@@ -61,11 +61,15 @@ def test_antigravity_bridge_is_bounded_for_headless_automation():
     assert 'data["enableTerminalSandbox"] = True' in launcher
     assert 'data["allowNonWorkspaceAccess"] = False' in launcher
     assert 'data["enableTelemetry"] = False' in launcher
+    assert '"read_file(.)"' in launcher
+    assert '"write_file(.)"' in launcher
+    assert '"read_file(.git/)"' in launcher
+    assert '"write_file(.git/)"' in launcher
     assert '"unsandboxed(git status)"' in launcher
     assert '"unsandboxed(git diff)"' in launcher
     assert '"unsandboxed(git push)"' in launcher
     assert '"unsandboxed(docker)"' in launcher
-    assert 'FORBIDDEN_ALLOW_RULES = {"unsandboxed(*)"}' in bridge
+    assert 'FORBIDDEN_ALLOW_RULES = {"unsandboxed(*)", "read_file(*)", "write_file(*)"}' in bridge
     assert privacy["training_policy_basis"] == "user_opt_out_enforced"
     assert privacy["enterprise_data_guarantee"] is False
     assert privacy["telemetry_opt_out_required"] is True
