@@ -56,10 +56,13 @@ if not isinstance(permissions, dict):
 allow = permissions.get("allow") or []
 if not isinstance(allow, list):
     allow = []
-# Remove a previously persisted global sandbox escape if present. The platform
-# only grants narrowly-scoped read-only Git escape hatches below.
-allow = [rule for rule in allow if rule != "unsandboxed(*)"]
+# Remove persisted global grants. `.` is resolved relative to the active workspace
+# root by Antigravity, so these scoped rules never grant arbitrary host access.
+forbidden_allow = {"unsandboxed(*)", "read_file(*)", "write_file(*)"}
+allow = [rule for rule in allow if rule not in forbidden_allow]
 required_allow = [
+    "read_file(.)",
+    "write_file(.)",
     "unsandboxed(git status)",
     "unsandboxed(git diff)",
     "unsandboxed(git log)",
@@ -77,6 +80,8 @@ deny = permissions.get("deny") or []
 if not isinstance(deny, list):
     deny = []
 required_deny = [
+    "read_file(.git/)",
+    "write_file(.git/)",
     "command(ddev)",
     "command(docker)",
     "command(sudo)",
