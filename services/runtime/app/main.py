@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.11", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.12", lifespan=lifespan)
 
 
 @app.get("/health", response_model=RuntimeHealth)
@@ -70,7 +70,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.11",
+        version="1.0.12",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
@@ -123,6 +123,11 @@ async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
 @app.post("/v1/jobs/{job_id}/cancel", response_model=JobView, dependencies=[Depends(auth)])
 async def cancel_job(job_id: str) -> JobView:
     try:
+        # Drain external side effects before committing the terminal DB state.
+        # If Runtime crashes between these two operations, startup recovery still
+        # sees a non-terminal job and performs cleanup instead of trusting a
+        # prematurely persisted `cancelled` state while DDEV work may be alive.
+        await engine.ddev.cancel(job_id=job_id)
         row = await engine.cancel(job_id)
     except RuntimeError as exc:
         raise runtime_error(exc) from exc
