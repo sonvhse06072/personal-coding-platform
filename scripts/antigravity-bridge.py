@@ -17,9 +17,38 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 REQUIRED_SETTINGS = {
     "enableTerminalSandbox": True,
     "toolPermission": "proceed-in-sandbox",
+    "artifactReviewPolicy": "always-proceed",
     "allowNonWorkspaceAccess": False,
     "enableTelemetry": False,
 }
+REQUIRED_ALLOW_RULES = {
+    "unsandboxed(git status)",
+    "unsandboxed(git diff)",
+    "unsandboxed(git log)",
+    "unsandboxed(git show)",
+    "unsandboxed(git ls-files)",
+    "unsandboxed(git grep)",
+    "unsandboxed(git rev-parse)",
+}
+REQUIRED_DENY_RULES = {
+    "command(ddev)",
+    "command(docker)",
+    "command(sudo)",
+    "unsandboxed(ddev)",
+    "unsandboxed(docker)",
+    "unsandboxed(sudo)",
+    "unsandboxed(git push)",
+    "unsandboxed(git fetch)",
+    "unsandboxed(git pull)",
+    "unsandboxed(git commit)",
+    "unsandboxed(git checkout)",
+    "unsandboxed(git switch)",
+    "unsandboxed(git reset)",
+    "unsandboxed(git clean)",
+    "unsandboxed(git merge)",
+    "unsandboxed(git rebase)",
+}
+FORBIDDEN_ALLOW_RULES = {"unsandboxed(*)"}
 
 
 def contained(path: Path, root: Path) -> bool:
@@ -59,14 +88,36 @@ def settings_status(path: Path) -> tuple[bool, dict]:
         return False, {"error": "settings_unreadable", "path": str(path)}
     if not isinstance(raw, dict):
         return False, {"error": "settings_not_object", "path": str(path)}
-    mismatches = {
+
+    mismatches: dict[str, object] = {
         key: {"expected": expected, "actual": raw.get(key)}
         for key, expected in REQUIRED_SETTINGS.items()
         if raw.get(key) != expected
     }
+
+    permissions = raw.get("permissions")
+    if not isinstance(permissions, dict):
+        permissions = {}
+    allow = permissions.get("allow")
+    deny = permissions.get("deny")
+    allow_rules = set(allow) if isinstance(allow, list) else set()
+    deny_rules = set(deny) if isinstance(deny, list) else set()
+
+    missing_allow = sorted(REQUIRED_ALLOW_RULES - allow_rules)
+    missing_deny = sorted(REQUIRED_DENY_RULES - deny_rules)
+    forbidden_allow = sorted(FORBIDDEN_ALLOW_RULES & allow_rules)
+    if missing_allow:
+        mismatches["permissions.allow.missing"] = missing_allow
+    if missing_deny:
+        mismatches["permissions.deny.missing"] = missing_deny
+    if forbidden_allow:
+        mismatches["permissions.allow.forbidden"] = forbidden_allow
+
     return not mismatches, {
         "path": str(path),
         "required": REQUIRED_SETTINGS,
+        "required_allow_rules": sorted(REQUIRED_ALLOW_RULES),
+        "required_deny_rules": sorted(REQUIRED_DENY_RULES),
         "mismatches": mismatches,
     }
 
@@ -107,7 +158,7 @@ class Bridge:
         bridge = self
 
         class Handler(BaseHTTPRequestHandler):
-            server_version = "PersonalCodingAntigravityBridge/1.2"
+            server_version = "PersonalCodingAntigravityBridge/1.3"
 
             def log_message(self, fmt: str, *args):
                 print(f"agy-bridge: {self.address_string()} - {fmt % args}", flush=True)
@@ -144,7 +195,7 @@ class Bridge:
                 return self.send_json(200 if safe else 503, {
                     "status": "ok" if safe else "degraded",
                     "service": "antigravity-host-bridge",
-                    "version": "1.2",
+                    "version": "1.3",
                     "agy": bridge.agy_bin,
                     "workspaces": str(bridge.workspaces),
                     "active_runs": active_runs,

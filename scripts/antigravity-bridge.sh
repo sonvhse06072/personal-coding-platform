@@ -38,21 +38,73 @@ except (json.JSONDecodeError, OSError) as exc:
 if not isinstance(data, dict):
     raise SystemExit(f"Antigravity settings must contain a JSON object: {path}")
 
-# Official Antigravity CLI safety controls. Sandboxed terminal commands may run
-# autonomously; anything needing to escape the sandbox is not auto-approved.
+# Official Antigravity CLI safety controls. The agent may edit files only inside
+# the active workspace and may auto-run commands that stay inside the sandbox.
 data["enableTerminalSandbox"] = True
 data["toolPermission"] = "proceed-in-sandbox"
+data["artifactReviewPolicy"] = "always-proceed"
 data["allowNonWorkspaceAccess"] = False
 # Individual-plan privacy is user-controlled rather than an Enterprise contract.
 # The platform therefore enforces the available data-collection opt-out locally.
 data["enableTelemetry"] = False
+
+permissions = data.setdefault("permissions", {})
+if not isinstance(permissions, dict):
+    permissions = {}
+    data["permissions"] = permissions
+
+allow = permissions.get("allow") or []
+if not isinstance(allow, list):
+    allow = []
+# Remove a previously persisted global sandbox escape if present. The platform
+# only grants narrowly-scoped read-only Git escape hatches below.
+allow = [rule for rule in allow if rule != "unsandboxed(*)"]
+required_allow = [
+    "unsandboxed(git status)",
+    "unsandboxed(git diff)",
+    "unsandboxed(git log)",
+    "unsandboxed(git show)",
+    "unsandboxed(git ls-files)",
+    "unsandboxed(git grep)",
+    "unsandboxed(git rev-parse)",
+]
+for rule in required_allow:
+    if rule not in allow:
+        allow.append(rule)
+permissions["allow"] = allow
+
+deny = permissions.get("deny") or []
+if not isinstance(deny, list):
+    deny = []
+required_deny = [
+    "command(ddev)",
+    "command(docker)",
+    "command(sudo)",
+    "unsandboxed(ddev)",
+    "unsandboxed(docker)",
+    "unsandboxed(sudo)",
+    "unsandboxed(git push)",
+    "unsandboxed(git fetch)",
+    "unsandboxed(git pull)",
+    "unsandboxed(git commit)",
+    "unsandboxed(git checkout)",
+    "unsandboxed(git switch)",
+    "unsandboxed(git reset)",
+    "unsandboxed(git clean)",
+    "unsandboxed(git merge)",
+    "unsandboxed(git rebase)",
+]
+for rule in required_deny:
+    if rule not in deny:
+        deny.append(rule)
+permissions["deny"] = deny
 
 path.parent.mkdir(parents=True, exist_ok=True)
 tmp = path.with_suffix(".tmp")
 tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 os.chmod(tmp, 0o600)
 tmp.replace(path)
-print(f"Antigravity safe settings enforced: {path}")
+print(f"Antigravity bounded headless settings enforced: {path}")
 PY
 }
 
