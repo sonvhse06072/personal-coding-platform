@@ -40,14 +40,20 @@ class RouterEngine(RuntimeRouterEngine):
             provider_state=request.provider_state,
         ))
 
-        if probe.action != "complete":
-            # DoD is incomplete, another hard budget is violated, or a human
-            # decision is required. Preserve the original counters so the normal
-            # policy remains fail-closed and no additional provider work can start.
-            return super().reassess(request)
-
         signals = list(probe.signals)
         signals.extend(f"post_call_token_overrun:{name}" for name in token_overruns)
+
+        if probe.action == "human_decision":
+            # Human policy gates are allowed to resolve without another provider
+            # call, so keep their priority over automatic completion/stop.
+            return probe.model_copy(update={"signals": signals})
+
+        if probe.action != "complete":
+            # DoD is incomplete or another hard budget is violated. Preserve the
+            # original counters so the normal policy remains fail-closed and no
+            # additional provider work can start.
+            return super().reassess(request)
+
         return ReassessResponse(
             action="complete",
             reason="Definition-of-done checks passed; post-call token overrun recorded and no further model work allowed",
