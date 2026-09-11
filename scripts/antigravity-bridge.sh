@@ -38,14 +38,13 @@ except (json.JSONDecodeError, OSError) as exc:
 if not isinstance(data, dict):
     raise SystemExit(f"Antigravity settings must contain a JSON object: {path}")
 
-# Official Antigravity CLI safety controls. The agent may edit files only inside
-# the active workspace and may auto-run commands that stay inside the sandbox.
+# Official Antigravity CLI safety controls. Terminal commands remain sandboxed,
+# code artifacts may be written headlessly, and non-workspace traversal is off.
 data["enableTerminalSandbox"] = True
 data["toolPermission"] = "proceed-in-sandbox"
 data["artifactReviewPolicy"] = "always-proceed"
 data["allowNonWorkspaceAccess"] = False
 # Individual-plan privacy is user-controlled rather than an Enterprise contract.
-# The platform therefore enforces the available data-collection opt-out locally.
 data["enableTelemetry"] = False
 
 permissions = data.setdefault("permissions", {})
@@ -53,16 +52,23 @@ if not isinstance(permissions, dict):
     permissions = {}
     data["permissions"] = permissions
 
+# The bridge owns file permissions while it is running. Relative rules such as
+# read_file(.) proved unreliable in headless isolated clones. Remove persistent
+# file rules so no stale Ask/Deny can shadow the exact absolute per-run rules that
+# antigravity-bridge.py injects for one job workspace at a time.
+def is_file_rule(rule):
+    return isinstance(rule, str) and (
+        rule.startswith("read_file(") or rule.startswith("write_file(")
+    )
+
 allow = permissions.get("allow") or []
 if not isinstance(allow, list):
     allow = []
-# Remove persisted global grants. `.` is resolved relative to the active workspace
-# root by Antigravity, so these scoped rules never grant arbitrary host access.
-forbidden_allow = {"unsandboxed(*)", "read_file(*)", "write_file(*)"}
-allow = [rule for rule in allow if rule not in forbidden_allow]
+allow = [
+    rule for rule in allow
+    if not is_file_rule(rule) and rule != "unsandboxed(*)"
+]
 required_allow = [
-    "read_file(.)",
-    "write_file(.)",
     "unsandboxed(git status)",
     "unsandboxed(git diff)",
     "unsandboxed(git log)",
@@ -76,26 +82,18 @@ for rule in required_allow:
         allow.append(rule)
 permissions["allow"] = allow
 
-# Permission precedence is Deny > Ask > Allow. Any read_file/write_file Ask rule
-# therefore shadows the workspace-scoped Allow rules above and headless mode cannot
-# prompt to resolve it. File access outside the workspace is already blocked by
-# allowNonWorkspaceAccess=false, so retain Ask policy for other action namespaces
-# while removing file Ask rules that make bounded headless automation impossible.
 ask = permissions.get("ask") or []
 if not isinstance(ask, list):
     ask = []
-ask = [
-    rule for rule in ask
-    if not (rule.startswith("read_file(") or rule.startswith("write_file("))
-]
-permissions["ask"] = ask
+permissions["ask"] = [rule for rule in ask if not is_file_rule(rule)]
 
 deny = permissions.get("deny") or []
 if not isinstance(deny, list):
     deny = []
+# Remove stale file denies as well; the bridge injects an absolute .git deny for
+# the exact active workspace together with the exact workspace allow rule.
+deny = [rule for rule in deny if not is_file_rule(rule)]
 required_deny = [
-    "read_file(.git/)",
-    "write_file(.git/)",
     "command(ddev)",
     "command(docker)",
     "command(sudo)",
