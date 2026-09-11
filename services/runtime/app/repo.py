@@ -26,9 +26,8 @@ def task_requires_material_change(task: dict[str, Any]) -> bool:
 
 
 # These words describe work shape rather than repository identity. Letting them
-# drive `rg token1|token2|...` made broad requests such as "add a small automated
-# test for existing custom Drupal modules" look like 30-file changes because
-# nearly every module contains words such as test/module/behavior.
+# drive broad content searches made requests such as "add a small automated test
+# for existing custom Drupal modules" look like large multi-file changes.
 STOPWORDS = {
     "the", "and", "with", "from", "that", "this", "into", "when", "then", "for",
     "fix", "add", "update", "change", "create", "implement", "issue", "bug", "feature",
@@ -36,6 +35,7 @@ STOPWORDS = {
     "test", "tests", "testing", "existing", "behavior", "behaviour", "inspect", "review",
     "code", "module", "modules", "custom", "drupal", "application", "project", "repository",
     "repo", "current", "public", "unrelated", "file", "files", "work", "working",
+    "one", "single", "keep", "not", "refactor", "refactoring",
 }
 
 
@@ -56,6 +56,27 @@ def tokenize(text: str) -> list[str]:
     return out[:12]
 
 
+def _matching_paths(repo: Path, word: str) -> list[str]:
+    """Return tracked files containing a fixed task term.
+
+    Use `git grep` rather than depending on ripgrep being present. Every coding
+    workspace is already a Git clone, so this keeps analysis deterministic across
+    the runtime image, local development and GitHub Actions while naturally
+    ignoring untracked/runtime-only files.
+    """
+    proc = subprocess.run(
+        [
+            "git", "-C", str(repo), "grep", "-l", "-i", "-F", "-e", word, "--", ".",
+            ":(exclude)vendor/**", ":(exclude)node_modules/**",
+        ],
+        text=True,
+        capture_output=True,
+    )
+    if proc.returncode not in (0, 1):
+        return []
+    return [line.strip().removeprefix("./") for line in proc.stdout.splitlines()[:200] if line.strip()]
+
+
 def _relevant_files(repo: Path, words: list[str]) -> list[tuple[str, float, list[str]]]:
     """Rank files by task-token evidence rather than counting every OR match.
 
@@ -69,25 +90,7 @@ def _relevant_files(repo: Path, words: list[str]) -> list[tuple[str, float, list
     evidence: dict[str, list[str]] = {}
 
     for word in words:
-        proc = subprocess.run(
-            [
-                "rg", "-l", "-i", "--fixed-strings",
-                "--glob", "!vendor/**", "--glob", "!node_modules/**", "--glob", "!.git/**",
-                word, str(repo),
-            ],
-            text=True,
-            capture_output=True,
-        )
-        if proc.returncode not in (0, 1):
-            continue
-        paths: list[str] = []
-        for line in proc.stdout.splitlines()[:200]:
-            if not line.strip():
-                continue
-            try:
-                paths.append(str(Path(line).relative_to(repo)))
-            except ValueError:
-                continue
+        paths = _matching_paths(repo, word)
         if not paths:
             continue
 
@@ -116,7 +119,7 @@ def _relevant_files(repo: Path, words: list[str]) -> list[tuple[str, float, list
         return []
 
     # A score below 2 represents only weak/broad evidence. Keep at most 12
-    # high-confidence files so Router scope is an estimate, not an arbitrary rg cap.
+    # high-confidence files so Router scope is an estimate, not an arbitrary cap.
     return [row for row in ranked if row[1] >= 2.0][:12]
 
 
