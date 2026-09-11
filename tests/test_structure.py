@@ -6,7 +6,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_required_platform_files_exist():
     required = [
-        ".ddev/config.yaml", ".ddev/docker-compose.platform.yaml",
+        ".ddev/config.yaml", ".ddev/docker-compose.platform.yaml", ".ddev/.env.example",
         "config/models.yml", "config/routing-policy.yml", "config/projects.yml",
         "services/router/app/main.py", "services/runtime/app/main.py", "services/ddev-executor/app/main.py",
     ]
@@ -46,3 +46,8 @@ def test_antigravity_replaces_legacy_gemini_cli():
     assert "@google/gemini-cli" not in dockerfile
     assert "/home/coder/.gemini" not in compose
     assert "ANTIGRAVITY_BRIDGE_URL" in compose
+
+
+def test_patch_backups_are_not_committed():
+    backups = [path for path in ROOT.rglob("*.bak-*") if ".git" not in path.parts]
+    assert backups == []
