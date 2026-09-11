@@ -76,6 +76,20 @@ for rule in required_allow:
         allow.append(rule)
 permissions["allow"] = allow
 
+# Permission precedence is Deny > Ask > Allow. Any read_file/write_file Ask rule
+# therefore shadows the workspace-scoped Allow rules above and headless mode cannot
+# prompt to resolve it. File access outside the workspace is already blocked by
+# allowNonWorkspaceAccess=false, so retain Ask policy for other action namespaces
+# while removing file Ask rules that make bounded headless automation impossible.
+ask = permissions.get("ask") or []
+if not isinstance(ask, list):
+    ask = []
+ask = [
+    rule for rule in ask
+    if not (rule.startswith("read_file(") or rule.startswith("write_file("))
+]
+permissions["ask"] = ask
+
 deny = permissions.get("deny") or []
 if not isinstance(deny, list):
     deny = []
