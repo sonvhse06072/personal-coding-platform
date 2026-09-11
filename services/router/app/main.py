@@ -7,13 +7,13 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, HTTPException
 
 from .config import clear_config_cache, get_config
-from .engine_runtime import RouterEngine
+from .engine_budget import RouterEngine
 from .schemas import ReassessRequest, ReassessResponse, RoutingRequest, RoutingResponse
 
 
 app = FastAPI(
     title="Personal Coding Router Service",
-    version="1.0.11",
+    version="1.0.12",
     description="Deterministic-first model/agent routing for a personal coding automation platform.",
 )
 
@@ -39,7 +39,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok",
         "service": "router-service",
-        "version": "1.0.11",
+        "version": "1.0.12",
         "registry_version": cfg["models"].get("version", 1),
         "policy_version": cfg["policy"].get("version", 1),
     }
