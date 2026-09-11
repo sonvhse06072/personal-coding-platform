@@ -45,7 +45,7 @@ def base_request(**overrides):
 def test_fast_routes_to_low_cost_agent():
     result = make_engine().route(base_request())
     assert result.strategy.profile == "fast"
-    assert result.strategy.executor.id in {"gemini_free", "deepseek_flash", "codex_plus"}
+    assert result.strategy.executor.id in {"antigravity_free", "deepseek_flash", "codex_plus"}
     assert result.strategy.planner is None
     assert result.strategy.evaluator is None
     assert result.strategy.human_decision.required is False

@@ -29,7 +29,6 @@ services:
       context: ${DDEV_APPROOT}/services/runtime
       args:
         CODEX_VERSION: ${CODEX_VERSION:-latest}
-        GEMINI_CLI_VERSION: ${GEMINI_CLI_VERSION:-latest}
         OPENCODE_VERSION: ${OPENCODE_VERSION:-latest}
         DDEV_UID: ${DDEV_UID}
         DDEV_GID: ${DDEV_GID}
@@ -52,18 +51,21 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GROQ_API_KEY: ${GROQ_API_KEY:-}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      ANTIGRAVITY_BRIDGE_URL: http://host.docker.internal:${ANTIGRAVITY_BRIDGE_PORT:-8792}
+      ANTIGRAVITY_BRIDGE_TOKEN: ${ANTIGRAVITY_BRIDGE_TOKEN}
       VIRTUAL_HOST: ${DDEV_HOSTNAME}
       HTTP_EXPOSE: 8787:8787
       HTTPS_EXPOSE: 8788:8787
     expose:
       - "8787"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       # Mount project/workspace roots at the exact same host absolute paths. This
       # keeps isolated job workspace paths identical on host and in containers.
       - ${CODING_WORKSPACES_ROOT}:${CODING_WORKSPACES_ROOT}
       # Reuse host logins for subscription-backed CLIs.
       - ${HOST_HOME}/.codex:/home/coder/.codex
-      - ${HOST_HOME}/.gemini:/home/coder/.gemini
       - ${HOST_HOME}/.config/opencode:/home/coder/.config/opencode
       - ${HOST_HOME}/.local/share/opencode:/home/coder/.local/share/opencode
       - ${HOST_HOME}/.gitconfig:/home/coder/.gitconfig:ro

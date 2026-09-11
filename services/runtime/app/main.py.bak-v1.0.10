@@ -1,0 +1,123 @@
+from __future__ import annotations
+
+import os
+import secrets
+import shutil
+from contextlib import asynccontextmanager
+from typing import Any
+
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
+
+from .engine import RuntimeEngine
+from .schemas import JobCreateRequest, JobList, JobView, RuntimeHealth
+from .storage import Storage
+
+
+storage = Storage()
+engine = RuntimeEngine(storage)
+
+
+def auth(authorization: str | None = Header(default=None)) -> None:
+    expected = os.getenv("RUNTIME_API_TOKEN", "change-me")
+    if not expected:
+        return
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Missing bearer token")
+    if not secrets.compare_digest(authorization.removeprefix("Bearer ").strip(), expected):
+        raise HTTPException(401, "Invalid bearer token")
+
+
+def view(row: dict[str, Any]) -> JobView:
+    route = row.get("route") or {}
+    strategy = route.get("strategy") or {}
+    executor = strategy.get("executor") or {}
+    return JobView(
+        id=row["id"], project_id=row["project_id"], status=row["status"], source_commit=row.get("source_commit"),
+        branch=row.get("branch"), workspace=row.get("workspace"), complexity_score=route.get("complexity_score"),
+        profile=strategy.get("profile"), executor=executor.get("id"),
+        created_at=row["created_at"].isoformat(), updated_at=row["updated_at"].isoformat(),
+        result=row.get("result"), error=row.get("error"),
+    )
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await engine.start()
+    yield
+    await engine.stop()
+
+
+app = FastAPI(title="Personal Coding Runtime", version="1.0.9", lifespan=lifespan)
+
+
+@app.get("/health", response_model=RuntimeHealth)
+async def health() -> RuntimeHealth:
+    router_ok = await engine.router.health()
+    executor_ok = await engine.ddev.health()
+    return RuntimeHealth(
+        status="ok" if router_ok and executor_ok else "degraded",
+        service="coding-runtime",
+        version="1.0.9",
+        router="ok" if router_ok else "down",
+        executor="ok" if executor_ok else "down",
+        adapters={
+            "antigravity_host": bool(os.getenv("ANTIGRAVITY_BRIDGE_URL")),
+            "codex_cli": shutil.which("codex") is not None,
+            "opencode": shutil.which("opencode") is not None,
+        },
+    )
+
+
+@app.post("/v1/jobs", response_model=JobView, dependencies=[Depends(auth)])
+async def create_job(payload: JobCreateRequest) -> JobView:
+    try:
+        job_id = engine.create_job(payload.model_dump(mode="json"))
+    except (RuntimeError, KeyError, ValueError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if payload.auto_run:
+        await engine.enqueue(job_id)
+    row = storage.get(job_id)
+    assert row is not None
+    return view(row)
+
+
+@app.get("/v1/jobs", response_model=JobList, dependencies=[Depends(auth)])
+def list_jobs(limit: int = Query(50, ge=1, le=500)) -> JobList:
+    return JobList(jobs=[view(row) for row in storage.list(limit)])
+
+
+@app.get("/v1/jobs/{job_id}", response_model=JobView, dependencies=[Depends(auth)])
+def get_job(job_id: str) -> JobView:
+    row = storage.get(job_id)
+    if not row:
+        raise HTTPException(404, "Job not found")
+    return view(row)
+
+
+@app.post("/v1/jobs/{job_id}/run", response_model=JobView, dependencies=[Depends(auth)])
+async def run_job(job_id: str) -> JobView:
+    row = storage.get(job_id)
+    if not row:
+        raise HTTPException(404, "Job not found")
+    if row["status"] not in {"queued", "interrupted", "blocked"}:
+        raise HTTPException(409, f"Job cannot be run from status={row['status']}")
+    storage.update(job_id, status="queued", error=None)
+    await engine.enqueue(job_id)
+    return view(storage.get(job_id))  # type: ignore[arg-type]
+
+
+@app.post("/v1/jobs/{job_id}/cancel", response_model=JobView, dependencies=[Depends(auth)])
+def cancel_job(job_id: str) -> JobView:
+    row = storage.get(job_id)
+    if not row:
+        raise HTTPException(404, "Job not found")
+    storage.update(job_id, status="cancelled")
+    return view(storage.get(job_id))  # type: ignore[arg-type]
+
+
+@app.post("/v1/jobs/{job_id}/cleanup", dependencies=[Depends(auth)])
+async def cleanup_job(job_id: str, remove_workspace: bool = False) -> dict[str, Any]:
+    try:
+        return await engine.cleanup(job_id, remove_workspace=remove_workspace)
+    except RuntimeError as exc:
+        raise HTTPException(404, str(exc)) from exc

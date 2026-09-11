@@ -2,7 +2,7 @@
 set -euo pipefail
 if [[ $# -lt 3 ]]; then
   echo "Usage: $0 <project-id> <title> <description>"
-  echo "Optional env: CODING_DISABLED_PROVIDERS=openai,google"
+  echo "Optional env: CODING_DISABLED_PROVIDERS=openai,google_antigravity"
   exit 2
 fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

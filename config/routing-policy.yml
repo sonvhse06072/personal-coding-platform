@@ -1,4 +1,4 @@
-version: 1
+version: 2
 complexity_weights:
   scope: 0.18
   dependency_depth: 0.1
@@ -30,7 +30,7 @@ profiles:
     executor_roles:
     - executor
     preferred_executor_ids:
-    - gemini_free
+    - antigravity_free
     - deepseek_flash
     - codex_plus
     max_input_tokens: 250000
@@ -56,7 +56,7 @@ profiles:
     executor_roles:
     - executor
     preferred_executor_ids:
-    - gemini_free
+    - antigravity_free
     - codex_plus
     - deepseek_flash
     max_input_tokens: 800000
@@ -88,10 +88,12 @@ profiles:
     - reviewer
     preferred_planner_ids:
     - codex_plus
+    - antigravity_free
     - claude_sonnet
     - frontier_codex
     preferred_executor_ids:
     - codex_plus
+    - antigravity_free
     - deepseek_flash
     - frontier_codex
     preferred_evaluator_ids:

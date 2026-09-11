@@ -18,9 +18,9 @@
     "analysis_depth": 1,
     "planner": null,
     "executor": {
-      "id": "gemini_free",
-      "provider": "google",
-      "adapter": "gemini_cli",
+      "id": "antigravity_free",
+      "provider": "google_antigravity",
+      "adapter": "antigravity_host",
       "model": "auto",
       "score": 0.7678,
       "predicted_success": 0.82,
@@ -81,7 +81,7 @@
     },
     "reasons": [
       "Complexity score 50 maps to standard",
-      "Executor selected: gemini_free",
+      "Executor selected: antigravity_free",
       "Analysis depth: 1",
       "Existing implementation pattern lowers novelty/ambiguity"
     ]

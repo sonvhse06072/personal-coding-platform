@@ -27,7 +27,7 @@
     "candidate_modules": ["order_sync", "crm_connector"]
   },
   "provider_state": {
-    "gemini_free": {
+    "antigravity_free": {
       "healthy": true,
       "quota_pressure": 0.2,
       "error_rate": 0.01,

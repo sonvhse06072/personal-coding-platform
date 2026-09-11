@@ -47,7 +47,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.7", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.10", lifespan=lifespan)
 
 
 @app.get("/health", response_model=RuntimeHealth)
@@ -57,12 +57,14 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.7",
+        version="1.0.10",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
-        adapters={name: shutil.which(binary) is not None for name, binary in {
-            "gemini_cli": "gemini", "codex_cli": "codex", "opencode": "opencode"
-        }.items()},
+        adapters={
+            "antigravity_host": bool(os.getenv("ANTIGRAVITY_BRIDGE_URL")),
+            "codex_cli": shutil.which("codex") is not None,
+            "opencode": shutil.which("opencode") is not None,
+        },
     )
 
 

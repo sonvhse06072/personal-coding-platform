@@ -43,6 +43,9 @@ _PROVIDER_FAILURE_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "invalid_api_key",
             "please login",
             "please log in",
+            "authentication required",
+            "failed to retrieve token",
+            "secret keyring is locked",
         ),
     ),
     (
@@ -55,6 +58,8 @@ _PROVIDER_FAILURE_PATTERNS: tuple[tuple[str, tuple[str, ...]], ...] = (
             "capacity",
             "http 503",
             "status 503",
+            "unexpected server error",
+            "internal server error",
         ),
     ),
     (

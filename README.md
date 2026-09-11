@@ -17,12 +17,13 @@ The Coding Runtime **does not** receive `/var/run/docker.sock` or the source-rep
 - **n8n** — control plane and external event orchestration.
 - **router** — deterministic-first complexity/profile/model selection and hard execution budgets.
 - **coding-runtime** — job persistence, repository analysis, isolated Git workspaces, agent adapters, deterministic verification, repair/escalation loops.
+- **Antigravity host bridge** — constrained WSL-host bridge that runs the signed-in `agy` CLI inside isolated job workspaces; it keeps OS-keyring credentials outside Docker.
 - **ddev-executor** — tiny privileged service that can operate target DDEV projects without exposing Docker socket to the agents.
 - **PostgreSQL** — the standard DDEV `db` service; n8n and runtime persistence share it.
 
 ## One-time setup
 
-Prerequisites on WSL: Docker/Docker Desktop integration, DDEV, Git and Python 3.
+Prerequisites on WSL: Docker/Docker Desktop integration, DDEV, Git, Python 3 and a signed-in Antigravity CLI (`agy`).
 
 ```bash
 ./scripts/bootstrap.sh
@@ -79,16 +80,27 @@ By default `CODING_PROJECTS_ROOT=$HOME/projects`. Change it once in `.ddev/.env`
 
 ## Authenticate coding agents once
 
-The runtime image contains Codex CLI, Gemini CLI and OpenCode. Their host credential directories are mounted into the runtime. You can authenticate on the WSL host using the normal CLIs, or open a runtime shell once:
+Antigravity Individual authentication is intentionally kept on the WSL host because `agy` stores account sessions in the Linux Secret Service/D-Bus keyring. The coding container does **not** receive your host keyring.
+
+Install/login Antigravity natively on WSL first:
 
 ```bash
-ddev exec -s coding-runtime bash
+curl -fsSL https://antigravity.google/cli/install.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
+agy
+agy -p "Reply with exactly ANTIGRAVITY_OK" --output-format json
+```
+
+`ddev start` automatically starts a local bearer-token-protected host bridge. Runtime calls that bridge only for workspaces under `$CODING_WORKSPACES_ROOT`; the bridge runs `agy` with Antigravity's native sandbox and non-interactive permissions.
+
+Codex/OpenCode remain container adapters. Authenticate them as needed:
+
+```bash
 codex login
-gemini
 opencode auth login
 ```
 
-Credentials persist under your WSL home and survive `ddev stop`/`ddev start`.
+Codex credentials are mounted into Runtime; OpenCode uses its mounted config/data directories.
 
 ## URLs
 
@@ -205,9 +217,25 @@ The coding-runtime and ddev-executor images now prepare `/home/coder` using the 
 - Agent success itself is part of completion state, preventing green deterministic checks from hiding an agent invocation failure.
 - Known provider exhaustion can be declared before a job with `CODING_DISABLED_PROVIDERS=openai ./scripts/create-job.sh ...`, avoiding a wasted probe call.
 
-## v1.0.7 runtime hardening
+## v1.0.9 Antigravity migration
 
-- Gemini CLI headless execution now passes `--skip-trust`; isolated job workspaces are intentionally trusted for the duration of the agent process so YOLO tool execution is not silently disabled by Gemini folder-trust policy.
-- A material-change task that returns an empty diff is treated as a `no_effect` execution. Runtime skips deterministic verification for that unchanged iteration, excludes only the ineffective model for the current job, and reroutes within a bounded `max_model_failovers` budget.
-- Job progress records bounded `agent_attempts` excerpts and blocked results retain `route_history`, making quota/auth/trust/no-effect failures observable without opening container internals.
-- Provider failover and model/no-effect failover remain separate budgets; neither resets the global job budget.
+- Removed Gemini CLI from the runtime image, registry, routing policy, mounts, tests and documentation. Google Individual coding now uses Antigravity CLI.
+- Added `antigravity_free` (`provider: google_antigravity`, `adapter: antigravity_host`, `quota_group: antigravity_individual`).
+- Added a constrained WSL-host bridge because Antigravity Individual account sessions live in the OS keyring and should not be mounted into Docker.
+- The bridge accepts only authenticated `/health` and `/run` requests, rejects workspaces outside `$CODING_WORKSPACES_ROOT`, and never accepts arbitrary command text.
+- Antigravity runs headlessly with JSON output, native sandboxing and bounded execution timeout. Token usage from `agy` is fed into the existing per-job budget counters.
+- `ddev start` starts the bridge through a host hook; `ddev stop` stops it. `ddev platform-status` now reports bridge health.
+- Routing prefers Antigravity for Fast/Standard work and includes it as a Complex planner/executor option. Critical routing remains biased toward stronger independent pools.
+
+To temporarily disable the Antigravity pool for one job:
+
+```bash
+CODING_DISABLED_PROVIDERS=google_antigravity ./scripts/create-job.sh ...
+```
+
+
+## v1.0.10 Test harness fix
+
+- Antigravity async unit tests use `asyncio.run(...)`, so `pytest-asyncio` is not required.
+- Runtime pytest cache is disabled in `ddev platform-test` because `/app` is intentionally read-only to the runtime user.
+- No routing or runtime execution behavior changed.

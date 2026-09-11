@@ -1,4 +1,4 @@
-version: 1
+version: 2
 models:
   groq_free:
     kind: llm
@@ -76,27 +76,29 @@ models:
       private_code_allowed: true
       training_allowed: false
       zero_retention_supported: true
-  gemini_free:
+  antigravity_free:
     kind: agent
-    provider: google
-    adapter: gemini_cli
+    provider: google_antigravity
+    adapter: antigravity_host
     model: auto
     tier: balanced
     cost_class: free
+    quota_group: antigravity_individual
     roles:
     - explore
     - executor
     - repair
     - test_writer
+    - planner
     capabilities:
       coding: 8
       reasoning: 8
-      debugging: 7
-      planning: 7
-      review: 6
-      structured_output: 6
+      debugging: 8
+      planning: 8
+      review: 7
+      structured_output: 8
       repo_exploration: 9
-    base_success: 0.82
+    base_success: 0.86
     privacy:
       private_code_allowed: true
       training_allowed: false

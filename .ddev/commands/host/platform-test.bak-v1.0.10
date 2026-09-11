@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+## Description: Run Router, Coding Runtime and DDEV executor unit tests
+## Usage: platform-test
+set -euo pipefail
+
+./scripts/antigravity-bridge.sh status >/dev/null
+
+# Router and executor install test dependencies globally.
+ddev exec -s router sh -c 'PYTHONPATH=/app pytest -q /app/tests'
+
+# Coding Runtime uses an isolated venv. Use its absolute interpreter path so
+# login-shell PATH changes cannot hide pytest.
+ddev exec -s coding-runtime sh -c 'PYTHONPATH=/app /opt/venv/bin/python -m pytest -q /app/tests'
+
+ddev exec -s ddev-executor sh -c 'PYTHONPATH=/app pytest -q /app/tests'
