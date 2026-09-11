@@ -48,7 +48,7 @@ def test_antigravity_replaces_legacy_gemini_cli():
     assert "ANTIGRAVITY_BRIDGE_URL" in compose
 
 
-def test_antigravity_bridge_is_sandboxed_without_global_yolo():
+def test_antigravity_bridge_is_bounded_for_headless_automation():
     bridge = (ROOT / "scripts/antigravity-bridge.py").read_text()
     launcher = (ROOT / "scripts/antigravity-bridge.sh").read_text()
     models = yaml.safe_load((ROOT / "config/models.yml").read_text())
@@ -57,9 +57,15 @@ def test_antigravity_bridge_is_sandboxed_without_global_yolo():
     assert '"--sandbox"' in bridge
     assert "dangerously-skip-permissions" not in bridge
     assert 'data["toolPermission"] = "proceed-in-sandbox"' in launcher
+    assert 'data["artifactReviewPolicy"] = "always-proceed"' in launcher
     assert 'data["enableTerminalSandbox"] = True' in launcher
     assert 'data["allowNonWorkspaceAccess"] = False' in launcher
     assert 'data["enableTelemetry"] = False' in launcher
+    assert '"unsandboxed(git status)"' in launcher
+    assert '"unsandboxed(git diff)"' in launcher
+    assert '"unsandboxed(git push)"' in launcher
+    assert '"unsandboxed(docker)"' in launcher
+    assert 'FORBIDDEN_ALLOW_RULES = {"unsandboxed(*)"}' in bridge
     assert privacy["training_policy_basis"] == "user_opt_out_enforced"
     assert privacy["enterprise_data_guarantee"] is False
     assert privacy["telemetry_opt_out_required"] is True
