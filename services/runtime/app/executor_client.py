@@ -23,8 +23,21 @@ class DdevExecutorClient:
         except httpx.HTTPError:
             return False
 
+    async def cancel(self, *, job_id: str) -> bool:
+        try:
+            async with httpx.AsyncClient(timeout=5) as client:
+                response = await client.post(
+                    f"{self.base}/v1/cancel",
+                    json={"job_id": job_id},
+                    headers=self.headers,
+                )
+                response.raise_for_status()
+                return bool(response.json().get("cancelled", False))
+        except (httpx.HTTPError, ValueError):
+            return False
+
     async def create_workspace(self, *, job_id: str, project_id: str, ref: str | None) -> dict[str, Any]:
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(timeout=320) as client:
             response = await client.post(
                 f"{self.base}/v1/workspaces",
                 json={"job_id": job_id, "project_id": project_id, "ref": ref},
