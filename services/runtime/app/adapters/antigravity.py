@@ -11,11 +11,24 @@ import httpx
 from .base import AgentAdapter, AgentRun, classify_provider_failure
 
 
+_PERMISSION_DENIED_PATTERNS = (
+    'a tool required the "unsandboxed" permission',
+    "headless mode cannot prompt for",
+    "was auto-denied",
+)
+
+
 def _bridge_config() -> tuple[str, str]:
     return (
         os.getenv("ANTIGRAVITY_BRIDGE_URL", "http://host.docker.internal:8792").rstrip("/"),
         os.getenv("ANTIGRAVITY_BRIDGE_TOKEN", ""),
     )
+
+
+def _permission_soft_denied(*parts: str) -> tuple[bool, str]:
+    text = "\n".join(part for part in parts if part).strip()
+    lower = text.lower()
+    return any(pattern in lower for pattern in _PERMISSION_DENIED_PATTERNS), text[-12000:]
 
 
 async def cancel_all_antigravity_runs() -> int:
@@ -126,10 +139,24 @@ class AntigravityAdapter(AgentAdapter):
             if status and status != "SUCCESS" and returncode == 0:
                 returncode = 1
 
-        failure_kind, failure_message = classify_provider_failure(stderr, error_text, stdout, output)
-        if returncode != 0 and not failure_kind:
-            failure_kind = "provider_unavailable" if error_text else None
-            failure_message = error_text or stderr or stdout
+        permission_denied, permission_message = _permission_soft_denied(
+            stderr, error_text, stdout, output
+        )
+        if permission_denied:
+            # Antigravity headless permission denials are intentionally soft: the
+            # CLI exits 0. Surface them as a deterministic non-provider failure so
+            # Runtime records the real cause and can model-failover without marking
+            # the Google provider unhealthy or consuming repair budget.
+            returncode = 77
+            failure_kind = "permission_denied"
+            failure_message = permission_message
+        else:
+            failure_kind, failure_message = classify_provider_failure(
+                stderr, error_text, stdout, output
+            )
+            if returncode != 0 and not failure_kind:
+                failure_kind = "provider_unavailable" if error_text else None
+                failure_message = error_text or stderr or stdout
 
         return AgentRun(
             self.name,
