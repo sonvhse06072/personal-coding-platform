@@ -118,3 +118,21 @@ def test_workspace_rules_are_temporary_and_preserve_non_file_policy(tmp_path: Pa
     assert scoped_deny.isdisjoint(set(cleaned["permissions"]["deny"]))
     assert "unsandboxed(git status)" in cleaned["permissions"]["allow"]
     assert "command(*)" in cleaned["permissions"]["ask"]
+
+
+def test_cancel_before_process_start_is_consumed_once(tmp_path: Path):
+    bridge_module = load_bridge_module()
+    settings = tmp_path / "settings.json"
+    settings.write_text(json.dumps(safe_settings()), encoding="utf-8")
+    workspaces = tmp_path / "workspaces"
+    workspaces.mkdir()
+    bridge = bridge_module.Bridge(
+        token="secret",
+        workspaces=workspaces,
+        agy_bin="/bin/true",
+        settings=settings,
+    )
+
+    assert bridge.cancel_run("queued-run") is True
+    assert bridge.consume_cancelled("queued-run") is True
+    assert bridge.consume_cancelled("queued-run") is False
