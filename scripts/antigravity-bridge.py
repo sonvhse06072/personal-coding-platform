@@ -68,6 +68,13 @@ class Bridge:
         terminate_process_group(proc)
         return True
 
+    def cancel_all_runs(self) -> int:
+        with self._runs_lock:
+            runs = list(self._runs.items())
+        for _, proc in runs:
+            terminate_process_group(proc)
+        return len(runs)
+
     def handler(self):
         bridge = self
 
@@ -118,6 +125,8 @@ class Bridge:
                     return self.send_json(401, {"error": "unauthorized"})
                 try:
                     payload = self.read_payload()
+                    if self.path == "/cancel-all":
+                        return self.send_json(200, {"cancelled": bridge.cancel_all_runs()})
                     if self.path == "/cancel":
                         run_id = str(payload.get("run_id") or "").strip()
                         if not run_id:
