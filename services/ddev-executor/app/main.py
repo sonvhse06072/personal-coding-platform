@@ -4,7 +4,9 @@ import os
 import re
 import secrets
 import shutil
+import signal
 import subprocess
+import threading
 from pathlib import Path
 from typing import Any, Literal
 
@@ -30,6 +32,10 @@ class WorkspaceRequest(BaseModel):
     ref: str | None = Field(default=None, max_length=200)
 
 
+class CancelRequest(BaseModel):
+    job_id: str = Field(min_length=8, max_length=100)
+
+
 class CommandOutput(BaseModel):
     command: str
     returncode: int
@@ -42,6 +48,10 @@ class PhaseResponse(BaseModel):
     passed: bool
     phase: Phase
     commands: list[CommandOutput]
+
+
+_ACTIVE: dict[str, subprocess.Popen] = {}
+_ACTIVE_LOCK = threading.Lock()
 
 
 def auth(authorization: str | None = Header(default=None)) -> None:
@@ -105,7 +115,82 @@ def remote_origin(repo: Path) -> str | None:
     return value if proc.returncode == 0 and value else None
 
 
-app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.0")
+def _register(job_id: str, proc: subprocess.Popen) -> None:
+    with _ACTIVE_LOCK:
+        previous = _ACTIVE.get(job_id)
+        if previous is not None and previous.poll() is None:
+            raise RuntimeError(f"Job {job_id} already has an active executor process")
+        _ACTIVE[job_id] = proc
+
+
+def _unregister(job_id: str, proc: subprocess.Popen) -> None:
+    with _ACTIVE_LOCK:
+        if _ACTIVE.get(job_id) is proc:
+            _ACTIVE.pop(job_id, None)
+
+
+def _terminate_process_group(proc: subprocess.Popen, grace_seconds: float = 3.0) -> None:
+    if proc.poll() is not None:
+        return
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        proc.wait(timeout=grace_seconds)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    try:
+        proc.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def cancel_active(job_id: str) -> bool:
+    with _ACTIVE_LOCK:
+        proc = _ACTIVE.get(job_id)
+    if proc is None:
+        return False
+    _terminate_process_group(proc)
+    return True
+
+
+def run_tracked(
+    job_id: str,
+    argv: list[str],
+    *,
+    cwd: Path | None = None,
+    timeout: int | None = None,
+    env: dict[str, str] | None = None,
+) -> tuple[int, str, str, bool]:
+    proc = subprocess.Popen(
+        argv,
+        cwd=str(cwd) if cwd else None,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        start_new_session=True,
+    )
+    _register(job_id, proc)
+    try:
+        try:
+            stdout, stderr = proc.communicate(timeout=timeout)
+            return int(proc.returncode or 0), stdout or "", stderr or "", False
+        except subprocess.TimeoutExpired:
+            _terminate_process_group(proc)
+            stdout, stderr = proc.communicate()
+            return 124, stdout or "", (stderr or "") + f"\nCommand timed out after {timeout}s", True
+    finally:
+        _unregister(job_id, proc)
+
+
+app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.11")
 
 
 @app.get("/health")
@@ -114,24 +199,27 @@ def health() -> dict[str, Any]:
     docker = subprocess.run(["docker", "version", "--format", "{{.Server.Version}}"], text=True, capture_output=True)
     buildx = subprocess.run(["docker", "buildx", "version"], text=True, capture_output=True)
     ok = result.returncode == 0 and docker.returncode == 0 and buildx.returncode == 0
+    with _ACTIVE_LOCK:
+        active_jobs = len(_ACTIVE)
     return {
         "status": "ok" if ok else "degraded",
         "service": "ddev-executor",
+        "version": "1.0.11",
         "ddev": (result.stdout or result.stderr).strip(),
         "docker": (docker.stdout or docker.stderr).strip(),
         "buildx": (buildx.stdout or buildx.stderr).strip(),
+        "active_jobs": active_jobs,
     }
+
+
+@app.post("/v1/cancel", dependencies=[Depends(auth)])
+def cancel(payload: CancelRequest) -> dict[str, Any]:
+    return {"job_id": payload.job_id, "cancelled": cancel_active(payload.job_id)}
 
 
 @app.post("/v1/workspaces", dependencies=[Depends(auth)])
 def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
-    """Create a self-contained clone for one job.
-
-    A traditional `git worktree` stores a .git pointer back to the source repo.
-    That would force coding-runtime to mount the source-repository root. We avoid
-    that trust-boundary leak by using a non-local clone, then pinning the exact
-    source commit and creating the AI branch inside the isolated workspace.
-    """
+    """Create a self-contained clone for one job."""
     cfg = project(payload.project_id)
     repo = expand(str(cfg.get("path", "")))
     if not is_git_repo(repo):
@@ -150,16 +238,16 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
         raise HTTPException(409, "Workspace already exists")
 
     # --no-local prevents hard-linked Git objects from being shared with the
-    # source repository. This costs some disk but ensures an agent cannot corrupt
-    # the original repo's object database through the isolated clone.
-    proc = subprocess.run(
+    # source repository. Track the clone process as well so cancellation cannot
+    # leave a large background clone running after the job is cancelled.
+    returncode, stdout, stderr, _ = run_tracked(
+        payload.job_id,
         ["git", "clone", "--no-local", "--no-checkout", str(repo), str(workspace)],
-        text=True,
-        capture_output=True,
+        timeout=300,
     )
-    if proc.returncode != 0:
+    if returncode != 0:
         shutil.rmtree(workspace, ignore_errors=True)
-        raise HTTPException(422, proc.stderr.strip() or proc.stdout.strip() or "git clone failed")
+        raise HTTPException(422, stderr.strip() or stdout.strip() or "git clone failed")
 
     try:
         if source_origin:
@@ -187,8 +275,6 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
 
 @app.delete("/v1/workspaces", dependencies=[Depends(auth)])
 def remove_workspace(job_id: str, project_id: str, workspace: str = Query(...)) -> dict[str, Any]:
-    # Resolve the project as an allowlist check even though deletion itself only
-    # happens under CODING_WORKSPACES_ROOT.
     project(project_id)
     path = Path(workspace).resolve()
     root = Path(os.environ["CODING_WORKSPACES_ROOT"]).resolve()
@@ -220,38 +306,23 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
         payload.timeout_seconds or 1800,
     )
     for command in commands:
-        try:
-            proc = subprocess.run(
-                ["bash", "-lc", command],
-                cwd=workspace,
-                text=True,
-                capture_output=True,
-                timeout=timeout,
-                env={**os.environ, "DDEV_NO_TUI": "true"},
+        returncode, stdout, stderr, timed_out = run_tracked(
+            payload.job_id,
+            ["bash", "-lc", command],
+            cwd=workspace,
+            timeout=timeout,
+            env={**os.environ, "DDEV_NO_TUI": "true"},
+        )
+        outputs.append(
+            CommandOutput(
+                command=command,
+                returncode=returncode,
+                stdout=stdout[-30000:],
+                stderr=stderr[-30000:],
+                timed_out=timed_out,
             )
-            outputs.append(
-                CommandOutput(
-                    command=command,
-                    returncode=proc.returncode,
-                    stdout=proc.stdout[-30000:],
-                    stderr=proc.stderr[-30000:],
-                )
-            )
-            if proc.returncode != 0:
-                passed = False
-                break
-        except subprocess.TimeoutExpired as exc:
-            stdout = exc.stdout.decode(errors="replace") if isinstance(exc.stdout, bytes) else (exc.stdout or "")
-            stderr = exc.stderr.decode(errors="replace") if isinstance(exc.stderr, bytes) else (exc.stderr or "")
-            outputs.append(
-                CommandOutput(
-                    command=command,
-                    returncode=124,
-                    stdout=stdout[-30000:],
-                    stderr=(stderr + f"\nCommand timed out after {timeout}s")[-30000:],
-                    timed_out=True,
-                )
-            )
+        )
+        if returncode != 0:
             passed = False
             break
 

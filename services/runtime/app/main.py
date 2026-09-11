@@ -9,7 +9,14 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 
 from .engine import RuntimeEngine
-from .schemas import JobCreateRequest, JobList, JobView, RuntimeHealth
+from .schemas import (
+    HumanDecisionRequest,
+    JobCreateRequest,
+    JobList,
+    JobRunRequest,
+    JobView,
+    RuntimeHealth,
+)
 from .storage import Storage
 
 
@@ -30,7 +37,8 @@ def auth(authorization: str | None = Header(default=None)) -> None:
 def view(row: dict[str, Any]) -> JobView:
     route = row.get("route") or {}
     strategy = route.get("strategy") or {}
-    executor = strategy.get("executor") or {}
+    checkpoint = row.get("checkpoint") or {}
+    executor = checkpoint.get("executor_choice") or strategy.get("executor") or {}
     return JobView(
         id=row["id"], project_id=row["project_id"], status=row["status"], source_commit=row.get("source_commit"),
         branch=row.get("branch"), workspace=row.get("workspace"), complexity_score=route.get("complexity_score"),
@@ -40,6 +48,11 @@ def view(row: dict[str, Any]) -> JobView:
     )
 
 
+def runtime_error(exc: RuntimeError) -> HTTPException:
+    message = str(exc)
+    return HTTPException(404 if message == "Unknown job" else 409, message)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await engine.start()
@@ -47,7 +60,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.10", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.11", lifespan=lifespan)
 
 
 @app.get("/health", response_model=RuntimeHealth)
@@ -57,7 +70,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.10",
+        version="1.0.11",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
@@ -95,24 +108,38 @@ def get_job(job_id: str) -> JobView:
 
 
 @app.post("/v1/jobs/{job_id}/run", response_model=JobView, dependencies=[Depends(auth)])
-async def run_job(job_id: str) -> JobView:
-    row = storage.get(job_id)
-    if not row:
-        raise HTTPException(404, "Job not found")
-    if row["status"] not in {"queued", "interrupted", "blocked"}:
-        raise HTTPException(409, f"Job cannot be run from status={row['status']}")
-    storage.update(job_id, status="queued", error=None)
-    await engine.enqueue(job_id)
-    return view(storage.get(job_id))  # type: ignore[arg-type]
+async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
+    request = payload or JobRunRequest()
+    try:
+        row = await engine.resume(
+            job_id,
+            reset_transient_provider_failures=request.reset_transient_provider_failures,
+        )
+    except RuntimeError as exc:
+        raise runtime_error(exc) from exc
+    return view(row)
 
 
 @app.post("/v1/jobs/{job_id}/cancel", response_model=JobView, dependencies=[Depends(auth)])
-def cancel_job(job_id: str) -> JobView:
-    row = storage.get(job_id)
-    if not row:
-        raise HTTPException(404, "Job not found")
-    storage.update(job_id, status="cancelled")
-    return view(storage.get(job_id))  # type: ignore[arg-type]
+async def cancel_job(job_id: str) -> JobView:
+    try:
+        row = await engine.cancel(job_id)
+    except RuntimeError as exc:
+        raise runtime_error(exc) from exc
+    return view(row)
+
+
+@app.post("/v1/jobs/{job_id}/decision", response_model=JobView, dependencies=[Depends(auth)])
+async def resolve_decision(job_id: str, payload: HumanDecisionRequest) -> JobView:
+    try:
+        row = await engine.resolve_human_decision(
+            job_id,
+            action=payload.action,
+            note=payload.note,
+        )
+    except RuntimeError as exc:
+        raise runtime_error(exc) from exc
+    return view(row)
 
 
 @app.post("/v1/jobs/{job_id}/cleanup", dependencies=[Depends(auth)])

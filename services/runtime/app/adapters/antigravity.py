@@ -1,11 +1,39 @@
 from __future__ import annotations
 
+import asyncio
 import os
+import uuid
+from contextlib import suppress
 from pathlib import Path
 
 import httpx
 
 from .base import AgentAdapter, AgentRun, classify_provider_failure
+
+
+def _bridge_config() -> tuple[str, str]:
+    return (
+        os.getenv("ANTIGRAVITY_BRIDGE_URL", "http://host.docker.internal:8792").rstrip("/"),
+        os.getenv("ANTIGRAVITY_BRIDGE_TOKEN", ""),
+    )
+
+
+async def cancel_all_antigravity_runs() -> int:
+    """Best-effort cleanup for host-side runs orphaned by a runtime restart."""
+    base_url, token = _bridge_config()
+    if not token:
+        return 0
+    try:
+        async with httpx.AsyncClient(timeout=5) as client:
+            response = await client.post(
+                f"{base_url}/cancel-all",
+                headers={"Authorization": f"Bearer {token}"},
+                json={},
+            )
+            response.raise_for_status()
+            return int(response.json().get("cancelled", 0))
+    except (httpx.HTTPError, ValueError, TypeError):
+        return 0
 
 
 class AntigravityAdapter(AgentAdapter):
@@ -18,9 +46,17 @@ class AntigravityAdapter(AgentAdapter):
 
     name = "antigravity_host"
 
+    async def _cancel_remote(self, base_url: str, token: str, run_id: str) -> None:
+        with suppress(Exception):
+            async with httpx.AsyncClient(timeout=5) as client:
+                await client.post(
+                    f"{base_url}/cancel",
+                    headers={"Authorization": f"Bearer {token}"},
+                    json={"run_id": run_id},
+                )
+
     async def run(self, *, workspace: Path, prompt: str, mode: str, timeout: int) -> AgentRun:
-        base_url = os.getenv("ANTIGRAVITY_BRIDGE_URL", "http://host.docker.internal:8792").rstrip("/")
-        token = os.getenv("ANTIGRAVITY_BRIDGE_TOKEN", "")
+        base_url, token = _bridge_config()
         if not token:
             return AgentRun(
                 self.name,
@@ -34,8 +70,10 @@ class AntigravityAdapter(AgentAdapter):
                 failure_message="Antigravity host bridge token is not configured",
             )
 
+        run_id = uuid.uuid4().hex
         effort = "high" if mode in {"plan", "evaluate"} else "medium"
         payload = {
+            "run_id": run_id,
             "workspace": str(workspace),
             "prompt": prompt,
             "model": self.model or "auto",
@@ -52,6 +90,12 @@ class AntigravityAdapter(AgentAdapter):
                 )
                 response.raise_for_status()
                 bridge = response.json()
+        except asyncio.CancelledError:
+            # The host bridge owns the actual `agy` process. Cancelling only the
+            # HTTP client would leave that process consuming quota, so explicitly
+            # terminate the corresponding host-side run before propagating cancel.
+            await self._cancel_remote(base_url, token, run_id)
+            raise
         except (httpx.HTTPError, ValueError) as exc:
             message = f"Antigravity host bridge unavailable: {exc}"
             return AgentRun(

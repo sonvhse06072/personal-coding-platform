@@ -54,3 +54,44 @@ def test_antigravity_bridge_unavailable_is_provider_failure(monkeypatch, tmp_pat
     )
     assert run.provider_failed
     assert run.failure_kind == "provider_unavailable"
+
+
+def test_antigravity_cancel_calls_host_bridge_cancel(monkeypatch, tmp_path: Path):
+    cancelled_run_ids: list[str] = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+        def json(self):
+            return {"cancelled": True}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): return None
+        async def post(self, url, *args, **kwargs):
+            if url.endswith("/cancel"):
+                cancelled_run_ids.append(kwargs["json"]["run_id"])
+                return FakeResponse()
+            await asyncio.Event().wait()
+            raise AssertionError("unreachable")
+
+    monkeypatch.setenv("ANTIGRAVITY_BRIDGE_TOKEN", "secret")
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+
+    async def scenario():
+        task = asyncio.create_task(
+            AntigravityAdapter("auto").run(
+                workspace=tmp_path, prompt="do it", mode="execute", timeout=30
+            )
+        )
+        await asyncio.sleep(0)
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    asyncio.run(scenario())
+    assert len(cancelled_run_ids) == 1
+    assert cancelled_run_ids[0]

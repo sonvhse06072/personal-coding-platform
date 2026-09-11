@@ -21,12 +21,14 @@ CREATE TABLE IF NOT EXISTS cp_jobs (
   repo_analysis JSONB,
   route JSONB,
   progress JSONB,
+  checkpoint JSONB,
   result JSONB,
   error TEXT,
   dry_run BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
+ALTER TABLE cp_jobs ADD COLUMN IF NOT EXISTS checkpoint JSONB;
 CREATE INDEX IF NOT EXISTS cp_jobs_status_idx ON cp_jobs(status);
 """
 
@@ -52,13 +54,14 @@ class Storage:
         with self.connect() as conn:
             conn.execute(
                 """INSERT INTO cp_jobs
-                (id, project_id, status, source_commit, branch, workspace, task, repo_analysis, route, progress, result, error, dry_run, created_at, updated_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,%s::jsonb,%s::jsonb,%s,%s,%s,%s)""",
+                (id, project_id, status, source_commit, branch, workspace, task, repo_analysis, route, progress, checkpoint, result, error, dry_run, created_at, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,%s::jsonb,%s::jsonb,%s::jsonb,%s,%s,%s,%s)""",
                 (
                     row["id"], row["project_id"], row.get("status", "queued"), row.get("source_commit"),
                     row.get("branch"), row.get("workspace"), json.dumps(row.get("task", {})),
                     json.dumps(row.get("repo_analysis")), json.dumps(row.get("route")), json.dumps(row.get("progress")),
-                    json.dumps(row.get("result")), row.get("error"), bool(row.get("dry_run", False)), timestamp, timestamp,
+                    json.dumps(row.get("checkpoint")), json.dumps(row.get("result")), row.get("error"),
+                    bool(row.get("dry_run", False)), timestamp, timestamp,
                 ),
             )
             conn.commit()
@@ -74,7 +77,7 @@ class Storage:
     def update(self, job_id: str, **fields: Any) -> None:
         if not fields:
             return
-        json_fields = {"task", "repo_analysis", "route", "progress", "result"}
+        json_fields = {"task", "repo_analysis", "route", "progress", "checkpoint", "result"}
         sets: list[str] = []
         values: list[Any] = []
         for key, value in fields.items():

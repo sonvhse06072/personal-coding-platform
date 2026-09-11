@@ -58,6 +58,15 @@ class JobCreateRequest(BaseModel):
     dry_run: bool = False
 
 
+class JobRunRequest(BaseModel):
+    reset_transient_provider_failures: bool = False
+
+
+class HumanDecisionRequest(BaseModel):
+    action: Literal["approve", "reject"]
+    note: str = Field(default="", max_length=5000)
+
+
 class JobView(BaseModel):
     id: str
     project_id: str
