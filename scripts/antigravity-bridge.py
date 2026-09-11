@@ -14,6 +14,14 @@ import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
+REQUIRED_SETTINGS = {
+    "enableTerminalSandbox": True,
+    "toolPermission": "proceed-in-sandbox",
+    "allowNonWorkspaceAccess": False,
+    "enableTelemetry": False,
+}
+
+
 def contained(path: Path, root: Path) -> bool:
     try:
         path.resolve().relative_to(root.resolve())
@@ -44,11 +52,31 @@ def terminate_process_group(proc: subprocess.Popen, grace_seconds: float = 3.0) 
         pass
 
 
+def settings_status(path: Path) -> tuple[bool, dict]:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False, {"error": "settings_unreadable", "path": str(path)}
+    if not isinstance(raw, dict):
+        return False, {"error": "settings_not_object", "path": str(path)}
+    mismatches = {
+        key: {"expected": expected, "actual": raw.get(key)}
+        for key, expected in REQUIRED_SETTINGS.items()
+        if raw.get(key) != expected
+    }
+    return not mismatches, {
+        "path": str(path),
+        "required": REQUIRED_SETTINGS,
+        "mismatches": mismatches,
+    }
+
+
 class Bridge:
-    def __init__(self, *, token: str, workspaces: Path, agy_bin: str):
+    def __init__(self, *, token: str, workspaces: Path, agy_bin: str, settings: Path):
         self.token = token
         self.workspaces = workspaces.resolve()
         self.agy_bin = agy_bin
+        self.settings = settings.resolve()
         self._runs: dict[str, subprocess.Popen] = {}
         self._runs_lock = threading.Lock()
 
@@ -79,7 +107,7 @@ class Bridge:
         bridge = self
 
         class Handler(BaseHTTPRequestHandler):
-            server_version = "PersonalCodingAntigravityBridge/1.1"
+            server_version = "PersonalCodingAntigravityBridge/1.2"
 
             def log_message(self, fmt: str, *args):
                 print(f"agy-bridge: {self.address_string()} - {fmt % args}", flush=True)
@@ -110,14 +138,18 @@ class Bridge:
                     return self.send_json(401, {"error": "unauthorized"})
                 if self.path != "/health":
                     return self.send_json(404, {"error": "not_found"})
+                safe, safety = settings_status(bridge.settings)
                 with bridge._runs_lock:
                     active_runs = len(bridge._runs)
-                return self.send_json(200, {
-                    "status": "ok",
+                return self.send_json(200 if safe else 503, {
+                    "status": "ok" if safe else "degraded",
                     "service": "antigravity-host-bridge",
+                    "version": "1.2",
                     "agy": bridge.agy_bin,
                     "workspaces": str(bridge.workspaces),
                     "active_runs": active_runs,
+                    "safe_settings": safe,
+                    "safety": safety,
                 })
 
             def do_POST(self):
@@ -137,6 +169,13 @@ class Bridge:
                         })
                     if self.path != "/run":
                         return self.send_json(404, {"error": "not_found"})
+
+                    safe, safety = settings_status(bridge.settings)
+                    if not safe:
+                        return self.send_json(503, {
+                            "error": "unsafe_antigravity_settings",
+                            "safety": safety,
+                        })
 
                     workspace = Path(str(payload["workspace"])).resolve()
                     if not workspace.is_dir() or not contained(workspace, bridge.workspaces):
@@ -158,7 +197,6 @@ class Bridge:
                         "-p", prompt,
                         "--output-format", "json",
                         "--sandbox",
-                        "--dangerously-skip-permissions",
                         "--effort", effort,
                         "--print-timeout", f"{timeout}s",
                     ]
@@ -217,6 +255,7 @@ def main():
     parser.add_argument("--token", required=True)
     parser.add_argument("--workspaces", required=True)
     parser.add_argument("--agy-bin", default="")
+    parser.add_argument("--settings", required=True)
     args = parser.parse_args()
 
     agy_bin = args.agy_bin or shutil.which("agy") or ""
@@ -224,9 +263,16 @@ def main():
         raise SystemExit("agy not found on WSL host. Install/login Antigravity first.")
     workspaces = Path(args.workspaces).expanduser()
     workspaces.mkdir(parents=True, exist_ok=True)
-    bridge = Bridge(token=args.token, workspaces=workspaces, agy_bin=agy_bin)
+    settings = Path(args.settings).expanduser()
+    safe, safety = settings_status(settings)
+    if not safe:
+        raise SystemExit(f"Unsafe Antigravity settings: {json.dumps(safety, sort_keys=True)}")
+    bridge = Bridge(token=args.token, workspaces=workspaces, agy_bin=agy_bin, settings=settings)
     server = ThreadingHTTPServer((args.host, args.port), bridge.handler())
-    print(f"Antigravity host bridge listening on {args.host}:{args.port}; workspaces={workspaces}", flush=True)
+    print(
+        f"Antigravity host bridge listening on {args.host}:{args.port}; workspaces={workspaces}; safe_settings=true",
+        flush=True,
+    )
     server.serve_forever()
 
 

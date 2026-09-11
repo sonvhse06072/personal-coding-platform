@@ -7,8 +7,6 @@ from pathlib import Path
 from typing import Any
 
 
-
-
 READ_ONLY_TASK_TYPES = {"analysis", "review", "explain", "research", "question", "read_only", "read-only"}
 CHANGE_TASK_TYPES = {"implementation", "bugfix", "feature", "refactor", "test", "config", "documentation", "docs"}
 CHANGE_VERBS = (
@@ -26,9 +24,18 @@ def task_requires_material_change(task: dict[str, Any]) -> bool:
     text = f"{task.get('title','')} {task.get('description','')}".strip().lower()
     return any(verb in text for verb in CHANGE_VERBS)
 
+
+# These words describe work shape rather than repository identity. Letting them
+# drive broad content searches made requests such as "add a small automated test
+# for existing custom Drupal modules" look like large multi-file changes.
 STOPWORDS = {
-    "the", "and", "with", "from", "that", "this", "into", "when", "then", "for", "fix", "add", "update",
-    "change", "create", "implement", "issue", "bug", "feature", "please", "should", "would", "could",
+    "the", "and", "with", "from", "that", "this", "into", "when", "then", "for",
+    "fix", "add", "update", "change", "create", "implement", "issue", "bug", "feature",
+    "please", "should", "would", "could", "small", "minimal", "automated", "automatic",
+    "test", "tests", "testing", "existing", "behavior", "behaviour", "inspect", "review",
+    "code", "module", "modules", "custom", "drupal", "application", "project", "repository",
+    "repo", "current", "public", "unrelated", "file", "files", "work", "working",
+    "one", "single", "keep", "not", "refactor", "refactoring",
 }
 
 
@@ -46,22 +53,82 @@ def tokenize(text: str) -> list[str]:
         if item in STOPWORDS or item.isdigit() or item in out:
             continue
         out.append(item)
-    return out[:8]
+    return out[:12]
+
+
+def _matching_paths(repo: Path, word: str) -> list[str]:
+    """Return tracked files containing a fixed task term.
+
+    Use `git grep` rather than depending on ripgrep being present. Every coding
+    workspace is already a Git clone, so this keeps analysis deterministic across
+    the runtime image, local development and GitHub Actions while naturally
+    ignoring untracked/runtime-only files.
+    """
+    proc = subprocess.run(
+        [
+            "git", "-C", str(repo), "grep", "-l", "-i", "-F", "-e", word, "--", ".",
+            ":(exclude)vendor/**", ":(exclude)node_modules/**",
+        ],
+        text=True,
+        capture_output=True,
+    )
+    if proc.returncode not in (0, 1):
+        return []
+    return [line.strip().removeprefix("./") for line in proc.stdout.splitlines()[:200] if line.strip()]
+
+
+def _relevant_files(repo: Path, words: list[str]) -> list[tuple[str, float, list[str]]]:
+    """Rank files by task-token evidence rather than counting every OR match.
+
+    A token that occurs in only a handful of files carries much more scope
+    evidence than one occurring across the repository. Path matches get an
+    additional bonus because named modules/classes/directories are strong task
+    signals. Broad tokens can still contribute when combined with another token,
+    but a single ubiquitous word cannot inflate the scope on its own.
+    """
+    scores: dict[str, float] = {}
+    evidence: dict[str, list[str]] = {}
+
+    for word in words:
+        paths = _matching_paths(repo, word)
+        if not paths:
+            continue
+
+        count = len(paths)
+        if count <= 5:
+            weight = 3.0
+        elif count <= 20:
+            weight = 2.0
+        elif count <= 60:
+            weight = 1.0
+        else:
+            weight = 0.5
+
+        for path in paths:
+            score = weight
+            if word in path.lower():
+                score += 1.5
+            scores[path] = scores.get(path, 0.0) + score
+            evidence.setdefault(path, []).append(word)
+
+    ranked = sorted(
+        ((path, score, evidence.get(path, [])) for path, score in scores.items()),
+        key=lambda row: (-row[1], row[0]),
+    )
+    if not ranked:
+        return []
+
+    # A score below 2 represents only weak/broad evidence. Keep at most 12
+    # high-confidence files so Router scope is an estimate, not an arbitrary cap.
+    return [row for row in ranked if row[1] >= 2.0][:12]
 
 
 def analyze_repo(repo: Path, task: dict[str, Any], hints: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     text = f"{task.get('title','')} {task.get('description','')}".strip()
     lower = text.lower()
     words = tokenize(text)
-    candidates: list[str] = []
-    if words:
-        pattern = "|".join(re.escape(w) for w in words)
-        proc = subprocess.run(
-            ["rg", "-l", "-i", "--glob", "!vendor/**", "--glob", "!node_modules/**", pattern, str(repo)],
-            text=True, capture_output=True,
-        )
-        if proc.returncode in (0, 1):
-            candidates = [str(Path(line).relative_to(repo)) for line in proc.stdout.splitlines()[:30] if line.strip()]
+    relevant = _relevant_files(repo, words)
+    candidates = [path for path, _, _ in relevant]
 
     candidate_modules: list[str] = []
     for path in candidates:
@@ -77,7 +144,11 @@ def analyze_repo(repo: Path, task: dict[str, Any], hints: dict[str, Any]) -> tup
     related = 0
     if words:
         grep = words[0]
-        proc = subprocess.run(["git", "-C", str(repo), "log", "--all", "--oneline", "--grep", grep, "-i", "-n", "10"], text=True, capture_output=True)
+        proc = subprocess.run(
+            ["git", "-C", str(repo), "log", "--all", "--oneline", "--grep", grep, "-i", "-n", "10"],
+            text=True,
+            capture_output=True,
+        )
         if proc.returncode == 0:
             related = len([line for line in proc.stdout.splitlines() if line.strip()])
 
@@ -94,7 +165,7 @@ def analyze_repo(repo: Path, task: dict[str, Any], hints: dict[str, Any]) -> tup
     production_write = any(k in lower for k in ["production database", "production write", "deploy production"])
 
     derived = {
-        "estimated_files": max(1, min(30, len(candidates) or 1)),
+        "estimated_files": max(1, min(12, len(candidates) or 1)),
         "affected_components": max(1, min(12, len(candidate_modules) or 1)),
         "dependency_depth": 2 if external_api else 1,
         "tests_available": tests_available,
@@ -110,6 +181,10 @@ def analyze_repo(repo: Path, task: dict[str, Any], hints: dict[str, Any]) -> tup
         "likely_change_types": [],
         "candidate_modules": candidate_modules,
         "related_commits_found": related,
+        "relevance": [
+            {"path": path, "score": round(score, 2), "matched_terms": terms}
+            for path, score, terms in relevant[:8]
+        ],
     }
     for key, value in hints.items():
         if value is not None:
@@ -144,7 +219,8 @@ def analyze_repo(repo: Path, task: dict[str, Any], hints: dict[str, Any]) -> tup
 def _status_entries(workspace: Path) -> list[tuple[str, str]]:
     proc = subprocess.run(
         ["git", "-C", str(workspace), "status", "--porcelain=v1", "--untracked-files=all"],
-        text=True, capture_output=True,
+        text=True,
+        capture_output=True,
     )
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or "git status failed")
@@ -157,8 +233,6 @@ def _status_entries(workspace: Path) -> list[tuple[str, str]]:
 
 
 def diff_state(workspace: Path, max_bytes: int) -> dict[str, Any]:
-    # Intent-to-add makes untracked agent-created files visible to `git diff`
-    # without staging their contents for commit.
     proc = subprocess.run(
         ["git", "-C", str(workspace), "ls-files", "--others", "--exclude-standard", "-z"],
         capture_output=True,
@@ -166,7 +240,11 @@ def diff_state(workspace: Path, max_bytes: int) -> dict[str, Any]:
     untracked = [p.decode("utf-8", errors="replace") for p in proc.stdout.split(b"\0") if p]
     untracked = [p for p in untracked if p != ".ddev/config.coding-platform.yaml"]
     if untracked:
-        add = subprocess.run(["git", "-C", str(workspace), "add", "-N", "--", *untracked], text=True, capture_output=True)
+        add = subprocess.run(
+            ["git", "-C", str(workspace), "add", "-N", "--", *untracked],
+            text=True,
+            capture_output=True,
+        )
         if add.returncode != 0:
             raise RuntimeError(add.stderr.strip() or "git add -N failed")
 
@@ -187,14 +265,17 @@ def diff_state(workspace: Path, max_bytes: int) -> dict[str, Any]:
 
 
 def commit_changes(workspace: Path, message: str) -> str | None:
-    actual = [(status, name) for status, name in _status_entries(workspace) if name != ".ddev/config.coding-platform.yaml"]
+    actual = [
+        (status, name)
+        for status, name in _status_entries(workspace)
+        if name != ".ddev/config.coding-platform.yaml"
+    ]
     if not actual:
         return None
-    # Keep runtime-only DDEV override untracked so cleanup can still address the
-    # job-specific DDEV project without polluting the user's commit.
     proc = subprocess.run(
         ["git", "-C", str(workspace), "add", "-A", "--", ".", ":(exclude).ddev/config.coding-platform.yaml"],
-        text=True, capture_output=True,
+        text=True,
+        capture_output=True,
     )
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or "git add failed")
