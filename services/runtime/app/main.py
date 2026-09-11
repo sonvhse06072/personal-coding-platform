@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import secrets
 import shutil
@@ -123,11 +124,17 @@ async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
 @app.post("/v1/jobs/{job_id}/cancel", response_model=JobView, dependencies=[Depends(auth)])
 async def cancel_job(job_id: str) -> JobView:
     try:
-        # Drain external side effects before committing the terminal DB state.
-        # If Runtime crashes between these two operations, startup recovery still
-        # sees a non-terminal job and performs cleanup instead of trusting a
-        # prematurely persisted `cancelled` state while DDEV work may be alive.
+        # Drain every external side effect before the engine persists the terminal
+        # `cancelled` state. DDEV owns Composer/Drush/PHPUnit processes; cancelling
+        # the active asyncio task propagates into Codex/OpenCode and the Antigravity
+        # adapter, whose CancelledError handler terminates the host-side `agy` run.
+        # If Runtime crashes during this drain, the DB remains non-terminal and
+        # startup recovery will treat the job as interrupted and clean it again.
         await engine.ddev.cancel(job_id=job_id)
+        active = engine.active_jobs.get(job_id)
+        if active and not active.done():
+            active.cancel()
+            await asyncio.gather(active, return_exceptions=True)
         row = await engine.cancel(job_id)
     except RuntimeError as exc:
         raise runtime_error(exc) from exc
