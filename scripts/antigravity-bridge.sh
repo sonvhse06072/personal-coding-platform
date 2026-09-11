@@ -9,7 +9,9 @@ STATE_DIR="$HOME/.coding-platform"
 PID_FILE="$STATE_DIR/antigravity-bridge.pid"
 LOG_FILE="$STATE_DIR/antigravity-bridge.log"
 PORT="${ANTIGRAVITY_BRIDGE_PORT:-8792}"
-mkdir -p "$STATE_DIR" "${CODING_WORKSPACES_ROOT}"
+AGY_SETTINGS="$HOME/.gemini/antigravity-cli/settings.json"
+AGY_SETTINGS_BACKUP="$STATE_DIR/antigravity-settings.before-platform.json"
+mkdir -p "$STATE_DIR" "${CODING_WORKSPACES_ROOT}" "$(dirname "$AGY_SETTINGS")"
 
 running() {
   [[ -f "$PID_FILE" ]] || return 1
@@ -18,8 +20,45 @@ running() {
   [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
 }
 
+configure_safe_settings() {
+  if [[ -f "$AGY_SETTINGS" && ! -f "$AGY_SETTINGS_BACKUP" ]]; then
+    cp -a "$AGY_SETTINGS" "$AGY_SETTINGS_BACKUP"
+  fi
+  python3 - "$AGY_SETTINGS" <<'PY'
+import json
+import os
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+try:
+    data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+except (json.JSONDecodeError, OSError) as exc:
+    raise SystemExit(f"Cannot read Antigravity settings {path}: {exc}")
+if not isinstance(data, dict):
+    raise SystemExit(f"Antigravity settings must contain a JSON object: {path}")
+
+# Official Antigravity CLI safety controls. Sandboxed terminal commands may run
+# autonomously; anything needing to escape the sandbox is not auto-approved.
+data["enableTerminalSandbox"] = True
+data["toolPermission"] = "proceed-in-sandbox"
+data["allowNonWorkspaceAccess"] = False
+# Individual-plan privacy is user-controlled rather than an Enterprise contract.
+# The platform therefore enforces the available data-collection opt-out locally.
+data["enableTelemetry"] = False
+
+path.parent.mkdir(parents=True, exist_ok=True)
+tmp = path.with_suffix(".tmp")
+tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+os.chmod(tmp, 0o600)
+tmp.replace(path)
+print(f"Antigravity safe settings enforced: {path}")
+PY
+}
+
 start() {
   command -v agy >/dev/null 2>&1 || { echo "agy is required on the WSL host." >&2; exit 1; }
+  configure_safe_settings
   if running; then
     echo "Antigravity bridge already running (pid $(cat "$PID_FILE"))."
     return
@@ -31,6 +70,7 @@ start() {
     --token "$ANTIGRAVITY_BRIDGE_TOKEN" \
     --workspaces "$CODING_WORKSPACES_ROOT" \
     --agy-bin "$(command -v agy)" \
+    --settings "$AGY_SETTINGS" \
     >>"$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
   for _ in $(seq 1 30); do
