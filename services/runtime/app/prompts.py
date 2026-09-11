@@ -10,6 +10,7 @@ def execution_prompt(*, task: dict[str, Any], route: dict[str, Any], repo_analys
         "You are executing a bounded coding job inside an isolated git workspace.",
         "The repository is the source of truth. Read existing requirements, architecture docs, tests and implementation before changing code.",
         "Do not commit, push, merge, deploy, modify git remotes, or run Docker/DDEV. The runtime owns those actions.",
+        "Do not request sandbox bypass or unsandboxed execution. Use built-in file tools and sandboxed/read-only Git commands only; if a command is denied, continue without it.",
         "Do not broaden scope. If you discover desirable unrelated work, mention it in your final note but do not implement it.",
         "Stop when the requested behavior is implemented. The runtime will run deterministic verification afterward.",
         "",
@@ -29,6 +30,7 @@ def execution_prompt(*, task: dict[str, Any], route: dict[str, Any], repo_analys
 def planning_prompt(*, task: dict[str, Any], repo_analysis: dict[str, Any]) -> str:
     return "\n".join([
         "Analyze this repository and produce a concise implementation plan. Do not edit files.",
+        "Use built-in file tools and sandboxed/read-only Git commands only. Do not request sandbox bypass or unsandboxed execution.",
         "Prefer existing project patterns and tests. Identify risks and exact verification steps.",
         f"TASK: {task.get('title')}\n{task.get('description','')}",
         f"REPOSITORY SIGNALS: {json.dumps(repo_analysis, ensure_ascii=False)}",
@@ -38,6 +40,7 @@ def planning_prompt(*, task: dict[str, Any], repo_analysis: dict[str, Any]) -> s
 def evaluator_prompt(*, task: dict[str, Any], diff: str, verification: dict[str, Any]) -> str:
     return "\n".join([
         "Review the current workspace changes read-only. Do not edit files.",
+        "Use built-in file tools and sandboxed/read-only Git commands only. Do not request sandbox bypass or unsandboxed execution.",
         "Return PASS if the implementation satisfies the task with no material correctness, security, regression, or missing-test issue. Otherwise return FAIL and concise actionable findings.",
         f"TASK: {task.get('title')}\n{task.get('description','')}",
         f"VERIFICATION: {json.dumps(verification, ensure_ascii=False)}",
