@@ -22,6 +22,8 @@ REQUIRED_SETTINGS = {
     "enableTelemetry": False,
 }
 REQUIRED_ALLOW_RULES = {
+    "read_file(.)",
+    "write_file(.)",
     "unsandboxed(git status)",
     "unsandboxed(git diff)",
     "unsandboxed(git log)",
@@ -31,6 +33,8 @@ REQUIRED_ALLOW_RULES = {
     "unsandboxed(git rev-parse)",
 }
 REQUIRED_DENY_RULES = {
+    "read_file(.git/)",
+    "write_file(.git/)",
     "command(ddev)",
     "command(docker)",
     "command(sudo)",
@@ -48,7 +52,7 @@ REQUIRED_DENY_RULES = {
     "unsandboxed(git merge)",
     "unsandboxed(git rebase)",
 }
-FORBIDDEN_ALLOW_RULES = {"unsandboxed(*)"}
+FORBIDDEN_ALLOW_RULES = {"unsandboxed(*)", "read_file(*)", "write_file(*)"}
 
 
 def contained(path: Path, root: Path) -> bool:
@@ -118,6 +122,7 @@ def settings_status(path: Path) -> tuple[bool, dict]:
         "required": REQUIRED_SETTINGS,
         "required_allow_rules": sorted(REQUIRED_ALLOW_RULES),
         "required_deny_rules": sorted(REQUIRED_DENY_RULES),
+        "forbidden_allow_rules": sorted(FORBIDDEN_ALLOW_RULES),
         "mismatches": mismatches,
     }
 
@@ -158,7 +163,7 @@ class Bridge:
         bridge = self
 
         class Handler(BaseHTTPRequestHandler):
-            server_version = "PersonalCodingAntigravityBridge/1.3"
+            server_version = "PersonalCodingAntigravityBridge/1.4"
 
             def log_message(self, fmt: str, *args):
                 print(f"agy-bridge: {self.address_string()} - {fmt % args}", flush=True)
@@ -195,7 +200,7 @@ class Bridge:
                 return self.send_json(200 if safe else 503, {
                     "status": "ok" if safe else "degraded",
                     "service": "antigravity-host-bridge",
-                    "version": "1.3",
+                    "version": "1.4",
                     "agy": bridge.agy_bin,
                     "workspaces": str(bridge.workspaces),
                     "active_runs": active_runs,
