@@ -1,4 +1,4 @@
-version: 2
+version: 3
 models:
   groq_free:
     kind: llm
@@ -101,7 +101,14 @@ models:
     base_success: 0.86
     privacy:
       private_code_allowed: true
+      # Individual Antigravity does not carry the Enterprise contractual
+      # no-training guarantee. The platform disables the documented telemetry /
+      # data-collection control on the WSL host and the bridge fails closed if
+      # that opt-out is no longer active.
       training_allowed: false
+      training_policy_basis: user_opt_out_enforced
+      enterprise_data_guarantee: false
+      telemetry_opt_out_required: true
       zero_retention_supported: false
   codex_plus:
     kind: agent
