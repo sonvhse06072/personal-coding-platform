@@ -213,6 +213,7 @@ class Bridge:
         self.agy_bin = agy_bin
         self.settings = settings.resolve()
         self._runs: dict[str, subprocess.Popen] = {}
+        self._cancelled_runs: set[str] = set()
         self._runs_lock = threading.Lock()
         # Antigravity uses one global settings.json. Serialize Antigravity runs so
         # each job can receive exact absolute file grants without cross-job races.
@@ -225,12 +226,23 @@ class Bridge:
     def unregister_run(self, run_id: str) -> None:
         with self._runs_lock:
             self._runs.pop(run_id, None)
+            self._cancelled_runs.discard(run_id)
+
+    def consume_cancelled(self, run_id: str) -> bool:
+        with self._runs_lock:
+            if run_id not in self._cancelled_runs:
+                return False
+            self._cancelled_runs.discard(run_id)
+            return True
 
     def cancel_run(self, run_id: str) -> bool:
         with self._runs_lock:
             proc = self._runs.get(run_id)
-        if proc is None:
-            return False
+            if proc is None:
+                # The request may be queued behind another Antigravity run. Record
+                # cancellation so it cannot start after the global settings lock frees.
+                self._cancelled_runs.add(run_id)
+                return True
         terminate_process_group(proc)
         return True
 
@@ -279,6 +291,7 @@ class Bridge:
                 safe, safety = settings_status(bridge.settings)
                 with bridge._runs_lock:
                     active_runs = len(bridge._runs)
+                    pending_cancellations = len(bridge._cancelled_runs)
                 return self.send_json(200 if safe else 503, {
                     "status": "ok" if safe else "degraded",
                     "service": "antigravity-host-bridge",
@@ -286,6 +299,7 @@ class Bridge:
                     "agy": bridge.agy_bin,
                     "workspaces": str(bridge.workspaces),
                     "active_runs": active_runs,
+                    "pending_cancellations": pending_cancellations,
                     "safe_settings": safe,
                     "safety": safety,
                 })
@@ -347,11 +361,27 @@ class Bridge:
                     # settings.json is global to the signed-in host account. One run
                     # at a time receives absolute grants for only its isolated clone.
                     with bridge._agy_lock:
+                        if bridge.consume_cancelled(run_id):
+                            return self.send_json(200, {
+                                "run_id": run_id,
+                                "returncode": 130,
+                                "stdout": "",
+                                "stderr": "Antigravity run cancelled before start",
+                                "payload": None,
+                            })
                         scoped_allow, scoped_deny = add_workspace_file_rules(
                             bridge.settings, workspace
                         )
                         proc = None
                         try:
+                            if bridge.consume_cancelled(run_id):
+                                return self.send_json(200, {
+                                    "run_id": run_id,
+                                    "returncode": 130,
+                                    "stdout": "",
+                                    "stderr": "Antigravity run cancelled before process launch",
+                                    "payload": None,
+                                })
                             proc = subprocess.Popen(
                                 cmd,
                                 cwd=workspace,
