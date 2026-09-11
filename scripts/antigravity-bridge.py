@@ -5,9 +5,12 @@ import argparse
 import hmac
 import json
 import os
+import signal
 from pathlib import Path
 import shutil
 import subprocess
+import threading
+import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
@@ -19,17 +22,57 @@ def contained(path: Path, root: Path) -> bool:
         return False
 
 
+def terminate_process_group(proc: subprocess.Popen, grace_seconds: float = 3.0) -> None:
+    if proc.poll() is not None:
+        return
+    try:
+        os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    try:
+        proc.wait(timeout=grace_seconds)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        return
+    try:
+        proc.wait(timeout=2)
+    except subprocess.TimeoutExpired:
+        pass
+
+
 class Bridge:
     def __init__(self, *, token: str, workspaces: Path, agy_bin: str):
         self.token = token
         self.workspaces = workspaces.resolve()
         self.agy_bin = agy_bin
+        self._runs: dict[str, subprocess.Popen] = {}
+        self._runs_lock = threading.Lock()
+
+    def register_run(self, run_id: str, proc: subprocess.Popen) -> None:
+        with self._runs_lock:
+            self._runs[run_id] = proc
+
+    def unregister_run(self, run_id: str) -> None:
+        with self._runs_lock:
+            self._runs.pop(run_id, None)
+
+    def cancel_run(self, run_id: str) -> bool:
+        with self._runs_lock:
+            proc = self._runs.get(run_id)
+        if proc is None:
+            return False
+        terminate_process_group(proc)
+        return True
 
     def handler(self):
         bridge = self
 
         class Handler(BaseHTTPRequestHandler):
-            server_version = "PersonalCodingAntigravityBridge/1.0"
+            server_version = "PersonalCodingAntigravityBridge/1.1"
 
             def log_message(self, fmt: str, *args):
                 print(f"agy-bridge: {self.address_string()} - {fmt % args}", flush=True)
@@ -47,26 +90,45 @@ class Bridge:
                 supplied = header.removeprefix("Bearer ").strip() if header.startswith("Bearer ") else ""
                 return bool(supplied) and hmac.compare_digest(supplied, bridge.token)
 
+            def read_payload(self) -> dict:
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length) if length else b"{}"
+                value = json.loads(raw or b"{}")
+                if not isinstance(value, dict):
+                    raise ValueError("JSON body must be an object")
+                return value
+
             def do_GET(self):
                 if not self.authorized():
                     return self.send_json(401, {"error": "unauthorized"})
                 if self.path != "/health":
                     return self.send_json(404, {"error": "not_found"})
+                with bridge._runs_lock:
+                    active_runs = len(bridge._runs)
                 return self.send_json(200, {
                     "status": "ok",
                     "service": "antigravity-host-bridge",
                     "agy": bridge.agy_bin,
                     "workspaces": str(bridge.workspaces),
+                    "active_runs": active_runs,
                 })
 
             def do_POST(self):
                 if not self.authorized():
                     return self.send_json(401, {"error": "unauthorized"})
-                if self.path != "/run":
-                    return self.send_json(404, {"error": "not_found"})
                 try:
-                    length = int(self.headers.get("Content-Length", "0"))
-                    payload = json.loads(self.rfile.read(length) or b"{}")
+                    payload = self.read_payload()
+                    if self.path == "/cancel":
+                        run_id = str(payload.get("run_id") or "").strip()
+                        if not run_id:
+                            return self.send_json(400, {"error": "run_id_required"})
+                        return self.send_json(200, {
+                            "run_id": run_id,
+                            "cancelled": bridge.cancel_run(run_id),
+                        })
+                    if self.path != "/run":
+                        return self.send_json(404, {"error": "not_found"})
+
                     workspace = Path(str(payload["workspace"])).resolve()
                     if not workspace.is_dir() or not contained(workspace, bridge.workspaces):
                         return self.send_json(403, {"error": "workspace_not_allowed"})
@@ -78,6 +140,9 @@ class Bridge:
                     effort = str(payload.get("effort") or "medium")
                     if effort not in {"low", "medium", "high"}:
                         effort = "medium"
+                    run_id = str(payload.get("run_id") or uuid.uuid4().hex).strip()
+                    if not run_id or len(run_id) > 128:
+                        return self.send_json(400, {"error": "invalid_run_id"})
 
                     cmd = [
                         bridge.agy_bin,
@@ -93,32 +158,42 @@ class Bridge:
 
                     env = os.environ.copy()
                     env["NO_COLOR"] = "1"
-                    proc = subprocess.run(
+                    proc = subprocess.Popen(
                         cmd,
                         cwd=workspace,
                         env=env,
                         text=True,
-                        capture_output=True,
-                        timeout=timeout + 15,
-                        check=False,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        start_new_session=True,
                     )
+                    bridge.register_run(run_id, proc)
+                    try:
+                        stdout, stderr = proc.communicate(timeout=timeout + 15)
+                    except subprocess.TimeoutExpired:
+                        terminate_process_group(proc)
+                        stdout, stderr = proc.communicate()
+                        return self.send_json(200, {
+                            "run_id": run_id,
+                            "returncode": 124,
+                            "stdout": stdout or "",
+                            "stderr": (stderr or "") + "\nAntigravity run timed out",
+                            "payload": None,
+                        })
+                    finally:
+                        bridge.unregister_run(run_id)
+
                     parsed = None
                     try:
-                        parsed = json.loads(proc.stdout)
+                        parsed = json.loads(stdout)
                     except json.JSONDecodeError:
                         pass
                     return self.send_json(200, {
-                        "returncode": proc.returncode,
-                        "stdout": proc.stdout,
-                        "stderr": proc.stderr,
+                        "run_id": run_id,
+                        "returncode": int(proc.returncode or 0),
+                        "stdout": stdout,
+                        "stderr": stderr,
                         "payload": parsed,
-                    })
-                except subprocess.TimeoutExpired as exc:
-                    return self.send_json(200, {
-                        "returncode": 124,
-                        "stdout": exc.stdout or "",
-                        "stderr": (exc.stderr or "") + "\nAntigravity run timed out",
-                        "payload": None,
                     })
                 except Exception as exc:
                     return self.send_json(500, {"error": f"{type(exc).__name__}: {exc}"})
