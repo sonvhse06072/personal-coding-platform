@@ -1,0 +1,179 @@
+version: 1
+complexity_weights:
+  scope: 0.18
+  dependency_depth: 0.1
+  ambiguity: 0.14
+  architecture_impact: 0.14
+  verification_difficulty: 0.1
+  risk: 0.12
+  context_requirement: 0.1
+  novelty: 0.07
+  reasoning_requirement: 0.05
+profiles:
+  fast:
+    max_score: 29
+    analysis_depth: 1
+    planner: false
+    evaluator: false
+    max_model_calls: 3
+    max_tool_calls: 35
+    max_iterations: 2
+    max_repair_iterations: 1
+    max_escalations: 0
+    max_provider_failovers: 1
+    max_model_failovers: 1
+    max_test_runs: 4
+    max_wall_time_minutes: 10
+    hard_cost_usd: 0.3
+    soft_cost_usd: 0.15
+    max_changed_files: 6
+    executor_roles:
+    - executor
+    preferred_executor_ids:
+    - gemini_free
+    - deepseek_flash
+    - codex_plus
+    max_input_tokens: 250000
+    max_output_tokens: 40000
+  standard:
+    min_score: 30
+    max_score: 59
+    analysis_depth: 1
+    planner: false
+    evaluator: false
+    max_model_calls: 8
+    max_tool_calls: 80
+    max_iterations: 5
+    max_repair_iterations: 2
+    max_escalations: 1
+    max_provider_failovers: 2
+    max_model_failovers: 2
+    max_test_runs: 8
+    max_wall_time_minutes: 25
+    hard_cost_usd: 1.5
+    soft_cost_usd: 0.75
+    max_changed_files: 14
+    executor_roles:
+    - executor
+    preferred_executor_ids:
+    - gemini_free
+    - codex_plus
+    - deepseek_flash
+    max_input_tokens: 800000
+    max_output_tokens: 120000
+  complex:
+    min_score: 60
+    max_score: 79
+    analysis_depth: 2
+    planner: true
+    evaluator: true
+    max_model_calls: 15
+    max_tool_calls: 160
+    max_iterations: 8
+    max_repair_iterations: 4
+    max_escalations: 2
+    max_provider_failovers: 2
+    max_model_failovers: 2
+    max_test_runs: 14
+    max_wall_time_minutes: 60
+    hard_cost_usd: 5.0
+    soft_cost_usd: 2.5
+    max_changed_files: 30
+    planner_roles:
+    - planner
+    executor_roles:
+    - executor
+    - debugger
+    evaluator_roles:
+    - reviewer
+    preferred_planner_ids:
+    - codex_plus
+    - claude_sonnet
+    - frontier_codex
+    preferred_executor_ids:
+    - codex_plus
+    - deepseek_flash
+    - frontier_codex
+    preferred_evaluator_ids:
+    - claude_sonnet
+    - codex_plus
+    max_input_tokens: 2000000
+    max_output_tokens: 300000
+  critical:
+    min_score: 80
+    analysis_depth: 3
+    planner: true
+    evaluator: true
+    max_model_calls: 20
+    max_tool_calls: 220
+    max_iterations: 10
+    max_repair_iterations: 4
+    max_escalations: 2
+    max_provider_failovers: 2
+    max_model_failovers: 2
+    max_test_runs: 18
+    max_wall_time_minutes: 90
+    hard_cost_usd: 10.0
+    soft_cost_usd: 5.0
+    max_changed_files: 45
+    planner_roles:
+    - planner
+    - architecture
+    executor_roles:
+    - executor
+    - debugger
+    evaluator_roles:
+    - reviewer
+    preferred_planner_ids:
+    - frontier_codex
+    - codex_plus
+    - claude_sonnet
+    preferred_executor_ids:
+    - frontier_codex
+    - codex_plus
+    preferred_evaluator_ids:
+    - claude_sonnet
+    - codex_plus
+    max_input_tokens: 4000000
+    max_output_tokens: 500000
+critical_triggers:
+- destructive_migration
+- production_write
+- branch_protection_change
+- secret_management_change
+human_decision_triggers:
+- architecture_choice
+- product_ambiguity_high_impact
+- destructive_migration
+- production_write
+- major_dependency_addition
+- security_boundary_change
+- budget_exhausted_with_decision
+minimum_profile_overrides:
+  security_sensitive: complex
+  schema_change: complex
+  authentication_change: critical
+  authorization_change: critical
+  production_write: critical
+  destructive_migration: critical
+scoring:
+  capability_weight: 0.52
+  predicted_success_weight: 0.3
+  preferred_order_bonus: 0.08
+  free_cost_bonus: 0.06
+  subscription_cost_bonus: 0.04
+  ultra_low_cost_bonus: 0.03
+  premium_cost_penalty: 0.04
+  scarce_cost_penalty: 0.1
+  quota_pressure_penalty: 0.12
+  error_rate_penalty: 0.12
+  latency_penalty: 0.03
+  unhealthy_penalty: 1.0
+  fallback_unknown_success: 0.7
+anti_loop:
+  same_failure_fingerprint_limit: 2
+  no_progress_iterations: 2
+  diff_oscillation_limit: 2
+  scope_growth_ratio: 2.0
+  escalation_monotonic: true
+  escalation_resets_budget: false

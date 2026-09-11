@@ -1,0 +1,111 @@
+version: 1
+projects:
+  default:
+    path: ${CODING_PROJECTS_ROOT}/example-project
+    base_branch: main
+    privacy:
+      private_code: true
+      allow_training_provider: false
+      require_zero_retention: false
+    human_policy:
+      routine_review: false
+      important_decisions_only: true
+    autonomy:
+      allow_commit: true
+      allow_push_ai_branch: true
+      allow_create_pr: true
+      allow_auto_merge_low_risk: true
+      allow_production_deploy: false
+    runtime:
+      branch_prefix: ai
+      max_diff_bytes: 500000
+      keep_workspace_on_success: true
+      keep_workspace_on_failure: true
+    ddev:
+      enabled: true
+      preflight:
+      - ddev start -y
+      targeted_tests:
+      - ddev exec vendor/bin/phpcs web/modules/custom || true
+      static_analysis:
+      - ddev exec vendor/bin/phpstan analyse || true
+      full_tests: []
+      cleanup:
+      - ddev stop --unlist --omit-snapshot
+  example-drupal:
+    path: ${CODING_PROJECTS_ROOT}/example-drupal
+    base_branch: develop
+    privacy:
+      private_code: true
+      allow_training_provider: false
+      require_zero_retention: false
+    human_policy:
+      routine_review: false
+      important_decisions_only: true
+    autonomy:
+      allow_commit: true
+      allow_push_ai_branch: true
+      allow_create_pr: true
+      allow_auto_merge_low_risk: true
+      allow_production_deploy: false
+    runtime:
+      branch_prefix: ai
+      max_diff_bytes: 750000
+      keep_workspace_on_success: true
+      keep_workspace_on_failure: true
+    ddev:
+      enabled: true
+      preflight:
+      - ddev start -y
+      - ddev drush cr
+      targeted_tests:
+      - ddev exec vendor/bin/phpcs web/modules/custom
+      static_analysis:
+      - ddev exec vendor/bin/phpstan analyse web/modules/custom
+      full_tests:
+      - ddev exec vendor/bin/phpunit
+      cleanup:
+      - ddev stop --unlist --omit-snapshot
+  chonhac:
+    path: /home/sonvh/chonhac
+    base_branch: main
+
+    privacy:
+      private_code: true
+      allow_training_provider: false
+      require_zero_retention: false
+
+    human_policy:
+      routine_review: false
+      important_decisions_only: true
+
+    autonomy:
+      allow_commit: true
+      allow_push_ai_branch: false
+      allow_create_pr: false
+      allow_auto_merge_low_risk: false
+      allow_production_deploy: false
+
+    runtime:
+      branch_prefix: ai
+      max_diff_bytes: 750000
+      keep_workspace_on_success: true
+      keep_workspace_on_failure: true
+
+    ddev:
+      enabled: true
+
+      preflight:
+        - ddev start -y
+        - ddev composer install --no-interaction
+        - ddev drush cr
+
+      targeted_tests:
+        - ddev exec vendor/bin/phpcs web/modules/custom
+
+      static_analysis: []
+
+      full_tests: []
+
+      cleanup:
+        - ddev stop --unlist --omit-snapshot

@@ -1,0 +1,238 @@
+version: 1
+models:
+  groq_free:
+    kind: llm
+    provider: groq
+    adapter: litellm
+    model: qwen/qwen3.6-27b
+    tier: utility
+    cost_class: free
+    roles:
+    - classify
+    - summarize
+    - failure_analysis
+    - compact
+    capabilities:
+      coding: 4
+      reasoning: 6
+      debugging: 5
+      planning: 4
+      review: 5
+      structured_output: 8
+      repo_exploration: 3
+    base_success: 0.72
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: false
+  cloudflare_free:
+    kind: llm
+    provider: cloudflare
+    adapter: litellm
+    model: '@cf/zai-org/glm-4.7-flash'
+    tier: utility
+    cost_class: free
+    roles:
+    - classify
+    - summarize
+    - failure_analysis
+    - compact
+    capabilities:
+      coding: 4
+      reasoning: 5
+      debugging: 4
+      planning: 4
+      review: 4
+      structured_output: 7
+      repo_exploration: 3
+    base_success: 0.68
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: false
+  openai_luna:
+    kind: llm
+    provider: openai
+    adapter: litellm
+    model: gpt-5.6-luna
+    tier: utility
+    cost_class: ultra_low
+    roles:
+    - classify
+    - summarize
+    - failure_analysis
+    - compact
+    - structured_reasoning
+    capabilities:
+      coding: 6
+      reasoning: 7
+      debugging: 6
+      planning: 6
+      review: 6
+      structured_output: 9
+      repo_exploration: 5
+    base_success: 0.82
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: true
+  gemini_free:
+    kind: agent
+    provider: google
+    adapter: gemini_cli
+    model: auto
+    tier: balanced
+    cost_class: free
+    roles:
+    - explore
+    - executor
+    - repair
+    - test_writer
+    capabilities:
+      coding: 8
+      reasoning: 8
+      debugging: 7
+      planning: 7
+      review: 6
+      structured_output: 6
+      repo_exploration: 9
+    base_success: 0.82
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: false
+  codex_plus:
+    kind: agent
+    provider: openai
+    adapter: codex_cli
+    model: gpt-5.6-sol
+    tier: strong
+    cost_class: subscription
+    roles:
+    - explore
+    - executor
+    - repair
+    - debugger
+    - planner
+    - architecture
+    capabilities:
+      coding: 9
+      reasoning: 9
+      debugging: 9
+      planning: 9
+      review: 8
+      structured_output: 7
+      repo_exploration: 9
+    base_success: 0.91
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: true
+  deepseek_flash:
+    kind: agent
+    provider: deepseek
+    adapter: opencode
+    model: deepseek/deepseek-v4-flash
+    tier: balanced
+    cost_class: ultra_low
+    roles:
+    - explore
+    - executor
+    - repair
+    - test_writer
+    - debugger
+    capabilities:
+      coding: 8
+      reasoning: 8
+      debugging: 8
+      planning: 7
+      review: 6
+      structured_output: 8
+      repo_exploration: 8
+    base_success: 0.84
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: false
+    pricing_usd_per_million:
+      input: 0.44
+      output: 1.32
+      basis: peak_cache_miss_conservative
+  claude_sonnet:
+    kind: agent
+    provider: anthropic
+    adapter: opencode
+    model: anthropic/claude-sonnet-5
+    tier: premium
+    cost_class: premium
+    roles:
+    - reviewer
+    - debugger
+    - planner
+    capabilities:
+      coding: 9
+      reasoning: 9
+      debugging: 9
+      planning: 9
+      review: 10
+      structured_output: 8
+      repo_exploration: 8
+    base_success: 0.92
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: true
+    pricing_usd_per_million:
+      input: 2.0
+      output: 10.0
+      basis: current_api_rate
+  frontier_codex:
+    kind: agent
+    provider: openai
+    adapter: codex_cli
+    model: gpt-6-astra
+    tier: frontier
+    cost_class: scarce
+    roles:
+    - executor
+    - debugger
+    - planner
+    - architecture
+    - frontier_escalation
+    capabilities:
+      coding: 10
+      reasoning: 10
+      debugging: 10
+      planning: 10
+      review: 9
+      structured_output: 8
+      repo_exploration: 9
+    base_success: 0.96
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: true
+  openrouter_free:
+    kind: llm
+    provider: openrouter
+    adapter: litellm
+    model: openrouter/free
+    tier: utility
+    cost_class: free
+    roles:
+    - classify
+    - summarize
+    - failure_analysis
+    capabilities:
+      coding: 5
+      reasoning: 5
+      debugging: 5
+      planning: 4
+      review: 4
+      structured_output: 6
+      repo_exploration: 3
+    base_success: 0.6
+    privacy:
+      private_code_allowed: false
+      training_allowed: true
+      zero_retention_supported: false

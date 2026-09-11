@@ -1,0 +1,114 @@
+{
+  "job_id": "job-123",
+  "source_commit": "a7bd3499",
+  "complexity_score": 50,
+  "dimensions": {
+    "scope": 70,
+    "dependency_depth": 40,
+    "ambiguity": 37,
+    "architecture_impact": 25,
+    "verification_difficulty": 65,
+    "risk": 30,
+    "context_requirement": 88,
+    "novelty": 20,
+    "reasoning_requirement": 83
+  },
+  "strategy": {
+    "profile": "standard",
+    "analysis_depth": 1,
+    "planner": null,
+    "executor": {
+      "id": "gemini_free",
+      "provider": "google",
+      "adapter": "gemini_cli",
+      "model": "auto",
+      "score": 0.7678,
+      "predicted_success": 0.82,
+      "reasons": [
+        "capability=0.79",
+        "predicted_success=0.82",
+        "preferred-order bonus=0.080",
+        "free cost bonus",
+        "quota penalty=0.024",
+        "error-rate penalty=0.001",
+        "latency penalty=0.005"
+      ]
+    },
+    "evaluator": null,
+    "human_decision": {
+      "required": false,
+      "triggers": [],
+      "reason": null
+    },
+    "budget": {
+      "max_model_calls": 8,
+      "max_tool_calls": 80,
+      "max_iterations": 5,
+      "max_repair_iterations": 2,
+      "max_escalations": 1,
+      "max_test_runs": 8,
+      "max_wall_time_minutes": 25,
+      "soft_cost_usd": 0.75,
+      "hard_cost_usd": 1.5,
+      "max_changed_files": 14
+    },
+    "anti_loop": {
+      "same_failure_fingerprint_limit": 2,
+      "no_progress_iterations": 2,
+      "diff_oscillation_limit": 2,
+      "scope_growth_ratio": 2.0,
+      "escalation_monotonic": true,
+      "escalation_resets_budget": false
+    },
+    "permissions": {
+      "commit": true,
+      "push_ai_branch": true,
+      "create_pr": true,
+      "auto_merge_low_risk": true,
+      "production_deploy": false
+    },
+    "definition_of_done": {
+      "required": [
+        "targeted_tests_pass",
+        "static_analysis_pass",
+        "no_unexpected_scope"
+      ],
+      "forbidden": [
+        "unapproved_production_write",
+        "budget_override",
+        "scope_expansion_without_reassessment"
+      ]
+    },
+    "reasons": [
+      "Complexity score 50 maps to standard",
+      "Executor selected: gemini_free",
+      "Analysis depth: 1",
+      "Existing implementation pattern lowers novelty/ambiguity"
+    ]
+  },
+  "rejected_candidates": {
+    "groq_free": [
+      "not an agent",
+      "missing required role: ['executor']"
+    ],
+    "cloudflare_free": [
+      "not an agent",
+      "missing required role: ['executor']"
+    ],
+    "openai_luna": [
+      "not an agent",
+      "missing required role: ['executor']"
+    ],
+    "claude_sonnet": [
+      "missing required role: ['executor']"
+    ],
+    "openrouter_free": [
+      "not an agent",
+      "missing required role: ['executor']",
+      "private code is not allowed by provider policy",
+      "provider may train on data"
+    ]
+  },
+  "policy_version": 1,
+  "registry_version": 1
+}

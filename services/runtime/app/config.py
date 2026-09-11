@@ -1,0 +1,69 @@
+from __future__ import annotations
+
+import os
+import re
+from functools import lru_cache
+from pathlib import Path
+from typing import Any
+
+import yaml
+
+
+SERVICE_DIR = Path(__file__).resolve().parent.parent
+def _default_config_file(name: str, container_default: str) -> str:
+    candidates: list[Path] = []
+    if SERVICE_DIR.parent.name == "services":
+        candidates.append(SERVICE_DIR.parent.parent / "config" / name)
+    candidates.append(Path(container_default))
+    candidates.append(SERVICE_DIR / "config" / name)
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return container_default
+
+
+def _load_yaml(path: str | Path) -> dict[str, Any]:
+    with open(path, "r", encoding="utf-8") as handle:
+        value = yaml.safe_load(handle) or {}
+    if not isinstance(value, dict):
+        raise ValueError(f"Expected YAML object in {path}")
+    return value
+
+
+def expand_env(value: str) -> str:
+    # os.path.expandvars leaves unknown variables unchanged, which is useful for
+    # producing a clear config error instead of silently changing the path.
+    return os.path.expanduser(os.path.expandvars(value))
+
+
+@lru_cache(maxsize=1)
+def models_doc() -> dict[str, Any]:
+    return _load_yaml(os.getenv("MODELS_FILE", _default_config_file("models.yml", "/config/models.yml")))
+
+
+def model_config(model_id: str) -> dict[str, Any]:
+    models = models_doc().get("models", {})
+    return dict(models.get(model_id, {}))
+
+
+@lru_cache(maxsize=1)
+def projects_doc() -> dict[str, Any]:
+    return _load_yaml(os.getenv("PROJECTS_FILE", _default_config_file("projects.yml", "/config/projects.yml")))
+
+
+def project_config(project_id: str) -> dict[str, Any]:
+    projects = projects_doc().get("projects", {})
+    if project_id not in projects:
+        raise KeyError(f"Unknown project_id: {project_id}")
+    cfg = dict(projects[project_id])
+    raw_path = str(cfg.get("path", ""))
+    path = expand_env(raw_path)
+    if not path or re.search(r"\$\{[^}]+\}", path):
+        raise ValueError(f"Project {project_id} has unresolved path: {raw_path}")
+    cfg["path"] = path
+    return cfg
+
+
+def clear_config_cache() -> None:
+    projects_doc.cache_clear()
+    models_doc.cache_clear()

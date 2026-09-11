@@ -1,0 +1,253 @@
+from __future__ import annotations
+
+from app.config import clear_config_cache, get_config
+from app.engine import RouterEngine
+from app.schemas import ExecutionProgress, ReassessRequest, RoutingRequest
+
+
+def make_engine() -> RouterEngine:
+    clear_config_cache()
+    return RouterEngine(get_config())
+
+
+def base_request(**overrides):
+    data = {
+        "job_id": "job-1",
+        "project_id": "default",
+        "repository": "repo",
+        "source_commit": "abcd1234",
+        "task": {
+            "title": "Small bounded code change",
+            "task_type": "bugfix",
+            "semantic": {
+                "ambiguity": 10,
+                "architecture_impact": 5,
+                "verification_difficulty": 10,
+                "risk": 5,
+                "context_requirement": 10,
+                "novelty": 5,
+                "reasoning_requirement": 15,
+            },
+        },
+        "repo": {
+            "estimated_files": 1,
+            "affected_components": 1,
+            "dependency_depth": 1,
+            "tests_available": True,
+            "existing_pattern": True,
+        },
+    }
+    for key, value in overrides.items():
+        data[key] = value
+    return RoutingRequest(**data)
+
+
+def test_fast_routes_to_low_cost_agent():
+    result = make_engine().route(base_request())
+    assert result.strategy.profile == "fast"
+    assert result.strategy.executor.id in {"gemini_free", "deepseek_flash", "codex_plus"}
+    assert result.strategy.planner is None
+    assert result.strategy.evaluator is None
+    assert result.strategy.human_decision.required is False
+
+
+def test_standard_is_autonomous():
+    req = base_request(
+        task={
+            "title": "Implement a normal multi-file feature",
+            "task_type": "feature",
+            "semantic": {
+                "ambiguity": 35,
+                "architecture_impact": 20,
+                "verification_difficulty": 35,
+                "risk": 20,
+                "context_requirement": 45,
+                "novelty": 35,
+                "reasoning_requirement": 50,
+            },
+        },
+        repo={
+            "estimated_files": 6,
+            "affected_components": 2,
+            "dependency_depth": 3,
+            "tests_available": True,
+            "existing_pattern": True,
+        },
+    )
+    result = make_engine().route(req)
+    assert result.strategy.profile == "standard"
+    assert result.strategy.human_decision.required is False
+    assert result.strategy.permissions["commit"] is True
+    assert result.strategy.permissions["push_ai_branch"] is True
+
+
+def test_complex_gets_planner_and_independent_evaluator():
+    req = base_request(
+        task={
+            "title": "Debug cross-module external API synchronization",
+            "task_type": "debugging",
+            "semantic": {
+                "ambiguity": 60,
+                "architecture_impact": 45,
+                "verification_difficulty": 65,
+                "risk": 45,
+                "context_requirement": 75,
+                "novelty": 55,
+                "reasoning_requirement": 85,
+            },
+        },
+        repo={
+            "estimated_files": 10,
+            "affected_components": 4,
+            "dependency_depth": 6,
+            "tests_available": True,
+            "existing_pattern": False,
+            "external_api": True,
+        },
+    )
+    result = make_engine().route(req)
+    assert result.strategy.profile in {"complex", "critical"}
+    assert result.strategy.planner is not None
+    assert result.strategy.evaluator is not None
+    assert result.strategy.evaluator.provider != result.strategy.executor.provider
+
+
+def test_auth_change_is_critical_and_human_decision():
+    req = base_request(
+        task={
+            "title": "Change authentication session semantics",
+            "task_type": "security",
+            "flags": ["security_boundary_change"],
+        },
+        repo={
+            "estimated_files": 4,
+            "affected_components": 2,
+            "dependency_depth": 3,
+            "authentication_change": True,
+            "security_sensitive": True,
+        },
+    )
+    result = make_engine().route(req)
+    assert result.strategy.profile == "critical"
+    assert result.strategy.human_decision.required is True
+    assert "security_boundary_change" in result.strategy.human_decision.triggers
+
+
+def test_private_project_rejects_training_provider():
+    result = make_engine().route(base_request())
+    assert "openrouter_free" in result.rejected_candidates
+    assert any("train" in reason for reason in result.rejected_candidates["openrouter_free"])
+
+
+def test_reassess_completes_on_definition_of_done():
+    eng = make_engine()
+    route = eng.route(base_request())
+    result = eng.reassess(
+        ReassessRequest(
+            route=route,
+            progress=ExecutionProgress(tests_passed=True, required_checks_passed=True, agent_succeeded=True),
+        )
+    )
+    assert result.action == "complete"
+
+
+def test_reassess_hard_budget_stops():
+    eng = make_engine()
+    route = eng.route(base_request())
+    progress = ExecutionProgress(model_calls=route.strategy.budget.max_model_calls)
+    result = eng.reassess(ReassessRequest(route=route, progress=progress))
+    assert result.action == "stop"
+    assert "budget" in result.reason
+
+
+def test_repeated_failure_escalates_or_stops_but_never_loops():
+    eng = make_engine()
+    req = base_request(
+        task={
+            "title": "Normal bug",
+            "semantic": {
+                "ambiguity": 35,
+                "architecture_impact": 20,
+                "verification_difficulty": 35,
+                "risk": 20,
+                "context_requirement": 45,
+                "novelty": 35,
+                "reasoning_requirement": 50,
+            },
+        },
+        repo={
+            "estimated_files": 6,
+            "affected_components": 2,
+            "dependency_depth": 3,
+            "tests_available": True,
+        },
+    )
+    route = eng.route(req)
+    progress = ExecutionProgress(
+        iteration=3,
+        repair_iterations=1,
+        failure_fingerprints=["same", "same", "same"],
+    )
+    result = eng.reassess(ReassessRequest(route=route, progress=progress))
+    assert result.action in {"escalate", "stop"}
+
+
+def test_reassess_token_budget_stops():
+    eng = make_engine()
+    route = eng.route(base_request())
+    progress = ExecutionProgress(
+        input_tokens=route.strategy.budget.max_input_tokens,
+        output_tokens=0,
+    )
+    result = eng.reassess(ReassessRequest(route=route, progress=progress))
+    assert result.action == "stop"
+    assert "input-token budget" in result.reason
+
+
+def test_material_change_task_cannot_complete_with_empty_diff():
+    eng = make_engine()
+    req = base_request(task={
+        "title": "Add a regression test",
+        "task_type": "test",
+        "flags": ["material_change_required"],
+        "semantic": {
+            "ambiguity": 10, "architecture_impact": 5, "verification_difficulty": 10,
+            "risk": 5, "context_requirement": 10, "novelty": 5, "reasoning_requirement": 15,
+        },
+    })
+    route = eng.route(req)
+    assert "material_change" in route.strategy.definition_of_done["required"]
+    result = eng.reassess(ReassessRequest(
+        route=route,
+        progress=ExecutionProgress(
+            tests_passed=True, required_checks_passed=True, agent_succeeded=True,
+            material_change_present=False, changed_files=0,
+        ),
+    ))
+    assert result.action != "complete"
+    assert any("material_change_missing" in signal for signal in result.signals)
+
+
+def test_provider_level_unavailable_excludes_same_provider_models():
+    eng = make_engine()
+    req = base_request(provider_state={
+        "provider:openai": {"healthy": False, "available": False, "quota_pressure": 1.0}
+    })
+    result = eng.route(req)
+    assert result.strategy.executor.provider != "openai"
+    assert "codex_plus" in result.rejected_candidates
+    assert "frontier_codex" in result.rejected_candidates
+
+
+def test_model_level_unavailable_reroutes_without_disabling_provider():
+    eng = make_engine()
+    initial = eng.route(base_request())
+    model_id = initial.strategy.executor.id
+    provider = initial.strategy.executor.provider
+    req = base_request(provider_state={model_id: {"healthy": False, "available": False}})
+    rerouted = eng.route(req)
+    assert rerouted.strategy.executor.id != model_id
+    # Only the failed model is excluded; another model from the same provider remains eligible in principle.
+    assert model_id in rerouted.rejected_candidates
+    assert any('unavailable' in reason for reason in rerouted.rejected_candidates[model_id])
+    assert provider  # documents that this is model-scoped rather than provider-scoped

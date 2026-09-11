@@ -1,0 +1,43 @@
+{
+  "job_id": "job-123",
+  "project_id": "example-drupal",
+  "repository": "client-site",
+  "source_commit": "a7bd3499",
+  "task": {
+    "title": "Fix intermittent order synchronization failure",
+    "description": "Orders occasionally fail to sync to CRM.",
+    "task_type": "debugging",
+    "semantic": {
+      "ambiguity": 45,
+      "architecture_impact": 25,
+      "verification_difficulty": 55,
+      "risk": 30,
+      "context_requirement": 65,
+      "novelty": 40,
+      "reasoning_requirement": 75
+    }
+  },
+  "repo": {
+    "estimated_files": 7,
+    "affected_components": 3,
+    "dependency_depth": 4,
+    "tests_available": true,
+    "existing_pattern": true,
+    "external_api": true,
+    "candidate_modules": ["order_sync", "crm_connector"]
+  },
+  "provider_state": {
+    "gemini_free": {
+      "healthy": true,
+      "quota_pressure": 0.2,
+      "error_rate": 0.01,
+      "latency_ms": 1800
+    },
+    "codex_plus": {
+      "healthy": true,
+      "quota_pressure": 0.65,
+      "error_rate": 0.01,
+      "latency_ms": 2500
+    }
+  }
+}
