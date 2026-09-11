@@ -61,10 +61,12 @@ def test_antigravity_bridge_is_bounded_for_headless_automation():
     assert 'data["enableTerminalSandbox"] = True' in launcher
     assert 'data["allowNonWorkspaceAccess"] = False' in launcher
     assert 'data["enableTelemetry"] = False' in launcher
-    assert '"read_file(.)"' in launcher
-    assert '"write_file(.)"' in launcher
-    assert '"read_file(.git/)"' in launcher
-    assert '"write_file(.git/)"' in launcher
+    assert 'workspace_file_rules(workspace' in bridge
+    assert 'f"read_file({workspace})"' in bridge
+    assert 'f"write_file({workspace})"' in bridge
+    assert 'f"read_file({git_dir})"' in bridge
+    assert 'f"write_file({git_dir})"' in bridge
+    assert 'self._agy_lock = threading.Lock()' in bridge
     assert 'rule.startswith("read_file(")' in launcher
     assert 'rule.startswith("write_file(")' in launcher
     assert '"unsandboxed(git status)"' in launcher
