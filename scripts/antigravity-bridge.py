@@ -22,8 +22,6 @@ REQUIRED_SETTINGS = {
     "enableTelemetry": False,
 }
 REQUIRED_ALLOW_RULES = {
-    "read_file(.)",
-    "write_file(.)",
     "unsandboxed(git status)",
     "unsandboxed(git diff)",
     "unsandboxed(git log)",
@@ -33,8 +31,6 @@ REQUIRED_ALLOW_RULES = {
     "unsandboxed(git rev-parse)",
 }
 REQUIRED_DENY_RULES = {
-    "read_file(.git/)",
-    "write_file(.git/)",
     "command(ddev)",
     "command(docker)",
     "command(sudo)",
@@ -86,13 +82,85 @@ def terminate_process_group(proc: subprocess.Popen, grace_seconds: float = 3.0) 
         pass
 
 
+def _read_settings(path: Path) -> dict:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("settings_not_object")
+    return raw
+
+
+def _write_settings(path: Path, data: dict) -> None:
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    os.chmod(tmp, 0o600)
+    tmp.replace(path)
+
+
+def _permission_lists(data: dict) -> tuple[list[str], list[str], list[str]]:
+    permissions = data.setdefault("permissions", {})
+    if not isinstance(permissions, dict):
+        permissions = {}
+        data["permissions"] = permissions
+    allow = permissions.get("allow")
+    deny = permissions.get("deny")
+    ask = permissions.get("ask")
+    allow = list(allow) if isinstance(allow, list) else []
+    deny = list(deny) if isinstance(deny, list) else []
+    ask = list(ask) if isinstance(ask, list) else []
+    permissions["allow"] = allow
+    permissions["deny"] = deny
+    permissions["ask"] = ask
+    return allow, deny, ask
+
+
+def workspace_file_rules(workspace: Path) -> tuple[set[str], set[str]]:
+    workspace = workspace.resolve()
+    git_dir = workspace / ".git"
+    allow = {
+        f"read_file({workspace})",
+        f"write_file({workspace})",
+    }
+    deny = {
+        f"read_file({git_dir})",
+        f"write_file({git_dir})",
+    }
+    return allow, deny
+
+
+def add_workspace_file_rules(path: Path, workspace: Path) -> tuple[set[str], set[str]]:
+    data = _read_settings(path)
+    allow, deny, _ = _permission_lists(data)
+    scoped_allow, scoped_deny = workspace_file_rules(workspace)
+    for rule in sorted(scoped_allow):
+        if rule not in allow:
+            allow.append(rule)
+    for rule in sorted(scoped_deny):
+        if rule not in deny:
+            deny.append(rule)
+    _write_settings(path, data)
+    return scoped_allow, scoped_deny
+
+
+def remove_workspace_file_rules(
+    path: Path,
+    scoped_allow: set[str],
+    scoped_deny: set[str],
+) -> None:
+    try:
+        data = _read_settings(path)
+    except (OSError, json.JSONDecodeError, ValueError):
+        return
+    allow, deny, _ = _permission_lists(data)
+    data["permissions"]["allow"] = [rule for rule in allow if rule not in scoped_allow]
+    data["permissions"]["deny"] = [rule for rule in deny if rule not in scoped_deny]
+    _write_settings(path, data)
+
+
 def settings_status(path: Path) -> tuple[bool, dict]:
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        raw = _read_settings(path)
+    except (OSError, json.JSONDecodeError, ValueError):
         return False, {"error": "settings_unreadable", "path": str(path)}
-    if not isinstance(raw, dict):
-        return False, {"error": "settings_not_object", "path": str(path)}
 
     mismatches: dict[str, object] = {
         key: {"expected": expected, "actual": raw.get(key)}
@@ -133,6 +201,7 @@ def settings_status(path: Path) -> tuple[bool, dict]:
         "required_deny_rules": sorted(REQUIRED_DENY_RULES),
         "forbidden_allow_rules": sorted(FORBIDDEN_ALLOW_RULES),
         "forbidden_ask_prefixes": list(FORBIDDEN_ASK_PREFIXES),
+        "file_permission_strategy": "per-run-absolute-workspace",
         "mismatches": mismatches,
     }
 
@@ -145,6 +214,9 @@ class Bridge:
         self.settings = settings.resolve()
         self._runs: dict[str, subprocess.Popen] = {}
         self._runs_lock = threading.Lock()
+        # Antigravity uses one global settings.json. Serialize Antigravity runs so
+        # each job can receive exact absolute file grants without cross-job races.
+        self._agy_lock = threading.Lock()
 
     def register_run(self, run_id: str, proc: subprocess.Popen) -> None:
         with self._runs_lock:
@@ -173,7 +245,7 @@ class Bridge:
         bridge = self
 
         class Handler(BaseHTTPRequestHandler):
-            server_version = "PersonalCodingAntigravityBridge/1.5"
+            server_version = "PersonalCodingAntigravityBridge/1.6"
 
             def log_message(self, fmt: str, *args):
                 print(f"agy-bridge: {self.address_string()} - {fmt % args}", flush=True)
@@ -210,7 +282,7 @@ class Bridge:
                 return self.send_json(200 if safe else 503, {
                     "status": "ok" if safe else "degraded",
                     "service": "antigravity-host-bridge",
-                    "version": "1.5",
+                    "version": "1.6",
                     "agy": bridge.agy_bin,
                     "workspaces": str(bridge.workspaces),
                     "active_runs": active_runs,
@@ -271,30 +343,43 @@ class Bridge:
 
                     env = os.environ.copy()
                     env["NO_COLOR"] = "1"
-                    proc = subprocess.Popen(
-                        cmd,
-                        cwd=workspace,
-                        env=env,
-                        text=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        start_new_session=True,
-                    )
-                    bridge.register_run(run_id, proc)
-                    try:
-                        stdout, stderr = proc.communicate(timeout=timeout + 15)
-                    except subprocess.TimeoutExpired:
-                        terminate_process_group(proc)
-                        stdout, stderr = proc.communicate()
-                        return self.send_json(200, {
-                            "run_id": run_id,
-                            "returncode": 124,
-                            "stdout": stdout or "",
-                            "stderr": (stderr or "") + "\nAntigravity run timed out",
-                            "payload": None,
-                        })
-                    finally:
-                        bridge.unregister_run(run_id)
+
+                    # settings.json is global to the signed-in host account. One run
+                    # at a time receives absolute grants for only its isolated clone.
+                    with bridge._agy_lock:
+                        scoped_allow, scoped_deny = add_workspace_file_rules(
+                            bridge.settings, workspace
+                        )
+                        proc = None
+                        try:
+                            proc = subprocess.Popen(
+                                cmd,
+                                cwd=workspace,
+                                env=env,
+                                text=True,
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                start_new_session=True,
+                            )
+                            bridge.register_run(run_id, proc)
+                            try:
+                                stdout, stderr = proc.communicate(timeout=timeout + 15)
+                            except subprocess.TimeoutExpired:
+                                terminate_process_group(proc)
+                                stdout, stderr = proc.communicate()
+                                return self.send_json(200, {
+                                    "run_id": run_id,
+                                    "returncode": 124,
+                                    "stdout": stdout or "",
+                                    "stderr": (stderr or "") + "\nAntigravity run timed out",
+                                    "payload": None,
+                                })
+                            finally:
+                                bridge.unregister_run(run_id)
+                        finally:
+                            remove_workspace_file_rules(
+                                bridge.settings, scoped_allow, scoped_deny
+                            )
 
                     parsed = None
                     try:
@@ -303,10 +388,11 @@ class Bridge:
                         pass
                     return self.send_json(200, {
                         "run_id": run_id,
-                        "returncode": int(proc.returncode or 0),
+                        "returncode": int(proc.returncode or 0) if proc else 1,
                         "stdout": stdout,
                         "stderr": stderr,
                         "payload": parsed,
+                        "workspace_permission_scope": str(workspace),
                     })
                 except Exception as exc:
                     return self.send_json(500, {"error": f"{type(exc).__name__}: {exc}"})
@@ -327,7 +413,7 @@ def main():
     agy_bin = args.agy_bin or shutil.which("agy") or ""
     if not agy_bin or not Path(agy_bin).exists():
         raise SystemExit("agy not found on WSL host. Install/login Antigravity first.")
-    workspaces = Path(args.workspaces).expanduser()
+    workspaces = Path(args.workspaces).expanduser().resolve()
     workspaces.mkdir(parents=True, exist_ok=True)
     settings = Path(args.settings).expanduser()
     safe, safety = settings_status(settings)
