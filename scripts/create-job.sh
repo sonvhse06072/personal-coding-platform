@@ -6,8 +6,11 @@ if [[ $# -lt 3 ]]; then
   exit 2
 fi
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Load shared non-secret config plus host-only helper credentials.
 # shellcheck disable=SC1090
 source "$ROOT/.ddev/.env"
+# shellcheck disable=SC1090
+source "$ROOT/.ddev/.env.host.local"
 PROJECT=$1; TITLE=$2; DESC=$3
 DISABLED_PROVIDERS="${CODING_DISABLED_PROVIDERS:-}"
 curl -fsS -X POST "https://personal-coding-platform.ddev.site:8788/v1/jobs" \
