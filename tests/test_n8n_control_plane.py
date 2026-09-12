@@ -87,12 +87,18 @@ def test_workflows_are_versioned_runtime_proxies_only() -> None:
 
         webhook_nodes = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.webhook"]
         assert len(webhook_nodes) == 1
-        params = webhook_nodes[0]["parameters"]
+        webhook = webhook_nodes[0]
+        params = webhook["parameters"]
         method = params.get("httpMethod", "GET")
         route = (method, params["path"])
         assert route == (expected["method"], expected["path"])
         assert route not in seen_routes
         seen_routes.add(route)
+
+        # n8n prepends webhookId to dynamic production paths. Keep the public
+        # control-plane contract stable and UUID-free for routes with :job_id.
+        if ":job_id" in params["path"]:
+            assert "webhookId" not in webhook
 
         http_nodes = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.httpRequest"]
         assert len(http_nodes) == 1
