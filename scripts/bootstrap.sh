@@ -47,7 +47,7 @@ if ! grep -Eq '^type:[[:space:]]+(php|generic)$' "$ROOT/.ddev/config.yaml"; then
   exit 1
 fi
 
-"$ROOT/scripts/antigravity-bridge.sh" start
+"$ROOT/scripts/with-host-secrets.sh" "$ROOT/scripts/antigravity-bridge.sh" start
 ddev start
 
 echo
