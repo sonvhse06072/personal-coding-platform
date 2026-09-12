@@ -13,6 +13,7 @@ WORKFLOW_IDS=(
   pcpJobIntakeV001
   pcpJobStatusV001
   pcpHumanDecision1
+  pcpPmBridgePoll1
 )
 
 random_secret() {
@@ -239,6 +240,7 @@ sync_workflows() {
   echo "  POST /webhook/coding-platform/jobs"
   echo "  GET  /webhook/${JOB_STATUS_WEBHOOK_ID}/coding-platform/jobs/<job_id>"
   echo "  POST /webhook/${HUMAN_DECISION_WEBHOOK_ID}/coding-platform/jobs/<job_id>/decision"
+  echo "PM bridge polling workflow: pcpPmBridgePoll1 (every 2 minutes)."
   echo "Use header: X-Control-Token: <value from .ddev/.env.n8n.local>"
 }
 
