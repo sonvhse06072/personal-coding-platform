@@ -58,6 +58,19 @@ def github_git_env(token: str) -> dict[str, str]:
     }
 
 
+def combined_status_signal(payload: dict[str, Any]) -> str:
+    """Return a commit-status state only when at least one status exists.
+
+    GitHub's combined-status endpoint reports `pending` when a commit has zero
+    statuses. That is not a real CI signal and must not keep no-CI repositories
+    waiting forever; check-runs are evaluated separately.
+    """
+    statuses = payload.get("statuses") or []
+    if not statuses:
+        return ""
+    return str(payload.get("state") or "")
+
+
 def summarize_ci(check_runs: list[dict[str, Any]], combined_status: str) -> tuple[str, list[dict[str, Any]]]:
     """Normalize GitHub checks/statuses into none|pending|success|failure."""
     checks: list[dict[str, Any]] = []
@@ -178,7 +191,8 @@ class GitHubDelivery:
 
             status_response = client.get(f"{self.base}/repos/{repository}/commits/{commit}/status")
             status_response.raise_for_status()
-            combined_status = str(status_response.json().get("state") or "")
+            status_payload = status_response.json()
+            combined_status = combined_status_signal(status_payload)
 
             state, checks = summarize_ci(check_runs, combined_status)
             failures: list[dict[str, Any]] = []
