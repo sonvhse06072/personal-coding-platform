@@ -13,6 +13,7 @@ def _event(payload: dict) -> str:
 def test_codex_turn_completed_is_authoritative_over_transient_rate_limit_text(monkeypatch, tmp_path: Path):
     stdout = "\n".join([
         _event({"type": "turn.started"}),
+        _event({"type": "rate_limits.updated", "message": "rate limit telemetry refreshed"}),
         _event({
             "type": "item.completed",
             "item": {"type": "agent_message", "text": "Implemented the requested test."},
@@ -24,12 +25,7 @@ def test_codex_turn_completed_is_authoritative_over_transient_rate_limit_text(mo
     ])
 
     async def fake_run_command(argv, *, cwd, timeout):
-        return CommandResult(
-            argv=argv,
-            returncode=0,
-            stdout=stdout,
-            stderr="Transient rate limit warning was retried internally.",
-        )
+        return CommandResult(argv=argv, returncode=0, stdout=stdout, stderr="")
 
     monkeypatch.setattr("app.adapters.codex.run_command", fake_run_command)
     run = asyncio.run(
