@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from copy import deepcopy
 from typing import Any, Literal
 
@@ -20,7 +21,9 @@ _RISK_SCORE = {"routine": 20, "standard": 40, "high": 70, "critical": 90}
 _PROVIDER_ROLE_WORDS = {
     "openai", "codex", "claude", "anthropic", "deepseek", "antigravity", "groq", "openrouter"
 }
-_MAX_SERIALIZED_BYTES = 24000
+# Router TaskDescriptor.description is capped at 20k. Leave headroom for the
+# canonical-task wrapper so a schema-valid WorkOrder cannot fail later at Router.
+_MAX_SERIALIZED_BYTES = 16000
 
 
 class WorkOrderPolicyError(ValueError):
@@ -156,8 +159,14 @@ class WorkOrder(BaseModel):
         criterion_ids = [criterion.id for criterion in self.acceptance_criteria]
         if len(set(criterion_ids)) != len(criterion_ids):
             raise ValueError("Acceptance criterion ids must be unique")
+        for dependency in self.dependencies:
+            if not re.fullmatch(_ID_PATTERN, dependency):
+                raise ValueError(f"Invalid WorkOrder dependency id: {dependency}")
         if self.id in set(self.dependencies):
             raise ValueError("WorkOrder cannot depend on itself")
+        overlap = set(self.in_scope) & set(self.out_of_scope)
+        if overlap:
+            raise ValueError(f"WorkOrder scope is contradictory: {sorted(overlap)}")
         serialized = json.dumps(self.model_dump(mode="json"), ensure_ascii=False, sort_keys=True)
         if len(serialized.encode("utf-8")) > _MAX_SERIALIZED_BYTES:
             raise ValueError(
