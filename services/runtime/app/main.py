@@ -71,10 +71,10 @@ async def lifespan(app: FastAPI):
     # parent before any job can launch so a same-UID child cannot recover Runtime
     # credentials from procfs even though both processes share one container.
     harden_runtime_process_secret_boundary()
+    # Storage initialization inside engine.start() also marks any in-flight PM
+    # planning turn interrupted. Neither coding jobs nor PM model calls are
+    # silently replayed after an uncertain process restart.
     await engine.start()
-    # PM model turns are not replayed automatically after a Runtime restart. A
-    # planning row that was in-flight becomes an explicit interrupted artifact.
-    storage.recover_execution_plans()
     yield
     await engine.stop()
 
