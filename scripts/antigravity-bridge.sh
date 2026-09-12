@@ -154,12 +154,14 @@ start() {
     return
   fi
   rm -f "$PID_FILE"
-  nohup python3 "$BRIDGE_LAUNCHER" \
+  nohup env -u ANTIGRAVITY_BRIDGE_TOKEN ANTIGRAVITY_BRIDGE_TOKEN_FD=3 \
+    python3 "$BRIDGE_LAUNCHER" \
     --host 0.0.0.0 \
     --port "$PORT" \
     --workspaces "$CODING_WORKSPACES_ROOT" \
     --agy-bin "$AGY_WRAPPER" \
     --settings "$AGY_SETTINGS" \
+    3<<<"$ANTIGRAVITY_BRIDGE_TOKEN" \
     >>"$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
   for _ in $(seq 1 30); do
