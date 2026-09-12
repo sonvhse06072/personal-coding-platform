@@ -5,7 +5,6 @@ services:
       context: ${DDEV_APPROOT}/services/router
     restart: "no"
     environment:
-      ROUTER_API_TOKEN: ${ROUTER_API_TOKEN}
       ROUTER_MODELS_FILE: /config/models.yml
       ROUTER_POLICY_FILE: /config/routing-policy.yml
       ROUTER_PROJECTS_FILE: /config/projects.yml
@@ -37,22 +36,13 @@ services:
     environment:
       HOME: /home/coder
       ROUTER_URL: http://router:8090
-      ROUTER_API_TOKEN: ${ROUTER_API_TOKEN}
-      RUNTIME_API_TOKEN: ${RUNTIME_API_TOKEN}
-      PLATFORM_INTERNAL_TOKEN: ${PLATFORM_INTERNAL_TOKEN}
       DDEV_EXECUTOR_URL: http://ddev-executor:8790
       PROJECTS_FILE: /config/projects.yml
       MODELS_FILE: /config/models.yml
       CODING_PROJECTS_ROOT: ${CODING_PROJECTS_ROOT}
       CODING_WORKSPACES_ROOT: ${CODING_WORKSPACES_ROOT}
       DATABASE_URL: postgresql://db:db@db:5432/db
-      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      GROQ_API_KEY: ${GROQ_API_KEY:-}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       ANTIGRAVITY_BRIDGE_URL: http://host.docker.internal:${ANTIGRAVITY_BRIDGE_PORT:-8792}
-      ANTIGRAVITY_BRIDGE_TOKEN: ${ANTIGRAVITY_BRIDGE_TOKEN}
       VIRTUAL_HOST: ${DDEV_HOSTNAME}
       HTTP_EXPOSE: 8787:8787
       HTTPS_EXPOSE: 8788:8787
@@ -95,12 +85,10 @@ services:
         DDEV_GID: ${DDEV_GID}
     restart: "no"
     environment:
-      PLATFORM_INTERNAL_TOKEN: ${PLATFORM_INTERNAL_TOKEN}
       PROJECTS_FILE: /config/projects.yml
       CODING_PROJECTS_ROOT: ${CODING_PROJECTS_ROOT}
       CODING_WORKSPACES_ROOT: ${CODING_WORKSPACES_ROOT}
       DDEV_COMMAND_TIMEOUT_SECONDS: 1800
-      GITHUB_DELIVERY_TOKEN: ${GITHUB_DELIVERY_TOKEN:-}
       HOME: /home/coder
     expose:
       - "8790"
@@ -127,7 +115,6 @@ services:
       DB_POSTGRESDB_DATABASE: db
       DB_POSTGRESDB_USER: db
       DB_POSTGRESDB_PASSWORD: db
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
       N8N_HOST: ${DDEV_HOSTNAME}
       N8N_PORT: 5678
       N8N_PROTOCOL: https
@@ -138,24 +125,10 @@ services:
       VIRTUAL_HOST: ${DDEV_HOSTNAME}
       HTTP_EXPOSE: 5678:5678
       HTTPS_EXPOSE: 5679:5678
-      # Workflow expressions use only the Runtime token + ingress token. DDEV's
-      # global .env reaches every service, so explicitly scrub unrelated global
-      # secrets from this container and verify the result in n8n-sync. The GitHub
-      # delivery token is already service-scoped to ddev-executor and is omitted.
-      ROUTER_API_TOKEN: ""
-      PLATFORM_INTERNAL_TOKEN: ""
-      ANTIGRAVITY_BRIDGE_TOKEN: ""
-      DEEPSEEK_API_KEY: ""
-      ANTHROPIC_API_KEY: ""
-      OPENAI_API_KEY: ""
-      GROQ_API_KEY: ""
-      OPENROUTER_API_KEY: ""
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
       NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.readWriteFile","n8n-nodes-base.localFileTrigger"]'
-      N8N_CONTROL_PLANE_TOKEN: ${N8N_CONTROL_PLANE_TOKEN}
       RUNTIME_INTERNAL_URL: http://coding-runtime:8787
-      RUNTIME_API_TOKEN: ${RUNTIME_API_TOKEN}
     expose:
       - "5678"
     depends_on:
