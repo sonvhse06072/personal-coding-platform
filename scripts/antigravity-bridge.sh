@@ -11,6 +11,7 @@ LOG_FILE="$STATE_DIR/antigravity-bridge.log"
 PORT="${ANTIGRAVITY_BRIDGE_PORT:-8792}"
 AGY_SETTINGS="$HOME/.gemini/antigravity-cli/settings.json"
 AGY_SETTINGS_BACKUP="$STATE_DIR/antigravity-settings.before-platform.json"
+AGY_WRAPPER="$ROOT/scripts/agy-workspace-wrapper.sh"
 mkdir -p "$STATE_DIR" "${CODING_WORKSPACES_ROOT}" "$(dirname "$AGY_SETTINGS")"
 
 running() {
@@ -126,7 +127,18 @@ PY
 }
 
 start() {
-  command -v agy >/dev/null 2>&1 || { echo "agy is required on the WSL host." >&2; exit 1; }
+  local real_agy
+  real_agy="$(command -v agy || true)"
+  [[ -n "$real_agy" ]] || { echo "agy is required on the WSL host." >&2; exit 1; }
+  [[ -f "$AGY_WRAPPER" ]] || { echo "Missing $AGY_WRAPPER" >&2; exit 1; }
+
+  # GitHub's Contents API does not preserve executable mode for newly-created
+  # files, so enforce a private executable mode locally before handing the wrapper
+  # to the bridge. The wrapper registers the already-validated cwd as an explicit
+  # absolute Antigravity workspace via --add-dir.
+  chmod 700 "$AGY_WRAPPER"
+  export ANTIGRAVITY_REAL_AGY_BIN="$real_agy"
+
   configure_safe_settings
   if running; then
     echo "Antigravity bridge already running (pid $(cat "$PID_FILE"))."
@@ -138,7 +150,7 @@ start() {
     --port "$PORT" \
     --token "$ANTIGRAVITY_BRIDGE_TOKEN" \
     --workspaces "$CODING_WORKSPACES_ROOT" \
-    --agy-bin "$(command -v agy)" \
+    --agy-bin "$AGY_WRAPPER" \
     --settings "$AGY_SETTINGS" \
     >>"$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
