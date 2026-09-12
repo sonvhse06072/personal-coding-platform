@@ -61,7 +61,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.14", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.15", lifespan=lifespan)
 
 
 @app.get("/health", response_model=RuntimeHealth)
@@ -71,7 +71,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.14",
+        version="1.0.15",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
