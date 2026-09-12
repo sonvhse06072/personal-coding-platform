@@ -227,6 +227,27 @@ def canonical_task_from_work_order(work_order: WorkOrder) -> dict[str, Any]:
     }
 
 
+def rehydrate_task_from_work_order(
+    current_task: dict[str, Any] | None,
+    work_order: WorkOrder,
+) -> dict[str, Any]:
+    """Restore authoritative task meaning while retaining analyzer-derived signals."""
+
+    canonical = canonical_task_from_work_order(work_order)
+    current = current_task or {}
+    semantic = current.get("semantic")
+    if isinstance(semantic, dict):
+        merged_semantic = dict(semantic)
+        merged_semantic["risk"] = canonical["semantic"]["risk"]
+        canonical["semantic"] = merged_semantic
+    flags = list(canonical.get("flags") or [])
+    for flag in current.get("flags") or []:
+        if flag not in flags:
+            flags.append(flag)
+    canonical["flags"] = flags
+    return canonical
+
+
 def apply_work_order_budget(route: dict[str, Any], work_order: WorkOrder) -> dict[str, Any]:
     """Apply the WorkOrder as a hard execution ceiling without weakening Router budgets."""
 
