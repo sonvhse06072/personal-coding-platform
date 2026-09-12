@@ -1,8 +1,34 @@
 version: 1
 
 # ProjectBaseline metadata is intentionally separate from document bodies.
-# At project inception, add the approved revision here and point each required
-# category at repository-relative source-of-truth files/sections in that project.
-# Phase 2 keeps this registry optional for legacy projects; Phase 3 WorkOrders
-# will carry an explicit governing revision.
-projects: {}
+# Each revision pins an exact project Git commit and points only to checked-in
+# Source-of-Truth documents from that commit. New work may use approved
+# revisions only; changing the active project frame requires a new revision.
+projects:
+  chonhac:
+    active_revision: mvp-v1-2026-09-13
+    revisions:
+      mvp-v1-2026-09-13:
+        status: approved
+        source_commit: 80a6974e62d5a5708c8ce4116a24e03557753e38
+        references:
+          goals:
+            - path: docs/00-project-overview.md
+            - path: docs/01-product-brief.md
+          non_goals:
+            - path: docs/02-mvp-scope.md
+          requirements:
+            - path: docs/02-mvp-scope.md
+            - path: docs/04-business-rules.md
+          architecture_constraints:
+            - path: docs/06-architecture.md
+            - path: docs/11-decisions.md
+          quality_policy:
+            - path: AGENTS.md
+          security_policy:
+            - path: docs/13-permissions-access-matrix.md
+          budget_policy:
+            - path: AGENTS.md
+          roadmap_frame:
+            - path: PROJECT-CONTEXT.md
+            - path: docs/09-roadmap.md
