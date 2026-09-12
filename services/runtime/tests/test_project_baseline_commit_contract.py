@@ -21,10 +21,19 @@ def refs() -> dict:
 
 
 def test_project_baseline_requires_full_git_commit_id() -> None:
-    with pytest.raises(ValidationError, match="full Git commit id"):
+    # Length validation may reject a short SHA before the custom format validator.
+    with pytest.raises(ValidationError):
         ProjectRevisionDefinition(
             status="approved",
             source_commit="abc1234",
+            references=refs(),
+        )
+
+    # A full-length non-hex value exercises the custom exact-commit validator.
+    with pytest.raises(ValidationError, match="full Git commit id"):
+        ProjectRevisionDefinition(
+            status="approved",
+            source_commit="z" * 40,
             references=refs(),
         )
 
