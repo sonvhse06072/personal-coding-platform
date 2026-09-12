@@ -12,6 +12,7 @@ PORT="${ANTIGRAVITY_BRIDGE_PORT:-8792}"
 AGY_SETTINGS="$HOME/.gemini/antigravity-cli/settings.json"
 AGY_SETTINGS_BACKUP="$STATE_DIR/antigravity-settings.before-platform.json"
 AGY_WRAPPER="$ROOT/scripts/agy-workspace-wrapper.sh"
+BRIDGE_LAUNCHER="$ROOT/scripts/antigravity-bridge-launcher.py"
 mkdir -p "$STATE_DIR" "${CODING_WORKSPACES_ROOT}" "$(dirname "$AGY_SETTINGS")"
 
 running() {
@@ -19,6 +20,13 @@ running() {
   local pid
   pid="$(cat "$PID_FILE" 2>/dev/null || true)"
   [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null
+}
+
+bridge_curl() {
+  # Send the bearer header over stdin so it never appears in curl's argv, and
+  # scrub the inherited environment copy from the curl process itself.
+  printf 'Authorization: Bearer %s\n' "$ANTIGRAVITY_BRIDGE_TOKEN" \
+    | env -u ANTIGRAVITY_BRIDGE_TOKEN curl -fsS -H @- "$@"
 }
 
 configure_safe_settings() {
@@ -131,6 +139,7 @@ start() {
   real_agy="$(command -v agy || true)"
   [[ -n "$real_agy" ]] || { echo "agy is required on the WSL host." >&2; exit 1; }
   [[ -f "$AGY_WRAPPER" ]] || { echo "Missing $AGY_WRAPPER" >&2; exit 1; }
+  [[ -f "$BRIDGE_LAUNCHER" ]] || { echo "Missing $BRIDGE_LAUNCHER" >&2; exit 1; }
 
   # GitHub's Contents API does not preserve executable mode for newly-created
   # files, so enforce a private executable mode locally before handing the wrapper
@@ -145,17 +154,16 @@ start() {
     return
   fi
   rm -f "$PID_FILE"
-  nohup python3 "$ROOT/scripts/antigravity-bridge.py" \
+  nohup python3 "$BRIDGE_LAUNCHER" \
     --host 0.0.0.0 \
     --port "$PORT" \
-    --token "$ANTIGRAVITY_BRIDGE_TOKEN" \
     --workspaces "$CODING_WORKSPACES_ROOT" \
     --agy-bin "$AGY_WRAPPER" \
     --settings "$AGY_SETTINGS" \
     >>"$LOG_FILE" 2>&1 &
   echo $! > "$PID_FILE"
   for _ in $(seq 1 30); do
-    if curl -fsS -H "Authorization: Bearer $ANTIGRAVITY_BRIDGE_TOKEN" "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
+    if bridge_curl "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
       echo "Antigravity bridge started (pid $(cat "$PID_FILE"))."
       return
     fi
@@ -175,7 +183,7 @@ stop() {
 }
 
 status() {
-  if running && curl -fsS -H "Authorization: Bearer $ANTIGRAVITY_BRIDGE_TOKEN" "http://127.0.0.1:$PORT/health"; then
+  if running && bridge_curl "http://127.0.0.1:$PORT/health"; then
     echo
     return 0
   fi
