@@ -1,4 +1,4 @@
-version: 2
+version: 3
 complexity_weights:
   scope: 0.18
   dependency_depth: 0.1
@@ -138,6 +138,18 @@ profiles:
     - codex_plus
     max_input_tokens: 4000000
     max_output_tokens: 500000
+staffing_roles:
+  product_manager:
+    model_roles:
+    - product_manager
+    allowed_profiles:
+    - standard
+    - complex
+    - critical
+    preferred_ids:
+    - codex_plus
+    - antigravity_free
+    - claude_sonnet
 critical_triggers:
 - destructive_migration
 - production_write
