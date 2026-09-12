@@ -23,11 +23,13 @@ EXPECTED_WORKFLOWS = {
         "id": "pcpJobStatusV001",
         "method": "GET",
         "path": "coding-platform/jobs/:job_id",
+        "webhook_id": "f94fd841-0da8-42af-a06a-17b78d5a1ea7",
     },
     "human-decision.json": {
         "id": "pcpHumanDecision1",
         "method": "POST",
         "path": "coding-platform/jobs/:job_id/decision",
+        "webhook_id": "a0db357c-167e-43c4-a692-e049aa21ef63",
     },
 }
 
@@ -87,12 +89,19 @@ def test_workflows_are_versioned_runtime_proxies_only() -> None:
 
         webhook_nodes = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.webhook"]
         assert len(webhook_nodes) == 1
-        params = webhook_nodes[0]["parameters"]
+        webhook = webhook_nodes[0]
+        params = webhook["parameters"]
         method = params.get("httpMethod", "GET")
         route = (method, params["path"])
         assert route == (expected["method"], expected["path"])
         assert route not in seen_routes
         seen_routes.add(route)
+
+        # n8n 2.38.x requires webhookId as the leading production URL segment
+        # for paths containing dynamic parameters such as :job_id. Keep these
+        # identifiers stable in version control so callers get deterministic URLs.
+        if ":job_id" in params["path"]:
+            assert webhook.get("webhookId") == expected["webhook_id"]
 
         http_nodes = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.httpRequest"]
         assert len(http_nodes) == 1
@@ -118,6 +127,8 @@ def test_sync_is_bounded_and_fail_closed() -> None:
     assert '"GITHUB_DELIVERY_TOKEN"' in script
     assert "Expected unauthenticated control-plane request to return 401" in script
     assert "Expected authenticated status proxy to preserve Runtime 404" in script
+    assert "f94fd841-0da8-42af-a06a-17b78d5a1ea7" in script
+    assert "a0db357c-167e-43c4-a692-e049aa21ef63" in script
     assert "N8N_ENCRYPTION_KEY" in script
     assert "Refusing n8n secret migration" in script
 
