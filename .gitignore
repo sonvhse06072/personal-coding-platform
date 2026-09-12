@@ -1,4 +1,5 @@
 .ddev/.env
+.ddev/.env.ddev-executor.local
 .runtime/
 .pytest_cache/
 __pycache__/
