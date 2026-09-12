@@ -101,6 +101,17 @@ class WorkOrder(BaseModel):
     budget: WorkOrderBudget = Field(default_factory=WorkOrderBudget)
     dependencies: list[str] = Field(default_factory=list, max_length=50)
 
+    @model_validator(mode="before")
+    @classmethod
+    def validate_raw_contract_size(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            serialized = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+            if len(serialized.encode("utf-8")) > _MAX_SERIALIZED_BYTES:
+                raise ValueError(
+                    f"WorkOrder exceeds the {_MAX_SERIALIZED_BYTES}-byte canonical contract limit"
+                )
+        return value
+
     @field_validator("objective")
     @classmethod
     def normalize_objective(cls, value: str) -> str:
