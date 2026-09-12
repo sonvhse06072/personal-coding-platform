@@ -173,6 +173,8 @@ def test_telegram_schedule_claims_sanitized_outbox_and_acks_runtime() -> None:
     assert "event.summary" in code
     assert "event.payload" not in code
     assert "RUNTIME_API_TOKEN" in code
+    assert "this.helpers.httpRequest" in code
+    assert "fetch(" not in code
     for key in FORBIDDEN_N8N_SECRETS:
         assert key not in code
 
