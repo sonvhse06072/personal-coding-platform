@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 
 from .engine import RuntimeEngine
+from .pm_bridge import router as pm_bridge_router
 from .pm_planning import (
     ExecutionPlanView,
     PMPlanCreateRequest,
@@ -79,7 +80,8 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.20", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.21", lifespan=lifespan)
+app.include_router(pm_bridge_router)
 
 
 @app.get("/health", response_model=RuntimeHealth)
@@ -89,7 +91,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.20",
+        version="1.0.21",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={

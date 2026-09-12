@@ -1,0 +1,60 @@
+{
+  "id": "pcpPmBridgePoll1",
+  "name": "PCP - PM Bridge Poll",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-260, 0],
+      "id": "1c97a931-50ad-426a-a164-425598edb02b",
+      "name": "Every Two Minutes"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RUNTIME_INTERNAL_URL + '/v1/pm-bridge/poll-all' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {"name": "Authorization", "value": "={{ 'Bearer ' + $env.RUNTIME_API_TOKEN }}"},
+            {"name": "Accept", "value": "application/json"}
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [0, 0],
+      "id": "c9826177-1dcc-4bc9-aa35-a9744c8ecb45",
+      "name": "Poll Runtime PM Bridge"
+    }
+  ],
+  "connections": {
+    "Every Two Minutes": {
+      "main": [[{"node": "Poll Runtime PM Bridge", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {"executionOrder": "v1"},
+  "versionId": "6fdc10e2-7671-4bf7-aa38-e9c99ec50eb2",
+  "meta": {"templateCredsSetupCompleted": true},
+  "pinData": {},
+  "tags": []
+}
