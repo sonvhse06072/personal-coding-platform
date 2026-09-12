@@ -11,7 +11,7 @@ from .config import project_baselines_doc
 
 RevisionStatus = Literal["draft", "approved", "superseded"]
 _REVISION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
-_COMMIT_RE = re.compile(r"^[0-9a-fA-F]{7,64}$")
+_COMMIT_RE = re.compile(r"^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$")
 
 
 class SourceReference(BaseModel):
@@ -55,7 +55,7 @@ class BaselineReferences(BaseModel):
 
 class ProjectRevisionDefinition(BaseModel):
     status: RevisionStatus
-    source_commit: str = Field(min_length=7, max_length=64)
+    source_commit: str = Field(min_length=40, max_length=64)
     references: BaselineReferences
 
     @field_validator("source_commit")
@@ -63,7 +63,7 @@ class ProjectRevisionDefinition(BaseModel):
     def validate_source_commit(cls, value: str) -> str:
         normalized = value.strip().lower()
         if not _COMMIT_RE.fullmatch(normalized):
-            raise ValueError("ProjectBaseline source_commit must be a Git commit id")
+            raise ValueError("ProjectBaseline source_commit must be a full Git commit id")
         return normalized
 
 
