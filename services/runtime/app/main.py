@@ -26,9 +26,9 @@ engine = RuntimeEngine(storage)
 
 
 def auth(authorization: str | None = Header(default=None)) -> None:
-    expected = os.getenv("RUNTIME_API_TOKEN", "change-me")
-    if not expected:
-        return
+    expected = os.getenv("RUNTIME_API_TOKEN", "").strip()
+    if not expected or expected.upper() == "CHANGE_ME":
+        raise HTTPException(503, "RUNTIME_API_TOKEN is not configured")
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, "Missing bearer token")
     if not secrets.compare_digest(authorization.removeprefix("Bearer ").strip(), expected):
