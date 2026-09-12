@@ -81,8 +81,8 @@ projects:
 
     autonomy:
       allow_commit: true
-      allow_push_ai_branch: false
-      allow_create_pr: false
+      allow_push_ai_branch: true
+      allow_create_pr: true
       allow_auto_merge_low_risk: false
       allow_production_deploy: false
 
