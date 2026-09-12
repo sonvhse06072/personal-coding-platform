@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 ProfileName = Literal["fast", "standard", "complex", "critical"]
@@ -73,6 +73,8 @@ class RoutingRequest(BaseModel):
 
 
 class StaffingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     request_id: str = Field(min_length=1, max_length=200)
     project_id: str = Field(default="default", min_length=1, max_length=200)
     role: str = Field(min_length=2, max_length=80, pattern=r"^[a-z][a-z0-9_]{1,79}$")
