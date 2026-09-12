@@ -30,8 +30,8 @@ class FakeDdev:
 
 
 class MemoryStorage:
-    def __init__(self):
-        self.row = {"id": "job12345"}
+    def __init__(self, row=None):
+        self.row = dict(row or {"id": "job12345"})
 
     def update(self, _job_id, **fields):
         self.row.update(fields)
@@ -60,6 +60,27 @@ def common_kwargs(ddev, permissions):
         "sleeper": no_sleep,
         "poll_seconds": 0.001,
         "discovery_seconds": 0,
+    }
+
+
+def accepted_result():
+    return {
+        "status": "accepted",
+        "branch": "ai/job12345",
+        "commit": "b" * 40,
+        "route": {
+            "strategy": {
+                "permissions": {"push_ai_branch": True, "create_pr": True},
+                "budget": {"max_wall_time_minutes": 10},
+            }
+        },
+        "verification": {"passed": True, "phases": []},
+        "evaluator": None,
+        "delivery": {
+            "state": "ci_waiting",
+            "publish": {"published": True},
+            "pull_request": {"number": 42},
+        },
     }
 
 
@@ -157,6 +178,53 @@ def test_verified_delivery_resume_requires_commit_and_does_not_resume_ci_failure
     failed = dict(base)
     failed["result"] = {**base["result"], "delivery": {"state": "ci_failure"}}
     assert RuntimeEngine._verified_result_needs_delivery(failed) is False
+
+
+def test_blocked_delivery_exposes_nested_verified_result_for_resume():
+    verified = accepted_result()
+    row = {
+        "status": "queued",
+        "result": {
+            "reason": "github_delivery_failed",
+            "last_failure": "GitHub API unavailable",
+            "accepted_result": verified,
+        },
+    }
+    assert RuntimeEngine._accepted_result_for_delivery(row) == verified
+    assert RuntimeEngine._verified_result_needs_delivery(row) is True
+
+
+def test_blocked_delivery_resume_reuses_verified_commit_without_execution_loop():
+    async def scenario():
+        verified = accepted_result()
+        row = {
+            "id": "job12345",
+            "project_id": "demo",
+            "status": "queued",
+            "workspace": "/workspaces/job12345",
+            "branch": "ai/job12345",
+            "source_commit": "a" * 40,
+            "task": {"title": "test"},
+            "progress": {"elapsed_minutes": 0.0},
+            "checkpoint": {},
+            "result": {
+                "reason": "github_delivery_failed",
+                "last_failure": "GitHub API unavailable",
+                "accepted_result": verified,
+            },
+        }
+        backend = MemoryStorage(row)
+        engine = RuntimeEngine(backend)
+        engine.ddev = FakeDdev(["none"])
+
+        await engine.run_job("job12345")
+
+        assert backend.row["status"] == "completed"
+        assert backend.row["result"]["commit"] == "b" * 40
+        assert backend.row["result"]["delivery_finalized"] is True
+        assert backend.row["progress"].get("model_calls", 0) == 0
+
+    asyncio.run(scenario())
 
 
 def test_pull_request_body_never_claims_auto_merge():
