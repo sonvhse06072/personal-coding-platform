@@ -1,4 +1,9 @@
-from app.github_delivery import github_push_url, github_repository_from_origin, summarize_ci
+from app.github_delivery import (
+    combined_status_signal,
+    github_push_url,
+    github_repository_from_origin,
+    summarize_ci,
+)
 
 
 def test_github_repository_from_origin_strips_credentials_and_transport():
@@ -32,3 +37,9 @@ def test_ci_summary_handles_none_pending_and_success():
     assert summarize_ci([
         {"id": 1, "name": "tests", "status": "completed", "conclusion": "success"}
     ], "")[0] == "success"
+
+
+def test_empty_combined_status_payload_is_not_a_ci_signal():
+    assert combined_status_signal({"state": "pending", "statuses": [], "total_count": 0}) == ""
+    assert combined_status_signal({"state": "success", "statuses": [{"context": "ci"}]}) == "success"
+    assert combined_status_signal({"state": "failure", "statuses": [{"context": "ci"}]}) == "failure"
