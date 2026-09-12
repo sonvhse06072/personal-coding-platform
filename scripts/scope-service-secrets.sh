@@ -35,7 +35,10 @@ PY
 
 is_real_secret() {
   local value="${1:-}"
-  [[ -n "$value" && "$value" != "CHANGE_ME" ]]
+  local trimmed="$value"
+  trimmed="${trimmed#"${trimmed%%[![:space:]]*}"}"
+  trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+  [[ -n "$trimmed" && "$trimmed" != "CHANGE_ME" && "$trimmed" != "change-me" ]]
 }
 
 set_env_value() {

@@ -40,7 +40,10 @@ PY
 
 is_real_secret() {
   local value="${1:-}"
-  [[ -n "$value" && "$value" != "CHANGE_ME" ]]
+  local trimmed="$value"
+  trimmed="${trimmed#"${trimmed%%[![:space:]]*}"}"
+  trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+  [[ -n "$trimmed" && "$trimmed" != "CHANGE_ME" && "$trimmed" != "change-me" ]]
 }
 
 set_env_value() {
@@ -164,12 +167,16 @@ wait_for_n8n() {
 assert_runtime_only_secret_boundary() {
   ddev exec -s n8n node -e '
 const required = ["N8N_ENCRYPTION_KEY", "N8N_CONTROL_PLANE_TOKEN", "RUNTIME_API_TOKEN"];
+const placeholders = new Set(["CHANGE_ME", "change-me"]);
 const forbidden = [
   "ROUTER_API_TOKEN", "PLATFORM_INTERNAL_TOKEN", "ANTIGRAVITY_BRIDGE_TOKEN",
   "DEEPSEEK_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
   "GROQ_API_KEY", "OPENROUTER_API_KEY", "GITHUB_DELIVERY_TOKEN"
 ];
-const missing = required.filter((key) => !process.env[key] || process.env[key] === "CHANGE_ME");
+const missing = required.filter((key) => {
+  const value = (process.env[key] || "").trim();
+  return !value || placeholders.has(value);
+});
 const leaked = forbidden.filter((key) => Boolean(process.env[key]));
 if (missing.length || leaked.length) {
   console.error(JSON.stringify({error:"n8n_secret_boundary_failed", missing, leaked}));
