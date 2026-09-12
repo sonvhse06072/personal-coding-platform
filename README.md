@@ -132,9 +132,11 @@ Initial production webhook paths:
 
 ```text
 POST /webhook/coding-platform/jobs
-GET  /webhook/coding-platform/jobs/<job_id>
-POST /webhook/coding-platform/jobs/<job_id>/decision
+GET  /webhook/f94fd841-0da8-42af-a06a-17b78d5a1ea7/coding-platform/jobs/<job_id>
+POST /webhook/a0db357c-167e-43c4-a692-e049aa21ef63/coding-platform/jobs/<job_id>/decision
 ```
+
+The status and human-decision workflows contain dynamic `:job_id` parameters. On the pinned n8n 2.38.x line their stable `webhookId` values form the leading production-URL segment, so callers must preserve the UUIDs shown above. `ddev n8n-sync` prints the same canonical paths after publishing.
 
 All three require the local ingress header `X-Control-Token`. The token is generated in `.ddev/.env.n8n.local` and must not be committed or shared. These DDEV webhooks are local-development endpoints unless you explicitly add a trusted tunnel/reverse proxy later.
 
@@ -163,7 +165,7 @@ Fetch status through the control plane:
 ```bash
 curl -fsS \
   -H "X-Control-Token: $N8N_CONTROL_PLANE_TOKEN" \
-  "https://personal-coding-platform.ddev.site:5679/webhook/coding-platform/jobs/<job_id>"
+  "https://personal-coding-platform.ddev.site:5679/webhook/f94fd841-0da8-42af-a06a-17b78d5a1ea7/coding-platform/jobs/<job_id>"
 ```
 
 Resolve a Runtime human-decision gate through n8n:
@@ -173,7 +175,7 @@ curl -fsS -X POST \
   -H "X-Control-Token: $N8N_CONTROL_PLANE_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"action":"approve","note":"Reviewed locally"}' \
-  "https://personal-coding-platform.ddev.site:5679/webhook/coding-platform/jobs/<job_id>/decision"
+  "https://personal-coding-platform.ddev.site:5679/webhook/a0db357c-167e-43c4-a692-e049aa21ef63/coding-platform/jobs/<job_id>/decision"
 ```
 
 ## Create a job
