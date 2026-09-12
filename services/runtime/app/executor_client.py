@@ -46,6 +46,32 @@ class DdevExecutorClient:
             response.raise_for_status()
             return response.json()
 
+    async def publish_branch(
+        self,
+        *,
+        job_id: str,
+        project_id: str,
+        workspace: str,
+        branch: str,
+        source_commit: str,
+        expected_commit: str,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=320) as client:
+            response = await client.post(
+                f"{self.base}/v1/publish-branch",
+                json={
+                    "job_id": job_id,
+                    "project_id": project_id,
+                    "workspace": workspace,
+                    "branch": branch,
+                    "source_commit": source_commit,
+                    "expected_commit": expected_commit,
+                },
+                headers=self.headers,
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def remove_workspace(self, *, job_id: str, project_id: str, workspace: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.delete(
