@@ -18,6 +18,7 @@ from .work_order import (
     WorkOrderPolicyError,
     apply_work_order_budget,
     canonical_task_from_work_order,
+    rehydrate_task_from_work_order,
     validate_work_order_against_baseline,
     work_order_snapshot,
 )
@@ -96,7 +97,20 @@ class RuntimeEngine(_RuntimeEngine):
         })
         return job_id
 
+    def _restore_work_order_task(self, job_id: str) -> None:
+        row = self.storage.get(job_id)
+        if not row:
+            return
+        checkpoint = row.get("checkpoint") or {}
+        work_order = work_order_snapshot(checkpoint.get("work_order"))
+        if work_order is None:
+            return
+        canonical = rehydrate_task_from_work_order(row.get("task"), work_order)
+        if canonical != row.get("task"):
+            self.storage.update(job_id, task=canonical)
+
     async def run_job(self, job_id: str) -> None:
+        self._restore_work_order_task(job_id)
         try:
             await super().run_job(job_id)
         except WorkOrderPolicyError as exc:
