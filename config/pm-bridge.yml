@@ -1,0 +1,8 @@
+version: 1
+projects:
+  chonhac:
+    enabled: true
+    allowed_authors:
+      - sonvhse06072
+    marker: "<!-- coding-platform:pm-plan:v1 -->"
+    max_comments_per_poll: 100
