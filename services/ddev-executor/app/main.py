@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 
 
 Phase = Literal["preflight", "targeted_tests", "static_analysis", "full_tests", "cleanup"]
+_BRANCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$")
 
 
 class PhaseRequest(BaseModel):
@@ -30,6 +31,15 @@ class WorkspaceRequest(BaseModel):
     job_id: str = Field(min_length=8, max_length=100)
     project_id: str = Field(min_length=1, max_length=200)
     ref: str | None = Field(default=None, max_length=200)
+
+
+class PublishBranchRequest(BaseModel):
+    job_id: str = Field(min_length=8, max_length=100)
+    project_id: str = Field(min_length=1, max_length=200)
+    workspace: str = Field(min_length=1, max_length=2000)
+    branch: str = Field(min_length=1, max_length=200)
+    source_commit: str = Field(min_length=7, max_length=64)
+    expected_commit: str = Field(min_length=7, max_length=64)
 
 
 class CancelRequest(BaseModel):
@@ -115,6 +125,23 @@ def remote_origin(repo: Path) -> str | None:
     return value if proc.returncode == 0 and value else None
 
 
+def _validate_workspace(job_id: str, workspace: str) -> Path:
+    path = Path(workspace).resolve()
+    root = Path(os.environ["CODING_WORKSPACES_ROOT"]).resolve()
+    if not allowed_workspace(path) or path.name != job_id or path.parent != root:
+        raise HTTPException(403, "Workspace is outside configured root or does not match job")
+    if not path.exists() or not is_git_repo(path):
+        raise HTTPException(404, "Workspace does not exist or is not a git repository")
+    return path
+
+
+def _validate_ai_branch(cfg: dict[str, Any], branch: str) -> None:
+    prefix = str(cfg.get("runtime", {}).get("branch_prefix", "ai")).strip("/")
+    expected_prefix = f"{prefix}/"
+    if not _BRANCH_RE.fullmatch(branch) or ".." in branch or not branch.startswith(expected_prefix):
+        raise HTTPException(422, f"Branch must be a bounded {expected_prefix}* branch")
+
+
 def _register(job_id: str, proc: subprocess.Popen) -> None:
     with _ACTIVE_LOCK:
         previous = _ACTIVE.get(job_id)
@@ -190,7 +217,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.11")
+app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.12")
 
 
 @app.get("/health")
@@ -204,7 +231,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok" if ok else "degraded",
         "service": "ddev-executor",
-        "version": "1.0.11",
+        "version": "1.0.12",
         "ddev": (result.stdout or result.stderr).strip(),
         "docker": (docker.stdout or docker.stderr).strip(),
         "buildx": (buildx.stdout or buildx.stderr).strip(),
@@ -219,7 +246,7 @@ def cancel(payload: CancelRequest) -> dict[str, Any]:
 
 @app.post("/v1/workspaces", dependencies=[Depends(auth)])
 def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
-    """Create a self-contained clone for one job."""
+    """Create a self-contained clone for one job without exposing source remotes."""
     cfg = project(payload.project_id)
     repo = expand(str(cfg.get("path", "")))
     if not is_git_repo(repo):
@@ -227,7 +254,6 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
 
     ref = payload.ref or str(cfg.get("base_branch", "main"))
     source_commit = git(repo, "rev-parse", ref)
-    source_origin = remote_origin(repo)
 
     root = Path(os.environ["CODING_WORKSPACES_ROOT"]).resolve()
     root.mkdir(parents=True, exist_ok=True)
@@ -238,8 +264,9 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
         raise HTTPException(409, "Workspace already exists")
 
     # --no-local prevents hard-linked Git objects from being shared with the
-    # source repository. Track the clone process as well so cancellation cannot
-    # leave a large background clone running after the job is cancelled.
+    # source repository. The local clone creates an `origin` that points at the
+    # source path; remove it before the agent sees the workspace. Source remote
+    # URLs (which may contain credentials) stay confined to this privileged API.
     returncode, stdout, stderr, _ = run_tracked(
         payload.job_id,
         ["git", "clone", "--no-local", "--no-checkout", str(repo), str(workspace)],
@@ -250,8 +277,8 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
         raise HTTPException(422, stderr.strip() or stdout.strip() or "git clone failed")
 
     try:
-        if source_origin:
-            git(workspace, "remote", "set-url", "origin", source_origin)
+        if remote_origin(workspace):
+            git(workspace, "remote", "remove", "origin")
         prefix = str(cfg.get("runtime", {}).get("branch_prefix", "ai"))
         branch = f"{prefix}/{payload.job_id[:12]}"
         git(workspace, "checkout", "-b", branch, source_commit)
@@ -269,7 +296,65 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
         "workspace": str(workspace),
         "branch": branch,
         "source_commit": source_commit,
-        "workspace_mode": "isolated_clone",
+        "workspace_mode": "isolated_clone_no_remote",
+    }
+
+
+@app.post("/v1/publish-branch", dependencies=[Depends(auth)])
+def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
+    """Push exactly one verified AI branch without adding a remote to the workspace."""
+    cfg = project(payload.project_id)
+    autonomy = cfg.get("autonomy", {}) or {}
+    if not bool(autonomy.get("allow_push_ai_branch", False)):
+        raise HTTPException(403, "Project policy does not allow AI branch publishing")
+
+    workspace = _validate_workspace(payload.job_id, payload.workspace)
+    _validate_ai_branch(cfg, payload.branch)
+
+    current_branch = git(workspace, "branch", "--show-current")
+    if current_branch != payload.branch:
+        raise HTTPException(409, "Workspace branch does not match requested publish branch")
+    head = git(workspace, "rev-parse", "HEAD")
+    expected = git(workspace, "rev-parse", payload.expected_commit)
+    source_commit = git(workspace, "rev-parse", payload.source_commit)
+    if head != expected:
+        raise HTTPException(409, "Workspace HEAD does not match expected commit")
+    if git(workspace, "remote", check=False).strip():
+        raise HTTPException(409, "Workspace must not contain git remotes during publish")
+
+    ancestry = subprocess.run(
+        ["git", "-C", str(workspace), "merge-base", "--is-ancestor", source_commit, expected],
+        text=True,
+        capture_output=True,
+    )
+    if ancestry.returncode != 0:
+        raise HTTPException(409, "Expected commit is not descended from the job source commit")
+
+    source_repo = expand(str(cfg.get("path", "")))
+    if not is_git_repo(source_repo):
+        raise HTTPException(422, "Configured source repository is unavailable")
+    origin = remote_origin(source_repo)
+    if not origin:
+        raise HTTPException(422, "Source repository has no origin remote")
+
+    returncode, stdout, stderr, timed_out = run_tracked(
+        payload.job_id,
+        [
+            "git", "-C", str(workspace), "push", "--porcelain", origin,
+            f"{expected}:refs/heads/{payload.branch}",
+        ],
+        timeout=300,
+        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+    )
+    if returncode != 0:
+        detail = (stderr or stdout or "git push failed")[-12000:]
+        raise HTTPException(502 if not timed_out else 504, detail)
+
+    return {
+        "published": True,
+        "branch": payload.branch,
+        "commit": expected,
+        "source_commit": source_commit,
     }
 
 
