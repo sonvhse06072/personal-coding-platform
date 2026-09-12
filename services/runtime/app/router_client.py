@@ -29,6 +29,12 @@ class RouterClient:
             response.raise_for_status()
             return response.json()
 
+    async def staff(self, payload: dict[str, Any]) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.post(f"{self.base}/v1/staff", json=payload, headers=self.headers)
+            response.raise_for_status()
+            return response.json()
+
     async def reassess(self, payload: dict[str, Any]) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=30) as client:
             response = await client.post(f"{self.base}/v1/reassess", json=payload, headers=self.headers)

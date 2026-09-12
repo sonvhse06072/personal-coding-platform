@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 ProfileName = Literal["fast", "standard", "complex", "critical"]
@@ -72,6 +72,17 @@ class RoutingRequest(BaseModel):
     privacy: PrivacyPolicy | None = None
 
 
+class StaffingRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    request_id: str = Field(min_length=1, max_length=200)
+    project_id: str = Field(default="default", min_length=1, max_length=200)
+    role: str = Field(min_length=2, max_length=80, pattern=r"^[a-z][a-z0-9_]{1,79}$")
+    profile: ProfileName = "standard"
+    semantic: SemanticSignals = Field(default_factory=SemanticSignals)
+    provider_state: dict[str, ProviderState] = Field(default_factory=dict)
+
+
 class DimensionScores(BaseModel):
     scope: int
     dependency_depth: int
@@ -92,6 +103,17 @@ class ModelChoice(BaseModel):
     score: float
     predicted_success: float
     reasons: list[str]
+
+
+class StaffingResponse(BaseModel):
+    request_id: str
+    project_id: str
+    role: str
+    profile: ProfileName
+    choice: ModelChoice
+    rejected_candidates: dict[str, list[str]] = Field(default_factory=dict)
+    policy_version: int
+    registry_version: int
 
 
 class HumanDecision(BaseModel):

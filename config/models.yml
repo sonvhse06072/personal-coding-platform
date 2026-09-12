@@ -1,4 +1,4 @@
-version: 3
+version: 4
 models:
   groq_free:
     kind: llm
@@ -90,6 +90,7 @@ models:
     - repair
     - test_writer
     - planner
+    - product_manager
     capabilities:
       coding: 8
       reasoning: 8
@@ -124,6 +125,7 @@ models:
     - debugger
     - planner
     - architecture
+    - product_manager
     capabilities:
       coding: 9
       reasoning: 9
@@ -178,6 +180,7 @@ models:
     - reviewer
     - debugger
     - planner
+    - product_manager
     capabilities:
       coding: 9
       reasoning: 9
