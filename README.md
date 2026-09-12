@@ -6,6 +6,12 @@ A DDEV-managed, personal coding automation platform. Daily startup is intentiona
 ddev start
 ```
 
+## Project source of truth
+
+Project intent, authority boundaries, current/target architecture, agent-team operating model, and the approved implementation roadmap live in [`docs/project/`](docs/project/README.md). Coding agents should begin with the repository-root [`AGENTS.md`](AGENTS.md), which defines the required reading order and authority hierarchy.
+
+The checked-in source of truth is authoritative over chat history or remembered agent context. Documents under `docs/project/` clearly distinguish current implemented behavior from approved target behavior so planned PM/WorkOrder/Reviewer capabilities are not treated as already available.
+
 ## Why DDEV for the whole platform?
 
 DDEV supports custom Docker Compose services through `.ddev/docker-compose.*.yaml`, so the platform can remain one Git repository while keeping Router, Coding Runtime, n8n and the privileged DDEV executor isolated as separate services.
