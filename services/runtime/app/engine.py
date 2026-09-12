@@ -55,7 +55,12 @@ class RuntimeEngine(_RuntimeEngine):
         self.router = WorkOrderRouterProxy(self.router, self.storage)
 
     def create_job(self, payload: dict[str, Any]) -> str:
-        """Create one job with its governing baseline/contract in the same write."""
+        """Create one job with its governing baseline/contract in the same write.
+
+        `_job_id` is an internal-only idempotency hook used by the durable plan
+        orchestrator. Public API models never expose it. Reusing the same id is
+        accepted only when the persisted project and WorkOrder identity match.
+        """
 
         project = project_config(payload["project_id"])
         work_order = work_order_snapshot(payload.get("work_order"))
@@ -72,7 +77,27 @@ class RuntimeEngine(_RuntimeEngine):
             if not isinstance(task, dict):
                 raise ValueError("Legacy job creation requires task when work_order is absent")
 
-        job_id = uuid.uuid4().hex
+        requested_job_id = str(payload.get("_job_id") or "").strip()
+        job_id = requested_job_id or uuid.uuid4().hex
+        if requested_job_id:
+            try:
+                uuid.UUID(hex=requested_job_id)
+            except ValueError as exc:
+                raise ValueError("Internal orchestrator job id must be a UUID hex value") from exc
+            existing = self.storage.get(job_id)
+            if existing is not None:
+                existing_checkpoint = existing.get("checkpoint") or {}
+                existing_work_order = work_order_snapshot(existing_checkpoint.get("work_order"))
+                if (
+                    existing.get("project_id") != payload["project_id"]
+                    or work_order is None
+                    or existing_work_order is None
+                    or existing_work_order.id != work_order.id
+                    or existing_work_order.baseline_revision != work_order.baseline_revision
+                ):
+                    raise RuntimeError("Deterministic orchestrator job id collides with different job metadata")
+                return job_id
+
         checkpoint = {
             "hints": payload.get("repo_hints", {}),
             "provider_state": payload.get("provider_state", {}),
