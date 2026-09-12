@@ -10,9 +10,17 @@ import threading
 from pathlib import Path
 from typing import Any, Literal
 
+import httpx
 import yaml
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, Field
+
+from .github_delivery import (
+    GitHubDelivery,
+    github_git_env,
+    github_push_url,
+    github_repository_from_origin,
+)
 
 
 Phase = Literal["preflight", "targeted_tests", "static_analysis", "full_tests", "cleanup"]
@@ -40,6 +48,15 @@ class PublishBranchRequest(BaseModel):
     branch: str = Field(min_length=1, max_length=200)
     source_commit: str = Field(min_length=7, max_length=64)
     expected_commit: str = Field(min_length=7, max_length=64)
+
+
+class PullRequestRequest(BaseModel):
+    job_id: str = Field(min_length=8, max_length=100)
+    project_id: str = Field(min_length=1, max_length=200)
+    branch: str = Field(min_length=1, max_length=200)
+    expected_commit: str = Field(min_length=7, max_length=64)
+    title: str = Field(min_length=1, max_length=500)
+    body: str = Field(default="", max_length=30000)
 
 
 class CancelRequest(BaseModel):
@@ -142,6 +159,36 @@ def _validate_ai_branch(cfg: dict[str, Any], branch: str) -> None:
         raise HTTPException(422, f"Branch must be a bounded {expected_prefix}* branch")
 
 
+def _source_origin(cfg: dict[str, Any]) -> tuple[Path, str]:
+    source_repo = expand(str(cfg.get("path", "")))
+    if not is_git_repo(source_repo):
+        raise HTTPException(422, "Configured source repository is unavailable")
+    origin = remote_origin(source_repo)
+    if not origin:
+        raise HTTPException(422, "Source repository has no origin remote")
+    return source_repo, origin
+
+
+def _github_context(cfg: dict[str, Any]) -> tuple[GitHubDelivery, str]:
+    _, origin = _source_origin(cfg)
+    repository = github_repository_from_origin(origin)
+    if not repository:
+        raise HTTPException(422, "Source origin is not a supported github.com repository")
+    delivery = GitHubDelivery()
+    if not delivery.configured:
+        raise HTTPException(503, "GITHUB_DELIVERY_TOKEN is not configured")
+    return delivery, repository
+
+
+def _github_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, httpx.HTTPStatusError):
+        detail = exc.response.text[-12000:] if exc.response is not None else str(exc)
+        return HTTPException(502, f"GitHub API request failed: {detail}")
+    if isinstance(exc, httpx.HTTPError):
+        return HTTPException(502, f"GitHub API unavailable: {exc}")
+    return HTTPException(409, str(exc))
+
+
 def _register(job_id: str, proc: subprocess.Popen) -> None:
     with _ACTIVE_LOCK:
         previous = _ACTIVE.get(job_id)
@@ -217,7 +264,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.12")
+app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.13")
 
 
 @app.get("/health")
@@ -231,11 +278,12 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok" if ok else "degraded",
         "service": "ddev-executor",
-        "version": "1.0.12",
+        "version": "1.0.13",
         "ddev": (result.stdout or result.stderr).strip(),
         "docker": (docker.stdout or docker.stderr).strip(),
         "buildx": (buildx.stdout or buildx.stderr).strip(),
         "active_jobs": active_jobs,
+        "github_delivery_configured": GitHubDelivery().configured,
     }
 
 
@@ -263,10 +311,6 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
     if workspace.exists():
         raise HTTPException(409, "Workspace already exists")
 
-    # --no-local prevents hard-linked Git objects from being shared with the
-    # source repository. The local clone creates an `origin` that points at the
-    # source path; remove it before the agent sees the workspace. Source remote
-    # URLs (which may contain credentials) stay confined to this privileged API.
     returncode, stdout, stderr, _ = run_tracked(
         payload.job_id,
         ["git", "clone", "--no-local", "--no-checkout", str(repo), str(workspace)],
@@ -330,21 +374,25 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
     if ancestry.returncode != 0:
         raise HTTPException(409, "Expected commit is not descended from the job source commit")
 
-    source_repo = expand(str(cfg.get("path", "")))
-    if not is_git_repo(source_repo):
-        raise HTTPException(422, "Configured source repository is unavailable")
-    origin = remote_origin(source_repo)
-    if not origin:
-        raise HTTPException(422, "Source repository has no origin remote")
+    _, origin = _source_origin(cfg)
+    repository = github_repository_from_origin(origin)
+    push_target = origin
+    push_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    if repository:
+        delivery = GitHubDelivery()
+        if not delivery.configured:
+            raise HTTPException(503, "GITHUB_DELIVERY_TOKEN is not configured for GitHub publishing")
+        push_target = github_push_url(repository)
+        push_env = github_git_env(delivery.token)
 
     returncode, stdout, stderr, timed_out = run_tracked(
         payload.job_id,
         [
-            "git", "-C", str(workspace), "push", "--porcelain", origin,
+            "git", "-C", str(workspace), "push", "--porcelain", push_target,
             f"{expected}:refs/heads/{payload.branch}",
         ],
         timeout=300,
-        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        env=push_env,
     )
     if returncode != 0:
         detail = (stderr or stdout or "git push failed")[-12000:]
@@ -355,7 +403,47 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
         "branch": payload.branch,
         "commit": expected,
         "source_commit": source_commit,
+        "repository": repository,
     }
+
+
+@app.post("/v1/github/pull-request", dependencies=[Depends(auth)])
+def upsert_pull_request(payload: PullRequestRequest) -> dict[str, Any]:
+    cfg = project(payload.project_id)
+    autonomy = cfg.get("autonomy", {}) or {}
+    if not bool(autonomy.get("allow_create_pr", False)):
+        raise HTTPException(403, "Project policy does not allow pull-request creation")
+    _validate_ai_branch(cfg, payload.branch)
+    delivery, repository = _github_context(cfg)
+    base_branch = str(cfg.get("base_branch", "main"))
+    try:
+        result = delivery.upsert_pull_request(
+            repository=repository,
+            branch=payload.branch,
+            base_branch=base_branch,
+            expected_commit=payload.expected_commit,
+            title=payload.title,
+            body=payload.body,
+        )
+    except (httpx.HTTPError, RuntimeError, ValueError) as exc:
+        raise _github_error(exc) from exc
+    return {"job_id": payload.job_id, **result}
+
+
+@app.get("/v1/github/ci", dependencies=[Depends(auth)])
+def github_ci(
+    project_id: str = Query(..., min_length=1, max_length=200),
+    commit: str = Query(..., min_length=7, max_length=64),
+) -> dict[str, Any]:
+    cfg = project(project_id)
+    autonomy = cfg.get("autonomy", {}) or {}
+    if not bool(autonomy.get("allow_create_pr", False)):
+        raise HTTPException(403, "Project policy does not allow GitHub delivery monitoring")
+    delivery, repository = _github_context(cfg)
+    try:
+        return delivery.ci_status(repository=repository, commit=commit)
+    except (httpx.HTTPError, RuntimeError, ValueError) as exc:
+        raise _github_error(exc) from exc
 
 
 @app.delete("/v1/workspaces", dependencies=[Depends(auth)])
