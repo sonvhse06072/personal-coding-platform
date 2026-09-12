@@ -90,3 +90,37 @@ def test_issue_metadata_marks_pull_requests(monkeypatch):
     assert result["title"] == "Canonical title"
     assert result["body"] == "Canonical body"
     assert result["is_pull_request"] is True
+
+
+def test_pull_request_status_exposes_only_merge_gate_metadata(monkeypatch):
+    delivery = FakeDelivery([
+        {
+            "number": 12,
+            "state": "closed",
+            "merged": True,
+            "merged_at": "2026-09-13T03:00:00Z",
+            "merge_commit_sha": "abc123",
+            "html_url": "https://github.com/example/repo/pull/12",
+            "head": {"sha": "head123", "ref": "ai/job"},
+            "base": {"ref": "main"},
+            "body": "must not leak through bounded response",
+        }
+    ])
+    monkeypatch.setattr(pm_bridge_github, "_repository", lambda project_id: (delivery, "example/repo"))
+
+    result = pm_bridge_github.pull_request(12, "demo")
+
+    assert result == {
+        "project_id": "demo",
+        "repository": "example/repo",
+        "number": 12,
+        "state": "closed",
+        "merged": True,
+        "merged_at": "2026-09-13T03:00:00Z",
+        "merge_commit_sha": "abc123",
+        "html_url": "https://github.com/example/repo/pull/12",
+        "head": "head123",
+        "head_ref": "ai/job",
+        "base_ref": "main",
+    }
+    assert delivery.client.calls == [("https://api.github.test/repos/example/repo/pulls/12", None)]
