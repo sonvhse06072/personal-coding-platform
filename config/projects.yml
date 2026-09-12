@@ -101,9 +101,11 @@ projects:
         - ddev drush cr
 
       targeted_tests:
-        - ddev exec vendor/bin/phpcs web/modules/custom
+        - >-
+          ddev exec bash -lc 'find web/modules/custom -type f -path "*/tests/src/Unit/*Test.php" -print0 | xargs -0 -r vendor/bin/phpunit -c web/core/phpunit.xml.dist'
 
-      static_analysis: []
+      static_analysis:
+        - ddev exec vendor/bin/phpcs web/modules/custom
 
       full_tests: []
 
