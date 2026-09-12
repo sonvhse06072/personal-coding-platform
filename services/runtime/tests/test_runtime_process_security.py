@@ -46,21 +46,29 @@ def test_runtime_process_hardening_is_noop_off_linux(monkeypatch) -> None:
     security.harden_runtime_process_secret_boundary()
 
 
-def test_lifespan_hardens_process_before_starting_engine(monkeypatch) -> None:
+def test_lifespan_hardens_process_before_starting_engine_and_orchestrator(monkeypatch) -> None:
     events: list[str] = []
 
     def fake_harden() -> None:
         events.append("harden")
 
-    async def fake_start() -> None:
-        events.append("start")
+    async def fake_engine_start() -> None:
+        events.append("engine_start")
 
-    async def fake_stop() -> None:
-        events.append("stop")
+    async def fake_engine_stop() -> None:
+        events.append("engine_stop")
+
+    async def fake_orchestrator_start() -> None:
+        events.append("orchestrator_start")
+
+    async def fake_orchestrator_stop() -> None:
+        events.append("orchestrator_stop")
 
     monkeypatch.setattr(main, "harden_runtime_process_secret_boundary", fake_harden)
-    monkeypatch.setattr(main.engine, "start", fake_start)
-    monkeypatch.setattr(main.engine, "stop", fake_stop)
+    monkeypatch.setattr(main.engine, "start", fake_engine_start)
+    monkeypatch.setattr(main.engine, "stop", fake_engine_stop)
+    monkeypatch.setattr(main.plan_orchestrator, "start", fake_orchestrator_start)
+    monkeypatch.setattr(main.plan_orchestrator, "stop", fake_orchestrator_stop)
 
     async def exercise() -> None:
         async with main.lifespan(main.app):
@@ -68,4 +76,11 @@ def test_lifespan_hardens_process_before_starting_engine(monkeypatch) -> None:
 
     asyncio.run(exercise())
 
-    assert events == ["harden", "start", "running", "stop"]
+    assert events == [
+        "harden",
+        "engine_start",
+        "orchestrator_start",
+        "running",
+        "orchestrator_stop",
+        "engine_stop",
+    ]
