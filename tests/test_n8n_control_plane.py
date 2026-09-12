@@ -13,7 +13,7 @@ SYNC_SCRIPT = ROOT / "scripts" / "n8n-control-plane.sh"
 GLOBAL_ENV_EXAMPLE = ROOT / ".ddev" / ".env.example"
 N8N_ENV_EXAMPLE = ROOT / ".ddev" / ".env.n8n.local.example"
 
-EXPECTED_WORKFLOWS = {
+EXPECTED_WEBHOOK_WORKFLOWS = {
     "job-intake.json": {
         "id": "pcpJobIntakeV001",
         "method": "POST",
@@ -31,6 +31,9 @@ EXPECTED_WORKFLOWS = {
         "path": "coding-platform/jobs/:job_id/decision",
         "webhook_id": "a0db357c-167e-43c4-a692-e049aa21ef63",
     },
+}
+EXPECTED_SCHEDULED_WORKFLOWS = {
+    "pm-bridge-poll.json": {"id": "pcpPmBridgePoll1"},
 }
 
 FORBIDDEN_N8N_SECRETS = {
@@ -76,12 +79,12 @@ def test_n8n_is_runtime_only_and_pinned() -> None:
     assert "n8n-nodes-base.localFileTrigger" in excluded
 
 
-def test_workflows_are_versioned_runtime_proxies_only() -> None:
+def test_webhook_workflows_are_versioned_runtime_proxies_only() -> None:
     files = {path.name: path for path in WORKFLOW_DIR.glob("*.json")}
-    assert set(files) == set(EXPECTED_WORKFLOWS)
+    assert set(files) == set(EXPECTED_WEBHOOK_WORKFLOWS) | set(EXPECTED_SCHEDULED_WORKFLOWS)
 
     seen_routes: set[tuple[str, str]] = set()
-    for name, expected in EXPECTED_WORKFLOWS.items():
+    for name, expected in EXPECTED_WEBHOOK_WORKFLOWS.items():
         workflow = json.loads(files[name].read_text(encoding="utf-8"))
         assert workflow["id"] == expected["id"]
         assert workflow["active"] is False
@@ -97,9 +100,6 @@ def test_workflows_are_versioned_runtime_proxies_only() -> None:
         assert route not in seen_routes
         seen_routes.add(route)
 
-        # n8n 2.38.x requires webhookId as the leading production URL segment
-        # for paths containing dynamic parameters such as :job_id. Keep these
-        # identifiers stable in version control so callers get deterministic URLs.
         if ":job_id" in params["path"]:
             assert webhook.get("webhookId") == expected["webhook_id"]
 
@@ -114,6 +114,35 @@ def test_workflows_are_versioned_runtime_proxies_only() -> None:
         assert "RUNTIME_API_TOKEN" in serialized
         assert "ROUTER_API_TOKEN" not in serialized
         assert '"credentials"' not in serialized
+
+
+def test_pm_bridge_schedule_is_runtime_only() -> None:
+    workflow = json.loads((WORKFLOW_DIR / "pm-bridge-poll.json").read_text(encoding="utf-8"))
+    assert workflow["id"] == EXPECTED_SCHEDULED_WORKFLOWS["pm-bridge-poll.json"]["id"]
+    assert workflow["active"] is False
+    assert workflow.get("credentials") in (None, {})
+
+    schedules = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.scheduleTrigger"]
+    requests = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.httpRequest"]
+    assert len(schedules) == 1
+    assert len(requests) == 1
+    assert schedules[0]["parameters"]["rule"]["interval"][0] == {
+        "field": "minutes",
+        "minutesInterval": 2,
+    }
+
+    request = requests[0]["parameters"]
+    assert request["method"] == "POST"
+    assert request["url"] == "={{ $env.RUNTIME_INTERNAL_URL + '/v1/pm-bridge/poll-all' }}"
+    headers = {item["name"]: item["value"] for item in request["headerParameters"]["parameters"]}
+    assert headers["Authorization"] == "={{ 'Bearer ' + $env.RUNTIME_API_TOKEN }}"
+
+    serialized = json.dumps(workflow)
+    assert "RUNTIME_API_TOKEN" in serialized
+    assert "GITHUB_DELIVERY_TOKEN" not in serialized
+    assert "PLATFORM_INTERNAL_TOKEN" not in serialized
+    assert "ROUTER_API_TOKEN" not in serialized
+    assert '"credentials"' not in serialized
 
 
 def test_human_decision_workflow_preserves_runtime_contract() -> None:
@@ -162,6 +191,7 @@ def test_sync_is_bounded_and_fail_closed() -> None:
     assert "Expected authenticated status proxy to preserve Runtime 404" in script
     assert "f94fd841-0da8-42af-a06a-17b78d5a1ea7" in script
     assert "a0db357c-167e-43c4-a692-e049aa21ef63" in script
+    assert "pcpPmBridgePoll1" in script
     assert "N8N_ENCRYPTION_KEY" in script
     assert "Refusing n8n secret migration" in script
 
