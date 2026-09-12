@@ -6,6 +6,24 @@ from typing import Any
 import httpx
 
 
+def _raise_for_status_with_detail(response: httpx.Response) -> None:
+    if response.is_success:
+        return
+    detail = ""
+    try:
+        payload = response.json()
+        if isinstance(payload, dict) and payload.get("detail"):
+            detail = str(payload["detail"])
+        else:
+            detail = str(payload)
+    except ValueError:
+        detail = response.text
+    message = f"DDEV executor HTTP {response.status_code}"
+    if detail:
+        message += f": {detail[-12000:]}"
+    raise RuntimeError(message)
+
+
 class DdevExecutorClient:
     def __init__(self) -> None:
         self.base = os.getenv("DDEV_EXECUTOR_URL", "http://ddev-executor:8790").rstrip("/")
@@ -69,7 +87,7 @@ class DdevExecutorClient:
                 },
                 headers=self.headers,
             )
-            response.raise_for_status()
+            _raise_for_status_with_detail(response)
             return response.json()
 
     async def upsert_pull_request(
@@ -95,7 +113,7 @@ class DdevExecutorClient:
                 },
                 headers=self.headers,
             )
-            response.raise_for_status()
+            _raise_for_status_with_detail(response)
             return response.json()
 
     async def github_ci(self, *, project_id: str, commit: str) -> dict[str, Any]:
@@ -105,7 +123,7 @@ class DdevExecutorClient:
                 params={"project_id": project_id, "commit": commit},
                 headers=self.headers,
             )
-            response.raise_for_status()
+            _raise_for_status_with_detail(response)
             return response.json()
 
     async def remove_workspace(self, *, job_id: str, project_id: str, workspace: str) -> dict[str, Any]:
