@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from copy import deepcopy
 from typing import Any
 
@@ -71,6 +72,14 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             )
         return max(1, min(900, remaining))
 
+    @staticmethod
+    def _charge_delivery_time(progress: dict[str, Any], started: float) -> None:
+        spent_minutes = max(0.0, (time.monotonic() - started) / 60.0)
+        progress["elapsed_minutes"] = round(
+            float(progress.get("elapsed_minutes", 0.0)) + spent_minutes,
+            3,
+        )
+
     async def run_job(self, job_id: str) -> None:
         # If Runtime restarted after local verification/commit but before GitHub
         # delivery completed, resume the idempotent delivery step instead of
@@ -121,6 +130,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 evaluator=evaluator,
             )
 
+            delivery_started = time.monotonic()
             try:
                 delivery = await deliver_verified_work(
                     ddev=self.ddev,
@@ -136,6 +146,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                     max_wait_seconds=self._delivery_wait_seconds(strategy, progress),
                 )
             except DeliveryError as exc:
+                self._charge_delivery_time(progress, delivery_started)
                 checkpoint["delivery"] = exc.metadata
                 result["delivery"] = exc.metadata
                 self._block(
@@ -149,6 +160,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 )
                 return
 
+            self._charge_delivery_time(progress, delivery_started)
             checkpoint["delivery"] = delivery
             result["delivery"] = delivery
 
