@@ -19,6 +19,20 @@ def test_projects_yaml_parses():
     assert "default" in doc["projects"]
 
 
+def test_chonhac_targeted_tests_execute_phpunit_and_static_analysis_executes_phpcs():
+    doc = yaml.safe_load((ROOT / "config/projects.yml").read_text())
+    ddev = doc["projects"]["chonhac"]["ddev"]
+    targeted = ddev["targeted_tests"]
+    static = ddev["static_analysis"]
+
+    assert len(targeted) == 1
+    assert "vendor/bin/phpunit" in targeted[0]
+    assert "tests/src/Unit/*Test.php" in targeted[0]
+    assert "web/core/phpunit.xml.dist" in targeted[0]
+    assert static == ["ddev exec vendor/bin/phpcs web/modules/custom"]
+    assert all("|| true" not in command for command in targeted + static)
+
+
 def test_service_homes_are_prepared_for_ddev_uid():
     compose = (ROOT / ".ddev/docker-compose.platform.yaml").read_text()
     runtime = (ROOT / "services/runtime/Dockerfile").read_text()
@@ -49,8 +63,8 @@ def test_antigravity_replaces_legacy_gemini_cli():
 
 
 def test_antigravity_bridge_is_bounded_for_headless_automation():
-    bridge = (ROOT / "scripts/antigravity-bridge.py").read_text()
-    launcher = (ROOT / "scripts/antigravity-bridge.sh").read_text()
+    bridge = (ROOT / "scripts" / "antigravity-bridge.py").read_text()
+    launcher = (ROOT / "scripts" / "antigravity-bridge.sh").read_text()
     models = yaml.safe_load((ROOT / "config/models.yml").read_text())
     privacy = models["models"]["antigravity_free"]["privacy"]
 
