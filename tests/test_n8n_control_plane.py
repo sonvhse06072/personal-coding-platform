@@ -1,0 +1,137 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+import yaml
+
+
+ROOT = Path(__file__).resolve().parents[1]
+COMPOSE = ROOT / ".ddev" / "docker-compose.platform.yaml"
+WORKFLOW_DIR = ROOT / "n8n" / "workflows"
+SYNC_SCRIPT = ROOT / "scripts" / "n8n-control-plane.sh"
+GLOBAL_ENV_EXAMPLE = ROOT / ".ddev" / ".env.example"
+N8N_ENV_EXAMPLE = ROOT / ".ddev" / ".env.n8n.local.example"
+
+EXPECTED_WORKFLOWS = {
+    "job-intake.json": {
+        "id": "pcpJobIntakeV001",
+        "method": "POST",
+        "path": "coding-platform/jobs",
+    },
+    "job-status.json": {
+        "id": "pcpJobStatusV001",
+        "method": "GET",
+        "path": "coding-platform/jobs/:job_id",
+    },
+    "human-decision.json": {
+        "id": "pcpHumanDecision1",
+        "method": "POST",
+        "path": "coding-platform/jobs/:job_id/decision",
+    },
+}
+
+FORBIDDEN_N8N_SECRETS = {
+    "ROUTER_API_TOKEN",
+    "PLATFORM_INTERNAL_TOKEN",
+    "ANTIGRAVITY_BRIDGE_TOKEN",
+    "DEEPSEEK_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "GROQ_API_KEY",
+    "OPENROUTER_API_KEY",
+    "GITHUB_DELIVERY_TOKEN",
+}
+
+
+def load_compose() -> dict:
+    return yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))
+
+
+def test_n8n_is_runtime_only_and_pinned() -> None:
+    n8n = load_compose()["services"]["n8n"]
+    env = n8n["environment"]
+
+    assert "2.38.6" in n8n["image"]
+    assert "latest" not in n8n["image"]
+    assert env["RUNTIME_INTERNAL_URL"] == "http://coding-runtime:8787"
+    assert env["RUNTIME_API_TOKEN"] == "${RUNTIME_API_TOKEN}"
+    assert env["N8N_CONTROL_PLANE_TOKEN"] == "${N8N_CONTROL_PLANE_TOKEN}"
+    assert env["N8N_BLOCK_ENV_ACCESS_IN_NODE"] == "false"
+
+    # DDEV's global .env reaches every service. The n8n service must explicitly
+    # scrub every out-of-scope platform/provider secret at compose merge time.
+    for key in FORBIDDEN_N8N_SECRETS:
+        assert key in env
+        assert env[key] == ""
+
+    assert "ROUTER_INTERNAL_URL" not in env
+    assert any(str(volume).endswith("/n8n/workflows:/opt/pcp-workflows:ro") for volume in n8n["volumes"])
+
+    excluded = json.loads(env["NODES_EXCLUDE"])
+    assert "n8n-nodes-base.executeCommand" in excluded
+    assert "n8n-nodes-base.readWriteFile" in excluded
+    assert "n8n-nodes-base.localFileTrigger" in excluded
+
+
+def test_workflows_are_versioned_runtime_proxies_only() -> None:
+    files = {path.name: path for path in WORKFLOW_DIR.glob("*.json")}
+    assert set(files) == set(EXPECTED_WORKFLOWS)
+
+    seen_routes: set[tuple[str, str]] = set()
+    for name, expected in EXPECTED_WORKFLOWS.items():
+        workflow = json.loads(files[name].read_text(encoding="utf-8"))
+        assert workflow["id"] == expected["id"]
+        assert workflow["active"] is False
+        assert workflow.get("credentials") in (None, {})
+
+        webhook_nodes = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.webhook"]
+        assert len(webhook_nodes) == 1
+        params = webhook_nodes[0]["parameters"]
+        method = params.get("httpMethod", "GET")
+        route = (method, params["path"])
+        assert route == (expected["method"], expected["path"])
+        assert route not in seen_routes
+        seen_routes.add(route)
+
+        http_nodes = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.httpRequest"]
+        assert len(http_nodes) == 1
+        url = http_nodes[0]["parameters"]["url"]
+        assert "RUNTIME_INTERNAL_URL" in url
+        assert "ROUTER" not in url.upper()
+
+        serialized = json.dumps(workflow)
+        assert "N8N_CONTROL_PLANE_TOKEN" in serialized
+        assert "RUNTIME_API_TOKEN" in serialized
+        assert "ROUTER_API_TOKEN" not in serialized
+        assert '"credentials"' not in serialized
+
+
+def test_sync_is_bounded_and_fail_closed() -> None:
+    script = SYNC_SCRIPT.read_text(encoding="utf-8")
+
+    assert "import:workflow --separate" in script
+    assert 'publish:workflow --id="$workflow_id"' in script
+    assert "publish:workflow --all" not in script
+    assert "update:workflow --all" not in script
+    assert "assert_runtime_only_secret_boundary" in script
+    assert "Expected unauthenticated control-plane request to return 401" in script
+    assert "Expected authenticated status proxy to preserve Runtime 404" in script
+    assert "N8N_ENCRYPTION_KEY" in script
+    assert "Refusing n8n secret migration" in script
+
+
+def test_n8n_secrets_are_documented_service_scoped() -> None:
+    global_env = GLOBAL_ENV_EXAMPLE.read_text(encoding="utf-8")
+    n8n_env = N8N_ENV_EXAMPLE.read_text(encoding="utf-8")
+
+    assert "N8N_ENCRYPTION_KEY=" not in global_env
+    assert "N8N_CONTROL_PLANE_TOKEN=" not in global_env
+    assert "N8N_IMAGE=n8nio/n8n:2.38.6" in global_env
+
+    keys = {
+        line.split("=", 1)[0]
+        for line in n8n_env.splitlines()
+        if line and not line.startswith("#") and "=" in line
+    }
+    assert keys == {"N8N_ENCRYPTION_KEY", "N8N_CONTROL_PLANE_TOKEN"}
