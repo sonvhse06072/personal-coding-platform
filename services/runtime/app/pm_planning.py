@@ -57,6 +57,17 @@ class PMTicket(BaseModel):
         return normalized
 
 
+class PMProviderState(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    healthy: bool = True
+    quota_pressure: float = Field(default=0.0, ge=0.0, le=1.0)
+    error_rate: float = Field(default=0.0, ge=0.0, le=1.0)
+    latency_ms: int = Field(default=0, ge=0)
+    predicted_success: float | None = Field(default=None, ge=0.0, le=1.0)
+    available: bool = True
+
+
 class PMPlanCreateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -69,6 +80,7 @@ class PMPlanCreateRequest(BaseModel):
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$",
     )
     planning_profile: PlanningProfile = "standard"
+    provider_state: dict[str, PMProviderState] = Field(default_factory=dict, max_length=50)
 
 
 class DecisionBoundary(BaseModel):
@@ -401,7 +413,10 @@ class PMPlanner:
                         "novelty": 40,
                         "reasoning_requirement": 85,
                     },
-                    "provider_state": {},
+                    "provider_state": {
+                        key: state.model_dump(mode="json")
+                        for key, state in request.provider_state.items()
+                    },
                 }
             )
             self.storage.update_execution_plan(plan_id, staffing=staffing)
