@@ -1,0 +1,67 @@
+{
+  "id": "pcpHumanDecision1",
+  "name": "PCP - Human Decision",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {"httpMethod": "POST", "path": "coding-platform/jobs/:job_id/decision", "responseMode": "responseNode", "options": {}},
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2.1, "position": [-620, 0],
+      "id": "1c1a52ef-e8b9-487a-865e-c20cf22778f7", "name": "Human Decision Webhook",
+      "webhookId": "a0db357c-167e-43c4-a692-e049aa21ef63"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3},
+          "conditions": [{
+            "id": "cb1c10c5-4850-46ab-b72a-26b750e531a4",
+            "leftValue": "={{ $json.headers['x-control-token'] || '' }}",
+            "rightValue": "={{ $env.N8N_CONTROL_PLANE_TOKEN }}",
+            "operator": {"type": "string", "operation": "equals", "name": "filter.operator.equals"}
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [-380, 0],
+      "id": "2fd60e52-a6ad-4552-b2f6-8061f78fa56c", "name": "Authorize Control Plane"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.RUNTIME_INTERNAL_URL + '/v1/jobs/' + $json.params.job_id + '/decision' }}",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [
+          {"name": "Authorization", "value": "={{ 'Bearer ' + $env.RUNTIME_API_TOKEN }}"},
+          {"name": "Accept", "value": "application/json"}
+        ]},
+        "options": {"response": {"response": {"fullResponse": true, "neverError": true}}},
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}"
+      },
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [-120, -120],
+      "id": "2bb227f7-f407-44de-8749-5636996d1210", "name": "Resolve Human Decision"
+    },
+    {
+      "parameters": {"respondWith": "json", "responseBody": "={{ $json.body }}", "options": {"responseCode": "={{ $json.statusCode }}"}},
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.5, "position": [140, -120],
+      "id": "9319d489-e103-428d-8cc2-d7f9a2ca0791", "name": "Respond Runtime Result"
+    },
+    {
+      "parameters": {"respondWith": "json", "responseBody": "={\"error\":\"unauthorized\"}", "options": {"responseCode": 401}},
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.5, "position": [-120, 120],
+      "id": "0140fc1e-702c-40b2-bc30-cc27004825a2", "name": "Reject Unauthorized"
+    }
+  ],
+  "connections": {
+    "Human Decision Webhook": {"main": [[{"node": "Authorize Control Plane", "type": "main", "index": 0}]]},
+    "Authorize Control Plane": {"main": [[{"node": "Resolve Human Decision", "type": "main", "index": 0}], [{"node": "Reject Unauthorized", "type": "main", "index": 0}]]},
+    "Resolve Human Decision": {"main": [[{"node": "Respond Runtime Result", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1"},
+  "versionId": "f641b36f-15a5-4d66-92d7-4ce8076ed7a5",
+  "meta": {"templateCredsSetupCompleted": true},
+  "pinData": {},
+  "tags": []
+}

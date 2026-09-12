@@ -1,0 +1,64 @@
+{
+  "id": "pcpJobStatusV001",
+  "name": "PCP - Job Status",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {"httpMethod": "GET", "path": "coding-platform/jobs/:job_id", "responseMode": "responseNode", "options": {}},
+      "type": "n8n-nodes-base.webhook", "typeVersion": 2.1, "position": [-620, 0],
+      "id": "cc7af2e4-e1d7-4375-8a0b-b6a23748cb18", "name": "Job Status Webhook",
+      "webhookId": "f94fd841-0da8-42af-a06a-17b78d5a1ea7"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {"caseSensitive": true, "leftValue": "", "typeValidation": "strict", "version": 3},
+          "conditions": [{
+            "id": "c4855eda-de60-4d1d-a599-180bc3fe8d3f",
+            "leftValue": "={{ $json.headers['x-control-token'] || '' }}",
+            "rightValue": "={{ $env.N8N_CONTROL_PLANE_TOKEN }}",
+            "operator": {"type": "string", "operation": "equals", "name": "filter.operator.equals"}
+          }],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if", "typeVersion": 2.3, "position": [-380, 0],
+      "id": "b0306af1-56bf-4ad7-ab0c-c0a085132353", "name": "Authorize Control Plane"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.RUNTIME_INTERNAL_URL + '/v1/jobs/' + $json.params.job_id }}",
+        "sendHeaders": true,
+        "headerParameters": {"parameters": [
+          {"name": "Authorization", "value": "={{ 'Bearer ' + $env.RUNTIME_API_TOKEN }}"},
+          {"name": "Accept", "value": "application/json"}
+        ]},
+        "options": {"response": {"response": {"fullResponse": true, "neverError": true}}}
+      },
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [-120, -120],
+      "id": "8f85b3f0-ff86-47b1-81de-baeae15baec6", "name": "Get Runtime Job"
+    },
+    {
+      "parameters": {"respondWith": "json", "responseBody": "={{ $json.body }}", "options": {"responseCode": "={{ $json.statusCode }}"}},
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.5, "position": [140, -120],
+      "id": "314110dd-6aeb-4bf9-b553-4037a094fea0", "name": "Respond Runtime Result"
+    },
+    {
+      "parameters": {"respondWith": "json", "responseBody": "={\"error\":\"unauthorized\"}", "options": {"responseCode": 401}},
+      "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.5, "position": [-120, 120],
+      "id": "a55d4158-b6e4-4100-befb-d5a9a3d676c2", "name": "Reject Unauthorized"
+    }
+  ],
+  "connections": {
+    "Job Status Webhook": {"main": [[{"node": "Authorize Control Plane", "type": "main", "index": 0}]]},
+    "Authorize Control Plane": {"main": [[{"node": "Get Runtime Job", "type": "main", "index": 0}], [{"node": "Reject Unauthorized", "type": "main", "index": 0}]]},
+    "Get Runtime Job": {"main": [[{"node": "Respond Runtime Result", "type": "main", "index": 0}]]}
+  },
+  "settings": {"executionOrder": "v1"},
+  "versionId": "0f7abf0d-0d94-4f9f-b9ca-cf7484322504",
+  "meta": {"templateCredsSetupCompleted": true},
+  "pinData": {},
+  "tags": []
+}

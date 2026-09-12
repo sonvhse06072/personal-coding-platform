@@ -25,12 +25,12 @@ if [[ ! -f "$ENV_FILE" ]]; then
   sed -i "s|/home/CHANGE_ME/.coding-platform/workspaces|$HOME/.coding-platform/workspaces|g" "$ENV_FILE"
   sed -i "s|/home/CHANGE_ME|$HOME|g" "$ENV_FILE"
   sed -i "s|DOCKER_GID=999|DOCKER_GID=$DOCKER_GID|g" "$ENV_FILE"
-  mapfile -t SECRETS < <(printf '%s\n' "$(random_secret)" "$(random_secret)" "$(random_secret)" "$(random_secret)" "$(random_secret)")
-  python3 - "$ENV_FILE" "${SECRETS[0]}" "${SECRETS[1]}" "${SECRETS[2]}" "${SECRETS[3]}" "${SECRETS[4]}" <<'PY'
+  mapfile -t SECRETS < <(printf '%s\n' "$(random_secret)" "$(random_secret)" "$(random_secret)" "$(random_secret)")
+  python3 - "$ENV_FILE" "${SECRETS[0]}" "${SECRETS[1]}" "${SECRETS[2]}" "${SECRETS[3]}" <<'PY'
 from pathlib import Path
 import sys
 p=Path(sys.argv[1]); text=p.read_text()
-for key,val in zip(["ROUTER_API_TOKEN","RUNTIME_API_TOKEN","PLATFORM_INTERNAL_TOKEN","N8N_ENCRYPTION_KEY","ANTIGRAVITY_BRIDGE_TOKEN"],sys.argv[2:]):
+for key,val in zip(["ROUTER_API_TOKEN","RUNTIME_API_TOKEN","PLATFORM_INTERNAL_TOKEN","ANTIGRAVITY_BRIDGE_TOKEN"],sys.argv[2:]):
     text=text.replace(f"{key}=CHANGE_ME", f"{key}={val}")
 p.write_text(text)
 PY
@@ -45,6 +45,10 @@ fi
 if ! grep -q '^ANTIGRAVITY_BRIDGE_PORT=' "$ENV_FILE"; then
   echo "ANTIGRAVITY_BRIDGE_PORT=8792" >> "$ENV_FILE"
 fi
+
+# n8n has its own DDEV service-scoped secret file. This also migrates a legacy
+# N8N_ENCRYPTION_KEY out of the global environment without rotating it.
+bash "$ROOT/scripts/n8n-control-plane.sh" prepare-env
 
 cd "$ROOT"
 

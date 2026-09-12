@@ -14,9 +14,9 @@ The Coding Runtime **does not** receive `/var/run/docker.sock` or the source-rep
 
 ## Components
 
-- **n8n** — control plane and external event orchestration.
+- **n8n** — thin control plane for ingress, status access, human decisions and future external event/notification orchestration.
 - **router** — deterministic-first complexity/profile/model selection and hard execution budgets.
-- **coding-runtime** — job persistence, repository analysis, isolated Git workspaces, agent adapters, deterministic verification, repair/escalation loops.
+- **coding-runtime** — job persistence, repository analysis, isolated Git workspaces, agent adapters, deterministic verification, repair/escalation loops and bounded GitHub delivery.
 - **Antigravity host bridge** — constrained WSL-host bridge that runs the signed-in `agy` CLI inside isolated job workspaces; it keeps OS-keyring credentials outside Docker.
 - **ddev-executor** — tiny privileged service that can operate target DDEV projects without exposing Docker socket to the agents.
 - **PostgreSQL** — the standard DDEV `db` service; n8n and runtime persistence share it.
@@ -29,7 +29,7 @@ Prerequisites on WSL: Docker/Docker Desktop integration, DDEV, Git, Python 3 and
 ./scripts/bootstrap.sh
 ```
 
-The script creates `.ddev/.env`, generates local service secrets, detects the Docker socket group, creates `$HOME/.coding-platform/workspaces`, and starts the platform.
+The script creates `.ddev/.env`, generates local service secrets, detects the Docker socket group, creates `$HOME/.coding-platform/workspaces`, and starts the platform. n8n secrets are kept in the service-scoped `.ddev/.env.n8n.local`; existing installs preserve their current n8n encryption key during migration.
 
 After that:
 
@@ -116,9 +116,69 @@ The custom services use DDEV-routed alternate HTTPS ports:
 - Router Swagger: `https://personal-coding-platform.ddev.site:8091/docs`
 - Runtime Swagger: `https://personal-coding-platform.ddev.site:8788/docs`
 
+## n8n thin control plane
+
+The control-plane workflows are versioned in `n8n/workflows/`. n8n deliberately does **not** route models, run agents, access Docker, publish Git branches, call GitHub delivery APIs, or own job state. It accepts external/operator events and proxies only the allowed operation to Coding Runtime, which remains the source of truth.
+
+After the first pull containing the workflows, or whenever a checked-in workflow changes, sync and publish them with:
+
+```bash
+ddev n8n-sync
+```
+
+The sync command prepares service-scoped n8n secrets, imports the exact checked-in workflows, publishes only their fixed IDs, restarts n8n so webhook registrations refresh, verifies the n8n container cannot see Router/provider/privileged platform secrets, and runs authenticated/unauthenticated webhook smoke checks.
+
+Initial production webhook paths:
+
+```text
+POST /webhook/coding-platform/jobs
+GET  /webhook/coding-platform/jobs/<job_id>
+POST /webhook/coding-platform/jobs/<job_id>/decision
+```
+
+All three require the local ingress header `X-Control-Token`. The token is generated in `.ddev/.env.n8n.local` and must not be committed or shared. These DDEV webhooks are local-development endpoints unless you explicitly add a trusted tunnel/reverse proxy later.
+
+Example job creation through n8n:
+
+```bash
+source .ddev/.env.n8n.local
+
+curl -fsS \
+  -H "X-Control-Token: $N8N_CONTROL_PLANE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "chonhac",
+    "task": {
+      "title": "Example task",
+      "description": "Make one bounded implementation change.",
+      "task_type": "implementation"
+    },
+    "auto_run": true
+  }' \
+  "https://personal-coding-platform.ddev.site:5679/webhook/coding-platform/jobs"
+```
+
+Fetch status through the control plane:
+
+```bash
+curl -fsS \
+  -H "X-Control-Token: $N8N_CONTROL_PLANE_TOKEN" \
+  "https://personal-coding-platform.ddev.site:5679/webhook/coding-platform/jobs/<job_id>"
+```
+
+Resolve a Runtime human-decision gate through n8n:
+
+```bash
+curl -fsS -X POST \
+  -H "X-Control-Token: $N8N_CONTROL_PLANE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"action":"approve","note":"Reviewed locally"}' \
+  "https://personal-coding-platform.ddev.site:5679/webhook/coding-platform/jobs/<job_id>/decision"
+```
+
 ## Create a job
 
-Using the helper:
+Using the direct Runtime helper remains supported:
 
 ```bash
 ./scripts/create-job.sh my-drupal \
@@ -126,7 +186,7 @@ Using the helper:
   "Orders occasionally fail to retry when the CRM API times out."
 ```
 
-Or call `POST /v1/jobs` on Coding Runtime.
+Or call `POST /v1/jobs` on Coding Runtime directly.
 
 ## Runtime lifecycle
 
@@ -145,14 +205,14 @@ optional planner
       ↓
 executor agent
       ↓
-DDEV verification through constrained executor
+DDEV deterministic verification
       ↓
-Router /reassess
-      ├─ continue repair
-      ├─ monotonic escalation
-      ├─ human decision
-      ├─ stop / blocked
-      └─ complete
+bounded commit + AI branch publish + PR
+      ↓
+GitHub Actions / commit-status monitoring
+      ├─ success → complete
+      ├─ failure → bounded repair → verify → same PR
+      └─ infrastructure failure → durable delivery checkpoint / resume
 ```
 
 Every workspace receives a temporary `.ddev/config.coding-platform.yaml` with a unique DDEV project name, so parallel jobs do not collide with the source project's normal DDEV environment.
@@ -172,6 +232,7 @@ ddev start
 ddev stop
 ddev platform-status
 ddev platform-test
+ddev n8n-sync
 ddev logs -s router
 ddev logs -s coding-runtime
 ddev logs -s ddev-executor
@@ -182,12 +243,14 @@ ddev logs -s n8n
 
 `ddev-executor` mounts Docker's socket, which is effectively host-root-equivalent capability. It is deliberately not externally exposed and does not accept arbitrary command text. Keep the platform local-only and do not expose this internal Docker network to untrusted users.
 
+The n8n service is intentionally lower privilege: it receives the Runtime API token and its own ingress/encryption secrets, but its Compose definition scrubs Router, provider, Antigravity and privileged internal tokens inherited from DDEV's global environment. `ddev n8n-sync` verifies this boundary inside the running container before publishing control-plane traffic.
+
 ## Current v1 boundaries
 
-- Runtime can commit successful work if Router grants permission.
-- Push, PR creation and merge are intentionally left for the next integration layer; the Router already returns permission flags for them.
+- Runtime supports bounded successful commits, non-force `ai/*` branch publishing, PR create/update and GitHub CI monitoring when project policy grants those capabilities.
+- GitHub CI failures can feed bounded diagnostics back into the Runtime repair loop and update the same branch/PR. Auto-merge remains off for the current real-project policy and production deployment remains forbidden.
+- n8n is intentionally thin: current responsibilities are job ingress, job status and human-decision forwarding. External notifications, scheduled intake and third-party event connectors are future control-plane extensions, not Runtime logic.
 - Per-job token/cost enforcement is active. Cross-job/monthly provider quota telemetry is the next layer; it is not yet inferred automatically from subscription dashboards.
-- n8n workflow is intentionally thin and comes after Router + Runtime integration.
 
 ## Why LiteLLM is not a running service in v1
 
@@ -205,7 +268,6 @@ The registry already reserves `adapter: litellm` for Groq, Cloudflare and Luna u
 ## v1.0.5 writable service HOME fix
 
 The coding-runtime and ddev-executor images now prepare `/home/coder` using the host DDEV UID/GID. This fixes CLI failures such as OpenCode being unable to create `/home/coder/.cache`, while keeping the services non-root at runtime.
-
 
 ## v1.0.6 quota-aware failover and strict completion
 
@@ -232,7 +294,6 @@ To temporarily disable the Antigravity pool for one job:
 ```bash
 CODING_DISABLED_PROVIDERS=google_antigravity ./scripts/create-job.sh ...
 ```
-
 
 ## v1.0.10 Test harness fix
 

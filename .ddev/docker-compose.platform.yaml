@@ -118,7 +118,7 @@ services:
 
   n8n:
     container_name: ddev-${DDEV_SITENAME}-n8n
-    image: ${N8N_IMAGE:-n8nio/n8n:latest}
+    image: ${N8N_IMAGE:-n8nio/n8n:2.38.6}
     restart: "no"
     environment:
       DB_TYPE: postgresdb
@@ -138,9 +138,23 @@ services:
       VIRTUAL_HOST: ${DDEV_HOSTNAME}
       HTTP_EXPOSE: 5678:5678
       HTTPS_EXPOSE: 5679:5678
-      ROUTER_INTERNAL_URL: http://router:8090
+      # Workflow expressions use only the Runtime token + ingress token. DDEV's
+      # global .env reaches every service, so explicitly scrub unrelated global
+      # secrets from this container and verify the result in n8n-sync. The GitHub
+      # delivery token is already service-scoped to ddev-executor and is omitted.
+      ROUTER_API_TOKEN: ""
+      PLATFORM_INTERNAL_TOKEN: ""
+      ANTIGRAVITY_BRIDGE_TOKEN: ""
+      DEEPSEEK_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+      OPENAI_API_KEY: ""
+      GROQ_API_KEY: ""
+      OPENROUTER_API_KEY: ""
+      N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
+      N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
+      NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.readWriteFile","n8n-nodes-base.localFileTrigger"]'
+      N8N_CONTROL_PLANE_TOKEN: ${N8N_CONTROL_PLANE_TOKEN}
       RUNTIME_INTERNAL_URL: http://coding-runtime:8787
-      ROUTER_API_TOKEN: ${ROUTER_API_TOKEN}
       RUNTIME_API_TOKEN: ${RUNTIME_API_TOKEN}
     expose:
       - "5678"
@@ -151,9 +165,10 @@ services:
         condition: service_started
     volumes:
       - n8n-data:/home/node/.n8n
+      - ${DDEV_APPROOT}/n8n/workflows:/opt/pcp-workflows:ro
     x-ddev:
       describe-url-port: 5679
-      describe-info: "n8n control plane"
+      describe-info: "Thin n8n control plane (Runtime only)"
 
 volumes:
   n8n-data:
