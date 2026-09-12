@@ -20,6 +20,7 @@ _RISK_SCORE = {"routine": 20, "standard": 40, "high": 70, "critical": 90}
 _PROVIDER_ROLE_WORDS = {
     "openai", "codex", "claude", "anthropic", "deepseek", "antigravity", "groq", "openrouter"
 }
+_MAX_SERIALIZED_BYTES = 24000
 
 
 class WorkOrderPolicyError(ValueError):
@@ -140,12 +141,17 @@ class WorkOrder(BaseModel):
         return normalized
 
     @model_validator(mode="after")
-    def validate_ids(self) -> "WorkOrder":
+    def validate_contract(self) -> "WorkOrder":
         criterion_ids = [criterion.id for criterion in self.acceptance_criteria]
         if len(set(criterion_ids)) != len(criterion_ids):
             raise ValueError("Acceptance criterion ids must be unique")
         if self.id in set(self.dependencies):
             raise ValueError("WorkOrder cannot depend on itself")
+        serialized = json.dumps(self.model_dump(mode="json"), ensure_ascii=False, sort_keys=True)
+        if len(serialized.encode("utf-8")) > _MAX_SERIALIZED_BYTES:
+            raise ValueError(
+                f"WorkOrder exceeds the {_MAX_SERIALIZED_BYTES}-byte canonical contract limit"
+            )
         return self
 
 
@@ -194,7 +200,7 @@ def canonical_task_from_work_order(work_order: WorkOrder) -> dict[str, Any]:
     )
     return {
         "title": work_order.objective[:500],
-        "description": description[:30000],
+        "description": description,
         "task_type": work_order.requested_role,
         "flags": list(work_order.risk.flags),
         "semantic": {"risk": _RISK_SCORE[work_order.risk.level]},
