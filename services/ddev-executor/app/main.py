@@ -82,7 +82,9 @@ _ACTIVE_LOCK = threading.Lock()
 
 
 def auth(authorization: str | None = Header(default=None)) -> None:
-    expected = os.getenv("PLATFORM_INTERNAL_TOKEN", "change-me")
+    expected = os.getenv("PLATFORM_INTERNAL_TOKEN", "").strip()
+    if not expected or expected in {"CHANGE_ME", "change-me"}:
+        raise HTTPException(503, "PLATFORM_INTERNAL_TOKEN is not configured")
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, "Missing bearer token")
     if not secrets.compare_digest(authorization.removeprefix("Bearer ").strip(), expected):
