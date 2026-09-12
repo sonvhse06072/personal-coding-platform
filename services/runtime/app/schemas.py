@@ -52,6 +52,12 @@ class JobCreateRequest(BaseModel):
     project_id: str = Field(min_length=1, max_length=200)
     task: TaskInput
     source_commit: str | None = Field(default=None, max_length=100)
+    baseline_revision: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$",
+    )
     repo_hints: RepoHints = Field(default_factory=RepoHints)
     provider_state: dict[str, dict[str, Any]] = Field(default_factory=dict)
     auto_run: bool = True
@@ -72,6 +78,7 @@ class JobView(BaseModel):
     project_id: str
     status: JobStatus | str
     source_commit: str | None = None
+    baseline_revision: str | None = None
     branch: str | None = None
     workspace: str | None = None
     complexity_score: int | None = None
