@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field
 
 
 ProfileName = Literal["fast", "standard", "complex", "critical"]
@@ -79,7 +79,6 @@ class StaffingRequest(BaseModel):
     profile: ProfileName = "standard"
     semantic: SemanticSignals = Field(default_factory=SemanticSignals)
     provider_state: dict[str, ProviderState] = Field(default_factory=dict)
-    privacy: PrivacyPolicy | None = None
 
 
 class DimensionScores(BaseModel):
