@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from .engine import RuntimeEngine
-from .plan_orchestrator import PlanOrchestrator
+from .orchestrator_notifications import PlanOrchestrator
 from .pm_bridge import router as pm_bridge_router
 from .pm_planning import (
     ExecutionPlanView,
