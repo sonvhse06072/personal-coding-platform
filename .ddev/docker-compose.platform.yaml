@@ -100,11 +100,13 @@ services:
       CODING_PROJECTS_ROOT: ${CODING_PROJECTS_ROOT}
       CODING_WORKSPACES_ROOT: ${CODING_WORKSPACES_ROOT}
       DDEV_COMMAND_TIMEOUT_SECONDS: 1800
+      GITHUB_DELIVERY_TOKEN: ${GITHUB_DELIVERY_TOKEN:-}
       HOME: /home/coder
     expose:
       - "8790"
     volumes:
-      # High-privilege service: only this constrained API sees Docker socket.
+      # High-privilege service: only this constrained API sees Docker socket and
+      # the GitHub delivery credential; coding-runtime/agents never receive it.
       - /var/run/docker.sock:/var/run/docker.sock
       - ${CODING_PROJECTS_ROOT}:${CODING_PROJECTS_ROOT}
       - ${CODING_WORKSPACES_ROOT}:${CODING_WORKSPACES_ROOT}
@@ -112,7 +114,7 @@ services:
       - ${HOST_HOME}/.gitconfig:/home/coder/.gitconfig:ro
       - ${DDEV_APPROOT}/config:/config:ro
     x-ddev:
-      describe-info: "Constrained DDEV executor (internal only)"
+      describe-info: "Constrained DDEV/GitHub executor (internal only)"
 
   n8n:
     container_name: ddev-${DDEV_SITENAME}-n8n

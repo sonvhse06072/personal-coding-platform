@@ -104,6 +104,7 @@ def test_publish_branch_pushes_verified_head_without_persisting_remote(tmp_path,
         "branch": "ai/jobpublish1",
         "commit": head,
         "source_commit": source_commit,
+        "repository": None,
     }
     assert run("git", "remote", cwd=workspace) == ""
     assert run("git", "--git-dir", str(remote), "rev-parse", "refs/heads/ai/jobpublish1") == head
@@ -126,3 +127,25 @@ def test_publish_branch_fails_closed_when_project_policy_disallows_push(tmp_path
         ))
 
     assert exc.value.status_code == 403
+
+
+def test_github_publish_requires_dedicated_delivery_token(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure(monkeypatch, tmp_path, allow_push=True)
+    source_commit = run("git", "rev-parse", "HEAD", cwd=source)
+    created = create_workspace(WorkspaceRequest(job_id="jobpublish3", project_id="demo"))
+    workspace = Path(created["workspace"])
+    run("git", "remote", "set-url", "origin", "https://user:embedded@github.com/acme/demo.git", cwd=source)
+    monkeypatch.delenv("GITHUB_DELIVERY_TOKEN", raising=False)
+
+    with pytest.raises(HTTPException) as exc:
+        publish_branch(PublishBranchRequest(
+            job_id="jobpublish3",
+            project_id="demo",
+            workspace=str(workspace),
+            branch="ai/jobpublish3",
+            source_commit=source_commit,
+            expected_commit=source_commit,
+        ))
+
+    assert exc.value.status_code == 503
+    assert run("git", "remote", cwd=workspace) == ""

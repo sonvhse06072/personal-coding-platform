@@ -9,6 +9,7 @@ def test_required_platform_files_exist():
         ".ddev/config.yaml", ".ddev/docker-compose.platform.yaml", ".ddev/.env.example",
         "config/models.yml", "config/routing-policy.yml", "config/projects.yml",
         "services/router/app/main.py", "services/runtime/app/main.py", "services/ddev-executor/app/main.py",
+        "services/ddev-executor/app/github_delivery.py",
     ]
     for item in required:
         assert (ROOT / item).exists(), item
@@ -44,6 +45,15 @@ def test_service_homes_are_prepared_for_ddev_uid():
         assert "ARG DDEV_UID=1000" in dockerfile
         assert "/home/coder/.cache" in dockerfile
         assert "chown -R ${DDEV_UID}:${DDEV_GID} /home/coder" in dockerfile
+
+
+def test_github_delivery_token_is_scoped_to_privileged_executor():
+    doc = yaml.safe_load((ROOT / ".ddev/docker-compose.platform.yaml").read_text())
+    services = doc["services"]
+    assert "GITHUB_DELIVERY_TOKEN" in services["ddev-executor"]["environment"]
+    assert "GITHUB_DELIVERY_TOKEN" not in services["coding-runtime"]["environment"]
+    assert "GITHUB_DELIVERY_TOKEN" not in services["router"]["environment"]
+    assert "GITHUB_DELIVERY_TOKEN" not in services["n8n"]["environment"]
 
 
 def test_antigravity_replaces_legacy_gemini_cli():
