@@ -1,0 +1,44 @@
+{
+  "id": "pcpTelegramOutbox1",
+  "name": "PCP - Telegram Notification Outbox",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-260, 0],
+      "id": "cd41e345-0646-4471-b057-e7bd0c7a9942",
+      "name": "Every Minute"
+    },
+    {
+      "parameters": {
+        "jsCode": "const runtime = ($env.RUNTIME_INTERNAL_URL || '').replace(/\\/$/, '');\nconst runtimeToken = ($env.RUNTIME_API_TOKEN || '').trim();\nconst botToken = ($env.TELEGRAM_BOT_TOKEN || '').trim();\nconst chatId = ($env.TELEGRAM_CHAT_ID || '').trim();\nif (!runtime || !runtimeToken) throw new Error('Runtime notification transport is not configured');\nif (!botToken || !chatId) return [{json:{status:'telegram_not_configured'}}];\nconst auth = {'Authorization': `Bearer ${runtimeToken}`, 'Content-Type': 'application/json'};\nconst claim = await fetch(`${runtime}/v1/notifications/claim`, {method:'POST', headers:auth});\nif (!claim.ok) throw new Error(`notification_claim_http_${claim.status}`);\nconst claimed = await claim.json();\nconst event = claimed.event;\nif (!event) return [{json:{status:'idle'}}];\nconst icon = event.severity === 'success' ? '🟢' : event.severity === 'warning' ? '🟠' : '🔴';\nconst lines = [\n  `${icon} ${String(event.event_type || 'platform_event').replaceAll('_', ' ')}`,\n  '',\n  `Project: ${event.project_id || '-'}`,\n  event.ticket_id ? `Ticket: ${event.ticket_id}` : null,\n  event.work_order_id ? `WorkOrder: ${event.work_order_id}` : null,\n  '',\n  event.summary || 'Platform attention required.',\n  event.github_url ? `GitHub: ${event.github_url}` : null,\n].filter(v => v !== null);\nconst text = lines.join('\\n').slice(0, 3900);\ntry {\n  const sent = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {\n    method:'POST',\n    headers:{'Content-Type':'application/json'},\n    body:JSON.stringify({chat_id:chatId, text, disable_web_page_preview:true}),\n  });\n  if (!sent.ok) throw new Error(`telegram_http_${sent.status}`);\n  const ack = await fetch(`${runtime}/v1/notifications/${event.id}/ack`, {method:'POST', headers:auth});\n  if (!ack.ok) throw new Error(`notification_ack_http_${ack.status}`);\n  return [{json:{status:'sent', event_id:event.id, event_type:event.event_type}}];\n} catch (error) {\n  const reason = String(error && error.message ? error.message : error).slice(0, 500);\n  await fetch(`${runtime}/v1/notifications/${event.id}/release`, {\n    method:'POST', headers:auth, body:JSON.stringify({error:reason, retry_seconds:60}),\n  });\n  throw error;\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "25290cb9-7daf-459d-aeb7-c7a94d9d603d",
+      "name": "Claim Send Ack"
+    }
+  ],
+  "connections": {
+    "Every Minute": {
+      "main": [[{"node": "Claim Send Ack", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {"executionOrder": "v1"},
+  "versionId": "8ce54757-9d87-4f78-b706-96946f3d03bd",
+  "meta": {"templateCredsSetupCompleted": true},
+  "pinData": {},
+  "tags": []
+}
