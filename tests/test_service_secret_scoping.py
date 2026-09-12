@@ -140,3 +140,8 @@ def test_global_template_and_compose_do_not_reintroduce_credentials():
     for key in GLOBAL_SECRET_KEYS | {"GITHUB_DELIVERY_TOKEN", "N8N_ENCRYPTION_KEY", "N8N_CONTROL_PLANE_TOKEN"}:
         assert f"${{{key}" not in compose
     assert "ROUTER_INTERNAL_URL" not in compose
+
+
+def test_n8n_sync_invokes_secret_scoping_via_bash():
+    command = (ROOT / ".ddev" / "commands" / "host" / "n8n-sync").read_text(encoding="utf-8")
+    assert "bash ./scripts/scope-service-secrets.sh" in command
