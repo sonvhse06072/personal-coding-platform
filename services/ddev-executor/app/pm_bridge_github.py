@@ -138,3 +138,34 @@ def issue(
         "html_url": raw.get("html_url"),
         "is_pull_request": bool(raw.get("pull_request")),
     }
+
+
+@router.get("/pulls/{pr_number}", dependencies=[Depends(auth)])
+def pull_request(
+    pr_number: int,
+    project_id: str = Query(..., min_length=1, max_length=200),
+) -> dict[str, Any]:
+    """Return the minimum read-only PR state needed by Runtime orchestration."""
+    if pr_number < 1:
+        raise HTTPException(422, "pr_number must be positive")
+    delivery, repository = _repository(project_id)
+    try:
+        with delivery._client() as client:
+            response = client.get(f"{delivery.base}/repos/{repository}/pulls/{pr_number}")
+            response.raise_for_status()
+            raw = response.json()
+    except (httpx.HTTPError, RuntimeError, ValueError) as exc:
+        raise _github_error(exc) from exc
+    return {
+        "project_id": project_id,
+        "repository": repository,
+        "number": int(raw["number"]),
+        "state": str(raw.get("state") or ""),
+        "merged": bool(raw.get("merged")),
+        "merged_at": raw.get("merged_at"),
+        "merge_commit_sha": raw.get("merge_commit_sha"),
+        "html_url": raw.get("html_url"),
+        "head": (raw.get("head") or {}).get("sha"),
+        "head_ref": (raw.get("head") or {}).get("ref"),
+        "base_ref": (raw.get("base") or {}).get("ref"),
+    }
