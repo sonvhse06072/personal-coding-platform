@@ -14,6 +14,7 @@ WORKFLOW_IDS=(
   pcpJobStatusV001
   pcpHumanDecision1
   pcpPmBridgePoll1
+  pcpTelegramOutbox1
 )
 
 random_secret() {
@@ -96,7 +97,7 @@ prepare_env() {
     exit 1
   }
 
-  local global_raw global_key local_key control_token
+  local global_raw global_key local_key control_token telegram_bot telegram_chat
   global_raw="$(read_env_value "$GLOBAL_ENV" N8N_ENCRYPTION_KEY)"
   global_key=""
   if is_real_secret "$global_raw"; then
@@ -119,6 +120,14 @@ prepare_env() {
     set_env_value "$N8N_ENV" N8N_CONTROL_PLANE_TOKEN "$(random_secret)"
   fi
 
+  telegram_bot="$(read_env_value "$N8N_ENV" TELEGRAM_BOT_TOKEN)"
+  telegram_chat="$(read_env_value "$N8N_ENV" TELEGRAM_CHAT_ID)"
+  if { is_real_secret "$telegram_bot" && ! is_real_secret "$telegram_chat"; } || \
+     { ! is_real_secret "$telegram_bot" && is_real_secret "$telegram_chat"; }; then
+    echo "Refusing partial Telegram configuration: set both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID, or neither." >&2
+    exit 1
+  fi
+
   # Existing n8n data is encrypted with the old key. Never silently rotate it.
   if [[ -n "$global_key" && "$global_key" != "$local_key" ]]; then
     echo "Refusing n8n secret migration: scoped encryption key differs from the existing global key." >&2
@@ -131,6 +140,12 @@ prepare_env() {
     remove_env_key "$GLOBAL_ENV" N8N_ENCRYPTION_KEY
     echo "Moved N8N_ENCRYPTION_KEY out of the global DDEV environment."
   fi
+  for key in TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID; do
+    if grep -q "^${key}=" "$GLOBAL_ENV"; then
+      remove_env_key "$GLOBAL_ENV" "$key"
+      echo "Moved ${key} out of the global DDEV environment."
+    fi
+  done
 
   python3 - "$GLOBAL_ENV" "$PINNED_N8N_IMAGE" <<'PY'
 from pathlib import Path
@@ -179,11 +194,14 @@ const missing = required.filter((key) => {
   return !value || placeholders.has(value);
 });
 const leaked = forbidden.filter((key) => Boolean(process.env[key]));
-if (missing.length || leaked.length) {
-  console.error(JSON.stringify({error:"n8n_secret_boundary_failed", missing, leaked}));
+const telegramBot = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
+const telegramChat = (process.env.TELEGRAM_CHAT_ID || "").trim();
+const partialTelegram = Boolean(telegramBot) !== Boolean(telegramChat);
+if (missing.length || leaked.length || partialTelegram) {
+  console.error(JSON.stringify({error:"n8n_secret_boundary_failed", missing, leaked, partialTelegram}));
   process.exit(1);
 }
-console.log(JSON.stringify({status:"ok", boundary:"runtime-only"}));
+console.log(JSON.stringify({status:"ok", boundary:"runtime-only", telegram_configured:Boolean(telegramBot && telegramChat)}));
 '
 }
 
@@ -241,6 +259,7 @@ sync_workflows() {
   echo "  GET  /webhook/${JOB_STATUS_WEBHOOK_ID}/coding-platform/jobs/<job_id>"
   echo "  POST /webhook/${HUMAN_DECISION_WEBHOOK_ID}/coding-platform/jobs/<job_id>/decision"
   echo "PM bridge polling workflow: pcpPmBridgePoll1 (every 2 minutes)."
+  echo "Telegram notification workflow: pcpTelegramOutbox1 (every minute; enabled when both Telegram values are configured)."
   echo "Use header: X-Control-Token: <value from .ddev/.env.n8n.local>"
 }
 
