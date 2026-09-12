@@ -15,13 +15,44 @@ from .baseline import resolve_project_baseline
 from .config import project_config
 from .engine_delivery import RuntimeEngine as _RuntimeEngine
 from .work_order import (
+    WorkOrderPolicyError,
+    apply_work_order_budget,
     canonical_task_from_work_order,
     validate_work_order_against_baseline,
     work_order_snapshot,
 )
 
 
+class WorkOrderRouterProxy:
+    """Apply per-job WorkOrder ceilings to every Router decision without global state."""
+
+    def __init__(self, delegate: Any, storage: Any) -> None:
+        self.delegate = delegate
+        self.storage = storage
+
+    async def health(self) -> bool:
+        return await self.delegate.health()
+
+    async def route(self, payload: dict[str, Any]) -> dict[str, Any]:
+        route = await self.delegate.route(payload)
+        row = self.storage.get(str(payload.get("job_id") or ""))
+        if not row:
+            return route
+        checkpoint = row.get("checkpoint") or {}
+        work_order = work_order_snapshot(checkpoint.get("work_order"))
+        if work_order is None:
+            return route
+        return apply_work_order_budget(route, work_order)
+
+    async def reassess(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.delegate.reassess(payload)
+
+
 class RuntimeEngine(_RuntimeEngine):
+    def __init__(self, storage: Any) -> None:
+        super().__init__(storage)
+        self.router = WorkOrderRouterProxy(self.router, self.storage)
+
     def create_job(self, payload: dict[str, Any]) -> str:
         """Create one job with its governing baseline/contract in the same write."""
 
@@ -64,6 +95,92 @@ class RuntimeEngine(_RuntimeEngine):
             "dry_run": bool(payload.get("dry_run", False)),
         })
         return job_id
+
+    async def run_job(self, job_id: str) -> None:
+        try:
+            await super().run_job(job_id)
+        except WorkOrderPolicyError as exc:
+            row = self.storage.get(job_id)
+            if not row:
+                raise
+            checkpoint = dict(row.get("checkpoint") or {})
+            progress = dict(row.get("progress") or self._new_progress())
+            self._block(
+                job_id=job_id,
+                progress=progress,
+                checkpoint=checkpoint,
+                reason="work_order_policy_rejected",
+                last_failure=str(exc),
+            )
+
+    async def _verify(
+        self,
+        job_id: str,
+        project_id: str,
+        workspace: Any,
+        project: dict[str, Any],
+        strategy: dict[str, Any],
+        started: float,
+        progress: dict[str, Any],
+    ) -> dict[str, Any]:
+        result = await super()._verify(
+            job_id,
+            project_id,
+            workspace,
+            project,
+            strategy,
+            started,
+            progress,
+        )
+        row = self.storage.get(job_id)
+        checkpoint = (row or {}).get("checkpoint") or {}
+        work_order = work_order_snapshot(checkpoint.get("work_order"))
+        if work_order is None or not result.get("passed", False):
+            return result
+
+        required = set(work_order.verification.required_phases)
+        base_profile = str(strategy.get("profile") or "")
+        extra_phases: list[str] = []
+        if "full_tests" in required and base_profile not in {"complex", "critical"}:
+            extra_phases.append("full_tests")
+
+        for phase in extra_phases:
+            commands = project.get("ddev", {}).get(phase, []) or []
+            count = len(commands)
+            budget = strategy["budget"]
+            if (
+                progress["tool_calls"] + int(result.get("tool_calls", 0)) + count
+                > int(budget["max_tool_calls"])
+                or progress["test_runs"] + int(result.get("test_runs", 0)) + count
+                > int(budget["max_test_runs"])
+            ):
+                result["passed"] = False
+                result["tests_passed"] = False
+                result["failure_text"] = (
+                    str(result.get("failure_text") or "")
+                    + f"\n{phase}: WorkOrder-required verification would exceed execution budget"
+                ).strip()[-30000:]
+                return result
+
+            phase_result = await self.ddev.phase(
+                job_id=job_id,
+                project_id=project_id,
+                workspace=str(workspace),
+                phase=phase,
+                timeout_seconds=self._remaining_seconds(strategy, started, 1200),
+            )
+            result.setdefault("phases", []).append(phase_result)
+            result["tool_calls"] = int(result.get("tool_calls", 0)) + len(phase_result.get("commands", []))
+            result["test_runs"] = int(result.get("test_runs", 0)) + len(phase_result.get("commands", []))
+            if not phase_result.get("passed", False):
+                result["passed"] = False
+                result["tests_passed"] = False
+                result["failure_text"] = (
+                    str(result.get("failure_text") or "") + "\n" + str(phase_result)
+                ).strip()[-30000:]
+                return result
+
+        return result
 
 
 __all__ = ["RuntimeEngine"]
