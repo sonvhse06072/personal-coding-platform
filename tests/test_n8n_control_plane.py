@@ -34,6 +34,7 @@ EXPECTED_WEBHOOK_WORKFLOWS = {
 }
 EXPECTED_SCHEDULED_WORKFLOWS = {
     "pm-bridge-poll.json": {"id": "pcpPmBridgePoll1"},
+    "telegram-notifications.json": {"id": "pcpTelegramOutbox1"},
 }
 
 FORBIDDEN_N8N_SECRETS = {
@@ -67,6 +68,8 @@ def test_n8n_is_runtime_only_and_pinned() -> None:
     assert "RUNTIME_API_TOKEN" not in env
     assert "N8N_CONTROL_PLANE_TOKEN" not in env
     assert "N8N_ENCRYPTION_KEY" not in env
+    assert "TELEGRAM_BOT_TOKEN" not in env
+    assert "TELEGRAM_CHAT_ID" not in env
     for key in FORBIDDEN_N8N_SECRETS:
         assert key not in env
 
@@ -145,6 +148,35 @@ def test_pm_bridge_schedule_is_runtime_only() -> None:
     assert '"credentials"' not in serialized
 
 
+def test_telegram_schedule_claims_sanitized_outbox_and_acks_runtime() -> None:
+    workflow = json.loads((WORKFLOW_DIR / "telegram-notifications.json").read_text(encoding="utf-8"))
+    assert workflow["id"] == EXPECTED_SCHEDULED_WORKFLOWS["telegram-notifications.json"]["id"]
+    assert workflow["active"] is False
+    assert workflow.get("credentials") in (None, {})
+
+    schedules = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.scheduleTrigger"]
+    code_nodes = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.code"]
+    assert len(schedules) == 1
+    assert len(code_nodes) == 1
+    assert schedules[0]["parameters"]["rule"]["interval"][0] == {
+        "field": "minutes",
+        "minutesInterval": 1,
+    }
+
+    code = code_nodes[0]["parameters"]["jsCode"]
+    assert "/v1/notifications/claim" in code
+    assert "/ack" in code
+    assert "/release" in code
+    assert "TELEGRAM_BOT_TOKEN" in code
+    assert "TELEGRAM_CHAT_ID" in code
+    assert "api.telegram.org" in code
+    assert "event.summary" in code
+    assert "event.payload" not in code
+    assert "RUNTIME_API_TOKEN" in code
+    for key in FORBIDDEN_N8N_SECRETS:
+        assert key not in code
+
+
 def test_human_decision_workflow_preserves_runtime_contract() -> None:
     workflow = json.loads((WORKFLOW_DIR / "human-decision.json").read_text(encoding="utf-8"))
     nodes = {node["name"]: node for node in workflow["nodes"]}
@@ -192,6 +224,10 @@ def test_sync_is_bounded_and_fail_closed() -> None:
     assert "f94fd841-0da8-42af-a06a-17b78d5a1ea7" in script
     assert "a0db357c-167e-43c4-a692-e049aa21ef63" in script
     assert "pcpPmBridgePoll1" in script
+    assert "pcpTelegramOutbox1" in script
+    assert "TELEGRAM_BOT_TOKEN" in script
+    assert "TELEGRAM_CHAT_ID" in script
+    assert "Refusing partial Telegram configuration" in script
     assert "N8N_ENCRYPTION_KEY" in script
     assert "Refusing n8n secret migration" in script
 
@@ -203,6 +239,8 @@ def test_n8n_secrets_are_documented_service_scoped() -> None:
     assert "N8N_ENCRYPTION_KEY=" not in global_env
     assert "N8N_CONTROL_PLANE_TOKEN=" not in global_env
     assert "RUNTIME_API_TOKEN=" not in global_env
+    assert "TELEGRAM_BOT_TOKEN=" not in global_env
+    assert "TELEGRAM_CHAT_ID=" not in global_env
     assert "N8N_IMAGE=n8nio/n8n:2.38.6" in global_env
 
     keys = {
@@ -210,4 +248,10 @@ def test_n8n_secrets_are_documented_service_scoped() -> None:
         for line in n8n_env.splitlines()
         if line and not line.startswith("#") and "=" in line
     }
-    assert keys == {"RUNTIME_API_TOKEN", "N8N_ENCRYPTION_KEY", "N8N_CONTROL_PLANE_TOKEN"}
+    assert keys == {
+        "RUNTIME_API_TOKEN",
+        "N8N_ENCRYPTION_KEY",
+        "N8N_CONTROL_PLANE_TOKEN",
+        "TELEGRAM_BOT_TOKEN",
+        "TELEGRAM_CHAT_ID",
+    }
