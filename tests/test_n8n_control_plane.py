@@ -31,7 +31,7 @@ EXPECTED_WORKFLOWS = {
     },
 }
 
-FORBIDDEN_N8N_SECRETS = {
+GLOBAL_SECRETS_SCRUBBED_FROM_N8N = {
     "ROUTER_API_TOKEN",
     "PLATFORM_INTERNAL_TOKEN",
     "ANTIGRAVITY_BRIDGE_TOKEN",
@@ -40,7 +40,6 @@ FORBIDDEN_N8N_SECRETS = {
     "OPENAI_API_KEY",
     "GROQ_API_KEY",
     "OPENROUTER_API_KEY",
-    "GITHUB_DELIVERY_TOKEN",
 }
 
 
@@ -59,11 +58,13 @@ def test_n8n_is_runtime_only_and_pinned() -> None:
     assert env["N8N_CONTROL_PLANE_TOKEN"] == "${N8N_CONTROL_PLANE_TOKEN}"
     assert env["N8N_BLOCK_ENV_ACCESS_IN_NODE"] == "false"
 
-    # DDEV's global .env reaches every service. The n8n service must explicitly
-    # scrub every out-of-scope platform/provider secret at compose merge time.
-    for key in FORBIDDEN_N8N_SECRETS:
+    # DDEV's global .env reaches every service. Explicitly override global
+    # secrets that n8n must not receive. GitHub delivery is already scoped only
+    # to ddev-executor, so it must remain absent rather than appear as an empty key.
+    for key in GLOBAL_SECRETS_SCRUBBED_FROM_N8N:
         assert key in env
         assert env[key] == ""
+    assert "GITHUB_DELIVERY_TOKEN" not in env
 
     assert "ROUTER_INTERNAL_URL" not in env
     assert any(str(volume).endswith("/n8n/workflows:/opt/pcp-workflows:ro") for volume in n8n["volumes"])
@@ -115,6 +116,7 @@ def test_sync_is_bounded_and_fail_closed() -> None:
     assert "publish:workflow --all" not in script
     assert "update:workflow --all" not in script
     assert "assert_runtime_only_secret_boundary" in script
+    assert '"GITHUB_DELIVERY_TOKEN"' in script
     assert "Expected unauthenticated control-plane request to return 401" in script
     assert "Expected authenticated status proxy to preserve Runtime 404" in script
     assert "N8N_ENCRYPTION_KEY" in script
