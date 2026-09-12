@@ -7,6 +7,8 @@ N8N_ENV="$ROOT/.ddev/.env.n8n.local"
 N8N_ENV_EXAMPLE="$ROOT/.ddev/.env.n8n.local.example"
 PINNED_N8N_IMAGE="n8nio/n8n:2.38.6"
 WORKFLOW_DIR="/opt/pcp-workflows"
+JOB_STATUS_WEBHOOK_ID="f94fd841-0da8-42af-a06a-17b78d5a1ea7"
+HUMAN_DECISION_WEBHOOK_ID="a0db357c-167e-43c4-a692-e049aa21ef63"
 WORKFLOW_IDS=(
   pcpJobIntakeV001
   pcpJobStatusV001
@@ -178,10 +180,12 @@ console.log(JSON.stringify({status:"ok", boundary:"runtime-only"}));
 }
 
 smoke_webhooks() {
-  local unauth_status auth_status
+  local status_path unauth_status auth_status
+  status_path="/webhook/${JOB_STATUS_WEBHOOK_ID}/coding-platform/jobs/not-a-real-job"
+
   unauth_status="$(
     ddev exec -s n8n node -e \
-      'fetch("http://127.0.0.1:5678/webhook/coding-platform/jobs/not-a-real-job").then(r=>console.log(r.status)).catch(()=>process.exit(1))' \
+      'fetch("http://127.0.0.1:5678'"$status_path"'").then(r=>console.log(r.status)).catch(()=>process.exit(1))' \
       2>/dev/null | tr -d '\r' | tail -n1
   )"
   if [[ "$unauth_status" != "401" ]]; then
@@ -193,7 +197,7 @@ smoke_webhooks() {
   # Runtime. A deliberately unknown job should therefore preserve Runtime's 404.
   auth_status="$(
     ddev exec -s n8n node -e \
-      'fetch("http://127.0.0.1:5678/webhook/coding-platform/jobs/not-a-real-job", {headers:{"X-Control-Token":process.env.N8N_CONTROL_PLANE_TOKEN}}).then(r=>console.log(r.status)).catch(()=>process.exit(1))' \
+      'fetch("http://127.0.0.1:5678'"$status_path"'", {headers:{"X-Control-Token":process.env.N8N_CONTROL_PLANE_TOKEN}}).then(r=>console.log(r.status)).catch(()=>process.exit(1))' \
       2>/dev/null | tr -d '\r' | tail -n1
   )"
   if [[ "$auth_status" != "404" ]]; then
@@ -226,8 +230,8 @@ sync_workflows() {
   echo "n8n thin control plane synced and published."
   echo "Production webhook paths (use the n8n HTTPS base URL shown by 'ddev describe'):"
   echo "  POST /webhook/coding-platform/jobs"
-  echo "  GET  /webhook/coding-platform/jobs/<job_id>"
-  echo "  POST /webhook/coding-platform/jobs/<job_id>/decision"
+  echo "  GET  /webhook/${JOB_STATUS_WEBHOOK_ID}/coding-platform/jobs/<job_id>"
+  echo "  POST /webhook/${HUMAN_DECISION_WEBHOOK_ID}/coding-platform/jobs/<job_id>/decision"
   echo "Use header: X-Control-Token: <value from .ddev/.env.n8n.local>"
 }
 
