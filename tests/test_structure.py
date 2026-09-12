@@ -7,7 +7,9 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_required_platform_files_exist():
     required = [
         ".ddev/config.yaml", ".ddev/docker-compose.platform.yaml", ".ddev/.env.example",
-        ".ddev/.env.ddev-executor.local.example",
+        ".ddev/.env.router.local.example", ".ddev/.env.coding-runtime.local.example",
+        ".ddev/.env.ddev-executor.local.example", ".ddev/.env.n8n.local.example",
+        ".ddev/.env.host.local.example",
         "config/models.yml", "config/routing-policy.yml", "config/projects.yml",
         "services/router/app/main.py", "services/runtime/app/main.py", "services/ddev-executor/app/main.py",
         "services/ddev-executor/app/github_delivery.py",
@@ -51,18 +53,20 @@ def test_service_homes_are_prepared_for_ddev_uid():
 def test_github_delivery_token_is_scoped_to_privileged_executor():
     doc = yaml.safe_load((ROOT / ".ddev/docker-compose.platform.yaml").read_text())
     services = doc["services"]
-    assert "GITHUB_DELIVERY_TOKEN" in services["ddev-executor"]["environment"]
-    assert "GITHUB_DELIVERY_TOKEN" not in services["coding-runtime"]["environment"]
-    assert "GITHUB_DELIVERY_TOKEN" not in services["router"]["environment"]
-    assert "GITHUB_DELIVERY_TOKEN" not in services["n8n"]["environment"]
+    for service in ("ddev-executor", "coding-runtime", "router", "n8n"):
+        assert "GITHUB_DELIVERY_TOKEN" not in services[service]["environment"]
 
     # DDEV injects .ddev/.env into every project container, so delivery secrets
-    # must never be documented or stored in the global project env file.
+    # must live only in ddev-executor's service-local env file.
     global_env = (ROOT / ".ddev/.env.example").read_text()
     executor_env = (ROOT / ".ddev/.env.ddev-executor.local.example").read_text()
+    runtime_env = (ROOT / ".ddev/.env.coding-runtime.local.example").read_text()
+    n8n_env = (ROOT / ".ddev/.env.n8n.local.example").read_text()
     gitignore = (ROOT / ".gitignore").read_text().splitlines()
     assert "GITHUB_DELIVERY_TOKEN" not in global_env
     assert "GITHUB_DELIVERY_TOKEN=" in executor_env
+    assert "GITHUB_DELIVERY_TOKEN" not in runtime_env
+    assert "GITHUB_DELIVERY_TOKEN" not in n8n_env
     assert ".ddev/.env.ddev-executor.local" in gitignore
 
 
