@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from typing import Any, Literal
 
@@ -19,6 +20,10 @@ _RISK_SCORE = {"routine": 20, "standard": 40, "high": 70, "critical": 90}
 _PROVIDER_ROLE_WORDS = {
     "openai", "codex", "claude", "anthropic", "deepseek", "antigravity", "groq", "openrouter"
 }
+
+
+class WorkOrderPolicyError(ValueError):
+    pass
 
 
 class AcceptanceCriterion(BaseModel):
@@ -180,15 +185,12 @@ def validate_work_order_against_baseline(
 
 
 def canonical_task_from_work_order(work_order: WorkOrder) -> dict[str, Any]:
-    scope = "\n".join(f"- {item}" for item in work_order.in_scope)
-    criteria = "\n".join(
-        f"- {criterion.id}: {criterion.description}" for criterion in work_order.acceptance_criteria
-    )
+    contract = json.dumps(work_order.model_dump(mode="json"), ensure_ascii=False, sort_keys=True)
     description = (
-        f"WorkOrder {work_order.id}\n"
-        f"Objective: {work_order.objective}\n"
-        f"In scope:\n{scope}\n"
-        f"Acceptance criteria:\n{criteria}"
+        "AUTHORITATIVE WORKORDER / TASK CONTRACT. Do not reinterpret, broaden, or override this contract.\n"
+        f"{contract}\n"
+        "Implement only the declared in_scope work, preserve out_of_scope boundaries, satisfy every acceptance criterion, "
+        "and report rather than silently changing project scope or constraints."
     )
     return {
         "title": work_order.objective[:500],
@@ -206,9 +208,9 @@ def apply_work_order_budget(route: dict[str, Any], work_order: WorkOrder) -> dic
     strategy = updated.get("strategy") or {}
     selected_profile = str(strategy.get("profile") or "")
     if selected_profile not in _PROFILE_RANK:
-        raise ValueError(f"Router returned unknown profile {selected_profile!r}")
+        raise WorkOrderPolicyError(f"Router returned unknown profile {selected_profile!r}")
     if _PROFILE_RANK[selected_profile] > _PROFILE_RANK[work_order.budget.max_profile]:
-        raise ValueError(
+        raise WorkOrderPolicyError(
             f"Router profile {selected_profile!r} exceeds WorkOrder max_profile "
             f"{work_order.budget.max_profile!r}"
         )
@@ -223,7 +225,7 @@ def apply_work_order_budget(route: dict[str, Any], work_order: WorkOrder) -> dic
     for key, ceiling in ceilings.items():
         current = budget.get(key)
         if current is None:
-            raise ValueError(f"Router strategy is missing required budget field {key!r}")
+            raise WorkOrderPolicyError(f"Router strategy is missing required budget field {key!r}")
         budget[key] = min(current, ceiling)
     strategy["budget"] = budget
     updated["strategy"] = strategy
