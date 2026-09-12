@@ -116,6 +116,39 @@ def test_workflows_are_versioned_runtime_proxies_only() -> None:
         assert '"credentials"' not in serialized
 
 
+def test_human_decision_workflow_preserves_runtime_contract() -> None:
+    workflow = json.loads((WORKFLOW_DIR / "human-decision.json").read_text(encoding="utf-8"))
+    nodes = {node["name"]: node for node in workflow["nodes"]}
+
+    request = nodes["Resolve Human Decision"]["parameters"]
+    assert request["method"] == "POST"
+    assert request["url"] == (
+        "={{ $env.RUNTIME_INTERNAL_URL + '/v1/jobs/' + $json.params.job_id + '/decision' }}"
+    )
+    assert request["sendBody"] is True
+    assert request["specifyBody"] == "json"
+    assert request["jsonBody"] == "={{ JSON.stringify($json.body) }}"
+
+    headers = {
+        item["name"]: item["value"]
+        for item in request["headerParameters"]["parameters"]
+    }
+    assert headers["Authorization"] == "={{ 'Bearer ' + $env.RUNTIME_API_TOKEN }}"
+    assert headers["Accept"] == "application/json"
+
+    response = request["options"]["response"]["response"]
+    assert response["fullResponse"] is True
+    assert response["neverError"] is True
+
+    reject = nodes["Reject Unauthorized"]["parameters"]
+    assert reject["options"]["responseCode"] == 401
+    assert "unauthorized" in reject["responseBody"]
+
+    authorize = workflow["connections"]["Authorize Control Plane"]["main"]
+    assert authorize[0][0]["node"] == "Resolve Human Decision"
+    assert authorize[1][0]["node"] == "Reject Unauthorized"
+
+
 def test_sync_is_bounded_and_fail_closed() -> None:
     script = SYNC_SCRIPT.read_text(encoding="utf-8")
 
