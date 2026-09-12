@@ -6,8 +6,7 @@
     {
       "parameters": {"httpMethod": "GET", "path": "coding-platform/jobs/:job_id", "responseMode": "responseNode", "options": {}},
       "type": "n8n-nodes-base.webhook", "typeVersion": 2.1, "position": [-620, 0],
-      "id": "cc7af2e4-e1d7-4375-8a0b-b6a23748cb18", "name": "Job Status Webhook",
-      "webhookId": "f94fd841-0da8-42af-a06a-17b78d5a1ea7"
+      "id": "cc7af2e4-e1d7-4375-8a0b-b6a23748cb18", "name": "Job Status Webhook"
     },
     {
       "parameters": {
