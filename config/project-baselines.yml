@@ -1,0 +1,8 @@
+version: 1
+
+# ProjectBaseline metadata is intentionally separate from document bodies.
+# At project inception, add the approved revision here and point each required
+# category at repository-relative source-of-truth files/sections in that project.
+# Phase 2 keeps this registry optional for legacy projects; Phase 3 WorkOrders
+# will carry an explicit governing revision.
+projects: {}
