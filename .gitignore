@@ -1,6 +1,9 @@
 .ddev/.env
+.ddev/.env.router.local
+.ddev/.env.coding-runtime.local
 .ddev/.env.ddev-executor.local
 .ddev/.env.n8n.local
+.ddev/.env.host.local
 .runtime/
 .pytest_cache/
 __pycache__/

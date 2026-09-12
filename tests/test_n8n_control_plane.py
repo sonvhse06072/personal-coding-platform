@@ -31,7 +31,7 @@ EXPECTED_WORKFLOWS = {
     },
 }
 
-GLOBAL_SECRETS_SCRUBBED_FROM_N8N = {
+FORBIDDEN_N8N_SECRETS = {
     "ROUTER_API_TOKEN",
     "PLATFORM_INTERNAL_TOKEN",
     "ANTIGRAVITY_BRIDGE_TOKEN",
@@ -40,6 +40,7 @@ GLOBAL_SECRETS_SCRUBBED_FROM_N8N = {
     "OPENAI_API_KEY",
     "GROQ_API_KEY",
     "OPENROUTER_API_KEY",
+    "GITHUB_DELIVERY_TOKEN",
 }
 
 
@@ -54,17 +55,15 @@ def test_n8n_is_runtime_only_and_pinned() -> None:
     assert "2.38.6" in n8n["image"]
     assert "latest" not in n8n["image"]
     assert env["RUNTIME_INTERNAL_URL"] == "http://coding-runtime:8787"
-    assert env["RUNTIME_API_TOKEN"] == "${RUNTIME_API_TOKEN}"
-    assert env["N8N_CONTROL_PLANE_TOKEN"] == "${N8N_CONTROL_PLANE_TOKEN}"
     assert env["N8N_BLOCK_ENV_ACCESS_IN_NODE"] == "false"
 
-    # DDEV's global .env reaches every service. Explicitly override global
-    # secrets that n8n must not receive. GitHub delivery is already scoped only
-    # to ddev-executor, so it must remain absent rather than appear as an empty key.
-    for key in GLOBAL_SECRETS_SCRUBBED_FROM_N8N:
-        assert key in env
-        assert env[key] == ""
-    assert "GITHUB_DELIVERY_TOKEN" not in env
+    # Credentials are injected through .ddev/.env.n8n.local, never interpolated
+    # through the global DDEV Compose environment.
+    assert "RUNTIME_API_TOKEN" not in env
+    assert "N8N_CONTROL_PLANE_TOKEN" not in env
+    assert "N8N_ENCRYPTION_KEY" not in env
+    for key in FORBIDDEN_N8N_SECRETS:
+        assert key not in env
 
     assert "ROUTER_INTERNAL_URL" not in env
     assert any(str(volume).endswith("/n8n/workflows:/opt/pcp-workflows:ro") for volume in n8n["volumes"])
@@ -129,6 +128,7 @@ def test_n8n_secrets_are_documented_service_scoped() -> None:
 
     assert "N8N_ENCRYPTION_KEY=" not in global_env
     assert "N8N_CONTROL_PLANE_TOKEN=" not in global_env
+    assert "RUNTIME_API_TOKEN=" not in global_env
     assert "N8N_IMAGE=n8nio/n8n:2.38.6" in global_env
 
     keys = {
@@ -136,4 +136,4 @@ def test_n8n_secrets_are_documented_service_scoped() -> None:
         for line in n8n_env.splitlines()
         if line and not line.startswith("#") and "=" in line
     }
-    assert keys == {"N8N_ENCRYPTION_KEY", "N8N_CONTROL_PLANE_TOKEN"}
+    assert keys == {"RUNTIME_API_TOKEN", "N8N_ENCRYPTION_KEY", "N8N_CONTROL_PLANE_TOKEN"}
