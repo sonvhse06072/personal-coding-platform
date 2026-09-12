@@ -159,6 +159,24 @@ wait_for_n8n() {
   return 1
 }
 
+assert_runtime_only_secret_boundary() {
+  ddev exec -s n8n node -e '
+const required = ["N8N_ENCRYPTION_KEY", "N8N_CONTROL_PLANE_TOKEN", "RUNTIME_API_TOKEN"];
+const forbidden = [
+  "ROUTER_API_TOKEN", "PLATFORM_INTERNAL_TOKEN", "ANTIGRAVITY_BRIDGE_TOKEN",
+  "DEEPSEEK_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY",
+  "GROQ_API_KEY", "OPENROUTER_API_KEY", "GITHUB_DELIVERY_TOKEN"
+];
+const missing = required.filter((key) => !process.env[key] || process.env[key] === "CHANGE_ME");
+const leaked = forbidden.filter((key) => Boolean(process.env[key]));
+if (missing.length || leaked.length) {
+  console.error(JSON.stringify({error:"n8n_secret_boundary_failed", missing, leaked}));
+  process.exit(1);
+}
+console.log(JSON.stringify({status:"ok", boundary:"runtime-only"}));
+'
+}
+
 smoke_webhooks() {
   local unauth_status auth_status
   unauth_status="$(
@@ -193,6 +211,7 @@ sync_workflows() {
   # more so webhook registrations are refreshed in the running n8n process.
   ddev restart
   wait_for_n8n
+  assert_runtime_only_secret_boundary
 
   ddev exec -s n8n n8n import:workflow --separate --input="$WORKFLOW_DIR"
   for workflow_id in "${WORKFLOW_IDS[@]}"; do
@@ -201,6 +220,7 @@ sync_workflows() {
 
   ddev restart
   wait_for_n8n
+  assert_runtime_only_secret_boundary
   smoke_webhooks
 
   echo "n8n thin control plane synced and published."
