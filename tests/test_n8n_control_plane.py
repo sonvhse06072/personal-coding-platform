@@ -23,11 +23,13 @@ EXPECTED_WORKFLOWS = {
         "id": "pcpJobStatusV001",
         "method": "GET",
         "path": "coding-platform/jobs/:job_id",
+        "webhook_id": "f94fd841-0da8-42af-a06a-17b78d5a1ea7",
     },
     "human-decision.json": {
         "id": "pcpHumanDecision1",
         "method": "POST",
         "path": "coding-platform/jobs/:job_id/decision",
+        "webhook_id": "a0db357c-167e-43c4-a692-e049aa21ef63",
     },
 }
 
@@ -95,10 +97,10 @@ def test_workflows_are_versioned_runtime_proxies_only() -> None:
         assert route not in seen_routes
         seen_routes.add(route)
 
-        # n8n prepends webhookId to dynamic production paths. Keep the public
-        # control-plane contract stable and UUID-free for routes with :job_id.
+        # n8n requires a webhookId prefix for dynamic production webhook paths.
+        # Keep those IDs stable in version control so the production URLs do not drift.
         if ":job_id" in params["path"]:
-            assert "webhookId" not in webhook
+            assert webhook.get("webhookId") == expected["webhook_id"]
 
         http_nodes = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.httpRequest"]
         assert len(http_nodes) == 1
@@ -124,6 +126,8 @@ def test_sync_is_bounded_and_fail_closed() -> None:
     assert '"GITHUB_DELIVERY_TOKEN"' in script
     assert "Expected unauthenticated control-plane request to return 401" in script
     assert "Expected authenticated status proxy to preserve Runtime 404" in script
+    assert "f94fd841-0da8-42af-a06a-17b78d5a1ea7" in script
+    assert "a0db357c-167e-43c4-a692-e049aa21ef63" in script
     assert "N8N_ENCRYPTION_KEY" in script
     assert "Refusing n8n secret migration" in script
 
