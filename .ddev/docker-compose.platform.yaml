@@ -138,8 +138,18 @@ services:
       VIRTUAL_HOST: ${DDEV_HOSTNAME}
       HTTP_EXPOSE: 5678:5678
       HTTPS_EXPOSE: 5679:5678
-      # Workflow expressions need these two service-only values. Keep n8n out of
-      # Router entirely: Runtime remains the only orchestration authority.
+      # Workflow expressions use only the Runtime token + ingress token. DDEV's
+      # global .env reaches every service, so explicitly scrub unrelated secrets
+      # from this container and verify the result in n8n-sync.
+      ROUTER_API_TOKEN: ""
+      PLATFORM_INTERNAL_TOKEN: ""
+      ANTIGRAVITY_BRIDGE_TOKEN: ""
+      DEEPSEEK_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+      OPENAI_API_KEY: ""
+      GROQ_API_KEY: ""
+      OPENROUTER_API_KEY: ""
+      GITHUB_DELIVERY_TOKEN: ""
       N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"
       N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
       NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.readWriteFile","n8n-nodes-base.localFileTrigger"]'
