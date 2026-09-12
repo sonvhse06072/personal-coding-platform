@@ -1,12 +1,14 @@
 import os
 
+import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.main import app, require_auth
 
 
 client = TestClient(app)
-HEADERS = {"Authorization": f"Bearer {os.getenv('ROUTER_API_TOKEN', 'change-me')}"}
+HEADERS = {"Authorization": f"Bearer {os.environ['ROUTER_API_TOKEN']}"}
 
 
 def test_health():
@@ -29,3 +31,34 @@ def test_route_endpoint():
     data = response.json()
     assert data["job_id"] == "api-1"
     assert "strategy" in data
+
+
+@pytest.mark.parametrize("configured", [None, "", "   ", "CHANGE_ME", "change-me"])
+def test_router_auth_fails_closed_when_token_is_not_configured(monkeypatch, configured):
+    if configured is None:
+        monkeypatch.delenv("ROUTER_API_TOKEN", raising=False)
+    else:
+        monkeypatch.setenv("ROUTER_API_TOKEN", configured)
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_auth("Bearer anything")
+
+    assert exc_info.value.status_code == 503
+    assert exc_info.value.detail == "ROUTER_API_TOKEN is not configured"
+
+
+def test_router_auth_rejects_missing_or_invalid_bearer(monkeypatch):
+    monkeypatch.setenv("ROUTER_API_TOKEN", "real-router-token")
+
+    with pytest.raises(HTTPException) as missing:
+        require_auth(None)
+    assert missing.value.status_code == 401
+
+    with pytest.raises(HTTPException) as invalid:
+        require_auth("Bearer wrong-token")
+    assert invalid.value.status_code == 401
+
+
+def test_router_auth_accepts_configured_token(monkeypatch):
+    monkeypatch.setenv("ROUTER_API_TOKEN", "real-router-token")
+    require_auth("Bearer real-router-token")

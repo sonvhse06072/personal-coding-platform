@@ -19,9 +19,9 @@ app = FastAPI(
 
 
 def require_auth(authorization: str | None = Header(default=None)) -> None:
-    expected = os.getenv("ROUTER_API_TOKEN", "change-me")
-    if expected == "":
-        return
+    expected = os.getenv("ROUTER_API_TOKEN", "").strip()
+    if not expected or expected in {"CHANGE_ME", "change-me"}:
+        raise HTTPException(status_code=503, detail="ROUTER_API_TOKEN is not configured")
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing bearer token")
     supplied = authorization.removeprefix("Bearer ").strip()
