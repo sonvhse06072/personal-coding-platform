@@ -49,9 +49,29 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         super().__init__(DeliveryAwareStorage(storage))
 
     @staticmethod
-    def _verified_result_needs_delivery(row: dict[str, Any]) -> bool:
+    def _accepted_result_for_delivery(row: dict[str, Any]) -> dict[str, Any] | None:
+        """Return the locally verified result, including from a delivery block.
+
+        Delivery/API failures are infrastructure failures that happen after the
+        code has already passed local Definition-of-Done and been committed. The
+        block result keeps that verified payload under `accepted_result`; resume
+        must continue delivery from it rather than spending another model call.
+        """
         result = row.get("result") or {}
-        if result.get("status") != "accepted" or result.get("delivery_finalized"):
+        candidate = result
+        if candidate.get("status") != "accepted":
+            nested = result.get("accepted_result")
+            if not isinstance(nested, dict):
+                return None
+            candidate = nested
+        if candidate.get("status") != "accepted" or candidate.get("delivery_finalized"):
+            return None
+        return deepcopy(candidate)
+
+    @classmethod
+    def _verified_result_needs_delivery(cls, row: dict[str, Any]) -> bool:
+        result = cls._accepted_result_for_delivery(row)
+        if not result:
             return False
         delivery = result.get("delivery") or {}
         if delivery.get("state") == "ci_failure":
@@ -81,12 +101,18 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         )
 
     async def run_job(self, job_id: str) -> None:
-        # If Runtime restarted after local verification/commit but before GitHub
-        # delivery completed, resume the idempotent delivery step instead of
+        # If Runtime restarted or a delivery dependency failed after local
+        # verification/commit, resume the idempotent delivery step instead of
         # spending another model call on already-verified work.
         before = self.storage.get(job_id)
-        if before and before.get("status") == "queued" and self._verified_result_needs_delivery(before):
-            self.storage.update(job_id, status="delivering", error=None)
+        accepted = self._accepted_result_for_delivery(before) if before else None
+        if (
+            before
+            and before.get("status") == "queued"
+            and accepted
+            and self._verified_result_needs_delivery(before)
+        ):
+            self.storage.update(job_id, status="delivering", result=accepted, error=None)
         else:
             await super().run_job(job_id)
 
