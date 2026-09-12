@@ -1,10 +1,35 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from .base import AgentAdapter, AgentRun, classify_provider_failure
 from ..shell import run_command
+
+
+_PROVIDER_KEY_BY_MODEL_PREFIX = {
+    "deepseek": "DEEPSEEK_API_KEY",
+    "anthropic": "ANTHROPIC_API_KEY",
+    "openai": "OPENAI_API_KEY",
+    "groq": "GROQ_API_KEY",
+    "openrouter": "OPENROUTER_API_KEY",
+}
+
+
+def provider_env_for_model(model: str) -> dict[str, str]:
+    """Return only the API credential required by this OpenCode model.
+
+    OpenCode may also use its mounted user configuration for authenticated
+    providers. Unknown/auto models therefore receive no API key by default rather
+    than inheriting every provider credential available to Runtime.
+    """
+    prefix = (model or "").split("/", 1)[0].strip().lower()
+    key = _PROVIDER_KEY_BY_MODEL_PREFIX.get(prefix)
+    if not key:
+        return {}
+    value = os.getenv(key, "").strip()
+    return {key: value} if value else {}
 
 
 class OpenCodeAdapter(AgentAdapter):
@@ -18,7 +43,12 @@ class OpenCodeAdapter(AgentAdapter):
         if self.model and self.model != "auto":
             argv += ["--model", self.model]
         argv.append(prompt)
-        result = await run_command(argv, cwd=workspace, timeout=timeout)
+        result = await run_command(
+            argv,
+            cwd=workspace,
+            timeout=timeout,
+            env=provider_env_for_model(self.model),
+        )
         chunks: list[str] = []
         errors: list[str] = []
         usage: dict = {}

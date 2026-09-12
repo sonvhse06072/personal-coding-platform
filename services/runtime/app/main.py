@@ -18,6 +18,7 @@ from .schemas import (
     JobView,
     RuntimeHealth,
 )
+from .security import harden_runtime_process_secret_boundary
 from .storage import Storage
 
 
@@ -56,6 +57,10 @@ def runtime_error(exc: RuntimeError) -> HTTPException:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Coding agents run as child processes of Runtime. Harden the long-running
+    # parent before any job can launch so a same-UID child cannot recover Runtime
+    # credentials from procfs even though both processes share one container.
+    harden_runtime_process_secret_boundary()
     await engine.start()
     yield
     await engine.stop()
