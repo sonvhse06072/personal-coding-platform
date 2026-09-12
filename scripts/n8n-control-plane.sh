@@ -36,6 +36,36 @@ for line in path.read_text(encoding="utf-8").splitlines():
 PY
 }
 
+is_real_secret() {
+  local value="${1:-}"
+  [[ -n "$value" && "$value" != "CHANGE_ME" ]]
+}
+
+set_env_value() {
+  local file="$1" key="$2" value="$3"
+  python3 - "$file" "$key" "$value" <<'PY'
+from pathlib import Path
+import sys
+path = Path(sys.argv[1])
+key = sys.argv[2]
+value = sys.argv[3]
+lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+updated = []
+written = False
+for line in lines:
+    if line.startswith(key + "="):
+        if not written:
+            updated.append(f"{key}={value}")
+            written = True
+        continue
+    updated.append(line)
+if not written:
+    updated.append(f"{key}={value}")
+path.parent.mkdir(parents=True, exist_ok=True)
+path.write_text("\n".join(updated) + "\n", encoding="utf-8")
+PY
+}
+
 remove_env_key() {
   local file="$1" key="$2"
   python3 - "$file" "$key" <<'PY'
@@ -60,38 +90,38 @@ prepare_env() {
     exit 1
   }
 
-  local existing_key control_token
-  existing_key="$(read_env_value "$GLOBAL_ENV" N8N_ENCRYPTION_KEY)"
-
-  if [[ ! -f "$N8N_ENV" ]]; then
-    local encryption_key
-    encryption_key="${existing_key:-$(random_secret)}"
-    control_token="$(random_secret)"
-    cat >"$N8N_ENV" <<EOF
-N8N_ENCRYPTION_KEY=$encryption_key
-N8N_CONTROL_PLANE_TOKEN=$control_token
-EOF
-    chmod 600 "$N8N_ENV"
-    echo "Created service-scoped n8n secrets at $N8N_ENV"
-  else
-    chmod 600 "$N8N_ENV"
-    if [[ -z "$(read_env_value "$N8N_ENV" N8N_ENCRYPTION_KEY)" ]]; then
-      echo "N8N_ENCRYPTION_KEY=${existing_key:-$(random_secret)}" >>"$N8N_ENV"
-    fi
-    if [[ -z "$(read_env_value "$N8N_ENV" N8N_CONTROL_PLANE_TOKEN)" ]]; then
-      echo "N8N_CONTROL_PLANE_TOKEN=$(random_secret)" >>"$N8N_ENV"
-    fi
+  local global_raw global_key local_key control_token
+  global_raw="$(read_env_value "$GLOBAL_ENV" N8N_ENCRYPTION_KEY)"
+  global_key=""
+  if is_real_secret "$global_raw"; then
+    global_key="$global_raw"
   fi
 
-  # Once the same encryption key is safely service-scoped, remove the legacy
-  # global copy so Router/Runtime/other containers no longer receive it.
-  if [[ -n "$existing_key" ]]; then
-    local scoped_key
-    scoped_key="$(read_env_value "$N8N_ENV" N8N_ENCRYPTION_KEY)"
-    if [[ "$existing_key" != "$scoped_key" ]]; then
-      echo "Refusing n8n secret migration: scoped encryption key differs from the existing global key." >&2
-      exit 1
-    fi
+  if [[ ! -f "$N8N_ENV" ]]; then
+    cp "$N8N_ENV_EXAMPLE" "$N8N_ENV"
+  fi
+  chmod 600 "$N8N_ENV"
+
+  local_key="$(read_env_value "$N8N_ENV" N8N_ENCRYPTION_KEY)"
+  if ! is_real_secret "$local_key"; then
+    local_key="${global_key:-$(random_secret)}"
+    set_env_value "$N8N_ENV" N8N_ENCRYPTION_KEY "$local_key"
+  fi
+
+  control_token="$(read_env_value "$N8N_ENV" N8N_CONTROL_PLANE_TOKEN)"
+  if ! is_real_secret "$control_token"; then
+    set_env_value "$N8N_ENV" N8N_CONTROL_PLANE_TOKEN "$(random_secret)"
+  fi
+
+  # Existing n8n data is encrypted with the old key. Never silently rotate it.
+  if [[ -n "$global_key" && "$global_key" != "$local_key" ]]; then
+    echo "Refusing n8n secret migration: scoped encryption key differs from the existing global key." >&2
+    exit 1
+  fi
+
+  # The service-scoped file now owns n8n secrets. Remove even a legacy
+  # placeholder from the global DDEV environment so other services never receive it.
+  if grep -q '^N8N_ENCRYPTION_KEY=' "$GLOBAL_ENV"; then
     remove_env_key "$GLOBAL_ENV" N8N_ENCRYPTION_KEY
     echo "Moved N8N_ENCRYPTION_KEY out of the global DDEV environment."
   fi
@@ -129,13 +159,38 @@ wait_for_n8n() {
   return 1
 }
 
+smoke_webhooks() {
+  local unauth_status auth_status
+  unauth_status="$(
+    ddev exec -s n8n node -e \
+      'fetch("http://127.0.0.1:5678/webhook/coding-platform/jobs/not-a-real-job").then(r=>console.log(r.status)).catch(()=>process.exit(1))' \
+      2>/dev/null | tr -d '\r' | tail -n1
+  )"
+  if [[ "$unauth_status" != "401" ]]; then
+    echo "Expected unauthenticated control-plane request to return 401, got: $unauth_status" >&2
+    exit 1
+  fi
+
+  # With the service-scoped ingress token, the request must cross n8n and reach
+  # Runtime. A deliberately unknown job should therefore preserve Runtime's 404.
+  auth_status="$(
+    ddev exec -s n8n node -e \
+      'fetch("http://127.0.0.1:5678/webhook/coding-platform/jobs/not-a-real-job", {headers:{"X-Control-Token":process.env.N8N_CONTROL_PLANE_TOKEN}}).then(r=>console.log(r.status)).catch(()=>process.exit(1))' \
+      2>/dev/null | tr -d '\r' | tail -n1
+  )"
+  if [[ "$auth_status" != "404" ]]; then
+    echo "Expected authenticated status proxy to preserve Runtime 404, got: $auth_status" >&2
+    exit 1
+  fi
+}
+
 sync_workflows() {
   prepare_env
   cd "$ROOT"
 
-  # First restart loads the service-scoped ingress token, workflow mount and the
-  # pinned image before CLI import. Publishing through the server CLI writes the
-  # database but needs one more restart for webhook registrations to refresh.
+  # First restart loads service-scoped secrets, the read-only workflow mount and
+  # the pinned image. Publishing through server CLI updates the DB; restart once
+  # more so webhook registrations are refreshed in the running n8n process.
   ddev restart
   wait_for_n8n
 
@@ -146,26 +201,13 @@ sync_workflows() {
 
   ddev restart
   wait_for_n8n
-
-  # Fail closed if the public control-plane webhook can be used without its
-  # service-scoped ingress token.
-  local status
-  status="$(ddev exec -s n8n node - <<'NODE'
-fetch('http://127.0.0.1:5678/webhook/coding-platform/jobs/not-a-real-job')
-  .then(r => { console.log(r.status); })
-  .catch(() => process.exit(1));
-NODE
-)"
-  if [[ "$status" != "401" ]]; then
-    echo "Expected unauthenticated control-plane request to return 401, got: $status" >&2
-    exit 1
-  fi
+  smoke_webhooks
 
   echo "n8n thin control plane synced and published."
-  echo "Webhooks:"
-  echo "  POST https://${DDEV_HOSTNAME}:5679/webhook/coding-platform/jobs"
-  echo "  GET  https://${DDEV_HOSTNAME}:5679/webhook/coding-platform/jobs/<job_id>"
-  echo "  POST https://${DDEV_HOSTNAME}:5679/webhook/coding-platform/jobs/<job_id>/decision"
+  echo "Production webhook paths (use the n8n HTTPS base URL shown by 'ddev describe'):"
+  echo "  POST /webhook/coding-platform/jobs"
+  echo "  GET  /webhook/coding-platform/jobs/<job_id>"
+  echo "  POST /webhook/coding-platform/jobs/<job_id>/decision"
   echo "Use header: X-Control-Token: <value from .ddev/.env.n8n.local>"
 }
 
