@@ -10,7 +10,7 @@ projects:
     revisions:
       mvp-v1-2026-09-13:
         status: approved
-        source_commit: 80a6974e62d5a5708c8ce4116a24e03557753e38
+        source_commit: b143fbb001c2006ec82570619802b607085fbeb0
         references:
           goals:
             - path: docs/00-project-overview.md
