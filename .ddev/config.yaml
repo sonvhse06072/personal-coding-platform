@@ -13,6 +13,6 @@ web_environment:
 
 hooks:
   pre-start:
-    - exec-host: "./scripts/with-host-secrets.sh ./scripts/antigravity-bridge.sh start"
+    - exec-host: "bash ./scripts/with-host-secrets.sh ./scripts/antigravity-bridge.sh start"
   post-stop:
-    - exec-host: "./scripts/with-host-secrets.sh ./scripts/antigravity-bridge.sh stop"
+    - exec-host: "bash ./scripts/with-host-secrets.sh ./scripts/antigravity-bridge.sh stop"
