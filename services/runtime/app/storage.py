@@ -66,6 +66,14 @@ class Storage:
     def init(self) -> None:
         with self.connect() as conn:
             conn.execute(DDL)
+            conn.execute(
+                """UPDATE cp_execution_plans
+                SET status='interrupted',
+                    error='Runtime restarted during PM planning; submit a new planning request.',
+                    updated_at=%s
+                WHERE status='planning'""",
+                (now(),),
+            )
             conn.commit()
 
     def create(self, row: dict[str, Any]) -> None:
