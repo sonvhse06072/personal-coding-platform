@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from .work_order import WorkOrder
 
 
 JobStatus = Literal[
@@ -50,7 +52,8 @@ class RepoHints(BaseModel):
 
 class JobCreateRequest(BaseModel):
     project_id: str = Field(min_length=1, max_length=200)
-    task: TaskInput
+    task: TaskInput | None = None
+    work_order: WorkOrder | None = None
     source_commit: str | None = Field(default=None, max_length=100)
     baseline_revision: str | None = Field(
         default=None,
@@ -62,6 +65,18 @@ class JobCreateRequest(BaseModel):
     provider_state: dict[str, dict[str, Any]] = Field(default_factory=dict)
     auto_run: bool = True
     dry_run: bool = False
+
+    @model_validator(mode="after")
+    def validate_task_contract(self) -> "JobCreateRequest":
+        if self.task is None and self.work_order is None:
+            raise ValueError("Either task or work_order is required")
+        if (
+            self.work_order is not None
+            and self.baseline_revision is not None
+            and self.baseline_revision != self.work_order.baseline_revision
+        ):
+            raise ValueError("baseline_revision must match work_order.baseline_revision")
+        return self
 
 
 class JobRunRequest(BaseModel):
@@ -79,6 +94,7 @@ class JobView(BaseModel):
     status: JobStatus | str
     source_commit: str | None = None
     baseline_revision: str | None = None
+    work_order_id: str | None = None
     branch: str | None = None
     workspace: str | None = None
     complexity_score: int | None = None

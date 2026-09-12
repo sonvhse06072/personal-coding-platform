@@ -1,9 +1,9 @@
-"""Baseline-aware facade for the checkpointed Runtime engine.
+"""Governance-aware facade for the checkpointed Runtime engine.
 
 The implementation remains split into engine_core (lifecycle/state transitions),
 engine_execution (coding/verification loop), and engine_delivery (bounded GitHub
-branch/PR/CI delivery). This facade owns the project-governance metadata that must
-be pinned atomically when a job row is first created.
+branch/PR/CI delivery). This facade owns project-governance metadata that must be
+validated and pinned atomically when a job row is first created.
 """
 
 from __future__ import annotations
@@ -14,17 +14,64 @@ from typing import Any
 from .baseline import resolve_project_baseline
 from .config import project_config
 from .engine_delivery import RuntimeEngine as _RuntimeEngine
+from .work_order import (
+    WorkOrderPolicyError,
+    apply_work_order_budget,
+    canonical_task_from_work_order,
+    rehydrate_task_from_work_order,
+    validate_work_order_against_baseline,
+    work_order_snapshot,
+)
+
+
+class WorkOrderRouterProxy:
+    """Apply per-job WorkOrder ceilings to every Router decision without global state."""
+
+    def __init__(self, delegate: Any, storage: Any) -> None:
+        self.delegate = delegate
+        self.storage = storage
+
+    async def health(self) -> bool:
+        return await self.delegate.health()
+
+    async def route(self, payload: dict[str, Any]) -> dict[str, Any]:
+        route = await self.delegate.route(payload)
+        row = self.storage.get(str(payload.get("job_id") or ""))
+        if not row:
+            return route
+        checkpoint = row.get("checkpoint") or {}
+        work_order = work_order_snapshot(checkpoint.get("work_order"))
+        if work_order is None:
+            return route
+        return apply_work_order_budget(route, work_order)
+
+    async def reassess(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.delegate.reassess(payload)
 
 
 class RuntimeEngine(_RuntimeEngine):
-    def create_job(self, payload: dict[str, Any]) -> str:
-        """Create one job with its governing ProjectBaseline in the same write."""
+    def __init__(self, storage: Any) -> None:
+        super().__init__(storage)
+        self.router = WorkOrderRouterProxy(self.router, self.storage)
 
-        project_config(payload["project_id"])
-        baseline = resolve_project_baseline(
-            payload["project_id"],
-            payload.get("baseline_revision"),
+    def create_job(self, payload: dict[str, Any]) -> str:
+        """Create one job with its governing baseline/contract in the same write."""
+
+        project = project_config(payload["project_id"])
+        work_order = work_order_snapshot(payload.get("work_order"))
+        requested_revision = (
+            work_order.baseline_revision if work_order is not None else payload.get("baseline_revision")
         )
+        baseline = resolve_project_baseline(payload["project_id"], requested_revision)
+
+        if work_order is not None:
+            validate_work_order_against_baseline(work_order, baseline, project)
+            task = canonical_task_from_work_order(work_order)
+        else:
+            task = payload.get("task")
+            if not isinstance(task, dict):
+                raise ValueError("Legacy job creation requires task when work_order is absent")
+
         job_id = uuid.uuid4().hex
         checkpoint = {
             "hints": payload.get("repo_hints", {}),
@@ -34,19 +81,120 @@ class RuntimeEngine(_RuntimeEngine):
         }
         if baseline is not None:
             checkpoint["project_baseline"] = baseline.model_dump(mode="json")
+        if work_order is not None:
+            checkpoint["work_order"] = work_order.model_dump(mode="json")
 
         self.storage.create({
             "id": job_id,
             "project_id": payload["project_id"],
             "status": "queued",
             "source_commit": payload.get("source_commit"),
-            "task": payload["task"],
+            "task": task,
             "repo_analysis": None,
             "progress": self._new_progress(),
             "checkpoint": checkpoint,
             "dry_run": bool(payload.get("dry_run", False)),
         })
         return job_id
+
+    def _restore_work_order_task(self, job_id: str) -> None:
+        row = self.storage.get(job_id)
+        if not row:
+            return
+        checkpoint = row.get("checkpoint") or {}
+        work_order = work_order_snapshot(checkpoint.get("work_order"))
+        if work_order is None:
+            return
+        canonical = rehydrate_task_from_work_order(row.get("task"), work_order)
+        if canonical != row.get("task"):
+            self.storage.update(job_id, task=canonical)
+
+    async def run_job(self, job_id: str) -> None:
+        self._restore_work_order_task(job_id)
+        try:
+            await super().run_job(job_id)
+        except WorkOrderPolicyError as exc:
+            row = self.storage.get(job_id)
+            if not row:
+                raise
+            checkpoint = dict(row.get("checkpoint") or {})
+            progress = dict(row.get("progress") or self._new_progress())
+            self._block(
+                job_id=job_id,
+                progress=progress,
+                checkpoint=checkpoint,
+                reason="work_order_policy_rejected",
+                last_failure=str(exc),
+            )
+
+    async def _verify(
+        self,
+        job_id: str,
+        project_id: str,
+        workspace: Any,
+        project: dict[str, Any],
+        strategy: dict[str, Any],
+        started: float,
+        progress: dict[str, Any],
+    ) -> dict[str, Any]:
+        result = await super()._verify(
+            job_id,
+            project_id,
+            workspace,
+            project,
+            strategy,
+            started,
+            progress,
+        )
+        row = self.storage.get(job_id)
+        checkpoint = (row or {}).get("checkpoint") or {}
+        work_order = work_order_snapshot(checkpoint.get("work_order"))
+        if work_order is None or not result.get("passed", False):
+            return result
+
+        required = set(work_order.verification.required_phases)
+        base_profile = str(strategy.get("profile") or "")
+        extra_phases: list[str] = []
+        if "full_tests" in required and base_profile not in {"complex", "critical"}:
+            extra_phases.append("full_tests")
+
+        for phase in extra_phases:
+            commands = project.get("ddev", {}).get(phase, []) or []
+            count = len(commands)
+            budget = strategy["budget"]
+            if (
+                progress["tool_calls"] + int(result.get("tool_calls", 0)) + count
+                > int(budget["max_tool_calls"])
+                or progress["test_runs"] + int(result.get("test_runs", 0)) + count
+                > int(budget["max_test_runs"])
+            ):
+                result["passed"] = False
+                result["tests_passed"] = False
+                result["failure_text"] = (
+                    str(result.get("failure_text") or "")
+                    + f"\n{phase}: WorkOrder-required verification would exceed execution budget"
+                ).strip()[-30000:]
+                return result
+
+            phase_result = await self.ddev.phase(
+                job_id=job_id,
+                project_id=project_id,
+                workspace=str(workspace),
+                phase=phase,
+                timeout_seconds=self._remaining_seconds(strategy, started, 1200),
+            )
+            result.setdefault("phases", []).append(phase_result)
+            result["tool_calls"] = int(result.get("tool_calls", 0)) + len(phase_result.get("commands", []))
+            result["test_runs"] = int(result.get("test_runs", 0)) + len(phase_result.get("commands", []))
+            if not phase_result.get("passed", False):
+                result["passed"] = False
+                result["tests_passed"] = False
+                result["failure_text"] = (
+                    str(result.get("failure_text") or "") + "\n" + str(phase_result)
+                ).strip()[-30000:]
+                return result
+
+        return result
 
 
 __all__ = ["RuntimeEngine"]

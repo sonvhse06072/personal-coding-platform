@@ -41,10 +41,11 @@ def view(row: dict[str, Any]) -> JobView:
     strategy = route.get("strategy") or {}
     checkpoint = row.get("checkpoint") or {}
     baseline = checkpoint.get("project_baseline") or {}
+    work_order = checkpoint.get("work_order") or {}
     executor = checkpoint.get("executor_choice") or strategy.get("executor") or {}
     return JobView(
         id=row["id"], project_id=row["project_id"], status=row["status"], source_commit=row.get("source_commit"),
-        baseline_revision=baseline.get("revision"),
+        baseline_revision=baseline.get("revision"), work_order_id=work_order.get("id"),
         branch=row.get("branch"), workspace=row.get("workspace"), complexity_score=route.get("complexity_score"),
         profile=strategy.get("profile"), executor=executor.get("id"),
         created_at=row["created_at"].isoformat(), updated_at=row["updated_at"].isoformat(),
@@ -68,7 +69,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.18", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.19", lifespan=lifespan)
 
 
 @app.get("/health", response_model=RuntimeHealth)
@@ -78,7 +79,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.18",
+        version="1.0.19",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
