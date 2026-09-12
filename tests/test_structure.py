@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_required_platform_files_exist():
     required = [
         ".ddev/config.yaml", ".ddev/docker-compose.platform.yaml", ".ddev/.env.example",
+        ".ddev/.env.ddev-executor.local.example",
         "config/models.yml", "config/routing-policy.yml", "config/projects.yml",
         "services/router/app/main.py", "services/runtime/app/main.py", "services/ddev-executor/app/main.py",
         "services/ddev-executor/app/github_delivery.py",
@@ -54,6 +55,15 @@ def test_github_delivery_token_is_scoped_to_privileged_executor():
     assert "GITHUB_DELIVERY_TOKEN" not in services["coding-runtime"]["environment"]
     assert "GITHUB_DELIVERY_TOKEN" not in services["router"]["environment"]
     assert "GITHUB_DELIVERY_TOKEN" not in services["n8n"]["environment"]
+
+    # DDEV injects .ddev/.env into every project container, so delivery secrets
+    # must never be documented or stored in the global project env file.
+    global_env = (ROOT / ".ddev/.env.example").read_text()
+    executor_env = (ROOT / ".ddev/.env.ddev-executor.local.example").read_text()
+    gitignore = (ROOT / ".gitignore").read_text().splitlines()
+    assert "GITHUB_DELIVERY_TOKEN" not in global_env
+    assert "GITHUB_DELIVERY_TOKEN=" in executor_env
+    assert ".ddev/.env.ddev-executor.local" in gitignore
 
 
 def test_antigravity_replaces_legacy_gemini_cli():
