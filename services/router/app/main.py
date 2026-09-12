@@ -7,13 +7,20 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, HTTPException
 
 from .config import clear_config_cache, get_config
-from .engine_budget import RouterEngine
-from .schemas import ReassessRequest, ReassessResponse, RoutingRequest, RoutingResponse
+from .schemas import (
+    ReassessRequest,
+    ReassessResponse,
+    RoutingRequest,
+    RoutingResponse,
+    StaffingRequest,
+    StaffingResponse,
+)
+from .staffing import RouterEngine
 
 
 app = FastAPI(
     title="Personal Coding Router Service",
-    version="1.0.12",
+    version="1.0.13",
     description="Deterministic-first model/agent routing for a personal coding automation platform.",
 )
 
@@ -39,7 +46,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok",
         "service": "router-service",
-        "version": "1.0.12",
+        "version": "1.0.13",
         "registry_version": cfg["models"].get("version", 1),
         "policy_version": cfg["policy"].get("version", 1),
     }
@@ -66,6 +73,14 @@ def models() -> dict[str, Any]:
 def route(payload: RoutingRequest) -> RoutingResponse:
     try:
         return engine().route(payload)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/v1/staff", response_model=StaffingResponse, dependencies=[Depends(require_auth)])
+def staff(payload: StaffingRequest) -> StaffingResponse:
+    try:
+        return engine().staff(payload)
     except RuntimeError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
