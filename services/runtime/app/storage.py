@@ -30,6 +30,25 @@ CREATE TABLE IF NOT EXISTS cp_jobs (
 );
 ALTER TABLE cp_jobs ADD COLUMN IF NOT EXISTS checkpoint JSONB;
 CREATE INDEX IF NOT EXISTS cp_jobs_status_idx ON cp_jobs(status);
+
+CREATE TABLE IF NOT EXISTS cp_execution_plans (
+  id TEXT PRIMARY KEY,
+  project_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  baseline_revision TEXT NOT NULL,
+  baseline_source_commit TEXT NOT NULL,
+  ticket JSONB NOT NULL,
+  staffing JSONB,
+  plan JSONB,
+  usage JSONB,
+  error TEXT,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS cp_execution_plans_project_idx
+  ON cp_execution_plans(project_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS cp_execution_plans_status_idx
+  ON cp_execution_plans(status);
 """
 
 
@@ -93,3 +112,79 @@ class Storage:
         with self.connect() as conn:
             conn.execute(f"UPDATE cp_jobs SET {', '.join(sets)} WHERE id=%s", values)
             conn.commit()
+
+    def create_execution_plan(self, row: dict[str, Any]) -> None:
+        timestamp = now()
+        with self.connect() as conn:
+            conn.execute(
+                """INSERT INTO cp_execution_plans
+                (id, project_id, status, baseline_revision, baseline_source_commit,
+                 ticket, staffing, plan, usage, error, created_at, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,%s::jsonb,%s,%s,%s)""",
+                (
+                    row["id"],
+                    row["project_id"],
+                    row.get("status", "planning"),
+                    row["baseline_revision"],
+                    row["baseline_source_commit"],
+                    json.dumps(row["ticket"]),
+                    json.dumps(row.get("staffing")),
+                    json.dumps(row.get("plan")),
+                    json.dumps(row.get("usage")),
+                    row.get("error"),
+                    timestamp,
+                    timestamp,
+                ),
+            )
+            conn.commit()
+
+    def get_execution_plan(self, plan_id: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            return conn.execute(
+                "SELECT * FROM cp_execution_plans WHERE id=%s",
+                (plan_id,),
+            ).fetchone()
+
+    def update_execution_plan(self, plan_id: str, **fields: Any) -> None:
+        if not fields:
+            return
+        allowed = {"status", "staffing", "plan", "usage", "error"}
+        unknown = set(fields) - allowed
+        if unknown:
+            raise ValueError(f"Unsupported execution-plan fields: {sorted(unknown)}")
+
+        json_fields = {"staffing", "plan", "usage"}
+        sets: list[str] = []
+        values: list[Any] = []
+        for key, value in fields.items():
+            if key in json_fields:
+                sets.append(f"{key}=%s::jsonb")
+                values.append(json.dumps(value) if value is not None else None)
+            else:
+                sets.append(f"{key}=%s")
+                values.append(value)
+        sets.append("updated_at=%s")
+        values.append(now())
+        values.append(plan_id)
+        with self.connect() as conn:
+            conn.execute(
+                f"UPDATE cp_execution_plans SET {', '.join(sets)} WHERE id=%s",
+                values,
+            )
+            conn.commit()
+
+    def recover_execution_plans(self) -> int:
+        """Fail closed after restart instead of replaying an uncertain PM model turn."""
+
+        timestamp = now()
+        with self.connect() as conn:
+            result = conn.execute(
+                """UPDATE cp_execution_plans
+                SET status='interrupted',
+                    error='Runtime restarted during PM planning; submit a new planning request.',
+                    updated_at=%s
+                WHERE status='planning'""",
+                (timestamp,),
+            )
+            conn.commit()
+            return int(result.rowcount or 0)
