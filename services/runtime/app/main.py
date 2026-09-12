@@ -10,6 +10,12 @@ from typing import Any
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 
 from .engine import RuntimeEngine
+from .pm_planning import (
+    ExecutionPlanView,
+    PMPlanCreateRequest,
+    PMPlanner,
+    execution_plan_view,
+)
 from .schemas import (
     HumanDecisionRequest,
     JobCreateRequest,
@@ -24,6 +30,7 @@ from .storage import Storage
 
 storage = Storage()
 engine = RuntimeEngine(storage)
+pm_planner = PMPlanner(storage)
 
 
 def auth(authorization: str | None = Header(default=None)) -> None:
@@ -65,11 +72,14 @@ async def lifespan(app: FastAPI):
     # credentials from procfs even though both processes share one container.
     harden_runtime_process_secret_boundary()
     await engine.start()
+    # PM model turns are not replayed automatically after a Runtime restart. A
+    # planning row that was in-flight becomes an explicit interrupted artifact.
+    storage.recover_execution_plans()
     yield
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.19", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.20", lifespan=lifespan)
 
 
 @app.get("/health", response_model=RuntimeHealth)
@@ -79,7 +89,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.19",
+        version="1.0.20",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
@@ -88,6 +98,26 @@ async def health() -> RuntimeHealth:
             "opencode": shutil.which("opencode") is not None,
         },
     )
+
+
+@app.post("/v1/plans", response_model=ExecutionPlanView, dependencies=[Depends(auth)])
+async def create_execution_plan(payload: PMPlanCreateRequest) -> ExecutionPlanView:
+    try:
+        row = await pm_planner.create_plan(payload)
+    except (RuntimeError, KeyError, ValueError) as exc:
+        # Pre-flight governance/configuration errors occur before a durable plan
+        # row is created. Model/runtime failures after persistence are returned as
+        # a durable `failed` ExecutionPlan instead of being lost in an HTTP error.
+        raise HTTPException(422, str(exc)) from exc
+    return execution_plan_view(row)
+
+
+@app.get("/v1/plans/{plan_id}", response_model=ExecutionPlanView, dependencies=[Depends(auth)])
+def get_execution_plan(plan_id: str) -> ExecutionPlanView:
+    row = storage.get_execution_plan(plan_id)
+    if not row:
+        raise HTTPException(404, "ExecutionPlan not found")
+    return execution_plan_view(row)
 
 
 @app.post("/v1/jobs", response_model=JobView, dependencies=[Depends(auth)])
