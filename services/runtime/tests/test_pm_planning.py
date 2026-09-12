@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
 from datetime import datetime, timezone
@@ -204,15 +205,14 @@ def configure(monkeypatch, tmp_path: Path, output: dict, *, mutate: bool = False
     return planner, request, storage, router, ddev, adapter
 
 
-@pytest.mark.asyncio
-async def test_pm_creates_ready_dependency_aware_plan(monkeypatch, tmp_path):
+def test_pm_creates_ready_dependency_aware_plan(monkeypatch, tmp_path):
     output = proposal(
         work_order("WO-1"),
         work_order("WO-2", dependencies=["WO-1"]),
     )
     planner, request, storage, router, ddev, adapter = configure(monkeypatch, tmp_path, output)
 
-    row = await planner.create_plan(request)
+    row = asyncio.run(planner.create_plan(request))
 
     assert row["status"] == "ready"
     assert row["plan"]["ready_work_order_ids"] == ["WO-1"]
@@ -224,12 +224,13 @@ async def test_pm_creates_ready_dependency_aware_plan(monkeypatch, tmp_path):
     assert router.calls[0]["role"] == "product_manager"
     assert len(adapter.calls) == 1
     assert adapter.calls[0]["mode"] == "plan"
+    assert "docs/scope.md" in adapter.calls[0]["prompt"]
+    assert "T-100" in adapter.calls[0]["prompt"]
     assert ddev.create_calls[0]["ref"] == "a" * 40
     assert len(ddev.remove_calls) == 1
 
 
-@pytest.mark.asyncio
-async def test_pm_persists_out_of_scope_without_work_orders(monkeypatch, tmp_path):
+def test_pm_persists_out_of_scope_without_work_orders(monkeypatch, tmp_path):
     output = {
         "scope_assessment": "out_of_scope",
         "summary": "The request is explicitly outside the approved product scope.",
@@ -238,15 +239,14 @@ async def test_pm_persists_out_of_scope_without_work_orders(monkeypatch, tmp_pat
     }
     planner, request, *_ = configure(monkeypatch, tmp_path, output)
 
-    row = await planner.create_plan(request)
+    row = asyncio.run(planner.create_plan(request))
 
     assert row["status"] == "out_of_scope"
     assert row["plan"]["work_orders"] == []
     assert row["plan"]["ready_work_order_ids"] == []
 
 
-@pytest.mark.asyncio
-async def test_pm_decision_boundary_is_not_executable(monkeypatch, tmp_path):
+def test_pm_decision_boundary_is_not_executable(monkeypatch, tmp_path):
     output = {
         "scope_assessment": "in_scope",
         "summary": "Implementation requires a human-owned architecture decision first.",
@@ -262,39 +262,36 @@ async def test_pm_decision_boundary_is_not_executable(monkeypatch, tmp_path):
     }
     planner, request, *_ = configure(monkeypatch, tmp_path, output)
 
-    row = await planner.create_plan(request)
+    row = asyncio.run(planner.create_plan(request))
 
     assert row["status"] == "human_decision"
     assert row["plan"]["ready_work_order_ids"] == []
 
 
-@pytest.mark.asyncio
-async def test_pm_rejects_dependency_cycle(monkeypatch, tmp_path):
+def test_pm_rejects_dependency_cycle(monkeypatch, tmp_path):
     output = proposal(
         work_order("WO-1", dependencies=["WO-2"]),
         work_order("WO-2", dependencies=["WO-1"]),
     )
     planner, request, *_ = configure(monkeypatch, tmp_path, output)
 
-    row = await planner.create_plan(request)
+    row = asyncio.run(planner.create_plan(request))
 
     assert row["status"] == "failed"
     assert "dependency graph contains a cycle" in row["error"]
 
 
-@pytest.mark.asyncio
-async def test_pm_rejects_work_order_reference_outside_baseline(monkeypatch, tmp_path):
+def test_pm_rejects_work_order_reference_outside_baseline(monkeypatch, tmp_path):
     output = proposal(work_order(source_path="docs/not-approved.md"))
     planner, request, *_ = configure(monkeypatch, tmp_path, output)
 
-    row = await planner.create_plan(request)
+    row = asyncio.run(planner.create_plan(request))
 
     assert row["status"] == "failed"
     assert "not authorized by ProjectBaseline" in row["error"]
 
 
-@pytest.mark.asyncio
-async def test_pm_workspace_mutation_fails_closed(monkeypatch, tmp_path):
+def test_pm_workspace_mutation_fails_closed(monkeypatch, tmp_path):
     planner, request, storage, router, ddev, adapter = configure(
         monkeypatch,
         tmp_path,
@@ -302,7 +299,7 @@ async def test_pm_workspace_mutation_fails_closed(monkeypatch, tmp_path):
         mutate=True,
     )
 
-    row = await planner.create_plan(request)
+    row = asyncio.run(planner.create_plan(request))
 
     assert row["status"] == "failed"
     assert "modified the read-only planning workspace" in row["error"]
@@ -310,8 +307,7 @@ async def test_pm_workspace_mutation_fails_closed(monkeypatch, tmp_path):
     assert len(ddev.remove_calls) == 1
 
 
-@pytest.mark.asyncio
-async def test_pm_requires_approved_baseline_before_persistence(monkeypatch, tmp_path):
+def test_pm_requires_approved_baseline_before_persistence(monkeypatch, tmp_path):
     storage = FakeStorage()
     monkeypatch.setattr(pm_planning, "project_config", lambda project_id: project_config())
     monkeypatch.setattr(pm_planning, "resolve_project_baseline", lambda project_id, revision=None: None)
@@ -319,6 +315,6 @@ async def test_pm_requires_approved_baseline_before_persistence(monkeypatch, tmp
     request = PMPlanCreateRequest(project_id="legacy", ticket=ticket())
 
     with pytest.raises(ValueError, match="approved ProjectBaseline"):
-        await planner.create_plan(request)
+        asyncio.run(planner.create_plan(request))
 
     assert storage.plans == {}
