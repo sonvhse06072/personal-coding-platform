@@ -47,6 +47,7 @@ def test_chonhac_active_baseline_resolves_to_approved_source_of_truth() -> None:
         "roadmap_frame": [
             {"path": "PROJECT-CONTEXT.md", "section": None},
             {"path": "docs/09-roadmap.md", "section": None},
+            {"path": "infra/staging/DEC-025-PRE-BETA-HARDENING.md", "section": None},
         ],
     }
 
