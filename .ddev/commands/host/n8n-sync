@@ -2,5 +2,5 @@
 ## Description: Prepare, import and publish the thin n8n control-plane workflows
 ## Usage: n8n-sync
 set -euo pipefail
-./scripts/scope-service-secrets.sh
+bash ./scripts/scope-service-secrets.sh
 ./scripts/n8n-control-plane.sh sync
