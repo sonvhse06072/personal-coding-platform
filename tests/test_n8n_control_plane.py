@@ -97,8 +97,9 @@ def test_workflows_are_versioned_runtime_proxies_only() -> None:
         assert route not in seen_routes
         seen_routes.add(route)
 
-        # n8n requires a webhookId prefix for dynamic production webhook paths.
-        # Keep those IDs stable in version control so the production URLs do not drift.
+        # n8n 2.38.x requires webhookId as the leading production URL segment
+        # for paths containing dynamic parameters such as :job_id. Keep these
+        # identifiers stable in version control so callers get deterministic URLs.
         if ":job_id" in params["path"]:
             assert webhook.get("webhookId") == expected["webhook_id"]
 
