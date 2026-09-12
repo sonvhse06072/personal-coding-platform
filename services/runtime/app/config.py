@@ -10,6 +10,8 @@ import yaml
 
 
 SERVICE_DIR = Path(__file__).resolve().parent.parent
+
+
 def _default_config_file(name: str, container_default: str) -> str:
     candidates: list[Path] = []
     if SERVICE_DIR.parent.name == "services":
@@ -51,6 +53,16 @@ def projects_doc() -> dict[str, Any]:
     return _load_yaml(os.getenv("PROJECTS_FILE", _default_config_file("projects.yml", "/config/projects.yml")))
 
 
+@lru_cache(maxsize=1)
+def project_baselines_doc() -> dict[str, Any]:
+    return _load_yaml(
+        os.getenv(
+            "PROJECT_BASELINES_FILE",
+            _default_config_file("project-baselines.yml", "/config/project-baselines.yml"),
+        )
+    )
+
+
 def project_config(project_id: str) -> dict[str, Any]:
     projects = projects_doc().get("projects", {})
     if project_id not in projects:
@@ -66,4 +78,5 @@ def project_config(project_id: str) -> dict[str, Any]:
 
 def clear_config_cache() -> None:
     projects_doc.cache_clear()
+    project_baselines_doc.cache_clear()
     models_doc.cache_clear()
