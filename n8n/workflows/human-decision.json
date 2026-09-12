@@ -6,7 +6,8 @@
     {
       "parameters": {"httpMethod": "POST", "path": "coding-platform/jobs/:job_id/decision", "responseMode": "responseNode", "options": {}},
       "type": "n8n-nodes-base.webhook", "typeVersion": 2.1, "position": [-620, 0],
-      "id": "1c1a52ef-e8b9-487a-865e-c20cf22778f7", "name": "Human Decision Webhook"
+      "id": "1c1a52ef-e8b9-487a-865e-c20cf22778f7", "name": "Human Decision Webhook",
+      "webhookId": "a0db357c-167e-43c4-a692-e049aa21ef63"
     },
     {
       "parameters": {
