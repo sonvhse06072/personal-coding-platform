@@ -59,6 +59,18 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         permissions = (route.get("strategy") or {}).get("permissions") or {}
         return bool(permissions.get("push_ai_branch", False)) and bool(result.get("commit"))
 
+    @staticmethod
+    def _delivery_wait_seconds(strategy: dict[str, Any], progress: dict[str, Any]) -> int:
+        total = int(float(strategy.get("budget", {}).get("max_wall_time_minutes", 60)) * 60)
+        elapsed = int(float(progress.get("elapsed_minutes", 0.0)) * 60)
+        remaining = total - elapsed
+        if remaining <= 0:
+            raise DeliveryError(
+                "github_delivery_budget_exhausted",
+                "Job wall-time budget was exhausted before GitHub delivery.",
+            )
+        return max(1, min(900, remaining))
+
     async def run_job(self, job_id: str) -> None:
         # If Runtime restarted after local verification/commit but before GitHub
         # delivery completed, resume the idempotent delivery step instead of
@@ -121,9 +133,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                     title=title,
                     body=body,
                     permissions=permissions,
-                    max_wait_seconds=self._remaining_seconds(strategy, 0.0, 900)
-                    if False
-                    else min(900, int(float(strategy.get("budget", {}).get("max_wall_time_minutes", 60)) * 60)),
+                    max_wait_seconds=self._delivery_wait_seconds(strategy, progress),
                 )
             except DeliveryError as exc:
                 checkpoint["delivery"] = exc.metadata
