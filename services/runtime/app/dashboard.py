@@ -56,6 +56,7 @@ def _choice(value: Any) -> dict[str, Any] | None:
         "provider": value.get("provider"),
         "adapter": value.get("adapter"),
         "model": value.get("model"),
+        "reasoning_effort": value.get("reasoning_effort"),
         "score": value.get("score"),
         "predicted_success": value.get("predicted_success"),
     }
