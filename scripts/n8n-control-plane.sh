@@ -5,6 +5,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GLOBAL_ENV="$ROOT/.ddev/.env"
 N8N_ENV="$ROOT/.ddev/.env.n8n.local"
 N8N_ENV_EXAMPLE="$ROOT/.ddev/.env.n8n.local.example"
+RUNTIME_ENV="$ROOT/.ddev/.env.coding-runtime.local"
 PINNED_N8N_IMAGE="n8nio/n8n:2.38.6"
 WORKFLOW_DIR="/opt/pcp-workflows"
 JOB_STATUS_WEBHOOK_ID="f94fd841-0da8-42af-a06a-17b78d5a1ea7"
@@ -15,6 +16,7 @@ WORKFLOW_IDS=(
   pcpHumanDecision1
   pcpPmBridgePoll1
   pcpTelegramOutbox1
+  pcpTelegramControl1
 )
 
 random_secret() {
@@ -96,8 +98,12 @@ prepare_env() {
     echo "Missing $N8N_ENV_EXAMPLE" >&2
     exit 1
   }
+  [[ -f "$RUNTIME_ENV" ]] || {
+    echo "Missing $RUNTIME_ENV. Run ./scripts/scope-service-secrets.sh first." >&2
+    exit 1
+  }
 
-  local global_raw global_key local_key control_token telegram_bot telegram_chat
+  local global_raw global_key local_key control_token telegram_bot telegram_chat telegram_owner
   global_raw="$(read_env_value "$GLOBAL_ENV" N8N_ENCRYPTION_KEY)"
   global_key=""
   if is_real_secret "$global_raw"; then
@@ -122,11 +128,21 @@ prepare_env() {
 
   telegram_bot="$(read_env_value "$N8N_ENV" TELEGRAM_BOT_TOKEN)"
   telegram_chat="$(read_env_value "$N8N_ENV" TELEGRAM_CHAT_ID)"
-  if { is_real_secret "$telegram_bot" && ! is_real_secret "$telegram_chat"; } || \
-     { ! is_real_secret "$telegram_bot" && is_real_secret "$telegram_chat"; }; then
-    echo "Refusing partial Telegram configuration: set both TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID, or neither." >&2
+  telegram_owner="$(read_env_value "$N8N_ENV" TELEGRAM_OWNER_USER_ID)"
+  local telegram_count=0
+  is_real_secret "$telegram_bot" && telegram_count=$((telegram_count + 1))
+  is_real_secret "$telegram_chat" && telegram_count=$((telegram_count + 1))
+  is_real_secret "$telegram_owner" && telegram_count=$((telegram_count + 1))
+  if (( telegram_count != 0 && telegram_count != 3 )); then
+    echo "Refusing partial Telegram configuration: set TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID and TELEGRAM_OWNER_USER_ID together, or none." >&2
     exit 1
   fi
+
+  # Runtime receives only the non-secret Telegram identity used to revalidate
+  # one-time owner actions. The bot credential remains n8n-only.
+  set_env_value "$RUNTIME_ENV" TELEGRAM_CHAT_ID "$telegram_chat"
+  set_env_value "$RUNTIME_ENV" TELEGRAM_OWNER_USER_ID "$telegram_owner"
+  remove_env_key "$RUNTIME_ENV" TELEGRAM_BOT_TOKEN
 
   # Existing n8n data is encrypted with the old key. Never silently rotate it.
   if [[ -n "$global_key" && "$global_key" != "$local_key" ]]; then
@@ -134,13 +150,14 @@ prepare_env() {
     exit 1
   fi
 
-  # The service-scoped file now owns n8n secrets. Remove even a legacy
-  # placeholder from the global DDEV environment so other services never receive it.
+  # The service-scoped files now own Telegram configuration. Remove even a
+  # legacy placeholder from the global DDEV environment so unrelated services
+  # never inherit it.
   if grep -q '^N8N_ENCRYPTION_KEY=' "$GLOBAL_ENV"; then
     remove_env_key "$GLOBAL_ENV" N8N_ENCRYPTION_KEY
     echo "Moved N8N_ENCRYPTION_KEY out of the global DDEV environment."
   fi
-  for key in TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID; do
+  for key in TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID TELEGRAM_OWNER_USER_ID; do
     if grep -q "^${key}=" "$GLOBAL_ENV"; then
       remove_env_key "$GLOBAL_ENV" "$key"
       echo "Moved ${key} out of the global DDEV environment."
@@ -196,12 +213,14 @@ const missing = required.filter((key) => {
 const leaked = forbidden.filter((key) => Boolean(process.env[key]));
 const telegramBot = (process.env.TELEGRAM_BOT_TOKEN || "").trim();
 const telegramChat = (process.env.TELEGRAM_CHAT_ID || "").trim();
-const partialTelegram = Boolean(telegramBot) !== Boolean(telegramChat);
+const telegramOwner = (process.env.TELEGRAM_OWNER_USER_ID || "").trim();
+const configured = [telegramBot, telegramChat, telegramOwner].filter(Boolean).length;
+const partialTelegram = configured !== 0 && configured !== 3;
 if (missing.length || leaked.length || partialTelegram) {
   console.error(JSON.stringify({error:"n8n_secret_boundary_failed", missing, leaked, partialTelegram}));
   process.exit(1);
 }
-console.log(JSON.stringify({status:"ok", boundary:"runtime-only", telegram_configured:Boolean(telegramBot && telegramChat)}));
+console.log(JSON.stringify({status:"ok", boundary:"runtime-only", telegram_configured:configured === 3}));
 '
 }
 
@@ -259,7 +278,8 @@ sync_workflows() {
   echo "  GET  /webhook/${JOB_STATUS_WEBHOOK_ID}/coding-platform/jobs/<job_id>"
   echo "  POST /webhook/${HUMAN_DECISION_WEBHOOK_ID}/coding-platform/jobs/<job_id>/decision"
   echo "PM bridge polling workflow: pcpPmBridgePoll1 (every 2 minutes)."
-  echo "Telegram notification workflow: pcpTelegramOutbox1 (every minute; enabled when both Telegram values are configured)."
+  echo "Telegram notification workflow: pcpTelegramOutbox1 (every minute when all Telegram values are configured)."
+  echo "Telegram owner control workflow: pcpTelegramControl1 (polls callback actions every minute)."
   echo "Use header: X-Control-Token: <value from .ddev/.env.n8n.local>"
 }
 
