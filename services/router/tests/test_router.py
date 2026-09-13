@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from app.config import clear_config_cache, get_config
-from app.engine import RouterEngine
 from app.schemas import ExecutionProgress, ReassessRequest, RoutingRequest
+from app.staffing import RouterEngine
 
 
 def make_engine() -> RouterEngine:
