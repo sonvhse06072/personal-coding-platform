@@ -47,6 +47,13 @@ class NotificationReleaseRequest(BaseModel):
     retry_seconds: int = Field(default=60, ge=5, le=3600)
 
 
+class ControlActionExecuteRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    telegram_user_id: str = Field(min_length=1, max_length=100)
+    telegram_chat_id: str = Field(min_length=1, max_length=100)
+
+
 storage = Storage()
 engine = RuntimeEngine(storage)
 pm_planner = PMPlanner(storage)
@@ -101,7 +108,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.27", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.28", lifespan=lifespan)
 app.include_router(pm_bridge_router)
 app.include_router(create_dashboard_router(storage, plan_orchestrator.store))
 
@@ -113,7 +120,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.27",
+        version="1.0.28",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
@@ -204,6 +211,23 @@ def release_notification(event_id: int, payload: NotificationReleaseRequest) -> 
     ):
         raise HTTPException(409, "Notification is not currently claimed")
     return {"status": "pending", "event_id": event_id}
+
+
+@app.post("/v1/control-actions/{action_id}/execute", dependencies=[Depends(auth)])
+async def execute_control_action(
+    action_id: str,
+    payload: ControlActionExecuteRequest,
+) -> dict[str, Any]:
+    if not action_id or len(action_id) > 100:
+        raise HTTPException(422, "Invalid control action id")
+    try:
+        return await plan_orchestrator.controls.execute(
+            action_id,
+            telegram_user_id=payload.telegram_user_id,
+            telegram_chat_id=payload.telegram_chat_id,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @app.post("/v1/jobs", response_model=JobView, dependencies=[Depends(auth)])
