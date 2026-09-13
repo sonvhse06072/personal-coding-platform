@@ -1,4 +1,4 @@
-version: 3
+version: 4
 complexity_weights:
   scope: 0.18
   dependency_depth: 0.1
@@ -29,10 +29,14 @@ profiles:
     max_changed_files: 6
     executor_roles:
     - executor
+    allowed_executor_ids:
+    - antigravity_free
+    - codex_luna
+    - codex_terra
     preferred_executor_ids:
     - antigravity_free
-    - deepseek_flash
-    - codex_plus
+    - codex_luna
+    - codex_terra
     max_input_tokens: 250000
     max_output_tokens: 40000
   standard:
@@ -55,10 +59,16 @@ profiles:
     max_changed_files: 14
     executor_roles:
     - executor
+    allowed_executor_ids:
+    - antigravity_free
+    - codex_terra
+    - codex_luna
+    - codex_sol
     preferred_executor_ids:
     - antigravity_free
-    - codex_plus
-    - deepseek_flash
+    - codex_terra
+    - codex_luna
+    - codex_sol
     max_input_tokens: 800000
     max_output_tokens: 120000
   complex:
@@ -86,19 +96,30 @@ profiles:
     - debugger
     evaluator_roles:
     - reviewer
+    allowed_planner_ids:
+    - antigravity_free
+    - codex_terra
+    - codex_sol
+    allowed_executor_ids:
+    - antigravity_free
+    - codex_terra
+    - codex_sol
+    allowed_evaluator_ids:
+    - groq_oss_120b
+    - antigravity_free
+    - codex_terra
     preferred_planner_ids:
-    - codex_plus
     - antigravity_free
-    - claude_sonnet
-    - frontier_codex
+    - codex_terra
+    - codex_sol
     preferred_executor_ids:
-    - codex_plus
     - antigravity_free
-    - deepseek_flash
-    - frontier_codex
+    - codex_terra
+    - codex_sol
     preferred_evaluator_ids:
-    - claude_sonnet
-    - codex_plus
+    - groq_oss_120b
+    - antigravity_free
+    - codex_terra
     max_input_tokens: 2000000
     max_output_tokens: 300000
   critical:
@@ -126,16 +147,26 @@ profiles:
     - debugger
     evaluator_roles:
     - reviewer
+    allowed_planner_ids:
+    - codex_sol
+    - frontier_codex
+    allowed_executor_ids:
+    - codex_sol
+    - frontier_codex
+    allowed_evaluator_ids:
+    - groq_oss_120b
+    - antigravity_free
+    - codex_terra
     preferred_planner_ids:
+    - codex_sol
     - frontier_codex
-    - codex_plus
-    - claude_sonnet
     preferred_executor_ids:
+    - codex_sol
     - frontier_codex
-    - codex_plus
     preferred_evaluator_ids:
-    - claude_sonnet
-    - codex_plus
+    - groq_oss_120b
+    - antigravity_free
+    - codex_terra
     max_input_tokens: 4000000
     max_output_tokens: 500000
 staffing_roles:
@@ -146,10 +177,14 @@ staffing_roles:
     - standard
     - complex
     - critical
-    preferred_ids:
-    - codex_plus
+    allowed_ids:
     - antigravity_free
-    - claude_sonnet
+    - codex_terra
+    - codex_sol
+    preferred_ids:
+    - antigravity_free
+    - codex_terra
+    - codex_sol
 critical_triggers:
 - destructive_migration
 - production_write
