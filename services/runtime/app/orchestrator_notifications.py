@@ -29,6 +29,36 @@ class PlanOrchestrator(CorePlanOrchestrator):
         if controls is not None and hasattr(controls, "orchestrator"):
             controls.orchestrator = self
 
+    async def start(self) -> None:
+        # Backfill only owner-attention surfaces that already existed before this
+        # Runtime version. This never reconciles, resumes, launches or mutates the
+        # underlying WorkOrder state; it only creates deduplicated notification/
+        # control records for stable attention gates such as the currently blocked
+        # C1 recovery job.
+        self.store.ensure()
+        self.controls.ensure()
+        self._notify_existing_attention_states()
+        await super().start()
+
+    def _notify_existing_attention_states(self) -> None:
+        with self.storage.connect() as conn:
+            plans = list(
+                conn.execute(
+                    """SELECT plan_id FROM cp_plan_orchestrations
+                    WHERE status <> 'completed'
+                    ORDER BY created_at, plan_id"""
+                ).fetchall()
+            )
+        for item in plans:
+            plan_id = str(item["plan_id"])
+            plan = self._plan_context(plan_id)
+            for row in self.store.work_orders(plan_id):
+                current = dict(row)
+                state = str(current.get("state") or "")
+                if state not in {"blocked", "waiting_human", "awaiting_merge"}:
+                    continue
+                self._emit_attention_for_state(plan, current, state, backfill=True)
+
     async def _reconcile_plan(self, plan: dict[str, Any]) -> None:
         plan_id = str(plan["plan_id"])
         before = {
@@ -49,80 +79,93 @@ class PlanOrchestrator(CorePlanOrchestrator):
             current_state = str(current.get("state") or "")
             if current_state == previous_state:
                 continue
+            if current_state in {"blocked", "waiting_human", "awaiting_merge"}:
+                self._emit_attention_for_state(current_plan, current, current_state, backfill=False)
 
-            job_id = str(current.get("job_id") or "")
-            job = self.storage.get(job_id) if job_id else None
-            job = dict(job) if job else None
+    def _emit_attention_for_state(
+        self,
+        plan: dict[str, Any],
+        current: dict[str, Any],
+        state: str,
+        *,
+        backfill: bool,
+    ) -> None:
+        work_order_id = str(current.get("work_order_id") or "")
+        job_id = str(current.get("job_id") or "")
+        job = self.storage.get(job_id) if job_id else None
+        job = dict(job) if job else None
+        stamp = current.get("updated_at") or "unknown"
+        prefix = "backfill" if backfill else "transition"
 
-            if current_state == "awaiting_merge":
-                pr_url = str(current.get("pr_url") or "") or None
-                advisory = self.controls.manual_merge_advisory(pr_url)
-                actions = self.controls.create_actions(
-                    plan=current_plan,
-                    work_order=current,
-                    job=job,
-                    advisory=advisory,
-                )
-                self._emit_attention(
-                    current_plan,
-                    work_order_id=work_order_id,
-                    event_type="human_decision_required",
-                    severity="warning",
-                    summary=advisory["summary"],
-                    suffix=f"manual-merge:{current.get('pr_number')}",
-                    github_url=pr_url,
-                    payload={
-                        "pr_number": current.get("pr_number"),
-                        "advisory": self._public_advisory(advisory),
-                        "actions": actions,
-                    },
-                )
-                continue
+        if state == "awaiting_merge":
+            pr_url = str(current.get("pr_url") or "") or None
+            advisory = self.controls.manual_merge_advisory(pr_url)
+            actions = self.controls.create_actions(
+                plan=plan,
+                work_order=current,
+                job=job,
+                advisory=advisory,
+            )
+            self._emit_attention(
+                plan,
+                work_order_id=work_order_id,
+                event_type="human_decision_required",
+                severity="warning",
+                summary=advisory["summary"],
+                suffix=f"{prefix}:manual-merge:{current.get('pr_number')}:{stamp}",
+                github_url=pr_url,
+                payload={
+                    "pr_number": current.get("pr_number"),
+                    "advisory": self._public_advisory(advisory),
+                    "actions": actions,
+                },
+            )
+            return
 
-            if current_state == "waiting_human":
-                advisory = self.controls.waiting_human_advisory(current, job)
-                actions = self.controls.create_actions(
-                    plan=current_plan,
-                    work_order=current,
-                    job=job,
-                    advisory=advisory,
-                )
-                self._emit_attention(
-                    current_plan,
-                    work_order_id=work_order_id,
-                    event_type="human_decision_required",
-                    severity="warning",
-                    summary=advisory["summary"],
-                    suffix=f"waiting-human:{job_id or 'operator'}:{current.get('updated_at')}",
-                    payload={
-                        "advisory": self._public_advisory(advisory),
-                        "actions": actions,
-                    },
-                )
-                continue
+        if state == "waiting_human":
+            advisory = self.controls.waiting_human_advisory(current, job)
+            actions = self.controls.create_actions(
+                plan=plan,
+                work_order=current,
+                job=job,
+                advisory=advisory,
+            )
+            self._emit_attention(
+                plan,
+                work_order_id=work_order_id,
+                event_type="human_decision_required",
+                severity="warning",
+                summary=advisory["summary"],
+                suffix=f"{prefix}:waiting-human:{job_id or 'operator'}:{stamp}",
+                payload={
+                    "job_id": job_id or None,
+                    "advisory": self._public_advisory(advisory),
+                    "actions": actions,
+                },
+            )
+            return
 
-            if current_state == "blocked":
-                advisory = self.controls.blocked_advisory(current, job)
-                actions = self.controls.create_actions(
-                    plan=current_plan,
-                    work_order=current,
-                    job=job,
-                    advisory=advisory,
-                )
-                reason = str(advisory.get("reason") or "blocked")
-                self._emit_attention(
-                    current_plan,
-                    work_order_id=work_order_id,
-                    event_type="work_order_blocked",
-                    severity="error",
-                    summary=advisory["summary"],
-                    suffix=f"blocked:{job_id or 'operator'}:{reason}:{current.get('updated_at')}",
-                    payload={
-                        "job_id": job_id or None,
-                        "advisory": self._public_advisory(advisory),
-                        "actions": actions,
-                    },
-                )
+        advisory = self.controls.blocked_advisory(current, job)
+        actions = self.controls.create_actions(
+            plan=plan,
+            work_order=current,
+            job=job,
+            advisory=advisory,
+        )
+        reason = str(advisory.get("reason") or "blocked")
+        self._emit_attention(
+            plan,
+            work_order_id=work_order_id,
+            event_type="work_order_blocked",
+            severity="error",
+            summary=advisory["summary"],
+            suffix=f"{prefix}:blocked:{job_id or 'operator'}:{reason}:{stamp}",
+            payload={
+                "job_id": job_id or None,
+                "advisory": self._public_advisory(advisory),
+                "actions": actions,
+            },
+        )
 
     async def resolve_operator(
         self,
