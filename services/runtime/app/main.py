@@ -13,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .dashboard import create_dashboard_router
 from .engine import RuntimeEngine
 from .orchestrator_notifications import PlanOrchestrator
+from .orchestrator_resume import prepare_orchestrated_job_resume, reopen_orchestrated_job
 from .pm_bridge import router as pm_bridge_router
 from .pm_planning import (
     ExecutionPlanView,
@@ -100,7 +101,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.24", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.25", lifespan=lifespan)
 app.include_router(pm_bridge_router)
 app.include_router(create_dashboard_router(storage, plan_orchestrator.store))
 
@@ -112,7 +113,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.24",
+        version="1.0.25",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
@@ -194,8 +195,6 @@ def ack_notification(event_id: int) -> dict[str, Any]:
 
 @app.post("/v1/notifications/{event_id}/release", dependencies=[Depends(auth)])
 def release_notification(event_id: int, payload: NotificationReleaseRequest) -> dict[str, Any]:
-    if event_id < 1:
-        raise HTTPException(422, "event_id must be positive")
     if not plan_orchestrator.store.release_notification(
         event_id,
         error=payload.error,
@@ -235,10 +234,13 @@ def get_job(job_id: str) -> JobView:
 async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
     request = payload or JobRunRequest()
     try:
+        orchestration_resume = prepare_orchestrated_job_resume(plan_orchestrator.store, job_id)
         row = await engine.resume(
             job_id,
             reset_transient_provider_failures=request.reset_transient_provider_failures,
+            reroute=request.reroute,
         )
+        reopen_orchestrated_job(plan_orchestrator.store, orchestration_resume, job_id)
     except RuntimeError as exc:
         raise runtime_error(exc) from exc
     return view(row)
