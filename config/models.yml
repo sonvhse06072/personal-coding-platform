@@ -1,7 +1,6 @@
 version: 5
 models:
   groq_free:
-    enabled: false
     kind: llm
     provider: groq
     adapter: litellm
@@ -31,20 +30,17 @@ models:
       cached_input: 0.0375
       output: 0.30
       basis: current_groq_rate
-    # Enable only after GROQ_API_KEY is configured and ZDR is confirmed.
 
   groq_oss_120b:
-    enabled: false
+    # Intentionally non-routable until GROQ_API_KEY is configured and ZDR is
+    # confirmed. Activation is a later explicit config change that adds roles.
     kind: agent
     provider: groq
     adapter: opencode
     model: groq/openai/gpt-oss-120b
     tier: balanced
     cost_class: ultra_low
-    roles:
-    - reviewer
-    - planner
-    - failure_analysis
+    roles: []
     capabilities:
       coding: 7
       reasoning: 8
@@ -63,7 +59,6 @@ models:
       cached_input: 0.075
       output: 0.60
       basis: current_groq_rate
-    # Enable only after GROQ_API_KEY is configured and ZDR is confirmed.
 
   cloudflare_free:
     kind: llm
@@ -92,7 +87,6 @@ models:
       zero_retention_supported: false
 
   openai_luna:
-    enabled: false
     kind: llm
     provider: openai
     adapter: litellm
@@ -223,11 +217,11 @@ models:
     cost_class: scarce
     quota_group: codex_chatgpt_plus
     roles:
-    - executor
     - debugger
     - planner
     - reviewer
     - architecture
+    - critical_executor
     - product_manager
     capabilities:
       coding: 9
@@ -244,19 +238,14 @@ models:
       zero_retention_supported: true
 
   deepseek_flash:
-    enabled: false
+    # Intentionally non-routable until an explicit low-cost provider activation.
     kind: agent
     provider: deepseek
     adapter: opencode
     model: deepseek/deepseek-v4-flash
     tier: balanced
     cost_class: ultra_low
-    roles:
-    - explore
-    - executor
-    - repair
-    - test_writer
-    - debugger
+    roles: []
     capabilities:
       coding: 8
       reasoning: 8
@@ -284,10 +273,10 @@ models:
     cost_class: scarce
     quota_group: codex_chatgpt_plus
     roles:
-    - executor
     - debugger
     - planner
     - architecture
+    - critical_executor
     - frontier_escalation
     capabilities:
       coding: 10
