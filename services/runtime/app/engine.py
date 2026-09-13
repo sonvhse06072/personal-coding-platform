@@ -9,6 +9,7 @@ validated and pinned atomically when a job row is first created.
 from __future__ import annotations
 
 import uuid
+from copy import deepcopy
 from typing import Any
 
 from .baseline import resolve_project_baseline
@@ -30,6 +31,54 @@ from .work_order import (
 
 
 _REASONING_ORDER = ["low", "medium", "high"]
+_OWNER_BUDGET_HARD_MAX = {
+    "max_model_calls": 100,
+    "max_tool_calls": 500,
+    "max_test_runs": 100,
+    "max_wall_time_minutes": 240,
+    "max_repair_iterations": 20,
+    "max_iterations": 30,
+}
+
+
+def _apply_owner_budget_authorizations(
+    route: dict[str, Any], checkpoint: dict[str, Any]
+) -> dict[str, Any]:
+    """Overlay explicit owner extensions after normal Router/WorkOrder ceilings.
+
+    The WorkOrder remains immutable. Only audited Telegram authorizations created
+    by Runtime may raise a named effective limit, and platform hard maxima still
+    apply. This makes an approved extension survive later provider reroutes.
+    """
+    updated = deepcopy(route)
+    strategy = updated.get("strategy") or {}
+    budget = dict(strategy.get("budget") or {})
+    for authorization in checkpoint.get("budget_authorizations") or []:
+        if not isinstance(authorization, dict):
+            continue
+        if authorization.get("channel") != "telegram" or not authorization.get("action_id"):
+            continue
+        dimension = str(authorization.get("dimension") or "")
+        hard_max = _OWNER_BUDGET_HARD_MAX.get(dimension)
+        if hard_max is None or dimension not in budget:
+            continue
+        try:
+            previous_limit = float(authorization["previous_limit"])
+            new_limit = float(authorization["new_limit"])
+            current = float(budget[dimension])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if new_limit <= previous_limit:
+            continue
+        authorized = min(new_limit, float(hard_max))
+        effective = max(current, authorized)
+        if dimension == "max_wall_time_minutes":
+            budget[dimension] = effective
+        else:
+            budget[dimension] = int(effective)
+    strategy["budget"] = budget
+    updated["strategy"] = strategy
+    return updated
 
 
 class WorkOrderRouterProxy:
@@ -51,7 +100,8 @@ class WorkOrderRouterProxy:
         work_order = work_order_snapshot(checkpoint.get("work_order"))
         if work_order is None:
             return route
-        return apply_work_order_budget(route, work_order)
+        bounded = apply_work_order_budget(route, work_order)
+        return _apply_owner_budget_authorizations(bounded, checkpoint)
 
     async def reassess(self, payload: dict[str, Any]) -> dict[str, Any]:
         return await self.delegate.reassess(payload)
