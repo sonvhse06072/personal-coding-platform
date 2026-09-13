@@ -10,6 +10,7 @@ from typing import Any, Literal
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
+from .dashboard import create_dashboard_router
 from .engine import RuntimeEngine
 from .orchestrator_notifications import PlanOrchestrator
 from .pm_bridge import router as pm_bridge_router
@@ -99,8 +100,9 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.22", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.23", lifespan=lifespan)
 app.include_router(pm_bridge_router)
+app.include_router(create_dashboard_router(storage, plan_orchestrator.store))
 
 
 @app.get("/health", response_model=RuntimeHealth)
@@ -110,7 +112,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.22",
+        version="1.0.23",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
