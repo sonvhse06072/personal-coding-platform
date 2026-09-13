@@ -14,6 +14,11 @@ from typing import Any
 from .baseline import resolve_project_baseline
 from .config import project_config
 from .engine_delivery import RuntimeEngine as _RuntimeEngine
+from .state import (
+    checkpoint_from_row,
+    clear_routing_choices_for_resume,
+    clear_transient_provider_failures,
+)
 from .work_order import (
     WorkOrderPolicyError,
     apply_work_order_budget,
@@ -113,6 +118,67 @@ class RuntimeEngine(_RuntimeEngine):
         attempts = progress.get("agent_attempts") or []
         if attempts:
             attempts[-1]["reasoning_effort"] = choice.get("reasoning_effort")
+
+    async def resume(
+        self,
+        job_id: str,
+        *,
+        reset_transient_provider_failures: bool = False,
+        reroute: bool = False,
+    ) -> dict[str, Any]:
+        """Resume a paused job, optionally replacing only its stale route state.
+
+        Explicit reroute preserves the deterministic job/workspace, WorkOrder,
+        plan and all progress/budget counters. A fresh route is resolved before
+        the job is made runnable, so a Router failure leaves the job blocked.
+        """
+        self._restore_work_order_task(job_id)
+        row = self.storage.get(job_id)
+        if not row:
+            raise RuntimeError("Unknown job")
+        if row["status"] not in {"queued", "interrupted", "blocked"}:
+            raise RuntimeError(f"Job cannot be resumed from status={row['status']}")
+
+        checkpoint = checkpoint_from_row(row)
+        if reset_transient_provider_failures:
+            checkpoint = clear_transient_provider_failures(checkpoint)
+
+        fields: dict[str, Any] = {
+            "status": "queued",
+            "error": None,
+            "checkpoint": checkpoint,
+        }
+        if reroute:
+            repo_analysis = row.get("repo_analysis")
+            source_commit = str(row.get("source_commit") or "").strip()
+            if not isinstance(repo_analysis, dict) or "estimated_files" not in repo_analysis:
+                raise RuntimeError("Explicit reroute requires persisted repository analysis")
+            if not source_commit:
+                raise RuntimeError("Explicit reroute requires a persisted source commit")
+
+            checkpoint = clear_routing_choices_for_resume(checkpoint)
+            provider_state = dict(checkpoint.get("provider_state") or {})
+            fresh_route = await self.router.route({
+                "job_id": job_id,
+                "project_id": row["project_id"],
+                "repository": row["project_id"],
+                "source_commit": source_commit,
+                "task": row["task"],
+                "repo": repo_analysis,
+                "provider_state": provider_state,
+            })
+            route_history = list(checkpoint.get("route_history") or [])
+            route_history.append({"reason": "explicit_resume_reroute", "route": fresh_route})
+            checkpoint["route_history"] = route_history
+            checkpoint["provider_state"] = provider_state
+            fields["route"] = fresh_route
+            fields["checkpoint"] = checkpoint
+
+        self.storage.update(job_id, **fields)
+        await self.enqueue(job_id)
+        updated = self.storage.get(job_id)
+        assert updated is not None
+        return updated
 
     def create_job(self, payload: dict[str, Any]) -> str:
         """Create one job with its governing baseline/contract in the same write.

@@ -81,6 +81,7 @@ class JobCreateRequest(BaseModel):
 
 class JobRunRequest(BaseModel):
     reset_transient_provider_failures: bool = False
+    reroute: bool = False
 
 
 class HumanDecisionRequest(BaseModel):

@@ -52,6 +52,19 @@ def clear_transient_provider_failures(checkpoint: dict[str, Any]) -> dict[str, A
     return updated
 
 
+def clear_routing_choices_for_resume(checkpoint: dict[str, Any]) -> dict[str, Any]:
+    """Drop only stale route-derived choices before an explicit reroute.
+
+    WorkOrder/baseline snapshots, plan text, progress counters, approved decisions
+    and route history remain durable. The prior block result remains on the job
+    until the resumed run records its next terminal result.
+    """
+    updated = deepcopy(checkpoint)
+    for key in ("planner_choice", "executor_choice", "evaluator_choice", "last_failure"):
+        updated.pop(key, None)
+    return updated
+
+
 def existing_repo_analysis(row: dict[str, Any]) -> dict[str, Any] | None:
     value = row.get("repo_analysis")
     if not isinstance(value, dict) or "estimated_files" not in value:
