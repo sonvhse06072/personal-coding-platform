@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from copy import deepcopy
 from typing import Any
 
 from .engine_budget import RouterEngine as BudgetRouterEngine
@@ -104,6 +103,11 @@ class RouterEngine(BudgetRouterEngine):
 
     def reassess(self, request: ReassessRequest) -> ReassessResponse:
         result = super().reassess(request)
+        profile_cfg = self.policy["profiles"][request.route.strategy.profile]
+        efforts = dict(profile_cfg.get("reasoning_effort") or {})
+        if result.next_executor is not None and result.next_executor.reasoning_effort is None:
+            self._apply_reasoning(result.next_executor, efforts.get("executor"))
+
         if request.progress.escalations >= request.route.strategy.budget.max_escalations:
             return result
 
