@@ -35,6 +35,7 @@ EXPECTED_WEBHOOK_WORKFLOWS = {
 EXPECTED_SCHEDULED_WORKFLOWS = {
     "pm-bridge-poll.json": {"id": "pcpPmBridgePoll1"},
     "telegram-notifications.json": {"id": "pcpTelegramOutbox1"},
+    "telegram-control.json": {"id": "pcpTelegramControl1"},
 }
 
 FORBIDDEN_N8N_SECRETS = {
@@ -63,13 +64,14 @@ def test_n8n_is_runtime_only_and_pinned() -> None:
     assert env["RUNTIME_INTERNAL_URL"] == "http://coding-runtime:8787"
     assert env["N8N_BLOCK_ENV_ACCESS_IN_NODE"] == "false"
 
-    # Credentials are injected through .ddev/.env.n8n.local, never interpolated
-    # through the global DDEV Compose environment.
+    # Credentials/owner ids are injected through service-scoped local env files,
+    # never interpolated through the global DDEV Compose environment.
     assert "RUNTIME_API_TOKEN" not in env
     assert "N8N_CONTROL_PLANE_TOKEN" not in env
     assert "N8N_ENCRYPTION_KEY" not in env
     assert "TELEGRAM_BOT_TOKEN" not in env
     assert "TELEGRAM_CHAT_ID" not in env
+    assert "TELEGRAM_OWNER_USER_ID" not in env
     for key in FORBIDDEN_N8N_SECRETS:
         assert key not in env
 
@@ -148,7 +150,7 @@ def test_pm_bridge_schedule_is_runtime_only() -> None:
     assert '"credentials"' not in serialized
 
 
-def test_telegram_schedule_claims_sanitized_outbox_and_acks_runtime() -> None:
+def test_telegram_schedule_renders_sanitized_advisory_actions_and_acks_runtime() -> None:
     workflow = json.loads((WORKFLOW_DIR / "telegram-notifications.json").read_text(encoding="utf-8"))
     assert workflow["id"] == EXPECTED_SCHEDULED_WORKFLOWS["telegram-notifications.json"]["id"]
     assert workflow["active"] is False
@@ -170,11 +172,58 @@ def test_telegram_schedule_claims_sanitized_outbox_and_acks_runtime() -> None:
     assert "TELEGRAM_BOT_TOKEN" in code
     assert "TELEGRAM_CHAT_ID" in code
     assert "api.telegram.org" in code
-    assert "event.summary" in code
-    assert "event.payload" not in code
+    assert "event.payload" in code
+    assert "payload.advisory" in code
+    assert "payload.actions" in code
+    assert "callback_data" in code
+    assert "act:" in code
     assert "RUNTIME_API_TOKEN" in code
     assert "this.helpers.httpRequest" in code
     assert "fetch(" not in code
+    # n8n formats only Runtime-sanitized advisory fields; it never reaches back
+    # into raw job/model/provider failure payloads.
+    assert "last_failure" not in code
+    assert "agent_attempts" not in code
+    assert "output_excerpt" not in code
+    assert "stderr_excerpt" not in code
+    for key in FORBIDDEN_N8N_SECRETS:
+        assert key not in code
+
+
+def test_telegram_owner_control_is_opaque_identity_bound_and_runtime_owned() -> None:
+    workflow = json.loads((WORKFLOW_DIR / "telegram-control.json").read_text(encoding="utf-8"))
+    assert workflow["id"] == EXPECTED_SCHEDULED_WORKFLOWS["telegram-control.json"]["id"]
+    assert workflow["active"] is False
+    assert workflow.get("credentials") in (None, {})
+
+    schedules = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.scheduleTrigger"]
+    code_nodes = [node for node in workflow["nodes"] if node["type"] == "n8n-nodes-base.code"]
+    assert len(schedules) == 1
+    assert len(code_nodes) == 1
+    assert schedules[0]["parameters"]["rule"]["interval"][0] == {
+        "field": "minutes",
+        "minutesInterval": 1,
+    }
+
+    code = code_nodes[0]["parameters"]["jsCode"]
+    assert "TELEGRAM_OWNER_USER_ID" in code
+    assert "TELEGRAM_CHAT_ID" in code
+    assert "TELEGRAM_BOT_TOKEN" in code
+    assert "callback_query" in code
+    assert "^act:" in code
+    assert "/v1/control-actions/" in code
+    assert "/execute" in code
+    assert "telegram_user_id" in code
+    assert "telegram_chat_id" in code
+    assert "RUNTIME_API_TOKEN" in code
+    # Telegram may transport an opaque action id, but it cannot select an
+    # arbitrary Runtime job/state/budget mutation directly.
+    assert "/v1/jobs/" not in code
+    assert "reset_budget" not in code
+    assert "allow_failed" not in code
+    assert "force_complete" not in code
+    assert "set_status" not in code
+    assert "merge" not in code.lower()
     for key in FORBIDDEN_N8N_SECRETS:
         assert key not in code
 
@@ -227,8 +276,10 @@ def test_sync_is_bounded_and_fail_closed() -> None:
     assert "a0db357c-167e-43c4-a692-e049aa21ef63" in script
     assert "pcpPmBridgePoll1" in script
     assert "pcpTelegramOutbox1" in script
+    assert "pcpTelegramControl1" in script
     assert "TELEGRAM_BOT_TOKEN" in script
     assert "TELEGRAM_CHAT_ID" in script
+    assert "TELEGRAM_OWNER_USER_ID" in script
     assert "Refusing partial Telegram configuration" in script
     assert "N8N_ENCRYPTION_KEY" in script
     assert "Refusing n8n secret migration" in script
@@ -243,6 +294,7 @@ def test_n8n_secrets_are_documented_service_scoped() -> None:
     assert "RUNTIME_API_TOKEN=" not in global_env
     assert "TELEGRAM_BOT_TOKEN=" not in global_env
     assert "TELEGRAM_CHAT_ID=" not in global_env
+    assert "TELEGRAM_OWNER_USER_ID=" not in global_env
     assert "N8N_IMAGE=n8nio/n8n:2.38.6" in global_env
 
     keys = {
@@ -256,4 +308,5 @@ def test_n8n_secrets_are_documented_service_scoped() -> None:
         "N8N_CONTROL_PLANE_TOKEN",
         "TELEGRAM_BOT_TOKEN",
         "TELEGRAM_CHAT_ID",
+        "TELEGRAM_OWNER_USER_ID",
     }
