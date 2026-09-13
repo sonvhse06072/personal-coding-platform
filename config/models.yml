@@ -265,6 +265,8 @@ models:
       basis: peak_cache_miss_conservative
 
   frontier_codex:
+    # Deliberately manual-only while budget is constrained. It remains registered
+    # for explicit frontier work but is not eligible for normal routing.
     kind: agent
     provider: openai
     adapter: codex_cli
@@ -273,10 +275,6 @@ models:
     cost_class: scarce
     quota_group: codex_chatgpt_plus
     roles:
-    - debugger
-    - planner
-    - architecture
-    - critical_executor
     - frontier_escalation
     capabilities:
       coding: 10
