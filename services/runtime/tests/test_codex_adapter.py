@@ -23,13 +23,15 @@ def test_codex_turn_completed_is_authoritative_over_transient_rate_limit_text(mo
             "usage": {"input_tokens": 513294, "output_tokens": 6475},
         }),
     ])
+    captured = {}
 
     async def fake_run_command(argv, *, cwd, timeout):
+        captured["argv"] = argv
         return CommandResult(argv=argv, returncode=0, stdout=stdout, stderr="")
 
     monkeypatch.setattr("app.adapters.codex.run_command", fake_run_command)
     run = asyncio.run(
-        CodexAdapter("gpt-5.6-sol").run(
+        CodexAdapter("gpt-5.6-sol", "medium").run(
             workspace=tmp_path,
             prompt="add a test",
             mode="execute",
@@ -43,6 +45,35 @@ def test_codex_turn_completed_is_authoritative_over_transient_rate_limit_text(mo
     assert run.output == "Implemented the requested test."
     assert run.usage["input_tokens"] == 513294
     assert run.usage["output_tokens"] == 6475
+    assert "--model" in captured["argv"]
+    assert "gpt-5.6-sol" in captured["argv"]
+    assert "--config" in captured["argv"]
+    assert 'model_reasoning_effort="medium"' in captured["argv"]
+
+
+def test_codex_without_routed_effort_does_not_invent_override(monkeypatch, tmp_path: Path):
+    captured = {}
+
+    async def fake_run_command(argv, *, cwd, timeout):
+        captured["argv"] = argv
+        return CommandResult(
+            argv=argv,
+            returncode=0,
+            stdout=_event({"type": "turn.completed", "usage": {}}),
+            stderr="",
+        )
+
+    monkeypatch.setattr("app.adapters.codex.run_command", fake_run_command)
+    asyncio.run(
+        CodexAdapter("gpt-5.6-luna").run(
+            workspace=tmp_path,
+            prompt="inspect",
+            mode="plan",
+            timeout=30,
+        )
+    )
+
+    assert not any(str(arg).startswith("model_reasoning_effort=") for arg in captured["argv"])
 
 
 def test_codex_turn_failed_still_classifies_provider_failure(monkeypatch, tmp_path: Path):
