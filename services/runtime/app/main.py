@@ -195,6 +195,8 @@ def ack_notification(event_id: int) -> dict[str, Any]:
 
 @app.post("/v1/notifications/{event_id}/release", dependencies=[Depends(auth)])
 def release_notification(event_id: int, payload: NotificationReleaseRequest) -> dict[str, Any]:
+    if event_id < 1:
+        raise HTTPException(422, "event_id must be positive")
     if not plan_orchestrator.store.release_notification(
         event_id,
         error=payload.error,
