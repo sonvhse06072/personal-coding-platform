@@ -24,6 +24,9 @@ from .work_order import (
 )
 
 
+_REASONING_ORDER = ["low", "medium", "high"]
+
+
 class WorkOrderRouterProxy:
     """Apply per-job WorkOrder ceilings to every Router decision without global state."""
 
@@ -53,6 +56,63 @@ class RuntimeEngine(_RuntimeEngine):
     def __init__(self, storage: Any) -> None:
         super().__init__(storage)
         self.router = WorkOrderRouterProxy(self.router, self.storage)
+
+    @staticmethod
+    def _next_reasoning_choice(
+        current_choice: dict[str, Any], strategy: dict[str, Any], role: str = "executor"
+    ) -> dict[str, Any] | None:
+        if current_choice.get("adapter") != "codex_cli":
+            return None
+        current = current_choice.get("reasoning_effort")
+        ceiling = (strategy.get("reasoning_ceiling") or {}).get(role)
+        if current not in _REASONING_ORDER or ceiling not in _REASONING_ORDER:
+            return None
+        current_idx = _REASONING_ORDER.index(current)
+        ceiling_idx = _REASONING_ORDER.index(ceiling)
+        if current_idx >= ceiling_idx:
+            return None
+        next_choice = dict(current_choice)
+        next_choice["reasoning_effort"] = _REASONING_ORDER[current_idx + 1]
+        reasons = list(next_choice.get("reasons") or [])
+        reasons.append(f"reasoning escalation {current}->{next_choice['reasoning_effort']}")
+        next_choice["reasons"] = reasons
+        return next_choice
+
+    async def _model_failover(
+        self,
+        *,
+        route_payload: dict[str, Any],
+        provider_state: dict[str, Any],
+        current_choice: dict[str, Any],
+        progress: dict[str, Any],
+        strategy: dict[str, Any],
+        reason: str,
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        # A deterministic/no-effect repair is cheaper to retry with more reasoning
+        # on the same Codex model before consuming a stronger model tier. Provider
+        # failures deliberately bypass this path and still use provider failover.
+        if progress.get("escalations", 0) < int(strategy["budget"].get("max_escalations", 0)):
+            boosted = self._next_reasoning_choice(current_choice, strategy)
+            if boosted is not None:
+                progress["escalations"] = int(progress.get("escalations", 0)) + 1
+                return boosted, {
+                    "reason": "reasoning_effort_escalation",
+                    "strategy": {"executor": boosted},
+                }
+        return await super()._model_failover(
+            route_payload=route_payload,
+            provider_state=provider_state,
+            current_choice=current_choice,
+            progress=progress,
+            strategy=strategy,
+            reason=reason,
+        )
+
+    def _record_agent_attempt(self, progress: dict[str, Any], choice: dict[str, Any], run: Any) -> None:
+        super()._record_agent_attempt(progress, choice, run)
+        attempts = progress.get("agent_attempts") or []
+        if attempts:
+            attempts[-1]["reasoning_effort"] = choice.get("reasoning_effort")
 
     def create_job(self, payload: dict[str, Any]) -> str:
         """Create one job with its governing baseline/contract in the same write.

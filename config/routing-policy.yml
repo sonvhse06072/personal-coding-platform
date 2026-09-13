@@ -1,4 +1,4 @@
-version: 4
+version: 5
 complexity_weights:
   scope: 0.18
   dependency_depth: 0.1
@@ -15,6 +15,10 @@ profiles:
     analysis_depth: 1
     planner: false
     evaluator: false
+    reasoning_effort:
+      executor: low
+    reasoning_ceiling:
+      executor: low
     max_model_calls: 3
     max_tool_calls: 35
     max_iterations: 2
@@ -41,6 +45,10 @@ profiles:
     analysis_depth: 1
     planner: false
     evaluator: false
+    reasoning_effort:
+      executor: low
+    reasoning_ceiling:
+      executor: medium
     max_model_calls: 8
     max_tool_calls: 80
     max_iterations: 5
@@ -67,6 +75,12 @@ profiles:
     analysis_depth: 2
     planner: true
     evaluator: true
+    reasoning_effort:
+      planner: medium
+      executor: medium
+      evaluator: low
+    reasoning_ceiling:
+      executor: high
     max_model_calls: 15
     max_tool_calls: 160
     max_iterations: 8
@@ -105,6 +119,12 @@ profiles:
     analysis_depth: 3
     planner: true
     evaluator: true
+    reasoning_effort:
+      planner: high
+      executor: high
+      evaluator: medium
+    reasoning_ceiling:
+      executor: high
     max_model_calls: 20
     max_tool_calls: 220
     max_iterations: 10

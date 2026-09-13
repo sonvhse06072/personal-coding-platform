@@ -41,8 +41,10 @@ def test_product_manager_staffing_selects_only_pm_eligible_agent() -> None:
     assert result.profile == "standard"
     assert result.choice.id in {"codex_terra", "antigravity_free"}
     assert result.choice.id != "codex_sol"
+    if result.choice.adapter == "codex_cli":
+        assert result.choice.reasoning_effort == "low"
     assert "product_manager" in engine.models[result.choice.id]["roles"]
-    assert result.policy_version == 4
+    assert result.policy_version == 5
     assert result.registry_version == 5
 
 
@@ -53,6 +55,7 @@ def test_product_manager_staffing_respects_provider_availability() -> None:
     )
 
     assert result.choice.id == "antigravity_free"
+    assert result.choice.reasoning_effort is None
     assert "provider/model unavailable" in result.rejected_candidates["codex_terra"]
 
 
@@ -68,6 +71,7 @@ def test_product_manager_staffing_can_fall_back_to_sol_when_lower_cost_capacity_
     )
 
     assert result.choice.id == "codex_sol"
+    assert result.choice.reasoning_effort == "low"
 
 
 def test_unknown_staffing_role_and_disallowed_profile_fail_closed() -> None:

@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 ProfileName = Literal["fast", "standard", "complex", "critical"]
 RouteAction = Literal["continue", "escalate", "stop", "complete", "human_decision"]
+ReasoningEffort = Literal["low", "medium", "high"]
 
 
 class SemanticSignals(BaseModel):
@@ -100,6 +101,7 @@ class ModelChoice(BaseModel):
     provider: str
     adapter: str
     model: str
+    reasoning_effort: ReasoningEffort | None = None
     score: float
     predicted_success: float
     reasons: list[str]
@@ -145,6 +147,7 @@ class ExecutionStrategy(BaseModel):
     planner: ModelChoice | None = None
     executor: ModelChoice
     evaluator: ModelChoice | None = None
+    reasoning_ceiling: dict[str, ReasoningEffort] = Field(default_factory=dict)
     human_decision: HumanDecision
     budget: Budget
     anti_loop: dict[str, Any]

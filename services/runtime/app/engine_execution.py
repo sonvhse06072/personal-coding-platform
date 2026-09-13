@@ -127,7 +127,9 @@ class RuntimeEngine(RuntimeEngineCore):
                 checkpoint["planner_choice"] = choice
                 checkpoint["provider_state"] = provider_state
                 self.storage.update(job_id, status="planning", progress=progress, checkpoint=checkpoint)
-                result = await build_adapter(choice["adapter"], choice["model"]).run(
+                result = await build_adapter(
+                    choice["adapter"], choice["model"], choice.get("reasoning_effort")
+                ).run(
                     workspace=workspace,
                     prompt=planning_prompt(task=enriched_task, repo_analysis=repo_analysis),
                     mode="plan",
@@ -244,7 +246,9 @@ class RuntimeEngine(RuntimeEngineCore):
                 "route_history": route_history,
             })
             self.storage.update(job_id, status="executing", progress=progress, checkpoint=checkpoint)
-            adapter = build_adapter(executor_choice["adapter"], executor_choice["model"])
+            adapter = build_adapter(
+                executor_choice["adapter"], executor_choice["model"], executor_choice.get("reasoning_effort")
+            )
             run = await adapter.run(
                 workspace=workspace,
                 prompt=execution_prompt(
@@ -376,7 +380,9 @@ class RuntimeEngine(RuntimeEngineCore):
                     progress["model_calls"] += 1
                     checkpoint["evaluator_choice"] = choice
                     self.storage.update(job_id, status="evaluating", progress=progress, checkpoint=checkpoint)
-                    evaluation = await build_adapter(choice["adapter"], choice["model"]).run(
+                    evaluation = await build_adapter(
+                        choice["adapter"], choice["model"], choice.get("reasoning_effort")
+                    ).run(
                         workspace=workspace,
                         prompt=evaluator_prompt(task=enriched_task, diff=diff["diff"], verification=verification),
                         mode="evaluate",
@@ -504,8 +510,10 @@ class RuntimeEngine(RuntimeEngineCore):
                         last_failure = reassess.get("reason") or "Definition of done is not complete."
             elif not verification["passed"]:
                 last_failure = verification.get("failure_text") or last_failure or "Verification failed"
-            else:
-                last_failure = f"Evaluator failed:\n{evaluator_output or 'unexpected scope'}"
+            elif not evaluator_ok:
+                last_failure = f"Evaluator failed:\n{evaluator_output or 'no PASS result'}"
+            elif progress["unexpected_scope"]:
+                last_failure = "Evaluator completed but the diff exceeded the approved changed-file scope."
 
             if last_failure:
                 fp = failure_fingerprint(last_failure)

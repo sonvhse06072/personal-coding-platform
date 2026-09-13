@@ -5,14 +5,21 @@ from typing import Any
 from .engine_budget import RouterEngine as BudgetRouterEngine
 from .schemas import (
     DimensionScores,
+    ReassessRequest,
+    ReassessResponse,
     RoutingRequest,
+    RoutingResponse,
     StaffingRequest,
     StaffingResponse,
 )
 
 
+_REASONING_ORDER = ["low", "medium", "high"]
+_PM_REASONING_BY_PROFILE = {"standard": "low", "complex": "medium", "critical": "high"}
+
+
 class RouterEngine(BudgetRouterEngine):
-    """Router extension for staffing logical team roles without product reasoning."""
+    """Router extension for staffing and explicit, budget-aware reasoning effort."""
 
     def _capability_match(
         self,
@@ -58,6 +65,68 @@ class RouterEngine(BudgetRouterEngine):
             reasoning_requirement=semantic.reasoning_requirement,
         )
 
+    @staticmethod
+    def _apply_reasoning(choice: Any, effort: str | None) -> None:
+        if choice is None or choice.adapter != "codex_cli" or effort not in _REASONING_ORDER:
+            return
+        choice.reasoning_effort = effort
+        marker = f"reasoning_effort={effort}"
+        if marker not in choice.reasons:
+            choice.reasons.append(marker)
+
+    @staticmethod
+    def _next_reasoning_choice(choice: Any, ceiling: str | None) -> Any | None:
+        if choice is None or choice.adapter != "codex_cli":
+            return None
+        current = choice.reasoning_effort
+        if current not in _REASONING_ORDER or ceiling not in _REASONING_ORDER:
+            return None
+        current_idx = _REASONING_ORDER.index(current)
+        ceiling_idx = _REASONING_ORDER.index(ceiling)
+        if current_idx >= ceiling_idx:
+            return None
+        next_effort = _REASONING_ORDER[current_idx + 1]
+        value = choice.model_copy(deep=True)
+        value.reasoning_effort = next_effort
+        value.reasons = list(value.reasons) + [f"reasoning escalation {current}->{next_effort}"]
+        return value
+
+    def route(self, request: RoutingRequest) -> RoutingResponse:
+        result = super().route(request)
+        profile_cfg = self.policy["profiles"][result.strategy.profile]
+        efforts = dict(profile_cfg.get("reasoning_effort") or {})
+        self._apply_reasoning(result.strategy.planner, efforts.get("planner"))
+        self._apply_reasoning(result.strategy.executor, efforts.get("executor"))
+        self._apply_reasoning(result.strategy.evaluator, efforts.get("evaluator"))
+        result.strategy.reasoning_ceiling = dict(profile_cfg.get("reasoning_ceiling") or {})
+        return result
+
+    def reassess(self, request: ReassessRequest) -> ReassessResponse:
+        result = super().reassess(request)
+        profile_cfg = self.policy["profiles"][request.route.strategy.profile]
+        efforts = dict(profile_cfg.get("reasoning_effort") or {})
+        if result.next_executor is not None and result.next_executor.reasoning_effort is None:
+            self._apply_reasoning(result.next_executor, efforts.get("executor"))
+
+        if request.progress.escalations >= request.route.strategy.budget.max_escalations:
+            return result
+
+        current = request.route.strategy.executor
+        ceiling = request.route.strategy.reasoning_ceiling.get("executor")
+        boosted = self._next_reasoning_choice(current, ceiling)
+        should_replace_model_escalation = result.action == "escalate" and result.next_executor is not None
+        should_use_signal_escalation = result.action == "continue" and bool(result.signals)
+        if boosted is not None and (should_replace_model_escalation or should_use_signal_escalation):
+            return ReassessResponse(
+                action="escalate",
+                reason=f"Increase Codex reasoning effort {current.reasoning_effort}->{boosted.reasoning_effort} before changing model",
+                current_profile=request.route.strategy.profile,
+                next_executor=boosted,
+                remaining=result.remaining,
+                signals=list(result.signals) + ["reasoning_effort_escalation"],
+            )
+        return result
+
     def staff(self, request: StaffingRequest) -> StaffingResponse:
         role_cfg = (self.policy.get("staffing_roles", {}) or {}).get(request.role)
         if not isinstance(role_cfg, dict):
@@ -97,6 +166,7 @@ class RouterEngine(BudgetRouterEngine):
             dimensions=dimensions,
             profile=request.profile,
         )
+        self._apply_reasoning(choice, _PM_REASONING_BY_PROFILE.get(request.profile))
         return StaffingResponse(
             request_id=request.request_id,
             project_id=request.project_id,

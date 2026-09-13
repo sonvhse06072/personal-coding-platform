@@ -115,8 +115,9 @@ class AgentRun:
 class AgentAdapter:
     name = "base"
 
-    def __init__(self, model: str):
+    def __init__(self, model: str, reasoning_effort: str | None = None):
         self.model = model
+        self.reasoning_effort = reasoning_effort
 
     async def run(self, *, workspace: Path, prompt: str, mode: str, timeout: int) -> AgentRun:
         raise NotImplementedError
