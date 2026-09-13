@@ -29,10 +29,6 @@ profiles:
     max_changed_files: 6
     executor_roles:
     - executor
-    allowed_executor_ids:
-    - antigravity_free
-    - codex_luna
-    - codex_terra
     preferred_executor_ids:
     - antigravity_free
     - codex_luna
@@ -59,16 +55,10 @@ profiles:
     max_changed_files: 14
     executor_roles:
     - executor
-    allowed_executor_ids:
-    - antigravity_free
-    - codex_terra
-    - codex_luna
-    - codex_sol
     preferred_executor_ids:
     - antigravity_free
     - codex_terra
     - codex_luna
-    - codex_sol
     max_input_tokens: 800000
     max_output_tokens: 120000
   complex:
@@ -96,18 +86,6 @@ profiles:
     - debugger
     evaluator_roles:
     - reviewer
-    allowed_planner_ids:
-    - antigravity_free
-    - codex_terra
-    - codex_sol
-    allowed_executor_ids:
-    - antigravity_free
-    - codex_terra
-    - codex_sol
-    allowed_evaluator_ids:
-    - groq_oss_120b
-    - antigravity_free
-    - codex_terra
     preferred_planner_ids:
     - antigravity_free
     - codex_terra
@@ -140,23 +118,11 @@ profiles:
     soft_cost_usd: 5.0
     max_changed_files: 45
     planner_roles:
-    - planner
     - architecture
     executor_roles:
-    - executor
-    - debugger
+    - critical_executor
     evaluator_roles:
     - reviewer
-    allowed_planner_ids:
-    - codex_sol
-    - frontier_codex
-    allowed_executor_ids:
-    - codex_sol
-    - frontier_codex
-    allowed_evaluator_ids:
-    - groq_oss_120b
-    - antigravity_free
-    - codex_terra
     preferred_planner_ids:
     - codex_sol
     - frontier_codex
@@ -177,10 +143,6 @@ staffing_roles:
     - standard
     - complex
     - critical
-    allowed_ids:
-    - antigravity_free
-    - codex_terra
-    - codex_sol
     preferred_ids:
     - antigravity_free
     - codex_terra
