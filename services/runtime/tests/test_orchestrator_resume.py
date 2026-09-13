@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import asyncio
 from contextlib import contextmanager
 from copy import deepcopy
+from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 
+from app import main as runtime_main
+from app.engine import RuntimeEngine
 from app.orchestrator_resume import prepare_orchestrated_job_resume, reopen_orchestrated_job
+from app.schemas import JobRunRequest
 
 
 class Result:
@@ -65,6 +71,18 @@ class Store:
         self.plan_status = status
 
 
+class RuntimeStorage:
+    def __init__(self, row):
+        self.rows = {row["id"]: deepcopy(row)}
+
+    def get(self, job_id):
+        row = self.rows.get(job_id)
+        return deepcopy(row) if row else None
+
+    def update(self, job_id, **fields):
+        self.rows[job_id].update(deepcopy(fields))
+
+
 def tracked(*, mode="agent", state="blocked"):
     return {
         "plan_id": "pm-gh-1",
@@ -73,6 +91,20 @@ def tracked(*, mode="agent", state="blocked"):
         "state": state,
         "job_id": "job-1",
         "detail": {"reason": "old block", "job_id": "job-1"},
+    }
+
+
+def failed_job_row():
+    return {
+        "id": "job-1",
+        "project_id": "demo",
+        "status": "failed",
+        "source_commit": "a" * 40,
+        "workspace": "/workspaces/job-1",
+        "task": {"title": "Recover orchestrated job"},
+        "repo_analysis": {"estimated_files": 2},
+        "progress": {"model_calls": 3, "input_tokens": 100},
+        "checkpoint": {"provider_state": {}, "route_history": []},
     }
 
 
@@ -120,3 +152,70 @@ def test_operator_work_order_fails_closed() -> None:
 def test_non_orchestrated_job_is_unchanged() -> None:
     store = Store([])
     assert prepare_orchestrated_job_resume(store, "job-free") is None
+
+
+def test_failed_orchestrated_job_reopens_only_after_engine_resume_succeeds(monkeypatch) -> None:
+    store = Store([tracked()])
+    runtime_storage = RuntimeStorage(failed_job_row())
+    engine = RuntimeEngine(runtime_storage)
+    queued = []
+
+    async def enqueue(job_id):
+        queued.append(job_id)
+
+    engine.enqueue = enqueue
+    monkeypatch.setattr(runtime_main, "engine", engine)
+    monkeypatch.setattr(runtime_main, "plan_orchestrator", SimpleNamespace(store=store))
+    monkeypatch.setattr(runtime_main, "view", lambda row: row)
+
+    result = asyncio.run(runtime_main.run_job("job-1"))
+
+    assert result["id"] == "job-1"
+    assert result["status"] == "queued"
+    assert queued == ["job-1"]
+    assert runtime_storage.get("job-1")["workspace"] == "/workspaces/job-1"
+    assert runtime_storage.get("job-1")["source_commit"] == "a" * 40
+    assert runtime_storage.get("job-1")["progress"] == {"model_calls": 3, "input_tokens": 100}
+    assert store.storage.tracked[0]["state"] == "running"
+    assert store.plan_status == "executing"
+
+
+def test_orchestrated_resume_failure_leaves_plan_and_work_order_blocked(monkeypatch) -> None:
+    store = Store([tracked()])
+    row = failed_job_row()
+    row["status"] = "cancelled"
+    runtime_storage = RuntimeStorage(row)
+    engine = RuntimeEngine(runtime_storage)
+
+    monkeypatch.setattr(runtime_main, "engine", engine)
+    monkeypatch.setattr(runtime_main, "plan_orchestrator", SimpleNamespace(store=store))
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(runtime_main.run_job("job-1"))
+
+    assert exc_info.value.status_code == 409
+    assert runtime_storage.get("job-1")["status"] == "cancelled"
+    assert store.storage.tracked[0]["state"] == "blocked"
+    assert store.plan_status == "blocked"
+
+
+def test_failed_orchestrated_reroute_failure_leaves_plan_and_work_order_blocked(monkeypatch) -> None:
+    store = Store([tracked()])
+    runtime_storage = RuntimeStorage(failed_job_row())
+    engine = RuntimeEngine(runtime_storage)
+
+    class Router:
+        async def route(self, payload):
+            raise RuntimeError("router unavailable")
+
+    engine.router = Router()
+    monkeypatch.setattr(runtime_main, "engine", engine)
+    monkeypatch.setattr(runtime_main, "plan_orchestrator", SimpleNamespace(store=store))
+
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(runtime_main.run_job("job-1", JobRunRequest(reroute=True)))
+
+    assert exc_info.value.status_code == 409
+    assert runtime_storage.get("job-1")["status"] == "failed"
+    assert store.storage.tracked[0]["state"] == "blocked"
+    assert store.plan_status == "blocked"

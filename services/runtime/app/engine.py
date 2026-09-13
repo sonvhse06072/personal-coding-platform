@@ -125,6 +125,7 @@ class RuntimeEngine(_RuntimeEngine):
         *,
         reset_transient_provider_failures: bool = False,
         reroute: bool = False,
+        _allow_failed_orchestrated_resume: bool = False,
     ) -> dict[str, Any]:
         """Resume a paused job, optionally replacing only its stale route state.
 
@@ -136,7 +137,13 @@ class RuntimeEngine(_RuntimeEngine):
         row = self.storage.get(job_id)
         if not row:
             raise RuntimeError("Unknown job")
-        if row["status"] not in {"queued", "interrupted", "blocked"}:
+        resumable_statuses = {"queued", "interrupted", "blocked"}
+        # Only main.py may set this after it has confirmed that this exact job
+        # belongs to a blocked agent WorkOrder in a blocked orchestration plan.
+        # It is deliberately not part of the public run request contract.
+        if _allow_failed_orchestrated_resume:
+            resumable_statuses.add("failed")
+        if row["status"] not in resumable_statuses:
             raise RuntimeError(f"Job cannot be resumed from status={row['status']}")
 
         checkpoint = checkpoint_from_row(row)

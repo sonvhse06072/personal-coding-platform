@@ -129,8 +129,9 @@ def fresh_route() -> dict:
     }
 
 
-def test_explicit_reroute_preserves_job_state_but_replaces_route_choices() -> None:
+def test_orchestrated_failed_reroute_preserves_job_state_but_replaces_route_choices() -> None:
     original = blocked_row()
+    original["status"] = "failed"
     storage = Storage(original)
     engine = RuntimeEngine(storage)
     router = Router(fresh_route())
@@ -141,6 +142,7 @@ def test_explicit_reroute_preserves_job_state_but_replaces_route_choices() -> No
             "job-resume",
             reset_transient_provider_failures=True,
             reroute=True,
+            _allow_failed_orchestrated_resume=True,
         )
     )
 
@@ -170,6 +172,23 @@ def test_explicit_reroute_preserves_job_state_but_replaces_route_choices() -> No
         "codex_terra": {"available": False, "healthy": False}
     }
     assert engine.queue.get_nowait() == "job-resume"
+
+
+def test_failed_non_orchestrated_job_is_rejected_without_internal_authorization() -> None:
+    original = blocked_row()
+    original["status"] = "failed"
+    storage = Storage(original)
+    engine = RuntimeEngine(storage)
+
+    with pytest.raises(RuntimeError, match="status=failed"):
+        asyncio.run(engine.resume("job-resume"))
+
+    current = storage.get("job-resume")
+    assert current["status"] == "failed"
+    assert current["workspace"] == original["workspace"]
+    assert current["source_commit"] == original["source_commit"]
+    assert current["progress"] == original["progress"]
+    assert engine.queue.empty()
 
 
 def test_reroute_failure_leaves_blocked_route_and_progress_unchanged() -> None:
