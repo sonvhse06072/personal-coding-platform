@@ -1,30 +1,70 @@
-version: 4
+version: 5
 models:
   groq_free:
+    enabled: false
     kind: llm
     provider: groq
     adapter: litellm
-    model: qwen/qwen3.6-27b
+    model: openai/gpt-oss-20b
     tier: utility
-    cost_class: free
+    cost_class: ultra_low
     roles:
     - classify
     - summarize
     - failure_analysis
     - compact
     capabilities:
-      coding: 4
-      reasoning: 6
-      debugging: 5
-      planning: 4
-      review: 5
-      structured_output: 8
-      repo_exploration: 3
-    base_success: 0.72
+      coding: 5
+      reasoning: 7
+      debugging: 6
+      planning: 5
+      review: 6
+      structured_output: 9
+      repo_exploration: 4
+    base_success: 0.76
     privacy:
       private_code_allowed: true
       training_allowed: false
-      zero_retention_supported: false
+      zero_retention_supported: true
+    pricing_usd_per_million:
+      input: 0.075
+      cached_input: 0.0375
+      output: 0.30
+      basis: current_groq_rate
+    # Enable only after GROQ_API_KEY is configured and ZDR is confirmed.
+
+  groq_oss_120b:
+    enabled: false
+    kind: agent
+    provider: groq
+    adapter: opencode
+    model: groq/openai/gpt-oss-120b
+    tier: balanced
+    cost_class: ultra_low
+    roles:
+    - reviewer
+    - planner
+    - failure_analysis
+    capabilities:
+      coding: 7
+      reasoning: 8
+      debugging: 7
+      planning: 7
+      review: 8
+      structured_output: 9
+      repo_exploration: 6
+    base_success: 0.84
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: true
+    pricing_usd_per_million:
+      input: 0.15
+      cached_input: 0.075
+      output: 0.60
+      basis: current_groq_rate
+    # Enable only after GROQ_API_KEY is configured and ZDR is confirmed.
+
   cloudflare_free:
     kind: llm
     provider: cloudflare
@@ -50,7 +90,9 @@ models:
       private_code_allowed: true
       training_allowed: false
       zero_retention_supported: false
+
   openai_luna:
+    enabled: false
     kind: llm
     provider: openai
     adapter: litellm
@@ -76,6 +118,7 @@ models:
       private_code_allowed: true
       training_allowed: false
       zero_retention_supported: true
+
   antigravity_free:
     kind: agent
     provider: google_antigravity
@@ -90,13 +133,14 @@ models:
     - repair
     - test_writer
     - planner
+    - reviewer
     - product_manager
     capabilities:
       coding: 8
       reasoning: 8
       debugging: 8
       planning: 8
-      review: 7
+      review: 8
       structured_output: 8
       repo_exploration: 9
     base_success: 0.86
@@ -111,20 +155,50 @@ models:
       enterprise_data_guarantee: false
       telemetry_opt_out_required: true
       zero_retention_supported: false
-  codex_plus:
+
+  codex_luna:
     kind: agent
     provider: openai
     adapter: codex_cli
-    model: gpt-5.6-sol
-    tier: strong
-    cost_class: subscription
+    model: gpt-5.6-luna
+    tier: utility
+    cost_class: ultra_low
+    quota_group: codex_chatgpt_plus
     roles:
     - explore
     - executor
     - repair
+    - test_writer
+    capabilities:
+      coding: 7
+      reasoning: 7
+      debugging: 6
+      planning: 6
+      review: 6
+      structured_output: 9
+      repo_exploration: 7
+    base_success: 0.84
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: true
+
+  codex_terra:
+    kind: agent
+    provider: openai
+    adapter: codex_cli
+    model: gpt-5.6-terra
+    tier: strong
+    cost_class: subscription
+    quota_group: codex_chatgpt_plus
+    roles:
+    - explore
+    - executor
+    - repair
+    - test_writer
     - debugger
     - planner
-    - architecture
+    - reviewer
     - product_manager
     capabilities:
       coding: 9
@@ -132,14 +206,45 @@ models:
       debugging: 9
       planning: 9
       review: 8
-      structured_output: 7
+      structured_output: 9
       repo_exploration: 9
-    base_success: 0.91
+    base_success: 0.90
     privacy:
       private_code_allowed: true
       training_allowed: false
       zero_retention_supported: true
+
+  codex_sol:
+    kind: agent
+    provider: openai
+    adapter: codex_cli
+    model: gpt-5.6-sol
+    tier: premium
+    cost_class: scarce
+    quota_group: codex_chatgpt_plus
+    roles:
+    - executor
+    - debugger
+    - planner
+    - reviewer
+    - architecture
+    - product_manager
+    capabilities:
+      coding: 9
+      reasoning: 9
+      debugging: 9
+      planning: 9
+      review: 9
+      structured_output: 8
+      repo_exploration: 9
+    base_success: 0.92
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: true
+
   deepseek_flash:
+    enabled: false
     kind: agent
     provider: deepseek
     adapter: opencode
@@ -169,35 +274,7 @@ models:
       input: 0.44
       output: 1.32
       basis: peak_cache_miss_conservative
-  claude_sonnet:
-    kind: agent
-    provider: anthropic
-    adapter: opencode
-    model: anthropic/claude-sonnet-5
-    tier: premium
-    cost_class: premium
-    roles:
-    - reviewer
-    - debugger
-    - planner
-    - product_manager
-    capabilities:
-      coding: 9
-      reasoning: 9
-      debugging: 9
-      planning: 9
-      review: 10
-      structured_output: 8
-      repo_exploration: 8
-    base_success: 0.92
-    privacy:
-      private_code_allowed: true
-      training_allowed: false
-      zero_retention_supported: true
-    pricing_usd_per_million:
-      input: 2.0
-      output: 10.0
-      basis: current_api_rate
+
   frontier_codex:
     kind: agent
     provider: openai
@@ -205,6 +282,7 @@ models:
     model: gpt-6-astra
     tier: frontier
     cost_class: scarce
+    quota_group: codex_chatgpt_plus
     roles:
     - executor
     - debugger
@@ -224,6 +302,7 @@ models:
       private_code_allowed: true
       training_allowed: false
       zero_retention_supported: true
+
   openrouter_free:
     kind: llm
     provider: openrouter
