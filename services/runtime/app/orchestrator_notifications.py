@@ -3,16 +3,31 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
+from .control_actions import ControlActionService
 from .plan_orchestrator import PlanOrchestrator as CorePlanOrchestrator
 
 
 class PlanOrchestrator(CorePlanOrchestrator):
-    """Core orchestration plus owner-attention notifications.
+    """Core orchestration plus owner-attention notifications and controls.
 
-    Keep notification observation separate from execution-state transitions so a
-    Telegram transport failure can never alter whether work runs, blocks or waits
-    for manual merge.
+    Notification/control transport remains separate from execution-state
+    transitions. Telegram failure can never decide whether work runs, blocks or
+    waits; Runtime validates every one-time control action immediately before it
+    mutates durable state.
     """
+
+    def __init__(
+        self,
+        storage: Any,
+        engine: Any,
+        *,
+        store: Any | None = None,
+        controls: Any | None = None,
+    ) -> None:
+        super().__init__(storage, engine, store=store)
+        self.controls = controls or ControlActionService(storage, engine, self.store, self)
+        if controls is not None and hasattr(controls, "orchestrator"):
+            controls.orchestrator = self
 
     async def _reconcile_plan(self, plan: dict[str, Any]) -> None:
         plan_id = str(plan["plan_id"])
@@ -28,18 +43,85 @@ class PlanOrchestrator(CorePlanOrchestrator):
             str(row["work_order_id"]): dict(row)
             for row in self.store.work_orders(plan_id)
         }
+        current_plan = self._plan_context(plan_id)
         for work_order_id, current in after.items():
             previous_state = str((before.get(work_order_id) or {}).get("state") or "")
-            if current.get("state") == "awaiting_merge" and previous_state != "awaiting_merge":
+            current_state = str(current.get("state") or "")
+            if current_state == previous_state:
+                continue
+
+            job_id = str(current.get("job_id") or "")
+            job = self.storage.get(job_id) if job_id else None
+            job = dict(job) if job else None
+
+            if current_state == "awaiting_merge":
+                pr_url = str(current.get("pr_url") or "") or None
+                advisory = self.controls.manual_merge_advisory(pr_url)
+                actions = self.controls.create_actions(
+                    plan=current_plan,
+                    work_order=current,
+                    job=job,
+                    advisory=advisory,
+                )
                 self._emit_attention(
-                    plan,
+                    current_plan,
                     work_order_id=work_order_id,
                     event_type="human_decision_required",
                     severity="warning",
-                    summary="PR passed its automated gates and is ready for manual merge.",
+                    summary=advisory["summary"],
                     suffix=f"manual-merge:{current.get('pr_number')}",
-                    github_url=str(current.get("pr_url") or "") or None,
-                    payload={"pr_number": current.get("pr_number")},
+                    github_url=pr_url,
+                    payload={
+                        "pr_number": current.get("pr_number"),
+                        "advisory": self._public_advisory(advisory),
+                        "actions": actions,
+                    },
+                )
+                continue
+
+            if current_state == "waiting_human":
+                advisory = self.controls.waiting_human_advisory(current, job)
+                actions = self.controls.create_actions(
+                    plan=current_plan,
+                    work_order=current,
+                    job=job,
+                    advisory=advisory,
+                )
+                self._emit_attention(
+                    current_plan,
+                    work_order_id=work_order_id,
+                    event_type="human_decision_required",
+                    severity="warning",
+                    summary=advisory["summary"],
+                    suffix=f"waiting-human:{job_id or 'operator'}:{current.get('updated_at')}",
+                    payload={
+                        "advisory": self._public_advisory(advisory),
+                        "actions": actions,
+                    },
+                )
+                continue
+
+            if current_state == "blocked":
+                advisory = self.controls.blocked_advisory(current, job)
+                actions = self.controls.create_actions(
+                    plan=current_plan,
+                    work_order=current,
+                    job=job,
+                    advisory=advisory,
+                )
+                reason = str(advisory.get("reason") or "blocked")
+                self._emit_attention(
+                    current_plan,
+                    work_order_id=work_order_id,
+                    event_type="work_order_blocked",
+                    severity="error",
+                    summary=advisory["summary"],
+                    suffix=f"blocked:{job_id or 'operator'}:{reason}:{current.get('updated_at')}",
+                    payload={
+                        "job_id": job_id or None,
+                        "advisory": self._public_advisory(advisory),
+                        "actions": actions,
+                    },
                 )
 
     async def resolve_operator(
@@ -72,13 +154,25 @@ class PlanOrchestrator(CorePlanOrchestrator):
         self.store.update_plan(plan_id, status="blocked")
 
         plan = self._plan_context(plan_id)
+        advisory = {
+            "title": "WORKORDER BLOCKED",
+            "phase": "operator",
+            "reason": "operator_blocked",
+            "summary": "Operator marked the WorkOrder blocked.",
+            "cause": "The human/operator procedure reported a condition that should not advance automatically.",
+            "preserved": ["Downstream WorkOrders remain pending."],
+            "impact": "The plan remains blocked until the operator condition is resolved through a new valid state transition.",
+            "recommended": "Review the operator note and documented recovery procedure before attempting further work.",
+            "metrics": [],
+        }
         self._emit_attention(
             plan,
             work_order_id=work_order_id,
             event_type="work_order_blocked",
             severity="error",
-            summary="Operator marked the WorkOrder blocked.",
-            suffix="operator-blocked",
+            summary=advisory["summary"],
+            suffix=f"operator-blocked:{row.get('updated_at')}",
+            payload={"advisory": advisory, "actions": []},
         )
         result = self.view(plan_id)
         assert result is not None
@@ -102,17 +196,34 @@ class PlanOrchestrator(CorePlanOrchestrator):
                     continue
                 model = str(failure.get("model") or "unknown")
                 provider = str(failure.get("provider") or "unknown")
+                advisory = {
+                    "title": "PROVIDER QUOTA EXHAUSTED",
+                    "phase": "provider",
+                    "reason": "provider_quota_exhausted",
+                    "summary": f"Model quota exhausted for {model} ({provider}).",
+                    "cause": "The provider reported quota exhaustion. Runtime will use an eligible fallback when policy and remaining budget allow it.",
+                    "preserved": ["The current job/workspace and durable progress remain preserved."],
+                    "impact": "No owner action is required while Runtime is actively failing over. If the WorkOrder blocks, a separate actionable notification will be sent.",
+                    "recommended": "Wait for the provider quota window to reset only if no fallback completes the WorkOrder.",
+                    "metrics": [
+                        {"label": "Model", "value": model},
+                        {"label": "Provider", "value": provider},
+                    ],
+                }
                 self._emit_attention(
                     plan,
                     work_order_id=work_order_id,
                     event_type="provider_quota_exhausted",
                     severity="warning",
-                    summary=(
-                        f"Model quota exhausted for {model} ({provider}). "
-                        "The platform will continue with an eligible fallback when available."
-                    ),
+                    summary=advisory["summary"],
                     suffix=f"quota:{job_id}:{model}:{provider}",
-                    payload={"job_id": job_id, "model": model, "provider": provider},
+                    payload={
+                        "job_id": job_id,
+                        "model": model,
+                        "provider": provider,
+                        "advisory": advisory,
+                        "actions": [],
+                    },
                 )
 
     def _plan_context(self, plan_id: str) -> dict[str, Any]:
@@ -124,6 +235,10 @@ class PlanOrchestrator(CorePlanOrchestrator):
             "plan_id": plan_id,
             "ticket": execution.get("ticket") or {},
         }
+
+    @staticmethod
+    def _public_advisory(advisory: dict[str, Any]) -> dict[str, Any]:
+        return {key: value for key, value in advisory.items() if key != "action_specs"}
 
     def _emit_attention(
         self,
