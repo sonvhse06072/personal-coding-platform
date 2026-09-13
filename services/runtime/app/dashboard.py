@@ -10,6 +10,8 @@ from fastapi import APIRouter, Cookie, HTTPException, Response
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from .activity import public_event
+from .config import models_doc
 from .dashboard_ui import DASHBOARD_HTML
 
 
@@ -17,6 +19,10 @@ _ACTIVE_PLAN_STATES = {"active", "executing", "waiting_merge", "waiting_human"}
 _ACTIVE_JOB_STATES = {"queued", "routing", "planning", "executing", "verifying", "evaluating", "delivering"}
 _PLACEHOLDERS = {"", "CHANGE_ME", "change-me"}
 _COOKIE = "pcp_dashboard_session"
+_QUOTA_LABELS = {
+    "codex_chatgpt_plus": "Codex ChatGPT Plus",
+    "antigravity_individual": "Antigravity Individual",
+}
 
 
 class DashboardLogin(BaseModel):
@@ -62,6 +68,45 @@ def _choice(value: Any) -> dict[str, Any] | None:
     }
 
 
+def _remaining(used: Any, maximum: Any, *, integer: bool = True) -> int | float | None:
+    if maximum is None:
+        return None
+    value = max(0.0, float(maximum or 0) - float(used or 0))
+    return int(value) if integer else round(value, 3)
+
+
+def _provider_quota_snapshot() -> list[dict[str, Any]]:
+    groups: dict[str, dict[str, Any]] = {}
+    for model_id, value in dict(models_doc().get("models") or {}).items():
+        model = dict(value or {})
+        quota_group = str(model.get("quota_group") or "").strip()
+        if not quota_group:
+            continue
+        group = groups.setdefault(quota_group, {
+            "id": quota_group,
+            "label": _QUOTA_LABELS.get(quota_group, quota_group.replace("_", " ").title()),
+            "providers": set(),
+            "models": [],
+        })
+        provider = str(model.get("provider") or "").strip()
+        if provider:
+            group["providers"].add(provider)
+        group["models"].append(str(model_id))
+    return [
+        {
+            "id": group["id"],
+            "label": group["label"],
+            "providers": sorted(group["providers"]),
+            "models": sorted(group["models"]),
+            "remaining": None,
+            "remaining_status": "unavailable",
+            "source": "provider_not_reported",
+            "message": "Provider does not expose authoritative remaining quota",
+        }
+        for group in sorted(groups.values(), key=lambda item: item["id"])
+    ]
+
+
 def _job_snapshot(job: dict[str, Any] | None) -> dict[str, Any] | None:
     if not job:
         return None
@@ -79,6 +124,21 @@ def _job_snapshot(job: dict[str, Any] | None) -> dict[str, Any] | None:
 
     attempts = list(progress.get("agent_attempts") or [])
     attempt_usage = dict((attempts[-1] if attempts else {}).get("usage") or {})
+    remaining = {
+        "input_tokens": _remaining(progress.get("input_tokens"), budget.get("max_input_tokens")),
+        "output_tokens": _remaining(progress.get("output_tokens"), budget.get("max_output_tokens")),
+        "model_calls": _remaining(progress.get("model_calls"), budget.get("max_model_calls")),
+        "tool_calls": _remaining(progress.get("tool_calls"), budget.get("max_tool_calls")),
+        "test_runs": _remaining(progress.get("test_runs"), budget.get("max_test_runs")),
+        "wall_time_minutes": _remaining(
+            progress.get("elapsed_minutes"), budget.get("max_wall_time_minutes"), integer=False
+        ),
+        "changed_files": _remaining(progress.get("changed_files"), budget.get("max_changed_files")),
+        "iterations": _remaining(progress.get("iteration"), budget.get("max_iterations")),
+        "repair_iterations": _remaining(
+            progress.get("repair_iterations"), budget.get("max_repair_iterations")
+        ),
+    }
     return {
         "id": job.get("id"),
         "status": status,
@@ -129,6 +189,8 @@ def _job_snapshot(job: dict[str, Any] | None) -> dict[str, Any] | None:
             "max_repair_iterations": budget.get("max_repair_iterations"),
             "hard_cost_usd": budget.get("hard_cost_usd"),
         },
+        "remaining": remaining,
+        "recent_events": [],
     }
 
 
@@ -161,6 +223,7 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
     waiting_merge = 0
     waiting_human = 0
     blocked_plans = 0
+    job_views_by_id: dict[str, list[dict[str, Any]]] = {}
 
     for plan_row in plan_rows:
         plan_id = str(plan_row["plan_id"])
@@ -169,6 +232,8 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
         for wo in orchestrator_store.work_orders(plan_id):
             job = storage.get(str(wo["job_id"])) if wo.get("job_id") else None
             job_view = _job_snapshot(job)
+            if job_view:
+                job_views_by_id.setdefault(str(job_view["id"]), []).append(job_view)
             if job_view and job_view["status"] in _ACTIVE_JOB_STATES:
                 active_jobs += 1
             if job_view:
@@ -208,6 +273,15 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
             "work_orders": work_orders,
         })
 
+    events_by_job: dict[str, list[dict[str, Any]]] = {job_id: [] for job_id in job_views_by_id}
+    for row in storage.recent_events(list(job_views_by_id), per_job_limit=40):
+        event = public_event(dict(row))
+        if event and event["job_id"] in events_by_job:
+            events_by_job[event["job_id"]].append(event)
+    for job_id, views in job_views_by_id.items():
+        for job_view in views:
+            job_view["recent_events"] = events_by_job[job_id]
+
     current_plan = next((p for p in plans if p["status"] in _ACTIVE_PLAN_STATES), plans[0] if plans else None)
     active_plans = sum(1 for p in plans if p["status"] in _ACTIVE_PLAN_STATES)
     return {
@@ -221,6 +295,7 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
             "pending_notifications": int((pending_notifications or {}).get("count", 0) or 0),
         },
         "current_plan_id": current_plan["id"] if current_plan else None,
+        "provider_quotas": _provider_quota_snapshot(),
         "plans": plans,
         "alerts": [
             {
