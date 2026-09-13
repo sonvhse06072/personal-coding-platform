@@ -25,9 +25,9 @@ def _job():
             "strategy": {
                 "profile": "complex",
                 "analysis_depth": 2,
-                "planner": {"id": "codex_plus", "provider": "openai", "adapter": "codex_cli", "model": "gpt-5.6-sol"},
-                "executor": {"id": "codex_plus", "provider": "openai", "adapter": "codex_cli", "model": "gpt-5.6-sol"},
-                "evaluator": {"id": "claude_sonnet", "provider": "anthropic", "adapter": "opencode", "model": "anthropic/claude-sonnet-5"},
+                "planner": {"id": "codex_terra", "provider": "openai", "adapter": "codex_cli", "model": "gpt-5.6-terra", "reasoning_effort": "medium"},
+                "executor": {"id": "codex_terra", "provider": "openai", "adapter": "codex_cli", "model": "gpt-5.6-terra", "reasoning_effort": "medium"},
+                "evaluator": {"id": "antigravity_free", "provider": "google_antigravity", "adapter": "antigravity_host", "model": "auto", "reasoning_effort": None},
                 "budget": {
                     "max_input_tokens": 2_000_000,
                     "max_output_tokens": 300_000,
@@ -43,7 +43,7 @@ def _job():
             },
         },
         "checkpoint": {
-            "executor_choice": {"id": "codex_plus", "provider": "openai", "adapter": "codex_cli", "model": "gpt-5.6-sol"},
+            "executor_choice": {"id": "codex_terra", "provider": "openai", "adapter": "codex_cli", "model": "gpt-5.6-terra", "reasoning_effort": "high"},
             "private_secret": "DO NOT LEAK",
         },
         "progress": {
@@ -54,7 +54,7 @@ def _job():
             "test_runs": 2,
             "iteration": 1,
             "repair_iterations": 0,
-            "escalations": 0,
+            "escalations": 1,
             "provider_failovers": 0,
             "model_failovers": 0,
             "elapsed_minutes": 12.5,
@@ -63,6 +63,7 @@ def _job():
             "required_checks_passed": False,
             "agent_succeeded": True,
             "agent_attempts": [{
+                "reasoning_effort": "high",
                 "output_excerpt": "PRIVATE AGENT OUTPUT",
                 "stderr_excerpt": "PRIVATE STDERR",
                 "usage": {
@@ -80,7 +81,8 @@ def test_job_snapshot_exposes_safe_runtime_telemetry_only():
     snapshot = _job_snapshot(_job())
     assert snapshot["profile"] == "complex"
     assert snapshot["analysis_depth"] == 2
-    assert snapshot["models"]["current"]["id"] == "codex_plus"
+    assert snapshot["models"]["current"]["id"] == "codex_terra"
+    assert snapshot["models"]["current"]["reasoning_effort"] == "high"
     assert snapshot["tokens"]["input_budget_tokens"] == 668_037
     assert snapshot["tokens"]["last_attempt_gross_input_tokens"] == 7_568_037
     assert snapshot["tokens"]["last_attempt_cached_input_tokens"] == 6_900_000
