@@ -5,7 +5,8 @@ from datetime import datetime, timezone
 import pytest
 from fastapi import HTTPException
 
-from app.dashboard import _job_snapshot, _require_session, _session_value, build_dashboard_snapshot
+import app.dashboard as dashboard
+from app.dashboard import _job_snapshot, _provider_quota_snapshot, _require_session, _session_value, build_dashboard_snapshot
 
 
 NOW = datetime(2026, 9, 13, tzinfo=timezone.utc)
@@ -86,11 +87,48 @@ def test_job_snapshot_exposes_safe_runtime_telemetry_only():
     assert snapshot["tokens"]["input_budget_tokens"] == 668_037
     assert snapshot["tokens"]["last_attempt_gross_input_tokens"] == 7_568_037
     assert snapshot["tokens"]["last_attempt_cached_input_tokens"] == 6_900_000
+    assert snapshot["remaining"] == {
+        "input_tokens": 1_331_963,
+        "output_tokens": 243_040,
+        "model_calls": 8,
+        "tool_calls": 155,
+        "test_runs": 12,
+        "wall_time_minutes": 37.5,
+        "changed_files": 10,
+        "iterations": 7,
+        "repair_iterations": 2,
+    }
     encoded = json.dumps(snapshot)
     assert "SUPER SECRET RAW TASK" not in encoded
     assert "DO NOT LEAK" not in encoded
     assert "PRIVATE AGENT OUTPUT" not in encoded
     assert "PRIVATE STDERR" not in encoded
+
+
+def test_provider_quota_is_unavailable_without_authoritative_source(monkeypatch):
+    monkeypatch.setattr(dashboard, "models_doc", lambda: {
+        "models": {
+            "codex_terra": {
+                "provider": "openai",
+                "quota_group": "codex_chatgpt_plus",
+                "secret": "DO NOT LEAK",
+            },
+            "antigravity_free": {
+                "provider": "google_antigravity",
+                "quota_group": "antigravity_individual",
+            },
+        }
+    })
+
+    quotas = _provider_quota_snapshot()
+
+    assert [quota["id"] for quota in quotas] == [
+        "antigravity_individual",
+        "codex_chatgpt_plus",
+    ]
+    assert all(quota["remaining"] is None for quota in quotas)
+    assert all(quota["remaining_status"] == "unavailable" for quota in quotas)
+    assert "DO NOT LEAK" not in json.dumps(quotas)
 
 
 def test_dashboard_session_is_separate_and_fail_closed(monkeypatch):
@@ -165,6 +203,24 @@ class _Storage:
     def get(self, job_id):
         return _job() if job_id == "job-1" else None
 
+    def recent_events(self, job_ids, per_job_limit=40):
+        assert job_ids == ["job-1"]
+        assert per_job_limit == 40
+        return [{
+            "id": 7,
+            "job_id": "job-1",
+            "event_type": "executor_started",
+            "phase": "MALICIOUS PHASE",
+            "level": "MALICIOUS LEVEL",
+            "message": "PRIVATE AGENT OUTPUT",
+            "data": {
+                "from_status": "routing",
+                "to_status": "executing",
+                "raw_prompt": "SUPER SECRET RAW TASK",
+            },
+            "created_at": NOW,
+        }]
+
 
 class _Store:
     def ensure(self):
@@ -189,6 +245,20 @@ def test_snapshot_aggregates_plan_progress_without_raw_plan_payloads():
     assert snapshot["summary"]["active_jobs"] == 1
     assert snapshot["current_plan_id"] == "pm-gh-1"
     assert snapshot["plans"][0]["token_totals"]["input_budget_tokens"] == 668_037
+    events = snapshot["plans"][0]["work_orders"][0]["job"]["recent_events"]
+    assert events == [{
+        "seq": 7,
+        "timestamp": NOW.isoformat(),
+        "job_id": "job-1",
+        "phase": "execution",
+        "level": "info",
+        "event": "executor_started",
+        "message": "Executor started",
+        "data": {"from_status": "routing", "to_status": "executing"},
+    }]
     encoded = json.dumps(snapshot)
     assert "NOT FOR DASHBOARD" not in encoded
     assert "SUPER SECRET RAW TASK" not in encoded
+    assert "PRIVATE AGENT OUTPUT" not in encoded
+    assert "MALICIOUS PHASE" not in encoded
+    assert "MALICIOUS LEVEL" not in encoded

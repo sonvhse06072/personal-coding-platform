@@ -8,6 +8,8 @@ from typing import Any
 import psycopg
 from psycopg.rows import dict_row
 
+from .activity import job_registered_event, route_selected_event, status_transition_event
+
 
 DDL = """
 CREATE TABLE IF NOT EXISTS cp_jobs (
@@ -30,6 +32,19 @@ CREATE TABLE IF NOT EXISTS cp_jobs (
 );
 ALTER TABLE cp_jobs ADD COLUMN IF NOT EXISTS checkpoint JSONB;
 CREATE INDEX IF NOT EXISTS cp_jobs_status_idx ON cp_jobs(status);
+
+CREATE TABLE IF NOT EXISTS cp_job_events (
+  id BIGSERIAL PRIMARY KEY,
+  job_id TEXT NOT NULL REFERENCES cp_jobs(id) ON DELETE CASCADE,
+  event_type TEXT NOT NULL,
+  phase TEXT NOT NULL,
+  level TEXT NOT NULL,
+  message TEXT NOT NULL,
+  data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS cp_job_events_job_id_idx
+  ON cp_job_events(job_id, id DESC);
 
 CREATE TABLE IF NOT EXISTS cp_execution_plans (
   id TEXT PRIMARY KEY,
@@ -54,6 +69,23 @@ CREATE INDEX IF NOT EXISTS cp_execution_plans_status_idx
 
 def now() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _insert_job_event(conn: Any, job_id: str, event: dict[str, Any]) -> None:
+    conn.execute(
+        """INSERT INTO cp_job_events
+        (job_id, event_type, phase, level, message, data, created_at)
+        VALUES (%s,%s,%s,%s,%s,%s::jsonb,%s)""",
+        (
+            job_id,
+            event["event_type"],
+            event["phase"],
+            event["level"],
+            event["message"],
+            json.dumps(event.get("data") or {}),
+            now(),
+        ),
+    )
 
 
 class Storage:
@@ -91,6 +123,7 @@ class Storage:
                     bool(row.get("dry_run", False)), timestamp, timestamp,
                 ),
             )
+            _insert_job_event(conn, row["id"], job_registered_event())
             conn.commit()
 
     def get(self, job_id: str) -> dict[str, Any] | None:
@@ -118,8 +151,42 @@ class Storage:
         values.append(now())
         values.append(job_id)
         with self.connect() as conn:
+            previous = conn.execute(
+                "SELECT status, route FROM cp_jobs WHERE id=%s FOR UPDATE",
+                (job_id,),
+            ).fetchone()
             conn.execute(f"UPDATE cp_jobs SET {', '.join(sets)} WHERE id=%s", values)
+            if previous:
+                if "route" in fields and fields["route"] != previous.get("route"):
+                    route_event = route_selected_event(fields["route"])
+                    if route_event:
+                        _insert_job_event(conn, job_id, route_event)
+                if "status" in fields:
+                    transition_event = status_transition_event(previous.get("status"), fields["status"])
+                    if transition_event:
+                        _insert_job_event(conn, job_id, transition_event)
             conn.commit()
+
+    def recent_events(self, job_ids: list[str], per_job_limit: int = 40) -> list[dict[str, Any]]:
+        ids = list(dict.fromkeys(str(job_id) for job_id in job_ids if job_id))
+        if not ids:
+            return []
+        limit = max(1, min(int(per_job_limit), 100))
+        with self.connect() as conn:
+            return list(
+                conn.execute(
+                    """SELECT id, job_id, event_type, phase, level, message, data, created_at
+                    FROM (
+                      SELECT id, job_id, event_type, phase, level, message, data, created_at,
+                             ROW_NUMBER() OVER (PARTITION BY job_id ORDER BY id DESC) AS event_rank
+                      FROM cp_job_events
+                      WHERE job_id = ANY(%s)
+                    ) recent
+                    WHERE event_rank <= %s
+                    ORDER BY job_id, id""",
+                    (ids, limit),
+                ).fetchall()
+            )
 
     def create_execution_plan(self, row: dict[str, Any]) -> None:
         timestamp = now()
