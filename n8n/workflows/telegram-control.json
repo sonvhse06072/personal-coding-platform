@@ -1,0 +1,44 @@
+{
+  "id": "pcpTelegramControl1",
+  "name": "PCP - Telegram Owner Control",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [-260, 0],
+      "id": "31c6c9d6-b42e-450c-a7b3-e83a429a839b",
+      "name": "Poll Telegram"
+    },
+    {
+      "parameters": {
+        "jsCode": "const runtime = ($env.RUNTIME_INTERNAL_URL || '').replace(/\\/$/, '');\nconst runtimeToken = ($env.RUNTIME_API_TOKEN || '').trim();\nconst botToken = ($env.TELEGRAM_BOT_TOKEN || '').trim();\nconst ownerUserId = ($env.TELEGRAM_OWNER_USER_ID || '').trim();\nconst ownerChatId = ($env.TELEGRAM_CHAT_ID || '').trim();\nif (!runtime || !runtimeToken) throw new Error('Runtime control transport is not configured');\nif (!botToken || !ownerUserId || !ownerChatId) return [{json:{status:'telegram_control_not_configured'}}];\nconst request = (options) => this.helpers.httpRequest({...options, json:true});\nconst state = $getWorkflowStaticData('global');\nconst offset = Number(state.telegram_update_offset || 0);\nconst updates = await request({\n  method:'GET',\n  url:`https://api.telegram.org/bot${botToken}/getUpdates`,\n  qs:{offset, limit:20, timeout:0, allowed_updates:JSON.stringify(['callback_query'])},\n});\nif (!updates || updates.ok !== true || !Array.isArray(updates.result)) throw new Error('Telegram update polling failed');\nconst auth = {'Authorization': `Bearer ${runtimeToken}`, 'Content-Type':'application/json'};\nlet handled = 0;\nfor (const update of updates.result) {\n  state.telegram_update_offset = Math.max(Number(state.telegram_update_offset || 0), Number(update.update_id || 0) + 1);\n  const cb = update.callback_query;\n  if (!cb) continue;\n  const fromId = String((cb.from || {}).id || '');\n  const chatId = String((((cb.message || {}).chat || {}).id) || '');\n  const callbackId = String(cb.id || '');\n  const data = String(cb.data || '');\n  const answer = async (text, alert=false) => request({\n    method:'POST',\n    url:`https://api.telegram.org/bot${botToken}/answerCallbackQuery`,\n    headers:{'Content-Type':'application/json'},\n    body:{callback_query_id:callbackId, text:String(text).slice(0,180), show_alert:Boolean(alert)},\n  });\n  if (fromId !== ownerUserId || chatId !== ownerChatId) {\n    await answer('Unauthorized owner control.', true);\n    continue;\n  }\n  const match = data.match(/^act:([A-Za-z0-9_-]{8,60})$/);\n  if (!match) {\n    await answer('Invalid or stale action.', true);\n    continue;\n  }\n  await answer('Đang xử lý action…');\n  const actionId = match[1];\n  try {\n    const result = await request({\n      method:'POST',\n      url:`${runtime}/v1/control-actions/${encodeURIComponent(actionId)}/execute`,\n      headers:auth,\n      body:{telegram_user_id:fromId, telegram_chat_id:chatId},\n    });\n    const lines = ['🟢 Owner action processed', '', result.message || 'Runtime accepted the action.'];\n    if (result.job_id) lines.push(`Job: ${String(result.job_id).slice(0,12)}…`);\n    if (result.job_status) lines.push(`Status: ${result.job_status}`);\n    const budget = result.budget_authorization || {};\n    if (budget.dimension) lines.push(`Budget: ${budget.used} / ${budget.previous_limit} → ${budget.used} / ${budget.new_limit}`);\n    const advisory = result.advisory || {};\n    if (advisory.reason) lines.push('', `Reason: ${advisory.reason}`);\n    if (advisory.cause) lines.push('', 'Why:', advisory.cause);\n    if (advisory.recommended) lines.push('', 'Recommended:', advisory.recommended);\n    await request({\n      method:'POST',\n      url:`https://api.telegram.org/bot${botToken}/sendMessage`,\n      headers:{'Content-Type':'application/json'},\n      body:{chat_id:ownerChatId, text:lines.join('\\n').slice(0,3900), disable_web_page_preview:true},\n    });\n    handled += 1;\n  } catch (error) {\n    await request({\n      method:'POST',\n      url:`https://api.telegram.org/bot${botToken}/sendMessage`,\n      headers:{'Content-Type':'application/json'},\n      body:{\n        chat_id:ownerChatId,\n        text:'🔴 Owner action was rejected or failed safely. Runtime state was not force-advanced. Wait for the next actionable notification or inspect the dashboard/runtime status.',\n      },\n    });\n  }\n}\nreturn [{json:{status:'ok', handled, next_offset:Number(state.telegram_update_offset || offset)}}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "c0ece9c9-32a2-428e-8d36-8a87b814ac84",
+      "name": "Validate And Execute Owner Action"
+    }
+  ],
+  "connections": {
+    "Poll Telegram": {
+      "main": [[{"node": "Validate And Execute Owner Action", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {"executionOrder": "v1"},
+  "versionId": "193827f4-c2ba-4867-a544-f7e924b97d35",
+  "meta": {"templateCredsSetupCompleted": true},
+  "pinData": {},
+  "tags": []
+}
