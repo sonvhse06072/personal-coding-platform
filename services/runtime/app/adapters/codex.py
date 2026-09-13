@@ -15,6 +15,8 @@ class CodexAdapter(AgentAdapter):
         argv = ["codex", "exec", "--json", "--sandbox", sandbox, "--cd", str(workspace)]
         if self.model and self.model not in {"auto", "subscription-auto", "subscription-managed", "frontier-subscription-managed"}:
             argv += ["--model", self.model]
+        if self.reasoning_effort:
+            argv += ["--config", f'model_reasoning_effort="{self.reasoning_effort}"']
         argv.append(prompt)
         result = await run_command(argv, cwd=workspace, timeout=timeout)
         messages: list[str] = []
