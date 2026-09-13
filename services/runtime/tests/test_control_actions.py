@@ -6,6 +6,7 @@ from copy import deepcopy
 import pytest
 
 from app.control_actions import ControlActionService
+from app.engine import _apply_owner_budget_authorizations
 
 
 class FakeStorage:
@@ -161,6 +162,55 @@ def test_budget_extension_is_additive_audited_and_preserves_work_order_and_progr
     assert audit["previous_limit"] == 10
     assert audit["new_limit"] == 14
     assert audit["used"] == 10
+
+
+def test_owner_budget_authorization_survives_a_fresh_route_without_mutating_work_order():
+    route = {"strategy": {"budget": {"max_model_calls": 10, "max_tool_calls": 80}}}
+    checkpoint = {
+        "work_order": {"id": "WO-1", "budget": {"max_model_calls": 10}},
+        "budget_authorizations": [
+            {
+                "action_id": "opaque-action",
+                "channel": "telegram",
+                "dimension": "max_model_calls",
+                "previous_limit": 10,
+                "new_limit": 14,
+                "used": 10,
+            }
+        ],
+    }
+
+    updated = _apply_owner_budget_authorizations(route, checkpoint)
+
+    assert route["strategy"]["budget"]["max_model_calls"] == 10
+    assert updated["strategy"]["budget"]["max_model_calls"] == 14
+    assert checkpoint["work_order"]["budget"]["max_model_calls"] == 10
+
+
+def test_owner_budget_overlay_ignores_untrusted_or_non_monotonic_checkpoint_data():
+    route = {"strategy": {"budget": {"max_model_calls": 10}}}
+    checkpoint = {
+        "budget_authorizations": [
+            {
+                "action_id": "bad-channel",
+                "channel": "unknown",
+                "dimension": "max_model_calls",
+                "previous_limit": 10,
+                "new_limit": 99,
+            },
+            {
+                "action_id": "bad-direction",
+                "channel": "telegram",
+                "dimension": "max_model_calls",
+                "previous_limit": 10,
+                "new_limit": 9,
+            },
+        ]
+    }
+
+    updated = _apply_owner_budget_authorizations(route, checkpoint)
+
+    assert updated["strategy"]["budget"]["max_model_calls"] == 10
 
 
 def test_budget_extension_fails_closed_at_platform_hard_max():
