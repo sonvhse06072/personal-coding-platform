@@ -29,9 +29,9 @@ def test_staffing_endpoint_returns_router_selected_pm_agent() -> None:
     data = response.json()
     assert data["request_id"] == "pm-api-1"
     assert data["role"] == "product_manager"
-    assert data["choice"]["id"] == "codex_plus"
-    assert data["policy_version"] == 3
-    assert data["registry_version"] == 4
+    assert data["choice"]["id"] == "codex_terra"
+    assert data["policy_version"] == 4
+    assert data["registry_version"] == 5
 
 
 def test_staffing_endpoint_rejects_unknown_role() -> None:
@@ -44,6 +44,6 @@ def test_staffing_endpoint_rejects_unknown_role() -> None:
 
 def test_staffing_endpoint_rejects_direct_model_override() -> None:
     payload = staffing_payload()
-    payload["model_id"] = "claude_sonnet"
+    payload["model_id"] = "codex_sol"
     response = client.post("/v1/staff", headers=HEADERS, json=payload)
     assert response.status_code == 422

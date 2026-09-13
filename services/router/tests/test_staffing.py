@@ -39,34 +39,35 @@ def test_product_manager_staffing_selects_only_pm_eligible_agent() -> None:
 
     assert result.role == "product_manager"
     assert result.profile == "standard"
-    assert result.choice.id == "codex_plus"
+    assert result.choice.id in {"codex_terra", "antigravity_free"}
+    assert result.choice.id != "codex_sol"
     assert "product_manager" in engine.models[result.choice.id]["roles"]
-    assert result.policy_version == 3
-    assert result.registry_version == 4
+    assert result.policy_version == 4
+    assert result.registry_version == 5
 
 
 def test_product_manager_staffing_respects_provider_availability() -> None:
     engine = make_engine()
     result = engine.staff(
-        pm_request(provider_state={"codex_plus": {"available": False}})
+        pm_request(provider_state={"codex_terra": {"available": False}})
     )
 
     assert result.choice.id == "antigravity_free"
-    assert "provider/model unavailable" in result.rejected_candidates["codex_plus"]
+    assert "provider/model unavailable" in result.rejected_candidates["codex_terra"]
 
 
-def test_product_manager_staffing_can_fall_back_to_premium_when_lower_cost_capacity_is_unavailable() -> None:
+def test_product_manager_staffing_can_fall_back_to_sol_when_lower_cost_capacity_is_unavailable() -> None:
     engine = make_engine()
     result = engine.staff(
         pm_request(
             provider_state={
-                "codex_plus": {"available": False},
+                "codex_terra": {"available": False},
                 "antigravity_free": {"available": False},
             }
         )
     )
 
-    assert result.choice.id == "claude_sonnet"
+    assert result.choice.id == "codex_sol"
 
 
 def test_unknown_staffing_role_and_disallowed_profile_fail_closed() -> None:
@@ -86,7 +87,7 @@ def test_staffing_request_forbids_direct_model_or_provider_selection() -> None:
             project_id="default",
             role="product_manager",
             profile="standard",
-            model_id="claude_sonnet",
+            model_id="codex_sol",
         )
 
     with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
@@ -95,7 +96,7 @@ def test_staffing_request_forbids_direct_model_or_provider_selection() -> None:
             project_id="default",
             role="product_manager",
             profile="standard",
-            provider="anthropic",
+            provider="openai",
         )
 
 
@@ -103,11 +104,16 @@ def test_staffing_keeps_project_privacy_policy_authoritative() -> None:
     engine = make_engine()
     result = engine.staff(pm_request())
 
-    # Public/training-eligible providers and non-agent utilities remain rejected;
-    # StaffingRequest has no privacy override field, so callers cannot relax the
-    # checked-in project privacy policy.
     assert "openrouter_free" in result.rejected_candidates
     assert any(
         "train" in reason or "not an agent" in reason
         for reason in result.rejected_candidates["openrouter_free"]
     )
+
+
+def test_unconfigured_optional_agents_are_not_staffable() -> None:
+    engine = make_engine()
+    result = engine.staff(pm_request())
+    for model_id in {"groq_oss_120b", "deepseek_flash", "frontier_codex"}:
+        assert model_id in result.rejected_candidates
+        assert any("missing required role" in reason for reason in result.rejected_candidates[model_id])
