@@ -7,6 +7,15 @@ from .control_actions import ControlActionService
 from .plan_orchestrator import PlanOrchestrator as CorePlanOrchestrator
 
 
+_SUPERSEDED_WORK_ORDER_EVENTS = {
+    "human_decision_required",
+    "operator_action_required",
+    "work_order_blocked",
+    "provider_quota_exhausted",
+    "ci_failed_after_repairs",
+}
+
+
 class PlanOrchestrator(CorePlanOrchestrator):
     """Core orchestration plus owner-attention notifications and controls.
 
@@ -30,15 +39,20 @@ class PlanOrchestrator(CorePlanOrchestrator):
             controls.orchestrator = self
 
     async def start(self) -> None:
-        # Backfill only owner-attention surfaces that already existed before this
-        # Runtime version. This never reconciles, resumes, launches or mutates the
-        # underlying WorkOrder state; it only creates deduplicated notification/
-        # control records for stable attention gates such as the currently blocked
-        # C1 recovery job.
         self.store.ensure()
         self.controls.ensure()
-        self._notify_existing_attention_states()
+        # Core start calls self.tick(), and this subclass materializes all stable
+        # attention states after that tick. Existing blocked/waiting/merge gates
+        # therefore receive controls after an upgrade without being resumed.
         await super().start()
+
+    async def tick(self) -> dict[str, Any]:
+        result = await super().tick()
+        # Read-only observation after every core transition/launch. Dedupe keys are
+        # tied to the durable WorkOrder state generation, so restarts and polling
+        # cannot spam duplicate owner notifications/actions.
+        self._notify_existing_attention_states()
+        return result
 
     def _notify_existing_attention_states(self) -> None:
         with self.storage.connect() as conn:
@@ -57,45 +71,29 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 state = str(current.get("state") or "")
                 if state not in {"blocked", "waiting_human", "awaiting_merge"}:
                     continue
-                self._emit_attention_for_state(plan, current, state, backfill=True)
+                self._emit_attention_for_state(plan, current, state)
 
     async def _reconcile_plan(self, plan: dict[str, Any]) -> None:
-        plan_id = str(plan["plan_id"])
-        before = {
+        tracked = {
             str(row["work_order_id"]): dict(row)
-            for row in self.store.work_orders(plan_id)
+            for row in self.store.work_orders(str(plan["plan_id"]))
         }
-
-        self._notify_new_quota_failures(plan, before)
+        # Provider quota exhaustion while the job is still active is informative;
+        # no mutation button is emitted because automatic failover may still work.
+        self._notify_new_quota_failures(plan, tracked)
         await super()._reconcile_plan(plan)
-
-        after = {
-            str(row["work_order_id"]): dict(row)
-            for row in self.store.work_orders(plan_id)
-        }
-        current_plan = self._plan_context(plan_id)
-        for work_order_id, current in after.items():
-            previous_state = str((before.get(work_order_id) or {}).get("state") or "")
-            current_state = str(current.get("state") or "")
-            if current_state == previous_state:
-                continue
-            if current_state in {"blocked", "waiting_human", "awaiting_merge"}:
-                self._emit_attention_for_state(current_plan, current, current_state, backfill=False)
 
     def _emit_attention_for_state(
         self,
         plan: dict[str, Any],
         current: dict[str, Any],
         state: str,
-        *,
-        backfill: bool,
     ) -> None:
         work_order_id = str(current.get("work_order_id") or "")
         job_id = str(current.get("job_id") or "")
         job = self.storage.get(job_id) if job_id else None
         job = dict(job) if job else None
         stamp = current.get("updated_at") or "unknown"
-        prefix = "backfill" if backfill else "transition"
 
         if state == "awaiting_merge":
             pr_url = str(current.get("pr_url") or "") or None
@@ -112,7 +110,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 event_type="human_decision_required",
                 severity="warning",
                 summary=advisory["summary"],
-                suffix=f"{prefix}:manual-merge:{current.get('pr_number')}:{stamp}",
+                suffix=f"attention:manual-merge:{current.get('pr_number')}:{stamp}",
                 github_url=pr_url,
                 payload={
                     "pr_number": current.get("pr_number"),
@@ -136,7 +134,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 event_type="human_decision_required",
                 severity="warning",
                 summary=advisory["summary"],
-                suffix=f"{prefix}:waiting-human:{job_id or 'operator'}:{stamp}",
+                suffix=f"attention:waiting-human:{job_id or 'operator'}:{stamp}",
                 payload={
                     "job_id": job_id or None,
                     "advisory": self._public_advisory(advisory),
@@ -159,7 +157,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
             event_type="work_order_blocked",
             severity="error",
             summary=advisory["summary"],
-            suffix=f"{prefix}:blocked:{job_id or 'operator'}:{reason}:{stamp}",
+            suffix=f"attention:blocked:{job_id or 'operator'}:{reason}:{stamp}",
             payload={
                 "job_id": job_id or None,
                 "advisory": self._public_advisory(advisory),
@@ -176,6 +174,8 @@ class PlanOrchestrator(CorePlanOrchestrator):
         note: str,
     ) -> dict[str, Any]:
         # Core complete flow is safe and also reconciles downstream dependencies.
+        # For block we perform the same state transition but leave notification
+        # formatting to the post-tick attention materializer.
         if action != "block":
             return await super().resolve_operator(
                 plan_id=plan_id,
@@ -193,30 +193,10 @@ class PlanOrchestrator(CorePlanOrchestrator):
 
         detail = dict(row.get("detail") or {})
         detail["operator_note"] = note.strip()[:2000]
+        detail["reason"] = "operator_blocked"
         self.store.update_work_order(plan_id, work_order_id, state="blocked", detail=detail)
         self.store.update_plan(plan_id, status="blocked")
-
-        plan = self._plan_context(plan_id)
-        advisory = {
-            "title": "WORKORDER BLOCKED",
-            "phase": "operator",
-            "reason": "operator_blocked",
-            "summary": "Operator marked the WorkOrder blocked.",
-            "cause": "The human/operator procedure reported a condition that should not advance automatically.",
-            "preserved": ["Downstream WorkOrders remain pending."],
-            "impact": "The plan remains blocked until the operator condition is resolved through a new valid state transition.",
-            "recommended": "Review the operator note and documented recovery procedure before attempting further work.",
-            "metrics": [],
-        }
-        self._emit_attention(
-            plan,
-            work_order_id=work_order_id,
-            event_type="work_order_blocked",
-            severity="error",
-            summary=advisory["summary"],
-            suffix=f"operator-blocked:{row.get('updated_at')}",
-            payload={"advisory": advisory, "actions": []},
-        )
+        await self.tick()
         result = self.view(plan_id)
         assert result is not None
         return result
@@ -282,6 +262,32 @@ class PlanOrchestrator(CorePlanOrchestrator):
     @staticmethod
     def _public_advisory(advisory: dict[str, Any]) -> dict[str, Any]:
         return {key: value for key, value in advisory.items() if key != "action_specs"}
+
+    def _notify(
+        self,
+        plan: dict[str, Any],
+        *,
+        work_order_id: str | None,
+        event_type: str,
+        severity: str,
+        summary: str,
+        suffix: str,
+        payload: dict[str, Any] | None = None,
+    ) -> None:
+        # Core owns state transitions but its work-order attention notifications
+        # are intentionally superseded by the sanitized advisory materializer.
+        # Plan-level decision/completion events continue through core unchanged.
+        if work_order_id is not None and event_type in _SUPERSEDED_WORK_ORDER_EVENTS:
+            return
+        super()._notify(
+            plan,
+            work_order_id=work_order_id,
+            event_type=event_type,
+            severity=severity,
+            summary=summary,
+            suffix=suffix,
+            payload=payload,
+        )
 
     def _emit_attention(
         self,
