@@ -45,13 +45,14 @@ def base_request(**overrides):
 def test_fast_routes_to_low_cost_agent():
     result = make_engine().route(base_request())
     assert result.strategy.profile == "fast"
-    assert result.strategy.executor.id in {"antigravity_free", "deepseek_flash", "codex_plus"}
+    assert result.strategy.executor.id in {"antigravity_free", "codex_luna", "codex_terra"}
+    assert result.strategy.executor.id != "codex_sol"
     assert result.strategy.planner is None
     assert result.strategy.evaluator is None
     assert result.strategy.human_decision.required is False
 
 
-def test_standard_is_autonomous():
+def test_standard_is_autonomous_and_does_not_default_to_sol():
     req = base_request(
         task={
             "title": "Implement a normal multi-file feature",
@@ -76,12 +77,14 @@ def test_standard_is_autonomous():
     )
     result = make_engine().route(req)
     assert result.strategy.profile == "standard"
+    assert result.strategy.executor.id in {"antigravity_free", "codex_luna", "codex_terra"}
+    assert result.strategy.executor.id != "codex_sol"
     assert result.strategy.human_decision.required is False
     assert result.strategy.permissions["commit"] is True
     assert result.strategy.permissions["push_ai_branch"] is True
 
 
-def test_complex_gets_planner_and_independent_evaluator():
+def test_complex_gets_planner_and_independent_evaluator_without_claude():
     req = base_request(
         task={
             "title": "Debug cross-module external API synchronization",
@@ -110,6 +113,7 @@ def test_complex_gets_planner_and_independent_evaluator():
     assert result.strategy.planner is not None
     assert result.strategy.evaluator is not None
     assert result.strategy.evaluator.provider != result.strategy.executor.provider
+    assert result.strategy.evaluator.id != "claude_sonnet"
 
 
 def test_auth_change_is_critical_and_human_decision():
@@ -129,8 +133,20 @@ def test_auth_change_is_critical_and_human_decision():
     )
     result = make_engine().route(req)
     assert result.strategy.profile == "critical"
+    assert result.strategy.executor.id == "codex_sol"
+    assert result.strategy.planner is not None
+    assert result.strategy.planner.id == "codex_sol"
+    assert result.strategy.evaluator is not None
+    assert result.strategy.evaluator.provider != "openai"
     assert result.strategy.human_decision.required is True
     assert "security_boundary_change" in result.strategy.human_decision.triggers
+
+
+def test_optional_paid_agents_are_fail_closed_until_roles_are_enabled():
+    result = make_engine().route(base_request())
+    for model_id in {"deepseek_flash", "groq_oss_120b", "frontier_codex"}:
+        assert model_id in result.rejected_candidates
+        assert any("missing required role" in reason for reason in result.rejected_candidates[model_id])
 
 
 def test_private_project_rejects_training_provider():
@@ -235,7 +251,9 @@ def test_provider_level_unavailable_excludes_same_provider_models():
     })
     result = eng.route(req)
     assert result.strategy.executor.provider != "openai"
-    assert "codex_plus" in result.rejected_candidates
+    assert "codex_luna" in result.rejected_candidates
+    assert "codex_terra" in result.rejected_candidates
+    assert "codex_sol" in result.rejected_candidates
     assert "frontier_codex" in result.rejected_candidates
 
 
@@ -247,7 +265,6 @@ def test_model_level_unavailable_reroutes_without_disabling_provider():
     req = base_request(provider_state={model_id: {"healthy": False, "available": False}})
     rerouted = eng.route(req)
     assert rerouted.strategy.executor.id != model_id
-    # Only the failed model is excluded; another model from the same provider remains eligible in principle.
     assert model_id in rerouted.rejected_candidates
     assert any('unavailable' in reason for reason in rerouted.rejected_candidates[model_id])
-    assert provider  # documents that this is model-scoped rather than provider-scoped
+    assert provider
