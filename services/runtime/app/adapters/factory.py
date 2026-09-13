@@ -7,7 +7,7 @@ from .fake import FakeAdapter
 from .opencode import OpenCodeAdapter
 
 
-def build_adapter(adapter: str, model: str) -> AgentAdapter:
+def build_adapter(adapter: str, model: str, reasoning_effort: str | None = None) -> AgentAdapter:
     mapping = {
         "antigravity_host": AntigravityAdapter,
         "codex_cli": CodexAdapter,
@@ -16,4 +16,4 @@ def build_adapter(adapter: str, model: str) -> AgentAdapter:
     }
     if adapter not in mapping:
         raise RuntimeError(f"Unsupported coding adapter: {adapter}")
-    return mapping[adapter](model)
+    return mapping[adapter](model, reasoning_effort)
