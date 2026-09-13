@@ -101,7 +101,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.26", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.27", lifespan=lifespan)
 app.include_router(pm_bridge_router)
 app.include_router(create_dashboard_router(storage, plan_orchestrator.store))
 
@@ -113,7 +113,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.26",
+        version="1.0.27",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
@@ -241,6 +241,9 @@ async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
             job_id,
             reset_transient_provider_failures=request.reset_transient_provider_failures,
             reroute=request.reroute,
+            _allow_failed_orchestrated_resume=bool(
+                orchestration_resume and orchestration_resume.get("reopen")
+            ),
         )
         reopen_orchestrated_job(plan_orchestrator.store, orchestration_resume, job_id)
     except RuntimeError as exc:
