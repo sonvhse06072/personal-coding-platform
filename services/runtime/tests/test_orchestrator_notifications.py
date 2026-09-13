@@ -6,6 +6,30 @@ from copy import deepcopy
 from app.orchestrator_notifications import PlanOrchestrator
 
 
+class FakeQueryResult:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def fetchall(self):
+        return deepcopy(self.rows)
+
+
+class FakeConnection:
+    def __init__(self, storage):
+        self.storage = storage
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def execute(self, sql, params=None):
+        if "SELECT plan_id FROM cp_plan_orchestrations" in sql:
+            return FakeQueryResult([{"plan_id": "pm-gh-200"}])
+        raise AssertionError(f"unexpected fake SQL: {sql}")
+
+
 class FakeStorage:
     def __init__(self, jobs=None):
         self.jobs = jobs or {}
@@ -19,6 +43,9 @@ class FakeStorage:
             "project_id": "demo",
             "ticket": {"id": "GH-5", "title": "Recovery", "description": "bounded"},
         }
+
+    def connect(self):
+        return FakeConnection(self)
 
 
 class FakeDdev:
@@ -68,7 +95,7 @@ class FakeControls:
 
     def blocked_advisory(self, work_order, job):
         result = (job or {}).get("result") or {}
-        reason = result.get("reason") or "work_order_blocked"
+        reason = result.get("reason") or (work_order.get("detail") or {}).get("reason") or "work_order_blocked"
         metrics = []
         if reason == "execution_budget_exhausted":
             metrics = [{"key": "max_model_calls", "label": "Model calls", "used": 10, "limit": 10}]
@@ -105,13 +132,27 @@ class FakeStore:
         self.plan_status = "active"
         self.notifications = []
 
+    def ensure(self):
+        return None
+
+    def register_new_plans(self):
+        return []
+
+    def active_plans(self):
+        if self.plan_status in {"blocked", "completed", "waiting_human"}:
+            return []
+        return [plan()]
+
+    def any_busy_work_order(self):
+        return any(item["state"] in {"running", "awaiting_merge", "waiting_human"} for item in self.rows)
+
     def work_orders(self, plan_id):
         return [deepcopy(row) for row in self.rows]
 
     def update_work_order(self, plan_id, work_order_id, **fields):
         row = next(item for item in self.rows if item["work_order_id"] == work_order_id)
         row.update(deepcopy(fields))
-        row.setdefault("updated_at", "t1")
+        row["updated_at"] = "t1"
 
     def update_plan(self, plan_id, *, status):
         self.plan_status = status
@@ -123,6 +164,7 @@ class FakeStore:
             "status": self.plan_status,
             "ticket_id": "GH-5",
             "github_url": "https://github.com/example/repo/issues/5",
+            "updated_at": "p1",
         }
 
     def emit_notification(self, **payload):
@@ -183,7 +225,7 @@ def test_ci_green_pr_transition_notifies_manual_merge_required():
     store = FakeStore([row()])
     orchestrator = service(storage, store)
 
-    asyncio.run(orchestrator._reconcile_plan(plan()))
+    asyncio.run(orchestrator.tick())
 
     assert store.rows[0]["state"] == "awaiting_merge"
     assert len(store.notifications) == 1
@@ -217,8 +259,8 @@ def test_quota_exhaustion_notifies_even_when_job_can_keep_running():
     store = FakeStore([row()])
     orchestrator = service(storage, store)
 
-    asyncio.run(orchestrator._reconcile_plan(plan()))
-    asyncio.run(orchestrator._reconcile_plan(plan()))
+    asyncio.run(orchestrator.tick())
+    asyncio.run(orchestrator.tick())
 
     assert store.rows[0]["state"] == "running"
     assert len(store.notifications) == 1
@@ -246,10 +288,11 @@ def test_budget_block_transition_emits_diagnostic_and_context_action():
     store = FakeStore([row()])
     orchestrator = service(storage, store)
 
-    asyncio.run(orchestrator._reconcile_plan(plan()))
+    asyncio.run(orchestrator.tick())
 
     assert store.rows[0]["state"] == "blocked"
     assert store.plan_status == "blocked"
+    assert len(store.notifications) == 1
     event = store.notifications[0]
     assert event["event_type"] == "work_order_blocked"
     assert event["payload"]["advisory"]["reason"] == "execution_budget_exhausted"
@@ -257,9 +300,10 @@ def test_budget_block_transition_emits_diagnostic_and_context_action():
     assert event["payload"]["actions"][0]["callback_data"] == "act:opaque-action-id"
 
 
-def test_operator_block_emits_event_without_execution_plan_shape_bug():
+def test_operator_block_emits_one_rich_event_without_core_duplicate():
     storage = FakeStorage()
     store = FakeStore([row(state="waiting_human", job_id=None, execution_mode="operator")])
+    store.plan_status = "waiting_human"
     orchestrator = service(storage, store)
 
     result = asyncio.run(
@@ -273,5 +317,6 @@ def test_operator_block_emits_event_without_execution_plan_shape_bug():
 
     assert result["status"] == "blocked"
     assert store.rows[0]["state"] == "blocked"
+    assert len(store.notifications) == 1
     assert store.notifications[0]["event_type"] == "work_order_blocked"
     assert store.notifications[0]["payload"]["advisory"]["reason"] == "operator_blocked"
