@@ -49,8 +49,8 @@ class PlanOrchestrator(CorePlanOrchestrator):
     async def tick(self) -> dict[str, Any]:
         result = await super().tick()
         # Read-only observation after every core transition/launch. Dedupe keys are
-        # tied to the durable WorkOrder state generation, so restarts and polling
-        # cannot spam duplicate owner notifications/actions.
+        # tied to the durable WorkOrder state generation and rendered action set,
+        # so polling is quiet while a rollout may still surface newly valid actions.
         self._notify_existing_attention_states()
         return result
 
@@ -104,13 +104,14 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 job=job,
                 advisory=advisory,
             )
+            action_fingerprint = self._action_set_fingerprint(actions)
             self._emit_attention(
                 plan,
                 work_order_id=work_order_id,
                 event_type="human_decision_required",
                 severity="warning",
                 summary=advisory["summary"],
-                suffix=f"attention:manual-merge:{current.get('pr_number')}:{stamp}",
+                suffix=f"attention:manual-merge:{current.get('pr_number')}:{stamp}:{action_fingerprint}",
                 github_url=pr_url,
                 payload={
                     "pr_number": current.get("pr_number"),
@@ -128,13 +129,14 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 job=job,
                 advisory=advisory,
             )
+            action_fingerprint = self._action_set_fingerprint(actions)
             self._emit_attention(
                 plan,
                 work_order_id=work_order_id,
                 event_type="human_decision_required",
                 severity="warning",
                 summary=advisory["summary"],
-                suffix=f"attention:waiting-human:{job_id or 'operator'}:{stamp}",
+                suffix=f"attention:waiting-human:{job_id or 'operator'}:{stamp}:{action_fingerprint}",
                 payload={
                     "job_id": job_id or None,
                     "advisory": self._public_advisory(advisory),
@@ -151,13 +153,14 @@ class PlanOrchestrator(CorePlanOrchestrator):
             advisory=advisory,
         )
         reason = str(advisory.get("reason") or "blocked")
+        action_fingerprint = self._action_set_fingerprint(actions)
         self._emit_attention(
             plan,
             work_order_id=work_order_id,
             event_type="work_order_blocked",
             severity="error",
             summary=advisory["summary"],
-            suffix=f"attention:blocked:{job_id or 'operator'}:{reason}:{stamp}",
+            suffix=f"attention:blocked:{job_id or 'operator'}:{reason}:{stamp}:{action_fingerprint}",
             payload={
                 "job_id": job_id or None,
                 "advisory": self._public_advisory(advisory),
@@ -262,6 +265,20 @@ class PlanOrchestrator(CorePlanOrchestrator):
     @staticmethod
     def _public_advisory(advisory: dict[str, Any]) -> dict[str, Any]:
         return {key: value for key, value in advisory.items() if key != "action_specs"}
+
+    @staticmethod
+    def _action_set_fingerprint(actions: list[dict[str, Any]]) -> str:
+        normalized = [
+            (
+                str(action.get("label") or ""),
+                str(action.get("action_id") or ""),
+                str(action.get("callback_data") or ""),
+                str(action.get("url") or ""),
+            )
+            for action in actions
+            if isinstance(action, dict)
+        ]
+        return hashlib.sha256(repr(normalized).encode("utf-8")).hexdigest()[:16]
 
     def _notify(
         self,

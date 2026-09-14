@@ -23,13 +23,15 @@ Before a material task is complete or handed off, update the relevant topical do
 ## Current repository state
 
 - PR #90 (`Recover wall-budget-bounded agent timeouts safely`) is merged; source Runtime behavior advanced to `1.0.31`.
-- PR #92 (`Make Codex unattended execution fail closed`) is merged at `7d05c68dc36a481fbece98540bc4d0e6888643a2`; post-merge GitHub Actions run #187 passed. Source Runtime behavior is `1.0.32`.
+- PR #92 (`Make Codex unattended execution fail closed`) is merged at `7d05c68dc36a481fbece98540bc4d0e6888643a2`; post-merge GitHub Actions run #187 passed. Source Runtime behavior advanced to `1.0.32`.
 - PR #92 policy: Codex planner/evaluator use `read-only`, execute/repair use `workspace-write`, every Codex Runtime turn uses `approval_policy="never"`, workspace-write network is explicitly disabled, and full-access/bypass flags remain forbidden.
 - PR #97 (`Delegate routine PR review and merge to PM`) is merged at `9574cc61a46cecb2ad88ae0983e7cb8eef8fbf7c`; GitHub Actions run #195 passed on exact head `6381507c112cd524d3fd71f3abbebaf69b999535` before PM merge.
 - PR #97 updates the Constitution, Architecture, Operating Model, `AGENTS.md`, and continuity policy so PM may review and merge eligible in-scope PRs autonomously after all required gates pass and when no unresolved Human Owner decision trigger exists.
 - PR #95 was closed unmerged as superseded; issue #93 was closed completed because its durable shell-command guidance is now included in `AGENTS.md` via PR #97.
-- The last proven deployed platform before the current rollout work was Router `1.0.15`, Runtime `1.0.30`, model registry `v7`, routing policy `v7`, OpenCode adapter available, n8n healthy, and OpenRouter secret scoped only to Runtime.
-- During rollout smoke testing, invoking Codex from `/app` failed before the prompt because `/app` is not a trusted Git repository. The next bounded smoke must use a temporary Git repository or a real isolated job workspace; do not add `--skip-git-repo-check` merely to hide the mismatch.
+- Local rollout now proves Router `1.0.15`, Runtime `1.0.32`, ddev-executor `1.0.14`, model registry `v7`, routing policy `v7`, n8n healthy, and all service-scoped secret boundaries healthy.
+- Codex CLI `0.154.0` passed the bounded unattended policy smoke from a disposable trusted Git repository with `workspace-write`, `approval_policy="never"`, and workspace network disabled. The earlier `/app` failure was only a Git trust-location mismatch; no bypass flag was added.
+- n8n control-plane sync is complete: `pcpTelegramOutbox1` and `pcpTelegramControl1` are active, Telegram configuration is complete, and the notification schedule executes successfully.
+- Issue #101 / PR #102 (`Re-emit attention when owner actions change`) fixes a rollout rematerialization bug: a stable blocked WorkOrder could gain a newly valid control action while the previously sent notification retained the same dedupe key. PR #102 changes notification dedupe to include a deterministic fingerprint of the rendered action set, adds regression coverage, and advances source Runtime to `1.0.33`. Rollout remains pending until PR #102 is merged and local Runtime is rebuilt.
 - Durable operator command guidance: avoid fragile nested `python3 -c '...'` quoting, prefer `.format()` or heredocs when they reduce quoting risk, verify `curl | python3` pipelines, and prefer readable multi-line commands.
 
 ## Effective PM merge governance
@@ -61,17 +63,20 @@ Runtime currently still has manual-merge orchestration behavior from the previou
   - `max_repair_iterations`: `2 -> 3`;
   - `max_iterations`: `8 -> 10`.
 - Last pre-timeout live counters included model calls `14/18`, tool calls `36/160`, test runs `6/14`, wall time about `63.515/70`, and repair iterations `2/3`.
-- C1 remains terminal `failed` from the Runtime `1.0.30` wall-budget timeout bug until Runtime `1.0.32` rollout/smoke verification is complete and the official compatibility control action reopens the exact same job.
-- Do not manually change DB state, create a replacement C1 job, or call generic `/v1/jobs/{job_id}/run` to bypass orchestration controls.
+- C1 is still the same terminal `failed` job from the Runtime `1.0.30` wall-budget timeout bug. Runtime `1.0.32` compatibility matching recognizes this exact legacy timeout as a bounded wall-time recovery candidate.
+- Orchestration reconciliation correctly keeps C1 WorkOrder `blocked`, but the already-sent blocked notification prevented the newly valid `max_wall_time_minutes +20` action from being delivered because the old notification dedupe key did not include the available action set. This is issue #101 / PR #102.
+- Do not manually change DB state, create a replacement C1 job, call generic `/v1/jobs/{job_id}/run`, or manually claim notification leases to bypass orchestration controls.
 - C2/C3 remain gated until C1 satisfies both evaluator findings and clears its delivery/merge gate under the effective governance policy.
 
 ## Next safe sequence
 
-1. Resume Runtime `1.0.32` rollout validation: confirm platform health, installed Codex CLI version, and run the bounded non-mutating Codex smoke inside a trusted temporary Git repo or actual isolated workspace.
-2. Trigger orchestration reconciliation and inspect the live control action for the same C1 job. Expected only if the compatibility matcher validates the persisted legacy state: `max_wall_time_minutes +20`.
-3. Execute recovery only through the official live-revalidated control action. Preserve the same job/workspace/source commit/diff/progress/counters.
-4. Continue C1 through verification/evaluation/delivery.
-5. Issue #98 remains follow-up platform work to align Runtime/ddev-executor merge behavior with the new PM merge-governance policy; it must not block the current Codex timeout recovery unless the current C1 delivery gate reaches a merge state that requires the new capability.
+1. Finish PR #102: exact-head CI/review, PM merge if all routine gates remain green and no Human Owner decision trigger appears.
+2. Pull merged `main`. Because C1 is terminal `failed` and no jobs are active, rebuild only `coding-runtime` to activate Runtime `1.0.33`; verify platform health and version afterward.
+3. Trigger orchestration reconciliation. The same blocked C1 state should emit one fresh notification because the rendered action-set fingerprint is now part of dedupe.
+4. Confirm Telegram receives the C1 owner notification with the exact bounded `max_wall_time_minutes +20` action. Execute only that official live-revalidated control action.
+5. Confirm the same job/workspace/source commit/diff/progress/counters are preserved and monitor C1 through verification/evaluation/delivery.
+6. Any later budget extension must come from a fresh live blocker/action only.
+7. Issue #98 remains follow-up platform work to align Runtime/ddev-executor merge behavior with the new PM merge-governance policy; it must not block the current Codex timeout recovery unless the current C1 delivery gate reaches a merge state that requires the new capability.
 
 ## Global operational gates
 

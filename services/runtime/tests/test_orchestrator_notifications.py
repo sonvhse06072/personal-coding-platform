@@ -61,6 +61,7 @@ class FakeEngine:
 class FakeControls:
     def __init__(self):
         self.orchestrator = None
+        self.include_budget_action = True
 
     def ensure(self):
         return None
@@ -114,13 +115,23 @@ class FakeControls:
 
     def create_actions(self, *, plan, work_order, job, advisory, ttl_hours=48):
         if advisory["reason"] == "execution_budget_exhausted":
-            return [
+            actions = [
                 {
-                    "label": "➕ +4 Model calls",
-                    "action_id": "opaque-action-id",
-                    "callback_data": "act:opaque-action-id",
+                    "label": "📋 Chi tiết",
+                    "action_id": "details-action",
+                    "callback_data": "act:details-action",
                 }
             ]
+            if self.include_budget_action:
+                actions.insert(
+                    0,
+                    {
+                        "label": "➕ +4 Model calls",
+                        "action_id": "opaque-action-id",
+                        "callback_data": "act:opaque-action-id",
+                    },
+                )
+            return actions
         if advisory["reason"] == "awaiting_merge":
             return [{"label": "🔗 Open PR", "url": work_order.get("pr_url")}]
         return [{"label": "📋 Chi tiết", "action_id": "details-action", "callback_data": "act:details-action"}]
@@ -199,8 +210,8 @@ def row(*, state="running", job_id="job-1", execution_mode="agent"):
     }
 
 
-def service(storage, store):
-    return PlanOrchestrator(storage, FakeEngine(), store=store, controls=FakeControls())
+def service(storage, store, controls=None):
+    return PlanOrchestrator(storage, FakeEngine(), store=store, controls=controls or FakeControls())
 
 
 def test_ci_green_pr_transition_notifies_manual_merge_required():
@@ -298,6 +309,45 @@ def test_budget_block_transition_emits_diagnostic_and_context_action():
     assert event["payload"]["advisory"]["reason"] == "execution_budget_exhausted"
     assert event["payload"]["advisory"]["metrics"][0]["used"] == 10
     assert event["payload"]["actions"][0]["callback_data"] == "act:opaque-action-id"
+
+
+def test_stable_attention_reemits_once_when_action_set_changes():
+    storage = FakeStorage(
+        {
+            "job-1": {
+                "id": "job-1",
+                "status": "blocked",
+                "result": {
+                    "reason": "execution_budget_exhausted",
+                    "last_failure": "model-call budget exhausted",
+                },
+                "progress": {"model_calls": 10},
+            }
+        }
+    )
+    store = FakeStore([row(state="blocked")])
+    store.plan_status = "blocked"
+    controls = FakeControls()
+    controls.include_budget_action = False
+    orchestrator = service(storage, store, controls=controls)
+    current = store.work_orders("pm-gh-200")[0]
+
+    orchestrator._emit_attention_for_state(plan(), current, "blocked")
+    orchestrator._emit_attention_for_state(plan(), current, "blocked")
+
+    assert len(store.notifications) == 1
+    assert [item["action_id"] for item in store.notifications[0]["payload"]["actions"]] == ["details-action"]
+
+    controls.include_budget_action = True
+    orchestrator._emit_attention_for_state(plan(), current, "blocked")
+    orchestrator._emit_attention_for_state(plan(), current, "blocked")
+
+    assert len(store.notifications) == 2
+    assert store.notifications[0]["dedupe_key"] != store.notifications[1]["dedupe_key"]
+    assert [item["action_id"] for item in store.notifications[1]["payload"]["actions"]] == [
+        "opaque-action-id",
+        "details-action",
+    ]
 
 
 def test_operator_block_emits_one_rich_event_without_core_duplicate():
