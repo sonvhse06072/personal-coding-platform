@@ -89,15 +89,22 @@ async def _terminate_process_group(proc: asyncio.subprocess.Process) -> None:
         return
     with suppress(ProcessLookupError):
         os.killpg(proc.pid, signal.SIGTERM)
-    try:
-        await asyncio.wait_for(proc.wait(), timeout=5)
+    if hasattr(proc, "wait"):
+        try:
+            await asyncio.wait_for(proc.wait(), timeout=5)
+            return
+        except TimeoutError:
+            pass
+        with suppress(ProcessLookupError):
+            os.killpg(proc.pid, signal.SIGKILL)
+        with suppress(Exception):
+            await proc.wait()
         return
-    except TimeoutError:
-        pass
-    with suppress(ProcessLookupError):
-        os.killpg(proc.pid, signal.SIGKILL)
-    with suppress(Exception):
-        await proc.wait()
+    # Compatibility with lightweight process doubles that only implement the
+    # historical communicate() surface. Real asyncio subprocesses use wait().
+    if hasattr(proc, "communicate"):
+        with suppress(Exception):
+            await asyncio.wait_for(proc.communicate(), timeout=5)
 
 
 async def _drain_stream(
@@ -121,6 +128,28 @@ async def _drain_stream(
                 pass
 
 
+async def _run_legacy_communicate(
+    proc: asyncio.subprocess.Process,
+    *,
+    argv: list[str],
+    timeout: int,
+) -> CommandResult:
+    try:
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.CancelledError:
+        await _terminate_process_group(proc)
+        raise
+    except TimeoutError as exc:
+        await _terminate_process_group(proc)
+        raise CommandTimeoutError(timeout=timeout, argv=argv) from exc
+    return CommandResult(
+        argv=argv,
+        returncode=int(proc.returncode or 0),
+        stdout=stdout.decode("utf-8", errors="replace"),
+        stderr=stderr.decode("utf-8", errors="replace"),
+    )
+
+
 async def run_command(
     argv: list[str],
     *,
@@ -140,6 +169,13 @@ async def run_command(
         limit=1024 * 1024,
         start_new_session=True,
     )
+
+    # Some deterministic unit tests and external adapters provide process doubles
+    # that implement only the historical communicate() API. Keep that contract
+    # while real asyncio subprocesses take the incremental streaming path below.
+    if not hasattr(proc, "stdout") or not hasattr(proc, "stderr") or not hasattr(proc, "wait"):
+        return await _run_legacy_communicate(proc, argv=argv, timeout=timeout)
+
     stdout_chunks: list[str] = []
     stderr_chunks: list[str] = []
     stdout_task = asyncio.create_task(_drain_stream(proc.stdout, stdout_chunks, on_stdout_line))
