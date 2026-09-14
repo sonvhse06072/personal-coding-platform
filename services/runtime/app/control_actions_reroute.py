@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import hashlib
 from typing import Any
 
 from .control_actions import _BUDGET_EXTENSION_SPECS
@@ -14,6 +15,7 @@ _PROVIDER_BLOCK_REASONS = {
     "provider_failure_without_fallback",
     "evaluator_provider_failure_without_fallback",
 }
+_RECOVERY_FINGERPRINT_REVISION = "provider-budget-recovery-v2"
 
 
 class ControlActionService(LiveControlActionService):
@@ -63,6 +65,26 @@ class ControlActionService(LiveControlActionService):
         """Backward-compatible single-dimension view used by older callers/tests."""
         dimensions = cls._provider_budget_dimensions(job)
         return dimensions[0] if len(dimensions) == 1 else None
+
+    def state_fingerprint(
+        self,
+        plan: dict[str, Any],
+        work_order: dict[str, Any],
+        job: dict[str, Any] | None,
+    ) -> str:
+        """Invalidate pre-v2 recovery buttons without editing durable rows.
+
+        Provider-blocked jobs with exhausted Runtime budgets gained a stricter
+        action surface in v2. Fold that semantic revision into the fingerprint so
+        old reroute/quota-reset buttons become stale automatically while unrelated
+        control actions retain their existing fingerprints.
+        """
+        base = super().state_fingerprint(plan, work_order, job)
+        if not job or not self._provider_budget_dimensions(dict(job)):
+            return base
+        return hashlib.sha256(
+            f"{base}:{_RECOVERY_FINGERPRINT_REVISION}".encode("utf-8")
+        ).hexdigest()
 
     @classmethod
     def _is_budget_recovery_state(cls, job: dict[str, Any]) -> bool:
