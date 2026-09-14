@@ -13,7 +13,7 @@ from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .activity import public_event
-from .dashboard_ui import DASHBOARD_HTML
+from .dashboard_ui_activity import DASHBOARD_HTML
 
 
 _ACTIVE_PLAN_STATES = {"active", "executing", "waiting_merge", "waiting_human"}
@@ -40,258 +40,187 @@ def _require_session(session: str | None) -> None:
     if secret in _PLACEHOLDERS:
         raise HTTPException(503, "Dashboard read token is not configured")
     if not session or not hmac.compare_digest(session, _session_value(secret)):
-        raise HTTPException(401, "Dashboard authentication required")
+        raise HTTPException(401, "Dashboard session required")
 
 
-def _iso(value: Any) -> str | None:
-    if value is None:
-        return None
-    if hasattr(value, "isoformat"):
+def _json_value(value: Any) -> Any:
+    if isinstance(value, datetime):
         return value.isoformat()
-    return str(value)
+    return value
 
 
-def _choice(value: Any) -> dict[str, Any] | None:
-    if not isinstance(value, dict) or not value:
-        return None
-    return {
-        "id": value.get("id"),
-        "provider": value.get("provider"),
-        "adapter": value.get("adapter"),
-        "model": value.get("model"),
-        "reasoning_effort": value.get("reasoning_effort"),
-        "score": value.get("score"),
-        "predicted_success": value.get("predicted_success"),
-    }
+def _recent_events(storage: Any, job_ids: list[str]) -> dict[str, list[dict[str, Any]]]:
+    rows = storage.recent_events(job_ids, per_job_limit=40)
+    grouped: dict[str, list[dict[str, Any]]] = {job_id: [] for job_id in job_ids}
+    for row in rows:
+        event = public_event(row)
+        if event is not None:
+            grouped.setdefault(str(row.get("job_id")), []).append(event)
+    return grouped
 
 
-def _remaining(used: Any, maximum: Any, *, integer: bool = True) -> int | float | None:
-    if maximum is None:
-        return None
-    value = max(0.0, float(maximum or 0) - float(used or 0))
-    return int(value) if integer else round(value, 3)
-
-
-def _job_snapshot(job: dict[str, Any] | None) -> dict[str, Any] | None:
-    if not job:
-        return None
-    route = dict(job.get("route") or {})
-    strategy = dict(route.get("strategy") or {})
-    checkpoint = dict(job.get("checkpoint") or {})
-    progress = dict(job.get("progress") or {})
+def _budget_view(job: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    strategy = ((job.get("route") or {}).get("strategy") or {})
     budget = dict(strategy.get("budget") or {})
-
-    planner = _choice(checkpoint.get("planner_choice") or strategy.get("planner"))
-    executor = _choice(checkpoint.get("executor_choice") or strategy.get("executor"))
-    evaluator = _choice(checkpoint.get("evaluator_choice") or strategy.get("evaluator"))
-    status = str(job.get("status") or "")
-    current_model = planner if status == "planning" else evaluator if status == "evaluating" else executor
-
-    attempts = list(progress.get("agent_attempts") or [])
-    attempt_usage = dict((attempts[-1] if attempts else {}).get("usage") or {})
-    remaining = {
-        "input_tokens": _remaining(progress.get("input_tokens"), budget.get("max_input_tokens")),
-        "output_tokens": _remaining(progress.get("output_tokens"), budget.get("max_output_tokens")),
-        "model_calls": _remaining(progress.get("model_calls"), budget.get("max_model_calls")),
-        "tool_calls": _remaining(progress.get("tool_calls"), budget.get("max_tool_calls")),
-        "test_runs": _remaining(progress.get("test_runs"), budget.get("max_test_runs")),
-        "wall_time_minutes": _remaining(
-            progress.get("elapsed_minutes"), budget.get("max_wall_time_minutes"), integer=False
-        ),
-        "changed_files": _remaining(progress.get("changed_files"), budget.get("max_changed_files")),
-        "iterations": _remaining(progress.get("iteration"), budget.get("max_iterations")),
-        "repair_iterations": _remaining(
-            progress.get("repair_iterations"), budget.get("max_repair_iterations")
-        ),
+    progress = dict(job.get("progress") or {})
+    pairs = {
+        "model_calls": "max_model_calls",
+        "tool_calls": "max_tool_calls",
+        "test_runs": "max_test_runs",
+        "repair_iterations": "max_repair_iterations",
+        "iteration": "max_iterations",
     }
+    remaining: dict[str, Any] = {}
+    for used_key, budget_key in pairs.items():
+        if budget_key in budget:
+            try:
+                remaining[used_key] = max(0, int(budget[budget_key]) - int(progress.get(used_key, 0)))
+            except (TypeError, ValueError):
+                pass
+    if "max_wall_time_minutes" in budget:
+        try:
+            remaining["wall_time_minutes"] = round(
+                max(0.0, float(budget["max_wall_time_minutes"]) - float(progress.get("elapsed_minutes", 0.0))),
+                3,
+            )
+        except (TypeError, ValueError):
+            pass
+    return budget, remaining
+
+
+def _model_view(job: dict[str, Any]) -> dict[str, Any]:
+    route = job.get("route") or {}
+    strategy = route.get("strategy") or {}
+    models = {
+        role: dict(strategy.get(role) or {}) if strategy.get(role) else None
+        for role in ("planner", "executor", "evaluator")
+    }
+    checkpoint = job.get("checkpoint") or {}
+    current = None
+    for key in ("evaluator_choice", "executor_choice", "planner_choice"):
+        if checkpoint.get(key):
+            current = dict(checkpoint[key])
+            break
+    models["current"] = current
+    return models
+
+
+def _token_view(job: dict[str, Any]) -> dict[str, Any]:
+    progress = job.get("progress") or {}
     return {
-        "id": job.get("id"),
-        "status": status,
-        "branch": job.get("branch"),
-        "source_commit": job.get("source_commit"),
-        "created_at": _iso(job.get("created_at")),
-        "updated_at": _iso(job.get("updated_at")),
-        "complexity_score": route.get("complexity_score"),
-        "profile": strategy.get("profile"),
-        "analysis_depth": strategy.get("analysis_depth"),
-        "models": {
-            "planner": planner,
-            "executor": executor,
-            "evaluator": evaluator,
-            "current": current_model,
-        },
-        "tokens": {
-            "input_budget_tokens": int(progress.get("input_tokens", 0) or 0),
-            "output_tokens": int(progress.get("output_tokens", 0) or 0),
-            "max_input_tokens": int(budget.get("max_input_tokens", 0) or 0),
-            "max_output_tokens": int(budget.get("max_output_tokens", 0) or 0),
-            "last_attempt_gross_input_tokens": int(attempt_usage.get("gross_input_tokens", attempt_usage.get("input_tokens", 0)) or 0),
-            "last_attempt_cached_input_tokens": int(attempt_usage.get("cached_input_tokens", 0) or 0),
-        },
-        "progress": {
-            "iteration": int(progress.get("iteration", 0) or 0),
-            "repair_iterations": int(progress.get("repair_iterations", 0) or 0),
-            "escalations": int(progress.get("escalations", 0) or 0),
-            "provider_failovers": int(progress.get("provider_failovers", 0) or 0),
-            "model_failovers": int(progress.get("model_failovers", 0) or 0),
-            "model_calls": int(progress.get("model_calls", 0) or 0),
-            "tool_calls": int(progress.get("tool_calls", 0) or 0),
-            "test_runs": int(progress.get("test_runs", 0) or 0),
-            "elapsed_minutes": float(progress.get("elapsed_minutes", 0.0) or 0.0),
-            "cost_usd": float(progress.get("cost_usd", 0.0) or 0.0),
-            "changed_files": int(progress.get("changed_files", 0) or 0),
-            "tests_passed": bool(progress.get("tests_passed", False)),
-            "required_checks_passed": bool(progress.get("required_checks_passed", False)),
-            "agent_succeeded": bool(progress.get("agent_succeeded", False)),
-        },
-        "budget": {
-            "max_model_calls": budget.get("max_model_calls"),
-            "max_tool_calls": budget.get("max_tool_calls"),
-            "max_test_runs": budget.get("max_test_runs"),
-            "max_wall_time_minutes": budget.get("max_wall_time_minutes"),
-            "max_changed_files": budget.get("max_changed_files"),
-            "max_iterations": budget.get("max_iterations"),
-            "max_repair_iterations": budget.get("max_repair_iterations"),
-            "hard_cost_usd": budget.get("hard_cost_usd"),
-        },
-        "remaining": remaining,
-        "recent_events": [],
+        key: progress.get(key, 0)
+        for key in (
+            "input_tokens",
+            "cached_input_tokens",
+            "input_budget_tokens",
+            "output_tokens",
+            "thinking_tokens",
+        )
     }
 
 
-def _public_job_events(storage: Any, job_id: str, *, after: int = 0, limit: int = 100) -> list[dict[str, Any]]:
-    events: list[dict[str, Any]] = []
-    for row in storage.events_after(job_id, after_id=after, limit=limit):
-        event = public_event(dict(row))
-        if event:
-            events.append(event)
-    return events
+def _job_snapshot(job: dict[str, Any], events: list[dict[str, Any]]) -> dict[str, Any]:
+    budget, remaining = _budget_view(job)
+    progress = dict(job.get("progress") or {})
+    return {
+        "id": job["id"],
+        "project_id": job["project_id"],
+        "status": job["status"],
+        "source_commit": job.get("source_commit"),
+        "branch": job.get("branch"),
+        "workspace": job.get("workspace"),
+        "updated_at": _json_value(job.get("updated_at")),
+        "progress": progress,
+        "budget": budget,
+        "remaining": remaining,
+        "tokens": _token_view(job),
+        "models": _model_view(job),
+        "recent_events": events,
+        "result": job.get("result"),
+        "error": job.get("error"),
+    }
 
 
-def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str, Any]:
-    orchestrator_store.ensure()
-    with storage.connect() as conn:
-        plan_rows = list(
-            conn.execute(
-                """SELECT o.*, p.baseline_revision, p.baseline_source_commit, p.ticket, p.plan, p.staffing
-                FROM cp_plan_orchestrations o
-                JOIN cp_execution_plans p ON p.id=o.plan_id
-                ORDER BY o.created_at DESC, o.plan_id DESC
-                LIMIT 20"""
-            ).fetchall()
-        )
-        alert_rows = list(
-            conn.execute(
-                """SELECT id, event_type, severity, project_id, ticket_id, plan_id,
-                          work_order_id, summary, github_url, status, attempts, created_at, sent_at
-                FROM cp_notification_outbox
-                ORDER BY id DESC LIMIT 3"""
-            ).fetchall()
-        )
-        pending_notifications = conn.execute(
-            "SELECT COUNT(*) AS count FROM cp_notification_outbox WHERE status IN ('pending','delivering')"
-        ).fetchone()
-
-    plans: list[dict[str, Any]] = []
-    active_jobs = 0
-    waiting_merge = 0
-    waiting_human = 0
-    blocked_plans = 0
-    job_views_by_id: dict[str, list[dict[str, Any]]] = {}
-
-    for plan_row in plan_rows:
-        plan_id = str(plan_row["plan_id"])
-        work_orders: list[dict[str, Any]] = []
-        totals = {"input_budget_tokens": 0, "output_tokens": 0}
-        for wo in orchestrator_store.work_orders(plan_id):
-            job = storage.get(str(wo["job_id"])) if wo.get("job_id") else None
-            job_view = _job_snapshot(job)
-            if job_view:
-                job_views_by_id.setdefault(str(job_view["id"]), []).append(job_view)
-            if job_view and job_view["status"] in _ACTIVE_JOB_STATES:
-                active_jobs += 1
-            if job_view:
-                totals["input_budget_tokens"] += int(job_view["tokens"].get("input_budget_tokens", 0) or 0)
-                totals["output_tokens"] += int(job_view["tokens"].get("output_tokens", 0) or 0)
-            if wo.get("state") == "awaiting_merge":
-                waiting_merge += 1
-            if wo.get("state") == "waiting_human":
-                waiting_human += 1
-            work_orders.append({
-                "id": wo.get("work_order_id"),
-                "sequence_no": wo.get("sequence_no"),
-                "execution_mode": wo.get("execution_mode"),
-                "state": wo.get("state"),
-                "pr_number": wo.get("pr_number"),
-                "pr_url": wo.get("pr_url"),
-                "updated_at": _iso(wo.get("updated_at")),
-                "job": job_view,
-            })
-        status = str(plan_row.get("status") or "")
-        if status == "blocked":
-            blocked_plans += 1
-        current_wo = next((wo for wo in work_orders if wo["state"] in {"running", "awaiting_merge", "waiting_human"}), None)
-        plans.append({
-            "id": plan_id,
-            "project_id": plan_row.get("project_id"),
-            "status": status,
-            "ticket_id": plan_row.get("ticket_id"),
-            "ticket_title": plan_row.get("ticket_title"),
-            "github_url": plan_row.get("github_url"),
-            "baseline_revision": plan_row.get("baseline_revision"),
-            "baseline_source_commit": plan_row.get("baseline_source_commit"),
-            "created_at": _iso(plan_row.get("created_at")),
-            "updated_at": _iso(plan_row.get("updated_at")),
-            "current_work_order_id": current_wo["id"] if current_wo else None,
-            "token_totals": totals,
-            "work_orders": work_orders,
+def _plan_snapshot(plan: dict[str, Any], rows: list[dict[str, Any]], jobs: dict[str, dict[str, Any]], events: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    work_orders: list[dict[str, Any]] = []
+    current_work_order_id = None
+    for row in rows:
+        job_id = row.get("job_id")
+        job = jobs.get(str(job_id)) if job_id else None
+        state = str(row.get("state") or "")
+        if current_work_order_id is None and state in {"running", "blocked", "waiting_human", "awaiting_merge"}:
+            current_work_order_id = row["work_order_id"]
+        work_orders.append({
+            "id": row["work_order_id"],
+            "sequence_no": row.get("sequence_no"),
+            "execution_mode": row.get("execution_mode"),
+            "state": state,
+            "job_id": job_id,
+            "pr_number": row.get("pr_number"),
+            "pr_url": row.get("pr_url"),
+            "detail": row.get("detail") or {},
+            "job": _job_snapshot(job, events.get(str(job_id), [])) if job else None,
         })
+    return {
+        "id": plan["plan_id"],
+        "project_id": plan["project_id"],
+        "status": plan["status"],
+        "ticket_id": plan.get("ticket_id"),
+        "ticket_title": plan.get("ticket_title"),
+        "github_url": plan.get("github_url"),
+        "baseline_revision": plan.get("baseline_revision"),
+        "current_work_order_id": current_work_order_id,
+        "updated_at": _json_value(plan.get("updated_at")),
+        "work_orders": work_orders,
+    }
 
-    events_by_job: dict[str, list[dict[str, Any]]] = {job_id: [] for job_id in job_views_by_id}
-    for row in storage.recent_events(list(job_views_by_id), per_job_limit=40):
-        event = public_event(dict(row))
-        if event and event["job_id"] in events_by_job:
-            events_by_job[event["job_id"]].append(event)
-    for job_id, views in job_views_by_id.items():
-        recent_events = sorted(
-            events_by_job[job_id],
-            key=lambda item: int(item.get("seq") or 0),
-            reverse=True,
-        )
-        for job_view in views:
-            job_view["recent_events"] = recent_events
 
-    current_plan = next((p for p in plans if p["status"] in _ACTIVE_PLAN_STATES), plans[0] if plans else None)
-    active_plans = sum(1 for p in plans if p["status"] in _ACTIVE_PLAN_STATES)
+def build_snapshot(storage: Any, orchestrator_store: Any) -> dict[str, Any]:
+    plan_rows = orchestrator_store.list_orchestrations(limit=25)
+    work_order_rows: dict[str, list[dict[str, Any]]] = {}
+    job_ids: list[str] = []
+    for plan in plan_rows:
+        rows = orchestrator_store.work_orders(plan["plan_id"])
+        work_order_rows[plan["plan_id"]] = rows
+        job_ids.extend(str(row["job_id"]) for row in rows if row.get("job_id"))
+    events = _recent_events(storage, job_ids)
+    jobs = {
+        job_id: job
+        for job_id in job_ids
+        if (job := storage.get(job_id)) is not None
+    }
+    plans = [
+        _plan_snapshot(plan, work_order_rows.get(plan["plan_id"], []), jobs, events)
+        for plan in plan_rows
+    ]
+    active_plans = [plan for plan in plans if plan["status"] in _ACTIVE_PLAN_STATES]
+    all_jobs = [wo["job"] for plan in plans for wo in plan["work_orders"] if wo.get("job")]
+    alerts = orchestrator_store.notifications(limit=10)
+    current_plan = next((plan for plan in active_plans if plan["status"] == "executing"), None)
+    if current_plan is None:
+        current_plan = next(iter(active_plans), None)
+    if current_plan is None:
+        current_plan = next(iter(plans), None)
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "summary": {
-            "active_plans": active_plans,
-            "active_jobs": active_jobs,
-            "waiting_merge": waiting_merge,
-            "waiting_human": waiting_human,
-            "blocked_plans": blocked_plans,
-            "pending_notifications": int((pending_notifications or {}).get("count", 0) or 0),
-        },
         "current_plan_id": current_plan["id"] if current_plan else None,
+        "summary": {
+            "active_plans": len(active_plans),
+            "active_jobs": sum(1 for job in all_jobs if job["status"] in _ACTIVE_JOB_STATES),
+            "waiting_merge": sum(1 for plan in plans for wo in plan["work_orders"] if wo["state"] == "awaiting_merge"),
+            "waiting_human": sum(1 for plan in plans for wo in plan["work_orders"] if wo["state"] == "waiting_human"),
+            "blocked_plans": sum(1 for plan in plans if plan["status"] == "blocked"),
+            "pending_notifications": sum(1 for item in alerts if item.get("status") == "pending"),
+        },
         "plans": plans,
         "alerts": [
             {
-                "id": row.get("id"),
-                "event_type": row.get("event_type"),
-                "severity": row.get("severity"),
-                "project_id": row.get("project_id"),
-                "ticket_id": row.get("ticket_id"),
-                "plan_id": row.get("plan_id"),
-                "work_order_id": row.get("work_order_id"),
-                "summary": row.get("summary"),
-                "github_url": row.get("github_url"),
-                "status": row.get("status"),
-                "attempts": row.get("attempts"),
-                "created_at": _iso(row.get("created_at")),
-                "sent_at": _iso(row.get("sent_at")),
+                "event_type": item.get("event_type"),
+                "status": item.get("status"),
+                "summary": item.get("summary"),
+                "created_at": _json_value(item.get("created_at")),
             }
-            for row in alert_rows
+            for item in alerts
         ],
     }
 
@@ -299,12 +228,12 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
 def create_dashboard_router(storage: Any, orchestrator_store: Any) -> APIRouter:
     router = APIRouter()
 
-    @router.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
-    def dashboard_page() -> str:
+    @router.get("/dashboard", response_class=HTMLResponse)
+    def dashboard() -> str:
         return DASHBOARD_HTML
 
-    @router.post("/v1/dashboard/session", include_in_schema=False)
-    def dashboard_login(payload: DashboardLogin, response: Response) -> dict[str, str]:
+    @router.post("/v1/dashboard/session", status_code=204)
+    def dashboard_session(payload: DashboardLogin, response: Response) -> None:
         secret = _dashboard_secret()
         if secret in _PLACEHOLDERS:
             raise HTTPException(503, "Dashboard read token is not configured")
@@ -316,70 +245,50 @@ def create_dashboard_router(storage: Any, orchestrator_store: Any) -> APIRouter:
             httponly=True,
             secure=True,
             samesite="strict",
-            max_age=12 * 60 * 60,
             path="/",
         )
-        return {"status": "ok"}
 
-    @router.delete("/v1/dashboard/session", include_in_schema=False)
-    def dashboard_logout(response: Response) -> dict[str, str]:
-        response.delete_cookie(_COOKIE, path="/")
-        return {"status": "ok"}
-
-    @router.get("/v1/dashboard/snapshot", include_in_schema=False)
+    @router.get("/v1/dashboard/snapshot")
     def dashboard_snapshot(pcp_dashboard_session: str | None = Cookie(default=None)) -> dict[str, Any]:
         _require_session(pcp_dashboard_session)
-        return build_dashboard_snapshot(storage, orchestrator_store)
+        return build_snapshot(storage, orchestrator_store)
 
-    @router.get("/v1/dashboard/jobs/{job_id}/events", include_in_schema=False)
-    def dashboard_job_events(
+    @router.get("/v1/dashboard/jobs/{job_id}/stream")
+    async def dashboard_stream(
         job_id: str,
-        after: int = Query(0, ge=0),
-        limit: int = Query(100, ge=1, le=200),
-        pcp_dashboard_session: str | None = Cookie(default=None),
-    ) -> dict[str, Any]:
-        _require_session(pcp_dashboard_session)
-        if storage.get(job_id) is None:
-            raise HTTPException(404, "Unknown job")
-        events = _public_job_events(storage, job_id, after=after, limit=limit)
-        return {"events": events, "last_seq": max([after, *[int(event["seq"]) for event in events]])}
-
-    @router.get("/v1/dashboard/jobs/{job_id}/stream", include_in_schema=False)
-    async def dashboard_job_stream(
         request: Request,
-        job_id: str,
-        after: int = Query(0, ge=0),
+        after: int = Query(default=0, ge=0),
         pcp_dashboard_session: str | None = Cookie(default=None),
     ) -> StreamingResponse:
         _require_session(pcp_dashboard_session)
         if storage.get(job_id) is None:
             raise HTTPException(404, "Unknown job")
 
-        async def stream():
+        async def events():
             cursor = int(after)
-            keepalive = 0
-            while not await request.is_disconnected():
-                rows = storage.events_after(job_id, after_id=cursor, limit=100)
+            while True:
+                if await request.is_disconnected():
+                    return
+                rows = await asyncio.to_thread(storage.events_after, job_id, cursor, 100)
                 if rows:
                     for row in rows:
                         cursor = max(cursor, int(row.get("id") or 0))
-                        event = public_event(dict(row))
-                        if not event:
+                        event = public_event(row)
+                        if event is None:
                             continue
-                        payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
-                        yield f"id: {event['seq']}\nevent: activity\ndata: {payload}\n\n"
-                    keepalive = 0
+                        payload = json.dumps(event, separators=(",", ":"), ensure_ascii=False)
+                        yield f"id: {cursor}\nevent: activity\ndata: {payload}\n\n"
                 else:
-                    keepalive += 1
-                    if keepalive >= 20:
-                        yield ": keepalive\n\n"
-                        keepalive = 0
+                    yield ": heartbeat\n\n"
                 await asyncio.sleep(0.75)
 
         return StreamingResponse(
-            stream(),
+            events(),
             media_type="text/event-stream",
-            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+            headers={
+                "Cache-Control": "no-cache, no-transform",
+                "X-Accel-Buffering": "no",
+            },
         )
 
     return router
