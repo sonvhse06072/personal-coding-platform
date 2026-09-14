@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 import re
 
@@ -20,12 +20,21 @@ def _compact(value: Any) -> str:
     return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
 
 
+def _expires_at(observed: datetime, ttl_seconds: int, reset_at: datetime | None) -> datetime:
+    ttl = observed + timedelta(seconds=ttl_seconds)
+    # A snapshot describing a pre-reset allowance must stop influencing Router at
+    # the provider-reported reset boundary. It is not evidence of post-reset
+    # capacity; the next poll will repopulate fresh values.
+    if reset_at is not None and reset_at > observed:
+        return min(ttl, reset_at)
+    return ttl
+
+
 class PolicyCodexQuotaCollector(CodexQuotaCollector):
     """Codex quota normalization that never infers recovery from reset time alone."""
 
     def normalize(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
         observed = utcnow()
-        expires = observed + timedelta(seconds=self.ttl_seconds)
         ordinary_allowed = payload.get("ordinaryUsageAllowed")
         buckets = payload.get("rateLimitsByLimitId")
         if not isinstance(buckets, dict) or not buckets:
@@ -38,7 +47,10 @@ class PolicyCodexQuotaCollector(CodexQuotaCollector):
             bucket = dict(bucket_raw)
             normal_model = str(bucket.get("normalModelSlug") or "").strip() or None
             logical_id = _logical_model_id("openai", normal_model)
-            state_key = f"quota:model:{logical_id}" if logical_id else "provider:openai"
+            # Codex ChatGPT allowance is a quota scope, not generic OpenAI provider
+            # health. Keeping account-wide buckets under the registered quota group
+            # avoids penalizing unrelated OpenAI utility/API calls.
+            state_key = f"quota:model:{logical_id}" if logical_id else "quota:codex_chatgpt_plus"
             for window_name in ("primary", "secondary"):
                 window = bucket.get(window_name)
                 if not isinstance(window, dict):
@@ -47,10 +59,9 @@ class PolicyCodexQuotaCollector(CodexQuotaCollector):
                 if used is None:
                     continue
                 reset_at = _parse_reset(window.get("resetsAt"))
-                # ordinaryUsageAllowed=false is authoritative provider denial.
-                # A full individual window is also unavailable. A future reset_at
-                # never clears either condition; freshness expiry or a new provider
-                # snapshot is required to recover.
+                # ordinaryUsageAllowed=false is authoritative quota denial for
+                # Codex ordinary usage. A full individual window is unavailable.
+                # A reset timestamp never means quota has recovered by itself.
                 available = ordinary_allowed is not False and used < 100.0
                 snapshots.append({
                     "snapshot_key": f"codex:{bucket_id}:{window_name}",
@@ -63,7 +74,7 @@ class PolicyCodexQuotaCollector(CodexQuotaCollector):
                     "remaining_percent": round(100.0 - used, 3),
                     "reset_at": reset_at,
                     "observed_at": observed,
-                    "expires_at": expires,
+                    "expires_at": _expires_at(observed, self.ttl_seconds, reset_at),
                     "authoritative": True,
                     "available": available,
                     "metadata": {
@@ -105,7 +116,6 @@ class PolicyAntigravityQuotaCollector(AntigravityQuotaCollector):
         if not isinstance(snapshot, dict):
             return []
         captured = _parse_reset(snapshot.get("captured_at")) or utcnow()
-        expires = captured + timedelta(seconds=self.ttl_seconds)
         quota = snapshot.get("quota")
         if not isinstance(quota, dict):
             return []
@@ -134,7 +144,7 @@ class PolicyAntigravityQuotaCollector(AntigravityQuotaCollector):
                 "remaining_percent": remaining,
                 "reset_at": reset_at,
                 "observed_at": captured,
-                "expires_at": expires,
+                "expires_at": _expires_at(captured, self.ttl_seconds, reset_at),
                 # Both sources originate from Antigravity's own local state. The
                 # local GetUserStatus transport is unsupported, so that fact stays
                 # explicit in metadata even though the quota values are provider data.
