@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import pytest
+import asyncio
 
 from app.quota_telemetry_active import ActiveQuotaTelemetryService
 
@@ -28,38 +28,35 @@ class FakeCollector:
         return list(self.result)
 
 
-@pytest.mark.asyncio
-async def test_refresh_marks_success_without_snapshots_as_no_data() -> None:
+def test_refresh_marks_success_without_snapshots_as_no_data() -> None:
     store = FakeStore()
     service = ActiveQuotaTelemetryService(store)
     service.collectors = [FakeCollector([])]
 
-    await service.refresh()
+    asyncio.run(service.refresh())
 
     assert store.snapshots == []
     assert store.results == [("antigravity_quota", "no_data", None)]
 
 
-@pytest.mark.asyncio
-async def test_refresh_marks_snapshot_collection_ok() -> None:
+def test_refresh_marks_snapshot_collection_ok() -> None:
     store = FakeStore()
     service = ActiveQuotaTelemetryService(store)
     snapshot = {"snapshot_key": "x"}
     service.collectors = [FakeCollector([snapshot])]
 
-    await service.refresh()
+    asyncio.run(service.refresh())
 
     assert store.snapshots == [snapshot]
     assert store.results == [("antigravity_quota", "ok", None)]
 
 
-@pytest.mark.asyncio
-async def test_refresh_persists_collector_error_fail_open() -> None:
+def test_refresh_persists_collector_error_fail_open() -> None:
     store = FakeStore()
     service = ActiveQuotaTelemetryService(store)
     service.collectors = [FakeCollector(error=RuntimeError("quota unavailable"))]
 
-    await service.refresh()
+    asyncio.run(service.refresh())
 
     assert store.snapshots == []
     assert store.results == [
