@@ -9,6 +9,7 @@ import psycopg
 from psycopg.rows import dict_row
 
 from .activity import job_registered_event, route_selected_event, status_transition_event
+from .developer_stream import bind_developer_sink
 
 
 DDL = """
@@ -65,6 +66,8 @@ CREATE INDEX IF NOT EXISTS cp_execution_plans_project_idx
 CREATE INDEX IF NOT EXISTS cp_execution_plans_status_idx
   ON cp_execution_plans(status);
 """
+
+_AGENT_STATUSES = {"planning", "executing", "evaluating"}
 
 
 def now() -> datetime:
@@ -134,6 +137,27 @@ class Storage:
         with self.connect() as conn:
             return list(conn.execute("SELECT * FROM cp_jobs ORDER BY created_at DESC LIMIT %s", (limit,)).fetchall())
 
+    def append_event(self, job_id: str, event: dict[str, Any]) -> None:
+        """Append one already-sanitized observability event for a durable job."""
+        with self.connect() as conn:
+            _insert_job_event(conn, job_id, event)
+            conn.commit()
+
+    def events_after(self, job_id: str, after_id: int = 0, limit: int = 100) -> list[dict[str, Any]]:
+        bounded = max(1, min(int(limit), 200))
+        cursor = max(0, int(after_id))
+        with self.connect() as conn:
+            return list(
+                conn.execute(
+                    """SELECT id, job_id, event_type, phase, level, message, data, created_at
+                    FROM cp_job_events
+                    WHERE job_id=%s AND id>%s
+                    ORDER BY id ASC
+                    LIMIT %s""",
+                    (job_id, cursor, bounded),
+                ).fetchall()
+            )
+
     def update(self, job_id: str, **fields: Any) -> None:
         if not fields:
             return
@@ -166,6 +190,11 @@ class Storage:
                     if transition_event:
                         _insert_job_event(conn, job_id, transition_event)
             conn.commit()
+        if "status" in fields:
+            if str(fields["status"]) in _AGENT_STATUSES:
+                bind_developer_sink(lambda event, bound_job_id=job_id: self.append_event(bound_job_id, event))
+            else:
+                bind_developer_sink(None)
 
     def recent_events(self, job_ids: list[str], per_job_limit: int = 40) -> list[dict[str, Any]]:
         ids = list(dict.fromkeys(str(job_id) for job_id in job_ids if job_id))
