@@ -1,6 +1,6 @@
 # Provider and Model Resource Policy
 
-Status: approved provider/resource policy. The OpenRouter-specific behavior below is an approved implementation target for issue #79 until the corresponding code is merged to `main`.
+Status: approved provider/resource policy. The OpenRouter-specific implementation from issue #79 / PR #81 is merged to `main`; local activation and a live privacy-safe provider smoke check are still required before treating OpenRouter free as operationally verified.
 
 ## 1. Authority boundary
 
