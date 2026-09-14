@@ -44,9 +44,11 @@ Lower-authority artifacts must not silently redefine higher-authority artifacts.
 - n8n remains a thin integration/control-plane layer. It must not contain coding intelligence, routing policy, project state, or model-selection logic.
 - Coding agents work only in isolated job workspaces and must not possess Runtime, Router, executor, GitHub-delivery, or unrelated provider credentials.
 - Only `ddev-executor` may hold Docker-socket/source-repository/GitHub-delivery capabilities required for bounded delivery.
-- Agent changes go through an `ai/*` branch and pull request. No force push, no automatic merge, and no production deployment.
+- Agent changes go through an `ai/*` branch and pull request. Force push and production deployment remain forbidden.
+- PM may review and merge a PR autonomously only when the work is inside the approved project frame, all required deterministic/review/CI gates pass, and no unresolved Human Owner decision trigger exists.
+- Developer agents must never merge.
 - Deterministic verification is authoritative for executable checks; model review supplements it rather than replacing it.
-- Important product, architecture, security, destructive-data, production, major-dependency, and material budget decisions require human approval.
+- Important product, architecture, security, destructive-data, production, major-dependency, governance, and material budget decisions require human approval.
 - Default execution concurrency is one. Parallel agent work is an explicit optimization only for independent WorkOrders.
 
 ## Change discipline
@@ -59,7 +61,15 @@ Lower-authority artifacts must not silently redefine higher-authority artifacts.
 - New automation should reduce failure rate, reduce model/tool time, or strengthen a security/governance boundary.
 - Preserve budget limits and anti-loop behavior; escalation must not reset consumed job budget.
 - A CI-green PR is a mandatory gate before a task is considered ready for merge.
-- Never merge automatically. The human owner performs the final merge.
+- Before merge, PM must review the WorkOrder/Task Contract, developer evidence, deterministic verification, independent review when required, CI state, unresolved risks, and any Human Owner decision triggers.
+- PM must not merge while a required human decision is unresolved. Once the Human Owner explicitly approves such a decision, PM may complete the merge after the remaining gates pass.
+
+## Operator command authoring
+
+- Avoid `python3 -c '...'` when the embedded Python code itself needs single-quoted expressions that can collide with the shell delimiter.
+- Prefer `.format()` or a heredoc when either approach reduces nested shell/Python quoting risk.
+- For `curl | python3` pipelines, verify both the shell quoting and the Python quoting before presenting the command.
+- Prefer readable multi-line commands over fragile one-liners when a command is moderately complex.
 
 ## Mandatory documentation continuity
 
