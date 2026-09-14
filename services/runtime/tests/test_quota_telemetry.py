@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
+
 from app.quota_telemetry import merge_provider_state
 from app.quota_telemetry_policy import (
     PolicyAntigravityQuotaCollector,
     PolicyCodexQuotaCollector,
+    _expires_at,
 )
 
 
@@ -42,7 +45,7 @@ def test_codex_multi_bucket_maps_model_and_windows():
     assert by_window["secondary"]["metadata"]["window_duration_mins"] == 10080
 
 
-def test_codex_backend_denial_wins_even_when_percent_is_low():
+def test_codex_account_bucket_is_codex_quota_not_generic_openai_health():
     collector = PolicyCodexQuotaCollector()
     snapshots = collector.normalize(
         {
@@ -55,9 +58,17 @@ def test_codex_backend_denial_wins_even_when_percent_is_low():
     )
 
     assert len(snapshots) == 1
-    assert snapshots[0]["state_key"] == "provider:openai"
+    assert snapshots[0]["state_key"] == "quota:codex_chatgpt_plus"
     assert snapshots[0]["available"] is False
     assert snapshots[0]["used_percent"] == 5.0
+
+
+def test_snapshot_stops_influencing_router_at_provider_reset_boundary():
+    observed = datetime(2026, 9, 15, 0, 0, tzinfo=timezone.utc)
+    reset = observed + timedelta(seconds=90)
+
+    assert _expires_at(observed, 600, reset) == reset
+    assert _expires_at(observed, 60, reset) == observed + timedelta(seconds=60)
 
 
 def test_antigravity_live_status_maps_human_label_to_logical_model():
