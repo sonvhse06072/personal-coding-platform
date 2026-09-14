@@ -32,21 +32,23 @@ def test_checkpoint_migrates_legacy_initial_job_shape():
     assert checkpoint["provider_state"]["provider:openai"]["available"] is False
 
 
-def test_reset_provider_failures_keeps_model_level_failures_but_clears_quota_groups():
+def test_reset_provider_failures_keeps_deterministic_model_failures_but_clears_quota_state():
     checkpoint = {
         "provider_state": {
             "provider:openai": {"available": False},
+            "quota:model:antigravity_free": {"available": False},
             "quota:antigravity_gemini": {"available": False},
             "codex_plus": {"available": False},
         }
     }
     updated = clear_transient_provider_failures(checkpoint)
     assert "provider:openai" not in updated["provider_state"]
+    assert "quota:model:antigravity_free" not in updated["provider_state"]
     assert "quota:antigravity_gemini" not in updated["provider_state"]
     assert updated["provider_state"]["codex_plus"]["available"] is False
 
 
-def test_legacy_antigravity_quota_marker_is_narrowed_to_gemini_bucket():
+def test_legacy_antigravity_quota_marker_is_narrowed_to_failed_model():
     checkpoint = {
         "provider_state": {
             "provider:google_antigravity": {
@@ -70,8 +72,8 @@ def test_legacy_antigravity_quota_marker_is_narrowed_to_gemini_bucket():
     updated = migrate_legacy_antigravity_quota_failure(checkpoint, progress)
 
     assert "provider:google_antigravity" not in updated["provider_state"]
-    assert updated["provider_state"]["quota:antigravity_gemini"]["available"] is False
-    assert updated["provider_state"]["quota:antigravity_gemini"]["quota_pressure"] == 1.0
+    assert updated["provider_state"]["quota:model:antigravity_free"]["available"] is False
+    assert updated["provider_state"]["quota:model:antigravity_free"]["quota_pressure"] == 1.0
     assert updated["provider_state"]["provider:openai"]["available"] is False
     assert "provider:google_antigravity" in checkpoint["provider_state"]
 
