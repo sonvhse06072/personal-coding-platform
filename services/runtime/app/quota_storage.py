@@ -93,23 +93,30 @@ class QuotaStorage(Storage):
             conn.commit()
 
     def list_quota_snapshots(self, provider: str | None = None) -> list[dict[str, Any]]:
-        with self.connect() as conn:
-            if provider:
-                rows = conn.execute(
-                    """SELECT provider, quota_key, model_id, quota_group, used_percent,
-                              remaining_percent, available, resets_at, window_minutes,
-                              observed_at, source, status, details
-                       FROM cp_provider_quota_state
-                       WHERE provider=%s
-                       ORDER BY provider, quota_key""",
-                    (provider,),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    """SELECT provider, quota_key, model_id, quota_group, used_percent,
-                              remaining_percent, available, resets_at, window_minutes,
-                              observed_at, source, status, details
-                       FROM cp_provider_quota_state
-                       ORDER BY provider, quota_key"""
-                ).fetchall()
-            return list(rows)
+        # Quota telemetry must never make job routing unavailable merely because
+        # the optional snapshot table/database cannot be read. A failed read is
+        # represented as no usable telemetry and normal provider-health routing
+        # remains in force.
+        try:
+            with self.connect() as conn:
+                if provider:
+                    rows = conn.execute(
+                        """SELECT provider, quota_key, model_id, quota_group, used_percent,
+                                  remaining_percent, available, resets_at, window_minutes,
+                                  observed_at, source, status, details
+                           FROM cp_provider_quota_state
+                           WHERE provider=%s
+                           ORDER BY provider, quota_key""",
+                        (provider,),
+                    ).fetchall()
+                else:
+                    rows = conn.execute(
+                        """SELECT provider, quota_key, model_id, quota_group, used_percent,
+                                  remaining_percent, available, resets_at, window_minutes,
+                                  observed_at, source, status, details
+                           FROM cp_provider_quota_state
+                           ORDER BY provider, quota_key"""
+                    ).fetchall()
+                return list(rows)
+        except Exception:
+            return []
