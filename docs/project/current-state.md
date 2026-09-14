@@ -45,7 +45,8 @@ Before a material task is complete or handed off, update the relevant topical do
 - Runtime behavior/version on this branch is `1.0.32`.
 - Focused adapter tests assert the non-interactive policy for execute, plan and evaluate modes and guard against full-access regression.
 - `docs/project/architecture.md` records this as the approved developer-agent trust-boundary policy.
-- Full GitHub CI and Human Owner manual merge are required. Do not auto-merge.
+- GitHub Actions run #185 passed on code/docs head `43386aea880d9478e5a9e29b3919c082c8c7c1f1`: Runtime, Router, ddev-executor and structure-test jobs all succeeded.
+- This continuity-only update is the final branch change; its resulting exact PR head must also be green before Human Owner manual merge. Do not auto-merge.
 
 ### 2. DEC-025C / `chonhac` recovery tooling
 
@@ -67,8 +68,8 @@ Before a material task is complete or handed off, update the relevant topical do
 
 ## Next safe sequence
 
-1. Let PR #92 run full GitHub CI. Repair only on the same branch/PR if required.
-2. Human Owner manually merges PR #92 after green CI.
+1. Confirm the exact final head of PR #92 is green after the continuity-only commit.
+2. Human Owner manually merges PR #92 after that green CI.
 3. Because C1 is terminal `failed`, pull merged `main` and restart/sync only as required to activate Runtime `1.0.32`. This single rollout includes the already-merged #89 timeout recovery plus the #91 Codex policy; do not perform an unnecessary intermediate `1.0.31` rollout first.
 4. Verify platform health and Runtime `1.0.32`; verify the installed Codex CLI accepts the explicit config policy with a bounded non-mutating smoke before relying on it for C1.
 5. Trigger orchestration reconciliation and inspect the newly materialized live control action for the same C1 job. Expected only if the compatibility matcher validates the persisted legacy state: `max_wall_time_minutes +20`.
