@@ -15,6 +15,7 @@ _PROVIDER_KEY_BY_MODEL_PREFIX = {
     "groq": "GROQ_API_KEY",
     "openrouter": "OPENROUTER_API_KEY",
 }
+_OPENROUTER_PREFIX = "openrouter/"
 
 
 def provider_env_for_model(model: str) -> dict[str, str]:
@@ -32,6 +33,53 @@ def provider_env_for_model(model: str) -> dict[str, str]:
     return {key: value} if value else {}
 
 
+def opencode_env_for_model(model: str) -> dict[str, str]:
+    """Build the provider-scoped environment for one OpenCode invocation.
+
+    OpenRouter coding jobs use an explicit model and an inline OpenCode provider
+    configuration. The inline policy is deliberately stricter than account
+    defaults: private repository content may be sent only to endpoints that deny
+    provider data collection and advertise Zero Data Retention. OpenRouter may
+    fail over between eligible endpoints for this same model, but PCP remains the
+    authority for choosing a different model after a provider failure.
+    """
+    env = provider_env_for_model(model)
+    normalized = (model or "").strip()
+    if not normalized.startswith(_OPENROUTER_PREFIX):
+        return env
+
+    upstream_model = normalized.removeprefix(_OPENROUTER_PREFIX).strip()
+    if not upstream_model or upstream_model == "free":
+        raise RuntimeError(
+            "OpenRouter coding runs require an explicit model; openrouter/free is not allowed"
+        )
+
+    config = {
+        "$schema": "https://opencode.ai/config.json",
+        "provider": {
+            "openrouter": {
+                "models": {
+                    upstream_model: {
+                        "options": {
+                            "provider": {
+                                "data_collection": "deny",
+                                "zdr": True,
+                                "require_parameters": True,
+                                "allow_fallbacks": True,
+                            }
+                        }
+                    }
+                }
+            }
+        },
+    }
+    env["OPENCODE_CONFIG_CONTENT"] = json.dumps(
+        config, ensure_ascii=True, sort_keys=True, separators=(",", ":")
+    )
+    env["OPENCODE_AUTO_SHARE"] = "false"
+    return env
+
+
 class OpenCodeAdapter(AgentAdapter):
     name = "opencode"
 
@@ -47,7 +95,7 @@ class OpenCodeAdapter(AgentAdapter):
             argv,
             cwd=workspace,
             timeout=timeout,
-            env=provider_env_for_model(self.model),
+            env=opencode_env_for_model(self.model),
         )
         chunks: list[str] = []
         errors: list[str] = []
