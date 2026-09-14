@@ -33,15 +33,17 @@ Before a material task is complete or handed off, update the relevant topical do
 ### 1. Post-merge version / rollout reconciliation
 
 - Issue: `personal-coding-platform` #83.
+- PR: #84, `Reconcile post-merge versions and rollout state`.
 - Branch: `fix/post-merge-version-state-83`.
 - Purpose: make post-#78/#81 behavior distinguishable in durable route/health evidence before rollout.
-- Planned version evidence:
+- Version evidence implemented on the branch:
   - Router app `1.0.15`;
   - Runtime app `1.0.29`;
   - model registry `v6`;
   - routing policy `v6`.
-- This task must not change routing/provider behavior; it only reconciles version markers, version tests, and docs.
-- Gate: CI green -> Human Owner manual merge -> only then local rollout.
+- This task does not change routing/provider behavior; it only reconciles version markers, version tests, and docs.
+- GitHub Actions run #161 passed all suites after updating the stale staffing version assertions.
+- Current gate: Human Owner manual merge of PR #84 -> only then local rollout.
 
 ### 2. DEC-025C / `chonhac` recovery tooling
 
@@ -82,7 +84,7 @@ Durable policy: `docs/project/provider-policy.md`.
 
 ## Next safe rollout sequence
 
-1. Finish issue #83, obtain green CI, and have the Human Owner merge its PR.
+1. Have the Human Owner merge PR #84 after its final docs-only CI run is green.
 2. On the local WSL checkout, pull current `main`.
 3. Query C1 job `eec59b13651c54559c10ce204380a68e`. If it is queued/routing/planning/executing/verifying/evaluating/delivering or otherwise in flight, do **not** restart anything.
 4. If C1 is confirmed stable blocked/terminal, configure `OPENROUTER_API_KEY` in `.ddev/.env.coding-runtime.local` without exposing it in chat/logs.
