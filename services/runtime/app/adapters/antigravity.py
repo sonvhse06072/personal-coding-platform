@@ -18,6 +18,7 @@ _PERMISSION_DENIED_PATTERNS = (
     "headless mode cannot prompt for",
     "was auto-denied",
 )
+_REASONING_EFFORTS = {"low", "medium", "high"}
 
 
 def _bridge_config() -> tuple[str, str]:
@@ -103,7 +104,12 @@ class AntigravityAdapter(AgentAdapter):
             )
 
         run_id = uuid.uuid4().hex
-        effort = "high" if mode in {"plan", "evaluate"} else "medium"
+        default_effort = "high" if mode in {"plan", "evaluate"} else "medium"
+        effort = (
+            self.reasoning_effort
+            if self.reasoning_effort in _REASONING_EFFORTS
+            else default_effort
+        )
         payload = {
             "run_id": run_id,
             "workspace": str(workspace),
