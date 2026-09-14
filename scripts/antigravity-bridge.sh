@@ -12,7 +12,8 @@ PORT="${ANTIGRAVITY_BRIDGE_PORT:-8792}"
 AGY_SETTINGS="$HOME/.gemini/antigravity-cli/settings.json"
 AGY_SETTINGS_BACKUP="$STATE_DIR/antigravity-settings.before-platform.json"
 AGY_WRAPPER="$ROOT/scripts/agy-workspace-wrapper.sh"
-AGY_QUOTA_SINK="$ROOT/scripts/antigravity-quota-sink.py"
+AGY_QUOTA_SINK_SOURCE="$ROOT/scripts/antigravity-quota-sink.py"
+AGY_QUOTA_SINK="$STATE_DIR/antigravity-quota-sink.py"
 AGY_QUOTA_SNAPSHOT="$STATE_DIR/antigravity-quota.json"
 BRIDGE_LAUNCHER="$ROOT/scripts/antigravity-bridge-launcher.py"
 mkdir -p "$STATE_DIR" "${CODING_WORKSPACES_ROOT}" "$(dirname "$AGY_SETTINGS")"
@@ -35,7 +36,7 @@ configure_safe_settings() {
   if [[ -f "$AGY_SETTINGS" && ! -f "$AGY_SETTINGS_BACKUP" ]]; then
     cp -a "$AGY_SETTINGS" "$AGY_SETTINGS_BACKUP"
   fi
-  python3 - "$AGY_SETTINGS" "$AGY_QUOTA_SINK" <<'PY'
+  python3 - "$AGY_SETTINGS" "$AGY_QUOTA_SINK" "$AGY_QUOTA_SINK_SOURCE" <<'PY'
 import json
 import os
 import sys
@@ -43,6 +44,7 @@ from pathlib import Path
 
 path = Path(sys.argv[1])
 sink = str(Path(sys.argv[2]).resolve())
+legacy_sink = str(Path(sys.argv[3]).resolve())
 try:
     data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 except (json.JSONDecodeError, OSError) as exc:
@@ -129,9 +131,10 @@ for rule in required_deny:
 permissions["deny"] = deny
 
 # Quota observability uses Antigravity's documented status-line JSON payload.
-# Never replace a user-defined custom status-line command. If none exists, install
-# a silent PCP sink stacked under the built-in status line so terminal rendering
-# remains unchanged while quota/reset metadata is captured locally.
+# Never replace a user-defined custom status-line command. PCP runs its sink from
+# a private runtime copy under ~/.coding-platform so bridge startup never chmods
+# or otherwise mutates a tracked repository file. Migrate the previous PCP sink
+# path automatically while preserving unrelated custom commands.
 status_line = data.get("statusLine")
 existing_command = ""
 if isinstance(status_line, dict):
@@ -143,8 +146,9 @@ if not existing_command:
         "enabled": True,
         "stack_with_default": True,
     }
-elif existing_command == sink:
+elif existing_command in {sink, legacy_sink}:
     status_line["type"] = "command"
+    status_line["command"] = sink
     status_line["enabled"] = True
     status_line["stack_with_default"] = True
 else:
@@ -164,13 +168,14 @@ start() {
   real_agy="$(command -v agy || true)"
   [[ -n "$real_agy" ]] || { echo "agy is required on the WSL host." >&2; exit 1; }
   [[ -f "$AGY_WRAPPER" ]] || { echo "Missing $AGY_WRAPPER" >&2; exit 1; }
-  [[ -f "$AGY_QUOTA_SINK" ]] || { echo "Missing $AGY_QUOTA_SINK" >&2; exit 1; }
+  [[ -f "$AGY_QUOTA_SINK_SOURCE" ]] || { echo "Missing $AGY_QUOTA_SINK_SOURCE" >&2; exit 1; }
   [[ -f "$BRIDGE_LAUNCHER" ]] || { echo "Missing $BRIDGE_LAUNCHER" >&2; exit 1; }
 
-  # GitHub's Contents API does not preserve executable mode for newly-created
-  # files, so enforce private executable modes locally before handing wrappers to
-  # Antigravity. The workspace wrapper registers the already-validated cwd.
-  chmod 700 "$AGY_WRAPPER" "$AGY_QUOTA_SINK"
+  # The tracked workspace wrapper already carries an executable bit. The quota
+  # sink is copied into private runtime state and made executable there so bridge
+  # startup never changes a tracked source file's mode or content.
+  chmod 700 "$AGY_WRAPPER"
+  install -m 700 "$AGY_QUOTA_SINK_SOURCE" "$AGY_QUOTA_SINK"
   export ANTIGRAVITY_REAL_AGY_BIN="$real_agy"
   export ANTIGRAVITY_QUOTA_SINK="$AGY_QUOTA_SINK"
   export ANTIGRAVITY_QUOTA_SNAPSHOT="$AGY_QUOTA_SNAPSHOT"
