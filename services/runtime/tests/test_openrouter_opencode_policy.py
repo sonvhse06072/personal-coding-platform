@@ -20,6 +20,7 @@ def test_openrouter_opencode_env_is_explicit_private_and_provider_scoped(monkeyp
     assert env["OPENCODE_AUTO_SHARE"] == "false"
 
     config = json.loads(env["OPENCODE_CONFIG_CONTENT"])
+    assert config["share"] == "disabled"
     models = config["provider"]["openrouter"]["models"]
     assert list(models) == ["qwen/qwen3-coder:free"]
     policy = models["qwen/qwen3-coder:free"]["options"]["provider"]
