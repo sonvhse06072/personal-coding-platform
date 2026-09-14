@@ -32,9 +32,11 @@ Before a material task is complete or handed off, update the relevant topical do
 - PR #102 fixes a rollout rematerialization bug: attention notification dedupe includes a deterministic fingerprint of the rendered control-action set, so a stable blocked/waiting/merge state emits one fresh owner notification when newly valid actions appear while repeated ticks with the same action set remain deduped.
 - PR #106 (`Keep Telegram callback acknowledgement non-blocking`) is merged at `03cd3a918fbf1de8f4ad1eabdd844d45f2ec8e73`; exact-head GitHub Actions run #205 passed before PM merge. Issue #105 is resolved.
 - PR #106 makes Telegram `answerCallbackQuery` best-effort in `pcpTelegramControl1`, so Telegram HTTP 400 acknowledgement failures cannot prevent a valid opaque Runtime control action from being attempted. Runtime remains authoritative for owner identity, stale/replayed action rejection and one-time live state revalidation.
-- Local rollout currently proves Router `1.0.15`, Runtime `1.0.33`, ddev-executor `1.0.14`, model registry `v7`, routing policy `v7`, n8n healthy, and all service-scoped secret boundaries healthy.
+- Local rollout proves Router `1.0.15`, Runtime `1.0.33`, ddev-executor `1.0.14`, model registry `v7`, routing policy `v7`, n8n healthy, and all service-scoped secret boundaries healthy.
 - Codex CLI `0.154.0` passed the bounded unattended policy smoke from a disposable trusted Git repository with `workspace-write`, `approval_policy="never"`, and workspace network disabled. The earlier `/app` failure was only a Git trust-location mismatch; no bypass flag was added.
-- n8n control-plane sync before PR #106 proved `pcpTelegramOutbox1` and `pcpTelegramControl1` active, Telegram configuration complete, and schedules executing. PR #106 still needs one local `ddev n8n-sync` so the merged callback transport fix is imported/published into the running n8n instance.
+- Issue #109 / PR #114 (`Stream sanitized live developer transcript`) is active platform work approved by the Human Owner. It incrementally consumes Codex `--json` stdout, persists only bounded sanitized developer/tool/file/error events, adds authenticated replay + SSE under the existing read-only dashboard session, and makes the Live Developer Console the primary active-job view while preserving a separate high-level audit timeline.
+- PR #114 explicitly excludes raw chain-of-thought/reasoning, prompts, credentials, unrestricted environment data and unbounded subprocess output. Observability callback/store failures are fail-open for the coding job; Runtime execution/control semantics remain authoritative and unchanged.
+- Initial PR #114 CI run #209 found two compatibility regressions only; both were corrected. Exact-head run #211 passed all four CI jobs before the continuity update. A final exact-head CI run is still required after this documentation commit.
 - Durable operator command guidance: avoid fragile nested `python3 -c '...'` quoting, prefer `.format()` or heredocs when they reduce quoting risk, verify `curl | python3` pipelines, and prefer readable multi-line commands.
 
 ## Effective PM merge governance
@@ -64,22 +66,21 @@ Runtime currently still has manual-merge orchestration behavior from the previou
 - Bounded recoveries already approved on the same job without resetting usage:
   - `max_model_calls`: `14 -> 18`;
   - `max_repair_iterations`: `2 -> 3`;
-  - `max_iterations`: `8 -> 10`.
-- Last pre-timeout live counters included model calls `14/18`, tool calls `36/160`, test runs `6/14`, wall time about `63.515/70`, and repair iterations `2/3`.
-- C1 is still the same terminal `failed` job from the Runtime `1.0.30` wall-budget timeout bug. Runtime `1.0.32+` compatibility matching recognizes this exact legacy timeout as a bounded wall-time recovery candidate.
-- Runtime `1.0.33` successfully rematerialized the missing `max_wall_time_minutes +20` owner action. The first owner attempts did not change C1 because `pcpTelegramControl1` failed on Telegram HTTP 400 while awaiting `answerCallbackQuery` before it could reach Runtime; PR #106 fixes that transport ordering/failure-containment bug.
-- Do not manually change DB state, create a replacement C1 job, call generic `/v1/jobs/{job_id}/run`, or manually claim notification leases to bypass orchestration controls.
+  - `max_iterations`: `8 -> 10`;
+  - compatibility recovery: `max_wall_time_minutes +20` only when the persisted legacy timeout matches live policy.
+- The Human Owner reports that the exact C1 job is currently running after recovery. Treat Runtime durable state as authoritative and re-read it before any operator action.
+- While C1 remains in an active state, do not restart/rebuild Runtime, DDEV or n8n; do not roll out PR #114; do not mutate its workspace/job/database state; and do not create a replacement C1 job.
+- Do not call generic `/v1/jobs/{job_id}/run`, manually claim notification leases or otherwise bypass orchestration controls.
 - C2/C3 remain gated until C1 satisfies both evaluator findings and clears its delivery/merge gate under the effective governance policy.
 
-## Next safe sequence
+## Live Developer Console rollout gate
 
-1. Pull merged `main` at or after merge commit `03cd3a918fbf1de8f4ad1eabdd844d45f2ec8e73`.
-2. C1 is terminal `failed` and no jobs are active, so run `ddev n8n-sync` to import/publish PR #106 and restart the n8n trigger registration safely. Reconfirm platform health afterward; Runtime should remain `1.0.33`.
-3. Do not manually claim notifications or mutate Runtime state. The existing C1 Telegram notification/action may be reused while its control action remains pending and live-valid.
-4. Click the exact `max_wall_time_minutes +20` owner action once. Telegram acknowledgement may still fail harmlessly if the callback response window is old; the workflow must continue to Runtime execution.
-5. Confirm the same job `eec59b13651c54559c10ce204380a68e` leaves terminal `failed`, preserving workspace/source commit/diff/progress/counters, then monitor it through verification/evaluation/delivery.
-6. Any later budget extension must come from a fresh live blocker/action only.
-7. Issue #98 remains follow-up platform work to align Runtime/ddev-executor merge behavior with the new PM merge-governance policy; it must not block the current Codex timeout recovery unless the current C1 delivery gate reaches a merge state that requires the new capability.
+1. Continue issue #109 / PR #114 entirely as repository + CI work while C1 is active. Merging the PR is allowed after all normal PM gates pass because merge alone does not restart the local Runtime.
+2. Do not pull/rebuild/restart the local platform for PR #114 while C1 is active. The current running Runtime must remain undisturbed.
+3. After C1 reaches a safe terminal or stably paused state, re-read platform/job status first. Only then plan the targeted Runtime rollout for the Live Developer Console.
+4. After rollout, verify the read-only dashboard session, recent-event replay and SSE stream with a bounded disposable/safe coding job before relying on the console operationally.
+5. Confirm that dashboard disconnect/reconnect never changes job status or execution, secrets/prompts/reasoning remain absent, and streamed events remain bounded/sanitized.
+6. Issue #98 remains separate follow-up work for constrained PM-controlled PR merge behavior.
 
 ## Global operational gates
 

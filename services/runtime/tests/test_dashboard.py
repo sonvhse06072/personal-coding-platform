@@ -287,9 +287,12 @@ def test_snapshot_orders_activity_newest_first_and_limits_alerts():
     assert "MALICIOUS LEVEL" not in encoded
 
 
-def test_dashboard_ui_shows_newest_activity_and_no_provider_quota_section():
-    assert "Newest first" in DASHBOARD_HTML
-    assert "Latest 3 notifications" in DASHBOARD_HTML
+def test_dashboard_ui_prioritizes_live_developer_console_and_keeps_audit_timeline():
+    assert "Live Developer Console" in DASHBOARD_HTML
+    assert "Developer transcript" in DASHBOARD_HTML
+    assert "Execution timeline" in DASHBOARD_HTML
+    assert "EventSource(" in DASHBOARD_HTML
+    assert "raw chain-of-thought and secrets are never exposed" in DASHBOARD_HTML
     assert "Provider quota remaining" not in DASHBOARD_HTML
     assert "providerQuotas" not in DASHBOARD_HTML
     assert ".slice(0,3)" in DASHBOARD_HTML
