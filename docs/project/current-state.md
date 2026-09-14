@@ -27,7 +27,7 @@ Before a material task is complete or handed off, update the relevant topical do
 - PR #82 (`Make project docs the cross-chat continuity source`) is merged.
 - PR #84 (`Reconcile post-merge versions and rollout state`) is merged; final CI run #162 passed.
 - `main` is verified at merge commit `326ea1c5afb40ce144bf95d2421ad5091eb8391d` after PR #84.
-- Intended post-rollout version evidence from current `main`: Router `1.0.15`, Runtime `1.0.29`, model registry `v6`, routing policy `v6`.
+- Current `main` rollout markers before issue #85: Router `1.0.15`, Runtime `1.0.29`, model registry `v6`, routing policy `v6`.
 - Merged code is not locally activated merely because it is on `main`; Runtime/Router/n8n health evidence must be checked after a safe rollout.
 
 ## Active work
@@ -38,18 +38,23 @@ Durable policy: `docs/project/provider-policy.md`.
 
 - Issue: `personal-coding-platform` #85.
 - Branch: `fix/openrouter-free-model-85`.
-- Do **not** run `ddev n8n-sync` or restart the local platform yet; the model configuration currently on `main` points to a withdrawn free model.
+- Do **not** run `ddev n8n-sync` or restart the local platform until #85 is merged and C1 is re-confirmed stable blocked/terminal.
+- Human Owner decision: OpenRouter free is effectiveness-first. ZDR and `data_collection=deny` are not required. Repository source code may traverse free endpoints under their published logging/training terms. Secret boundaries and disabled OpenCode sharing remain mandatory.
 - Live evidence:
   - `qwen/qwen3-coder:free` -> 404, unavailable for free;
   - `qwen/qwen3.6-plus:free` -> 404, free model deprecated;
-  - `nvidia/nemotron-3-ultra-550b-a55b:free` -> valid free model, but synthetic tool-call smoke returned upstream NVIDIA 502 `provider_unavailable` / temporarily overloaded.
-- Human Owner decision: OpenRouter free is now effectiveness-first. ZDR and `data_collection=deny` are not required. Repository source code may traverse free endpoints under their published logging/training terms. Secret boundaries and disabled OpenCode sharing remain mandatory.
-- Current selection logic considers Programming usage/ranking, coding/tool capability, context and live availability. Ranking is a usage/adoption signal, not a sufficient quality/reliability proof.
-- Preferred primary candidate: `cohere/north-mini-code:free` because it is specialized for agentic coding/terminal work including OpenCode/SWE-Agent, supports tool calls, has 256K context, and currently reports ~99.9% OpenRouter availability.
-- Secondary opportunistic candidate: `nvidia/nemotron-3-ultra-550b-a55b:free` because it is high in current Programming usage ranking and has 1M context/tool support, but current availability is only ~73-75% and a live overload was observed.
-- Next gate: synthetic tool-call smoke against North Mini Code **without** ZDR/data-collection filters. If it passes, patch the explicit multi-model free pool, bump model registry version, update focused tests/docs, run full CI and require Human Owner manual merge before rollout.
-- Preserve current critical-profile and Product Manager exclusions unless separately approved.
-- The Human Owner has funded at least $10 OpenRouter credit; current documented free allowance is 1,000 requests/day at 20 RPM. Do not expose a fabricated authoritative remaining-quota counter.
+  - `nvidia/nemotron-3-ultra-550b-a55b:free` -> valid model, but synthetic tool-call smoke returned NVIDIA 502 `provider_unavailable` / temporarily overloaded;
+  - `cohere/north-mini-code:free` -> synthetic tool-call smoke passed without ZDR/data-collection filters and returned one `pcp_probe` tool call;
+  - North Mini Code with `zdr=true` + `data_collection=deny` -> 404 `No endpoints found matching your data policy (Zero data retention)`.
+- Implementation decision for #85:
+  - use `cohere/north-mini-code:free` as the **single active explicit OpenRouter free model** for initial rollout;
+  - preserve logical model ID `openrouter_qwen3_coder_free` as a stable legacy durable identity so existing route history/provider-state evidence remains comparable; the registry `model:` slug is authoritative;
+  - do not activate Nemotron in the same pool yet because Runtime provider failures mark `provider:openrouter` unavailable, so one provider-level failure would exclude every OpenRouter model and defeat same-provider model fallback;
+  - remove mandatory ZDR/data-collection filters from Runtime OpenCode request policy, but keep exact-model/provider allowlists, `require_parameters`, same-model endpoint fallback, service-scoped `OPENROUTER_API_KEY`, and `share=disabled`.
+- Intended #85 version markers: Router remains `1.0.15`; Runtime `1.0.30`; model registry `v7`; routing policy `v7`.
+- Critical profile and Product Manager exclusions remain unchanged.
+- The Human Owner funded at least $10 OpenRouter credit; current documented free allowance is 1,000 requests/day at 20 RPM. Do not expose a fabricated authoritative remaining-quota counter.
+- Current gate: finish focused tests/docs, green full CI, Human Owner manual merge; no local restart before that.
 
 ### 2. DEC-025C / `chonhac` recovery tooling
 
@@ -72,18 +77,18 @@ Durable policy: `docs/project/provider-policy.md`.
 - Owner-facing Telegram messages/actions are localized to Vietnamese; stable machine reason codes remain unchanged.
 - `reassessment_stopped + hard_budget_guard` can produce a bounded, live-dimension-revalidated owner action; stale/wrong-dimension actions fail closed.
 - Local activation is pending.
-- `ddev n8n-sync` restarts the DDEV stack; it must run only after C1 is confirmed stable blocked/terminal and issue #85 produces a valid OpenRouter model configuration.
+- `ddev n8n-sync` restarts the DDEV stack; it must run only after C1 is confirmed stable blocked/terminal and #85 is merged.
 
 ## Next safe sequence
 
-1. Keep the local DDEV stack unchanged; do not run `ddev n8n-sync` yet.
-2. Smoke `cohere/north-mini-code:free` with synthetic tool calling and no ZDR/data-collection filters.
-3. If North passes, implement issue #85 as a small explicit multi-model registry/routing/test/docs patch: North Mini Code reliable primary, Nemotron opportunistic secondary, existing PCP fallbacks after them as policy allows.
-4. Bump model registry version, run full CI, obtain Human Owner manual merge.
-5. Pull merged `main` locally and re-query C1.
-6. Only if C1 is stable blocked/terminal, configure `OPENROUTER_API_KEY` in `.ddev/.env.coding-runtime.local` and run the required platform/n8n rollout.
-7. Verify Router/Runtime/config versions and OpenCode availability before any C1 recovery.
-8. Run a minimal smoke through the deployed integration, then trigger orchestrator tick and recover C1 only through the official live-revalidated control action.
+1. Finish issue #85 on `fix/openrouter-free-model-85`: North Mini Code upstream model, effectiveness-first OpenCode request policy, Runtime `1.0.30`, registry/policy `v7`, focused tests/docs.
+2. Run full CI and obtain Human Owner manual merge; do not restart local services yet.
+3. Pull merged `main` locally and re-query C1.
+4. Only if C1 is stable blocked/terminal, configure `OPENROUTER_API_KEY` in `.ddev/.env.coding-runtime.local` and run the required platform/n8n rollout.
+5. Verify Router `1.0.15`, Runtime `1.0.30`, registry `v7`, routing policy `v7`, plus OpenCode availability.
+6. Run one minimal deployed integration smoke through PCP using North Mini Code; no secrets/private credentials in the prompt.
+7. Trigger orchestrator tick and recover C1 only through the official live-revalidated control action; expected first bounded extension for the recorded blocker is `+4 model calls`.
+8. C1 must address both evaluator findings and reach its normal PR/CI/manual-merge gate before C2/C3 proceed.
 
 ## Global operational gates
 
