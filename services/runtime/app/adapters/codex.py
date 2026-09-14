@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 
 from .base import AgentAdapter, AgentRun, classify_provider_failure
-from ..developer_stream import codex_public_event, emit_developer_event
+from ..developer_stream import agent_lifecycle_event, agent_public_event, emit_developer_event
 from ..shell import run_command
 
 
@@ -36,16 +36,28 @@ class CodexAdapter(AgentAdapter):
             argv += ["--config", f'model_reasoning_effort="{self.reasoning_effort}"']
         argv.append(prompt)
 
+        emit_developer_event(
+            agent_lifecycle_event(
+                adapter=self.name,
+                provider="openai",
+                model=self.model,
+                mode=mode,
+                state="started",
+            )
+        )
+
         def on_stdout_line(line: str) -> None:
             try:
                 raw = json.loads(line)
             except json.JSONDecodeError:
                 return
             emit_developer_event(
-                codex_public_event(
+                agent_public_event(
                     raw,
                     workspace=workspace,
                     mode=mode,
+                    adapter=self.name,
+                    provider="openai",
                     model=self.model,
                 )
             )
@@ -110,6 +122,15 @@ class CodexAdapter(AgentAdapter):
             if errors and not failure_message:
                 failure_message = "\n".join(errors)[-12000:]
 
+        emit_developer_event(
+            agent_lifecycle_event(
+                adapter=self.name,
+                provider="openai",
+                model=self.model,
+                mode=mode,
+                state="completed" if effective_returncode == 0 else "failed",
+            )
+        )
         return AgentRun(
             self.name,
             self.model,
