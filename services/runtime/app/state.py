@@ -5,9 +5,6 @@ from pathlib import Path
 from typing import Any
 
 
-_ANTIGRAVITY_LEGACY_QUOTA_GROUPS = {
-    "antigravity_free": "antigravity_gemini",
-}
 _ANTIGRAVITY_QUOTA_FAILURES = {"quota_exhausted", "rate_limited"}
 
 
@@ -45,10 +42,10 @@ def checkpoint_from_row(row: dict[str, Any]) -> dict[str, Any]:
 def clear_transient_provider_failures(checkpoint: dict[str, Any]) -> dict[str, Any]:
     """Clear provider/quota health after explicit operator recovery assertion.
 
-    Direct model-scoped failures such as `no_effect` remain excluded. Provider
-    health and quota-bucket health are transient external resource state, so an
-    explicit quota reset/credential repair may clear those markers without ever
-    resetting Runtime job usage counters.
+    Direct deterministic model failures such as `no_effect` remain excluded.
+    Provider and quota state are transient external resource state, so an explicit
+    reset/credential-repair assertion may clear those markers without resetting
+    Runtime usage counters, workspace or diff.
     """
     updated = deepcopy(checkpoint)
     state = dict(updated.get("provider_state") or {})
@@ -64,13 +61,13 @@ def migrate_legacy_antigravity_quota_failure(
     checkpoint: dict[str, Any],
     progress: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Narrow old provider-wide Antigravity quota state to its quota bucket.
+    """Narrow old provider-wide Antigravity quota state to the failed model.
 
-    Runtime versions before model-aware Antigravity routing marked quota
-    exhaustion as `provider:google_antigravity` unavailable. During a preserved
-    same-job reroute, narrow only a proven quota/rate-limit marker so other
-    Antigravity quota groups remain eligible. Auth/bridge/provider failures remain
-    provider-wide and are deliberately not migrated.
+    Runtime versions before model-aware Antigravity routing marked one model's
+    quota exhaustion as `provider:google_antigravity` unavailable. During a
+    preserved same-job reroute, narrow only a proven quota/rate-limit marker to
+    `quota:model:<logical-id>`. Other Antigravity models and quota families stay
+    eligible. Auth/bridge/provider failures deliberately remain provider-wide.
     """
     updated = deepcopy(checkpoint)
     state = dict(updated.get("provider_state") or {})
@@ -96,8 +93,7 @@ def migrate_legacy_antigravity_quota_failure(
     model_id = str(failure.get("model") or "").strip()
     if not model_id:
         return updated
-    quota_group = _ANTIGRAVITY_LEGACY_QUOTA_GROUPS.get(model_id, model_id)
-    quota_key = f"quota:{quota_group}"
+    quota_key = f"quota:model:{model_id}"
     quota_marker = dict(state.get(quota_key) or {})
     quota_marker.update(deepcopy(provider_marker))
     quota_marker.update({"healthy": False, "available": False, "quota_pressure": 1.0})
