@@ -64,9 +64,10 @@ Durable provider policy: `docs/project/provider-policy.md`.
 - First post-rollout bounded recovery extended `max_model_calls` by `+4`, from `14` to `18`, and resumed the same C1 job without resetting usage.
 - C1 progressed through verification, then blocked again at `2026-09-14T13:37:33.795835+00:00` with `reason=execution_budget_exhausted`, Runtime error `None`.
 - The live Telegram advisory identified repair iterations as the exhausted dimension: repair iterations `2/2`, model calls `14/18`, tool calls `33/160`, test runs `6/14`, wall time `63.294/70`.
-- Human Owner pressed the fresh bounded `+1 repair iteration` Telegram control, but a subsequent job query still returned the exact same blocked row and exact same `updated_at=2026-09-14T13:37:33.795835+00:00`. Therefore execution of that Telegram action is **not yet confirmed**; do not press it again until the control-action row/result is inspected.
-- The next diagnostic must read the fresh `budget_extend` control action for payload `{"dimension":"max_repair_iterations","increment":1}` and inspect its `status`, `result`, `updated_at`, and expiry. Valid outcomes include `pending`, `executed`, `failed`, `stale`, `cancelled`, or `expired`.
-- Do not call generic `/v1/jobs/{job_id}/run`, do not mutate `cp_control_actions` manually, and do not create a replacement C1 job. C2/C3 remain gated.
+- Fresh repair-budget action is now identified exactly: action id `vNqbP1aduh_RzGKxnvhz_njI`, `action_type=budget_extend`, payload `{"dimension":"max_repair_iterations","increment":1}`, status `pending`, result `null`, created/updated `2026-09-14T13:37:36.684818+00:00`, expires `2026-09-16T13:37:36.684818+00:00`.
+- The Telegram button attempt did not execute this action; the action remains pending and the C1 job row is unchanged at the blocked timestamp above. Do not press the Telegram action again while using the CLI fallback.
+- The next authorized mutation is to execute this exact pending action once through `POST /v1/control-actions/vNqbP1aduh_RzGKxnvhz_njI/execute`. Runtime must revalidate owner identity, expiry, exact state fingerprint, non-in-flight status, increment, and hard maximum before applying it and resuming the same job.
+- No other budget extension is authorized. Do not call generic `/v1/jobs/{job_id}/run`, do not mutate `cp_control_actions` manually, and do not create a replacement C1 job. C2/C3 remain gated.
 
 ### 3. Telegram control rollout
 
@@ -74,16 +75,16 @@ Durable provider policy: `docs/project/provider-policy.md`.
 - Owner-facing Telegram messages/actions are localized to Vietnamese; stable machine reason codes remain unchanged.
 - The first `max_model_calls +4` recovery completed and resumed the same job.
 - The subsequent `execution_budget_exhausted` state correctly surfaced repair iterations `2/2` and a bounded `+1` repair action.
-- Human Owner attempted the `+1 lượt sửa` Telegram control, but the Runtime job row did not change afterward. Treat this as an unconfirmed control transport/execution outcome until the corresponding `cp_control_actions` row is inspected.
-- n8n remains the owner-control transport; Runtime remains authoritative and revalidates every action before mutation.
+- Human Owner attempted the `+1 lượt sửa` Telegram control, but the action remained `pending` in Runtime, confirming the callback did not execute the mutation.
+- n8n remains the owner-control transport, but CLI execution of the exact pending action through the same official Runtime endpoint is the current safe fallback. Runtime remains authoritative and revalidates every action before mutation.
 
 ## Next safe sequence
 
-1. Read-only inspect current C1 `budget_extend` control actions and identify the exact fresh `max_repair_iterations +1` row.
-2. If that row is `executed`, inspect its `result` and re-query the job; do not execute it again.
-3. If it is still `pending`, the Telegram callback likely did not reach/complete Runtime; execute that exact action once through the official Runtime endpoint or retry the exact Telegram button only after confirming it remains pending/current.
-4. If it is `failed` or `stale`, inspect the safe result/current state and materialize a fresh action via orchestration if required; never reuse stale actions.
-5. Once C1 resumes, monitor only until the next stable state or PR/CI gate. Do not restart services while in flight.
+1. Execute exactly pending action `vNqbP1aduh_RzGKxnvhz_njI` once through the official Runtime control-action endpoint using configured Telegram owner/chat identity.
+2. Confirm the response records `max_repair_iterations` previous limit `2`, new limit `3`, used `2`, and the same C1 job id.
+3. Re-query C1 immediately. If status is in flight (`routing`, `planning`, `executing`, `verifying`, `evaluating`, `delivering`, or equivalent), monitor only and do not execute another control or restart services.
+4. If C1 reaches `delivering`/PR creation, follow the normal CI/manual-merge gate.
+5. If C1 blocks again, inspect the new live reason/counters/fresh action before approving anything else. Extend only the current exhausted dimension.
 6. C1 must fix both evaluator findings and reach the normal PR/CI/manual-merge gate before C2/C3 proceed.
 
 ## Global operational gates
