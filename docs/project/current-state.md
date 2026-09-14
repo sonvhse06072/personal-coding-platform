@@ -25,13 +25,16 @@ Before a material task is complete or handed off, update the relevant topical do
 - PR #90 (`Recover wall-budget-bounded agent timeouts safely`) is merged; source Runtime behavior advanced to `1.0.31`.
 - PR #92 (`Make Codex unattended execution fail closed`) is merged at `7d05c68dc36a481fbece98540bc4d0e6888643a2`; post-merge GitHub Actions run #187 passed. Source Runtime behavior is `1.0.32`.
 - PR #92 policy: Codex planner/evaluator use `read-only`, execute/repair use `workspace-write`, every Codex Runtime turn uses `approval_policy="never"`, workspace-write network is explicitly disabled, and full-access/bypass flags remain forbidden.
+- PR #97 (`Delegate routine PR review and merge to PM`) is merged at `9574cc61a46cecb2ad88ae0983e7cb8eef8fbf7c`; GitHub Actions run #195 passed on exact head `6381507c112cd524d3fd71f3abbebaf69b999535` before PM merge.
+- PR #97 updates the Constitution, Architecture, Operating Model, `AGENTS.md`, and continuity policy so PM may review and merge eligible in-scope PRs autonomously after all required gates pass and when no unresolved Human Owner decision trigger exists.
+- PR #95 was closed unmerged as superseded; issue #93 was closed completed because its durable shell-command guidance is now included in `AGENTS.md` via PR #97.
 - The last proven deployed platform before the current rollout work was Router `1.0.15`, Runtime `1.0.30`, model registry `v7`, routing policy `v7`, OpenCode adapter available, n8n healthy, and OpenRouter secret scoped only to Runtime.
 - During rollout smoke testing, invoking Codex from `/app` failed before the prompt because `/app` is not a trusted Git repository. The next bounded smoke must use a temporary Git repository or a real isolated job workspace; do not add `--skip-git-repo-check` merely to hide the mismatch.
-- Operator command guidance is now intended to be durable: avoid fragile nested `python3 -c '...'` quoting, prefer `.format()` or heredocs when they reduce quoting risk, verify `curl | python3` pipelines, and prefer readable multi-line commands.
+- Durable operator command guidance: avoid fragile nested `python3 -c '...'` quoting, prefer `.format()` or heredocs when they reduce quoting risk, verify `curl | python3` pipelines, and prefer readable multi-line commands.
 
-## Active governance amendment — issue #96 / PR #97
+## Effective PM merge governance
 
-Human Owner decision on 2026-09-14:
+Human Owner decision adopted on 2026-09-14 through issue #96 / PR #97:
 
 - PM may review and merge routine PRs autonomously when the change stays inside the already-approved project frame.
 - PR, deterministic verification, required independent review, and green CI remain mandatory gates.
@@ -42,15 +45,7 @@ Human Owner decision on 2026-09-14:
 - Human Owner approval is still required for important protected decisions: scope/non-goal changes, architecture invariants, major dependencies/services, authentication/authorization/security/trust boundaries, destructive data changes, production policy/actions, high-authority governance amendments, and material budget expansion.
 - If a PR introduces or depends on one of those decisions, PM must pause for explicit Human Owner approval. After approval and remaining green gates, PM may complete the merge.
 
-Implementation artifacts:
-
-- Issue #96: `Allow PM-reviewed autonomous PR merge within approved scope`.
-- Branch: `ai/pm-autonomous-merge-policy-96`.
-- PR #97: `Delegate routine PR review and merge to PM`.
-- PR #97 updates `constitution.md`, `architecture.md`, `operating-model.md`, `AGENTS.md`, and this continuity file.
-- Issue #96 records explicit transitional Human Owner authorization for PM to merge PR #97 itself after CI/review gates pass, because this PR enacts the new merge-governance rule.
-- Runtime currently still has manual-merge orchestration behavior from the previous policy. Treat that as transitional implementation state. A separate implementation PR is required to add constrained PM-controlled merge through Runtime/ddev-executor; do not broaden developer-agent privileges.
-- PR #95 (`Document safer operator shell command patterns`) is superseded by PR #97 because the durable shell-command guidance is included in `AGENTS.md` here. Close #95 after #97 is merged rather than merging duplicate/stale continuity changes.
+Runtime currently still has manual-merge orchestration behavior from the previous policy. Issue #98 (`Implement constrained PM-controlled PR merge in Runtime`) tracks executable alignment. The future implementation must keep merge capability behind Runtime -> constrained `ddev-executor`, validate exact PR/head/project/WorkOrder/CI/review/human-decision state, preserve developer-agent credential isolation, and fail closed on stale/replayed/unauthorized merge requests.
 
 ## DEC-025C / `chonhac` recovery tooling
 
@@ -72,14 +67,11 @@ Implementation artifacts:
 
 ## Next safe sequence
 
-1. Let PR #97 CI complete; PM reviews the exact diff and CI evidence.
-2. Because the Human Owner explicitly approved this governance amendment in issue #96, PM may merge PR #97 when green without an additional human merge step.
-3. Close superseded PR #95 after #97 is merged.
-4. Resume Runtime `1.0.32` rollout validation: confirm platform health, installed Codex CLI version, and run the bounded non-mutating Codex smoke inside a trusted temporary Git repo or actual isolated workspace.
-5. Trigger orchestration reconciliation and inspect the live control action for the same C1 job. Expected only if the compatibility matcher validates the persisted legacy state: `max_wall_time_minutes +20`.
-6. Execute recovery only through the official live-revalidated control action. Preserve the same job/workspace/source commit/diff/progress/counters.
-7. Continue C1 through verification/evaluation/delivery.
-8. Separately implement constrained PM-controlled merge support in Runtime/ddev-executor so executable behavior matches the new approved policy; preserve developer-agent credential isolation and fail closed on unresolved Human Owner decision triggers.
+1. Resume Runtime `1.0.32` rollout validation: confirm platform health, installed Codex CLI version, and run the bounded non-mutating Codex smoke inside a trusted temporary Git repo or actual isolated workspace.
+2. Trigger orchestration reconciliation and inspect the live control action for the same C1 job. Expected only if the compatibility matcher validates the persisted legacy state: `max_wall_time_minutes +20`.
+3. Execute recovery only through the official live-revalidated control action. Preserve the same job/workspace/source commit/diff/progress/counters.
+4. Continue C1 through verification/evaluation/delivery.
+5. Issue #98 remains follow-up platform work to align Runtime/ddev-executor merge behavior with the new PM merge-governance policy; it must not block the current Codex timeout recovery unless the current C1 delivery gate reaches a merge state that requires the new capability.
 
 ## Global operational gates
 
