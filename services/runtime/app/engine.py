@@ -15,6 +15,7 @@ from typing import Any
 from .baseline import resolve_project_baseline
 from .config import project_config
 from .engine_delivery import RuntimeEngine as _RuntimeEngine
+from .shell import CommandTimeoutError
 from .state import (
     checkpoint_from_row,
     clear_routing_choices_for_resume,
@@ -38,6 +39,11 @@ _OWNER_BUDGET_HARD_MAX = {
     "max_wall_time_minutes": 240,
     "max_repair_iterations": 20,
     "max_iterations": 30,
+}
+_AGENT_TIMEOUT_CAP_BY_STATUS = {
+    "planning": 1800,
+    "executing": 2400,
+    "evaluating": 1200,
 }
 
 
@@ -168,6 +174,67 @@ class RuntimeEngine(_RuntimeEngine):
         attempts = progress.get("agent_attempts") or []
         if attempts:
             attempts[-1]["reasoning_effort"] = choice.get("reasoning_effort")
+
+    def _block_wall_budget_command_timeout(
+        self,
+        job_id: str,
+        exc: CommandTimeoutError,
+    ) -> bool:
+        """Turn only wall-budget-bounded agent timeouts into recoverable blocks.
+
+        Planner/executor/evaluator calls receive one of the phase caps below via
+        `_remaining_seconds()`. A timeout shorter than that cap is therefore
+        bounded by the job's remaining wall-time budget. Exact-cap timeouts are
+        treated as wall-bounded only when the persisted remaining wall time also
+        matches that deadline. Ordinary per-call timeouts keep their existing
+        terminal-failure semantics.
+        """
+        row = self.storage.get(job_id)
+        if not row:
+            return False
+        status = str(row.get("status") or "")
+        phase_cap = _AGENT_TIMEOUT_CAP_BY_STATUS.get(status)
+        if phase_cap is None:
+            return False
+
+        route = dict(row.get("route") or {})
+        budget = dict((route.get("strategy") or {}).get("budget") or {})
+        try:
+            wall_limit = float(budget["max_wall_time_minutes"])
+        except (KeyError, TypeError, ValueError):
+            return False
+
+        progress = dict(row.get("progress") or self._new_progress())
+        try:
+            elapsed = float(progress.get("elapsed_minutes", 0.0))
+        except (TypeError, ValueError):
+            return False
+
+        remaining_seconds = max(0.0, (wall_limit - elapsed) * 60.0)
+        wall_limited = (
+            exc.timeout < float(phase_cap)
+            or remaining_seconds <= exc.timeout + 1.0
+        )
+        if not wall_limited:
+            return False
+
+        # The command consumed its complete wall-bounded deadline. Persist at
+        # least the wall limit before blocking so recovery selection observes an
+        # actually exhausted wall-time dimension rather than stale pre-call time.
+        progress["elapsed_minutes"] = round(
+            max(elapsed + exc.timeout / 60.0, wall_limit),
+            3,
+        )
+        checkpoint = checkpoint_from_row(row)
+        reason = "planner_budget_exhausted" if status == "planning" else "execution_budget_exhausted"
+        self._block(
+            job_id=job_id,
+            progress=progress,
+            checkpoint=checkpoint,
+            reason=reason,
+            last_failure="wall-time budget exhausted",
+        )
+        return True
 
     async def resume(
         self,
@@ -321,6 +388,10 @@ class RuntimeEngine(_RuntimeEngine):
         self._restore_work_order_task(job_id)
         try:
             await super().run_job(job_id)
+        except CommandTimeoutError as exc:
+            if self._block_wall_budget_command_timeout(job_id, exc):
+                return
+            raise
         except WorkOrderPolicyError as exc:
             row = self.storage.get(job_id)
             if not row:
