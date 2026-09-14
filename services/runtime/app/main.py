@@ -11,6 +11,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from .dashboard import create_dashboard_router
+from .dashboard_quota import create_quota_dashboard_router
 from .engine_antigravity import RuntimeEngine
 from .orchestrator_notifications import PlanOrchestrator
 from .orchestrator_resume import prepare_orchestrated_job_resume, reopen_orchestrated_job
@@ -92,6 +93,20 @@ def runtime_error(exc: RuntimeError) -> HTTPException:
     return HTTPException(404 if message == "Unknown job" else 409, message)
 
 
+async def quota_aware_planning_request(payload: PMPlanCreateRequest) -> PMPlanCreateRequest:
+    """Overlay fresh platform quota state onto PM staffing without inventing data."""
+    if not engine._quota_storage_ready:
+        return payload
+    try:
+        await engine.quota_telemetry.refresh_if_stale()
+    except Exception:
+        pass
+    raw = payload.model_dump(mode="json")
+    provider_state = dict(raw.get("provider_state") or {})
+    raw["provider_state"] = engine.quota_telemetry.apply_to_provider_state(provider_state)
+    return PMPlanCreateRequest.model_validate(raw)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Coding agents run as child processes of Runtime. Harden the long-running
@@ -108,9 +123,15 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.35", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.36", lifespan=lifespan)
 app.include_router(pm_bridge_router)
 app.include_router(create_dashboard_router(storage, plan_orchestrator.store))
+app.include_router(
+    create_quota_dashboard_router(
+        engine.quota_telemetry,
+        lambda: engine._quota_storage_ready,
+    )
+)
 
 
 @app.get("/health", response_model=RuntimeHealth)
@@ -120,7 +141,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.35",
+        version="1.0.36",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
@@ -131,10 +152,24 @@ async def health() -> RuntimeHealth:
     )
 
 
+@app.get("/v1/provider-quotas", dependencies=[Depends(auth)])
+def provider_quotas() -> dict[str, Any]:
+    """Read-only operational view; collection/reset remains Runtime-owned."""
+    ready = bool(engine._quota_storage_ready)
+    return {
+        "storage_ready": ready,
+        "poll_seconds": engine.quota_telemetry.poll_seconds,
+        "stale_seconds": engine.quota_telemetry.stale_seconds,
+        "snapshots": engine.quota_telemetry.snapshots() if ready else [],
+        "collector_errors": dict(engine.quota_telemetry.last_errors) if ready else {},
+    }
+
+
 @app.post("/v1/plans", response_model=ExecutionPlanView, dependencies=[Depends(auth)])
 async def create_execution_plan(payload: PMPlanCreateRequest) -> ExecutionPlanView:
     try:
-        row = await pm_planner.create_plan(payload)
+        effective_payload = await quota_aware_planning_request(payload)
+        row = await pm_planner.create_plan(effective_payload)
     except (RuntimeError, KeyError, ValueError) as exc:
         raise HTTPException(422, str(exc)) from exc
     await plan_orchestrator.tick()
