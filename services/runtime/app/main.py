@@ -11,7 +11,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from .dashboard import create_dashboard_router
-from .engine import RuntimeEngine
+from .engine_antigravity import RuntimeEngine
 from .orchestrator_notifications import PlanOrchestrator
 from .orchestrator_resume import prepare_orchestrated_job_resume, reopen_orchestrated_job
 from .pm_bridge import router as pm_bridge_router
@@ -108,7 +108,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.34", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.35", lifespan=lifespan)
 app.include_router(pm_bridge_router)
 app.include_router(create_dashboard_router(storage, plan_orchestrator.store))
 
@@ -120,7 +120,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.34",
+        version="1.0.35",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
@@ -136,13 +136,7 @@ async def create_execution_plan(payload: PMPlanCreateRequest) -> ExecutionPlanVi
     try:
         row = await pm_planner.create_plan(payload)
     except (RuntimeError, KeyError, ValueError) as exc:
-        # Pre-flight governance/configuration errors occur before a durable plan
-        # row is created. Model/runtime failures after persistence are returned as
-        # a durable `failed` ExecutionPlan instead of being lost in an HTTP error.
         raise HTTPException(422, str(exc)) from exc
-    # The background orchestrator discovers eligible newly-created plans from the
-    # durable creation timestamp. This explicit tick removes normal polling delay
-    # without changing that registration boundary.
     await plan_orchestrator.tick()
     return execution_plan_view(row)
 
@@ -278,12 +272,6 @@ async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
 @app.post("/v1/jobs/{job_id}/cancel", response_model=JobView, dependencies=[Depends(auth)])
 async def cancel_job(job_id: str) -> JobView:
     try:
-        # Drain every external side effect before the engine persists the terminal
-        # `cancelled` state. DDEV owns Composer/Drush/PHPUnit processes; cancelling
-        # the active asyncio task propagates into Codex/OpenCode and the Antigravity
-        # adapter, whose CancelledError handler terminates the host-side `agy` run.
-        # If Runtime crashes during this drain, the DB remains non-terminal and
-        # startup recovery will treat the job as interrupted and clean it again.
         await engine.ddev.cancel(job_id=job_id)
         active = engine.active_jobs.get(job_id)
         if active and not active.done():
