@@ -34,7 +34,7 @@ Product Manager synthesis
     |
     +--> repair / reassign / replan within approved scope
     +--> ChangeProposal -> Human Owner when project frame must change
-    +--> delivery -> GitHub CI -> Human merge
+    +--> delivery -> GitHub CI -> PM review/merge when no human-decision trigger exists
 ```
 
 PM, developer, reviewer, debugger, tester, and other specialists are logical roles. They are not separate infrastructure services unless future evidence demonstrates a concrete need.
@@ -85,6 +85,8 @@ Current Runtime responsibilities:
 
 Runtime is an engineering-operations orchestrator. It does not own project/product direction.
 
+The current implementation may still contain manual-merge orchestration behavior from the previous governance policy. That behavior is transitional implementation state, not the approved target authority model after issue #96. Runtime/ddev-executor changes that automate the PM merge gate must preserve all existing trust boundaries and be delivered separately through normal PR/CI review.
+
 ### Isolated workspaces
 
 Each coding job uses a self-contained clone pinned to the source commit and an `ai/*` branch. The agent workspace has no Git remote. This is deliberate: agents may modify workspace files but cannot independently publish to the source repository.
@@ -94,6 +96,8 @@ Each coding job uses a self-contained clone pinned to the source commit and an `
 `ddev-executor` is the privileged boundary. It is the only platform service intended to have the Docker socket, target source-repository visibility needed for workspace creation, and GitHub delivery credentials/capabilities.
 
 It accepts registered project IDs and bounded operations rather than arbitrary remote command execution. It validates workspace identity, branch namespace, source ancestry, expected commits, and project autonomy policy before publishing.
+
+PM-controlled merge capability, when implemented, must remain behind a constrained Runtime/ddev-executor operation that validates the exact PR/head, CI/review state, project/WorkOrder identity, and absence of unresolved human-decision triggers. Developer-agent subprocesses must never receive GitHub merge credentials or direct merge capability.
 
 ### Agent adapters
 
@@ -119,7 +123,7 @@ It proxies Runtime operations and is intentionally forbidden from owning model r
 
 ### GitHub delivery
 
-Current delivery flow is:
+Approved delivery flow is:
 
 ```text
 local deterministic verification
@@ -127,12 +131,14 @@ local deterministic verification
   -> non-force ai/* branch publish
   -> create/update PR
   -> monitor GitHub CI
-     -> success: complete
      -> failure: bounded repair on same branch/PR
      -> delivery infrastructure failure: durable checkpoint/resume
+     -> success: PM consumes WorkOrder + WorkReport + required ReviewReport + CI evidence
+         -> in scope, all gates green, no human-decision trigger: PM merge
+         -> protected decision boundary: pause for Human Owner decision, then PM may merge after approval
 ```
 
-Automatic merge and production deployment are not allowed.
+Blind auto-merge, force push, developer-agent merge, and production deployment by implication are not allowed. PM-controlled autonomous merge after explicit evidence gates is approved.
 
 ## 3. Approved target architecture
 
@@ -163,9 +169,11 @@ The PM is a reasoning role above Router/Runtime. Its responsibilities include:
 - choose the next meaningful action after developer/reviewer/CI evidence;
 - request staffing from Router;
 - create ChangeProposals when the approved project frame must change;
-- summarize completed work and update project execution state.
+- summarize completed work and update project execution state;
+- perform the final engineering review for merge eligibility;
+- authorize and execute merge for in-scope PRs after all required gates pass and no human-decision trigger remains unresolved.
 
-The PM may change execution tactics but not project intent without human approval.
+The PM may change execution tactics and merge routine in-scope work, but it may not change project intent or protected governance boundaries without human approval.
 
 ### Structured team artifacts
 
@@ -219,7 +227,7 @@ Developer WorkReport
         v
 PM TaskOutcome
         |
-        +--> accept
+        +--> accept and merge when eligible
         +--> bounded repair
         +--> reassign
         +--> replan within scope
@@ -227,7 +235,7 @@ PM TaskOutcome
         +--> select next in-scope WorkOrder
 ```
 
-The PM should not be called for every lint/test retry. Runtime handles routine repair mechanics; PM is invoked at meaningful checkpoints.
+The PM should not be called for every lint/test retry. Runtime handles routine repair mechanics; PM is invoked at meaningful checkpoints, including the final merge decision.
 
 ## 4. Trust-boundary model
 
@@ -240,7 +248,7 @@ Developer agent
   - no platform-internal credentials
   - no Docker socket
   - no source repo root
-  - no GitHub delivery credential
+  - no GitHub delivery/merge credential
 
 Runtime
   - job/project state
@@ -248,6 +256,7 @@ Runtime
   - coding adapters
   - no Docker socket
   - no unrestricted GitHub delivery privilege
+  - may request constrained PM-authorized merge through ddev-executor after validating gates
 
 Router
   - model/project policy
@@ -259,6 +268,7 @@ ddev-executor
   - registered source/workspace roots
   - bounded DDEV execution
   - GitHub delivery credential
+  - constrained PR publish/status/merge operations only
   - internal only
 
 n8n
@@ -277,10 +287,12 @@ Parallel execution may be enabled later only when PM determines that WorkOrders 
 
 ## 6. State and source-of-truth principle
 
-Stable project intent belongs in checked-in project documentation. Runtime/PostgreSQL will hold mutable execution state, reports, checkpoints, and outcomes.
+Stable project intent belongs in checked-in project documentation. Runtime/PostgreSQL will hold mutable execution state, reports, checkpoints, outcomes, and merge-gate evidence.
 
 Chat history is never authoritative project state.
 
 ## 7. Architecture change rule
 
 A change that alters service boundaries, trust boundaries, major dependencies, project authority, merge/deploy policy, or PM/Router/Runtime responsibility boundaries is an architecture change. It requires a ChangeProposal and human approval before implementation.
+
+Once the Human Owner explicitly approves such a change, PM may carry its amendment PR through the remaining review/CI gates and merge it under the approved transition.
