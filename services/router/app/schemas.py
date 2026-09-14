@@ -101,6 +101,7 @@ class ModelChoice(BaseModel):
     provider: str
     adapter: str
     model: str
+    quota_group: str | None = None
     reasoning_effort: ReasoningEffort | None = None
     score: float
     predicted_success: float
