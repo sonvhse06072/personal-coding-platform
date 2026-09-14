@@ -18,7 +18,7 @@ class _Result:
 
 class _Connection:
     def __init__(self):
-        self.current = {"status": "executing", "route": None}
+        self.current = {"status": "executing", "route": None, "workspace": "/tmp/job-1"}
         self.events = []
         self.recent_rows = []
         self.queries = []
@@ -27,7 +27,7 @@ class _Connection:
     def execute(self, query, params=None):
         compact = " ".join(query.split())
         self.queries.append((compact, params))
-        if compact.startswith("SELECT status, route FROM cp_jobs"):
+        if compact.startswith("SELECT status, route, workspace FROM cp_jobs"):
             return _Result(row=self.current)
         if compact.startswith("INSERT INTO cp_job_events"):
             self.events.append(params)
@@ -113,10 +113,25 @@ def test_update_records_route_and_real_status_transition_without_raw_route():
     }
 
 
+def test_update_persists_sanitized_block_activity():
+    connection = _Connection()
+    storage = _storage(connection)
+    storage.update(
+        "job-1",
+        status="blocked",
+        result={"reason": "provider_failure_without_fallback"},
+    )
+    assert [params[1] for params in connection.events] == ["job_blocked", "runtime_activity"]
+    activity = connection.events[-1]
+    assert activity[2] == "blocked"
+    assert activity[3] == "error"
+    assert "provider_failure_without_fallback" in activity[4]
+
+
 def test_update_does_not_duplicate_an_unchanged_status_or_route():
     connection = _Connection()
     route = {"strategy": {"profile": "standard"}}
-    connection.current = {"status": "verifying", "route": route}
+    connection.current = {"status": "verifying", "route": route, "workspace": "/tmp/job-1"}
     storage = _storage(connection)
 
     storage.update("job-1", status="verifying", route=route, progress={"test_runs": 2})
