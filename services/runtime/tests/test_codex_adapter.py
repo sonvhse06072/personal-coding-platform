@@ -142,7 +142,7 @@ def test_codex_plain_cli_failure_without_terminal_json_is_still_classified(monke
     assert run.provider_failed
 
 
-def test_codex_emits_sanitized_event_during_stdout_stream(monkeypatch, tmp_path: Path):
+def test_codex_emits_provider_neutral_activity_during_stdout_stream(monkeypatch, tmp_path: Path):
     line = _event({
         "type": "item.completed",
         "item": {"type": "agent_message", "text": "Editing the recovery runner."},
@@ -169,6 +169,11 @@ def test_codex_emits_sanitized_event_during_stdout_stream(monkeypatch, tmp_path:
     finally:
         bind_developer_sink(None)
 
-    assert len(seen) == 1
-    assert seen[0]["event_type"] == "developer_message"
-    assert seen[0]["data"]["text"] == "Editing the recovery runner."
+    messages = [event for event in seen if event["event_type"] == "developer_message"]
+    assert len(messages) == 1
+    assert messages[0]["data"]["text"] == "Editing the recovery runner."
+    assert messages[0]["data"]["provider"] == "openai"
+    assert messages[0]["data"]["adapter"] == "codex_cli"
+    assert messages[0]["data"]["model"] == "gpt-5.6-terra"
+    lifecycle = [event["data"].get("status") for event in seen if event["event_type"] == "developer_step"]
+    assert lifecycle == ["started", "completed"]

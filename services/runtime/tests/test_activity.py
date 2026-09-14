@@ -35,6 +35,7 @@ def test_route_event_keeps_only_allow_listed_model_metadata():
     assert event["data"]["executor"] == {
         "id": "codex_terra",
         "provider": "openai",
+        "adapter": "codex_cli",
         "model": "gpt-5.6-terra",
         "reasoning_effort": "medium",
     }
@@ -63,6 +64,30 @@ def test_public_event_rebuilds_fixed_message_phase_and_level():
     assert event["message"] == "Job blocked"
     assert event["data"] == {"to_status": "blocked"}
     assert "PRIVATE" not in json.dumps(event)
+
+
+def test_runtime_activity_uses_bounded_allow_listed_fields():
+    event = public_event({
+        "id": 10,
+        "job_id": "job-1",
+        "event_type": "runtime_activity",
+        "phase": "verification",
+        "level": "success",
+        "message": "targeted_tests passed",
+        "data": {
+            "kind": "check",
+            "command": "python3 -m unittest",
+            "output": "24 passed",
+            "status": "passed",
+            "raw_prompt": "DO NOT LEAK",
+        },
+        "created_at": datetime(2026, 9, 13, tzinfo=timezone.utc),
+    })
+    assert event["phase"] == "verification"
+    assert event["level"] == "success"
+    assert event["message"] == "targeted_tests passed"
+    assert event["data"]["kind"] == "check"
+    assert "raw_prompt" not in event["data"]
 
 
 def test_unknown_event_types_are_not_exposed():

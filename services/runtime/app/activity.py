@@ -25,6 +25,8 @@ _EVENT_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     "developer_command_completed": ("execution", "success", "Command completed"),
     "developer_file_activity": ("execution", "info", "Files changed"),
     "developer_error": ("execution", "error", "Developer error"),
+    "developer_step": ("execution", "info", "Agent activity"),
+    "runtime_activity": ("execution", "info", "Runtime activity"),
 }
 
 _STATUS_EVENT_TYPES = {
@@ -45,27 +47,39 @@ _STATUS_EVENT_TYPES = {
 
 _PAUSED = {"blocked", "interrupted", "waiting_human"}
 _SAFE_STATUSES = set(_STATUS_EVENT_TYPES) | {"unknown"}
+_SAFE_PHASES = {
+    "queue", "routing", "planning", "execution", "verification", "evaluation",
+    "reassessment", "delivery", "blocked", "completed", "failed", "interrupted",
+    "human_gate", "provider",
+}
+_SAFE_LEVELS = {"info", "success", "warning", "error"}
 _SAFE_DATA_KEYS = {
     "from_status",
     "to_status",
     "profile",
     "analysis_depth",
 }
-_SAFE_CHOICE_KEYS = {"id", "provider", "model", "reasoning_effort"}
+_SAFE_CHOICE_KEYS = {"id", "provider", "model", "reasoning_effort", "adapter"}
 _DEVELOPER_EVENT_TYPES = {
     "developer_message",
     "developer_command_started",
     "developer_command_completed",
     "developer_file_activity",
     "developer_error",
+    "developer_step",
 }
-_DEVELOPER_TEXT_LIMITS = {
+_ACTIVITY_EVENT_TYPES = _DEVELOPER_EVENT_TYPES | {"runtime_activity"}
+_ACTIVITY_TEXT_LIMITS = {
     "text": 2000,
     "command": 1000,
     "output": 3000,
     "status": 80,
     "role": 40,
     "model": 160,
+    "adapter": 80,
+    "provider": 80,
+    "tool": 120,
+    "kind": 80,
 }
 
 
@@ -136,9 +150,9 @@ def route_selected_event(route: Any) -> dict[str, Any] | None:
     return _event("route_selected", data)
 
 
-def _developer_data(source: dict[str, Any]) -> dict[str, Any]:
+def _activity_data(source: dict[str, Any]) -> dict[str, Any]:
     data: dict[str, Any] = {}
-    for key, limit in _DEVELOPER_TEXT_LIMITS.items():
+    for key, limit in _ACTIVITY_TEXT_LIMITS.items():
         value = _bounded_text(source.get(key), limit)
         if value is not None:
             data[key] = value
@@ -156,14 +170,27 @@ def _developer_data(source: dict[str, Any]) -> dict[str, Any]:
 def _developer_message(event_type: str, data: dict[str, Any], default: str) -> str:
     if event_type in {"developer_message", "developer_error"} and data.get("text"):
         return str(data["text"])
-    if event_type == "developer_command_started" and data.get("command"):
-        return f"$ {data['command']}"[:1200]
-    if event_type == "developer_command_completed" and data.get("command"):
-        code = data.get("exit_code")
-        suffix = f" · exit {code}" if isinstance(code, int) else ""
-        return f"$ {data['command']}{suffix}"[:1200]
+    if event_type == "developer_command_started":
+        if data.get("command"):
+            return f"$ {data['command']}"[:1200]
+        if data.get("tool"):
+            return f"{data['tool']} started"[:1200]
+    if event_type == "developer_command_completed":
+        if data.get("command"):
+            code = data.get("exit_code")
+            suffix = f" · exit {code}" if isinstance(code, int) else ""
+            return f"$ {data['command']}{suffix}"[:1200]
+        if data.get("tool"):
+            return f"{data['tool']} · {data.get('status') or 'completed'}"[:1200]
     if event_type == "developer_file_activity" and data.get("paths"):
         return "Files changed: " + ", ".join(data["paths"][:6])
+    if event_type == "developer_step":
+        provider = data.get("provider")
+        model = data.get("model")
+        state = data.get("status")
+        identity = " · ".join(str(item) for item in (provider, model) if item)
+        detail = f"{identity} · {state}" if identity and state else identity or state
+        return str(detail or default)[:1200]
     return default
 
 
@@ -176,14 +203,25 @@ def public_event(row: dict[str, Any]) -> dict[str, Any] | None:
     phase, level, message = _definition(event_type)
     source = row.get("data") if isinstance(row.get("data"), dict) else {}
     data: dict[str, Any] = {}
-    if event_type in _DEVELOPER_EVENT_TYPES:
-        data = _developer_data(source)
-        message = _developer_message(event_type, data, message)
-        if event_type == "developer_command_completed":
-            code = data.get("exit_code")
-            status = str(data.get("status") or "").lower()
-            if (isinstance(code, int) and code != 0) or status in {"failed", "error"}:
-                level = "error"
+    if event_type in _ACTIVITY_EVENT_TYPES:
+        data = _activity_data(source)
+        if event_type in _DEVELOPER_EVENT_TYPES:
+            message = _developer_message(event_type, data, message)
+            if event_type == "developer_command_completed":
+                code = data.get("exit_code")
+                status = str(data.get("status") or "").lower()
+                if (isinstance(code, int) and code != 0) or status in {"failed", "error"}:
+                    level = "error"
+        else:
+            row_phase = str(row.get("phase") or "")
+            row_level = str(row.get("level") or "")
+            row_message = _bounded_text(row.get("message"), 2000)
+            if row_phase in _SAFE_PHASES:
+                phase = row_phase
+            if row_level in _SAFE_LEVELS:
+                level = row_level
+            if row_message:
+                message = row_message
     else:
         for key in _SAFE_DATA_KEYS:
             value = source.get(key)

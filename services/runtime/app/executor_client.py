@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from typing import Any
 
 import httpx
+
+from .developer_stream import emit_developer_event, runtime_activity_event
 
 
 def _raise_for_status_with_detail(response: httpx.Response) -> None:
@@ -147,11 +150,68 @@ class DdevExecutorClient:
             return response.json()
 
     async def phase(self, *, job_id: str, project_id: str, workspace: str, phase: str, timeout_seconds: int | None = None) -> dict[str, Any]:
-        async with httpx.AsyncClient(timeout=None) as client:
-            response = await client.post(
-                f"{self.base}/v1/phase",
-                json={"job_id": job_id, "project_id": project_id, "workspace": workspace, "phase": phase, "timeout_seconds": timeout_seconds},
-                headers=self.headers,
+        workspace_path = Path(workspace)
+        emit_developer_event(
+            runtime_activity_event(
+                kind="verification_phase",
+                message=f"Running {phase}",
+                phase="verification",
+                workspace=workspace_path,
+                status="started",
             )
-            response.raise_for_status()
-            return response.json()
+        )
+        try:
+            async with httpx.AsyncClient(timeout=None) as client:
+                response = await client.post(
+                    f"{self.base}/v1/phase",
+                    json={"job_id": job_id, "project_id": project_id, "workspace": workspace, "phase": phase, "timeout_seconds": timeout_seconds},
+                    headers=self.headers,
+                )
+                response.raise_for_status()
+                payload = response.json()
+        except Exception:
+            emit_developer_event(
+                runtime_activity_event(
+                    kind="verification_phase",
+                    message=f"{phase} failed before results were returned",
+                    phase="verification",
+                    workspace=workspace_path,
+                    level="error",
+                    status="failed",
+                )
+            )
+            raise
+
+        for item in payload.get("commands", []) if isinstance(payload, dict) else []:
+            if not isinstance(item, dict):
+                continue
+            command = str(item.get("command") or "")
+            returncode = item.get("returncode")
+            timed_out = bool(item.get("timed_out", False))
+            ok = isinstance(returncode, int) and returncode == 0 and not timed_out
+            output = item.get("stdout") or item.get("stderr") or ""
+            emit_developer_event(
+                runtime_activity_event(
+                    kind="check",
+                    message=f"{phase}: {'passed' if ok else 'failed'}",
+                    phase="verification",
+                    workspace=workspace_path,
+                    command=command,
+                    output=output,
+                    status="passed" if ok else ("timed_out" if timed_out else "failed"),
+                    level="success" if ok else "error",
+                )
+            )
+
+        passed = bool(payload.get("passed", False)) if isinstance(payload, dict) else False
+        emit_developer_event(
+            runtime_activity_event(
+                kind="verification_phase",
+                message=f"{phase} {'passed' if passed else 'failed'}",
+                phase="verification",
+                workspace=workspace_path,
+                status="passed" if passed else "failed",
+                level="success" if passed else "error",
+            )
+        )
+        return payload
