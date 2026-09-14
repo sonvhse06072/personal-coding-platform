@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .control_actions import (
@@ -15,6 +16,10 @@ _BUDGET_BLOCK_REASONS = {
     "execution_budget_exhausted",
 }
 _WALL_TIME_RECOVERY_THRESHOLD_MINUTES = 1.0
+_LEGACY_COMMAND_TIMEOUT_RE = re.compile(
+    r"^(?:RuntimeError|CommandTimeoutError): Command timed out after "
+    r"(?P<seconds>\d+(?:\.\d+)?)s(?:\b|:)"
+)
 
 _VI_METRIC_LABELS = {
     "Model calls": "Lượt gọi model",
@@ -41,6 +46,40 @@ class ControlActionService(BaseControlActionService):
         except (TypeError, ValueError):
             return None
 
+    @classmethod
+    def _legacy_failed_wall_timeout(cls, job: dict[str, Any]) -> bool:
+        """Recognize the pre-1.0.31 wall-bounded timeout shape fail-closed.
+
+        Older Runtime versions persisted command timeouts as generic terminal
+        RuntimeError rows before updating elapsed wall time. We accept that legacy
+        shape only when the recorded timeout closely matches the wall time that
+        remained at the last durable progress checkpoint. This compatibility path
+        exists so an already-failed orchestrated job can receive the same bounded
+        +20-minute owner action without direct DB mutation or replacement jobs.
+        """
+        if str(job.get("status") or "") != "failed":
+            return False
+        match = _LEGACY_COMMAND_TIMEOUT_RE.match(str(job.get("error") or ""))
+        if not match:
+            return False
+        try:
+            timeout_seconds = float(match.group("seconds"))
+        except (TypeError, ValueError):
+            return False
+
+        route = dict(job.get("route") or {})
+        budget = dict((route.get("strategy") or {}).get("budget") or {})
+        progress = dict(job.get("progress") or {})
+        wall_limit = cls._numeric(budget.get("max_wall_time_minutes"))
+        wall_used = cls._numeric(progress.get("elapsed_minutes", 0))
+        if wall_limit is None or wall_used is None or timeout_seconds <= 0:
+            return False
+
+        remaining_seconds = max(0.0, (wall_limit - wall_used) * 60.0)
+        if remaining_seconds <= 10.0 and timeout_seconds <= 10.0:
+            return True
+        return abs(remaining_seconds - timeout_seconds) <= 30.0
+
     @staticmethod
     def _reassessment_budget_hint(job: dict[str, Any]) -> str | None:
         result = dict(job.get("result") or {})
@@ -55,6 +94,8 @@ class ControlActionService(BaseControlActionService):
 
     @classmethod
     def _budget_hint(cls, job: dict[str, Any]) -> str | None:
+        if cls._legacy_failed_wall_timeout(job):
+            return "wall-time budget exhausted"
         result = dict(job.get("result") or {})
         reason = str(result.get("reason") or "")
         if reason in _BUDGET_BLOCK_REASONS:
@@ -66,12 +107,16 @@ class ControlActionService(BaseControlActionService):
     def _is_budget_recovery_state(cls, job: dict[str, Any]) -> bool:
         result = dict(job.get("result") or {})
         return (
-            str(result.get("reason") or "") in _BUDGET_BLOCK_REASONS
+            cls._legacy_failed_wall_timeout(job)
+            or str(result.get("reason") or "") in _BUDGET_BLOCK_REASONS
             or cls._reassessment_budget_hint(job) is not None
         )
 
     @classmethod
     def _live_budget_dimension(cls, job: dict[str, Any], failure_hint: str) -> str | None:
+        if cls._legacy_failed_wall_timeout(job):
+            return "max_wall_time_minutes"
+
         route = dict(job.get("route") or {})
         strategy = dict(route.get("strategy") or {})
         budget = dict(strategy.get("budget") or {})
@@ -176,7 +221,11 @@ class ControlActionService(BaseControlActionService):
         ]
         advisory["impact"] = "Không có tác vụ tự động nào chạy tiếp cho WorkOrder này cho đến khi một action khôi phục hợp lệ thành công."
 
-        if reason in _BUDGET_BLOCK_REASONS:
+        if self_legacy := cls._legacy_failed_wall_timeout(job):
+            advisory["summary"] = "Runtime cũ đã ghi terminal failure khi coding-agent timeout đúng tại wall-time deadline."
+            advisory["cause"] = "Timeout này khớp với phần wall-time còn lại của job; same-job recovery cần mở rộng wall-time có giới hạn."
+            advisory["recommended"] = "Chỉ phê duyệt +20 phút để tiếp tục đúng job/workspace hiện tại sau khi Runtime fix đã được rollout."
+        elif reason in _BUDGET_BLOCK_REASONS:
             advisory["summary"] = "Runtime đã dùng hết một giới hạn ngân sách thực thi."
             advisory["cause"] = "Một giới hạn an toàn của Runtime đã chạm ngưỡng hiện tại; đây không phải quota rolling của provider."
         elif reason == "reassessment_stopped" and cls._reassessment_budget_hint(job):
@@ -236,8 +285,6 @@ class ControlActionService(BaseControlActionService):
     def blocked_advisory(self, work_order: dict[str, Any], job: dict[str, Any] | None) -> dict[str, Any]:
         advisory = super().blocked_advisory(work_order, job)
         current_job = dict(job or {})
-        result = dict(current_job.get("result") or {})
-        reason = str(result.get("reason") or "")
 
         if self._is_budget_recovery_state(current_job):
             failure_hint = self._budget_hint(current_job) or ""
