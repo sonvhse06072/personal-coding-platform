@@ -26,35 +26,28 @@ Before a material task is complete or handed off, update the relevant topical do
 - PR #81 (`Complete OpenRouter free-tier routing policy`) is merged; CI run #155 passed on its exact head.
 - PR #82 (`Make project docs the cross-chat continuity source`) is merged.
 - PR #84 (`Reconcile post-merge versions and rollout state`) is merged; final CI run #162 passed.
-- `main` is verified at merge commit `326ea1c5afb40ce144bf95d2421ad5091eb8391d` after PR #84.
-- Current `main` rollout markers before issue #85: Router `1.0.15`, Runtime `1.0.29`, model registry `v6`, routing policy `v6`.
+- PR #86 (`Replace withdrawn OpenRouter free model with North Mini Code`) is merged; exact head `f7eafe041a3aeed709b7af55e15bcfb2b6737ae6` passed CI run #167.
+- `main` is verified at merge commit `cd525d8dfd346bfc6293c8c2641f3c95a4a37799` after PR #86.
+- Intended rollout markers on current `main`: Router `1.0.15`, Runtime `1.0.30`, model registry `v7`, routing policy `v7`.
 - Merged code is not locally activated merely because it is on `main`; Runtime/Router/n8n health evidence must be checked after a safe rollout.
 
 ## Active work
 
-### 1. OpenRouter free-model replacement before rollout
+### 1. Local rollout of merged OpenRouter support
 
-Durable policy: `docs/project/provider-policy.md`.
+Durable provider policy: `docs/project/provider-policy.md`.
 
-- Issue: `personal-coding-platform` #85.
-- Branch: `fix/openrouter-free-model-85`.
-- Do **not** run `ddev n8n-sync` or restart the local platform until #85 is merged and C1 is re-confirmed stable blocked/terminal.
-- Human Owner decision: OpenRouter free is effectiveness-first. ZDR and `data_collection=deny` are not required. Repository source code may traverse free endpoints under their published logging/training terms. Secret boundaries and disabled OpenCode sharing remain mandatory.
-- Live evidence:
-  - `qwen/qwen3-coder:free` -> 404, unavailable for free;
-  - `qwen/qwen3.6-plus:free` -> 404, free model deprecated;
-  - `nvidia/nemotron-3-ultra-550b-a55b:free` -> valid model, but synthetic tool-call smoke returned NVIDIA 502 `provider_unavailable` / temporarily overloaded;
-  - `cohere/north-mini-code:free` -> synthetic tool-call smoke passed without ZDR/data-collection filters and returned one `pcp_probe` tool call;
-  - North Mini Code with `zdr=true` + `data_collection=deny` -> 404 `No endpoints found matching your data policy (Zero data retention)`.
-- Implementation decision for #85:
-  - use `cohere/north-mini-code:free` as the **single active explicit OpenRouter free model** for initial rollout;
-  - preserve logical model ID `openrouter_qwen3_coder_free` as a stable legacy durable identity so existing route history/provider-state evidence remains comparable; the registry `model:` slug is authoritative;
-  - do not activate Nemotron in the same pool yet because Runtime provider failures mark `provider:openrouter` unavailable, so one provider-level failure would exclude every OpenRouter model and defeat same-provider model fallback;
-  - remove mandatory ZDR/data-collection filters from Runtime OpenCode request policy, but keep exact-model/provider allowlists, `require_parameters`, same-model endpoint fallback, service-scoped `OPENROUTER_API_KEY`, and `share=disabled`.
-- Intended #85 version markers: Router remains `1.0.15`; Runtime `1.0.30`; model registry `v7`; routing policy `v7`.
-- Critical profile and Product Manager exclusions remain unchanged.
-- The Human Owner funded at least $10 OpenRouter credit; current documented free allowance is 1,000 requests/day at 20 RPM. Do not expose a fabricated authoritative remaining-quota counter.
-- Current gate: finish focused tests/docs, green full CI, Human Owner manual merge; no local restart before that.
+- Operational issue: `personal-coding-platform` #87.
+- PR #86 is merged. No further OpenRouter code change is required before local rollout.
+- Active explicit upstream free model: `cohere/north-mini-code:free`.
+- Stable logical PCP model ID remains `openrouter_qwen3_coder_free` for durable route-history/provider-state compatibility; the registry `model:` slug is authoritative.
+- Human Owner policy: OpenRouter free is effectiveness-first. ZDR and `data_collection=deny` are not required. Repository source code may traverse free endpoints under their published logging/training terms.
+- Secret boundaries remain strict: never intentionally send API keys, access tokens, `.env` contents, private keys, passwords, cookies, Runtime/control-plane credentials, or unrelated provider credentials to a model.
+- OpenCode session sharing remains disabled; Runtime scopes only `OPENROUTER_API_KEY` to the OpenRouter subprocess.
+- North Mini Code live evidence before merge: tool-call smoke passed without ZDR/data-collection filters; the same model failed with a ZDR-required policy because no matching endpoint existed.
+- Nemotron remains inactive. Runtime provider failures currently mark `provider:openrouter` unavailable, so activating multiple OpenRouter models would not provide reliable same-provider model fallback after a provider-level failure.
+- Human Owner funded at least $10 of OpenRouter credit; current documented free allowance is 1,000 requests/day at 20 RPM. Do not expose a fabricated authoritative remaining-quota counter.
+- Current gate: pull merged `main`, re-query C1, and restart/sync only if C1 is stable blocked/terminal.
 
 ### 2. DEC-025C / `chonhac` recovery tooling
 
@@ -76,19 +69,21 @@ Durable policy: `docs/project/provider-policy.md`.
 - Issue #77 / PR #78 are merged.
 - Owner-facing Telegram messages/actions are localized to Vietnamese; stable machine reason codes remain unchanged.
 - `reassessment_stopped + hard_budget_guard` can produce a bounded, live-dimension-revalidated owner action; stale/wrong-dimension actions fail closed.
-- Local activation is pending.
-- `ddev n8n-sync` restarts the DDEV stack; it must run only after C1 is confirmed stable blocked/terminal and #85 is merged.
+- Local activation is still pending.
+- `ddev n8n-sync` restarts the DDEV stack and must run only after C1 is confirmed stable blocked/terminal.
 
 ## Next safe sequence
 
-1. Finish issue #85 on `fix/openrouter-free-model-85`: North Mini Code upstream model, effectiveness-first OpenCode request policy, Runtime `1.0.30`, registry/policy `v7`, focused tests/docs.
-2. Run full CI and obtain Human Owner manual merge; do not restart local services yet.
-3. Pull merged `main` locally and re-query C1.
-4. Only if C1 is stable blocked/terminal, configure `OPENROUTER_API_KEY` in `.ddev/.env.coding-runtime.local` and run the required platform/n8n rollout.
-5. Verify Router `1.0.15`, Runtime `1.0.30`, registry `v7`, routing policy `v7`, plus OpenCode availability.
-6. Run one minimal deployed integration smoke through PCP using North Mini Code; no secrets/private credentials in the prompt.
-7. Trigger orchestrator tick and recover C1 only through the official live-revalidated control action; expected first bounded extension for the recorded blocker is `+4 model calls`.
-8. C1 must address both evaluator findings and reach its normal PR/CI/manual-merge gate before C2/C3 proceed.
+1. Pull current `main` locally and verify HEAD `cd525d8dfd346bfc6293c8c2641f3c95a4a37799`.
+2. Re-query C1 job `eec59b13651c54559c10ce204380a68e` before any restart.
+3. If C1 is in flight (`queued`, `routing`, `planning`, `executing`, `verifying`, `evaluating`, `delivering`, or equivalent), do **not** restart or sync anything.
+4. If C1 is stable blocked/terminal, configure `OPENROUTER_API_KEY` only in `.ddev/.env.coding-runtime.local` without printing or committing it.
+5. Run the required platform/n8n rollout (`ddev n8n-sync`).
+6. Verify Router `1.0.15`, Runtime `1.0.30`, model registry `v7`, routing policy `v7`, and Runtime OpenCode availability.
+7. Run one minimal deployed integration smoke through PCP using North Mini Code; use synthetic content only and do not include secrets.
+8. Re-query C1 and trigger an orchestrator tick.
+9. Recover C1 only through the official live-revalidated control action. For the last recorded blocker the expected first bounded extension is `+4 model calls`, but live state is authoritative.
+10. Monitor the same C1 job until it addresses both evaluator findings and reaches its normal PR/CI/manual-merge gate. Keep C2/C3 pending until C1 clears that gate.
 
 ## Global operational gates
 
