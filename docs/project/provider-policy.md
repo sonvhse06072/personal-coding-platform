@@ -1,6 +1,6 @@
 # Provider and Model Resource Policy
 
-Status: approved provider/resource policy. OpenRouter free is an effectiveness-first opportunistic tier. Antigravity is an explicit multi-model resource pool with quota-group-aware routing. Model availability, quota terms and ranking are external operational inputs and must be revalidated before rollout.
+Status: approved provider/resource policy. OpenRouter free is an effectiveness-first opportunistic tier. Antigravity is an explicit multi-model resource pool with model/group/provider-aware health. Upstream quota telemetry is authoritative only when obtained from a supported provider signal and fresh enough for routing. Model availability, quota terms and ranking remain external operational inputs and must be revalidated before rollout.
 
 ## 1. Authority boundary
 
@@ -10,7 +10,7 @@ The Personal Coding Platform Router remains authoritative for:
 - model selection;
 - cross-model failover;
 - profile/risk eligibility;
-- durable provider/model/quota-group health state;
+- durable provider/model/quota health state;
 - execution budgets and recovery.
 
 An upstream model gateway or provider may select an endpoint for the **same already-selected model**, but it must not silently broaden the model choice behind PCP Router.
@@ -58,6 +58,8 @@ Secret boundaries remain strict. Developer-agent prompts or context must never i
 - private keys, passwords, cookies or session credentials;
 - Runtime/control-plane credentials;
 - unrelated provider credentials.
+
+Quota collection must use already-authenticated provider tooling through constrained Runtime/bridge interfaces. It must not parse provider OAuth credentials, expose account secrets, or hand provider credentials to coding agents merely to read usage.
 
 OpenCode session sharing remains disabled. Provider credentials remain service-scoped, and an OpenRouter subprocess receives only the credential required for that provider.
 
@@ -115,48 +117,62 @@ The active initial pool is:
 
 The Router may attach `low`, `medium` or `high` reasoning effort to an Antigravity choice. Runtime must pass that exact effort to the headless bridge. A bounded reasoning escalation may increase effort on the same selected model before consuming a different model tier when policy allows it.
 
-Antigravity health is tracked at three distinct levels:
+Antigravity resource state has four deliberately separate scopes:
 
 ```text
-model:<logical model id>        model-specific deterministic/no-effect health
-quota:<quota group>             shared Antigravity quota/rate-limit health
-provider:google_antigravity     bridge/auth/provider-wide health
+model:<logical model id>          deterministic/no-effect model health
+quota:model:<logical model id>    observed quota/rate-limit failure for one model
+quota:<quota group>               authoritative evidence for a shared quota family
+provider:google_antigravity       bridge/auth/provider-wide health
 ```
 
-The initial quota groups follow the externally visible Antigravity resource families:
+The registry currently associates Gemini models with `antigravity_gemini` and Claude/GPT-family models with `antigravity_claude_gpt`, but a failure from one selected model is **not** sufficient evidence that its whole family is exhausted. Runtime therefore records a concrete `quota_exhausted` or `rate_limited` failure at `quota:model:<id>`. A shared `quota:<group>` marker may be produced only from an authoritative upstream quota signal that actually identifies the shared bucket. Authentication, bridge and provider-wide failures remain provider-scoped.
 
-- `antigravity_gemini` for Gemini Flash/Pro models;
-- `antigravity_claude_gpt` for Claude/GPT-family models.
+For compatibility, a preserved same-job reroute may narrow a legacy `provider:google_antigravity` marker to the exact historical model only when durable failure evidence proves the old marker came from quota/rate-limit exhaustion. Other provider-wide failures are not narrowed.
 
-A `quota_exhausted` or `rate_limited` result from an Antigravity model marks only its quota group unavailable. It must **not** mark all of `google_antigravity` unavailable. Authentication, bridge or true provider-wide failures remain provider-scoped. This lets PCP move from an exhausted Gemini pool to the Claude/GPT pool before leaving Antigravity entirely, while avoiding repeated calls into models sharing a quota bucket that is already known exhausted.
+## 8. Authoritative proactive quota telemetry
 
-For compatibility, a preserved same-job reroute may narrow a legacy `provider:google_antigravity` marker to the corresponding quota group only when durable failure evidence proves the old marker came from Antigravity quota/rate-limit exhaustion. Other provider-wide failures are not narrowed.
+PCP should know provider capacity **before** a model call whenever a supported upstream signal makes that possible. Runtime maintains provider quota telemetry as platform-wide durable resource state rather than job-owned progress.
 
-Antigravity plan terms currently include weekly limits, while eligible paid plans may also refresh usable quota on a shorter window until the weekly limit is reached. PCP treats these windows as external operational state. It does not invent a reset time or automatically re-enable a quota group without authoritative evidence or an explicit owner recovery action.
+Current authoritative collection paths are:
 
-The Antigravity interactive `/usage`/`/quota` UI and statusline may expose richer quota information, but PCP does not scrape or mutate host Antigravity settings merely to infer remaining quota. A future dedicated telemetry integration may ingest an officially supported machine-readable quota signal if one becomes operationally reliable.
+- **Codex:** the installed authenticated `codex app-server` protocol, initialized normally and queried with `account/rateLimits/read`. Primary/secondary windows may provide `usedPercent`, window duration and `resetsAt`. `ordinaryUsageAllowed` is a separate backend permission signal; when it is `null`, PCP must not infer recovery solely from a low percentage or future reset time.
+- **Antigravity:** the constrained authenticated host bridge invokes the official read-only print command `agy -p "/usage" --output-format json`. It is serialized with normal Antigravity CLI access and returns only bounded sanitized quota metadata. Structured model/bucket values such as remaining fraction and reset time are normalized without reading provider credentials directly.
 
-## 8. Quota and telemetry
+Telemetry rules:
+
+1. poll best-effort at approximately five-minute cadence and persist the latest successful provider snapshot;
+2. treat snapshots as stale after the configured freshness horizon; stale data is visible for diagnosis but must not change routing availability or quota pressure;
+3. before a new route or PM staffing decision, perform one bounded best-effort refresh when the provider snapshot is stale;
+4. refresh again after a quota/rate-limit failure so the durable observation can catch up quickly;
+5. never replace the last known snapshot with fabricated `0%`, `100%`, or an invented reset timestamp when collection fails;
+6. use fresh `used_percent` as Router `quota_pressure` so capacity with more headroom is favored when capability/policy permit it;
+7. fresh authoritative exhaustion may make only the mapped model/group unavailable;
+8. fresh authoritative capacity may reconcile an old **quota-only** transient failure after reset, but must never clear authentication, bridge/provider health or deterministic model-health failures;
+9. collector failures are fail-open for coding execution: normal durable provider-health/failure semantics remain active;
+10. quota reads are observability/routing inputs only. They do not reset provider quotas, extend Runtime job budgets, resume blocked jobs, or authorize control actions.
+
+Dashboard and authenticated diagnostics must expose source, freshness, used/remaining percentage and reset time when upstream actually supplied those values. Unknown fields must remain visibly unknown.
+
+## 9. Quota terms and non-authoritative limits
 
 The platform may record observed usage, failures, latency, selected model/provider/quota group and local request counts.
 
-It must not present an authoritative "quota remaining" value unless the upstream exposes a reliable authoritative counter for that exact quota bucket.
+It must not present an authoritative "quota remaining" value unless the upstream exposes a reliable authoritative counter for that exact model/bucket/window. Product documentation about weekly limits, RPM, subscription tiers or refresh cadence is useful policy context but is **not** a substitute for a fresh account-specific snapshot.
 
-The Human Owner has funded at least $10 of OpenRouter credit, which currently raises the documented free-model allowance to 1,000 requests/day with a 20 RPM free-model limit. These are external terms and may change; they are not architecture invariants.
+The Human Owner has funded at least $10 of OpenRouter credit, which has historically affected documented free-model request allowances. Those external terms may change; they are not architecture invariants and are not currently collected by the Codex/Antigravity telemetry integration.
 
-For Antigravity, provider/model availability and quota reset cadence are also external terms. Durable PCP state records observed exhaustion and explicit recovery, not speculative remaining percentages.
+## 10. Rollout rule
 
-## 9. Rollout rule
+Provider/model/telemetry changes should be introduced incrementally:
 
-Provider/model changes should be introduced incrementally:
-
-1. validate explicit model IDs/slugs against current provider documentation or live model discovery;
-2. register explicit models and bump registry/routing-policy versions;
-3. bump Router/Runtime versions when routing or failure semantics change;
-4. run deterministic Router/Runtime/executor/structure tests;
+1. validate explicit model IDs and telemetry interfaces against current provider documentation or protocol source;
+2. implement collection behind existing service/credential boundaries without exposing provider secrets to coding agents;
+3. add deterministic parser, stale-data, reconciliation, routing-pressure, dashboard and secret-non-disclosure tests;
+4. bump affected service versions;
 5. obtain green CI and the review/merge required by current governance;
-6. only at a stable blocked/terminal Runtime gate, roll out locally and verify service/config versions;
-7. run deployed integration checks before relying on a newly activated provider/model tier for normal jobs;
-8. review telemetry before broader role/profile eligibility.
+6. only at a stable blocked/terminal Runtime gate, roll out locally and verify service/config/bridge versions;
+7. query the deployed read-only quota endpoint and compare it with provider UI/CLI evidence before allowing telemetry to influence normal routing;
+8. preserve fail-open behavior if an upstream quota schema changes or becomes unavailable.
 
 Never force-complete work or restart Runtime/DDEV while a job is in flight.
