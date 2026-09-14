@@ -42,6 +42,35 @@ if _OLD_RENDER not in DASHBOARD_HTML:
     raise RuntimeError("Dashboard activity presentation target changed; review the base UI before rollout")
 DASHBOARD_HTML = DASHBOARD_HTML.replace(_OLD_RENDER, _NEW_RENDER)
 
+# Provider quota is a separate read-only resource view. Keep it outside job
+# counters so users can distinguish provider allowance from WorkOrder budgets.
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    "</style>",
+    ".quota-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}.quota-card{border:1px solid var(--border);background:var(--panel2);border-radius:11px;padding:12px}.quota-row{display:flex;justify-content:space-between;gap:10px;align-items:baseline}.quota-value{font-size:18px;font-weight:730}.quota-fresh{color:#86efac}.quota-stale{color:var(--amber)}.quota-unknown{color:var(--muted)}.collector-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}@media(max-width:1050px){.quota-grid{grid-template-columns:repeat(2,1fr)}}@media(max-width:640px){.quota-grid{grid-template-columns:1fr}}</style>",
+    1,
+)
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    '<div class="foot">Read-only observability. Dashboard disconnects never control, pause, resume, or otherwise affect a coding job.</div>',
+    '<section class="card section"><div class="section-head"><div><div class="section-title">Provider quota</div><div class="small">Fresh provider allowance telemetry · distinct from WorkOrder budgets · unknown/stale values are never inferred</div></div><div id="quotaCollectors" class="small"></div></div><div id="quotaGrid" class="quota-grid"><div class="small">Quota telemetry has not been loaded.</div></div><div id="quotaCollectorRows" class="collector-row"></div></section><div class="foot">Read-only observability. Dashboard disconnects never control, pause, resume, or otherwise affect a coding job.</div>',
+    1,
+)
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    "let snapshot=null,selected=null,source=null,streamJob=null,lastSeq=0,consoleEvents=[];",
+    "let snapshot=null,quotaSnapshot=null,selected=null,source=null,streamJob=null,lastSeq=0,consoleEvents=[];",
+    1,
+)
+
+_QUOTA_FUNCTIONS = r'''function quotaPct(v){return v===null||v===undefined?'unknown':`${Number(v).toFixed(1)}%`}function quotaReset(v){if(!v)return 'reset unknown';const d=new Date(v);return Number.isNaN(d.getTime())?'reset unknown':`reset ${d.toLocaleString()}`}function renderQuota(){const grid=$('#quotaGrid'),rows=$('#quotaCollectorRows'),summary=$('#quotaCollectors');if(!grid)return;const q=quotaSnapshot||{},items=q.snapshots||[],collectors=q.collectors||[];const fresh=items.filter(x=>x.fresh).length;summary.textContent=items.length?`${fresh}/${items.length} fresh snapshots`:'no snapshots';if(!items.length){grid.innerHTML=`<div class="small quota-unknown">${esc(q.error||'Provider quota is currently unknown. Existing routing health/failure state remains authoritative.')}</div>`}else{grid.innerHTML=items.map(x=>{const state=x.fresh?'fresh':'stale',used=quotaPct(x.used_percent),remaining=quotaPct(x.remaining_percent),window=x.window_name?` · ${esc(x.window_name)}`:'',reset=quotaReset(x.reset_at),source=x.source||'unknown',support=x.metadata?.source_supported===false?' · internal/local API':'';return `<div class="quota-card"><div class="quota-row"><div><div class="k">${esc(x.provider||'provider')}${window}</div><div style="font-weight:720;margin-top:4px;word-break:break-word">${esc(x.quota_id||x.state_key||'unknown quota')}</div></div><span class="${state==='fresh'?'quota-fresh':'quota-stale'}">${state}</span></div><div class="quota-row" style="margin-top:10px"><div><div class="k">USED</div><div class="quota-value">${esc(used)}</div></div><div style="text-align:right"><div class="k">REMAINING</div><div class="quota-value">${esc(remaining)}</div></div></div><div class="small" style="margin-top:8px">${esc(reset)} · ${esc(source+support)}</div></div>`}).join('')}rows.innerHTML=collectors.length?collectors.map(c=>`<span class="pill"><span class="dot ${c.status==='ok'?'':'off'}"></span>${esc(c.source)} · ${esc(c.status)}${c.last_success_at?' · '+esc(new Date(c.last_success_at).toLocaleTimeString()):''}</span>`).join(''):'<span class="small quota-unknown">No collector status yet.</span>'}async function refreshQuota(){try{const r=await fetch('/v1/dashboard/quota',{cache:'no-store'});if(r.status===401)return;if(!r.ok)throw new Error(`quota HTTP ${r.status}`);quotaSnapshot=await r.json();renderQuota()}catch(e){quotaSnapshot={snapshots:[],collectors:[],error:'Quota telemetry unavailable'};renderQuota();console.error(e)}}
+'''
+if "function render(){" not in DASHBOARD_HTML:
+    raise RuntimeError("Dashboard render target changed; review quota UI integration")
+DASHBOARD_HTML = DASHBOARD_HTML.replace("function render(){", _QUOTA_FUNCTIONS + "function render(){", 1)
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    "snapshot=await r.json();hideLogin();render()",
+    "snapshot=await r.json();hideLogin();render();await refreshQuota()",
+    1,
+)
+
 # Invisible compatibility markers keep older structural probes from treating the
 # intentional UI rename as a functional regression. Visible labels above are the
 # provider-neutral names.
