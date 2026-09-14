@@ -101,6 +101,8 @@ Current coding adapters include Codex CLI, OpenCode and the Antigravity host ada
 
 The architecture requires developer-agent subprocesses to receive only the process environment and provider credential needed for that specific call. They must not receive internal platform credentials or unrelated provider keys.
 
+Codex CLI is an unattended Runtime worker, so its approval behavior must be explicit rather than inherited from mounted user configuration. Planner/evaluator turns use `read-only`; execute/repair turns use `workspace-write`; all Codex turns use approval policy `never`, and workspace-write network access is explicitly disabled. A command that requires permission outside the selected sandbox must fail closed rather than wait for interactive approval. `danger-full-access` and approval/sandbox bypass flags are outside the approved developer-agent trust boundary.
+
 ### Antigravity host bridge
 
 Antigravity remains on the WSL host so its OS keyring credentials do not enter Docker. Runtime talks to a constrained bearer-authenticated bridge that accepts only bounded workspace runs/cancellation.

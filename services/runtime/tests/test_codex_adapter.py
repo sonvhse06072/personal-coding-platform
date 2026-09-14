@@ -10,6 +10,13 @@ def _event(payload: dict) -> str:
     return json.dumps(payload)
 
 
+def _assert_bounded_unattended_policy(argv: list[str], *, sandbox: str) -> None:
+    assert argv[argv.index("--sandbox") + 1] == sandbox
+    assert 'approval_policy="never"' in argv
+    assert "danger-full-access" not in argv
+    assert "--dangerously-bypass-approvals-and-sandbox" not in argv
+
+
 def test_codex_turn_completed_is_authoritative_over_transient_rate_limit_text(monkeypatch, tmp_path: Path):
     stdout = "\n".join([
         _event({"type": "turn.started"}),
@@ -49,13 +56,15 @@ def test_codex_turn_completed_is_authoritative_over_transient_rate_limit_text(mo
     assert "gpt-5.6-sol" in captured["argv"]
     assert "--config" in captured["argv"]
     assert 'model_reasoning_effort="medium"' in captured["argv"]
+    _assert_bounded_unattended_policy(captured["argv"], sandbox="workspace-write")
+    assert "sandbox_workspace_write.network_access=false" in captured["argv"]
 
 
-def test_codex_without_routed_effort_does_not_invent_override(monkeypatch, tmp_path: Path):
-    captured = {}
+def test_codex_read_only_modes_are_noninteractive_without_write_network_override(monkeypatch, tmp_path: Path):
+    captured: list[list[str]] = []
 
     async def fake_run_command(argv, *, cwd, timeout):
-        captured["argv"] = argv
+        captured.append(argv)
         return CommandResult(
             argv=argv,
             returncode=0,
@@ -64,16 +73,21 @@ def test_codex_without_routed_effort_does_not_invent_override(monkeypatch, tmp_p
         )
 
     monkeypatch.setattr("app.adapters.codex.run_command", fake_run_command)
-    asyncio.run(
-        CodexAdapter("gpt-5.6-luna").run(
-            workspace=tmp_path,
-            prompt="inspect",
-            mode="plan",
-            timeout=30,
+    for mode in ("plan", "evaluate"):
+        asyncio.run(
+            CodexAdapter("gpt-5.6-luna").run(
+                workspace=tmp_path,
+                prompt="inspect",
+                mode=mode,
+                timeout=30,
+            )
         )
-    )
 
-    assert not any(str(arg).startswith("model_reasoning_effort=") for arg in captured["argv"])
+    assert len(captured) == 2
+    for argv in captured:
+        _assert_bounded_unattended_policy(argv, sandbox="read-only")
+        assert "sandbox_workspace_write.network_access=false" not in argv
+        assert not any(str(arg).startswith("model_reasoning_effort=") for arg in argv)
 
 
 def test_codex_turn_failed_still_classifies_provider_failure(monkeypatch, tmp_path: Path):
