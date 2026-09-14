@@ -4,6 +4,7 @@ from copy import deepcopy
 from typing import Any
 
 from .engine import RuntimeEngine as BaseRuntimeEngine
+from .quota_runtime import quota_coordinator
 from .state import checkpoint_from_row, migrate_legacy_antigravity_quota_failure
 
 
@@ -14,6 +15,17 @@ _ANTIGRAVITY_QUOTA_FAILURES = {"quota_exhausted", "rate_limited"}
 
 class RuntimeEngine(BaseRuntimeEngine):
     """Runtime engine with Antigravity model/quota-aware recovery semantics."""
+
+    async def start(self) -> None:
+        await super().start()
+        # Provider allowance is platform telemetry, independent of any WorkOrder.
+        # Coordinator startup is fail-open and never prevents Runtime readiness.
+        await quota_coordinator.start()
+
+    async def stop(self) -> None:
+        # Stop the advisory collector before Runtime tears down its worker loop.
+        await quota_coordinator.stop()
+        await super().stop()
 
     @staticmethod
     def _next_reasoning_choice(

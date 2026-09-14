@@ -7,10 +7,10 @@ import shutil
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
-from .dashboard import create_dashboard_router
+from .dashboard import _require_session, create_dashboard_router
 from .engine_antigravity import RuntimeEngine
 from .orchestrator_notifications import PlanOrchestrator
 from .orchestrator_resume import prepare_orchestrated_job_resume, reopen_orchestrated_job
@@ -21,6 +21,7 @@ from .pm_planning import (
     PMPlanner,
     execution_plan_view,
 )
+from .quota_runtime import quota_coordinator
 from .schemas import (
     HumanDecisionRequest,
     JobCreateRequest,
@@ -108,7 +109,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.35", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.36", lifespan=lifespan)
 app.include_router(pm_bridge_router)
 app.include_router(create_dashboard_router(storage, plan_orchestrator.store))
 
@@ -120,7 +121,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.35",
+        version="1.0.36",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
@@ -129,6 +130,21 @@ async def health() -> RuntimeHealth:
             "opencode": shutil.which("opencode") is not None,
         },
     )
+
+
+@app.get("/v1/quota", dependencies=[Depends(auth)])
+def quota_view() -> dict[str, Any]:
+    """Read-only normalized provider quota/freshness view for operators."""
+    return quota_coordinator.view()
+
+
+@app.get("/v1/dashboard/quota", include_in_schema=False)
+def dashboard_quota_view(
+    pcp_dashboard_session: str | None = Cookie(default=None),
+) -> dict[str, Any]:
+    """Read-only quota view using the existing dashboard session boundary."""
+    _require_session(pcp_dashboard_session)
+    return quota_coordinator.view()
 
 
 @app.post("/v1/plans", response_model=ExecutionPlanView, dependencies=[Depends(auth)])
