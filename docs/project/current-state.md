@@ -27,7 +27,7 @@ Before a material task is complete or handed off, update the relevant topical do
 - PR #82 (`Make project docs the cross-chat continuity source`) is merged.
 - PR #84 (`Reconcile post-merge versions and rollout state`) is merged; final CI run #162 passed.
 - `main` is verified at merge commit `326ea1c5afb40ce144bf95d2421ad5091eb8391d` after PR #84.
-- Intended post-rollout version evidence is Router `1.0.15`, Runtime `1.0.29`, model registry `v6`, routing policy `v6` until issue #85 bumps the registry for a replacement model.
+- Intended post-rollout version evidence from current `main`: Router `1.0.15`, Runtime `1.0.29`, model registry `v6`, routing policy `v6`.
 - Merged code is not locally activated merely because it is on `main`; Runtime/Router/n8n health evidence must be checked after a safe rollout.
 
 ## Active work
@@ -38,16 +38,18 @@ Durable policy: `docs/project/provider-policy.md`.
 
 - Issue: `personal-coding-platform` #85.
 - Branch: `fix/openrouter-free-model-85`.
-- `openrouter/qwen/qwen3-coder:free` is unavailable for free: live synthetic smoke returned 404 and pointed to the paid slug.
-- `qwen/qwen3.6-plus:free` is also unavailable for free: live synthetic smoke returned 404 stating the free model is deprecated.
-- Therefore the local platform must **not** be restarted/rolled out with either Qwen free slug.
-- The Human Owner has added at least $10 OpenRouter credit, enabling the provider's higher documented free-model allowance; exact remaining quota must not be presented as authoritative.
-- New owner decision: prioritize model effectiveness and useful free capacity over ZDR/no-data-collection guarantees for the OpenRouter free tier. Free-provider logging/training terms are accepted for this provider tier and are no longer eligibility gates.
-- This does **not** relax secret handling: credentials, tokens, `.env` values, private keys and control-plane secrets must never be sent to OpenRouter; OpenCode sharing remains disabled and provider credentials remain isolated.
-- Current primary candidate: `nvidia/nemotron-3-ultra-550b-a55b:free`, because it is currently highly ranked in OpenRouter programming usage, has 1M context, tool calling and strong agentic/reasoning positioning.
-- Current fallback candidate: `cohere/north-mini-code:free`, because it is purpose-built for agentic coding/OpenCode/SWE-Agent, has 256K context, tool calling and stronger observed availability.
-- Candidate approval now requires a synthetic **availability + tool-call** smoke only. ZDR and `data_collection=deny` are no longer required.
-- Only after a candidate passes smoke should issue #85 change `config/models.yml`, bump model registry version, update focused tests and finalize docs.
+- Do **not** run `ddev n8n-sync` or restart the local platform yet; the model configuration currently on `main` points to a withdrawn free model.
+- Live evidence:
+  - `qwen/qwen3-coder:free` -> 404, unavailable for free;
+  - `qwen/qwen3.6-plus:free` -> 404, free model deprecated;
+  - `nvidia/nemotron-3-ultra-550b-a55b:free` -> valid free model, but synthetic tool-call smoke returned upstream NVIDIA 502 `provider_unavailable` / temporarily overloaded.
+- Human Owner decision: OpenRouter free is now effectiveness-first. ZDR and `data_collection=deny` are not required. Repository source code may traverse free endpoints under their published logging/training terms. Secret boundaries and disabled OpenCode sharing remain mandatory.
+- Current selection logic considers Programming usage/ranking, coding/tool capability, context and live availability. Ranking is a usage/adoption signal, not a sufficient quality/reliability proof.
+- Preferred primary candidate: `cohere/north-mini-code:free` because it is specialized for agentic coding/terminal work including OpenCode/SWE-Agent, supports tool calls, has 256K context, and currently reports ~99.9% OpenRouter availability.
+- Secondary opportunistic candidate: `nvidia/nemotron-3-ultra-550b-a55b:free` because it is high in current Programming usage ranking and has 1M context/tool support, but current availability is only ~73-75% and a live overload was observed.
+- Next gate: synthetic tool-call smoke against North Mini Code **without** ZDR/data-collection filters. If it passes, patch the explicit multi-model free pool, bump model registry version, update focused tests/docs, run full CI and require Human Owner manual merge before rollout.
+- Preserve current critical-profile and Product Manager exclusions unless separately approved.
+- The Human Owner has funded at least $10 OpenRouter credit; current documented free allowance is 1,000 requests/day at 20 RPM. Do not expose a fabricated authoritative remaining-quota counter.
 
 ### 2. DEC-025C / `chonhac` recovery tooling
 
@@ -62,7 +64,7 @@ Durable policy: `docs/project/provider-policy.md`.
   2. AC6 needs deterministic passing evidence for the DEC-025C-specific Python/PHP/shell/static checks.
 - PR #78 supports bounded recovery for this reassessment class. For the recorded state, the first expected recovery dimension is `+4 model calls`; later extensions are allowed only if they become the current live blocker.
 - Do not force-complete C1. Do not create a replacement job. C2/C3 remain gated.
-- Before any restart or recovery action, query local Runtime again; the status above is last known evidence only.
+- Before any restart or recovery action, query local Runtime again; this status is last known evidence only.
 
 ### 3. Telegram control rollout
 
@@ -70,18 +72,18 @@ Durable policy: `docs/project/provider-policy.md`.
 - Owner-facing Telegram messages/actions are localized to Vietnamese; stable machine reason codes remain unchanged.
 - `reassessment_stopped + hard_budget_guard` can produce a bounded, live-dimension-revalidated owner action; stale/wrong-dimension actions fail closed.
 - Local activation is pending.
-- `ddev n8n-sync` restarts the DDEV stack; it must run only after C1 is confirmed stable blocked/terminal and after issue #85 produces a valid OpenRouter model configuration.
+- `ddev n8n-sync` restarts the DDEV stack; it must run only after C1 is confirmed stable blocked/terminal and issue #85 produces a valid OpenRouter model configuration.
 
 ## Next safe sequence
 
 1. Keep the local DDEV stack unchanged; do not run `ddev n8n-sync` yet.
-2. Live-smoke `nvidia/nemotron-3-ultra-550b-a55b:free` with synthetic text and required tool calling. Do not send repository content or secrets in this validation request.
-3. If Nemotron passes, complete issue #85 with the smallest model-registry/test/docs patch and obtain green CI + Human Owner merge.
-4. If Nemotron is unavailable or tool calling fails, smoke `cohere/north-mini-code:free` next.
-5. After the replacement PR is merged, pull `main` locally and re-query C1.
+2. Smoke `cohere/north-mini-code:free` with synthetic tool calling and no ZDR/data-collection filters.
+3. If North passes, implement issue #85 as a small explicit multi-model registry/routing/test/docs patch: North Mini Code reliable primary, Nemotron opportunistic secondary, existing PCP fallbacks after them as policy allows.
+4. Bump model registry version, run full CI, obtain Human Owner manual merge.
+5. Pull merged `main` locally and re-query C1.
 6. Only if C1 is stable blocked/terminal, configure `OPENROUTER_API_KEY` in `.ddev/.env.coding-runtime.local` and run the required platform/n8n rollout.
 7. Verify Router/Runtime/config versions and OpenCode availability before any C1 recovery.
-8. Re-run a minimal OpenRouter smoke through the deployed integration, then trigger orchestrator tick and recover C1 only through the official live-revalidated control action.
+8. Run a minimal smoke through the deployed integration, then trigger orchestrator tick and recover C1 only through the official live-revalidated control action.
 
 ## Global operational gates
 
@@ -89,7 +91,7 @@ Durable policy: `docs/project/provider-policy.md`.
 - Never force push, auto-merge, or production deploy.
 - Do not restart Runtime/DDEV while a job is in flight.
 - Runtime durable state is authoritative; do not mutate job/database state manually to bypass state-machine logic.
-- Provider/control-plane credentials remain service-scoped and must never be committed to repository docs.
+- Provider/control-plane credentials remain service-scoped and must never be committed to repository docs or intentionally sent to model prompts.
 
 ## Updating this file
 
