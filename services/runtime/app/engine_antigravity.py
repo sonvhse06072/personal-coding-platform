@@ -44,18 +44,20 @@ class RuntimeEngine(BaseRuntimeEngine):
         choice: dict[str, Any],
         kind: str,
     ) -> None:
-        """Keep Antigravity quota pressure below the provider-health boundary.
+        """Keep observed Antigravity quota failures below provider scope.
 
-        Antigravity exposes multiple reasoning-model families with distinct quota
-        buckets. Quota/rate-limit exhaustion therefore marks the selected quota
-        group unavailable, while auth/bridge/provider failures continue to mark
-        the whole google_antigravity provider unavailable.
+        `/usage` exposes model-specific quota while Antigravity also reports
+        broader quota families. A failure from one selected model is therefore
+        insufficient evidence that every model in its family is exhausted. Mark
+        only `quota:model:<logical-id>` here. A separate authoritative telemetry
+        source may populate `quota:<group>` when the shared bucket itself is known
+        exhausted. Auth/bridge/provider failures remain provider-wide.
         """
         provider = str(choice.get("provider") or "")
         if provider == "google_antigravity" and kind in _ANTIGRAVITY_QUOTA_FAILURES:
-            quota_group = str(choice.get("quota_group") or choice.get("id") or "").strip()
-            if quota_group:
-                key = f"quota:{quota_group}"
+            model_id = str(choice.get("id") or "").strip()
+            if model_id:
+                key = f"quota:model:{model_id}"
                 state = dict(provider_state.get(key) or {})
                 state.update(
                     {
@@ -79,7 +81,7 @@ class RuntimeEngine(BaseRuntimeEngine):
     ) -> dict[str, Any]:
         # A preserved reroute from a pre-v1.0.35 job may still carry the old
         # provider-wide Antigravity quota marker. Narrow it before Router sees
-        # state so another Antigravity quota group remains eligible.
+        # state so other explicit Antigravity models remain eligible.
         if reroute and not reset_transient_provider_failures:
             row = self.storage.get(job_id)
             if row:
