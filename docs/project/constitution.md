@@ -10,7 +10,7 @@ Build a personal, budget-conscious coding automation platform that models a smal
 
 The human owner collaborates with a Product Manager agent at project inception to establish the complete project scope, source of truth, architecture constraints, roadmap frame, quality expectations, and budget policy. After that baseline is approved, the PM is responsible for executing within it.
 
-The system should reduce the amount of routine supervision required from the human owner while keeping the human in control of important product, architecture, security, production, destructive-data, dependency, and material budget decisions.
+The system should reduce the amount of routine supervision required from the human owner while keeping the human in control of important product, architecture, security, production, destructive-data, dependency, governance, and material budget decisions.
 
 ## 2. Project goals
 
@@ -30,7 +30,7 @@ The platform is not intended to become:
 - an enterprise workflow engine;
 - an always-parallel autonomous agent swarm;
 - a replacement for human ownership of project direction;
-- a system that auto-merges code or deploys to production without human control;
+- a system that blindly merges code without PM review and required gates, or deploys to production without human control;
 - a reason to add infrastructure or abstraction that does not improve reliability, efficiency, security, or governance.
 
 ## 4. Authority hierarchy
@@ -59,10 +59,9 @@ The human owner has final authority over:
 - destructive migrations or data-loss risks;
 - production writes and production deployment;
 - material budget/quota changes;
-- amendments to this Constitution or other high-authority source-of-truth documents;
-- final merge of pull requests.
+- amendments to this Constitution or other high-authority source-of-truth documents.
 
-The system must surface these decision boundaries rather than silently resolving them.
+Routine pull-request review and merge inside the already-approved project frame is delegated to the Product Manager after required verification gates pass. The system must surface Human Owner decision boundaries rather than silently resolving them.
 
 ## 6. Product Manager authority
 
@@ -75,7 +74,9 @@ After the human owner approves the baseline, the PM may autonomously:
 - ask the Router to staff a WorkOrder with an appropriate model/role;
 - request bounded repair, re-review, reassignment, or escalation;
 - update the mutable Execution Plan;
-- record newly discovered work that is inside or outside the approved scope.
+- record newly discovered work that is inside or outside the approved scope;
+- review pull requests using the WorkOrder, WorkReport, deterministic verification, independent review when required, and CI evidence;
+- merge a PR autonomously when it remains inside the approved project frame, all required gates are green, and no unresolved Human Owner decision trigger exists.
 
 The PM may not autonomously:
 
@@ -85,7 +86,8 @@ The PM may not autonomously:
 - add a major dependency or infrastructure service without approval;
 - weaken a security or trust boundary;
 - authorize destructive or production operations outside existing approved policy;
-- materially expand the project budget.
+- materially expand the project budget;
+- approve or merge a change that itself requires Human Owner approval until that approval has been explicitly obtained.
 
 When such a change appears necessary, the PM must create a ChangeProposal for human approval.
 
@@ -114,7 +116,8 @@ Agents must not confuse these two levels.
 - Only the constrained `ddev-executor` service may hold the Docker/source/GitHub-delivery capabilities required for bounded verification and delivery.
 - n8n remains a thin external integration/control-plane layer and must not own coding intelligence, model routing, product state, or privileged execution.
 - Authentication and secret boundaries fail closed when required credentials are absent or placeholders.
-- No force push, automatic merge, or production deployment is permitted by the current project policy.
+- No force push is permitted. Developer agents cannot merge. PM-reviewed autonomous merge is allowed only after required gates pass and only when no Human Owner decision boundary is implicated.
+- Production deployment remains separately controlled and cannot be implied by a PR merge.
 
 ## 10. Verification and delivery invariants
 
@@ -124,7 +127,8 @@ Agents must not confuse these two levels.
 - Bounded repair/escalation must preserve already-consumed job budgets.
 - Agent-produced changes are delivered through an `ai/*` branch and pull request.
 - CI green is a mandatory gate before a PR is considered ready for merge.
-- The human owner performs the final merge.
+- The PM performs the final engineering review for in-scope work and may merge autonomously when all required gates pass and no unresolved Human Owner decision trigger exists.
+- Changes requiring Human Owner approval must obtain that approval before PM merge.
 
 ## 11. Budget principles
 
@@ -136,7 +140,7 @@ Agents must not confuse these two levels.
 
 ## 12. Change control
 
-Any proposed change to project goals, scope, non-goals, architecture invariants, major dependency choices, security policy, production policy, destructive-data policy, or material budget policy requires a ChangeProposal containing:
+Any proposed change to project goals, scope, non-goals, architecture invariants, major dependency choices, security policy, production policy, destructive-data policy, merge-governance policy, or material budget policy requires a ChangeProposal containing:
 
 - the current constraint;
 - the proposed change;
@@ -146,7 +150,7 @@ Any proposed change to project goals, scope, non-goals, architecture invariants,
 - a recommendation;
 - explicit human approval/rejection.
 
-Once approved, the affected source-of-truth document must be versioned through Git in a reviewed PR.
+Once approved, the affected source-of-truth document must be versioned through Git in a reviewed PR. After explicit Human Owner approval of the high-authority change, the PM may merge that amendment PR once CI and required review gates pass.
 
 ## 13. Practicality rule
 
