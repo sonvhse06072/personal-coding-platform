@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
+import json
 import os
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Cookie, HTTPException, Response
-from fastapi.responses import HTMLResponse
+from fastapi import APIRouter, Cookie, HTTPException, Query, Request, Response
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .activity import public_event
@@ -155,6 +157,15 @@ def _job_snapshot(job: dict[str, Any] | None) -> dict[str, Any] | None:
         "remaining": remaining,
         "recent_events": [],
     }
+
+
+def _public_job_events(storage: Any, job_id: str, *, after: int = 0, limit: int = 100) -> list[dict[str, Any]]:
+    events: list[dict[str, Any]] = []
+    for row in storage.events_after(job_id, after_id=after, limit=limit):
+        event = public_event(dict(row))
+        if event:
+            events.append(event)
+    return events
 
 
 def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str, Any]:
@@ -319,5 +330,56 @@ def create_dashboard_router(storage: Any, orchestrator_store: Any) -> APIRouter:
     def dashboard_snapshot(pcp_dashboard_session: str | None = Cookie(default=None)) -> dict[str, Any]:
         _require_session(pcp_dashboard_session)
         return build_dashboard_snapshot(storage, orchestrator_store)
+
+    @router.get("/v1/dashboard/jobs/{job_id}/events", include_in_schema=False)
+    def dashboard_job_events(
+        job_id: str,
+        after: int = Query(0, ge=0),
+        limit: int = Query(100, ge=1, le=200),
+        pcp_dashboard_session: str | None = Cookie(default=None),
+    ) -> dict[str, Any]:
+        _require_session(pcp_dashboard_session)
+        if storage.get(job_id) is None:
+            raise HTTPException(404, "Unknown job")
+        events = _public_job_events(storage, job_id, after=after, limit=limit)
+        return {"events": events, "last_seq": max([after, *[int(event["seq"]) for event in events]])}
+
+    @router.get("/v1/dashboard/jobs/{job_id}/stream", include_in_schema=False)
+    async def dashboard_job_stream(
+        request: Request,
+        job_id: str,
+        after: int = Query(0, ge=0),
+        pcp_dashboard_session: str | None = Cookie(default=None),
+    ) -> StreamingResponse:
+        _require_session(pcp_dashboard_session)
+        if storage.get(job_id) is None:
+            raise HTTPException(404, "Unknown job")
+
+        async def stream():
+            cursor = int(after)
+            keepalive = 0
+            while not await request.is_disconnected():
+                rows = storage.events_after(job_id, after_id=cursor, limit=100)
+                if rows:
+                    for row in rows:
+                        cursor = max(cursor, int(row.get("id") or 0))
+                        event = public_event(dict(row))
+                        if not event:
+                            continue
+                        payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
+                        yield f"id: {event['seq']}\nevent: activity\ndata: {payload}\n\n"
+                    keepalive = 0
+                else:
+                    keepalive += 1
+                    if keepalive >= 20:
+                        yield ": keepalive\n\n"
+                        keepalive = 0
+                await asyncio.sleep(0.75)
+
+        return StreamingResponse(
+            stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
 
     return router
