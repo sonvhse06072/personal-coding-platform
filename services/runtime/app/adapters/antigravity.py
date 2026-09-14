@@ -129,48 +129,59 @@ class AntigravityAdapter(AgentAdapter):
         legacy_bridge: dict | None = None
         try:
             async with httpx.AsyncClient(timeout=timeout + 20) as client:
-                async with client.stream(
-                    "POST",
-                    f"{base_url}/run-stream",
-                    headers={"Authorization": f"Bearer {token}"},
-                    json=payload,
-                ) as response:
-                    if response.status_code in {404, 405}:
-                        legacy_bridge = await self._legacy_run(
-                            client=client,
-                            base_url=base_url,
-                            token=token,
-                            payload=payload,
-                        )
-                    else:
-                        response.raise_for_status()
-                        async for line in response.aiter_lines():
-                            if not line.strip():
-                                continue
-                            try:
-                                event = json.loads(line)
-                            except json.JSONDecodeError:
-                                continue
-                            if not isinstance(event, dict):
-                                continue
-                            if event.get("bridge_event") == "result":
-                                bridge_result = event
-                                continue
-                            raw_events.append(line[:12000])
-                            if len(raw_events) > 100:
-                                raw_events = raw_events[-100:]
-                            if str(event.get("event") or "") == "result":
-                                final_result = _result_payload(event)
-                            emit_developer_event(
-                                agent_public_event(
-                                    event,
-                                    workspace=workspace,
-                                    mode=mode,
-                                    adapter=self.name,
-                                    provider=self.provider,
-                                    model=self.model,
-                                )
+                # Real httpx clients expose streaming. Keeping the legacy call
+                # path available also preserves compatibility with a pre-1.7
+                # bridge and with narrow test clients that only implement post().
+                if not hasattr(client, "stream"):
+                    legacy_bridge = await self._legacy_run(
+                        client=client,
+                        base_url=base_url,
+                        token=token,
+                        payload=payload,
+                    )
+                else:
+                    async with client.stream(
+                        "POST",
+                        f"{base_url}/run-stream",
+                        headers={"Authorization": f"Bearer {token}"},
+                        json=payload,
+                    ) as response:
+                        if response.status_code in {404, 405}:
+                            legacy_bridge = await self._legacy_run(
+                                client=client,
+                                base_url=base_url,
+                                token=token,
+                                payload=payload,
                             )
+                        else:
+                            response.raise_for_status()
+                            async for line in response.aiter_lines():
+                                if not line.strip():
+                                    continue
+                                try:
+                                    event = json.loads(line)
+                                except json.JSONDecodeError:
+                                    continue
+                                if not isinstance(event, dict):
+                                    continue
+                                if event.get("bridge_event") == "result":
+                                    bridge_result = event
+                                    continue
+                                raw_events.append(line[:12000])
+                                if len(raw_events) > 100:
+                                    raw_events = raw_events[-100:]
+                                if str(event.get("event") or "") == "result":
+                                    final_result = _result_payload(event)
+                                emit_developer_event(
+                                    agent_public_event(
+                                        event,
+                                        workspace=workspace,
+                                        mode=mode,
+                                        adapter=self.name,
+                                        provider=self.provider,
+                                        model=self.model,
+                                    )
+                                )
         except asyncio.CancelledError:
             # The host bridge owns the actual `agy` process. Cancelling only the
             # HTTP client would leave that process consuming quota, so explicitly
