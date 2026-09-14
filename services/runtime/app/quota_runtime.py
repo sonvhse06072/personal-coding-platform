@@ -4,16 +4,16 @@ import asyncio
 import time
 from typing import Any
 
-from .quota_telemetry import QuotaTelemetryStore, merge_provider_state
-from .quota_telemetry_policy import PolicyQuotaTelemetryService
+from .quota_telemetry import merge_provider_state
+from .quota_telemetry_active import ActiveQuotaTelemetryService, ActiveQuotaTelemetryStore
 
 
 class QuotaTelemetryCoordinator:
     """Maintain proactive quota snapshots and enrich route/staff decisions, fail-open."""
 
     def __init__(self) -> None:
-        self.store = QuotaTelemetryStore()
-        self.service = PolicyQuotaTelemetryService(self.store)
+        self.store = ActiveQuotaTelemetryStore()
+        self.service = ActiveQuotaTelemetryService(self.store)
         self._initialized = False
         self._lock = asyncio.Lock()
         self._last_refresh_monotonic = 0.0
