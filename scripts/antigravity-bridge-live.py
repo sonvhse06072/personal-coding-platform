@@ -23,29 +23,115 @@ if _SPEC is None or _SPEC.loader is None:
 legacy = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(legacy)
 
+_MAX_TEXT = 12000
+_MAX_TOOL_NAME = 160
+_SAFE_USAGE_KEYS = {
+    "input_tokens",
+    "output_tokens",
+    "thinking_tokens",
+    "cache_read_tokens",
+    "cached_input_tokens",
+    "total_tokens",
+}
+
+
+def _bounded(value: Any, limit: int = _MAX_TEXT) -> str:
+    return str(value or "")[:limit]
+
+
+def _safe_usage(value: Any) -> dict[str, int | float]:
+    if not isinstance(value, dict):
+        return {}
+    safe: dict[str, int | float] = {}
+    for key in _SAFE_USAGE_KEYS:
+        item = value.get(key)
+        if isinstance(item, (int, float)) and not isinstance(item, bool):
+            safe[key] = item
+    return safe
+
+
+def _safe_tool_info(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    safe: dict[str, Any] = {}
+    name = value.get("name")
+    if isinstance(name, str) and name:
+        safe["name"] = name[:_MAX_TOOL_NAME]
+    # Parameters/output make activity useful, but unknown top-level tool metadata,
+    # child log URIs and conversation identifiers are excluded here. Runtime
+    # applies a second redaction/bounding layer before persistence/dashboard use.
+    if isinstance(value.get("parameters"), (dict, list, str)):
+        safe["parameters"] = value["parameters"]
+    if isinstance(value.get("output"), (dict, list, str, int, float, bool)):
+        safe["output"] = value["output"]
+    if value.get("error") is not None:
+        safe["error"] = _bounded(value.get("error"), 4000)
+    return safe
+
 
 def _safe_stream_event(value: Any) -> dict[str, Any] | None:
-    """Allow only documented observable Antigravity stream events.
+    """Field-level allowlist for observable Antigravity stream events.
 
-    The prompt is represented by a user_input step in stream-json. It is
-    intentionally dropped at the host boundary so Runtime/dashboard cannot
-    accidentally expose the full prompt. Unknown future event shapes fail closed.
+    The prompt is represented by a user_input step in stream-json. It is dropped
+    at the host boundary. Reasoning/analysis steps and unknown top-level fields are
+    also discarded so a future CLI schema addition cannot become a log leak by
+    default.
     """
     if not isinstance(value, dict):
         return None
     event = str(value.get("event") or "")
+
     if event == "init":
-        return value
+        safe: dict[str, Any] = {"event": "init"}
+        model = value.get("model")
+        if isinstance(model, str) and model:
+            safe["model"] = model[:160]
+        return safe
+
     if event == "result":
-        return value
+        source = value.get("result") if isinstance(value.get("result"), dict) else value
+        result: dict[str, Any] = {}
+        status = source.get("status")
+        if status is not None:
+            result["status"] = _bounded(status, 80)
+        response = source.get("response")
+        if response is not None:
+            result["response"] = _bounded(response, _MAX_TEXT)
+        usage = _safe_usage(source.get("usage"))
+        if usage:
+            result["usage"] = usage
+        if source.get("error") is not None:
+            result["error"] = _bounded(source.get("error"), 4000)
+        return {"event": "result", "result": result}
+
     if event != "step_update":
         return None
     step = value.get("step_update")
     if not isinstance(step, dict):
         return None
-    if str(step.get("step_type") or "") == "user_input":
+    step_type = str(step.get("step_type") or "")
+    if step_type in {"user_input", "reasoning", "analysis"}:
         return None
-    return value
+
+    safe_step: dict[str, Any] = {"step_type": step_type[:80]}
+    state = step.get("state")
+    if state is not None:
+        safe_step["state"] = _bounded(state, 80)
+
+    if step_type == "agent_response":
+        text_delta = step.get("text_delta")
+        if text_delta is not None:
+            safe_step["text_delta"] = _bounded(text_delta, 4000)
+    elif step_type == "tool":
+        tool_name = step.get("tool_name")
+        if isinstance(tool_name, str) and tool_name:
+            safe_step["tool_name"] = tool_name[:_MAX_TOOL_NAME]
+        tool_info = _safe_tool_info(step.get("tool_info"))
+        if tool_info:
+            safe_step["tool_info"] = tool_info
+    # Other documented non-sensitive step types are represented only by type and
+    # state. No subagent log URI/conversation id or unknown payload is forwarded.
+    return {"event": "step_update", "step_update": safe_step}
 
 
 class StreamingBridge(legacy.Bridge):
@@ -134,6 +220,7 @@ class StreamingBridge(legacy.Bridge):
                 proc: subprocess.Popen | None = None
                 scoped_allow: set[str] = set()
                 scoped_deny: set[str] = set()
+                safe_stream_failure: str | None = None
                 try:
                     with bridge._agy_lock:
                         if bridge.consume_cancelled(run_id):
@@ -224,6 +311,10 @@ class StreamingBridge(legacy.Bridge):
                     if proc is not None:
                         legacy.terminate_process_group(proc)
                     return
+                except Exception as exc:
+                    safe_stream_failure = type(exc).__name__
+                    if proc is not None:
+                        legacy.terminate_process_group(proc)
                 finally:
                     if proc is not None:
                         bridge.unregister_run(run_id)
@@ -235,13 +326,22 @@ class StreamingBridge(legacy.Bridge):
                 stderr = "".join(stderr_chunks)[-12000:]
                 if timed_out:
                     stderr = (stderr + "\nAntigravity run timed out").strip()
-                return self._write_ndjson({
-                    "bridge_event": "result",
-                    "run_id": run_id,
-                    "returncode": 124 if timed_out else int(proc.returncode or 0) if proc else 1,
-                    "stderr": stderr,
-                    "timed_out": timed_out,
-                })
+                if safe_stream_failure:
+                    stderr = (stderr + f"\nAntigravity bridge stream failed safely: {safe_stream_failure}").strip()
+                try:
+                    return self._write_ndjson({
+                        "bridge_event": "result",
+                        "run_id": run_id,
+                        "returncode": (
+                            124 if timed_out else
+                            1 if safe_stream_failure else
+                            int(proc.returncode or 0) if proc else 1
+                        ),
+                        "stderr": stderr,
+                        "timed_out": timed_out,
+                    })
+                except (BrokenPipeError, ConnectionResetError):
+                    return None
 
             def do_POST(self):
                 if self.path != "/run-stream":
@@ -251,14 +351,10 @@ class StreamingBridge(legacy.Bridge):
                 try:
                     return self._stream_run(self.read_payload())
                 except Exception as exc:
-                    # Before streaming starts this is an ordinary JSON 500. Once
-                    # headers are sent, connection close is safer than leaking raw
-                    # host diagnostics into the activity channel.
-                    try:
-                        return self.send_json(500, {"error": f"{type(exc).__name__}: {exc}"})
-                    except Exception:
-                        self.close_connection = True
-                        return None
+                    # Only pre-stream validation/setup errors reach here. Once the
+                    # NDJSON response starts, _stream_run converts internal failures
+                    # into a bounded terminal result or closes the connection.
+                    return self.send_json(500, {"error": f"stream_setup_failed:{type(exc).__name__}"})
 
         return Handler
 
