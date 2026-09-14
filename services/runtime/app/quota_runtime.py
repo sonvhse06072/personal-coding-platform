@@ -9,7 +9,7 @@ from .quota_telemetry_policy import PolicyQuotaTelemetryService
 
 
 class QuotaTelemetryCoordinator:
-    """Refresh external quota state before route/staff decisions, fail-open."""
+    """Maintain proactive quota snapshots and enrich route/staff decisions, fail-open."""
 
     def __init__(self) -> None:
         self.store = QuotaTelemetryStore()
@@ -17,12 +17,40 @@ class QuotaTelemetryCoordinator:
         self._initialized = False
         self._lock = asyncio.Lock()
         self._last_refresh_monotonic = 0.0
+        self._started = False
 
     def _ensure_initialized(self) -> None:
         if self._initialized:
             return
         self.store.init()
         self._initialized = True
+
+    async def start(self) -> None:
+        """Start an independent fail-open collector loop.
+
+        Quota polling is platform telemetry, not a WorkOrder action: it does not
+        increment model/tool/test counters and it does not depend on a job being
+        runnable. The service persists collector errors instead of raising them
+        into Runtime startup/execution semantics.
+        """
+        if self._started:
+            return
+        try:
+            self._ensure_initialized()
+            await self.service.start()
+            self._last_refresh_monotonic = time.monotonic()
+            self._started = True
+        except Exception:
+            # A missing database/provider telemetry surface must never stop Runtime.
+            self._started = False
+
+    async def stop(self) -> None:
+        if not self._started:
+            return
+        try:
+            await self.service.stop()
+        finally:
+            self._started = False
 
     async def refresh_if_due(self) -> None:
         self._ensure_initialized()
