@@ -5,7 +5,7 @@ projects:
     base_branch: main
     privacy:
       private_code: true
-      allow_training_provider: false
+      allow_training_provider: true
       require_zero_retention: false
     human_policy:
       routine_review: false
@@ -37,7 +37,7 @@ projects:
     base_branch: develop
     privacy:
       private_code: true
-      allow_training_provider: false
+      allow_training_provider: true
       require_zero_retention: false
     human_policy:
       routine_review: false
@@ -72,7 +72,7 @@ projects:
 
     privacy:
       private_code: true
-      allow_training_provider: false
+      allow_training_provider: true
       require_zero_retention: false
 
     human_policy:
