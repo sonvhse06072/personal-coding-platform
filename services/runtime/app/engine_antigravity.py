@@ -28,17 +28,28 @@ class RuntimeEngine(BaseRuntimeEngine):
         # persistence separate while sharing Runtime's PostgreSQL database.
         self.quota_storage = QuotaStorage()
         self.quota_telemetry = ProviderQuotaTelemetry(self.quota_storage)
+        self._quota_storage_ready = False
 
     async def start(self) -> None:
-        self.quota_storage.ensure_quota_table()
+        try:
+            self.quota_storage.ensure_quota_table()
+            self._quota_storage_ready = True
+        except Exception:
+            # Runtime remains usable if optional telemetry persistence cannot be
+            # initialized. Core Storage startup below remains authoritative.
+            self._quota_storage_ready = False
         await super().start()
-        await self.quota_telemetry.start()
+        if self._quota_storage_ready:
+            await self.quota_telemetry.start()
 
     async def stop(self) -> None:
-        await self.quota_telemetry.stop()
+        if self._quota_storage_ready:
+            await self.quota_telemetry.stop()
         await super().stop()
 
     async def _refresh_and_apply_quota_state(self, job_id: str) -> None:
+        if not self._quota_storage_ready:
+            return
         try:
             await self.quota_telemetry.refresh_if_stale()
         except Exception:
@@ -128,7 +139,7 @@ class RuntimeEngine(BaseRuntimeEngine):
         strategy: dict[str, Any],
         role: str = "executor",
     ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-        if failure_kind in _QUOTA_FAILURES:
+        if self._quota_storage_ready and failure_kind in _QUOTA_FAILURES:
             provider = str(current_choice.get("provider") or "")
             if provider in {"openai", "google_antigravity"}:
                 try:
@@ -158,10 +169,11 @@ class RuntimeEngine(BaseRuntimeEngine):
     ) -> dict[str, Any]:
         row = self.storage.get(job_id)
         if row:
-            try:
-                await self.quota_telemetry.refresh_if_stale()
-            except Exception:
-                pass
+            if self._quota_storage_ready:
+                try:
+                    await self.quota_telemetry.refresh_if_stale()
+                except Exception:
+                    pass
             checkpoint = checkpoint_from_row(row)
             if reset_transient_provider_failures:
                 checkpoint = clear_transient_provider_failures(checkpoint)
@@ -173,9 +185,10 @@ class RuntimeEngine(BaseRuntimeEngine):
                     checkpoint,
                     deepcopy(row.get("progress") or {}),
                 )
-            checkpoint["provider_state"] = self.quota_telemetry.apply_to_provider_state(
-                dict(checkpoint.get("provider_state") or {})
-            )
+            if self._quota_storage_ready:
+                checkpoint["provider_state"] = self.quota_telemetry.apply_to_provider_state(
+                    dict(checkpoint.get("provider_state") or {})
+                )
             self.storage.update(job_id, checkpoint=checkpoint)
 
         # We already applied an explicit reset above, then re-added only fresh
