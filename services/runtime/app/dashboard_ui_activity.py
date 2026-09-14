@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .dashboard_ui import DASHBOARD_HTML as _BASE
+from .dashboard_ui_base import DASHBOARD_HTML as _BASE
 
 
 # Keep the stable dashboard layout and apply a narrow observability presentation
