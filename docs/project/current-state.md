@@ -27,23 +27,26 @@ Before a material task is complete or handed off, update the relevant topical do
 - PR #82 (`Make project docs the cross-chat continuity source`) is merged.
 - PR #84 (`Reconcile post-merge versions and rollout state`) is merged; final CI run #162 passed.
 - PR #86 (`Replace withdrawn OpenRouter free model with North Mini Code`) is merged; exact head `f7eafe041a3aeed709b7af55e15bcfb2b6737ae6` passed CI run #167.
-- `main` was verified at merge commit `cd525d8dfd346bfc6293c8c2641f3c95a4a37799` after PR #86.
-- Local rollout is complete: Router `1.0.15`, Runtime `1.0.30`, model registry `v7`, routing policy `v7`, OpenCode adapter available, n8n healthy, OpenRouter secret scoped only to Runtime.
+- PR #88 (`Reconcile post-OpenRouter rollout state`) is merged; current `main` merge commit is `3129dad6ea876cd659c9518d4080d3fa4cb366c2`.
+- Deployed platform before issue #89: Router `1.0.15`, Runtime `1.0.30`, model registry `v7`, routing policy `v7`, OpenCode adapter available, n8n healthy, OpenRouter secret scoped only to Runtime.
 - Deployed Runtime/OpenCode smoke passed with `openrouter/cohere/north-mini-code:free` in non-mutating plan mode.
 
 ## Active work
 
-### 1. OpenRouter rollout status
+### 1. Runtime wall-budget timeout recovery — issue #89
 
-Durable provider policy: `docs/project/provider-policy.md`.
-
-- Operational issue: `personal-coding-platform` #87.
-- PR #86 is merged and locally activated.
-- Active explicit upstream free model: `cohere/north-mini-code:free`.
-- Stable logical PCP model ID remains `openrouter_qwen3_coder_free` for durable route-history/provider-state compatibility; registry `model:` slug is authoritative.
-- OpenRouter free is effectiveness-first. ZDR and `data_collection=deny` are not required, but secret boundaries remain strict and OpenCode sharing remains disabled.
-- Nemotron remains inactive because current provider-health semantics can disable the entire OpenRouter provider after a provider-level failure.
-- OpenRouter rollout gate is complete. Current work is C1 recovery/verification.
+- Issue: `personal-coding-platform` #89 (`Recover wall-budget-bounded agent timeouts instead of failing jobs`).
+- Branch: `fix/wall-budget-agent-timeout-89`.
+- Trigger: DEC-025C C1 resumed after bounded budget extensions, then a Codex invocation received an approximately `376s` timeout derived from the remaining job wall-time budget. `run_command()` raised a generic RuntimeError and the worker loop incorrectly persisted the job as terminal `failed` instead of stopping at a recoverable wall-time budget gate.
+- Required forward behavior:
+  - coding-command timeout is represented by a typed exception while preserving whole-process-group termination;
+  - planner/executor/evaluator timeouts are reclassified as budget exhaustion only when the job's remaining wall-time is the limiting deadline;
+  - ordinary per-call timeouts while wall-time remains are not fabricated into budget exhaustion;
+  - elapsed progress/checkpoint are persisted before the recoverable block;
+  - same job/workspace/counters remain intact.
+- Compatibility behavior for the already-failed C1 is intentionally narrow: Runtime recognizes only the legacy terminal timeout shape whose recorded timeout closely matches the wall time remaining at the last durable progress checkpoint. That state may expose only the normal bounded `max_wall_time_minutes +20` recovery action; unrelated failed jobs must fail closed.
+- Runtime behavior changes from `1.0.30` to target `1.0.31`; Router/model policy is unchanged.
+- Current implementation branch includes the typed timeout, wall-budget classification, legacy failed-job compatibility, focused regression tests, and version bump. Full CI and Human Owner manual merge are still required before rollout.
 
 ### 2. DEC-025C / `chonhac` recovery tooling
 
@@ -51,38 +54,42 @@ Durable provider policy: `docs/project/provider-policy.md`.
 - Orchestration plan: `pm-gh-5650852312`.
 - WorkOrder: `DEC-025C-1-recovery-tooling-r2`.
 - Runtime job: `eec59b13651c54559c10ce204380a68e`.
-- Evaluator findings that C1 still needs to satisfy:
+- C1 still must satisfy two evaluator findings before its normal PR/CI/manual-merge gate:
   1. derive/verify deployed release identity from the deployed tree instead of trusting local Git SHA/fingerprint supplied by `run.sh`;
   2. provide deterministic passing evidence for the DEC-025C-specific Python/PHP/shell/static checks required by AC6.
-- First bounded recovery extended `max_model_calls` from `14` to `18` and resumed the same job without resetting usage.
-- Second bounded recovery action `vNqbP1aduh_RzGKxnvhz_njI` was executed through the official Runtime endpoint after the Telegram callback remained pending. It extended `max_repair_iterations` from `2` to `3`, used `2`, and resumed the same job.
-- After that repair-budget recovery C1 returned to `verifying`, then blocked again with `reason=execution_budget_exhausted` because iterations reached `8/8` while model calls were `14/18`, tool calls `36/160`, test runs `6/14`, wall time `63.515/70`, repair iterations `2/3`.
-- Third bounded recovery action `ymYxMQEsO4qCfaJqbc66H2gL` was executed through the official Runtime endpoint. It extended `max_iterations` from `8` to `10`, used `8`, and resumed the same C1 job without resetting usage.
-- Current live state after that iteration recovery is **in flight**: `status=verifying`, `updated_at=2026-09-14T13:53:27.632763+00:00`, Runtime error `None`.
-- While C1 is `verifying`, returned `result.reason=execution_budget_exhausted` is stale prior-result context and is not a current authorization to extend another budget.
-- No further budget extension is currently authorized. Do not restart services, tick orchestration for recovery, execute another control action, call generic `/v1/jobs/{job_id}/run`, mutate DB state manually, or create a replacement C1 job while it is in flight.
+- Bounded recoveries already approved on the same job without resetting usage:
+  - `max_model_calls`: `14 -> 18`;
+  - `max_repair_iterations`: `2 -> 3` via action `vNqbP1aduh_RzGKxnvhz_njI`;
+  - `max_iterations`: `8 -> 10` via action `ymYxMQEsO4qCfaJqbc66H2gL`.
+- Last pre-timeout live counters included model calls `14/18`, tool calls `36/160`, test runs `6/14`, wall time about `63.515/70`, and repair iterations `2/3`.
+- Current C1 state is terminal `failed` under Runtime `1.0.30` because the wall-budget-bounded Codex command timed out after about `376s`. This terminal state is the Runtime bug being fixed by issue #89; do not manually change the DB status, create a replacement C1 job, or call generic `/v1/jobs/{job_id}/run` to bypass orchestration controls.
 - C2/C3 remain gated until C1 satisfies both evaluator findings and reaches its normal PR/CI/manual-merge gate.
 
-### 3. Telegram control rollout
+### 3. OpenRouter / Telegram control status
 
-- Issue #77 / PR #78 are merged and n8n workflows are locally synced.
-- Owner-facing Telegram messages/actions are localized to Vietnamese; stable machine reason codes remain unchanged.
-- Runtime correctly surfaced sequential bounded recovery gates: `+4 model calls`, then `+1 repair iteration`, then `+2 iterations`.
-- The prior `+1 repair` Telegram callback did not execute; CLI execution of the exact pending action through the same official Runtime endpoint succeeded. Treat Runtime action state as authoritative rather than assuming a button press completed.
+Durable provider policy: `docs/project/provider-policy.md`.
+
+- OpenRouter rollout is complete and operational; active explicit upstream free model is `cohere/north-mini-code:free`.
+- Stable logical PCP model ID remains `openrouter_qwen3_coder_free`; registry `model:` slug is authoritative.
+- OpenRouter free remains effectiveness-first; secret boundaries and disabled OpenCode sharing remain mandatory.
+- Telegram owner controls are localized to Vietnamese and use Runtime-owned durable action state. Runtime previously surfaced sequential bounded C1 gates `+4 model calls`, `+1 repair iteration`, and `+2 iterations` correctly.
+- Treat Runtime action state as authoritative rather than assuming a Telegram button press executed successfully.
 
 ## Next safe sequence
 
-1. Monitor only the same C1 job `eec59b13651c54559c10ce204380a68e` while it remains in flight (`executing`, `verifying`, `evaluating`, `delivering`, or equivalent).
-2. Do not restart services, tick orchestration for recovery, or execute another control action while it is in flight.
-3. If C1 reaches delivery/PR creation, follow the normal CI/manual-merge gate.
-4. If C1 becomes blocked again, inspect the new live reason, counters and freshly materialized pending control action before approving anything else. Extend only the dimension Runtime authorizes for that new state.
-5. C1 must fix both evaluator findings and reach the normal PR/CI/manual-merge gate before C2/C3 proceed.
+1. Finish issue #89 on `fix/wall-budget-agent-timeout-89`: focused tests, Runtime `1.0.31`, continuity docs, green CI, then Human Owner manual merge. Do not auto-merge.
+2. C1 is terminal `failed`, so after #89 is merged it is safe to pull merged `main` and restart/sync only as required to activate Runtime `1.0.31`.
+3. Verify platform health and Runtime `1.0.31` after rollout.
+4. Trigger orchestration reconciliation and inspect the newly materialized live control action for the same C1 job. Expected only if the compatibility matcher validates the exact persisted legacy state: `max_wall_time_minutes +20`.
+5. Execute recovery only through the official live-revalidated control action. Do not mutate DB state or create a replacement job.
+6. Monitor the same C1 through verification/evaluation/delivery. Any later budget extension must be based on a fresh live blocker/action only.
+7. C1 must fix both evaluator findings and reach PR/green-CI/Human-merge before C2/C3 proceed.
 
 ## Global operational gates
 
 - Never commit directly to `main`; use issue -> branch -> tests/CI -> PR -> human merge.
 - Never force push, auto-merge, or production deploy.
-- Do not restart Runtime/DDEV while a job is in flight.
+- Do not restart Runtime/DDEV while a job is in flight. Terminal `failed`/stable blocked states may be restarted when needed for an approved rollout.
 - Runtime durable state is authoritative; do not mutate job/database state manually to bypass state-machine logic.
 - Provider/control-plane credentials remain service-scoped and must never be committed to repository docs or intentionally sent to model prompts.
 
