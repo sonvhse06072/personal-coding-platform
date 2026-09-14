@@ -4,7 +4,8 @@ import asyncio
 import time
 from typing import Any
 
-from .quota_telemetry import QuotaTelemetryService, QuotaTelemetryStore, merge_provider_state
+from .quota_telemetry import QuotaTelemetryStore, merge_provider_state
+from .quota_telemetry_policy import PolicyQuotaTelemetryService
 
 
 class QuotaTelemetryCoordinator:
@@ -12,7 +13,7 @@ class QuotaTelemetryCoordinator:
 
     def __init__(self) -> None:
         self.store = QuotaTelemetryStore()
-        self.service = QuotaTelemetryService(self.store)
+        self.service = PolicyQuotaTelemetryService(self.store)
         self._initialized = False
         self._lock = asyncio.Lock()
         self._last_refresh_monotonic = 0.0
