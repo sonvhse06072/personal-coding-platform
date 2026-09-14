@@ -50,6 +50,16 @@ REQUIRED_DENY_RULES = {
 }
 FORBIDDEN_ALLOW_RULES = {"unsandboxed(*)", "read_file(*)", "write_file(*)"}
 FORBIDDEN_ASK_PREFIXES = ("read_file(", "write_file(")
+_SENSITIVE_QUOTA_KEYS = (
+    "token",
+    "secret",
+    "password",
+    "cookie",
+    "authorization",
+    "credential",
+    "private_key",
+    "access_key",
+)
 
 
 def contained(path: Path, root: Path) -> bool:
@@ -206,6 +216,28 @@ def settings_status(path: Path) -> tuple[bool, dict]:
     }
 
 
+def sanitize_quota_payload(value, depth: int = 0):
+    """Keep quota metadata while dropping credential-shaped fields and huge data."""
+    if depth > 8:
+        return None
+    if isinstance(value, dict):
+        result = {}
+        for key, item in list(value.items())[:100]:
+            text = str(key)
+            lower = text.lower()
+            if any(part in lower for part in _SENSITIVE_QUOTA_KEYS):
+                continue
+            result[text[:120]] = sanitize_quota_payload(item, depth + 1)
+        return result
+    if isinstance(value, list):
+        return [sanitize_quota_payload(item, depth + 1) for item in value[:100]]
+    if isinstance(value, str):
+        return value[:1000]
+    if isinstance(value, (int, float, bool)) or value is None:
+        return value
+    return str(value)[:1000]
+
+
 class Bridge:
     def __init__(self, *, token: str, workspaces: Path, agy_bin: str, settings: Path):
         self.token = token
@@ -215,8 +247,9 @@ class Bridge:
         self._runs: dict[str, subprocess.Popen] = {}
         self._cancelled_runs: set[str] = set()
         self._runs_lock = threading.Lock()
-        # Antigravity uses one global settings.json. Serialize Antigravity runs so
-        # each job can receive exact absolute file grants without cross-job races.
+        # Antigravity uses one global settings.json. Serialize both coding runs
+        # and read-only quota refreshes so the CLI never races its own account
+        # configuration/cache while a job has temporary workspace grants.
         self._agy_lock = threading.Lock()
 
     def register_run(self, run_id: str, proc: subprocess.Popen) -> None:
@@ -239,8 +272,6 @@ class Bridge:
         with self._runs_lock:
             proc = self._runs.get(run_id)
             if proc is None:
-                # The request may be queued behind another Antigravity run. Record
-                # cancellation so it cannot start after the global settings lock frees.
                 self._cancelled_runs.add(run_id)
                 return True
         terminate_process_group(proc)
@@ -253,11 +284,53 @@ class Bridge:
             terminate_process_group(proc)
         return len(runs)
 
+    def quota(self, timeout: int = 30) -> tuple[int, dict]:
+        safe, safety = settings_status(self.settings)
+        if not safe:
+            return 503, {"error": "unsafe_antigravity_settings", "safety": safety}
+        cmd = [
+            self.agy_bin,
+            "-p", "/usage",
+            "--output-format", "json",
+            "--print-timeout", f"{timeout}s",
+        ]
+        env = os.environ.copy()
+        env["NO_COLOR"] = "1"
+        with self._agy_lock:
+            proc = subprocess.Popen(
+                cmd,
+                cwd=self.workspaces,
+                env=env,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                start_new_session=True,
+            )
+            try:
+                stdout, _stderr = proc.communicate(timeout=timeout + 5)
+            except subprocess.TimeoutExpired:
+                terminate_process_group(proc)
+                proc.communicate()
+                return 504, {"error": "antigravity_quota_timeout"}
+        if proc.returncode != 0:
+            return 503, {"error": "antigravity_quota_unavailable"}
+        if len(stdout.encode("utf-8", errors="ignore")) > 2_000_000:
+            return 502, {"error": "antigravity_quota_response_too_large"}
+        try:
+            parsed = json.loads(stdout)
+        except json.JSONDecodeError:
+            return 502, {"error": "antigravity_quota_invalid_json"}
+        return 200, {
+            "status": "ok",
+            "source": "agy_print_usage_json",
+            "payload": sanitize_quota_payload(parsed),
+        }
+
     def handler(self):
         bridge = self
 
         class Handler(BaseHTTPRequestHandler):
-            server_version = "PersonalCodingAntigravityBridge/1.6"
+            server_version = "PersonalCodingAntigravityBridge/1.7"
 
             def log_message(self, fmt: str, *args):
                 print(f"agy-bridge: {self.address_string()} - {fmt % args}", flush=True)
@@ -295,7 +368,7 @@ class Bridge:
                 return self.send_json(200 if safe else 503, {
                     "status": "ok" if safe else "degraded",
                     "service": "antigravity-host-bridge",
-                    "version": "1.6",
+                    "version": "1.7",
                     "agy": bridge.agy_bin,
                     "workspaces": str(bridge.workspaces),
                     "active_runs": active_runs,
@@ -319,6 +392,10 @@ class Bridge:
                             "run_id": run_id,
                             "cancelled": bridge.cancel_run(run_id),
                         })
+                    if self.path == "/quota":
+                        timeout = max(10, min(int(payload.get("timeout", 30)), 60))
+                        status, result = bridge.quota(timeout=timeout)
+                        return self.send_json(status, result)
                     if self.path != "/run":
                         return self.send_json(404, {"error": "not_found"})
 
@@ -358,8 +435,6 @@ class Bridge:
                     env = os.environ.copy()
                     env["NO_COLOR"] = "1"
 
-                    # settings.json is global to the signed-in host account. One run
-                    # at a time receives absolute grants for only its isolated clone.
                     with bridge._agy_lock:
                         if bridge.consume_cancelled(run_id):
                             return self.send_json(200, {
