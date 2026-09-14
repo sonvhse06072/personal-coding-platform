@@ -1,4 +1,4 @@
-version: 7
+version: 8
 models:
   groq_free:
     kind: llm
@@ -114,13 +114,17 @@ models:
       zero_retention_supported: true
 
   antigravity_free:
+    # Stable legacy PCP ID retained for durable route/provider history. The
+    # upstream model is now explicit instead of `auto`, so PCP remains the model
+    # routing authority while using the normal Gemini quota bucket.
     kind: agent
     provider: google_antigravity
     adapter: antigravity_host
-    model: auto
+    model: gemini-3.8-flash-medium
     tier: balanced
     cost_class: free
-    quota_group: antigravity_individual
+    quota_group: antigravity_gemini
+    quota_refresh: weekly_or_five_hour_by_plan
     roles:
     - explore
     - executor
@@ -138,6 +142,105 @@ models:
       structured_output: 8
       repo_exploration: 9
     base_success: 0.86
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      training_policy_basis: user_opt_out_enforced
+      enterprise_data_guarantee: false
+      telemetry_opt_out_required: true
+      zero_retention_supported: false
+
+  antigravity_flash_high:
+    kind: agent
+    provider: google_antigravity
+    adapter: antigravity_host
+    model: gemini-3.8-flash-high
+    tier: strong
+    cost_class: free
+    quota_group: antigravity_gemini
+    quota_refresh: weekly_or_five_hour_by_plan
+    roles:
+    - executor
+    - repair
+    - debugger
+    - planner
+    - reviewer
+    capabilities:
+      coding: 8
+      reasoning: 9
+      debugging: 8
+      planning: 8
+      review: 8
+      structured_output: 8
+      repo_exploration: 9
+    base_success: 0.88
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      training_policy_basis: user_opt_out_enforced
+      enterprise_data_guarantee: false
+      telemetry_opt_out_required: true
+      zero_retention_supported: false
+
+  antigravity_gemini_pro:
+    kind: agent
+    provider: google_antigravity
+    adapter: antigravity_host
+    model: gemini-3.1-pro-high
+    tier: strong
+    cost_class: scarce
+    quota_group: antigravity_gemini
+    quota_refresh: weekly_or_five_hour_by_plan
+    roles:
+    - executor
+    - repair
+    - debugger
+    - planner
+    - reviewer
+    - architecture
+    - product_manager
+    capabilities:
+      coding: 9
+      reasoning: 9
+      debugging: 9
+      planning: 9
+      review: 9
+      structured_output: 8
+      repo_exploration: 9
+    base_success: 0.91
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      training_policy_basis: user_opt_out_enforced
+      enterprise_data_guarantee: false
+      telemetry_opt_out_required: true
+      zero_retention_supported: false
+
+  antigravity_claude_sonnet:
+    kind: agent
+    provider: google_antigravity
+    adapter: antigravity_host
+    model: claude-sonnet-4-6
+    tier: strong
+    cost_class: scarce
+    quota_group: antigravity_claude_gpt
+    quota_refresh: weekly_or_five_hour_by_plan
+    roles:
+    - executor
+    - repair
+    - debugger
+    - planner
+    - reviewer
+    - product_manager
+    capabilities:
+      coding: 9
+      reasoning: 9
+      debugging: 9
+      planning: 9
+      review: 9
+      structured_output: 8
+      repo_exploration: 8
+    base_success: 0.91
     privacy:
       private_code_allowed: true
       training_allowed: false
