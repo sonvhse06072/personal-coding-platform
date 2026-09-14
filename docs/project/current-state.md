@@ -47,7 +47,7 @@ Durable provider policy: `docs/project/provider-policy.md`.
 - North Mini Code live evidence before merge: tool-call smoke passed without ZDR/data-collection filters; the same model failed with a ZDR-required policy because no matching endpoint existed.
 - Nemotron remains inactive. Runtime provider failures currently mark `provider:openrouter` unavailable, so activating multiple OpenRouter models would not provide reliable same-provider model fallback after a provider-level failure.
 - Human Owner funded at least $10 of OpenRouter credit; current documented free allowance is 1,000 requests/day at 20 RPM. Do not expose a fabricated authoritative remaining-quota counter.
-- Current gate: pull merged `main`, re-query C1, and restart/sync only if C1 is stable blocked/terminal.
+- Restart gate is now satisfied by live C1 evidence: C1 remains stable `blocked` with no Runtime error. The next operation may configure the Runtime-only OpenRouter key and perform the required local sync/restart.
 
 ### 2. DEC-025C / `chonhac` recovery tooling
 
@@ -55,14 +55,14 @@ Durable provider policy: `docs/project/provider-policy.md`.
 - Orchestration plan: `pm-gh-5650852312`.
 - WorkOrder: `DEC-025C-1-recovery-tooling-r2`.
 - Runtime job: `eec59b13651c54559c10ce204380a68e`.
-- Last known Runtime status: `blocked` in `reassessment` with top-level reason `reassessment_stopped`.
-- Nested reassessment evidence: `model-call budget exhausted` with `hard_budget_guard`.
-- Evaluator did **not** accept C1. Two material findings remain:
+- Live status re-verified on 2026-09-14 before rollout: `blocked`, profile `complex`, executor `codex_terra`, top-level reason `reassessment_stopped`, Runtime error `None`.
+- The blocked row was last updated at `2026-09-13T21:03:40.184327+00:00`, confirming it is stable rather than in-flight.
+- Evaluator still did **not** accept C1. The same two material findings remain in the live `last_failure` evidence:
   1. deployed release identity must be derived/verified from the deployed tree instead of trusting local Git SHA/fingerprint supplied by `run.sh`;
   2. AC6 needs deterministic passing evidence for the DEC-025C-specific Python/PHP/shell/static checks.
 - PR #78 supports bounded recovery for this reassessment class. For the recorded state, the first expected recovery dimension is `+4 model calls`; later extensions are allowed only if they become the current live blocker.
 - Do not force-complete C1. Do not create a replacement job. C2/C3 remain gated.
-- Before any restart or recovery action, query local Runtime again; this status is last known evidence only.
+- After rollout, re-query this same job before any recovery action; post-restart live state remains authoritative.
 
 ### 3. Telegram control rollout
 
@@ -70,20 +70,17 @@ Durable provider policy: `docs/project/provider-policy.md`.
 - Owner-facing Telegram messages/actions are localized to Vietnamese; stable machine reason codes remain unchanged.
 - `reassessment_stopped + hard_budget_guard` can produce a bounded, live-dimension-revalidated owner action; stale/wrong-dimension actions fail closed.
 - Local activation is still pending.
-- `ddev n8n-sync` restarts the DDEV stack and must run only after C1 is confirmed stable blocked/terminal.
+- `ddev n8n-sync` restarts the DDEV stack; the required pre-restart C1 gate has now been satisfied by the live blocked-state check above.
 
 ## Next safe sequence
 
-1. Pull current `main` locally and verify HEAD `cd525d8dfd346bfc6293c8c2641f3c95a4a37799`.
-2. Re-query C1 job `eec59b13651c54559c10ce204380a68e` before any restart.
-3. If C1 is in flight (`queued`, `routing`, `planning`, `executing`, `verifying`, `evaluating`, `delivering`, or equivalent), do **not** restart or sync anything.
-4. If C1 is stable blocked/terminal, configure `OPENROUTER_API_KEY` only in `.ddev/.env.coding-runtime.local` without printing or committing it.
-5. Run the required platform/n8n rollout (`ddev n8n-sync`).
-6. Verify Router `1.0.15`, Runtime `1.0.30`, model registry `v7`, routing policy `v7`, and Runtime OpenCode availability.
-7. Run one minimal deployed integration smoke through PCP using North Mini Code; use synthetic content only and do not include secrets.
-8. Re-query C1 and trigger an orchestrator tick.
-9. Recover C1 only through the official live-revalidated control action. For the last recorded blocker the expected first bounded extension is `+4 model calls`, but live state is authoritative.
-10. Monitor the same C1 job until it addresses both evaluator findings and reaches its normal PR/CI/manual-merge gate. Keep C2/C3 pending until C1 clears that gate.
+1. Configure `OPENROUTER_API_KEY` only in `.ddev/.env.coding-runtime.local` without printing or committing it.
+2. Run the required platform/n8n rollout (`ddev n8n-sync`).
+3. Verify Router `1.0.15`, Runtime `1.0.30`, model registry `v7`, routing policy `v7`, and Runtime OpenCode availability.
+4. Run one minimal deployed integration smoke through PCP using North Mini Code; use synthetic content only and do not include secrets.
+5. Re-query C1 and trigger an orchestrator tick.
+6. Recover C1 only through the official live-revalidated control action. For the last recorded blocker the expected first bounded extension is `+4 model calls`, but live state is authoritative.
+7. Monitor the same C1 job until it addresses both evaluator findings and reaches its normal PR/CI/manual-merge gate. Keep C2/C3 pending until C1 clears that gate.
 
 ## Global operational gates
 
