@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta
 from typing import Any
 import re
@@ -181,3 +182,15 @@ class PolicyQuotaTelemetryService(QuotaTelemetryService):
                     success=False,
                     error=f"{type(exc).__name__}: {exc}",
                 )
+
+    async def _loop(self) -> None:
+        while True:
+            try:
+                await self.refresh()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                # Database/provider telemetry outages must not kill the long-lived
+                # advisory collector. A later interval can recover automatically.
+                pass
+            await asyncio.sleep(self.interval)
