@@ -136,7 +136,13 @@ async def create_execution_plan(payload: PMPlanCreateRequest) -> ExecutionPlanVi
     try:
         row = await pm_planner.create_plan(payload)
     except (RuntimeError, KeyError, ValueError) as exc:
+        # Pre-flight governance/configuration errors occur before a durable plan
+        # row is created. Model/runtime failures after persistence are returned as
+        # a durable `failed` ExecutionPlan instead of being lost in an HTTP error.
         raise HTTPException(422, str(exc)) from exc
+    # The background orchestrator discovers eligible newly-created plans from the
+    # durable creation timestamp. This explicit tick removes normal polling delay
+    # without changing that registration boundary.
     await plan_orchestrator.tick()
     return execution_plan_view(row)
 
@@ -158,7 +164,11 @@ def get_plan_orchestration(plan_id: str) -> dict[str, Any]:
 
 
 @app.post("/v1/plans/{plan_id}/work-orders/{work_order_id}/operator", dependencies=[Depends(auth)])
-async def resolve_operator_work_order(plan_id: str, work_order_id: str, payload: OperatorResolutionRequest) -> dict[str, Any]:
+async def resolve_operator_work_order(
+    plan_id: str,
+    work_order_id: str,
+    payload: OperatorResolutionRequest,
+) -> dict[str, Any]:
     try:
         return await plan_orchestrator.resolve_operator(
             plan_id=plan_id,
@@ -194,13 +204,20 @@ def ack_notification(event_id: int) -> dict[str, Any]:
 def release_notification(event_id: int, payload: NotificationReleaseRequest) -> dict[str, Any]:
     if event_id < 1:
         raise HTTPException(422, "event_id must be positive")
-    if not plan_orchestrator.store.release_notification(event_id, error=payload.error, retry_seconds=payload.retry_seconds):
+    if not plan_orchestrator.store.release_notification(
+        event_id,
+        error=payload.error,
+        retry_seconds=payload.retry_seconds,
+    ):
         raise HTTPException(409, "Notification is not currently claimed")
     return {"status": "pending", "event_id": event_id}
 
 
 @app.post("/v1/control-actions/{action_id}/execute", dependencies=[Depends(auth)])
-async def execute_control_action(action_id: str, payload: ControlActionExecuteRequest) -> dict[str, Any]:
+async def execute_control_action(
+    action_id: str,
+    payload: ControlActionExecuteRequest,
+) -> dict[str, Any]:
     if not action_id or len(action_id) > 100:
         raise HTTPException(422, "Invalid control action id")
     try:
@@ -248,7 +265,9 @@ async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
             job_id,
             reset_transient_provider_failures=request.reset_transient_provider_failures,
             reroute=request.reroute,
-            _allow_failed_orchestrated_resume=bool(orchestration_resume and orchestration_resume.get("reopen")),
+            _allow_failed_orchestrated_resume=bool(
+                orchestration_resume and orchestration_resume.get("reopen")
+            ),
         )
         reopen_orchestrated_job(plan_orchestrator.store, orchestration_resume, job_id)
     except RuntimeError as exc:
@@ -259,6 +278,12 @@ async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
 @app.post("/v1/jobs/{job_id}/cancel", response_model=JobView, dependencies=[Depends(auth)])
 async def cancel_job(job_id: str) -> JobView:
     try:
+        # Drain every external side effect before the engine persists the terminal
+        # `cancelled` state. DDEV owns Composer/Drush/PHPUnit processes; cancelling
+        # the active asyncio task propagates into Codex/OpenCode and the Antigravity
+        # adapter, whose CancelledError handler terminates the host-side `agy` run.
+        # If Runtime crashes during this drain, the DB remains non-terminal and
+        # startup recovery will treat the job as interrupted and clean it again.
         await engine.ddev.cancel(job_id=job_id)
         active = engine.active_jobs.get(job_id)
         if active and not active.done():
@@ -273,7 +298,11 @@ async def cancel_job(job_id: str) -> JobView:
 @app.post("/v1/jobs/{job_id}/decision", response_model=JobView, dependencies=[Depends(auth)])
 async def resolve_decision(job_id: str, payload: HumanDecisionRequest) -> JobView:
     try:
-        row = await engine.resolve_human_decision(job_id, action=payload.action, note=payload.note)
+        row = await engine.resolve_human_decision(
+            job_id,
+            action=payload.action,
+            note=payload.note,
+        )
     except RuntimeError as exc:
         raise runtime_error(exc) from exc
     await plan_orchestrator.tick()
