@@ -10,9 +10,13 @@ Before proposing or implementing a non-trivial change, read:
 2. `docs/project/architecture.md`
 3. `docs/project/operating-model.md`
 4. `docs/project/roadmap.md`
-5. the relevant implementation, tests, and configuration
+5. `docs/project/current-state.md`
+6. every topical project document referenced by the active work
+7. the relevant implementation, tests, configuration, active issue/PR and current branch diff
 
 For operational setup and current commands, also read `README.md`.
+
+A new chat or agent session must not require the previous conversation to resume work safely. If the Human Owner asks to "read the project docs and continue", the repository source of truth plus current executable evidence must be sufficient to reconstruct the active context.
 
 ## Authority order
 
@@ -25,6 +29,8 @@ When sources conflict, use this order:
 5. WorkOrder / Task Contract for the current task
 6. Current implementation and tests
 7. Developer/reviewer reports and other runtime evidence
+
+`docs/project/current-state.md` is a continuity/handoff index, not permission to override a higher-authority source. It records the latest mutable execution state and points to the authoritative topical documents and evidence.
 
 Lower-authority artifacts must not silently redefine higher-authority artifacts. If a requested change conflicts with a higher-authority source, stop at the decision boundary and produce a change proposal instead of implementing the conflict.
 
@@ -54,6 +60,16 @@ Lower-authority artifacts must not silently redefine higher-authority artifacts.
 - Preserve budget limits and anti-loop behavior; escalation must not reset consumed job budget.
 - A CI-green PR is a mandatory gate before a task is considered ready for merge.
 - Never merge automatically. The human owner performs the final merge.
+
+## Mandatory documentation continuity
+
+Every material decision or state transition must be reflected in repository documentation before the work is considered complete or safely handed off, whether the work was performed by ChatGPT, Codex, or the platform itself.
+
+Update the relevant topical source-of-truth document when a durable decision changes. Update `docs/project/current-state.md` whenever active execution context changes materially, including issue/branch/PR/WorkOrder/job state, completed work, blockers, verification evidence, next safe action, or rollout/merge/restart/deploy gates.
+
+Do not append an unbounded chat transcript to project docs. Keep the current-state document compact and replace stale state; Git history is the audit trail.
+
+When delegating implementation to Codex/platform agents, the handoff prompt must require documentation updates as an explicit Definition-of-Done item.
 
 ## Planned team artifacts
 
