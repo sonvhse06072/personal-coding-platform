@@ -28,11 +28,13 @@ Before a material task is complete or handed off, update the relevant topical do
 - PR #97 (`Delegate routine PR review and merge to PM`) is merged at `9574cc61a46cecb2ad88ae0983e7cb8eef8fbf7c`; GitHub Actions run #195 passed on exact head `6381507c112cd524d3fd71f3abbebaf69b999535` before PM merge.
 - PR #97 updates the Constitution, Architecture, Operating Model, `AGENTS.md`, and continuity policy so PM may review and merge eligible in-scope PRs autonomously after all required gates pass and when no unresolved Human Owner decision trigger exists.
 - PR #95 was closed unmerged as superseded; issue #93 was closed completed because its durable shell-command guidance is now included in `AGENTS.md` via PR #97.
-- PR #102 (`Re-emit attention when owner actions change`) is merged at `bdba1a34d3f154f0e0e1e757cc7a341a188645b2`; exact-head GitHub Actions run #201 passed before PM merge. Issue #101 is resolved. Source Runtime is now `1.0.33`.
-- PR #102 fixes a rollout rematerialization bug: attention notification dedupe now includes a deterministic fingerprint of the rendered control-action set, so a stable blocked/waiting/merge state emits one fresh owner notification when newly valid actions appear while repeated ticks with the same action set remain deduped.
-- Local rollout currently proves Router `1.0.15`, Runtime `1.0.32`, ddev-executor `1.0.14`, model registry `v7`, routing policy `v7`, n8n healthy, and all service-scoped secret boundaries healthy. Runtime `1.0.33` is merged but not yet deployed locally.
+- PR #102 (`Re-emit attention when owner actions change`) is merged at `bdba1a34d3f154f0e0e1e757cc7a341a188645b2`; exact-head GitHub Actions run #201 passed before PM merge. Issue #101 is resolved. Source Runtime is `1.0.33`.
+- PR #102 fixes a rollout rematerialization bug: attention notification dedupe includes a deterministic fingerprint of the rendered control-action set, so a stable blocked/waiting/merge state emits one fresh owner notification when newly valid actions appear while repeated ticks with the same action set remain deduped.
+- PR #106 (`Keep Telegram callback acknowledgement non-blocking`) is merged at `03cd3a918fbf1de8f4ad1eabdd844d45f2ec8e73`; exact-head GitHub Actions run #205 passed before PM merge. Issue #105 is resolved.
+- PR #106 makes Telegram `answerCallbackQuery` best-effort in `pcpTelegramControl1`, so Telegram HTTP 400 acknowledgement failures cannot prevent a valid opaque Runtime control action from being attempted. Runtime remains authoritative for owner identity, stale/replayed action rejection and one-time live state revalidation.
+- Local rollout currently proves Router `1.0.15`, Runtime `1.0.33`, ddev-executor `1.0.14`, model registry `v7`, routing policy `v7`, n8n healthy, and all service-scoped secret boundaries healthy.
 - Codex CLI `0.154.0` passed the bounded unattended policy smoke from a disposable trusted Git repository with `workspace-write`, `approval_policy="never"`, and workspace network disabled. The earlier `/app` failure was only a Git trust-location mismatch; no bypass flag was added.
-- n8n control-plane sync is complete: `pcpTelegramOutbox1` and `pcpTelegramControl1` are active, Telegram configuration is complete, and the notification schedule executes successfully.
+- n8n control-plane sync before PR #106 proved `pcpTelegramOutbox1` and `pcpTelegramControl1` active, Telegram configuration complete, and schedules executing. PR #106 still needs one local `ddev n8n-sync` so the merged callback transport fix is imported/published into the running n8n instance.
 - Durable operator command guidance: avoid fragile nested `python3 -c '...'` quoting, prefer `.format()` or heredocs when they reduce quoting risk, verify `curl | python3` pipelines, and prefer readable multi-line commands.
 
 ## Effective PM merge governance
@@ -65,17 +67,17 @@ Runtime currently still has manual-merge orchestration behavior from the previou
   - `max_iterations`: `8 -> 10`.
 - Last pre-timeout live counters included model calls `14/18`, tool calls `36/160`, test runs `6/14`, wall time about `63.515/70`, and repair iterations `2/3`.
 - C1 is still the same terminal `failed` job from the Runtime `1.0.30` wall-budget timeout bug. Runtime `1.0.32+` compatibility matching recognizes this exact legacy timeout as a bounded wall-time recovery candidate.
-- Orchestration reconciliation correctly keeps C1 WorkOrder `blocked`. The previously missing Telegram action was traced to notification dedupe, not compatibility matching or n8n scheduling; PR #102 fixes that rematerialization path.
+- Runtime `1.0.33` successfully rematerialized the missing `max_wall_time_minutes +20` owner action. The first owner attempts did not change C1 because `pcpTelegramControl1` failed on Telegram HTTP 400 while awaiting `answerCallbackQuery` before it could reach Runtime; PR #106 fixes that transport ordering/failure-containment bug.
 - Do not manually change DB state, create a replacement C1 job, call generic `/v1/jobs/{job_id}/run`, or manually claim notification leases to bypass orchestration controls.
 - C2/C3 remain gated until C1 satisfies both evaluator findings and clears its delivery/merge gate under the effective governance policy.
 
 ## Next safe sequence
 
-1. Pull merged `main` at or after merge commit `bdba1a34d3f154f0e0e1e757cc7a341a188645b2`.
-2. Because C1 is terminal `failed` and no jobs are active, rebuild only `coding-runtime` to activate Runtime `1.0.33`; verify platform health and version afterward.
-3. Trigger orchestration reconciliation. The same blocked C1 state should emit one fresh notification because the rendered action-set fingerprint is now part of dedupe.
-4. Confirm Telegram receives the C1 owner notification with the exact bounded `max_wall_time_minutes +20` action. Execute only that official live-revalidated control action.
-5. Confirm the same job/workspace/source commit/diff/progress/counters are preserved and monitor C1 through verification/evaluation/delivery.
+1. Pull merged `main` at or after merge commit `03cd3a918fbf1de8f4ad1eabdd844d45f2ec8e73`.
+2. C1 is terminal `failed` and no jobs are active, so run `ddev n8n-sync` to import/publish PR #106 and restart the n8n trigger registration safely. Reconfirm platform health afterward; Runtime should remain `1.0.33`.
+3. Do not manually claim notifications or mutate Runtime state. The existing C1 Telegram notification/action may be reused while its control action remains pending and live-valid.
+4. Click the exact `max_wall_time_minutes +20` owner action once. Telegram acknowledgement may still fail harmlessly if the callback response window is old; the workflow must continue to Runtime execution.
+5. Confirm the same job `eec59b13651c54559c10ce204380a68e` leaves terminal `failed`, preserving workspace/source commit/diff/progress/counters, then monitor it through verification/evaluation/delivery.
 6. Any later budget extension must come from a fresh live blocker/action only.
 7. Issue #98 remains follow-up platform work to align Runtime/ddev-executor merge behavior with the new PM merge-governance policy; it must not block the current Codex timeout recovery unless the current C1 delivery gate reaches a merge state that requires the new capability.
 
