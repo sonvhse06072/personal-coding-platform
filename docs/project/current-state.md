@@ -27,11 +27,9 @@ Before a material task is complete or handed off, update the relevant topical do
 - PR #82 (`Make project docs the cross-chat continuity source`) is merged.
 - PR #84 (`Reconcile post-merge versions and rollout state`) is merged; final CI run #162 passed.
 - PR #86 (`Replace withdrawn OpenRouter free model with North Mini Code`) is merged; exact head `f7eafe041a3aeed709b7af55e15bcfb2b6737ae6` passed CI run #167.
-- `main` is verified at merge commit `cd525d8dfd346bfc6293c8c2641f3c95a4a37799` after PR #86.
-- Local rollout has been performed after confirming C1 was stable blocked.
-- Live post-rollout evidence: Router `1.0.15`, Runtime `1.0.30`, model registry `v7`, routing policy `v7`, Runtime OpenCode adapter available, DDEV executor healthy with `active_jobs: 0` before C1 recovery, n8n healthy, Antigravity bridge healthy with `active_runs: 0`.
-- OpenRouter credential boundary was verified live: Runtime sees `OPENROUTER_API_KEY`, while global `.ddev/.env` does not contain it.
-- Deployed OpenRouter smoke through the actual Runtime `OpenCodeAdapter` passed using `openrouter/cohere/north-mini-code:free` in non-mutating plan mode. The synthetic success token was observed and the temporary workspace remained unchanged.
+- `main` was verified at merge commit `cd525d8dfd346bfc6293c8c2641f3c95a4a37799` after PR #86.
+- Local rollout is complete: Router `1.0.15`, Runtime `1.0.30`, model registry `v7`, routing policy `v7`, OpenCode adapter available, n8n healthy, OpenRouter secret scoped only to Runtime.
+- Deployed Runtime/OpenCode smoke passed with `openrouter/cohere/north-mini-code:free` in non-mutating plan mode.
 
 ## Active work
 
@@ -42,13 +40,9 @@ Durable provider policy: `docs/project/provider-policy.md`.
 - Operational issue: `personal-coding-platform` #87.
 - PR #86 is merged and locally activated.
 - Active explicit upstream free model: `cohere/north-mini-code:free`.
-- Stable logical PCP model ID remains `openrouter_qwen3_coder_free` for durable route-history/provider-state compatibility; the registry `model:` slug is authoritative.
-- Human Owner policy: OpenRouter free is effectiveness-first. ZDR and `data_collection=deny` are not required. Repository source code may traverse free endpoints under their published logging/training terms.
-- Secret boundaries remain strict: never intentionally send API keys, access tokens, `.env` contents, private keys, passwords, cookies, Runtime/control-plane credentials, or unrelated provider credentials to a model.
-- OpenCode session sharing remains disabled; Runtime scopes only `OPENROUTER_API_KEY` to the OpenRouter subprocess.
-- Direct pre-rollout smoke and deployed Runtime/OpenCode smoke both passed for North Mini Code without ZDR/data-collection filters. North Mini Code has no endpoint matching the old ZDR-required policy.
-- Nemotron remains inactive. Runtime provider failures currently mark `provider:openrouter` unavailable, so activating multiple OpenRouter models would not provide reliable same-provider model fallback after a provider-level failure.
-- Human Owner funded at least $10 of OpenRouter credit; current documented free allowance is 1,000 requests/day at 20 RPM. Do not expose a fabricated authoritative remaining-quota counter.
+- Stable logical PCP model ID remains `openrouter_qwen3_coder_free` for durable route-history/provider-state compatibility; registry `model:` slug is authoritative.
+- OpenRouter free is effectiveness-first. ZDR and `data_collection=deny` are not required, but secret boundaries remain strict and OpenCode sharing remains disabled.
+- Nemotron remains inactive because current provider-health semantics can disable the entire OpenRouter provider after a provider-level failure.
 - OpenRouter rollout gate is complete. Current work is C1 recovery/verification.
 
 ### 2. DEC-025C / `chonhac` recovery tooling
@@ -57,34 +51,31 @@ Durable provider policy: `docs/project/provider-policy.md`.
 - Orchestration plan: `pm-gh-5650852312`.
 - WorkOrder: `DEC-025C-1-recovery-tooling-r2`.
 - Runtime job: `eec59b13651c54559c10ce204380a68e`.
-- Before recovery, C1 was stable `blocked`, profile `complex`, executor `codex_terra`, reason `reassessment_stopped`, Runtime error `None`.
 - Evaluator findings that C1 still needs to satisfy:
-  1. deployed release identity must be derived/verified from the deployed tree instead of trusting local Git SHA/fingerprint supplied by `run.sh`;
-  2. AC6 needs deterministic passing evidence for the DEC-025C-specific Python/PHP/shell/static checks.
-- First post-rollout bounded recovery extended `max_model_calls` by `+4`, from `14` to `18`, and resumed the same C1 job without resetting usage.
-- C1 progressed through verification, then blocked again at `2026-09-14T13:37:33.795835+00:00` with `reason=execution_budget_exhausted`, Runtime error `None`.
-- The live Telegram advisory identified repair iterations as the exhausted dimension: repair iterations `2/2`, model calls `14/18`, tool calls `33/160`, test runs `6/14`, wall time `63.294/70`.
-- Fresh repair-budget action is now identified exactly: action id `vNqbP1aduh_RzGKxnvhz_njI`, `action_type=budget_extend`, payload `{"dimension":"max_repair_iterations","increment":1}`, status `pending`, result `null`, created/updated `2026-09-14T13:37:36.684818+00:00`, expires `2026-09-16T13:37:36.684818+00:00`.
-- The Telegram button attempt did not execute this action; the action remains pending and the C1 job row is unchanged at the blocked timestamp above. Do not press the Telegram action again while using the CLI fallback.
-- The next authorized mutation is to execute this exact pending action once through `POST /v1/control-actions/vNqbP1aduh_RzGKxnvhz_njI/execute`. Runtime must revalidate owner identity, expiry, exact state fingerprint, non-in-flight status, increment, and hard maximum before applying it and resuming the same job.
-- No other budget extension is authorized. Do not call generic `/v1/jobs/{job_id}/run`, do not mutate `cp_control_actions` manually, and do not create a replacement C1 job. C2/C3 remain gated.
+  1. derive/verify deployed release identity from the deployed tree instead of trusting local Git SHA/fingerprint supplied by `run.sh`;
+  2. provide deterministic passing evidence for the DEC-025C-specific Python/PHP/shell/static checks required by AC6.
+- First bounded recovery extended `max_model_calls` from `14` to `18` and resumed the same job without resetting usage.
+- Second bounded recovery action `vNqbP1aduh_RzGKxnvhz_njI` was executed through the official Runtime endpoint after the Telegram callback remained pending. It extended `max_repair_iterations` from `2` to `3`, used `2`, and resumed the same job.
+- After that repair-budget recovery C1 returned to `verifying`, then blocked again with `reason=execution_budget_exhausted`.
+- Current live Telegram advisory identifies **iterations** as the newly exhausted dimension: iterations `8/8`, model calls `14/18`, tool calls `36/160`, test runs `6/14`, wall time `63.515/70`, repair iterations `2/3`.
+- Therefore the only currently authorized bounded recovery is **`max_iterations +2`**. Model calls and repair iterations are not currently exhausted and must not be extended again unless a future live blocker specifically exhausts them.
+- Because the previous Telegram control transport did not execute the repair action, prefer fail-closed verification for this new state: identify the fresh pending `budget_extend` action and confirm payload exactly `{"dimension":"max_iterations","increment":2}` before executing it once through the official Runtime endpoint if still pending.
+- Do not force-complete C1, do not call generic `/v1/jobs/{job_id}/run`, do not mutate DB state manually, and do not create a replacement job. C2/C3 remain gated.
 
 ### 3. Telegram control rollout
 
-- Issue #77 / PR #78 are merged and their n8n workflows have been locally synced.
+- Issue #77 / PR #78 are merged and n8n workflows are locally synced.
 - Owner-facing Telegram messages/actions are localized to Vietnamese; stable machine reason codes remain unchanged.
-- The first `max_model_calls +4` recovery completed and resumed the same job.
-- The subsequent `execution_budget_exhausted` state correctly surfaced repair iterations `2/2` and a bounded `+1` repair action.
-- Human Owner attempted the `+1 lượt sửa` Telegram control, but the action remained `pending` in Runtime, confirming the callback did not execute the mutation.
-- n8n remains the owner-control transport, but CLI execution of the exact pending action through the same official Runtime endpoint is the current safe fallback. Runtime remains authoritative and revalidates every action before mutation.
+- Runtime correctly surfaced sequential bounded recovery gates: `+4 model calls`, then `+1 repair iteration`, and now `+2 iterations`.
+- The prior `+1 repair` Telegram callback did not execute; CLI execution of the exact pending action through the same official Runtime endpoint succeeded. Treat Runtime action state as authoritative rather than assuming a button press completed.
 
 ## Next safe sequence
 
-1. Execute exactly pending action `vNqbP1aduh_RzGKxnvhz_njI` once through the official Runtime control-action endpoint using configured Telegram owner/chat identity.
-2. Confirm the response records `max_repair_iterations` previous limit `2`, new limit `3`, used `2`, and the same C1 job id.
-3. Re-query C1 immediately. If status is in flight (`routing`, `planning`, `executing`, `verifying`, `evaluating`, `delivering`, or equivalent), monitor only and do not execute another control or restart services.
-4. If C1 reaches `delivering`/PR creation, follow the normal CI/manual-merge gate.
-5. If C1 blocks again, inspect the new live reason/counters/fresh action before approving anything else. Extend only the current exhausted dimension.
+1. Read-only inspect current C1 `budget_extend` actions and identify the fresh pending row with payload exactly `dimension=max_iterations`, `increment=2`.
+2. If that row is pending and current, execute that exact action once through `POST /v1/control-actions/{action_id}/execute` using configured owner/chat identity.
+3. Confirm authorization changes `max_iterations` from `8` to `10`, used `8`, and resumes the same C1 job.
+4. While C1 is in flight, monitor only; do not restart services, tick orchestration for recovery, or execute another control action.
+5. If C1 reaches delivery/PR creation, follow the normal CI/manual-merge gate. If it blocks again, inspect the new live reason/counters/fresh action and extend only that current exhausted dimension.
 6. C1 must fix both evaluator findings and reach the normal PR/CI/manual-merge gate before C2/C3 proceed.
 
 ## Global operational gates
