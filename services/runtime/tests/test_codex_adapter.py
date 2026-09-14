@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 from app.adapters.codex import CodexAdapter
+from app.developer_stream import bind_developer_sink
 from app.shell import CommandResult
 
 
@@ -32,7 +33,7 @@ def test_codex_turn_completed_is_authoritative_over_transient_rate_limit_text(mo
     ])
     captured = {}
 
-    async def fake_run_command(argv, *, cwd, timeout):
+    async def fake_run_command(argv, *, cwd, timeout, on_stdout_line=None):
         captured["argv"] = argv
         return CommandResult(argv=argv, returncode=0, stdout=stdout, stderr="")
 
@@ -63,7 +64,7 @@ def test_codex_turn_completed_is_authoritative_over_transient_rate_limit_text(mo
 def test_codex_read_only_modes_are_noninteractive_without_write_network_override(monkeypatch, tmp_path: Path):
     captured: list[list[str]] = []
 
-    async def fake_run_command(argv, *, cwd, timeout):
+    async def fake_run_command(argv, *, cwd, timeout, on_stdout_line=None):
         captured.append(argv)
         return CommandResult(
             argv=argv,
@@ -99,7 +100,7 @@ def test_codex_turn_failed_still_classifies_provider_failure(monkeypatch, tmp_pa
         }),
     ])
 
-    async def fake_run_command(argv, *, cwd, timeout):
+    async def fake_run_command(argv, *, cwd, timeout, on_stdout_line=None):
         return CommandResult(argv=argv, returncode=0, stdout=stdout, stderr="")
 
     monkeypatch.setattr("app.adapters.codex.run_command", fake_run_command)
@@ -118,7 +119,7 @@ def test_codex_turn_failed_still_classifies_provider_failure(monkeypatch, tmp_pa
 
 
 def test_codex_plain_cli_failure_without_terminal_json_is_still_classified(monkeypatch, tmp_path: Path):
-    async def fake_run_command(argv, *, cwd, timeout):
+    async def fake_run_command(argv, *, cwd, timeout, on_stdout_line=None):
         return CommandResult(
             argv=argv,
             returncode=1,
@@ -139,3 +140,35 @@ def test_codex_plain_cli_failure_without_terminal_json_is_still_classified(monke
     assert run.returncode == 1
     assert run.failure_kind == "quota_exhausted"
     assert run.provider_failed
+
+
+def test_codex_emits_sanitized_event_during_stdout_stream(monkeypatch, tmp_path: Path):
+    line = _event({
+        "type": "item.completed",
+        "item": {"type": "agent_message", "text": "Editing the recovery runner."},
+    })
+    terminal = _event({"type": "turn.completed", "usage": {}})
+    seen: list[dict] = []
+
+    async def fake_run_command(argv, *, cwd, timeout, on_stdout_line=None):
+        assert on_stdout_line is not None
+        on_stdout_line(line)
+        return CommandResult(argv=argv, returncode=0, stdout=f"{line}\n{terminal}", stderr="")
+
+    monkeypatch.setattr("app.adapters.codex.run_command", fake_run_command)
+    bind_developer_sink(seen.append)
+    try:
+        asyncio.run(
+            CodexAdapter("gpt-5.6-terra").run(
+                workspace=tmp_path,
+                prompt="implement",
+                mode="execute",
+                timeout=30,
+            )
+        )
+    finally:
+        bind_developer_sink(None)
+
+    assert len(seen) == 1
+    assert seen[0]["event_type"] == "developer_message"
+    assert seen[0]["data"]["text"] == "Editing the recovery runner."
