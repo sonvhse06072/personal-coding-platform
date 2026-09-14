@@ -49,6 +49,8 @@ The model registry must make profile eligibility explicit rather than relying on
 
 Human Owner decision on 2026-09-14: OpenRouter free selection is **effectiveness-first**. ZDR and `data_collection=deny` are not required eligibility or smoke-test gates for this provider tier. Repository source code may be sent to a free endpoint even when its published terms permit provider logging or model/product improvement use. This is an explicit privacy tradeoff accepted by the Human Owner.
 
+Runtime therefore must not inject ZDR or `data_collection=deny` as mandatory OpenRouter routing filters for this tier. It may still require request-parameter support and same-model endpoint fallback while keeping PCP authoritative for any cross-model change.
+
 Secret boundaries remain strict. Developer-agent prompts or context must never intentionally include:
 
 - API keys or access tokens;
@@ -75,26 +77,30 @@ selected explicit OpenRouter free model
        -> block only when no valid fallback remains
 ```
 
-Do not aggressively retry a pressured free provider. A provider overload such as HTTP/API 502 should move routing toward another eligible free/paid model rather than consume budget on repeated retries.
+Do not aggressively retry a pressured free provider. A provider overload such as HTTP/API 502 should move routing toward another eligible provider/model rather than consume budget on repeated retries.
 
-## 6. Current candidate strategy
+Current Runtime provider-failure semantics mark `provider:openrouter` unavailable for provider failures. Therefore multiple active OpenRouter models do **not** currently provide an effective same-provider PCP fallback: one provider-level failure would exclude all of them. Do not register a multi-model OpenRouter pool until provider/model health semantics are intentionally redesigned and tested.
 
-Issue #85 is replacing withdrawn Qwen free models before local rollout.
+## 6. Current active model strategy
 
-Observed evidence:
+Issue #85 replaces withdrawn Qwen free models before local rollout.
+
+Observed live evidence:
 
 - `qwen/qwen3-coder:free`: withdrawn from free access (404);
 - `qwen/qwen3.6-plus:free`: deprecated as a free model (404);
-- `nvidia/nemotron-3-ultra-550b-a55b:free`: strong Programming usage and 1M context, but current OpenRouter availability is materially lower than the preferred reliable candidate and a live smoke returned upstream NVIDIA overload (502);
-- `cohere/north-mini-code:free`: coding/terminal/OpenCode-oriented, 256K context, tool calling support and currently high observed OpenRouter availability.
+- `nvidia/nemotron-3-ultra-550b-a55b:free`: valid free model, but synthetic tool-call smoke returned upstream NVIDIA overload (502 `provider_unavailable`);
+- `cohere/north-mini-code:free`: synthetic tool-call smoke succeeded with the expected tool call when no ZDR/data-collection filter was imposed;
+- the same North Mini Code smoke with `zdr=true` + `data_collection=deny` failed with 404 `No endpoints found matching your data policy (Zero data retention)`.
 
-Current preferred ordering for rollout validation:
+Rollout choice:
 
-1. `cohere/north-mini-code:free` as the reliable primary free coding candidate;
-2. `nvidia/nemotron-3-ultra-550b-a55b:free` as a secondary opportunistic model for stronger/long-context work when healthy;
-3. existing non-OpenRouter PCP fallbacks remain authoritative after free-tier failures.
+1. activate `cohere/north-mini-code:free` as the single explicit OpenRouter free model for the initial rollout;
+2. retain the existing logical PCP model ID `openrouter_qwen3_coder_free` as a **stable legacy durable identity** so existing route history/provider-state evidence remains comparable; the `model:` field is the authoritative upstream model slug;
+3. keep Nemotron documented but **not active** until a separate change introduces safe model-level health/failover semantics for multiple models under one OpenRouter provider;
+4. existing non-OpenRouter PCP fallbacks remain authoritative after an OpenRouter provider failure.
 
-This ordering is operational, not permanent. Re-evaluate when model availability/rankings materially change.
+This choice is operational, not permanent. Re-evaluate when model availability/rankings materially change.
 
 ## 7. Quota and telemetry
 
@@ -108,12 +114,13 @@ The Human Owner has funded at least $10 of OpenRouter credit, which currently ra
 
 OpenRouter free should be introduced incrementally:
 
-1. validate at least one explicit free coding model with a synthetic tool-call smoke;
-2. register the explicit model set and bump registry version;
-3. run deterministic Router/Runtime/executor/structure tests;
-4. obtain green CI and Human Owner manual merge;
-5. only at a stable blocked/terminal Runtime gate, roll out locally and verify service/config versions;
-6. run one deployed-integration smoke before relying on the tier for normal jobs;
-7. review telemetry before broader role/profile eligibility.
+1. validate one explicit free coding model with a synthetic tool-call smoke under the intended request policy;
+2. register the explicit model and bump registry/routing-policy versions;
+3. bump Runtime when request-policy behavior changes;
+4. run deterministic Router/Runtime/executor/structure tests;
+5. obtain green CI and Human Owner manual merge;
+6. only at a stable blocked/terminal Runtime gate, roll out locally and verify service/config versions;
+7. run one deployed-integration smoke before relying on the tier for normal jobs;
+8. review telemetry before broader role/profile eligibility.
 
 Never auto-merge, force-complete work, or restart Runtime/DDEV while a job is in flight.
