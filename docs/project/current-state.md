@@ -22,39 +22,43 @@ Before a material task is complete or handed off, update the relevant topical do
 
 ## Current repository state
 
-- PR #90 (`Recover wall-budget-bounded agent timeouts safely`) is merged at main commit `f698ccc5a687ecc012305c17391c5b40194cb29d`; issue #89 is closed.
-- PR #90 changes Runtime source behavior from `1.0.30` to `1.0.31`: typed coding-command timeouts, wall-budget-aware recoverable blocking, and narrow compatibility recovery for the already-failed DEC-025C C1 job.
-- The last proven deployed platform before that rollout remains Router `1.0.15`, Runtime `1.0.30`, model registry `v7`, routing policy `v7`, OpenCode adapter available, n8n healthy, and OpenRouter secret scoped only to Runtime.
-- OpenRouter rollout is operational with explicit upstream free model `cohere/north-mini-code:free`; stable logical PCP model ID remains `openrouter_qwen3_coder_free`.
+- PR #90 (`Recover wall-budget-bounded agent timeouts safely`) is merged; source Runtime behavior advanced to `1.0.31`.
+- PR #92 (`Make Codex unattended execution fail closed`) is merged at `7d05c68dc36a481fbece98540bc4d0e6888643a2`; post-merge GitHub Actions run #187 passed. Source Runtime behavior is `1.0.32`.
+- PR #92 policy: Codex planner/evaluator use `read-only`, execute/repair use `workspace-write`, every Codex Runtime turn uses `approval_policy="never"`, workspace-write network is explicitly disabled, and full-access/bypass flags remain forbidden.
+- The last proven deployed platform before the current rollout work was Router `1.0.15`, Runtime `1.0.30`, model registry `v7`, routing policy `v7`, OpenCode adapter available, n8n healthy, and OpenRouter secret scoped only to Runtime.
+- During rollout smoke testing, invoking Codex from `/app` failed before the prompt because `/app` is not a trusted Git repository. The next bounded smoke must use a temporary Git repository or a real isolated job workspace; do not add `--skip-git-repo-check` merely to hide the mismatch.
+- Operator command guidance is now intended to be durable: avoid fragile nested `python3 -c '...'` quoting, prefer `.format()` or heredocs when they reduce quoting risk, verify `curl | python3` pipelines, and prefer readable multi-line commands.
 
-## Active work
+## Active governance amendment — issue #96 / PR #97
 
-### 1. Codex unattended execution policy — issue #91 / PR #92
+Human Owner decision on 2026-09-14:
 
-- Issue: `personal-coding-platform` #91 (`Make Codex unattended execution policy explicit`).
-- Branch: `fix/codex-unattended-policy-91`.
-- PR: #92 (`Make Codex unattended execution fail closed`).
-- Human Owner decision: Codex must not receive full machine access merely to avoid interactive approval.
-- Implemented policy on the PR branch:
-  - planner/evaluator: `read-only` sandbox;
-  - execute/repair: `workspace-write` sandbox;
-  - every Codex Runtime turn: `approval_policy="never"`;
-  - workspace-write network access: explicitly `false`;
-  - `danger-full-access` and approval/sandbox bypass flags remain forbidden.
-- Commands that require permission outside the selected sandbox must fail closed instead of waiting for an interactive approval that Runtime cannot answer.
-- Runtime behavior/version on this branch is `1.0.32`.
-- Focused adapter tests assert the non-interactive policy for execute, plan and evaluate modes and guard against full-access regression.
-- `docs/project/architecture.md` records this as the approved developer-agent trust-boundary policy.
-- GitHub Actions run #185 passed on code/docs head `43386aea880d9478e5a9e29b3919c082c8c7c1f1`: Runtime, Router, ddev-executor and structure-test jobs all succeeded.
-- This continuity-only update is the final branch change; its resulting exact PR head must also be green before Human Owner manual merge. Do not auto-merge.
+- PM may review and merge routine PRs autonomously when the change stays inside the already-approved project frame.
+- PR, deterministic verification, required independent review, and green CI remain mandatory gates.
+- PM must inspect the WorkOrder/Task Contract, WorkReport, verification evidence, review findings, CI state, unresolved risks, and human-decision triggers before merge.
+- Developer agents still cannot merge and must not receive GitHub merge credentials.
+- Force push remains forbidden.
+- Production deployment is separate from PR merge and remains under existing Human Owner decision policy.
+- Human Owner approval is still required for important protected decisions: scope/non-goal changes, architecture invariants, major dependencies/services, authentication/authorization/security/trust boundaries, destructive data changes, production policy/actions, high-authority governance amendments, and material budget expansion.
+- If a PR introduces or depends on one of those decisions, PM must pause for explicit Human Owner approval. After approval and remaining green gates, PM may complete the merge.
 
-### 2. DEC-025C / `chonhac` recovery tooling
+Implementation artifacts:
+
+- Issue #96: `Allow PM-reviewed autonomous PR merge within approved scope`.
+- Branch: `ai/pm-autonomous-merge-policy-96`.
+- PR #97: `Delegate routine PR review and merge to PM`.
+- PR #97 updates `constitution.md`, `architecture.md`, `operating-model.md`, `AGENTS.md`, and this continuity file.
+- Issue #96 records explicit transitional Human Owner authorization for PM to merge PR #97 itself after CI/review gates pass, because this PR enacts the new merge-governance rule.
+- Runtime currently still has manual-merge orchestration behavior from the previous policy. Treat that as transitional implementation state. A separate implementation PR is required to add constrained PM-controlled merge through Runtime/ddev-executor; do not broaden developer-agent privileges.
+- PR #95 (`Document safer operator shell command patterns`) is superseded by PR #97 because the durable shell-command guidance is included in `AGENTS.md` here. Close #95 after #97 is merged rather than merging duplicate/stale continuity changes.
+
+## DEC-025C / `chonhac` recovery tooling
 
 - GitHub ticket: `chonhac` issue GH-5.
 - Orchestration plan: `pm-gh-5650852312`.
 - WorkOrder: `DEC-025C-1-recovery-tooling-r2`.
 - Runtime job: `eec59b13651c54559c10ce204380a68e`.
-- C1 still must satisfy two evaluator findings before its normal PR/CI/manual-merge gate:
+- C1 still must satisfy two evaluator findings before normal delivery completion:
   1. derive/verify deployed release identity from the deployed tree instead of trusting local Git SHA/fingerprint supplied by `run.sh`;
   2. provide deterministic passing evidence for the DEC-025C-specific Python/PHP/shell/static checks required by AC6.
 - Bounded recoveries already approved on the same job without resetting usage:
@@ -62,25 +66,28 @@ Before a material task is complete or handed off, update the relevant topical do
   - `max_repair_iterations`: `2 -> 3`;
   - `max_iterations`: `8 -> 10`.
 - Last pre-timeout live counters included model calls `14/18`, tool calls `36/160`, test runs `6/14`, wall time about `63.515/70`, and repair iterations `2/3`.
-- C1 remains terminal `failed` from the Runtime `1.0.30` wall-budget timeout bug until the merged timeout-recovery behavior is rolled out and the official compatibility control action reopens the exact same job.
+- C1 remains terminal `failed` from the Runtime `1.0.30` wall-budget timeout bug until Runtime `1.0.32` rollout/smoke verification is complete and the official compatibility control action reopens the exact same job.
 - Do not manually change DB state, create a replacement C1 job, or call generic `/v1/jobs/{job_id}/run` to bypass orchestration controls.
-- C2/C3 remain gated until C1 satisfies both evaluator findings and reaches its normal PR/CI/manual-merge gate.
+- C2/C3 remain gated until C1 satisfies both evaluator findings and clears its delivery/merge gate under the effective governance policy.
 
 ## Next safe sequence
 
-1. Confirm the exact final head of PR #92 is green after the continuity-only commit.
-2. Human Owner manually merges PR #92 after that green CI.
-3. Because C1 is terminal `failed`, pull merged `main` and restart/sync only as required to activate Runtime `1.0.32`. This single rollout includes the already-merged #89 timeout recovery plus the #91 Codex policy; do not perform an unnecessary intermediate `1.0.31` rollout first.
-4. Verify platform health and Runtime `1.0.32`; verify the installed Codex CLI accepts the explicit config policy with a bounded non-mutating smoke before relying on it for C1.
-5. Trigger orchestration reconciliation and inspect the newly materialized live control action for the same C1 job. Expected only if the compatibility matcher validates the persisted legacy state: `max_wall_time_minutes +20`.
+1. Let PR #97 CI complete; PM reviews the exact diff and CI evidence.
+2. Because the Human Owner explicitly approved this governance amendment in issue #96, PM may merge PR #97 when green without an additional human merge step.
+3. Close superseded PR #95 after #97 is merged.
+4. Resume Runtime `1.0.32` rollout validation: confirm platform health, installed Codex CLI version, and run the bounded non-mutating Codex smoke inside a trusted temporary Git repo or actual isolated workspace.
+5. Trigger orchestration reconciliation and inspect the live control action for the same C1 job. Expected only if the compatibility matcher validates the persisted legacy state: `max_wall_time_minutes +20`.
 6. Execute recovery only through the official live-revalidated control action. Preserve the same job/workspace/source commit/diff/progress/counters.
-7. Monitor C1 through verification/evaluation/delivery. Any later budget extension must be based on a fresh live blocker/action only.
-8. C1 must fix both evaluator findings and reach PR/green-CI/Human-merge before C2/C3 proceed.
+7. Continue C1 through verification/evaluation/delivery.
+8. Separately implement constrained PM-controlled merge support in Runtime/ddev-executor so executable behavior matches the new approved policy; preserve developer-agent credential isolation and fail closed on unresolved Human Owner decision triggers.
 
 ## Global operational gates
 
-- Never commit directly to `main`; use issue -> branch -> tests/CI -> PR -> human merge.
-- Never force push, auto-merge, or production deploy.
+- Do not commit implementation work directly to `main`; use issue -> `ai/*` branch -> tests/CI -> PR.
+- Never force push.
+- Developer agents never merge.
+- PM may merge only after required gates pass and only when no unresolved Human Owner decision trigger exists.
+- Human Owner remains final authority over important protected decisions listed in the Constitution.
 - Do not restart Runtime/DDEV while a job is in flight. Terminal `failed`/stable blocked states may be restarted when needed for an approved rollout.
 - Runtime durable state is authoritative; do not mutate job/database state manually to bypass state-machine logic.
 - Provider/control-plane credentials remain service-scoped and must never be committed to repository docs or intentionally sent to model prompts.

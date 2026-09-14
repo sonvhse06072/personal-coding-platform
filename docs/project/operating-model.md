@@ -31,7 +31,7 @@ The Human Owner collaborates with PM during project inception to define the comp
 - roadmap frame;
 - resource/budget policy.
 
-After baseline approval, the Human Owner should not need to supervise routine engineering execution.
+After baseline approval, the Human Owner should not need to supervise routine engineering execution or routine PR merges.
 
 Human participation is required for:
 
@@ -43,8 +43,10 @@ Human participation is required for:
 - destructive data changes;
 - production writes or deployment;
 - material budget expansion;
-- ambiguities that cannot be resolved from approved source of truth;
-- final PR merge.
+- high-authority governance amendments;
+- ambiguities that cannot be resolved from approved source of truth.
+
+Routine PR review and merge inside the approved project frame is delegated to PM after required verification/review/CI gates pass. A merge must stop for Human Owner input whenever the PR introduces or depends on one of the decision boundaries above.
 
 ## 3. Product Manager
 
@@ -75,7 +77,9 @@ PM must:
 7. keep work aligned with the approved Project Plan;
 8. create a ChangeProposal instead of silently changing project intent;
 9. produce a TaskOutcome after meaningful completion/failure;
-10. select the next approved in-scope task when appropriate.
+10. select the next approved in-scope task when appropriate;
+11. perform the final engineering review of PR evidence before merge;
+12. merge eligible PRs when all required gates pass and no Human Owner decision trigger remains unresolved.
 
 ### PM autonomy
 
@@ -87,7 +91,9 @@ PM may autonomously:
 - change execution tactics;
 - update Execution Plan state;
 - record discovered follow-up work;
-- defer an in-scope task because of dependency or budget evidence.
+- defer an in-scope task because of dependency or budget evidence;
+- review and merge an in-scope PR after deterministic checks, required independent review, and CI are green;
+- continue to the next dependency-satisfied in-scope task after the merge gate clears.
 
 PM may not autonomously:
 
@@ -97,7 +103,8 @@ PM may not autonomously:
 - add a major framework/service/dependency;
 - weaken security boundaries;
 - approve destructive/production operations outside existing policy;
-- materially expand budget.
+- materially expand budget;
+- merge a PR whose content or unresolved finding requires a Human Owner decision.
 
 ## 4. Router / Staffing Policy
 
@@ -139,7 +146,8 @@ Responsibilities:
 - perform bounded retries/failover/escalation;
 - pause for human decisions when required;
 - checkpoint/recover interrupted work;
-- coordinate bounded GitHub delivery and CI repair.
+- coordinate bounded GitHub delivery and CI repair;
+- support the PM-controlled merge gate without giving developer agents merge authority.
 
 Runtime should handle routine test/lint/repair mechanics without invoking PM for every iteration.
 
@@ -266,7 +274,7 @@ plan_changes: [...]
 next_task: T-124
 ```
 
-If a next task is already inside the approved Project Plan, PM may schedule it automatically subject to budget/dependency rules.
+If a next task is already inside the approved Project Plan, PM may schedule it automatically subject to budget/dependency rules. When the accepted task is represented by a PR, PM may merge it after the required merge gates pass and then advance the dependency graph.
 
 Outside-scope discovered work is recorded but not silently added to the roadmap.
 
@@ -292,7 +300,7 @@ recommendation: ...
 requires_human_decision: true
 ```
 
-Human approval leads to a source-of-truth revision through Git/PR; rejection leaves the baseline unchanged.
+Human approval leads to a source-of-truth revision through Git/PR; rejection leaves the baseline unchanged. After explicit Human Owner approval, PM may merge the amendment PR once all remaining gates pass.
 
 ## 12. n8n Integration Layer
 
@@ -324,10 +332,13 @@ WorkOrder accepted locally
   -> pull request
   -> CI
   -> bounded repair if needed
-  -> human final review/merge
+  -> required independent review when applicable
+  -> PM final engineering review
+     -> merge when in scope and all gates pass
+     -> human decision when a protected decision boundary is implicated
 ```
 
-No automatic merge or production deployment.
+A PR merge is not a production deployment. Force push remains forbidden. Blind or gate-bypassing auto-merge remains forbidden; PM-controlled autonomous merge is the approved routine path.
 
 ## 14. Concurrency and budget
 
@@ -353,6 +364,7 @@ PM should normally run when:
 - a developer completes meaningful work;
 - review fails after bounded routine repair;
 - a decision boundary or scope conflict is discovered;
-- a task completes and the next action must be selected.
+- a task completes and the next action must be selected;
+- a PR has passed its required gates and is ready for PM merge review.
 
 A first lint failure, test typo, or ordinary bounded retry remains Runtime/Developer responsibility.
