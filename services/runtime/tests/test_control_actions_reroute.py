@@ -319,6 +319,7 @@ def test_multi_budget_bundle_rejects_stale_dimension_set_before_resume():
                     {
                         "extensions": [
                             {"dimension": "max_wall_time_minutes", "increment": 20},
+                            {"dimension": "max_repair_iterations", "increment": 1},
                         ]
                     },
                 )
