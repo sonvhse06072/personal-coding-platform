@@ -5,6 +5,8 @@ from typing import Any
 
 import httpx
 
+from .quota_runtime import quota_coordinator
+
 
 class RouterClient:
     def __init__(self) -> None:
@@ -24,14 +26,16 @@ class RouterClient:
             return False
 
     async def route(self, payload: dict[str, Any]) -> dict[str, Any]:
+        enriched = await quota_coordinator.enrich(payload)
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(f"{self.base}/v1/route", json=payload, headers=self.headers)
+            response = await client.post(f"{self.base}/v1/route", json=enriched, headers=self.headers)
             response.raise_for_status()
             return response.json()
 
     async def staff(self, payload: dict[str, Any]) -> dict[str, Any]:
+        enriched = await quota_coordinator.enrich(payload)
         async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.post(f"{self.base}/v1/staff", json=payload, headers=self.headers)
+            response = await client.post(f"{self.base}/v1/staff", json=enriched, headers=self.headers)
             response.raise_for_status()
             return response.json()
 
