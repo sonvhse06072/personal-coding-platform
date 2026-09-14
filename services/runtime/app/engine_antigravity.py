@@ -4,16 +4,62 @@ from copy import deepcopy
 from typing import Any
 
 from .engine import RuntimeEngine as BaseRuntimeEngine
-from .state import checkpoint_from_row, migrate_legacy_antigravity_quota_failure
+from .quota_storage import QuotaStorage
+from .quota_telemetry import ProviderQuotaTelemetry
+from .state import (
+    checkpoint_from_row,
+    clear_transient_provider_failures,
+    migrate_legacy_antigravity_quota_failure,
+)
 
 
 _REASONING_ORDER = ["low", "medium", "high"]
 _REASONING_ADAPTERS = {"codex_cli", "antigravity_host"}
 _ANTIGRAVITY_QUOTA_FAILURES = {"quota_exhausted", "rate_limited"}
+_QUOTA_FAILURES = {"quota_exhausted", "rate_limited"}
 
 
 class RuntimeEngine(BaseRuntimeEngine):
-    """Runtime engine with Antigravity model/quota-aware recovery semantics."""
+    """Runtime engine with provider quota-aware routing and recovery semantics."""
+
+    def __init__(self, storage: Any) -> None:
+        super().__init__(storage)
+        # Quota is platform-wide resource state, not job-owned state. Keep its
+        # persistence separate while sharing Runtime's PostgreSQL database.
+        self.quota_storage = QuotaStorage()
+        self.quota_telemetry = ProviderQuotaTelemetry(self.quota_storage)
+
+    async def start(self) -> None:
+        self.quota_storage.ensure_quota_table()
+        await super().start()
+        await self.quota_telemetry.start()
+
+    async def stop(self) -> None:
+        await self.quota_telemetry.stop()
+        await super().stop()
+
+    async def _refresh_and_apply_quota_state(self, job_id: str) -> None:
+        try:
+            await self.quota_telemetry.refresh_if_stale()
+        except Exception:
+            # Telemetry is deliberately fail-open. Existing durable provider
+            # health remains authoritative if collection is unavailable.
+            pass
+        row = self.storage.get(job_id)
+        if not row:
+            return
+        checkpoint = checkpoint_from_row(row)
+        current = dict(checkpoint.get("provider_state") or {})
+        effective = self.quota_telemetry.apply_to_provider_state(current)
+        if effective != current:
+            checkpoint["provider_state"] = effective
+            self.storage.update(job_id, checkpoint=checkpoint)
+
+    async def run_job(self, job_id: str) -> None:
+        row = self.storage.get(job_id)
+        if row and row.get("status") == "queued":
+            await self._refresh_and_apply_quota_state(job_id)
+        await super().run_job(job_id)
 
     @staticmethod
     def _next_reasoning_choice(
@@ -71,6 +117,37 @@ class RuntimeEngine(BaseRuntimeEngine):
                 return
         BaseRuntimeEngine._mark_provider_failure(provider_state, choice, kind)
 
+    async def _provider_failover(
+        self,
+        *,
+        route_payload: dict[str, Any],
+        provider_state: dict[str, Any],
+        current_choice: dict[str, Any],
+        failure_kind: str,
+        progress: dict[str, Any],
+        strategy: dict[str, Any],
+        role: str = "executor",
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+        if failure_kind in _QUOTA_FAILURES:
+            provider = str(current_choice.get("provider") or "")
+            if provider in {"openai", "google_antigravity"}:
+                try:
+                    await self.quota_telemetry.refresh(providers={provider})
+                except Exception:
+                    pass
+        # Preserve the concrete failure for the current reroute even if the
+        # background read reports remaining capacity: a just-failed resource
+        # should not immediately win the same failover decision.
+        return await super()._provider_failover(
+            route_payload=route_payload,
+            provider_state=provider_state,
+            current_choice=current_choice,
+            failure_kind=failure_kind,
+            progress=progress,
+            strategy=strategy,
+            role=role,
+        )
+
     async def resume(
         self,
         job_id: str,
@@ -79,23 +156,33 @@ class RuntimeEngine(BaseRuntimeEngine):
         reroute: bool = False,
         _allow_failed_orchestrated_resume: bool = False,
     ) -> dict[str, Any]:
-        # A preserved reroute from a pre-v1.0.35 job may still carry the old
-        # provider-wide Antigravity quota marker. Narrow it before Router sees
-        # state so other explicit Antigravity models remain eligible.
-        if reroute and not reset_transient_provider_failures:
-            row = self.storage.get(job_id)
-            if row:
-                checkpoint = checkpoint_from_row(row)
-                migrated = migrate_legacy_antigravity_quota_failure(
+        row = self.storage.get(job_id)
+        if row:
+            try:
+                await self.quota_telemetry.refresh_if_stale()
+            except Exception:
+                pass
+            checkpoint = checkpoint_from_row(row)
+            if reset_transient_provider_failures:
+                checkpoint = clear_transient_provider_failures(checkpoint)
+            elif reroute:
+                # A preserved reroute from a pre-v1.0.35 job may still carry
+                # the old provider-wide Antigravity quota marker. Narrow it
+                # only when durable failure evidence proves a quota failure.
+                checkpoint = migrate_legacy_antigravity_quota_failure(
                     checkpoint,
                     deepcopy(row.get("progress") or {}),
                 )
-                if migrated != checkpoint:
-                    self.storage.update(job_id, checkpoint=migrated)
+            checkpoint["provider_state"] = self.quota_telemetry.apply_to_provider_state(
+                dict(checkpoint.get("provider_state") or {})
+            )
+            self.storage.update(job_id, checkpoint=checkpoint)
 
+        # We already applied an explicit reset above, then re-added only fresh
+        # authoritative quota pressure. Passing reset=True again would erase it.
         return await super().resume(
             job_id,
-            reset_transient_provider_failures=reset_transient_provider_failures,
+            reset_transient_provider_failures=False,
             reroute=reroute,
             _allow_failed_orchestrated_resume=_allow_failed_orchestrated_resume,
         )
