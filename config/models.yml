@@ -1,4 +1,4 @@
-version: 6
+version: 7
 models:
   groq_free:
     kind: llm
@@ -287,21 +287,18 @@ models:
       zero_retention_supported: true
 
   openrouter_qwen3_coder_free:
-    # Opportunistic free compute only. PCP chooses this exact model; OpenRouter
-    # may fail over between eligible endpoints serving the same model, but it may
-    # not choose a different model. Runtime injects data_collection=deny and ZDR
-    # into OpenCode for every request and fails over if no compliant endpoint is
-    # available.
+    # Stable legacy PCP model ID retained so durable route history/provider state
+    # remains comparable across the upstream-model replacement. The actual model
+    # is North Mini Code. The Human Owner accepts published free-endpoint
+    # logging/training terms in exchange for effectiveness; secret isolation and
+    # disabled OpenCode sharing remain hard boundaries.
     kind: agent
     provider: openrouter
     adapter: opencode
-    model: openrouter/qwen/qwen3-coder:free
+    model: openrouter/cohere/north-mini-code:free
     tier: balanced
     cost_class: free
     quota_group: openrouter_free
-    # This is an eligibility boundary, not a scoring preference. It prevents
-    # this opportunistic provider from becoming a critical fallback merely
-    # because every preferred model is unavailable.
     allowed_profiles:
     - fast
     - standard
@@ -312,24 +309,24 @@ models:
     - reviewer
     capabilities:
       coding: 8
-      reasoning: 8
+      reasoning: 7
       debugging: 8
       planning: 6
       review: 7
-      structured_output: 7
+      structured_output: 8
       repo_exploration: 8
-    base_success: 0.80
+    base_success: 0.84
     privacy:
       private_code_allowed: true
-      training_allowed: false
-      zero_retention_supported: true
-      enforcement_basis: openrouter_request_policy
+      training_allowed: true
+      zero_retention_supported: false
+      enforcement_basis: human_owner_effectiveness_first_2026_09_14
     provider_policy:
-      data_collection: deny
-      zdr: true
       require_parameters: true
       allow_fallbacks: true
       model_fallbacks: false
+      zdr_required: false
+      data_collection_deny_required: false
     free_tier:
       requests_per_minute: 20
       requests_per_day_after_10_credit: 1000

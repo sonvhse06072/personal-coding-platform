@@ -10,12 +10,16 @@ from app.adapters.opencode import OpenCodeAdapter, opencode_env_for_model
 from app.shell import CommandResult, agent_subprocess_env
 
 
-def test_openrouter_opencode_env_is_explicit_private_and_provider_scoped(monkeypatch) -> None:
+MODEL = "openrouter/cohere/north-mini-code:free"
+UPSTREAM_MODEL = "cohere/north-mini-code:free"
+
+
+def test_openrouter_opencode_env_is_explicit_effectiveness_first_and_provider_scoped(monkeypatch) -> None:
     monkeypatch.setenv("OPENROUTER_API_KEY", "openrouter-secret")
     monkeypatch.setenv("OPENAI_API_KEY", "must-not-leak")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "must-not-leak")
 
-    env = opencode_env_for_model("openrouter/qwen/qwen3-coder:free")
+    env = opencode_env_for_model(MODEL)
 
     assert env["OPENROUTER_API_KEY"] == "openrouter-secret"
     assert "OPENAI_API_KEY" not in env
@@ -28,15 +32,15 @@ def test_openrouter_opencode_env_is_explicit_private_and_provider_scoped(monkeyp
     openrouter = config["provider"]["openrouter"]
     assert set(openrouter) == {"models", "whitelist"}
     models = openrouter["models"]
-    assert list(models) == ["qwen/qwen3-coder:free"]
-    assert openrouter["whitelist"] == ["qwen/qwen3-coder:free"]
-    policy = models["qwen/qwen3-coder:free"]["options"]["provider"]
+    assert list(models) == [UPSTREAM_MODEL]
+    assert openrouter["whitelist"] == [UPSTREAM_MODEL]
+    policy = models[UPSTREAM_MODEL]["options"]["provider"]
     assert policy == {
         "allow_fallbacks": True,
-        "data_collection": "deny",
         "require_parameters": True,
-        "zdr": True,
     }
+    assert "zdr" not in policy
+    assert "data_collection" not in policy
     # OpenRouter receives one explicit model. There is no request-level model
     # fallback list for OpenRouter to select another model behind PCP Router.
     serialized = json.dumps(config, sort_keys=True)
@@ -59,7 +63,7 @@ def test_openrouter_adapter_forwards_only_its_key_and_required_opencode_policy(m
 
     monkeypatch.setattr("app.adapters.opencode.run_command", fake_run_command)
     run = asyncio.run(
-        OpenCodeAdapter("openrouter/qwen/qwen3-coder:free").run(
+        OpenCodeAdapter(MODEL).run(
             workspace=tmp_path,
             prompt="bounded test prompt",
             mode="execute",
@@ -77,7 +81,7 @@ def test_openrouter_adapter_forwards_only_its_key_and_required_opencode_policy(m
     }
     assert child_extra["OPENROUTER_API_KEY"] == "openrouter-secret"
     assert "--model" in captured["argv"]
-    assert "openrouter/qwen/qwen3-coder:free" in captured["argv"]
+    assert MODEL in captured["argv"]
     sanitized = agent_subprocess_env(child_extra)
     assert sanitized["OPENROUTER_API_KEY"] == "openrouter-secret"
     for key in {"OPENAI_API_KEY", "RUNTIME_API_TOKEN", "ROUTER_API_TOKEN", "PLATFORM_INTERNAL_TOKEN"}:

@@ -36,12 +36,13 @@ def provider_env_for_model(model: str) -> dict[str, str]:
 def opencode_env_for_model(model: str) -> dict[str, str]:
     """Build the provider-scoped environment for one OpenCode invocation.
 
-    OpenRouter coding jobs use an explicit model and an inline OpenCode provider
-    configuration. The inline policy is deliberately stricter than account
-    defaults: private repository content may be sent only to endpoints that deny
-    provider data collection and advertise Zero Data Retention. OpenRouter may
-    fail over between eligible endpoints for this same model, but PCP remains the
-    authority for choosing a different model after a provider failure.
+    OpenRouter coding jobs use one explicit model and an inline OpenCode provider
+    configuration. PCP keeps the provider/model allowlist narrow and disables
+    OpenCode sharing, while the Human Owner's effectiveness-first policy permits
+    repository source code to use eligible free endpoints without requiring ZDR
+    or provider data-collection denial. OpenRouter may fail over between endpoints
+    serving the same selected model; PCP remains authoritative for cross-model
+    failover after a provider failure.
     """
     env = provider_env_for_model(model)
     normalized = (model or "").strip()
@@ -64,20 +65,19 @@ def opencode_env_for_model(model: str) -> dict[str, str]:
         "provider": {
             "openrouter": {
                 # Keep the selectable model set as narrow as the Router's
-                # selected model. This is not an OpenRouter fallback list.
+                # selected model. This is not an OpenRouter cross-model fallback
+                # list. Endpoint fallback is allowed only for this same model.
                 "whitelist": [upstream_model],
                 "models": {
                     upstream_model: {
                         "options": {
                             "provider": {
-                                "data_collection": "deny",
-                                "zdr": True,
                                 "require_parameters": True,
                                 "allow_fallbacks": True,
                             }
                         }
                     }
-                }
+                },
             }
         },
     }
