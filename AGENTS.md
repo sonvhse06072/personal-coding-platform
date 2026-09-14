@@ -61,6 +61,15 @@ Lower-authority artifacts must not silently redefine higher-authority artifacts.
 - A CI-green PR is a mandatory gate before a task is considered ready for merge.
 - Never merge automatically. The human owner performs the final merge.
 
+## Operator command authoring
+
+Commands written for the Human Owner to copy and paste must favor correctness and readability over compact one-liners.
+
+- Avoid `python3 -c '...'` when the embedded Python code itself contains single quotes that can collide with the shell's outer single-quote delimiter.
+- Prefer `.format()` or a heredoc when they reduce nested shell/Python quoting risk.
+- For `curl | python3` pipelines, verify both shell quoting and Python quoting before presenting the command.
+- When a command is moderately long or structurally complex, prefer a readable multi-line form over a fragile one-liner.
+
 ## Mandatory documentation continuity
 
 Every material decision or state transition must be reflected in repository documentation before the work is considered complete or safely handed off, whether the work was performed by ChatGPT, Codex, or the platform itself.
