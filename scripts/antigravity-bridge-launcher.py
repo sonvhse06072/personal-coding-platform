@@ -34,7 +34,7 @@ def load_bridge_token() -> str:
 
 def main() -> None:
     token = load_bridge_token()
-    bridge = Path(__file__).with_name("antigravity-bridge.py")
+    bridge = Path(__file__).with_name("antigravity-bridge-live.py")
     if not bridge.is_file():
         raise SystemExit(f"Missing {bridge}")
 
