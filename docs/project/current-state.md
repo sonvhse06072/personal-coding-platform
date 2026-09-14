@@ -62,25 +62,27 @@ Durable provider policy: `docs/project/provider-policy.md`.
 - Evaluator still did **not** accept C1. The same two material findings remain in the live `last_failure` evidence:
   1. deployed release identity must be derived/verified from the deployed tree instead of trusting local Git SHA/fingerprint supplied by `run.sh`;
   2. AC6 needs deterministic passing evidence for the DEC-025C-specific Python/PHP/shell/static checks.
-- PR #78 supports bounded recovery for this reassessment class. For the recorded state, the first expected recovery dimension is `+4 model calls`; later extensions are allowed only if they become the current live blocker.
-- Do not force-complete C1. Do not create a replacement job. C2/C3 remain gated.
-- Next gate: re-query this same job after restart, trigger one orchestrator tick, inspect the current pending control action read-only, and execute only the official live-revalidated action matching the currently exhausted dimension.
+- Post-rollout orchestrator tick materialized a current pending recovery action for the exact C1 state: action id `l-PuQpbvYEHnlMNp8Fk5IJ5P`, `action_type=budget_extend`, payload `dimension=max_model_calls`, `increment=4`, expiring `2026-09-16T13:22:37Z`.
+- Live advisory counters at action creation: model calls `14/14`, tool calls `30/160`, test runs `6/14`, wall time `61.97/70`, repair iterations `2/2`.
+- Multiple counters include repair iterations at its limit, but the reassessment failure hint is specifically `model-call budget exhausted`; Runtime's live validation therefore authorizes only `max_model_calls +4` for this state. Do not pre-authorize repair iterations. If repair becomes the next live blocker, materialize and approve only the new bounded `+1 repair iteration` action.
+- The current action must be executed only through `POST /v1/control-actions/{action_id}/execute`; Runtime will revalidate owner identity, expiry, exact state fingerprint, non-in-flight status, dimension/increment, and platform hard maximum before applying it and resuming the same job.
+- Do not force-complete C1. Do not create a replacement job. Do not mutate the DB. C2/C3 remain gated.
 
 ### 3. Telegram control rollout
 
 - Issue #77 / PR #78 are merged and their n8n workflows have been locally synced.
 - Owner-facing Telegram messages/actions are localized to Vietnamese; stable machine reason codes remain unchanged.
-- `reassessment_stopped + hard_budget_guard` can produce a bounded, live-dimension-revalidated owner action; stale/wrong-dimension actions fail closed.
+- `reassessment_stopped + hard_budget_guard` produced the expected bounded, live-dimension-revalidated C1 recovery action after rollout.
 - n8n is healthy after rollout. No control action has yet been executed for C1 after restart.
 
 ## Next safe sequence
 
-1. Re-query C1 job `eec59b13651c54559c10ce204380a68e` after restart and confirm it remains blocked/terminal.
-2. Trigger one orchestrator tick.
-3. Read the latest pending `cp_control_actions` row for this C1 job without mutating durable state. Confirm `action_type=budget_extend`, `payload.dimension=max_model_calls`, and `payload.increment=4` before execution; live state is authoritative.
-4. Execute only that action through the official Runtime control-action endpoint (or its Telegram button). Do not mutate the DB directly.
-5. Monitor the same C1 job until it addresses both evaluator findings and reaches its normal PR/CI/manual-merge gate. Keep C2/C3 pending until C1 clears that gate.
-6. Update this document with post-restart C1 state, control action evidence/execution, and the resulting job state before handoff.
+1. Execute only current C1 action `l-PuQpbvYEHnlMNp8Fk5IJ5P` through the official Runtime control-action endpoint using the configured Telegram owner/chat identity. Do not call the generic job-run endpoint and do not mutate DB state.
+2. Confirm the response records `max_model_calls` previous limit `14`, new limit `18`, used `14`, and resumes the same job id.
+3. Monitor the same C1 job. Do not restart services while it is in flight.
+4. If it blocks again, trigger/reconcile and inspect the newly materialized live action. Extend only that current exhausted dimension. Repair iterations are already `2/2`, so `+1 repair iteration` is a likely next bounded gate but is not authorized until Runtime says so.
+5. C1 must fix both evaluator findings and reach the normal PR/CI/manual-merge gate before C2/C3 proceed.
+6. Update this document with the executed action result, resulting job state, and any next live blocker before handoff.
 
 ## Global operational gates
 
