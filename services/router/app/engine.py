@@ -262,7 +262,11 @@ class RouterEngine:
 
         if model_id in preferred_ids:
             position = preferred_ids.index(model_id)
-            bonus = float(scoring.get("preferred_order_bonus", 0.08)) * max(0.25, 1.0 - position * 0.25)
+            profile_cfg = self.policy.get("profiles", {}).get(profile, {})
+            preferred_order_bonus = profile_cfg.get(
+                "preferred_order_bonus", scoring.get("preferred_order_bonus", 0.08)
+            )
+            bonus = float(preferred_order_bonus) * max(0.25, 1.0 - position * 0.25)
             score += bonus
             reasons.append(f"preferred-order bonus={bonus:.3f}")
 
@@ -318,6 +322,9 @@ class RouterEngine:
             reasons: list[str] = []
             if model.get("kind") != "agent":
                 reasons.append("not an agent")
+            allowed_profiles = model.get("allowed_profiles")
+            if allowed_profiles is not None and profile not in set(allowed_profiles):
+                reasons.append(f"profile {profile!r} is not allowed")
             if not set(role_names) & set(model.get("roles", [])):
                 reasons.append(f"missing required role: {role_names}")
             if model.get("provider") in exclude_providers:

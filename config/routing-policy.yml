@@ -12,6 +12,9 @@ complexity_weights:
 profiles:
   fast:
     max_score: 29
+    # Fast work may prefer an eligible opportunistic model, but this remains a
+    # score bonus rather than an allowlist.
+    preferred_order_bonus: 0.14
     analysis_depth: 1
     planner: false
     evaluator: false
@@ -33,7 +36,9 @@ profiles:
     max_changed_files: 6
     executor_roles:
     - executor
+    - fast_executor
     preferred_executor_ids:
+    - openrouter_qwen3_coder_free
     - antigravity_free
     - codex_luna
     - codex_terra
@@ -63,8 +68,10 @@ profiles:
     max_changed_files: 14
     executor_roles:
     - executor
+    - standard_executor
     preferred_executor_ids:
     - antigravity_free
+    - openrouter_qwen3_coder_free
     - codex_terra
     - codex_luna
     max_input_tokens: 800000
@@ -111,6 +118,7 @@ profiles:
     preferred_evaluator_ids:
     - groq_oss_120b
     - antigravity_free
+    - openrouter_qwen3_coder_free
     - codex_terra
     max_input_tokens: 2000000
     max_output_tokens: 300000

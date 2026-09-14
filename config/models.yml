@@ -140,10 +140,6 @@ models:
     base_success: 0.86
     privacy:
       private_code_allowed: true
-      # Individual Antigravity does not carry the Enterprise contractual
-      # no-training guarantee. The platform disables the documented telemetry /
-      # data-collection control on the WSL host and the bridge fails closed if
-      # that opt-out is no longer active.
       training_allowed: false
       training_policy_basis: user_opt_out_enforced
       enterprise_data_guarantee: false
@@ -290,27 +286,52 @@ models:
       training_allowed: false
       zero_retention_supported: true
 
-  openrouter_free:
-    kind: llm
+  openrouter_qwen3_coder_free:
+    # Opportunistic free compute only. PCP chooses this exact model; OpenRouter
+    # may fail over between eligible endpoints serving the same model, but it may
+    # not choose a different model. Runtime injects data_collection=deny and ZDR
+    # into OpenCode for every request and fails over if no compliant endpoint is
+    # available.
+    kind: agent
     provider: openrouter
-    adapter: litellm
-    model: openrouter/free
-    tier: utility
+    adapter: opencode
+    model: openrouter/qwen/qwen3-coder:free
+    tier: balanced
     cost_class: free
+    quota_group: openrouter_free
+    # This is an eligibility boundary, not a scoring preference. It prevents
+    # this opportunistic provider from becoming a critical fallback merely
+    # because every preferred model is unavailable.
+    allowed_profiles:
+    - fast
+    - standard
+    - complex
     roles:
-    - classify
-    - summarize
-    - failure_analysis
+    - fast_executor
+    - standard_executor
+    - reviewer
     capabilities:
-      coding: 5
-      reasoning: 5
-      debugging: 5
-      planning: 4
-      review: 4
-      structured_output: 6
-      repo_exploration: 3
-    base_success: 0.6
+      coding: 8
+      reasoning: 8
+      debugging: 8
+      planning: 6
+      review: 7
+      structured_output: 7
+      repo_exploration: 8
+    base_success: 0.80
     privacy:
-      private_code_allowed: false
-      training_allowed: true
-      zero_retention_supported: false
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: true
+      enforcement_basis: openrouter_request_policy
+    provider_policy:
+      data_collection: deny
+      zdr: true
+      require_parameters: true
+      allow_fallbacks: true
+      model_fallbacks: false
+    free_tier:
+      requests_per_minute: 20
+      requests_per_day_after_10_credit: 1000
+      authoritative_remaining_available: false
+      basis: openrouter_documented_free_tier_2026_09

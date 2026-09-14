@@ -108,10 +108,10 @@ def test_staffing_keeps_project_privacy_policy_authoritative() -> None:
     engine = make_engine()
     result = engine.staff(pm_request())
 
-    assert "openrouter_free" in result.rejected_candidates
+    assert "openrouter_qwen3_coder_free" in result.rejected_candidates
     assert any(
-        "train" in reason or "not an agent" in reason
-        for reason in result.rejected_candidates["openrouter_free"]
+        "missing required role" in reason
+        for reason in result.rejected_candidates["openrouter_qwen3_coder_free"]
     )
 
 
