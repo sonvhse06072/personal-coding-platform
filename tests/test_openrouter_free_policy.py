@@ -23,7 +23,7 @@ def test_openrouter_free_uses_one_explicit_effectiveness_first_model() -> None:
     models = models_doc["models"]
     model = models[MODEL_ID]
 
-    assert models_doc["version"] == 7
+    assert models_doc["version"] == 8
     assert all(item.get("model") != "openrouter/free" for item in models.values())
     assert model["kind"] == "agent"
     assert model["provider"] == "openrouter"
@@ -56,7 +56,7 @@ def test_openrouter_free_is_opportunistic_and_excluded_from_critical_and_pm() ->
     _, policy = documents()
     profiles = policy["profiles"]
 
-    assert policy["version"] == 7
+    assert policy["version"] == 8
     assert "fast_executor" in profiles["fast"]["executor_roles"]
     assert profiles["fast"]["preferred_executor_ids"][0] == MODEL_ID
 
@@ -67,7 +67,7 @@ def test_openrouter_free_is_opportunistic_and_excluded_from_critical_and_pm() ->
     assert MODEL_ID not in profiles["complex"]["preferred_executor_ids"]
     assert MODEL_ID not in profiles["complex"]["preferred_planner_ids"]
     complex_evaluators = profiles["complex"]["preferred_evaluator_ids"]
-    assert complex_evaluators.index("antigravity_free") < complex_evaluators.index(MODEL_ID)
+    assert complex_evaluators.index("antigravity_claude_sonnet") < complex_evaluators.index(MODEL_ID)
     assert complex_evaluators.index(MODEL_ID) < complex_evaluators.index("codex_terra")
 
     critical = profiles["critical"]

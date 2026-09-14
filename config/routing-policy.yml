@@ -1,4 +1,4 @@
-version: 7
+version: 8
 complexity_weights:
   scope: 0.18
   dependency_depth: 0.1
@@ -73,6 +73,8 @@ profiles:
     - antigravity_free
     - openrouter_qwen3_coder_free
     - codex_terra
+    - antigravity_flash_high
+    - antigravity_gemini_pro
     - codex_luna
     max_input_tokens: 800000
     max_output_tokens: 120000
@@ -108,18 +110,26 @@ profiles:
     evaluator_roles:
     - reviewer
     preferred_planner_ids:
-    - antigravity_free
+    - antigravity_gemini_pro
     - codex_terra
+    - antigravity_claude_sonnet
+    - antigravity_flash_high
     - codex_sol
+    - antigravity_free
     preferred_executor_ids:
     - antigravity_free
     - codex_terra
+    - antigravity_flash_high
+    - antigravity_gemini_pro
+    - antigravity_claude_sonnet
     - codex_sol
     preferred_evaluator_ids:
-    - groq_oss_120b
-    - antigravity_free
+    - antigravity_claude_sonnet
     - openrouter_qwen3_coder_free
+    - antigravity_gemini_pro
     - codex_terra
+    - antigravity_flash_high
+    - antigravity_free
     max_input_tokens: 2000000
     max_output_tokens: 300000
   critical:
@@ -153,14 +163,16 @@ profiles:
     - reviewer
     preferred_planner_ids:
     - codex_sol
+    - antigravity_gemini_pro
     - frontier_codex
     preferred_executor_ids:
     - codex_sol
     - frontier_codex
     preferred_evaluator_ids:
-    - groq_oss_120b
-    - antigravity_free
+    - antigravity_claude_sonnet
+    - antigravity_gemini_pro
     - codex_terra
+    - antigravity_flash_high
     max_input_tokens: 4000000
     max_output_tokens: 500000
 staffing_roles:
@@ -172,9 +184,11 @@ staffing_roles:
     - complex
     - critical
     preferred_ids:
-    - antigravity_free
+    - antigravity_gemini_pro
     - codex_terra
+    - antigravity_claude_sonnet
     - codex_sol
+    - antigravity_free
 critical_triggers:
 - destructive_migration
 - production_write

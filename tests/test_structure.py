@@ -56,8 +56,6 @@ def test_github_delivery_token_is_scoped_to_privileged_executor():
     for service in ("ddev-executor", "coding-runtime", "router", "n8n"):
         assert "GITHUB_DELIVERY_TOKEN" not in services[service]["environment"]
 
-    # DDEV injects .ddev/.env into every project container, so delivery secrets
-    # must live only in ddev-executor's service-local env file.
     global_env = (ROOT / ".ddev/.env.example").read_text()
     executor_env = (ROOT / ".ddev/.env.ddev-executor.local.example").read_text()
     runtime_env = (ROOT / ".ddev/.env.coding-runtime.local.example").read_text()
@@ -78,7 +76,10 @@ def test_antigravity_replaces_legacy_gemini_cli():
 
     assert "antigravity_free:" in models
     assert "adapter: antigravity_host" in models
-    assert "quota_group: antigravity_individual" in models
+    assert "model: gemini-3.8-flash-medium" in models
+    assert "quota_group: antigravity_gemini" in models
+    assert "antigravity_claude_sonnet:" in models
+    assert "quota_group: antigravity_claude_gpt" in models
     assert "gemini_free:" not in models
     assert "gemini_cli" not in factory
     assert "@google/gemini-cli" not in dockerfile

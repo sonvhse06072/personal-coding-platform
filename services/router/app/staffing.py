@@ -5,6 +5,7 @@ from typing import Any
 from .engine_budget import RouterEngine as BudgetRouterEngine
 from .schemas import (
     DimensionScores,
+    ProviderState,
     ReassessRequest,
     ReassessResponse,
     RoutingRequest,
@@ -15,11 +16,12 @@ from .schemas import (
 
 
 _REASONING_ORDER = ["low", "medium", "high"]
+_REASONING_ADAPTERS = {"codex_cli", "antigravity_host"}
 _PM_REASONING_BY_PROFILE = {"standard": "low", "complex": "medium", "critical": "high"}
 
 
 class RouterEngine(BudgetRouterEngine):
-    """Router extension for staffing and explicit, budget-aware reasoning effort."""
+    """Router extension for staffing, quota state and explicit reasoning effort."""
 
     def _capability_match(
         self,
@@ -51,6 +53,54 @@ class RouterEngine(BudgetRouterEngine):
         return max(0.0, min(1.0, score))
 
     @staticmethod
+    def _combine_state(primary: ProviderState, quota: ProviderState) -> ProviderState:
+        return ProviderState(
+            healthy=primary.healthy and quota.healthy,
+            quota_pressure=max(primary.quota_pressure, quota.quota_pressure),
+            error_rate=max(primary.error_rate, quota.error_rate),
+            latency_ms=max(primary.latency_ms, quota.latency_ms),
+            predicted_success=(
+                primary.predicted_success
+                if primary.predicted_success is not None
+                else quota.predicted_success
+            ),
+            available=primary.available and quota.available,
+        )
+
+    def _quota_aware_request(self, request: RoutingRequest) -> RoutingRequest:
+        """Project model- and group-quota health onto model scoring.
+
+        `quota:model:<id>` is created from a concrete model quota/rate-limit
+        failure. `quota:<group>` is reserved for authoritative shared-bucket
+        evidence (for example future statusline telemetry). Base Router still
+        combines this model view with `provider:<name>` health afterwards.
+        """
+        updated = request.model_copy(deep=True)
+        state = dict(updated.provider_state)
+        for model_id, model in self.models.items():
+            combined = state.get(model_id, ProviderState())
+            model_quota = state.get(f"quota:model:{model_id}")
+            if model_quota is not None:
+                combined = self._combine_state(combined, model_quota)
+            quota_group = str(model.get("quota_group") or "").strip()
+            group_quota = state.get(f"quota:{quota_group}") if quota_group else None
+            if group_quota is not None:
+                combined = self._combine_state(combined, group_quota)
+            if model_quota is not None or group_quota is not None:
+                state[model_id] = combined
+        updated.provider_state = state
+        return updated
+
+    def select_model(self, **kwargs):
+        request = kwargs.get("request")
+        if isinstance(request, RoutingRequest):
+            kwargs["request"] = self._quota_aware_request(request)
+        choice, rejected = super().select_model(**kwargs)
+        model = self.models.get(choice.id, {})
+        choice.quota_group = str(model.get("quota_group") or "") or None
+        return choice, rejected
+
+    @staticmethod
     def _staffing_dimensions(request: StaffingRequest) -> DimensionScores:
         semantic = request.semantic
         return DimensionScores(
@@ -67,7 +117,7 @@ class RouterEngine(BudgetRouterEngine):
 
     @staticmethod
     def _apply_reasoning(choice: Any, effort: str | None) -> None:
-        if choice is None or choice.adapter != "codex_cli" or effort not in _REASONING_ORDER:
+        if choice is None or choice.adapter not in _REASONING_ADAPTERS or effort not in _REASONING_ORDER:
             return
         choice.reasoning_effort = effort
         marker = f"reasoning_effort={effort}"
@@ -76,7 +126,7 @@ class RouterEngine(BudgetRouterEngine):
 
     @staticmethod
     def _next_reasoning_choice(choice: Any, ceiling: str | None) -> Any | None:
-        if choice is None or choice.adapter != "codex_cli":
+        if choice is None or choice.adapter not in _REASONING_ADAPTERS:
             return None
         current = choice.reasoning_effort
         if current not in _REASONING_ORDER or ceiling not in _REASONING_ORDER:
@@ -119,7 +169,7 @@ class RouterEngine(BudgetRouterEngine):
         if boosted is not None and (should_replace_model_escalation or should_use_signal_escalation):
             return ReassessResponse(
                 action="escalate",
-                reason=f"Increase Codex reasoning effort {current.reasoning_effort}->{boosted.reasoning_effort} before changing model",
+                reason=f"Increase agent reasoning effort {current.reasoning_effort}->{boosted.reasoning_effort} before changing model",
                 current_profile=request.route.strategy.profile,
                 next_executor=boosted,
                 remaining=result.remaining,

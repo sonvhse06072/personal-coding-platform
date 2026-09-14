@@ -39,33 +39,38 @@ def test_product_manager_staffing_selects_only_pm_eligible_agent() -> None:
 
     assert result.role == "product_manager"
     assert result.profile == "standard"
-    assert result.choice.id in {"codex_terra", "antigravity_free"}
+    assert result.choice.id in {
+        "codex_terra",
+        "antigravity_free",
+        "antigravity_gemini_pro",
+        "antigravity_claude_sonnet",
+    }
     assert result.choice.id != "codex_sol"
-    if result.choice.adapter == "codex_cli":
-        assert result.choice.reasoning_effort == "low"
+    assert result.choice.reasoning_effort == "low"
     assert "product_manager" in engine.models[result.choice.id]["roles"]
-    assert result.policy_version == 7
-    assert result.registry_version == 7
+    assert result.policy_version == 8
+    assert result.registry_version == 8
 
 
-def test_product_manager_staffing_respects_provider_availability() -> None:
+def test_product_manager_staffing_respects_provider_availability_and_sets_antigravity_effort() -> None:
     engine = make_engine()
     result = engine.staff(
-        pm_request(provider_state={"codex_terra": {"available": False}})
+        pm_request(provider_state={"provider:openai": {"available": False}})
     )
 
-    assert result.choice.id == "antigravity_free"
-    assert result.choice.reasoning_effort is None
-    assert "provider/model unavailable" in result.rejected_candidates["codex_terra"]
+    assert result.choice.provider == "google_antigravity"
+    assert result.choice.reasoning_effort == "low"
+    assert result.choice.quota_group in {"antigravity_gemini", "antigravity_claude_gpt"}
 
 
-def test_product_manager_staffing_can_fall_back_to_sol_when_lower_cost_capacity_is_unavailable() -> None:
+def test_product_manager_staffing_can_fall_back_to_sol_when_antigravity_quota_is_unavailable() -> None:
     engine = make_engine()
     result = engine.staff(
         pm_request(
             provider_state={
                 "codex_terra": {"available": False},
-                "antigravity_free": {"available": False},
+                "quota:antigravity_gemini": {"available": False, "healthy": False},
+                "quota:antigravity_claude_gpt": {"available": False, "healthy": False},
             }
         )
     )
