@@ -20,6 +20,11 @@ _EVENT_DEFINITIONS: dict[str, tuple[str, str, str]] = {
     "job_failed": ("failed", "error", "Job failed"),
     "job_cancelled": ("cancelled", "warning", "Job cancelled"),
     "job_interrupted": ("interrupted", "warning", "Job interrupted"),
+    "developer_message": ("execution", "info", "Developer update"),
+    "developer_command_started": ("execution", "info", "Command started"),
+    "developer_command_completed": ("execution", "success", "Command completed"),
+    "developer_file_activity": ("execution", "info", "Files changed"),
+    "developer_error": ("execution", "error", "Developer error"),
 }
 
 _STATUS_EVENT_TYPES = {
@@ -47,6 +52,21 @@ _SAFE_DATA_KEYS = {
     "analysis_depth",
 }
 _SAFE_CHOICE_KEYS = {"id", "provider", "model", "reasoning_effort"}
+_DEVELOPER_EVENT_TYPES = {
+    "developer_message",
+    "developer_command_started",
+    "developer_command_completed",
+    "developer_file_activity",
+    "developer_error",
+}
+_DEVELOPER_TEXT_LIMITS = {
+    "text": 2000,
+    "command": 1000,
+    "output": 3000,
+    "status": 80,
+    "role": 40,
+    "model": 160,
+}
 
 
 def _bounded_text(value: Any, limit: int = 160) -> str | None:
@@ -116,6 +136,37 @@ def route_selected_event(route: Any) -> dict[str, Any] | None:
     return _event("route_selected", data)
 
 
+def _developer_data(source: dict[str, Any]) -> dict[str, Any]:
+    data: dict[str, Any] = {}
+    for key, limit in _DEVELOPER_TEXT_LIMITS.items():
+        value = _bounded_text(source.get(key), limit)
+        if value is not None:
+            data[key] = value
+    exit_code = source.get("exit_code")
+    if isinstance(exit_code, int):
+        data["exit_code"] = exit_code
+    paths = source.get("paths")
+    if isinstance(paths, list):
+        safe_paths = [str(path)[:240] for path in paths[:12] if path is not None]
+        if safe_paths:
+            data["paths"] = safe_paths
+    return data
+
+
+def _developer_message(event_type: str, data: dict[str, Any], default: str) -> str:
+    if event_type in {"developer_message", "developer_error"} and data.get("text"):
+        return str(data["text"])
+    if event_type == "developer_command_started" and data.get("command"):
+        return f"$ {data['command']}"[:1200]
+    if event_type == "developer_command_completed" and data.get("command"):
+        code = data.get("exit_code")
+        suffix = f" · exit {code}" if isinstance(code, int) else ""
+        return f"$ {data['command']}{suffix}"[:1200]
+    if event_type == "developer_file_activity" and data.get("paths"):
+        return "Files changed: " + ", ".join(data["paths"][:6])
+    return default
+
+
 def public_event(row: dict[str, Any]) -> dict[str, Any] | None:
     """Return the dashboard contract from fixed definitions and allow-listed data."""
 
@@ -125,21 +176,30 @@ def public_event(row: dict[str, Any]) -> dict[str, Any] | None:
     phase, level, message = _definition(event_type)
     source = row.get("data") if isinstance(row.get("data"), dict) else {}
     data: dict[str, Any] = {}
-    for key in _SAFE_DATA_KEYS:
-        value = source.get(key)
-        if key == "analysis_depth":
-            if isinstance(value, int):
-                data[key] = value
-        else:
-            bounded = _bounded_text(value)
-            if key in {"from_status", "to_status"} and bounded not in _SAFE_STATUSES:
-                continue
-            if bounded is not None:
-                data[key] = bounded
-    for role in ("planner", "executor", "evaluator"):
-        choice = _safe_choice(source.get(role))
-        if choice:
-            data[role] = choice
+    if event_type in _DEVELOPER_EVENT_TYPES:
+        data = _developer_data(source)
+        message = _developer_message(event_type, data, message)
+        if event_type == "developer_command_completed":
+            code = data.get("exit_code")
+            status = str(data.get("status") or "").lower()
+            if (isinstance(code, int) and code != 0) or status in {"failed", "error"}:
+                level = "error"
+    else:
+        for key in _SAFE_DATA_KEYS:
+            value = source.get(key)
+            if key == "analysis_depth":
+                if isinstance(value, int):
+                    data[key] = value
+            else:
+                bounded = _bounded_text(value)
+                if key in {"from_status", "to_status"} and bounded not in _SAFE_STATUSES:
+                    continue
+                if bounded is not None:
+                    data[key] = bounded
+        for role in ("planner", "executor", "evaluator"):
+            choice = _safe_choice(source.get(role))
+            if choice:
+                data[role] = choice
     created_at = row.get("created_at")
     timestamp = created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at or "")
     return {
