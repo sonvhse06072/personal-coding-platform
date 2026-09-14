@@ -5,8 +5,8 @@ from datetime import datetime, timezone
 import pytest
 from fastapi import HTTPException
 
-import app.dashboard as dashboard
-from app.dashboard import _job_snapshot, _provider_quota_snapshot, _require_session, _session_value, build_dashboard_snapshot
+from app.dashboard import _job_snapshot, _require_session, _session_value, build_dashboard_snapshot
+from app.dashboard_ui import DASHBOARD_HTML
 
 
 NOW = datetime(2026, 9, 13, tzinfo=timezone.utc)
@@ -105,32 +105,6 @@ def test_job_snapshot_exposes_safe_runtime_telemetry_only():
     assert "PRIVATE STDERR" not in encoded
 
 
-def test_provider_quota_is_unavailable_without_authoritative_source(monkeypatch):
-    monkeypatch.setattr(dashboard, "models_doc", lambda: {
-        "models": {
-            "codex_terra": {
-                "provider": "openai",
-                "quota_group": "codex_chatgpt_plus",
-                "secret": "DO NOT LEAK",
-            },
-            "antigravity_free": {
-                "provider": "google_antigravity",
-                "quota_group": "antigravity_individual",
-            },
-        }
-    })
-
-    quotas = _provider_quota_snapshot()
-
-    assert [quota["id"] for quota in quotas] == [
-        "antigravity_individual",
-        "codex_chatgpt_plus",
-    ]
-    assert all(quota["remaining"] is None for quota in quotas)
-    assert all(quota["remaining_status"] == "unavailable" for quota in quotas)
-    assert "DO NOT LEAK" not in json.dumps(quotas)
-
-
 def test_dashboard_session_is_separate_and_fail_closed(monkeypatch):
     monkeypatch.delenv("DASHBOARD_READ_TOKEN", raising=False)
     with pytest.raises(HTTPException) as exc:
@@ -177,21 +151,54 @@ class _Connection:
                 "staffing": {"private": "NOT FOR DASHBOARD"},
             }])
         if "FROM cp_notification_outbox" in query:
-            return _Result(rows=[{
-                "id": 1,
-                "event_type": "manual_merge_required",
-                "severity": "warning",
-                "project_id": "chonhac",
-                "ticket_id": "GH-5",
-                "plan_id": "pm-gh-1",
-                "work_order_id": "C1",
-                "summary": "PR ready for manual merge",
-                "github_url": "https://example.invalid/pr/1",
-                "status": "sent",
-                "attempts": 1,
-                "created_at": NOW,
-                "sent_at": NOW,
-            }])
+            assert "ORDER BY id DESC LIMIT 3" in query
+            return _Result(rows=[
+                {
+                    "id": 3,
+                    "event_type": "work_order_blocked",
+                    "severity": "error",
+                    "project_id": "chonhac",
+                    "ticket_id": "GH-5",
+                    "plan_id": "pm-gh-1",
+                    "work_order_id": "C1",
+                    "summary": "Newest alert",
+                    "github_url": None,
+                    "status": "pending",
+                    "attempts": 0,
+                    "created_at": NOW,
+                    "sent_at": None,
+                },
+                {
+                    "id": 2,
+                    "event_type": "provider_quota_exhausted",
+                    "severity": "warning",
+                    "project_id": "chonhac",
+                    "ticket_id": "GH-5",
+                    "plan_id": "pm-gh-1",
+                    "work_order_id": "C1",
+                    "summary": "Second alert",
+                    "github_url": None,
+                    "status": "sent",
+                    "attempts": 1,
+                    "created_at": NOW,
+                    "sent_at": NOW,
+                },
+                {
+                    "id": 1,
+                    "event_type": "manual_merge_required",
+                    "severity": "warning",
+                    "project_id": "chonhac",
+                    "ticket_id": "GH-5",
+                    "plan_id": "pm-gh-1",
+                    "work_order_id": "C1",
+                    "summary": "Third alert",
+                    "github_url": "https://example.invalid/pr/1",
+                    "status": "sent",
+                    "attempts": 1,
+                    "created_at": NOW,
+                    "sent_at": NOW,
+                },
+            ])
         raise AssertionError(query)
 
 
@@ -206,20 +213,36 @@ class _Storage:
     def recent_events(self, job_ids, per_job_limit=40):
         assert job_ids == ["job-1"]
         assert per_job_limit == 40
-        return [{
-            "id": 7,
-            "job_id": "job-1",
-            "event_type": "executor_started",
-            "phase": "MALICIOUS PHASE",
-            "level": "MALICIOUS LEVEL",
-            "message": "PRIVATE AGENT OUTPUT",
-            "data": {
-                "from_status": "routing",
-                "to_status": "executing",
-                "raw_prompt": "SUPER SECRET RAW TASK",
+        return [
+            {
+                "id": 7,
+                "job_id": "job-1",
+                "event_type": "executor_started",
+                "phase": "MALICIOUS PHASE",
+                "level": "MALICIOUS LEVEL",
+                "message": "PRIVATE AGENT OUTPUT",
+                "data": {
+                    "from_status": "routing",
+                    "to_status": "executing",
+                    "raw_prompt": "SUPER SECRET RAW TASK",
+                },
+                "created_at": NOW,
             },
-            "created_at": NOW,
-        }]
+            {
+                "id": 8,
+                "job_id": "job-1",
+                "event_type": "executor_started",
+                "phase": "MALICIOUS PHASE 2",
+                "level": "MALICIOUS LEVEL 2",
+                "message": "PRIVATE AGENT OUTPUT 2",
+                "data": {
+                    "from_status": "executing",
+                    "to_status": "verifying",
+                    "raw_prompt": "SUPER SECRET RAW TASK 2",
+                },
+                "created_at": NOW,
+            },
+        ]
 
 
 class _Store:
@@ -239,26 +262,34 @@ class _Store:
         }]
 
 
-def test_snapshot_aggregates_plan_progress_without_raw_plan_payloads():
+def test_snapshot_orders_activity_newest_first_and_limits_alerts():
     snapshot = build_dashboard_snapshot(_Storage(), _Store())
     assert snapshot["summary"]["active_plans"] == 1
     assert snapshot["summary"]["active_jobs"] == 1
     assert snapshot["current_plan_id"] == "pm-gh-1"
     assert snapshot["plans"][0]["token_totals"]["input_budget_tokens"] == 668_037
+
     events = snapshot["plans"][0]["work_orders"][0]["job"]["recent_events"]
-    assert events == [{
-        "seq": 7,
-        "timestamp": NOW.isoformat(),
-        "job_id": "job-1",
-        "phase": "execution",
-        "level": "info",
-        "event": "executor_started",
-        "message": "Executor started",
-        "data": {"from_status": "routing", "to_status": "executing"},
-    }]
+    assert [event["seq"] for event in events] == [8, 7]
+    assert events[0]["phase"] == "execution"
+    assert events[0]["level"] == "info"
+    assert events[0]["message"] == "Executor started"
+    assert events[0]["data"] == {"from_status": "executing", "to_status": "verifying"}
+
+    assert [alert["id"] for alert in snapshot["alerts"]] == [3, 2, 1]
+    assert "provider_quotas" not in snapshot
+
     encoded = json.dumps(snapshot)
     assert "NOT FOR DASHBOARD" not in encoded
     assert "SUPER SECRET RAW TASK" not in encoded
     assert "PRIVATE AGENT OUTPUT" not in encoded
     assert "MALICIOUS PHASE" not in encoded
     assert "MALICIOUS LEVEL" not in encoded
+
+
+def test_dashboard_ui_shows_newest_activity_and_no_provider_quota_section():
+    assert "Newest first" in DASHBOARD_HTML
+    assert "Latest 3 notifications" in DASHBOARD_HTML
+    assert "Provider quota remaining" not in DASHBOARD_HTML
+    assert "providerQuotas" not in DASHBOARD_HTML
+    assert ".slice(0,3)" in DASHBOARD_HTML

@@ -11,7 +11,6 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .activity import public_event
-from .config import models_doc
 from .dashboard_ui import DASHBOARD_HTML
 
 
@@ -19,10 +18,6 @@ _ACTIVE_PLAN_STATES = {"active", "executing", "waiting_merge", "waiting_human"}
 _ACTIVE_JOB_STATES = {"queued", "routing", "planning", "executing", "verifying", "evaluating", "delivering"}
 _PLACEHOLDERS = {"", "CHANGE_ME", "change-me"}
 _COOKIE = "pcp_dashboard_session"
-_QUOTA_LABELS = {
-    "codex_chatgpt_plus": "Codex ChatGPT Plus",
-    "antigravity_individual": "Antigravity Individual",
-}
 
 
 class DashboardLogin(BaseModel):
@@ -73,38 +68,6 @@ def _remaining(used: Any, maximum: Any, *, integer: bool = True) -> int | float 
         return None
     value = max(0.0, float(maximum or 0) - float(used or 0))
     return int(value) if integer else round(value, 3)
-
-
-def _provider_quota_snapshot() -> list[dict[str, Any]]:
-    groups: dict[str, dict[str, Any]] = {}
-    for model_id, value in dict(models_doc().get("models") or {}).items():
-        model = dict(value or {})
-        quota_group = str(model.get("quota_group") or "").strip()
-        if not quota_group:
-            continue
-        group = groups.setdefault(quota_group, {
-            "id": quota_group,
-            "label": _QUOTA_LABELS.get(quota_group, quota_group.replace("_", " ").title()),
-            "providers": set(),
-            "models": [],
-        })
-        provider = str(model.get("provider") or "").strip()
-        if provider:
-            group["providers"].add(provider)
-        group["models"].append(str(model_id))
-    return [
-        {
-            "id": group["id"],
-            "label": group["label"],
-            "providers": sorted(group["providers"]),
-            "models": sorted(group["models"]),
-            "remaining": None,
-            "remaining_status": "unavailable",
-            "source": "provider_not_reported",
-            "message": "Provider does not expose authoritative remaining quota",
-        }
-        for group in sorted(groups.values(), key=lambda item: item["id"])
-    ]
 
 
 def _job_snapshot(job: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -211,7 +174,7 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
                 """SELECT id, event_type, severity, project_id, ticket_id, plan_id,
                           work_order_id, summary, github_url, status, attempts, created_at, sent_at
                 FROM cp_notification_outbox
-                ORDER BY id DESC LIMIT 12"""
+                ORDER BY id DESC LIMIT 3"""
             ).fetchall()
         )
         pending_notifications = conn.execute(
@@ -279,8 +242,13 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
         if event and event["job_id"] in events_by_job:
             events_by_job[event["job_id"]].append(event)
     for job_id, views in job_views_by_id.items():
+        recent_events = sorted(
+            events_by_job[job_id],
+            key=lambda item: int(item.get("seq") or 0),
+            reverse=True,
+        )
         for job_view in views:
-            job_view["recent_events"] = events_by_job[job_id]
+            job_view["recent_events"] = recent_events
 
     current_plan = next((p for p in plans if p["status"] in _ACTIVE_PLAN_STATES), plans[0] if plans else None)
     active_plans = sum(1 for p in plans if p["status"] in _ACTIVE_PLAN_STATES)
@@ -295,7 +263,6 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
             "pending_notifications": int((pending_notifications or {}).get("count", 0) or 0),
         },
         "current_plan_id": current_plan["id"] if current_plan else None,
-        "provider_quotas": _provider_quota_snapshot(),
         "plans": plans,
         "alerts": [
             {
