@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from .base import AgentAdapter, AgentRun, classify_provider_failure
+from ..developer_stream import codex_public_event, emit_developer_event
 from ..shell import run_command
 
 
@@ -34,7 +35,27 @@ class CodexAdapter(AgentAdapter):
         if self.reasoning_effort:
             argv += ["--config", f'model_reasoning_effort="{self.reasoning_effort}"']
         argv.append(prompt)
-        result = await run_command(argv, cwd=workspace, timeout=timeout)
+
+        def on_stdout_line(line: str) -> None:
+            try:
+                raw = json.loads(line)
+            except json.JSONDecodeError:
+                return
+            emit_developer_event(
+                codex_public_event(
+                    raw,
+                    workspace=workspace,
+                    mode=mode,
+                    model=self.model,
+                )
+            )
+
+        result = await run_command(
+            argv,
+            cwd=workspace,
+            timeout=timeout,
+            on_stdout_line=on_stdout_line,
+        )
         messages: list[str] = []
         errors: list[str] = []
         usage: dict = {}
@@ -78,8 +99,6 @@ class CodexAdapter(AgentAdapter):
             effective_returncode = 0
         else:
             diagnostics = [result.stderr, "\n".join(errors)]
-            # Preserve compatibility with older/plain CLI failures that do not
-            # emit terminal JSON events by falling back to raw stdout scanning.
             if not saw_json_event or terminal_event is None:
                 diagnostics.append(result.stdout)
             failure_kind, failure_message = classify_provider_failure(*diagnostics)
@@ -87,7 +106,6 @@ class CodexAdapter(AgentAdapter):
             if errors and effective_returncode == 0:
                 effective_returncode = 70
             if failure_kind and effective_returncode == 0:
-                # EX_TEMPFAIL-like code: provider/resource failure despite CLI exit 0.
                 effective_returncode = 75
             if errors and not failure_message:
                 failure_message = "\n".join(errors)[-12000:]
