@@ -76,12 +76,13 @@ def test_launcher_removes_control_env_before_running_bridge(monkeypatch) -> None
     monkeypatch.setattr(launcher.runpy, "run_path", fake_run_path)
     launcher.main()
 
-    assert captured["path"].endswith("scripts/antigravity-bridge.py")
+    assert captured["path"].endswith("scripts/antigravity-bridge-live.py")
+    assert (ROOT / "scripts" / "antigravity-bridge.py").is_file()
     assert captured["run_name"] == "__main__"
     assert captured["token_in_env"] is False
     assert captured["fd_in_env"] is False
     assert captured["argv"] == [
-        str(ROOT / "scripts" / "antigravity-bridge.py"),
+        str(ROOT / "scripts" / "antigravity-bridge-live.py"),
         "--host",
         "127.0.0.1",
         "--token",
