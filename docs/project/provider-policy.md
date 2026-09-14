@@ -68,7 +68,7 @@ For OpenRouter-backed private-code calls, Runtime/OpenCode must enforce the equi
 
 If no eligible endpoint satisfies the required privacy policy, the provider call must fail and PCP must use its normal provider/model failover path. The platform must never relax privacy requirements merely to consume free capacity.
 
-OpenCode sharing must be disabled for OpenRouter runs. Developer-agent subprocesses receive only `OPENROUTER_API_KEY` when that provider is selected; they must not inherit unrelated provider keys or Runtime/control-plane credentials.
+OpenCode sharing must be disabled for OpenRouter runs. The inline OpenCode configuration must also allowlist only the `openrouter` provider (or use the current OpenCode equivalent), so mounted user configuration cannot silently activate another provider for that run. Developer-agent subprocesses receive only `OPENROUTER_API_KEY` when that provider is selected; they must not inherit unrelated provider keys or Runtime/control-plane credentials.
 
 ## 5. Failure and recovery semantics
 
