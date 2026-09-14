@@ -101,7 +101,7 @@ def test_preserved_reroute_narrows_legacy_quota_marker_before_router_call():
 
     routed_state = router.payloads[0]["provider_state"]
     assert "provider:google_antigravity" not in routed_state
-    assert routed_state["quota:antigravity_gemini"]["available"] is False
+    assert routed_state["quota:model:antigravity_free"]["available"] is False
     assert updated["progress"] == original["progress"]
     assert updated["status"] == "queued"
     assert updated["route"]["strategy"]["evaluator"]["id"] == "antigravity_claude_sonnet"
