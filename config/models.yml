@@ -286,12 +286,12 @@ models:
       training_allowed: false
       zero_retention_supported: true
 
-  openrouter_north_mini_code_free:
-    # Opportunistic free compute only. PCP chooses this exact model. The Human
-    # Owner accepts published free-endpoint logging/training terms in exchange for
-    # effectiveness; secret isolation and disabled OpenCode sharing remain hard
-    # boundaries. OpenRouter may fail over only between endpoints serving this
-    # same model; PCP remains authoritative for cross-model failover.
+  openrouter_qwen3_coder_free:
+    # Stable legacy PCP model ID retained so durable route history/provider state
+    # remains comparable across the upstream-model replacement. The actual model
+    # is North Mini Code. The Human Owner accepts published free-endpoint
+    # logging/training terms in exchange for effectiveness; secret isolation and
+    # disabled OpenCode sharing remain hard boundaries.
     kind: agent
     provider: openrouter
     adapter: opencode
@@ -299,9 +299,6 @@ models:
     tier: balanced
     cost_class: free
     quota_group: openrouter_free
-    # This is an eligibility boundary, not a scoring preference. It prevents
-    # this opportunistic provider from becoming a critical fallback merely
-    # because every preferred model is unavailable.
     allowed_profiles:
     - fast
     - standard
