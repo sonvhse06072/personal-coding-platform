@@ -23,32 +23,36 @@ Before a material task is complete or handed off, update the relevant topical do
 ## Current repository state
 
 - PR #90 (`Recover wall-budget-bounded agent timeouts safely`) is merged at main commit `f698ccc5a687ecc012305c17391c5b40194cb29d`; issue #89 is closed.
-- PR #90 changes Runtime source behavior from `1.0.30` to `1.0.31`: typed coding-command timeouts, wall-budget-aware recoverable blocking, and narrow compatibility recovery for the already-failed DEC-025C C1 job.
-- The last proven deployed platform before that rollout remains Router `1.0.15`, Runtime `1.0.30`, model registry `v7`, routing policy `v7`, OpenCode adapter available, n8n healthy, and OpenRouter secret scoped only to Runtime.
+- PR #92 (`Make Codex unattended execution fail closed`) is merged at main commit `7d05c68dc36a481fbece98540bc4d0e6888643a2`; issue #91 is closed.
+- `main` Runtime source behavior is now `1.0.32`, combining the `1.0.31` wall-budget timeout recovery with explicit unattended Codex policy: read-only planner/evaluator, workspace-write execute/repair, `approval_policy="never"`, and workspace-write network disabled.
+- GitHub Actions run #187 passed on the exact PR #92 merge commit.
+- The last fully recorded deployed platform evidence still predates this rollout: Router `1.0.15`, Runtime `1.0.30`, model registry `v7`, routing policy `v7`, OpenCode adapter available, n8n healthy, and OpenRouter secret scoped only to Runtime. Runtime `1.0.32` rollout verification is in progress and must be recorded from live evidence rather than assumed from source state.
 - OpenRouter rollout is operational with explicit upstream free model `cohere/north-mini-code:free`; stable logical PCP model ID remains `openrouter_qwen3_coder_free`.
 
 ## Active work
 
-### 1. Codex unattended execution policy — issue #91 / PR #92
+### 1. Runtime `1.0.32` rollout and DEC-025C recovery
 
-- Issue: `personal-coding-platform` #91 (`Make Codex unattended execution policy explicit`).
-- Branch: `fix/codex-unattended-policy-91`.
-- PR: #92 (`Make Codex unattended execution fail closed`).
-- Human Owner decision: Codex must not receive full machine access merely to avoid interactive approval.
-- Implemented policy on the PR branch:
-  - planner/evaluator: `read-only` sandbox;
-  - execute/repair: `workspace-write` sandbox;
-  - every Codex Runtime turn: `approval_policy="never"`;
-  - workspace-write network access: explicitly `false`;
-  - `danger-full-access` and approval/sandbox bypass flags remain forbidden.
-- Commands that require permission outside the selected sandbox must fail closed instead of waiting for an interactive approval that Runtime cannot answer.
-- Runtime behavior/version on this branch is `1.0.32`.
-- Focused adapter tests assert the non-interactive policy for execute, plan and evaluate modes and guard against full-access regression.
-- `docs/project/architecture.md` records this as the approved developer-agent trust-boundary policy.
-- GitHub Actions run #185 passed on code/docs head `43386aea880d9478e5a9e29b3919c082c8c7c1f1`: Runtime, Router, ddev-executor and structure-test jobs all succeeded.
-- This continuity-only update is the final branch change; its resulting exact PR head must also be green before Human Owner manual merge. Do not auto-merge.
+- Human Owner merged PR #92.
+- A bounded Codex smoke using the new explicit policy was attempted with `--cd /app` and failed before prompt execution with `Not inside a trusted directory and --skip-git-repo-check was not specified.`
+- That failure does not show rejection of `approval_policy="never"` or `sandbox_workspace_write.network_access=false`; it shows `/app` is not an acceptable trusted Git working tree for `codex exec`.
+- Do not weaken the smoke by adding `--skip-git-repo-check`, because Runtime does not use that bypass. Re-run the smoke in a disposable Git repository or an existing trusted job workspace; prefer a disposable repo so the C1 workspace remains untouched.
+- Successful smoke evidence should include the exact `CODEX_POLICY_OK` agent message and a terminal `turn.completed` event before relying on this CLI policy for C1.
 
-### 2. DEC-025C / `chonhac` recovery tooling
+### 2. Operator command quoting guidance — issue #93 / PR #95
+
+- Issue #93 records durable copy/paste command-authoring guidance requested by the Human Owner.
+- Branch: `ai/docs-shell-command-safety-93`.
+- PR: #95 (`Document safer operator shell command patterns`).
+- `AGENTS.md` now requires future sessions to:
+  - avoid fragile `python3 -c '...'` forms when embedded Python also contains single quotes;
+  - prefer `.format()` or heredocs when they reduce nested quoting risk;
+  - verify shell and Python quoting in `curl | python3` pipelines;
+  - prefer readable multi-line commands over fragile one-liners for moderately complex commands.
+- Documentation-only change; no Runtime, Router, provider, orchestration, security, budget, or deployment behavior change.
+- Human Owner must manually merge after green CI; do not auto-merge.
+
+### 3. DEC-025C / `chonhac` recovery tooling
 
 - GitHub ticket: `chonhac` issue GH-5.
 - Orchestration plan: `pm-gh-5650852312`.
@@ -62,20 +66,19 @@ Before a material task is complete or handed off, update the relevant topical do
   - `max_repair_iterations`: `2 -> 3`;
   - `max_iterations`: `8 -> 10`.
 - Last pre-timeout live counters included model calls `14/18`, tool calls `36/160`, test runs `6/14`, wall time about `63.515/70`, and repair iterations `2/3`.
-- C1 remains terminal `failed` from the Runtime `1.0.30` wall-budget timeout bug until the merged timeout-recovery behavior is rolled out and the official compatibility control action reopens the exact same job.
+- C1 remains terminal `failed` from the Runtime `1.0.30` wall-budget timeout bug until merged recovery behavior is live and the official compatibility control action reopens the exact same job.
 - Do not manually change DB state, create a replacement C1 job, or call generic `/v1/jobs/{job_id}/run` to bypass orchestration controls.
 - C2/C3 remain gated until C1 satisfies both evaluator findings and reaches its normal PR/CI/manual-merge gate.
 
 ## Next safe sequence
 
-1. Confirm the exact final head of PR #92 is green after the continuity-only commit.
-2. Human Owner manually merges PR #92 after that green CI.
-3. Because C1 is terminal `failed`, pull merged `main` and restart/sync only as required to activate Runtime `1.0.32`. This single rollout includes the already-merged #89 timeout recovery plus the #91 Codex policy; do not perform an unnecessary intermediate `1.0.31` rollout first.
-4. Verify platform health and Runtime `1.0.32`; verify the installed Codex CLI accepts the explicit config policy with a bounded non-mutating smoke before relying on it for C1.
-5. Trigger orchestration reconciliation and inspect the newly materialized live control action for the same C1 job. Expected only if the compatibility matcher validates the persisted legacy state: `max_wall_time_minutes +20`.
-6. Execute recovery only through the official live-revalidated control action. Preserve the same job/workspace/source commit/diff/progress/counters.
-7. Monitor C1 through verification/evaluation/delivery. Any later budget extension must be based on a fresh live blocker/action only.
-8. C1 must fix both evaluator findings and reach PR/green-CI/Human-merge before C2/C3 proceed.
+1. Wait for PR #95 CI on its exact final head; Human Owner manually merges it when green so future sessions receive the durable command-authoring guidance.
+2. Verify live platform health and Runtime `1.0.32`; do not infer deployed version from repository source alone.
+3. Re-run the bounded non-mutating Codex policy smoke inside a disposable Git repository, without `--skip-git-repo-check` and without touching C1.
+4. After `CODEX_POLICY_OK` plus terminal `turn.completed`, trigger orchestration reconciliation and inspect the newly materialized live control action for the same C1 job. Expected only if the compatibility matcher validates the persisted legacy state: `max_wall_time_minutes +20`.
+5. Execute recovery only through the official live-revalidated control action. Preserve the same job/workspace/source commit/diff/progress/counters.
+6. Monitor C1 through verification/evaluation/delivery. Any later budget extension must be based on a fresh live blocker/action only.
+7. C1 must fix both evaluator findings and reach PR/green-CI/Human-merge before C2/C3 proceed.
 
 ## Global operational gates
 
