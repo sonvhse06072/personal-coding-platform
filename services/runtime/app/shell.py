@@ -6,6 +6,7 @@ import signal
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
 
 @dataclass
@@ -30,8 +31,6 @@ class CommandTimeoutError(RuntimeError):
         super().__init__(f"Command timed out after {timeout}s")
 
 
-# Coding CLIs are untrusted workers. They need a normal process environment but
-# must not inherit Runtime control-plane credentials or unrelated provider keys.
 _SAFE_AGENT_ENV_KEYS = {
     "PATH",
     "HOME",
@@ -70,12 +69,7 @@ _FORBIDDEN_AGENT_ENV_KEYS = {
 
 
 def agent_subprocess_env(extra: dict[str, str] | None = None) -> dict[str, str]:
-    """Build the minimal environment exposed to one coding-agent subprocess.
-
-    Provider credentials are opt-in through ``extra``. Runtime/control-plane
-    credentials are rejected even when a future adapter accidentally attempts to
-    forward one explicitly.
-    """
+    """Build the minimal environment exposed to one coding-agent subprocess."""
     env = {
         key: value
         for key in _SAFE_AGENT_ENV_KEYS
@@ -96,14 +90,35 @@ async def _terminate_process_group(proc: asyncio.subprocess.Process) -> None:
     with suppress(ProcessLookupError):
         os.killpg(proc.pid, signal.SIGTERM)
     try:
-        await asyncio.wait_for(proc.communicate(), timeout=5)
+        await asyncio.wait_for(proc.wait(), timeout=5)
         return
     except TimeoutError:
         pass
     with suppress(ProcessLookupError):
         os.killpg(proc.pid, signal.SIGKILL)
     with suppress(Exception):
-        await proc.communicate()
+        await proc.wait()
+
+
+async def _drain_stream(
+    stream: asyncio.StreamReader | None,
+    chunks: list[str],
+    callback: Callable[[str], None] | None,
+) -> None:
+    if stream is None:
+        return
+    while True:
+        line = await stream.readline()
+        if not line:
+            return
+        text = line.decode("utf-8", errors="replace")
+        chunks.append(text)
+        if callback is not None:
+            try:
+                callback(text.rstrip("\r\n"))
+            except Exception:
+                # Live observability is explicitly fail-open for execution.
+                pass
 
 
 async def run_command(
@@ -112,6 +127,8 @@ async def run_command(
     cwd: str | Path,
     timeout: int = 1800,
     env: dict[str, str] | None = None,
+    on_stdout_line: Callable[[str], None] | None = None,
+    on_stderr_line: Callable[[str], None] | None = None,
 ) -> CommandResult:
     merged = agent_subprocess_env(env)
     proc = await asyncio.create_subprocess_exec(
@@ -120,21 +137,27 @@ async def run_command(
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         env=merged,
-        # Coding CLIs can spawn tool/shell children. A dedicated session lets a
-        # job cancellation terminate the entire process group deterministically.
+        limit=1024 * 1024,
         start_new_session=True,
     )
+    stdout_chunks: list[str] = []
+    stderr_chunks: list[str] = []
+    stdout_task = asyncio.create_task(_drain_stream(proc.stdout, stdout_chunks, on_stdout_line))
+    stderr_task = asyncio.create_task(_drain_stream(proc.stderr, stderr_chunks, on_stderr_line))
     try:
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        await asyncio.wait_for(proc.wait(), timeout=timeout)
+        await asyncio.gather(stdout_task, stderr_task)
     except asyncio.CancelledError:
         await _terminate_process_group(proc)
+        await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
         raise
     except TimeoutError as exc:
         await _terminate_process_group(proc)
+        await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
         raise CommandTimeoutError(timeout=timeout, argv=argv) from exc
     return CommandResult(
         argv=argv,
         returncode=int(proc.returncode or 0),
-        stdout=stdout.decode("utf-8", errors="replace"),
-        stderr=stderr.decode("utf-8", errors="replace"),
+        stdout="".join(stdout_chunks),
+        stderr="".join(stderr_chunks),
     )
