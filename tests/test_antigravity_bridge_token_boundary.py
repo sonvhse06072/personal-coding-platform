@@ -76,19 +76,22 @@ def test_launcher_removes_control_env_before_running_bridge(monkeypatch) -> None
     monkeypatch.setattr(launcher.runpy, "run_path", fake_run_path)
     launcher.main()
 
+    refresh_bridge = ROOT / "scripts" / "antigravity-bridge-quota-refresh.py"
     quota_bridge = ROOT / "scripts" / "antigravity-bridge-quota.py"
     live_bridge = ROOT / "scripts" / "antigravity-bridge-live.py"
     legacy_bridge = ROOT / "scripts" / "antigravity-bridge.py"
-    assert captured["path"].endswith("scripts/antigravity-bridge-quota.py")
+    assert captured["path"].endswith("scripts/antigravity-bridge-quota-refresh.py")
+    assert refresh_bridge.is_file()
     assert quota_bridge.is_file()
     assert live_bridge.is_file()
     assert legacy_bridge.is_file()
+    assert 'with_name("antigravity-bridge-quota.py")' in refresh_bridge.read_text(encoding="utf-8")
     assert 'with_name("antigravity-bridge-live.py")' in quota_bridge.read_text(encoding="utf-8")
     assert captured["run_name"] == "__main__"
     assert captured["token_in_env"] is False
     assert captured["fd_in_env"] is False
     assert captured["argv"] == [
-        str(quota_bridge),
+        str(refresh_bridge),
         "--host",
         "127.0.0.1",
         "--token",
