@@ -1,4 +1,4 @@
-version: 6
+version: 7
 complexity_weights:
   scope: 0.18
   dependency_depth: 0.1
@@ -38,7 +38,7 @@ profiles:
     - executor
     - fast_executor
     preferred_executor_ids:
-    - openrouter_qwen3_coder_free
+    - openrouter_north_mini_code_free
     - antigravity_free
     - codex_luna
     - codex_terra
@@ -71,7 +71,7 @@ profiles:
     - standard_executor
     preferred_executor_ids:
     - antigravity_free
-    - openrouter_qwen3_coder_free
+    - openrouter_north_mini_code_free
     - codex_terra
     - codex_luna
     max_input_tokens: 800000
@@ -118,7 +118,7 @@ profiles:
     preferred_evaluator_ids:
     - groq_oss_120b
     - antigravity_free
-    - openrouter_qwen3_coder_free
+    - openrouter_north_mini_code_free
     - codex_terra
     max_input_tokens: 2000000
     max_output_tokens: 300000
