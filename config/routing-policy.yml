@@ -12,6 +12,9 @@ complexity_weights:
 profiles:
   fast:
     max_score: 29
+    # Fast work may prefer an eligible opportunistic model, but this remains a
+    # score bonus rather than an allowlist.
+    preferred_order_bonus: 0.14
     analysis_depth: 1
     planner: false
     evaluator: false

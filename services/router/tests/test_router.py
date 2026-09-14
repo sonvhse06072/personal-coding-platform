@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import pytest
+
 from app.config import clear_config_cache, get_config
 from app.schemas import ExecutionProgress, ReassessRequest, RoutingRequest
 from app.staffing import RouterEngine
+
+
+OPENROUTER_FREE = "openrouter_qwen3_coder_free"
 
 
 def make_engine() -> RouterEngine:
@@ -73,7 +78,7 @@ def complex_request(**overrides):
 def test_fast_routes_to_low_cost_agent():
     result = make_engine().route(base_request())
     assert result.strategy.profile == "fast"
-    assert result.strategy.executor.id in {"antigravity_free", "codex_luna", "codex_terra"}
+    assert result.strategy.executor.id == OPENROUTER_FREE
     assert result.strategy.executor.id != "codex_sol"
     assert result.strategy.planner is None
     assert result.strategy.evaluator is None
@@ -105,7 +110,7 @@ def test_standard_is_autonomous_and_does_not_default_to_sol():
     )
     result = make_engine().route(req)
     assert result.strategy.profile == "standard"
-    assert result.strategy.executor.id in {"antigravity_free", "codex_luna", "codex_terra"}
+    assert result.strategy.executor.id in {"antigravity_free", OPENROUTER_FREE, "codex_luna", "codex_terra"}
     assert result.strategy.executor.id != "codex_sol"
     assert result.strategy.human_decision.required is False
     assert result.strategy.permissions["commit"] is True
@@ -115,7 +120,8 @@ def test_standard_is_autonomous_and_does_not_default_to_sol():
 def test_codex_reasoning_effort_is_explicit_and_bounded_by_profile():
     eng = make_engine()
     fast = eng.route(base_request(provider_state={
-        "provider:google_antigravity": {"healthy": False, "available": False}
+        "provider:google_antigravity": {"healthy": False, "available": False},
+        "provider:openrouter": {"healthy": False, "available": False},
     }))
     assert fast.strategy.executor.adapter == "codex_cli"
     assert fast.strategy.executor.reasoning_effort == "low"
@@ -130,7 +136,11 @@ def test_codex_reasoning_effort_is_explicit_and_bounded_by_profile():
     assert complex_route.strategy.planner is not None
     assert complex_route.strategy.planner.reasoning_effort == "medium"
     assert complex_route.strategy.evaluator is not None
-    assert complex_route.strategy.evaluator.reasoning_effort == "low"
+    if complex_route.strategy.evaluator.adapter == "codex_cli":
+        assert complex_route.strategy.evaluator.reasoning_effort == "low"
+    else:
+        assert complex_route.strategy.evaluator.id == OPENROUTER_FREE
+        assert complex_route.strategy.evaluator.reasoning_effort is None
 
 
 def test_complex_gets_planner_and_independent_evaluator_without_claude():
@@ -161,7 +171,7 @@ def test_evaluator_provider_failure_has_degraded_but_eligible_fallback():
     # With only two configured coding providers, losing the independent evaluator
     # may force a same-provider reviewer. That is preferable to blocking while
     # still preserving a separate evaluation turn and model policy.
-    assert rerouted.strategy.evaluator.id in {"antigravity_free", "codex_terra"}
+    assert rerouted.strategy.evaluator.id in {"antigravity_free", OPENROUTER_FREE, "codex_terra"}
 
 
 def test_reassess_raises_reasoning_before_changing_codex_model():
@@ -224,10 +234,95 @@ def test_optional_paid_agents_are_fail_closed_until_roles_are_enabled():
         assert any("missing required role" in reason for reason in result.rejected_candidates[model_id])
 
 
-def test_private_project_rejects_training_provider():
+def test_private_project_accepts_openrouter_under_enforced_provider_policy():
     result = make_engine().route(base_request())
-    assert "openrouter_free" in result.rejected_candidates
-    assert any("train" in reason for reason in result.rejected_candidates["openrouter_free"])
+    assert result.strategy.executor.id == OPENROUTER_FREE
+    assert OPENROUTER_FREE not in result.rejected_candidates
+
+
+def test_standard_keeps_openrouter_free_eligible_when_antigravity_is_unavailable():
+    request = base_request(
+        task={
+            "title": "Implement a normal multi-file feature",
+            "task_type": "feature",
+            "semantic": {
+                "ambiguity": 35,
+                "architecture_impact": 20,
+                "verification_difficulty": 35,
+                "risk": 20,
+                "context_requirement": 45,
+                "novelty": 35,
+                "reasoning_requirement": 50,
+            },
+        },
+        repo={
+            "estimated_files": 6,
+            "affected_components": 2,
+            "dependency_depth": 3,
+            "tests_available": True,
+            "existing_pattern": True,
+        },
+        provider_state={
+            "provider:google_antigravity": {"healthy": False, "available": False},
+            "provider:openai": {"healthy": False, "available": False},
+        },
+    )
+
+    result = make_engine().route(request)
+
+    assert result.strategy.profile == "standard"
+    assert result.strategy.executor.id == OPENROUTER_FREE
+
+
+def test_complex_uses_openrouter_only_as_an_evaluator_fallback():
+    result = make_engine().route(
+        complex_request(provider_state={
+            "provider:google_antigravity": {"healthy": False, "available": False},
+        })
+    )
+
+    assert result.strategy.profile == "complex"
+    assert result.strategy.executor.id != OPENROUTER_FREE
+    assert result.strategy.planner is not None
+    assert result.strategy.planner.id != OPENROUTER_FREE
+    assert result.strategy.evaluator is not None
+    assert result.strategy.evaluator.id == OPENROUTER_FREE
+
+
+def test_critical_profile_rejects_openrouter_even_when_it_is_the_only_reviewer_candidate():
+    engine = make_engine()
+    request = complex_request(provider_state={
+        "provider:google_antigravity": {"healthy": False, "available": False},
+        "provider:openai": {"healthy": False, "available": False},
+    })
+    dimensions = engine.compute_dimensions(request)
+
+    with pytest.raises(RuntimeError, match="No eligible model") as exc_info:
+        engine.select_model(
+            role="evaluator",
+            role_names=["reviewer"],
+            # A preferred-order bonus must never override profile eligibility.
+            preferred_ids=[OPENROUTER_FREE],
+            request=request,
+            dimensions=dimensions,
+            profile="critical",
+        )
+
+    assert OPENROUTER_FREE in str(exc_info.value)
+    assert "profile 'critical' is not allowed" in str(exc_info.value)
+
+
+def test_openrouter_provider_failure_uses_normal_router_failover():
+    initial = make_engine().route(base_request())
+    assert initial.strategy.executor.id == OPENROUTER_FREE
+
+    rerouted = make_engine().route(base_request(provider_state={
+        "provider:openrouter": {"healthy": False, "available": False, "error_rate": 1.0},
+    }))
+
+    assert rerouted.strategy.executor.id != OPENROUTER_FREE
+    assert rerouted.strategy.executor.provider != "openrouter"
+    assert "provider/model unavailable" in rerouted.rejected_candidates[OPENROUTER_FREE]
 
 
 def test_reassess_completes_on_definition_of_done():

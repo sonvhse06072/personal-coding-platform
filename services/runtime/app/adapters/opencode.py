@@ -57,8 +57,15 @@ def opencode_env_for_model(model: str) -> dict[str, str]:
     config = {
         "$schema": "https://opencode.ai/config.json",
         "share": "disabled",
+        # OpenCode 1.18.30 accepts this allowlist in OPENCODE_CONFIG_CONTENT.
+        # It prevents mounted host configuration or credentials from selecting a
+        # provider other than the provider PCP Router already selected.
+        "enabled_providers": ["openrouter"],
         "provider": {
             "openrouter": {
+                # Keep the selectable model set as narrow as the Router's
+                # selected model. This is not an OpenRouter fallback list.
+                "whitelist": [upstream_model],
                 "models": {
                     upstream_model: {
                         "options": {

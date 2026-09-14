@@ -299,6 +299,13 @@ models:
     tier: balanced
     cost_class: free
     quota_group: openrouter_free
+    # This is an eligibility boundary, not a scoring preference. It prevents
+    # this opportunistic provider from becoming a critical fallback merely
+    # because every preferred model is unavailable.
+    allowed_profiles:
+    - fast
+    - standard
+    - complex
     roles:
     - fast_executor
     - standard_executor

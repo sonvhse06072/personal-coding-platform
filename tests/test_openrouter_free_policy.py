@@ -30,6 +30,7 @@ def test_openrouter_free_uses_one_explicit_private_code_model() -> None:
     assert model["model"] == "openrouter/qwen/qwen3-coder:free"
     assert model["cost_class"] == "free"
     assert model["quota_group"] == "openrouter_free"
+    assert model["allowed_profiles"] == ["fast", "standard", "complex"]
 
     assert set(model["roles"]) == {"fast_executor", "standard_executor", "reviewer"}
     assert not ({"executor", "debugger", "critical_executor", "product_manager", "planner"} & set(model["roles"]))
