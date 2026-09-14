@@ -11,13 +11,14 @@ def _choice(*, model_id="antigravity_free", quota_group="antigravity_gemini"):
     }
 
 
-def test_antigravity_quota_exhaustion_marks_only_quota_group():
+def test_antigravity_quota_exhaustion_marks_only_selected_model_quota():
     state = {}
 
     RuntimeEngine._mark_provider_failure(state, _choice(), "quota_exhausted")
 
     assert "provider:google_antigravity" not in state
-    assert state["quota:antigravity_gemini"] == {
+    assert "quota:antigravity_gemini" not in state
+    assert state["quota:model:antigravity_free"] == {
         "healthy": False,
         "available": False,
         "error_rate": 1.0,
@@ -25,13 +26,13 @@ def test_antigravity_quota_exhaustion_marks_only_quota_group():
     }
 
 
-def test_antigravity_rate_limit_marks_only_quota_group():
+def test_antigravity_rate_limit_marks_only_selected_model_quota():
     state = {}
 
     RuntimeEngine._mark_provider_failure(state, _choice(), "rate_limited")
 
     assert "provider:google_antigravity" not in state
-    assert state["quota:antigravity_gemini"]["available"] is False
+    assert state["quota:model:antigravity_free"]["available"] is False
 
 
 def test_antigravity_bridge_failure_remains_provider_wide():
@@ -40,7 +41,7 @@ def test_antigravity_bridge_failure_remains_provider_wide():
     RuntimeEngine._mark_provider_failure(state, _choice(), "provider_unavailable")
 
     assert state["provider:google_antigravity"]["available"] is False
-    assert "quota:antigravity_gemini" not in state
+    assert "quota:model:antigravity_free" not in state
 
 
 def test_other_provider_quota_failure_keeps_existing_provider_wide_semantics():
@@ -56,4 +57,4 @@ def test_other_provider_quota_failure_keeps_existing_provider_wide_semantics():
     RuntimeEngine._mark_provider_failure(state, choice, "quota_exhausted")
 
     assert state["provider:openrouter"]["available"] is False
-    assert "quota:openrouter_free" not in state
+    assert "quota:model:openrouter_qwen3_coder_free" not in state
