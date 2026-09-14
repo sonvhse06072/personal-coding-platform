@@ -5,6 +5,12 @@ import os
 from pathlib import Path
 
 from .base import AgentAdapter, AgentRun, classify_provider_failure
+from ..developer_stream import (
+    agent_lifecycle_event,
+    agent_public_event,
+    emit_developer_event,
+    provider_for_adapter,
+)
 from ..shell import run_command
 
 
@@ -101,11 +107,39 @@ class OpenCodeAdapter(AgentAdapter):
         if self.model and self.model != "auto":
             argv += ["--model", self.model]
         argv.append(prompt)
+        provider = provider_for_adapter(self.name, self.model)
+        emit_developer_event(
+            agent_lifecycle_event(
+                adapter=self.name,
+                provider=provider,
+                model=self.model,
+                mode=mode,
+                state="started",
+            )
+        )
+
+        def on_stdout_line(line: str) -> None:
+            try:
+                raw = json.loads(line)
+            except json.JSONDecodeError:
+                return
+            emit_developer_event(
+                agent_public_event(
+                    raw,
+                    workspace=workspace,
+                    mode=mode,
+                    adapter=self.name,
+                    provider=provider,
+                    model=self.model,
+                )
+            )
+
         result = await run_command(
             argv,
             cwd=workspace,
             timeout=timeout,
             env=opencode_env_for_model(self.model),
+            on_stdout_line=on_stdout_line,
         )
         chunks: list[str] = []
         errors: list[str] = []
@@ -130,6 +164,15 @@ class OpenCodeAdapter(AgentAdapter):
             effective_returncode = 70
         if failure_kind and effective_returncode == 0:
             effective_returncode = 75
+        emit_developer_event(
+            agent_lifecycle_event(
+                adapter=self.name,
+                provider=provider,
+                model=self.model,
+                mode=mode,
+                state="completed" if effective_returncode == 0 else "failed",
+            )
+        )
         return AgentRun(
             self.name, self.model, effective_returncode, output, result.stderr, usage, result.stdout,
             failure_kind=failure_kind, failure_message=failure_message,
