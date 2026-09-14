@@ -109,12 +109,13 @@ def test_stale_model_failure_yields_live_wall_time_extension_for_real_c1_shape()
         "dimension": "max_wall_time_minutes",
         "increment": 20,
     }
-    assert "Wall time" in actions[0]["label"]
+    assert actions[0]["label"] == "➕ +20 phút"
     assert all(
         item.get("payload", {}).get("dimension") != "max_model_calls"
         for item in advisory["action_specs"]
     )
-    assert "live runtime counters" in advisory["cause"].lower()
+    assert advisory["title"] == "WORKORDER BỊ CHẶN"
+    assert "quota rolling" in advisory["cause"].lower()
 
 
 def test_old_model_extension_action_is_rejected_against_live_wall_time_state():
@@ -142,6 +143,7 @@ def test_exact_live_model_call_exhaustion_still_selects_model_calls():
         "dimension": "max_model_calls",
         "increment": 4,
     }
+    assert actions[0]["label"] == "➕ +4 lượt gọi model"
 
 
 def test_live_wall_time_extension_is_additive_and_preserves_usage():
@@ -173,11 +175,12 @@ def test_stale_hint_without_live_exhaustion_fails_closed():
     advisory = controls.blocked_advisory(work_order(), current)
 
     assert budget_actions(advisory) == []
-    assert "do not identify one safe extension dimension" in advisory["cause"].lower()
+    assert "giữ workorder" in advisory["recommended"].lower()
     assert [item["action_type"] for item in advisory["action_specs"]] == [
         "details",
         "keep_blocked",
     ]
+    assert advisory["action_specs"][1]["label"] == "⛔ Giữ trạng thái chặn"
 
 
 def test_multiple_live_exhausted_dimensions_without_matching_hint_fail_closed():
