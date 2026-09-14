@@ -1,6 +1,6 @@
 # Provider and Model Resource Policy
 
-Status: approved provider/resource policy. OpenRouter free is an effectiveness-first opportunistic tier. Model availability and ranking are external operational inputs and must be revalidated before rollout.
+Status: approved provider/resource policy. OpenRouter free is an effectiveness-first opportunistic tier. Antigravity is an explicit multi-model resource pool with quota-group-aware routing. Model availability, quota terms and ranking are external operational inputs and must be revalidated before rollout.
 
 ## 1. Authority boundary
 
@@ -10,7 +10,7 @@ The Personal Coding Platform Router remains authoritative for:
 - model selection;
 - cross-model failover;
 - profile/risk eligibility;
-- durable provider/model health state;
+- durable provider/model/quota-group health state;
 - execution budgets and recovery.
 
 An upstream model gateway or provider may select an endpoint for the **same already-selected model**, but it must not silently broaden the model choice behind PCP Router.
@@ -79,9 +79,9 @@ selected explicit OpenRouter free model
 
 Do not aggressively retry a pressured free provider. A provider overload such as HTTP/API 502 should move routing toward another eligible provider/model rather than consume budget on repeated retries.
 
-Current Runtime provider-failure semantics mark `provider:openrouter` unavailable for provider failures. Therefore multiple active OpenRouter models do **not** currently provide an effective same-provider PCP fallback: one provider-level failure would exclude all of them. Do not register a multi-model OpenRouter pool until provider/model health semantics are intentionally redesigned and tested.
+Current Runtime provider-failure semantics intentionally remain provider-wide for OpenRouter. Therefore multiple active OpenRouter models do **not** currently provide an effective same-provider PCP fallback: one provider-level failure would exclude all of them. Do not register a multi-model OpenRouter pool until its health semantics are intentionally redesigned and tested.
 
-## 6. Current active model strategy
+## 6. Current OpenRouter model strategy
 
 Issue #85 replaces withdrawn Qwen free models before local rollout.
 
@@ -102,25 +102,61 @@ Rollout choice:
 
 This choice is operational, not permanent. Re-evaluate when model availability/rankings materially change.
 
-## 7. Quota and telemetry
+## 7. Antigravity model, effort and quota policy
 
-The platform may record observed usage, failures, latency, selected model/provider and local request counts.
+Antigravity is a multi-model provider. PCP must pin an explicit headless model slug rather than delegate durable model selection to Antigravity `auto` mode.
 
-It must not present an authoritative "free quota remaining" value unless the upstream exposes a reliable authoritative counter for that exact quota.
+The active initial pool is:
+
+- `antigravity_free` -> `gemini-3.8-flash-medium`, retained as the stable legacy PCP identity and preferred for general low-cost execution;
+- `antigravity_flash_high` -> `gemini-3.8-flash-high`, a stronger Flash option for reasoning-heavy execution without spending the stronger Pro/Sonnet pools first;
+- `antigravity_gemini_pro` -> `gemini-3.1-pro-high`, preferred for planning, debugging and high-reasoning work;
+- `antigravity_claude_sonnet` -> `claude-sonnet-4-6`, preferred for independent review/evaluation and strong fallback reasoning.
+
+The Router may attach `low`, `medium` or `high` reasoning effort to an Antigravity choice. Runtime must pass that exact effort to the headless bridge. A bounded reasoning escalation may increase effort on the same selected model before consuming a different model tier when policy allows it.
+
+Antigravity health is tracked at three distinct levels:
+
+```text
+model:<logical model id>        model-specific deterministic/no-effect health
+quota:<quota group>             shared Antigravity quota/rate-limit health
+provider:google_antigravity     bridge/auth/provider-wide health
+```
+
+The initial quota groups follow the externally visible Antigravity resource families:
+
+- `antigravity_gemini` for Gemini Flash/Pro models;
+- `antigravity_claude_gpt` for Claude/GPT-family models.
+
+A `quota_exhausted` or `rate_limited` result from an Antigravity model marks only its quota group unavailable. It must **not** mark all of `google_antigravity` unavailable. Authentication, bridge or true provider-wide failures remain provider-scoped. This lets PCP move from an exhausted Gemini pool to the Claude/GPT pool before leaving Antigravity entirely, while avoiding repeated calls into models sharing a quota bucket that is already known exhausted.
+
+For compatibility, a preserved same-job reroute may narrow a legacy `provider:google_antigravity` marker to the corresponding quota group only when durable failure evidence proves the old marker came from Antigravity quota/rate-limit exhaustion. Other provider-wide failures are not narrowed.
+
+Antigravity plan terms currently include weekly limits, while eligible paid plans may also refresh usable quota on a shorter window until the weekly limit is reached. PCP treats these windows as external operational state. It does not invent a reset time or automatically re-enable a quota group without authoritative evidence or an explicit owner recovery action.
+
+The Antigravity interactive `/usage`/`/quota` UI and statusline may expose richer quota information, but PCP does not scrape or mutate host Antigravity settings merely to infer remaining quota. A future dedicated telemetry integration may ingest an officially supported machine-readable quota signal if one becomes operationally reliable.
+
+## 8. Quota and telemetry
+
+The platform may record observed usage, failures, latency, selected model/provider/quota group and local request counts.
+
+It must not present an authoritative "quota remaining" value unless the upstream exposes a reliable authoritative counter for that exact quota bucket.
 
 The Human Owner has funded at least $10 of OpenRouter credit, which currently raises the documented free-model allowance to 1,000 requests/day with a 20 RPM free-model limit. These are external terms and may change; they are not architecture invariants.
 
-## 8. Rollout rule
+For Antigravity, provider/model availability and quota reset cadence are also external terms. Durable PCP state records observed exhaustion and explicit recovery, not speculative remaining percentages.
 
-OpenRouter free should be introduced incrementally:
+## 9. Rollout rule
 
-1. validate one explicit free coding model with a synthetic tool-call smoke under the intended request policy;
-2. register the explicit model and bump registry/routing-policy versions;
-3. bump Runtime when request-policy behavior changes;
+Provider/model changes should be introduced incrementally:
+
+1. validate explicit model IDs/slugs against current provider documentation or live model discovery;
+2. register explicit models and bump registry/routing-policy versions;
+3. bump Router/Runtime versions when routing or failure semantics change;
 4. run deterministic Router/Runtime/executor/structure tests;
-5. obtain green CI and Human Owner manual merge;
+5. obtain green CI and the review/merge required by current governance;
 6. only at a stable blocked/terminal Runtime gate, roll out locally and verify service/config versions;
-7. run one deployed-integration smoke before relying on the tier for normal jobs;
+7. run deployed integration checks before relying on a newly activated provider/model tier for normal jobs;
 8. review telemetry before broader role/profile eligibility.
 
-Never auto-merge, force-complete work, or restart Runtime/DDEV while a job is in flight.
+Never force-complete work or restart Runtime/DDEV while a job is in flight.
