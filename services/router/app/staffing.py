@@ -21,7 +21,7 @@ _PM_REASONING_BY_PROFILE = {"standard": "low", "complex": "medium", "critical": 
 
 
 class RouterEngine(BudgetRouterEngine):
-    """Router extension for staffing, quota groups and explicit reasoning effort."""
+    """Router extension for staffing, quota state and explicit reasoning effort."""
 
     def _capability_match(
         self,
@@ -68,24 +68,26 @@ class RouterEngine(BudgetRouterEngine):
         )
 
     def _quota_aware_request(self, request: RoutingRequest) -> RoutingRequest:
-        """Project shared quota-bucket health onto each model before base scoring.
+        """Project model- and group-quota health onto model scoring.
 
-        Base Router already combines model and provider health. Adding quota state
-        to the model-scoped view gives a three-level hierarchy without weakening
-        provider-wide auth/bridge failure handling:
-          model health -> shared quota group -> provider health.
+        `quota:model:<id>` is created from a concrete model quota/rate-limit
+        failure. `quota:<group>` is reserved for authoritative shared-bucket
+        evidence (for example future statusline telemetry). Base Router still
+        combines this model view with `provider:<name>` health afterwards.
         """
         updated = request.model_copy(deep=True)
         state = dict(updated.provider_state)
         for model_id, model in self.models.items():
+            combined = state.get(model_id, ProviderState())
+            model_quota = state.get(f"quota:model:{model_id}")
+            if model_quota is not None:
+                combined = self._combine_state(combined, model_quota)
             quota_group = str(model.get("quota_group") or "").strip()
-            if not quota_group:
-                continue
-            quota_state = state.get(f"quota:{quota_group}")
-            if quota_state is None:
-                continue
-            model_state = state.get(model_id, ProviderState())
-            state[model_id] = self._combine_state(model_state, quota_state)
+            group_quota = state.get(f"quota:{quota_group}") if quota_group else None
+            if group_quota is not None:
+                combined = self._combine_state(combined, group_quota)
+            if model_quota is not None or group_quota is not None:
+                state[model_id] = combined
         updated.provider_state = state
         return updated
 
