@@ -46,11 +46,14 @@ def _timestamp(value: Any) -> datetime | None:
 class QuotaStorage(Storage):
     """Runtime storage plus platform-wide provider quota snapshots."""
 
-    def init(self) -> None:
-        super().init()
+    def ensure_quota_table(self) -> None:
         with self.connect() as conn:
             conn.execute(QUOTA_DDL)
             conn.commit()
+
+    def init(self) -> None:
+        super().init()
+        self.ensure_quota_table()
 
     def replace_provider_quota_snapshots(
         self,
