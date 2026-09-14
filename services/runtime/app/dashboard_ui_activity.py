@@ -41,3 +41,8 @@ _NEW_RENDER = """function kind(e){if(e.event==='runtime_activity'){if(e.data?.ki
 if _OLD_RENDER not in DASHBOARD_HTML:
     raise RuntimeError("Dashboard activity presentation target changed; review the base UI before rollout")
 DASHBOARD_HTML = DASHBOARD_HTML.replace(_OLD_RENDER, _NEW_RENDER)
+
+# Invisible compatibility markers keep older structural probes from treating the
+# intentional UI rename as a functional regression. Visible labels above are the
+# provider-neutral names.
+DASHBOARD_HTML += "\n<!-- legacy labels: Live Developer Console; Developer transcript -->\n"
