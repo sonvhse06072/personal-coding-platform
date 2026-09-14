@@ -36,10 +36,13 @@ def job(
     max_wall_time_minutes=50,
     tool_calls=25,
     max_tool_calls=160,
+    status="blocked",
+    error=None,
 ):
     return {
         "id": "job-1",
-        "status": "blocked",
+        "status": status,
+        "error": error,
         "route": {
             "strategy": {
                 "budget": {
@@ -166,6 +169,51 @@ def test_live_wall_time_extension_is_additive_and_preserves_usage():
     assert after["progress"] == before["progress"]
     assert after["checkpoint"]["work_order"] == before["checkpoint"]["work_order"]
     assert after["route"]["strategy"]["budget"]["max_wall_time_minutes"] == 70.0
+
+
+def test_legacy_failed_wall_bounded_timeout_offers_only_wall_time_extension():
+    current = job(
+        last_failure="iteration budget exhausted",
+        model_calls=15,
+        max_model_calls=18,
+        elapsed_minutes=63.733,
+        max_wall_time_minutes=70,
+        status="failed",
+        error="RuntimeError: Command timed out after 376s: codex exec --json <redacted>",
+    )
+    controls, _ = service(current)
+
+    advisory = controls.blocked_advisory(work_order(), current)
+
+    actions = budget_actions(advisory)
+    assert len(actions) == 1
+    assert actions[0]["payload"] == {
+        "dimension": "max_wall_time_minutes",
+        "increment": 20,
+    }
+    assert actions[0]["label"] == "➕ +20 phút"
+    assert "runtime cũ" in advisory["summary"].lower()
+
+
+def test_legacy_timeout_must_match_recorded_remaining_wall_time():
+    current = job(
+        last_failure="iteration budget exhausted",
+        model_calls=15,
+        max_model_calls=18,
+        elapsed_minutes=63.5,
+        max_wall_time_minutes=70,
+        status="failed",
+        error="RuntimeError: Command timed out after 120s: codex exec --json <redacted>",
+    )
+    controls, _ = service(current)
+
+    advisory = controls.blocked_advisory(work_order(), current)
+
+    assert budget_actions(advisory) == []
+    assert [item["action_type"] for item in advisory["action_specs"]] == [
+        "details",
+        "keep_blocked",
+    ]
 
 
 def test_stale_hint_without_live_exhaustion_fails_closed():

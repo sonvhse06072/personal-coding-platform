@@ -16,6 +16,20 @@ class CommandResult:
     stderr: str
 
 
+class CommandTimeoutError(RuntimeError):
+    """Typed coding-agent timeout used by Runtime state classification.
+
+    The exception intentionally omits argv from its string form because coding
+    commands carry the full model prompt as an argument. Callers that need to
+    classify the timeout use the typed attributes instead of parsing logs.
+    """
+
+    def __init__(self, *, timeout: int | float, argv: list[str]) -> None:
+        self.timeout = float(timeout)
+        self.argv = tuple(argv)
+        super().__init__(f"Command timed out after {timeout}s")
+
+
 # Coding CLIs are untrusted workers. They need a normal process environment but
 # must not inherit Runtime control-plane credentials or unrelated provider keys.
 _SAFE_AGENT_ENV_KEYS = {
@@ -115,9 +129,9 @@ async def run_command(
     except asyncio.CancelledError:
         await _terminate_process_group(proc)
         raise
-    except TimeoutError:
+    except TimeoutError as exc:
         await _terminate_process_group(proc)
-        raise RuntimeError(f"Command timed out after {timeout}s: {' '.join(argv)}")
+        raise CommandTimeoutError(timeout=timeout, argv=argv) from exc
     return CommandResult(
         argv=argv,
         returncode=int(proc.returncode or 0),
