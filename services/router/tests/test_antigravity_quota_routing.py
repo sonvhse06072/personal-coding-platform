@@ -105,6 +105,35 @@ def test_gemini_quota_exhaustion_can_fall_through_to_sonnet_bucket():
     assert "antigravity_gemini_pro" in rejected
 
 
+def test_fresh_quota_pressure_reduces_model_score_without_marking_it_unavailable():
+    engine = make_engine()
+    request = standard_request()
+    dimensions = engine.compute_dimensions(request)
+    model = engine.models["antigravity_free"]
+
+    clear_score, _, _ = engine._model_score(
+        "antigravity_free",
+        model,
+        "executor",
+        dimensions,
+        "standard",
+        ProviderState(quota_pressure=0.0),
+        ["antigravity_free"],
+    )
+    pressured_score, _, reasons = engine._model_score(
+        "antigravity_free",
+        model,
+        "executor",
+        dimensions,
+        "standard",
+        ProviderState(quota_pressure=0.85, available=True),
+        ["antigravity_free"],
+    )
+
+    assert pressured_score < clear_score
+    assert any(reason.startswith("quota penalty=") for reason in reasons)
+
+
 def test_provider_wide_antigravity_failure_excludes_every_antigravity_bucket():
     request = standard_request(
         {
