@@ -5,6 +5,7 @@ from copy import deepcopy
 
 import pytest
 
+from app.control_actions_live import ControlActionService as LiveControlActionService
 from app.control_actions_reroute import ControlActionService
 
 
@@ -208,6 +209,39 @@ def test_provider_block_with_wall_and_iteration_exhaustion_offers_one_atomic_bun
     }
     assert "max_wall_time_minutes" in metric_keys
     assert "max_iterations" in metric_keys
+
+
+def test_provider_budget_recovery_revision_invalidates_old_action_fingerprint():
+    controls = Harness(provider_multi_budget_block())
+    job = provider_multi_budget_block()
+    plan = {"plan_id": "plan-1", "status": "blocked", "updated_at": "plan-v1"}
+    work_order = {
+        "work_order_id": "wo-1",
+        "state": "blocked",
+        "updated_at": "wo-v1",
+    }
+
+    legacy = LiveControlActionService.state_fingerprint(
+        controls,
+        plan,
+        work_order,
+        job,
+    )
+    current = controls.state_fingerprint(plan, work_order, job)
+
+    assert current != legacy
+
+    no_budget_job = provider_wall_block()
+    no_budget_job["progress"]["elapsed_minutes"] = 80
+    assert controls._provider_budget_dimensions(no_budget_job) == []
+    assert controls.state_fingerprint(plan, work_order, no_budget_job) == (
+        LiveControlActionService.state_fingerprint(
+            controls,
+            plan,
+            work_order,
+            no_budget_job,
+        )
+    )
 
 
 def test_combined_budget_action_extends_then_reroutes_same_job_without_clearing_provider_state():
