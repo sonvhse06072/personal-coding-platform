@@ -56,6 +56,7 @@ def opencode_env_for_model(model: str) -> dict[str, str]:
 
     config = {
         "$schema": "https://opencode.ai/config.json",
+        "share": "disabled",
         "provider": {
             "openrouter": {
                 "models": {
@@ -76,6 +77,8 @@ def opencode_env_for_model(model: str) -> dict[str, str]:
     env["OPENCODE_CONFIG_CONTENT"] = json.dumps(
         config, ensure_ascii=True, sort_keys=True, separators=(",", ":")
     )
+    # Defense in depth for older OpenCode behavior; the inline `share=disabled`
+    # policy above is the authoritative setting for current versions.
     env["OPENCODE_AUTO_SHARE"] = "false"
     return env
 
