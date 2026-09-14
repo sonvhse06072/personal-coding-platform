@@ -1,5 +1,5 @@
 from app.main import app
 
 
-def test_runtime_version_is_1_0_36():
-    assert app.version == "1.0.36"
+def test_runtime_version_is_1_0_37():
+    assert app.version == "1.0.37"
