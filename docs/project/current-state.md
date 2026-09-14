@@ -27,7 +27,7 @@ Before a material task is complete or handed off, update the relevant topical do
 - PR #82 (`Make project docs the cross-chat continuity source`) is merged.
 - PR #84 (`Reconcile post-merge versions and rollout state`) is merged; final CI run #162 passed.
 - `main` is verified at merge commit `326ea1c5afb40ce144bf95d2421ad5091eb8391d` after PR #84.
-- Intended post-rollout version evidence is Router `1.0.15`, Runtime `1.0.29`, model registry `v6`, routing policy `v6`.
+- Intended post-rollout version evidence is Router `1.0.15`, Runtime `1.0.29`, model registry `v6`, routing policy `v6` until issue #85 bumps the registry for a replacement model.
 - Merged code is not locally activated merely because it is on `main`; Runtime/Router/n8n health evidence must be checked after a safe rollout.
 
 ## Active work
@@ -38,14 +38,16 @@ Durable policy: `docs/project/provider-policy.md`.
 
 - Issue: `personal-coding-platform` #85.
 - Branch: `fix/openrouter-free-model-85`.
-- The original configured free model `openrouter/qwen/qwen3-coder:free` is no longer usable: a live synthetic privacy-safe OpenRouter request returned HTTP/API 404 with `This model is unavailable for free` and suggested the paid slug `qwen/qwen3-coder`.
-- Therefore the local platform must **not** be restarted/rolled out with the current OpenRouter model configuration.
-- The Human Owner has added at least $10 OpenRouter credit, which raises the documented account free-model allowance to 1,000 requests/day while free-model rate limiting remains 20 RPM; this is an external operational limit, not an authoritative remaining-quota counter.
-- Preferred first replacement candidate: `qwen/qwen3.6-plus:free`. OpenRouter currently lists it as free, 1M context, agentic/repository coding capable, and tool-calling capable.
-- Candidate approval requires a successful synthetic request with `provider.zdr=true`, `data_collection=deny`, `require_parameters=true`, and no cross-model fallback.
-- If Qwen3.6 Plus has no eligible privacy-safe free endpoint, next candidate is `openai/gpt-oss-120b:free`, subject to the same live privacy smoke and capability review.
-- Do not use NVIDIA Nemotron 3 Ultra free for private code: OpenRouter's current free-endpoint notice says sessions are logged/used to improve NVIDIA products, which conflicts with this project's fail-closed private-code policy.
-- Only after a replacement passes live smoke should issue #85 change `config/models.yml`, bump the model registry version, update focused tests and update `provider-policy.md`.
+- `openrouter/qwen/qwen3-coder:free` is unavailable for free: live synthetic smoke returned 404 and pointed to the paid slug.
+- `qwen/qwen3.6-plus:free` is also unavailable for free: live synthetic smoke returned 404 stating the free model is deprecated.
+- Therefore the local platform must **not** be restarted/rolled out with either Qwen free slug.
+- The Human Owner has added at least $10 OpenRouter credit, enabling the provider's higher documented free-model allowance; exact remaining quota must not be presented as authoritative.
+- New owner decision: prioritize model effectiveness and useful free capacity over ZDR/no-data-collection guarantees for the OpenRouter free tier. Free-provider logging/training terms are accepted for this provider tier and are no longer eligibility gates.
+- This does **not** relax secret handling: credentials, tokens, `.env` values, private keys and control-plane secrets must never be sent to OpenRouter; OpenCode sharing remains disabled and provider credentials remain isolated.
+- Current primary candidate: `nvidia/nemotron-3-ultra-550b-a55b:free`, because it is currently highly ranked in OpenRouter programming usage, has 1M context, tool calling and strong agentic/reasoning positioning.
+- Current fallback candidate: `cohere/north-mini-code:free`, because it is purpose-built for agentic coding/OpenCode/SWE-Agent, has 256K context, tool calling and stronger observed availability.
+- Candidate approval now requires a synthetic **availability + tool-call** smoke only. ZDR and `data_collection=deny` are no longer required.
+- Only after a candidate passes smoke should issue #85 change `config/models.yml`, bump model registry version, update focused tests and finalize docs.
 
 ### 2. DEC-025C / `chonhac` recovery tooling
 
@@ -73,9 +75,9 @@ Durable policy: `docs/project/provider-policy.md`.
 ## Next safe sequence
 
 1. Keep the local DDEV stack unchanged; do not run `ddev n8n-sync` yet.
-2. Live-smoke `qwen/qwen3.6-plus:free` using only synthetic text and the exact privacy controls required by `provider-policy.md`.
-3. If it passes, complete issue #85 with the smallest model-registry/test/docs patch and obtain green CI + Human Owner merge.
-4. If it fails due to no privacy-eligible endpoint/unavailability, smoke the next approved candidate instead; never relax ZDR/no-data-collection requirements.
+2. Live-smoke `nvidia/nemotron-3-ultra-550b-a55b:free` with synthetic text and required tool calling. Do not send repository content or secrets in this validation request.
+3. If Nemotron passes, complete issue #85 with the smallest model-registry/test/docs patch and obtain green CI + Human Owner merge.
+4. If Nemotron is unavailable or tool calling fails, smoke `cohere/north-mini-code:free` next.
 5. After the replacement PR is merged, pull `main` locally and re-query C1.
 6. Only if C1 is stable blocked/terminal, configure `OPENROUTER_API_KEY` in `.ddev/.env.coding-runtime.local` and run the required platform/n8n rollout.
 7. Verify Router/Runtime/config versions and OpenCode availability before any C1 recovery.
