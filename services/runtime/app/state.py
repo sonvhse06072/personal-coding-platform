@@ -5,6 +5,12 @@ from pathlib import Path
 from typing import Any
 
 
+_ANTIGRAVITY_LEGACY_QUOTA_GROUPS = {
+    "antigravity_free": "antigravity_gemini",
+}
+_ANTIGRAVITY_QUOTA_FAILURES = {"quota_exhausted", "rate_limited"}
+
+
 def merge_progress(defaults: dict[str, Any], existing: dict[str, Any] | None) -> dict[str, Any]:
     progress = deepcopy(defaults)
     if existing:
@@ -26,8 +32,6 @@ def checkpoint_from_row(row: dict[str, Any]) -> dict[str, Any]:
     """Load the durable checkpoint and migrate the pre-v1.0.11 bootstrap shape."""
     checkpoint = deepcopy(row.get("checkpoint") or {})
     legacy = row.get("repo_analysis") or {}
-    # Before checkpoints existed, the first queued row temporarily stored hints
-    # and provider state in repo_analysis. Preserve compatibility with such jobs.
     if isinstance(legacy, dict) and "estimated_files" not in legacy:
         checkpoint.setdefault("hints", deepcopy(legacy.get("hints") or {}))
         checkpoint.setdefault("provider_state", deepcopy(legacy.get("provider_state") or {}))
@@ -39,16 +43,67 @@ def checkpoint_from_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def clear_transient_provider_failures(checkpoint: dict[str, Any]) -> dict[str, Any]:
-    """Clear provider-pool health failures after explicit operator intervention.
+    """Clear provider/quota health after explicit operator recovery assertion.
 
-    Model-scoped failures such as `no_effect` remain excluded; only provider-level
-    resource/auth/quota health is reset. Job budget counters are never reset.
+    Direct model-scoped failures such as `no_effect` remain excluded. Provider
+    health and quota-bucket health are transient external resource state, so an
+    explicit quota reset/credential repair may clear those markers without ever
+    resetting Runtime job usage counters.
     """
     updated = deepcopy(checkpoint)
     state = dict(updated.get("provider_state") or {})
     updated["provider_state"] = {
-        key: value for key, value in state.items() if not str(key).startswith("provider:")
+        key: value
+        for key, value in state.items()
+        if not str(key).startswith(("provider:", "quota:"))
     }
+    return updated
+
+
+def migrate_legacy_antigravity_quota_failure(
+    checkpoint: dict[str, Any],
+    progress: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Narrow old provider-wide Antigravity quota state to its quota bucket.
+
+    Runtime versions before model-aware Antigravity routing marked quota
+    exhaustion as `provider:google_antigravity` unavailable. During a preserved
+    same-job reroute, narrow only a proven quota/rate-limit marker so other
+    Antigravity quota groups remain eligible. Auth/bridge/provider failures remain
+    provider-wide and are deliberately not migrated.
+    """
+    updated = deepcopy(checkpoint)
+    state = dict(updated.get("provider_state") or {})
+    provider_key = "provider:google_antigravity"
+    provider_marker = state.get(provider_key)
+    if not isinstance(provider_marker, dict):
+        return updated
+
+    failures = list((progress or {}).get("provider_failures") or [])
+    failure: dict[str, Any] | None = None
+    for item in reversed(failures):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("provider") or "") != "google_antigravity":
+            continue
+        if str(item.get("kind") or "") not in _ANTIGRAVITY_QUOTA_FAILURES:
+            continue
+        failure = item
+        break
+    if failure is None:
+        return updated
+
+    model_id = str(failure.get("model") or "").strip()
+    if not model_id:
+        return updated
+    quota_group = _ANTIGRAVITY_LEGACY_QUOTA_GROUPS.get(model_id, model_id)
+    quota_key = f"quota:{quota_group}"
+    quota_marker = dict(state.get(quota_key) or {})
+    quota_marker.update(deepcopy(provider_marker))
+    quota_marker.update({"healthy": False, "available": False, "quota_pressure": 1.0})
+    state[quota_key] = quota_marker
+    state.pop(provider_key, None)
+    updated["provider_state"] = state
     return updated
 
 
