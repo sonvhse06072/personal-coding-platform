@@ -44,8 +44,8 @@ def test_product_manager_staffing_selects_only_pm_eligible_agent() -> None:
     if result.choice.adapter == "codex_cli":
         assert result.choice.reasoning_effort == "low"
     assert "product_manager" in engine.models[result.choice.id]["roles"]
-    assert result.policy_version == 5
-    assert result.registry_version == 5
+    assert result.policy_version == 6
+    assert result.registry_version == 6
 
 
 def test_product_manager_staffing_respects_provider_availability() -> None:
