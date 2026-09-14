@@ -3,13 +3,14 @@ from __future__ import annotations
 import json
 import os
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import psycopg
 from psycopg.rows import dict_row
 
 from .activity import job_registered_event, route_selected_event, status_transition_event
-from .developer_stream import bind_developer_sink
+from .developer_stream import bind_developer_sink, runtime_activity_event
 
 
 DDL = """
@@ -67,7 +68,7 @@ CREATE INDEX IF NOT EXISTS cp_execution_plans_status_idx
   ON cp_execution_plans(status);
 """
 
-_AGENT_STATUSES = {"planning", "executing", "evaluating"}
+_ACTIVITY_STATUSES = {"routing", "planning", "executing", "verifying", "evaluating", "delivering"}
 
 
 def now() -> datetime:
@@ -176,7 +177,7 @@ class Storage:
         values.append(job_id)
         with self.connect() as conn:
             previous = conn.execute(
-                "SELECT status, route FROM cp_jobs WHERE id=%s FOR UPDATE",
+                "SELECT status, route, workspace FROM cp_jobs WHERE id=%s FOR UPDATE",
                 (job_id,),
             ).fetchone()
             conn.execute(f"UPDATE cp_jobs SET {', '.join(sets)} WHERE id=%s", values)
@@ -189,9 +190,25 @@ class Storage:
                     transition_event = status_transition_event(previous.get("status"), fields["status"])
                     if transition_event:
                         _insert_job_event(conn, job_id, transition_event)
+                    if str(fields["status"]) == "blocked":
+                        result = fields.get("result") if isinstance(fields.get("result"), dict) else {}
+                        reason = str(result.get("reason") or "work_order_blocked")
+                        workspace = Path(str(previous.get("workspace") or "."))
+                        _insert_job_event(
+                            conn,
+                            job_id,
+                            runtime_activity_event(
+                                kind="block",
+                                message=f"Runtime blocked: {reason}",
+                                phase="blocked",
+                                level="error",
+                                status=reason,
+                                workspace=workspace,
+                            ),
+                        )
             conn.commit()
         if "status" in fields:
-            if str(fields["status"]) in _AGENT_STATUSES:
+            if str(fields["status"]) in _ACTIVITY_STATUSES:
                 bind_developer_sink(lambda event, bound_job_id=job_id: self.append_event(bound_job_id, event))
             else:
                 bind_developer_sink(None)
