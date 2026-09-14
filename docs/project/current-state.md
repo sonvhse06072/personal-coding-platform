@@ -2,7 +2,7 @@
 
 Status: mutable continuity document. Update this file whenever a material decision, implementation state, blocker, rollout decision, or handoff changes. Durable architecture/product/policy decisions belong in the relevant topical source-of-truth document.
 
-Last updated: 2026-09-14
+Last updated: 2026-09-15
 
 ## How to resume in a new chat or agent session
 
@@ -34,10 +34,13 @@ Before a material task is complete or handed off, update the relevant topical do
 - PR #106 makes Telegram `answerCallbackQuery` best-effort in `pcpTelegramControl1`, so Telegram HTTP 400 acknowledgement failures cannot prevent a valid opaque Runtime control action from being attempted. Runtime remains authoritative for owner identity, stale/replayed action rejection and one-time live state revalidation.
 - PR #114 (`Stream sanitized live developer transcript`) is merged at `a60b15523c30c6b6884c040f76cb608131bdcb3f`; exact-head GitHub Actions run #212 passed all four jobs before PM merge. Issue #109 is resolved.
 - PR #114 incrementally consumes Codex `--json` stdout, persists only bounded sanitized developer/tool/file/error events, adds authenticated recent-event replay + SSE under the existing read-only dashboard session, and makes the Live Developer Console the primary active-job view while preserving a separate high-level audit timeline.
-- PR #114 explicitly excludes raw chain-of-thought/reasoning, prompts, credentials, unrestricted environment data and unbounded subprocess output. Observability callback/store failures are fail-open for the coding job; Runtime execution/control semantics remain authoritative and unchanged.
-- Local rollout currently proves Router `1.0.15`, Runtime `1.0.33`, ddev-executor `1.0.14`, model registry `v7`, routing policy `v7`, n8n healthy, and all service-scoped secret boundaries healthy. The merged PR #114 code is not yet rolled out locally because C1 is active.
-- Codex CLI `0.154.0` passed the bounded unattended policy smoke from a disposable trusted Git repository with `workspace-write`, `approval_policy="never"`, and workspace network disabled. Current Codex JSONL evidence still includes the `agent_message`, `command_execution` and terminal turn shapes consumed by PR #114; unknown/additive events are ignored rather than affecting execution.
-- Durable operator command guidance: avoid fragile nested `python3 -c '...'` quoting, prefer `.format()` or heredocs when they reduce quoting risk, verify `curl | python3` pipelines, and prefer readable multi-line commands.
+- PR #118 (`Expand Live Developer Activity across providers`) is merged at `d389c60517dfe19357d57414b1f0795df39e703d`; exact-head GitHub Actions run #225 passed before merge. Issue #117 is resolved.
+- PR #118 expands the read-only activity stream across Codex, OpenCode, OpenRouter-backed OpenCode, constrained Antigravity host `stream-json`, and Runtime-native verification/block activity. Adapter/provider/model identity is separate, and Antigravity prompt/user-input plus unknown event fields are dropped at the host boundary before Runtime.
+- Raw chain-of-thought/reasoning, full prompts, credentials, unrestricted environment data and unbounded subprocess output remain excluded. Observability failures remain fail-open for coding execution and cannot authorize control mutations.
+- Issue #119 tracks release-identity alignment after PR #118. Source Runtime release identity is advanced to `1.0.34` on branch `ai/runtime-release-identity-119`; local rollout waits for its green CI/merge so health can prove the new Runtime image deterministically.
+- Local rollout currently proves Router `1.0.15`, deployed Runtime `1.0.33`, ddev-executor `1.0.14`, model registry `v7`, routing policy `v7`, n8n healthy, and all service-scoped secret boundaries healthy. PR #118 is merged but not yet rolled out locally.
+- Codex CLI `0.154.0` passed the bounded unattended policy smoke from a disposable trusted Git repository with `workspace-write`, `approval_policy="never"`, and workspace network disabled.
+- Durable operator command guidance: avoid fragile nested `python3 -c '...'` quoting, prefer heredocs/readable multi-line commands, verify `curl | python3` pipelines, and prefer deterministic explicit guards.
 
 ## Effective PM merge governance
 
@@ -68,20 +71,23 @@ Runtime currently still has manual-merge orchestration behavior from the previou
   - `max_repair_iterations`: `2 -> 3`;
   - `max_iterations`: `8 -> 10`;
   - compatibility recovery: `max_wall_time_minutes +20` only when the persisted legacy timeout matches live policy.
-- The Human Owner reports that the exact C1 job is currently running after recovery. Treat Runtime durable state as authoritative and re-read it before any operator action.
-- While C1 remains in an active state, do not restart/rebuild Runtime, DDEV or n8n; do not roll out merged PR #114; do not mutate its workspace/job/database state; and do not create a replacement C1 job.
-- Do not call generic `/v1/jobs/{job_id}/run`, manually claim notification leases or otherwise bypass orchestration controls.
+- The exact C1 job is now stably blocked because its selected provider reported quota exhaustion. Same job/workspace/durable counters are preserved; Runtime durable state remains authoritative.
+- While C1 is stably blocked, the approved targeted platform rollout may rebuild/restart only the components required for PR #118/#119. Do not manually mutate job/database state, replace C1, reset counters, or call generic `/v1/jobs/{job_id}/run`.
+- After rollout verification, rematerialize the existing blocked-state owner actions through normal orchestration. If provider quota is still exhausted, prefer the explicit `reroute_provider` owner action; use `provider_quota_reset` only when quota has actually reset. Both paths resume the same job and preserve durable usage.
 - C2/C3 remain gated until C1 satisfies both evaluator findings and clears its delivery/merge gate under the effective governance policy.
 
-## Live Developer Console rollout gate
+## Live Developer Activity rollout gate
 
-1. PR #114 is merged, but merge is repository state only and does not authorize disturbing the active C1 process.
-2. Do not pull/rebuild/restart the local platform for PR #114 while C1 is active. The current running Runtime must remain undisturbed.
-3. After C1 reaches a safe terminal or stably paused state, re-read platform/job status first. Only then plan the targeted Runtime rollout for the Live Developer Console.
-4. After rollout, verify the read-only dashboard session, recent-event replay and SSE stream with a bounded disposable/safe coding job before relying on the console operationally.
-5. Confirm that dashboard disconnect/reconnect never changes job status or execution, secrets/prompts/reasoning remain absent, and streamed events remain bounded/sanitized.
-6. The current Runtime health version remains `1.0.33`; use the merged PR/commit plus the functional dashboard smoke as rollout identity until a later Runtime version bump is intentionally made.
-7. Issue #98 remains separate follow-up work for constrained PM-controlled PR merge behavior.
+1. PR #118 is merged at `d389c60517dfe19357d57414b1f0795df39e703d`; exact-head CI run #225 is green.
+2. Complete issue #119 so Runtime reports `1.0.34`; merge only after exact-head CI is green.
+3. Re-read C1 before local rollout and require the same job id to be stably blocked/non-active.
+4. Pull the exact merged main head, restart only the Antigravity host bridge, and rebuild/restart only `coding-runtime` with DDEV service-scoped rebuild. Router, ddev-executor and n8n do not require rollout for this change.
+5. Verify Antigravity bridge health reports `version=1.7` and `streaming=true`; verify Runtime health reports `version=1.0.34` with Router/executor healthy.
+6. Re-read C1 after rollout and require the same job/workspace/counters to remain blocked and unchanged apart from safe startup metadata/events.
+7. Trigger a normal orchestrator tick to rematerialize owner attention. Do not manually claim notification leases. Let the existing n8n outbox deliver the Telegram control message.
+8. If provider quota remains exhausted, select `🔀 Chuyển provider`; if quota has genuinely reset, select `✅ Quota đã reset — tiếp tục`. Runtime revalidates the opaque action id and resumes the same job with a fresh route.
+9. Once C1 returns active, do not restart/rebuild Runtime/DDEV/n8n until it reaches another safe terminal/stable blocked state.
+10. Use the new read-only Live Developer Activity stream to monitor model/tool/verification work; dashboard disconnect/reconnect must never change execution state.
 
 ## Global operational gates
 
