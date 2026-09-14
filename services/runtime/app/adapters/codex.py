@@ -12,7 +12,23 @@ class CodexAdapter(AgentAdapter):
 
     async def run(self, *, workspace: Path, prompt: str, mode: str, timeout: int) -> AgentRun:
         sandbox = "read-only" if mode in {"plan", "evaluate"} else "workspace-write"
-        argv = ["codex", "exec", "--json", "--sandbox", sandbox, "--cd", str(workspace)]
+        # Runtime is non-interactive: a Codex approval prompt has no valid human
+        # response channel. Make the policy explicit instead of inheriting mounted
+        # user configuration. This does not broaden the sandbox; commands that need
+        # more permission fail closed. Execute/repair also pins workspace network
+        # access off so user config cannot silently widen that boundary.
+        argv = [
+            "codex",
+            "exec",
+            "--json",
+            "--sandbox",
+            sandbox,
+            "--config",
+            'approval_policy="never"',
+        ]
+        if sandbox == "workspace-write":
+            argv += ["--config", "sandbox_workspace_write.network_access=false"]
+        argv += ["--cd", str(workspace)]
         if self.model and self.model not in {"auto", "subscription-auto", "subscription-managed", "frontier-subscription-managed"}:
             argv += ["--model", self.model]
         if self.reasoning_effort:
