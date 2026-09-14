@@ -8,7 +8,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 MODELS = ROOT / "config" / "models.yml"
 POLICY = ROOT / "config" / "routing-policy.yml"
-MODEL_ID = "openrouter_north_mini_code_free"
+MODEL_ID = "openrouter_qwen3_coder_free"
 
 
 def documents() -> tuple[dict, dict]:
