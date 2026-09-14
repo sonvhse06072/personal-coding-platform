@@ -11,7 +11,10 @@ def test_developer_event_sink_is_task_local():
         emit_developer_event({"event_type": name})
         return seen
 
-    left, right = asyncio.run(asyncio.gather(worker("left"), worker("right")))
+    async def run_workers():
+        return await asyncio.gather(worker("left"), worker("right"))
+
+    left, right = asyncio.run(run_workers())
     assert left == [{"event_type": "left"}]
     assert right == [{"event_type": "right"}]
 
