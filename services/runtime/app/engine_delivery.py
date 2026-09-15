@@ -5,7 +5,7 @@ from copy import deepcopy
 from typing import Any
 
 from .delivery import DeliveryError, deliver_verified_work, pull_request_body
-from .engine_execution import RuntimeEngine as ExecutionRuntimeEngine
+from .engine_verification import RuntimeEngine as ExecutionRuntimeEngine
 from .fingerprint import failure_fingerprint
 
 
@@ -141,7 +141,12 @@ class RuntimeEngine(ExecutionRuntimeEngine):
 
             checkpoint = deepcopy(row.get("checkpoint") or {})
             progress = deepcopy(row.get("progress") or {})
-            progress["delivery_attempts"] = int(progress.get("delivery_attempts", 0)) + 1
+            previous_delivery_attempts = int(progress.get("delivery_attempts", 0))
+            progress["delivery_attempts"] = previous_delivery_attempts + 1
+            if previous_delivery_attempts > 0:
+                progress["delivery_retry_attempts"] = int(
+                    progress.get("delivery_retry_attempts", 0)
+                ) + 1
             self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
 
             verification = result.get("verification") or {}
@@ -195,6 +200,9 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 failure_text = str(ci.get("failure_text") or "GitHub CI failed")[-30000:]
                 last_failure = f"GitHub CI failed for verified commit {commit}:\n{failure_text}"[-30000:]
                 progress["ci_failures"] = int(progress.get("ci_failures", 0)) + 1
+                # A real CI failure requires engineering repair; delivery/API
+                # observation retries are counted separately above and do not
+                # consume this counter.
                 progress["repair_iterations"] = int(progress.get("repair_iterations", 0)) + 1
                 fp = failure_fingerprint(last_failure)
                 progress.setdefault("failure_fingerprints", []).append(fp)
