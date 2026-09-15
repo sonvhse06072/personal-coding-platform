@@ -47,6 +47,7 @@ def test_new_routes_expose_estimate_working_target_and_emergency_ceiling():
     profile_cfg = engine.policy["profiles"][route.strategy.profile]
     for dimension in (
         "max_model_calls",
+        "max_tool_calls",
         "max_iterations",
         "max_repair_iterations",
         "max_test_runs",
@@ -55,6 +56,8 @@ def test_new_routes_expose_estimate_working_target_and_emergency_ceiling():
         envelope = adaptive.dimensions[dimension]
         assert envelope.estimate <= envelope.working_target <= envelope.emergency_limit
         assert envelope.working_target >= float(profile_cfg[dimension])
+        # Only the emergency ceiling is a technical stop point. Estimate and
+        # working target remain observable resource-management thresholds.
         assert float(getattr(route.strategy.budget, dimension)) == envelope.emergency_limit
 
 
@@ -103,6 +106,7 @@ def test_working_target_is_non_blocking_and_emergency_limit_still_stops():
     ))
     assert emergency.action == "stop"
     assert emergency.reason == "repair budget exhausted"
+    assert "hard_budget_guard" in emergency.signals
 
 
 def test_non_blocking_budget_signals_do_not_force_reasoning_escalation():
@@ -125,10 +129,48 @@ def test_non_blocking_budget_signals_do_not_force_reasoning_escalation():
     assert "reasoning_effort_escalation" not in result.signals
 
 
-def test_legacy_strategy_without_adaptive_metadata_remains_valid():
+def test_legacy_strategy_without_adaptive_metadata_keeps_hard_profile_limit():
     engine = make_engine()
     route = engine.route(request())
     payload = route.strategy.model_dump(mode="json")
     payload.pop("adaptive_budget", None)
+    baseline = engine.policy["profiles"][route.strategy.profile]
+    payload["budget"]["max_repair_iterations"] = baseline["max_repair_iterations"]
     legacy = ExecutionStrategy(**payload)
+    route.strategy = legacy
+
+    result = engine.reassess(ReassessRequest(
+        route=route,
+        progress=ExecutionProgress(
+            repair_iterations=baseline["max_repair_iterations"],
+            tests_passed=False,
+            required_checks_passed=False,
+            agent_succeeded=True,
+        ),
+    ))
+    assert result.action == "stop"
+    assert result.reason == "repair budget exhausted"
     assert legacy.adaptive_budget is None
+
+
+def test_abnormal_repeated_failure_is_not_hidden_by_budget_headroom():
+    engine = make_engine()
+    route = engine.route(request())
+    adaptive = route.strategy.adaptive_budget
+    assert adaptive is not None
+    repair = adaptive.dimensions["max_repair_iterations"]
+
+    result = engine.reassess(ReassessRequest(
+        route=route,
+        progress=ExecutionProgress(
+            repair_iterations=int(repair.working_target),
+            failure_fingerprints=["same", "same", "same"],
+            progress_markers=["same", "same", "same"],
+            tests_passed=False,
+            required_checks_passed=False,
+            agent_succeeded=False,
+            last_agent_failure_kind="deterministic_failure",
+        ),
+    ))
+    assert result.action in {"escalate", "stop"}
+    assert any(signal.startswith("repeated_failure:") for signal in result.signals)
