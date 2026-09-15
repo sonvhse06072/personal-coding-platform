@@ -21,6 +21,23 @@ class PlanOrchestrator(CorePlanOrchestrator):
         super().__init__(storage, engine, store=store)
         self.merge_audit = PMMergeAuditStore(storage)
 
+    @staticmethod
+    def _project_merge_config(project_id: str) -> dict[str, Any]:
+        """Resolve project merge policy without turning config gaps into mutation authority.
+
+        Older tests/integrations can carry an orchestration project that is not in
+        the local projects file. That state was historically a manual merge gate.
+        Preserve it and fail closed instead of crashing or inventing auto-merge
+        permission.
+        """
+        try:
+            return project_config(project_id)
+        except (KeyError, ValueError):
+            return {
+                "base_branch": "main",
+                "autonomy": {"allow_auto_merge_low_risk": False},
+            }
+
     async def start(self) -> None:
         self.merge_audit.ensure()
         await super().start()
@@ -138,7 +155,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 project_id=str(plan["project_id"]),
                 pr_number=int(pr_number),
             )
-            project = project_config(str(plan["project_id"]))
+            project = self._project_merge_config(str(plan["project_id"]))
             eligibility = evaluate_pm_merge(
                 project=project,
                 plan=plan,
