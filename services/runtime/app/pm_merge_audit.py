@@ -60,6 +60,7 @@ class PMMergeAuditStore:
     ) -> dict[str, Any]:
         self.ensure()
         timestamp = now()
+        created = False
         with self.storage.connect() as conn:
             row = conn.execute(
                 """INSERT INTO cp_pm_merge_audit
@@ -81,7 +82,9 @@ class PMMergeAuditStore:
                     timestamp,
                 ),
             ).fetchone()
-            if row is None:
+            if row is not None:
+                created = True
+            else:
                 row = conn.execute(
                     """SELECT * FROM cp_pm_merge_audit
                     WHERE plan_id=%s AND work_order_id=%s AND expected_head=%s""",
@@ -89,7 +92,9 @@ class PMMergeAuditStore:
                 ).fetchone()
             conn.commit()
         assert row is not None
-        return dict(row)
+        value = dict(row)
+        value["created"] = created
+        return value
 
     def finish(
         self,
