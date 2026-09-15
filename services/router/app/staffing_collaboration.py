@@ -65,62 +65,12 @@ _REASONING_BY_PROFILE = {
 
 
 class RouterEngine(BaseRouterEngine):
-    """Add provider-independent staffing for bounded collaboration roles."""
+    """Add provider-independent eligibility policy for collaboration roles.
 
-    def _capability_match(self, model, role, dimensions, profile):
-        cap = model.get("capabilities", {})
-        weights: dict[str, float] | None = None
-        if role == "consultant":
-            weights = {
-                "reasoning": 0.30,
-                "planning": 0.24,
-                "repo_exploration": 0.22,
-                "review": 0.16,
-                "structured_output": 0.08,
-            }
-        elif role == "test_engineer":
-            weights = {
-                "review": 0.28,
-                "debugging": 0.24,
-                "structured_output": 0.18,
-                "repo_exploration": 0.16,
-                "coding": 0.14,
-            }
-        elif role == "debugger":
-            weights = {
-                "debugging": 0.36,
-                "reasoning": 0.28,
-                "repo_exploration": 0.20,
-                "review": 0.16,
-            }
-        elif role == "security_specialist":
-            weights = {
-                "reasoning": 0.32,
-                "review": 0.28,
-                "planning": 0.18,
-                "debugging": 0.14,
-                "structured_output": 0.08,
-            }
-        elif role == "reviewer":
-            weights = {
-                "review": 0.38,
-                "reasoning": 0.28,
-                "debugging": 0.16,
-                "repo_exploration": 0.10,
-                "structured_output": 0.08,
-            }
-        if weights is None:
-            return super()._capability_match(model, role, dimensions, profile)
-        score = sum((float(cap.get(name, 0)) / 10.0) * weight for name, weight in weights.items())
-        difficulty = (
-            dimensions.reasoning_requirement
-            + dimensions.context_requirement
-            + dimensions.verification_difficulty
-            + dimensions.risk
-        ) / 400.0
-        if profile in {"complex", "critical"}:
-            score *= 0.90 + 0.10 * min(1.0, score / max(0.45, difficulty))
-        return max(0.0, min(1.0, score))
+    Capability scoring stays in the base staffing layer so there is one scoring
+    definition per logical role. This extension only supplies which existing
+    model capabilities/roles are eligible and their cost-aware preference order.
+    """
 
     def staff(self, request: StaffingRequest) -> StaffingResponse:
         role_cfg = _COLLABORATION_ROLE_POLICY.get(request.role)
