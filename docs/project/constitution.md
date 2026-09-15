@@ -20,6 +20,7 @@ The system should reduce the amount of routine supervision required from the hum
 - Use cross-model review so important work is not locked into a single model's assumptions or reasoning style.
 - Keep deterministic checks, Git, CI, bounded retries, budgets, checkpoints, and explicit trust boundaries as hard controls around model behavior.
 - Keep operating cost practical for one person. Strong or scarce models should be used where they create meaningful value, not by default.
+- Minimize avoidable Human Owner intervention in routine healthy execution; human attention is itself a scarce project resource.
 - Preserve a repository-resident source of truth so any capable agent can resume project work from source control alone.
 
 ## 3. Non-goals
@@ -63,6 +64,8 @@ The human owner has final authority over:
 
 Routine pull-request review and merge inside the already-approved project frame is delegated to the Product Manager after required verification gates pass. The system must surface Human Owner decision boundaries rather than silently resolving them.
 
+Routine execution continuation inside an already-approved task working envelope is not a material budget decision and should not require Human Owner approval when execution remains healthy and no protected decision boundary is implicated.
+
 ## 6. Product Manager authority
 
 After the human owner approves the baseline, the PM may autonomously:
@@ -72,7 +75,7 @@ After the human owner approves the baseline, the PM may autonomously:
 - split a task into smaller in-scope tasks;
 - select the next task within the approved roadmap frame;
 - ask the Router to staff a WorkOrder with an appropriate model/role;
-- request bounded repair, re-review, reassignment, or escalation;
+- request bounded repair, re-review, reassignment, escalation, or specialist consultation;
 - update the mutable Execution Plan;
 - record newly discovered work that is inside or outside the approved scope;
 - review pull requests using the WorkOrder, WorkReport, deterministic verification, independent review when required, and CI evidence;
@@ -86,7 +89,7 @@ The PM may not autonomously:
 - add a major dependency or infrastructure service without approval;
 - weaken a security or trust boundary;
 - authorize destructive or production operations outside existing approved policy;
-- materially expand the project budget;
+- materially expand the project/personal resource envelope;
 - approve or merge a change that itself requires Human Owner approval until that approval has been explicitly obtained.
 
 When such a change appears necessary, the PM must create a ChangeProposal for human approval.
@@ -106,6 +109,8 @@ Agents must not confuse these two levels.
 - The same model may perform different roles at different times, subject to review-diversity policy.
 - Critical work should receive an independent review from a different model/provider where practical.
 - Cross-model review must be risk-proportionate; routine work must not become an expensive swarm by default.
+- Bounded inter-agent consultation is allowed when expected value justifies the resource cost; collaboration must not become unrestricted recursive agent chatter.
+- For a WorkOrder workspace, the default writer is one Primary Developer. Consultants, testers, debuggers, specialists, and reviewers are read-only unless a separately approved execution design explicitly grants a narrower capability.
 - Default execution concurrency is one. Parallel execution is allowed only for demonstrably independent WorkOrders and when budget permits.
 
 ## 9. Trust and security invariants
@@ -123,8 +128,9 @@ Agents must not confuse these two levels.
 
 - Model output is never the sole definition of correctness.
 - Deterministic verification must run against checked-in project commands and policies.
-- Independent model review supplements deterministic checks for risk-appropriate tasks.
-- Bounded repair/escalation must preserve already-consumed job budgets.
+- Verification may be layered so targeted/affected checks run during implementation and repair, but required full deterministic verification must still pass before acceptance/delivery.
+- Independent model review supplements deterministic checks for risk-appropriate tasks and must be stronger where risk justifies the added resource cost.
+- Bounded repair/escalation must preserve already-consumed job budgets/counters.
 - Agent-produced changes are delivered through an `ai/*` branch and pull request.
 - CI green is a mandatory gate before a PR is considered ready for merge.
 - The PM performs the final engineering review for in-scope work and may merge autonomously when all required gates pass and no unresolved Human Owner decision trigger exists.
@@ -132,11 +138,19 @@ Agents must not confuse these two levels.
 
 ## 11. Budget principles
 
-- Budget is a team resource envelope, not only a USD value.
-- Resource decisions may account for money, subscription quota, scarcity, latency, model-call count, wall time, and repair count.
+- Budget is a team/personal resource envelope, not only a USD value.
+- Resource decisions may account for money, subscription quota, scarcity, latency, model-call/token usage, wall time, verification cost, repair work, provider reliability, and Human Owner attention.
+- Task budget should distinguish **estimate**, **elastic working envelope**, and **emergency hard ceiling** semantics where implementation supports it.
+- A task estimate is primarily a planning/resource-allocation forecast; merely reaching the estimate should not interrupt healthy execution.
+- Runtime may autonomously use bounded headroom inside the approved working envelope when progress remains healthy, consumed usage is preserved, no protected decision is implicated, provider/quota state is acceptable, and no circuit-break condition exists.
+- Hard task ceilings exist mainly as safety/circuit-break controls for abnormal execution or real material resource risk; they must not be tuned so low that routine healthy tasks repeatedly require owner continuation clicks.
+- Provider quota/resource state is separate from task execution estimates. Authoritative provider exhaustion may block/reroute work; estimate exhaustion alone is not equivalent to provider quota exhaustion.
 - Cheap/free/subscription capacity should be preferred for routine work when expected quality is sufficient.
-- Stronger or scarce models should be reserved for high-risk, high-reasoning, repeated-failure, architecture, or review work where they create meaningful value.
-- Repeated failures should trigger reassessment or escalation, not unbounded retries.
+- Stronger or scarce models should be reserved for high-risk, high-reasoning, repeated-failure, architecture, specialist consultation, or review work where they create meaningful value.
+- Repeated failures, no progress, solution oscillation, unexpected scope growth, or other abnormal execution signals should trigger reassessment/escalation/circuit breaking rather than unbounded retries.
+- Material expansion of the approved project/personal resource envelope or override of an emergency ceiling requires Human Owner approval.
+- Human attention should be measured as a scarce resource; routine healthy tasks should target zero avoidable owner interventions.
+- The detailed Human Owner-approved execution-efficiency policy is `docs/project/execution-efficiency.md`.
 
 ## 12. Change control
 
@@ -154,10 +168,11 @@ Once approved, the affected source-of-truth document must be versioned through G
 
 ## 13. Practicality rule
 
-Do the simplest thing that preserves the approved architecture and invariants. A new abstraction, service, agent role, model call, or automation must justify itself by improving at least one of:
+Do the simplest thing that preserves the approved architecture and invariants. A new abstraction, service, agent role, model call, consultation, review round, or automation must justify itself by improving at least one of:
 
 - failure rate / correctness;
-- model or tool efficiency;
+- model, tool, verification, or context efficiency;
+- Human Owner attention / autonomous throughput;
 - security / blast-radius control;
 - governance / project alignment.
 
