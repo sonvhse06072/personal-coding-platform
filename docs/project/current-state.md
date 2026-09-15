@@ -26,8 +26,10 @@ The currently relevant merged platform state is:
 
 - PM routine in-scope PR review/merge authority is approved by issue #96 / PR #97; developer agents still cannot merge and production deployment remains separately Human Owner-controlled.
 - PR #154 (`Add adaptive task budgets with emergency ceilings`) merged Phase A / issue #147.
-- PR #155 (`Prefer OpenRouter for routine standard coding`) merged the routine Standard OpenRouter preference. Merged Router source is `1.0.18` and routing/model policy remains v10.
-- PR #156 (`Add layered verification and retry attribution`) merged Phase B / issue #148 at merge commit `6b57976c6e6dfd1e3a40052003b2fa59c125f9b7`. Merged Runtime source is `1.0.40`.
+- PR #155 (`Prefer OpenRouter for routine standard coding`) merged the routine Standard OpenRouter preference.
+- PR #156 (`Add layered verification and retry attribution`) merged Phase B / issue #148 at merge commit `6b57976c6e6dfd1e3a40052003b2fa59c125f9b7`.
+- PR #157 (`Add bounded inter-agent collaboration`) merged Phase C / issue #149 at merge commit `754233a17572b4631f418dfbab1c667790dc7fc5`. Merged Runtime source is `1.0.41`, Router source is `1.0.19`, and routing policy is v10.
+- Phase C leaves one primary write-capable Developer, bounded read-only Router-staffed collaborators/reviewers, durable compact `CollaborationThread` artifacts, max two dialogue rounds, structured PM handoff, and no coding-agent Runtime credential exposure.
 - Antigravity host bridge remains `1.10`; provider quota telemetry/proactive refresh and live Developer Activity remain implemented.
 - PR #139 (`Document Telegram terminal operations gateway`) is merged; the terminal gateway remains an approved target, not implemented.
 - Issue #98 (`Implement constrained PM-controlled PR merge in Runtime`) remains open and is still required for full executable alignment with the approved PM merge governance.
@@ -41,8 +43,8 @@ Tracking:
 - #146 — umbrella efficiency initiative;
 - #147 — Phase A adaptive task budgets: complete/merged through PR #154;
 - #148 — Phase B layered verification and failure-budget separation: complete/merged through PR #156;
-- #149 — Phase C bounded inter-agent collaboration and review dialogue: active through PR #157;
-- #150 — Phase D risk-proportionate review and role-specific evidence packs;
+- #149 — Phase C bounded inter-agent collaboration and review dialogue: complete/merged through PR #157;
+- #150 — Phase D risk-proportionate review and role-specific evidence packs: active through PR #158;
 - #151 — Phase E telemetry calibration, Human-attention metrics, and continuity automation;
 - #98 — constrained PM-controlled merge remains part of the low-touch delivery target.
 
@@ -52,45 +54,48 @@ Approved execution priority remains:
 
 1. #147 adaptive budgeting — complete/merged;
 2. #148 layered verification/failure accounting — complete/merged;
-3. #149 bounded collaboration — active now;
-4. #150 risk-proportionate review/context compaction;
+3. #149 bounded collaboration — complete/merged;
+4. #150 risk-proportionate review/context compaction — active now;
 5. #151 telemetry calibration/continuity automation;
 6. complete #98 as part of removing the remaining routine end-of-task human checkpoint.
 
 Telegram terminal convenience work remains lower priority unless an operational need changes the ordering.
 
-## Active Phase C / issue #149 state
+## Active Phase D / issue #150 state
 
-Branch: `ai/bounded-collaboration-149`.
+Branch: `ai/risk-proportionate-review-150`.
 
-Pull request: #157 (`Add bounded inter-agent collaboration`), targeting `main` from the exact post-#156 merge baseline.
+Pull request: #158 (`Add risk-proportionate review and compact evidence packs`), targeting `main` from the exact post-#157 merge baseline.
 
-Target service versions on this branch:
+Target service/policy versions on this branch:
 
-- Coding Runtime `1.0.41`;
-- Router `1.0.19`.
+- Coding Runtime `1.0.42`;
+- Router `1.0.20`;
+- routing policy v11.
 
 Implemented behavior on the branch:
 
-- durable compact `CollaborationThread` artifacts are persisted inside the parent job checkpoint and survive Runtime/manager recreation;
-- the primary Developer remains the only write-capable implementation role;
-- consultant/test engineer/debugger/security specialist/reviewer roles are logical Router-staffed roles and cannot select their own provider/model;
-- collaborators receive disposable workspaces at the pinned source commit plus bounded evidence, run through the existing read-only planning mode, and fail closed if the disposable workspace changes;
-- active Developer collaboration uses a temporary `.pcp-collaboration-request.json` workspace control artifact, so coding agents receive no Runtime credential/API token; Runtime consumes/removes the artifact before deterministic verification and returns only the compact structured collaboration result to the same job/workspace;
-- the Git intent-to-add behavior produced by pre-verification diff collection is handled explicitly so the temporary artifact is not mistaken for repository-tracked code and is removed from the verification/commit diff;
-- manual authenticated create/re-check endpoints are restricted to stable blocked/interrupted jobs; read/list/cancel remain available for operations/observability;
-- at most three threads may be open per job and each thread is bounded to two dialogue rounds;
-- recursive consultant-to-consultant fanout and duplicate open questions are denied;
-- unresolved disagreement after the second round becomes structured PM handoff evidence instead of another debate round;
-- the durable trace contains compact sender/recipient/type/round/timestamp/hash metadata instead of raw transcript propagation;
-- collaboration model/token/cost/provider-recovery counters are observable separately while still charging the parent job emergency budget;
-- collaboration provider failure may restaff the same logical role once using persisted provider/model health without consuming an engineering-repair iteration;
-- collaboration rounds have bounded deadlines and active-thread cancellation;
-- legacy non-WorkOrder execution does not receive the Developer collaboration control surface.
+- routed execution strategy carries a typed review policy with review level, required/conditional behavior, reviewer-independence requirements, compact evidence mode and JIT repository-retrieval permission;
+- review level and high-impact thresholds live in `config/routing-policy.yml` v11 so PM calibration within approved policy does not require a code change;
+- routine/fast work prepares a lightweight alternate reviewer but Runtime skips the model call when deterministic evidence is strong;
+- standard work receives bounded independent review;
+- complex work prefers a stronger reviewer on a different model;
+- critical/security/architecture/high-risk work requires a different model/provider reviewer when eligible capacity exists; capacity degradation is recorded rather than hidden;
+- reviewer prompts consume compact role-specific evidence packs instead of full default transcripts/logs; deterministic command stdout/stderr and full diff tails are omitted by default;
+- reviewers may retrieve the smallest additional in-scope repository context just in time through the existing read-only evaluator sandbox, but may not request or reconstruct full model/developer transcripts;
+- canonical WorkOrder authority is preserved in the compact reviewer pack, including compatibility for callers that carry only the canonical task description;
+- reviewer output has a structured `ReviewReport` with verdict, summary, actionable findings, evidence references and JIT-context-use flag while retaining legacy PASS/FAIL compatibility;
+- failed review is returned to the Developer as a compact repair evidence pack rather than a reviewer transcript;
+- accepted results include compact review and PM evidence packs;
+- telemetry tracks review runs, findings, findings that lead to a later diff change, review input/output tokens, estimated review cost, JIT-context use and useful-finding yield;
+- useful-finding yield is updated immediately when a pending finding is followed by a changed diff, including when the next iteration is accepted immediately;
+- deterministic verification and Human Owner protected-decision boundaries remain unchanged.
 
-Regression coverage on the branch includes logical-role staffing, provider-state fallback, single-writer enforcement, recursive fanout denial, two-round PM handoff, durable thread recovery, provider recovery without engineering-repair charge, compact prompt/control-artifact behavior, Git intent-to-add cleanup and Runtime/Router service versions.
+Regression coverage includes review-level selection, cross-provider reviewer requirements and capacity degradation, evidence-pack minimization, canonical WorkOrder preservation, JIT retrieval contract, structured review parsing, review resource telemetry, finding-to-diff attribution, and role-specific Developer/consultant/reviewer/PM evidence packs.
 
-No local Router/Runtime/DDEV/n8n rollout has been performed for Phase C. PR #157 must have exact-head deterministic CI success before merge. Merge still does not authorize a local service restart while an engineering job is active.
+The first PR #158 CI run on head `83f591d7c356d8c72234efde8f7790290fe22dd8` had Router/structure/DDEV green and one Runtime compatibility failure: the compact evaluator prompt no longer exposed the canonical WorkOrder object when only canonical task text was supplied. The branch now parses that canonical task contract into the compact evidence object instead of reintroducing raw context. A new exact-head CI run is required after the subsequent policy/version/continuity commits.
+
+No local Router/Runtime/DDEV/n8n rollout has been performed for Phase D. Merge still does not authorize a local service restart while an engineering job is active.
 
 ## Active `chonhac` DEC-025C state
 
@@ -127,7 +132,7 @@ Fresh exact recovery action recorded for that state:
 - payload: `max_repair_iterations +1`;
 - last recorded status: pending/valid.
 
-C2/C3 remain gated behind C1 completion. No manual DB/job mutation, counter reset, job replacement, or generic `/v1/jobs/{job_id}/run` bypass is allowed. The newer adaptive/layered/collaboration policies must not be simulated by manually altering this preserved job's counters/state.
+C2/C3 remain gated behind C1 completion. No manual DB/job mutation, counter reset, job replacement, or generic `/v1/jobs/{job_id}/run` bypass is allowed. Newer adaptive/layered/collaboration/review policies must not be simulated by manually altering this preserved job's counters/state.
 
 ## Durable efficiency policy already approved
 
@@ -139,7 +144,8 @@ C2/C3 remain gated behind C1 completion. No manual DB/job mutation, counter rese
 - Final deterministic verification remains mandatory; targeted/focused checks optimize iteration rather than weaken Definition of Done.
 - Engineering repair accounting is separate from provider, infrastructure, verification and delivery retries.
 - Inter-agent collaboration is bounded: one primary writer by default, read-only consultants/reviewers, Router-selected logical roles, compact evidence packs, normally 1-2 rounds, no recursive swarm.
-- Review strength is risk-proportionate and should be calibrated using useful-finding telemetry.
+- Review strength is risk-proportionate and calibrated through approved routing policy plus useful-finding/resource telemetry, never by weakening protected decision boundaries.
+- Role-specific evidence packs and just-in-time read-only repository retrieval are preferred over raw transcript propagation.
 - Human Owner attention is a first-class resource; routine targets are `human_interventions_per_task -> 0` and `avoidable_blocks_per_task -> 0`.
 
 ## Global operational gates
@@ -158,12 +164,12 @@ C2/C3 remain gated behind C1 completion. No manual DB/job mutation, counter rese
 
 Platform development:
 
-1. require exact-head deterministic CI for PR #157 and fix any failure on the same branch;
-2. when #157 is green and review/governance gates are satisfied, merge it under the approved routine PM authority;
-3. do not roll out Runtime `1.0.41` / Router `1.0.19` locally merely because the PR merges; respect the active-job service-restart gate and revalidate the preserved C1 job before/after any explicitly chosen targeted rollout;
-4. after Phase C is merged, continue with #150 risk-proportionate review and role-specific evidence packs unless new evidence changes priority.
+1. require exact-head deterministic CI for PR #158 after Runtime `1.0.42`, Router `1.0.20`, routing policy v11 and this continuity update; fix any failure on the same branch;
+2. when #158 is green and review/governance gates are satisfied, merge it under the approved routine PM authority;
+3. do not roll out Runtime `1.0.42` / Router `1.0.20` locally merely because the PR merges; respect the active-job service-restart gate and revalidate the preserved C1 job before/after any explicitly chosen targeted rollout;
+4. after Phase D is merged, continue with #151 telemetry calibration, Human-attention metrics and continuity automation unless new evidence changes priority.
 
 DEC-025C:
 
 - the fresh `max_repair_iterations +1` action remains the normal recovery path if the Human Owner chooses to continue C1 under the currently deployed semantics;
-- future adaptive/layered/collaboration Runtime behavior must not be backported to C1 by manual state manipulation.
+- future adaptive/layered/collaboration/review Runtime behavior must not be backported to C1 by manual state manipulation.
