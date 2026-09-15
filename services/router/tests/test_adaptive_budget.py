@@ -61,15 +61,17 @@ def test_new_routes_expose_estimate_working_target_and_emergency_ceiling():
         assert float(getattr(route.strategy.budget, dimension)) == envelope.emergency_limit
 
 
-def test_task_pressure_changes_estimate_without_changing_policy_shape():
+def test_task_pressure_increases_effort_pressure_and_estimated_capacity():
     engine = make_engine()
     low = engine.route(request(pressure=10))
     high = engine.route(request(pressure=90))
-    assert low.strategy.profile == high.strategy.profile
     low_budget = low.strategy.adaptive_budget
     high_budget = high.strategy.adaptive_budget
     assert low_budget is not None and high_budget is not None
     assert high_budget.effort_pressure > low_budget.effort_pressure
+    # Higher semantic pressure may legitimately cross a profile boundary; the
+    # adaptive estimate should still increase rather than relying on one fixed
+    # profile-shaped ceiling.
     assert (
         high_budget.dimensions["max_test_runs"].estimate
         > low_budget.dimensions["max_test_runs"].estimate
