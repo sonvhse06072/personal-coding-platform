@@ -63,6 +63,17 @@ class ProviderState(BaseModel):
     available: bool = True
 
 
+class ObservedCalibration(BaseModel):
+    """Historical project evidence; Router policy decides whether it is usable."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    sample_size: int = Field(default=0, ge=0, le=10000)
+    minimum_sample_size: int = Field(default=5, ge=1, le=1000)
+    resource_multipliers: dict[str, float] = Field(default_factory=dict)
+    source: str = Field(default="project_task_role_history", max_length=100)
+
+
 class RoutingRequest(BaseModel):
     job_id: str = Field(min_length=1, max_length=200)
     project_id: str = Field(default="default", max_length=200)
@@ -72,6 +83,7 @@ class RoutingRequest(BaseModel):
     repo: RepoAnalysis = Field(default_factory=RepoAnalysis)
     provider_state: dict[str, ProviderState] = Field(default_factory=dict)
     privacy: PrivacyPolicy | None = None
+    calibration: ObservedCalibration | None = None
 
 
 class StaffingRequest(BaseModel):

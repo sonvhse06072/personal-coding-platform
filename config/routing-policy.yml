@@ -1,4 +1,4 @@
-version: 11
+version: 12
 complexity_weights:
   scope: 0.18
   dependency_depth: 0.1
@@ -39,6 +39,12 @@ adaptive_budget:
     max_wall_time_minutes:
       minimum: 10
       hard_max: 180
+telemetry_calibration:
+  # Historical evidence may refine an estimate only after a meaningful sample.
+  # It never expands adaptive-budget hard maxima or protected decision policy.
+  minimum_sample_size: 5
+  multiplier_min: 0.75
+  multiplier_max: 1.75
 review_policy:
   # Review spend is policy/calibration data, not a model identity decision.
   # Router still staffs the logical reviewer role from current provider/model

@@ -16,7 +16,7 @@ from .collaboration import (
     CollaborationView,
 )
 from .dashboard import _require_session, create_dashboard_router
-from .engine_antigravity import RuntimeEngine
+from .engine_telemetry import RuntimeEngine
 from .orchestrator_notifications import PlanOrchestrator
 from .orchestrator_resume import prepare_orchestrated_job_resume, reopen_orchestrated_job
 from .pm_bridge import router as pm_bridge_router
@@ -36,7 +36,7 @@ from .schemas import (
     RuntimeHealth,
 )
 from .security import harden_runtime_process_secret_boundary
-from .storage import Storage
+from .telemetry_storage import TelemetryStorage
 
 
 class OperatorResolutionRequest(BaseModel):
@@ -60,7 +60,16 @@ class ControlActionExecuteRequest(BaseModel):
     telegram_chat_id: str = Field(min_length=1, max_length=100)
 
 
-storage = Storage()
+class ContinuityEventRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_type: Literal["pr_merged", "rollout", "governance_decision"]
+    project_id: str = Field(min_length=1, max_length=200)
+    job_id: str | None = Field(default=None, max_length=200)
+    detail: dict[str, Any] = Field(default_factory=dict)
+
+
+storage = TelemetryStorage()
 engine = RuntimeEngine(storage)
 pm_planner = PMPlanner(storage)
 collaboration_manager = engine.collaboration
@@ -120,7 +129,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.42", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.43", lifespan=lifespan)
 app.include_router(pm_bridge_router)
 app.include_router(create_dashboard_router(storage, plan_orchestrator.store))
 
@@ -132,7 +141,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.42",
+        version="1.0.43",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
@@ -146,6 +155,47 @@ async def health() -> RuntimeHealth:
 @app.get("/v1/quota", dependencies=[Depends(auth)])
 def quota_view() -> dict[str, Any]:
     return quota_coordinator.view()
+
+
+@app.get("/v1/telemetry/calibration", dependencies=[Depends(auth)])
+def telemetry_calibration(
+    project_id: str = Query(..., min_length=1, max_length=200),
+    task_type: str = Query(..., min_length=1, max_length=100),
+    role: str | None = Query(default=None, max_length=80),
+) -> dict[str, Any]:
+    return storage.calibration_hint(project_id=project_id, task_type=task_type, role=role)
+
+
+@app.get("/v1/telemetry/attention/{job_id}", dependencies=[Depends(auth)])
+def telemetry_attention(job_id: str) -> dict[str, Any]:
+    if not storage.get(job_id):
+        raise HTTPException(404, "Unknown job")
+    return storage.attention_summary(job_id)
+
+
+@app.get("/v1/continuity/proposal", dependencies=[Depends(auth)])
+def latest_continuity_proposal(
+    project_id: str = Query(..., min_length=1, max_length=200),
+) -> dict[str, Any]:
+    proposal = storage.latest_continuity_proposal(project_id)
+    if proposal is None:
+        raise HTTPException(404, "No continuity proposal for project")
+    return proposal
+
+
+@app.post("/v1/continuity/events", dependencies=[Depends(auth)])
+def record_continuity_event(payload: ContinuityEventRequest) -> dict[str, Any]:
+    if payload.job_id and not storage.get(payload.job_id):
+        raise HTTPException(404, "Unknown job")
+    try:
+        return storage.record_external_continuity(
+            project_id=payload.project_id,
+            event_type=payload.event_type,
+            job_id=payload.job_id,
+            payload=payload.detail,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @app.get("/v1/dashboard/quota", include_in_schema=False)

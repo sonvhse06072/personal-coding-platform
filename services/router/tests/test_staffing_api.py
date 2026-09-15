@@ -31,7 +31,7 @@ def test_staffing_endpoint_returns_router_selected_pm_agent() -> None:
     assert data["role"] == "product_manager"
     assert data["choice"]["id"] == "codex_terra"
     assert data["choice"]["reasoning_effort"] == "low"
-    assert data["policy_version"] == 11
+    assert data["policy_version"] == 12
     assert data["registry_version"] == 8
 
 

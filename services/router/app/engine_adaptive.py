@@ -33,6 +33,10 @@ class RouterEngine(BudgetRouterEngine):
     existing anti-loop, scope, escalation and human-decision policy after each
     meaningful iteration.
 
+    Historical telemetry may adjust an estimate only after the configured
+    minimum sample size. Sparse evidence falls back to the hand-authored policy
+    defaults and can never expand the configured emergency hard caps.
+
     Legacy persisted routes omit ``adaptive_budget`` and keep the historical
     max_* hard-stop semantics exactly.
     """
@@ -51,7 +55,37 @@ class RouterEngine(BudgetRouterEngine):
         )
         return max(0.0, min(1.0, weighted / 100.0))
 
-    def _adaptive_policy(self, route: RoutingResponse) -> AdaptiveBudgetPolicy | None:
+    def _calibration_multipliers(self, request: RoutingRequest) -> dict[str, float]:
+        observed = request.calibration
+        if observed is None:
+            return {}
+        cfg = dict(self.policy.get("telemetry_calibration") or {})
+        policy_minimum = int(cfg.get("minimum_sample_size", 5))
+        required = max(policy_minimum, int(observed.minimum_sample_size))
+        if int(observed.sample_size) < required:
+            return {}
+        lower = float(cfg.get("multiplier_min", 0.75))
+        upper = float(cfg.get("multiplier_max", 1.75))
+        if upper < lower:
+            lower, upper = upper, lower
+        result: dict[str, float] = {}
+        for dimension, raw in observed.resource_multipliers.items():
+            if dimension not in _ELASTIC_COUNTERS:
+                continue
+            try:
+                value = float(raw)
+            except (TypeError, ValueError):
+                continue
+            if value <= 0:
+                continue
+            result[dimension] = max(lower, min(upper, value))
+        return result
+
+    def _adaptive_policy(
+        self,
+        route: RoutingResponse,
+        request: RoutingRequest,
+    ) -> AdaptiveBudgetPolicy | None:
         cfg = dict(self.policy.get("adaptive_budget") or {})
         if not bool(cfg.get("enabled", False)):
             return None
@@ -66,6 +100,7 @@ class RouterEngine(BudgetRouterEngine):
         working_ratio = float(cfg.get("working_headroom_ratio", 1.25))
         emergency_ratio = float(cfg.get("emergency_multiplier", 1.5))
         estimate_ratio = min_ratio + (max_ratio - min_ratio) * pressure
+        calibration = self._calibration_multipliers(request)
 
         budget = route.strategy.budget.model_copy(deep=True)
         dimensions: dict[str, AdaptiveBudgetDimension] = {}
@@ -77,8 +112,12 @@ class RouterEngine(BudgetRouterEngine):
             baseline = float(getattr(budget, dimension))
             hard_cap = max(baseline, float(spec.get("hard_max", baseline)))
             minimum = float(spec.get("minimum", 1.0))
+            historical_multiplier = float(calibration.get(dimension, 1.0))
 
-            estimate = max(minimum, math.ceil(baseline * estimate_ratio))
+            estimate = min(
+                hard_cap,
+                max(minimum, math.ceil(baseline * estimate_ratio * historical_multiplier)),
+            )
             working_target = min(
                 hard_cap,
                 max(baseline, math.ceil(estimate * working_ratio)),
@@ -115,13 +154,19 @@ class RouterEngine(BudgetRouterEngine):
 
     def route(self, request: RoutingRequest) -> RoutingResponse:
         result = super().route(request)
-        adaptive = self._adaptive_policy(result)
+        multipliers = self._calibration_multipliers(request)
+        adaptive = self._adaptive_policy(result, request)
         if adaptive is None:
             return result
         result.strategy.adaptive_budget = adaptive
-        result.strategy.reasons = list(result.strategy.reasons) + [
+        reasons = list(result.strategy.reasons) + [
             "Adaptive personal-scale budget enabled: estimate/working targets are non-blocking and max_* values are bounded emergency circuit breakers."
         ]
+        if multipliers and request.calibration is not None:
+            reasons.append(
+                f"Observed project/task/role calibration applied from {request.calibration.sample_size} comparable terminal jobs; emergency hard caps remain authoritative."
+            )
+        result.strategy.reasons = reasons
         return result
 
     @staticmethod
