@@ -146,12 +146,22 @@ class AdaptiveBudgetDimension(BaseModel):
     estimate: float = Field(ge=0.0)
     working_target: float = Field(ge=0.0)
     emergency_limit: float = Field(ge=0.0)
+    grant_increment: float = Field(gt=0.0)
 
 
 class AdaptiveBudgetPolicy(BaseModel):
     enabled: bool = False
     effort_pressure: float = Field(default=0.0, ge=0.0, le=1.0)
     dimensions: dict[str, AdaptiveBudgetDimension] = Field(default_factory=dict)
+
+
+class AdaptiveBudgetGrant(BaseModel):
+    dimension: str = Field(min_length=1, max_length=80)
+    previous_limit: float = Field(ge=0.0)
+    new_limit: float = Field(ge=0.0)
+    emergency_limit: float = Field(ge=0.0)
+    used: float = Field(ge=0.0)
+    projected: float = Field(ge=0.0)
 
 
 class ExecutionStrategy(BaseModel):
@@ -212,6 +222,7 @@ class ReassessRequest(BaseModel):
     route: RoutingResponse
     progress: ExecutionProgress
     provider_state: dict[str, ProviderState] = Field(default_factory=dict)
+    requested_headroom: dict[str, float] = Field(default_factory=dict)
 
 
 class ReassessResponse(BaseModel):
@@ -222,3 +233,4 @@ class ReassessResponse(BaseModel):
     human_decision: HumanDecision | None = None
     remaining: dict[str, float | int]
     signals: list[str] = Field(default_factory=list)
+    adaptive_budget_grants: list[AdaptiveBudgetGrant] = Field(default_factory=list)
