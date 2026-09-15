@@ -140,6 +140,12 @@ def review_report_summary(report: ReviewReport) -> dict[str, Any]:
     }
 
 
+def _update_useful_finding_yield(progress: dict[str, Any]) -> None:
+    total = int(progress.get("review_findings", 0))
+    actioned = int(progress.get("review_findings_actioned", 0))
+    progress["review_useful_finding_yield"] = round(actioned / total, 4) if total else 0.0
+
+
 def record_review_telemetry(
     progress: dict[str, Any],
     report: ReviewReport,
@@ -178,6 +184,7 @@ def record_review_telemetry(
         }
     )
     progress["review_history"] = history[-12:]
+    _update_useful_finding_yield(progress)
 
 
 def mark_actioned_review_findings(
@@ -195,6 +202,7 @@ def mark_actioned_review_findings(
     findings = [item for item in pending.get("findings", []) if isinstance(item, dict)]
     progress["review_findings_actioned"] = int(progress.get("review_findings_actioned", 0)) + len(findings)
     checkpoint.pop("pending_review_findings", None)
+    _update_useful_finding_yield(progress)
 
 
 __all__ = [
