@@ -20,7 +20,7 @@ from .staffing import RouterEngine
 
 app = FastAPI(
     title="Personal Coding Router Service",
-    version="1.0.16",
+    version="1.0.17",
     description="Deterministic-first model/agent routing for a personal coding automation platform.",
 )
 
@@ -46,7 +46,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok",
         "service": "router-service",
-        "version": "1.0.16",
+        "version": "1.0.17",
         "registry_version": cfg["models"].get("version", 1),
         "policy_version": cfg["policy"].get("version", 1),
     }
