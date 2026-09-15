@@ -4,6 +4,7 @@ from copy import deepcopy
 
 from app.telemetry import (
     aggregate_calibration,
+    classify_attention_event,
     classify_budget_attention,
     task_telemetry_snapshot,
 )
@@ -124,11 +125,15 @@ def test_sparse_calibration_falls_back_then_uses_bounded_observed_ratios() -> No
     assert result["fallback"] is None
 
 
-def test_budget_attention_distinguishes_legacy_avoidable_from_adaptive_emergency() -> None:
+def test_attention_classification_separates_protected_decisions_from_routine_operations() -> None:
+    adaptive = completed_row()
     legacy = completed_row()
     legacy["route"]["strategy"].pop("adaptive_budget")
-    adaptive = completed_row()
 
+    assert classify_attention_event("human_decision", adaptive) == {
+        "category": "decision_boundary",
+        "avoidable": False,
+    }
     assert classify_budget_attention(legacy) == {
         "category": "routine_operational",
         "avoidable": True,
