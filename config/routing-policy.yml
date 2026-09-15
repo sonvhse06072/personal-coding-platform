@@ -1,4 +1,4 @@
-version: 10
+version: 11
 complexity_weights:
   scope: 0.18
   dependency_depth: 0.1
@@ -39,6 +39,60 @@ adaptive_budget:
     max_wall_time_minutes:
       minimum: 10
       hard_max: 180
+review_policy:
+  # Review spend is policy/calibration data, not a model identity decision.
+  # Router still staffs the logical reviewer role from current provider/model
+  # eligibility and Runtime remains responsible for deterministic acceptance.
+  profiles:
+    fast:
+      level: lightweight
+      required: false
+      conditional_on_strong_evidence: true
+      independent: true
+      different_model_required: true
+      different_provider_required: false
+      reason: routine work skips model review only when deterministic evidence is strong
+    standard:
+      level: standard
+      required: true
+      conditional_on_strong_evidence: false
+      independent: true
+      different_model_required: false
+      different_provider_required: false
+      reason: standard profile requires bounded independent Task Contract/diff review
+    complex:
+      level: strong
+      required: true
+      conditional_on_strong_evidence: false
+      independent: true
+      different_model_required: true
+      different_provider_required: false
+      reason: complex profile requires a stronger independent reviewer
+    critical:
+      level: critical
+      required: true
+      conditional_on_strong_evidence: false
+      independent: true
+      different_model_required: true
+      different_provider_required: true
+      reason: critical profile requires cross-provider review when eligible
+  high_impact:
+    architecture_impact_min: 70
+    risk_min: 85
+    flags:
+    - security_sensitive
+    - security_boundary_change
+    - authentication_change
+    - authorization_change
+    - secret_management_change
+    policy:
+      level: critical
+      required: true
+      conditional_on_strong_evidence: false
+      independent: true
+      different_model_required: true
+      different_provider_required: true
+      reason: security/architecture/high-risk work requires cross-provider review when eligible
 profiles:
   fast:
     max_score: 29

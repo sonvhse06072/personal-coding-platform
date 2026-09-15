@@ -56,7 +56,7 @@ def test_openrouter_free_is_preferred_for_routine_work_and_excluded_from_critica
     _, policy = documents()
     profiles = policy["profiles"]
 
-    assert policy["version"] == 10
+    assert policy["version"] == 11
     assert "fast_executor" in profiles["fast"]["executor_roles"]
     assert profiles["fast"]["preferred_executor_ids"][0] == MODEL_ID
 
