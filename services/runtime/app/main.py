@@ -109,7 +109,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.38", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.39", lifespan=lifespan)
 app.include_router(pm_bridge_router)
 app.include_router(create_dashboard_router(storage, plan_orchestrator.store))
 
@@ -121,7 +121,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.38",
+        version="1.0.39",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
@@ -220,7 +220,53 @@ def release_notification(event_id: int, payload: NotificationReleaseRequest) -> 
         retry_seconds=payload.retry_seconds,
     ):
         raise HTTPException(409, "Notification is not currently claimed")
-    return {"status": "pending", "event_id": event_id}
+    return {"status": "released", "event_id": event_id}
+
+
+@app.get("/v1/jobs", response_model=JobList, dependencies=[Depends(auth)])
+def list_jobs(limit: int = Query(50, ge=1, le=200)) -> JobList:
+    return JobList(jobs=[view(row) for row in storage.list(limit=limit)])
+
+
+@app.get("/v1/jobs/{job_id}", response_model=JobView, dependencies=[Depends(auth)])
+def get_job(job_id: str) -> JobView:
+    row = storage.get(job_id)
+    if not row:
+        raise HTTPException(404, "Unknown job")
+    return view(row)
+
+
+@app.post("/v1/jobs", response_model=JobView, dependencies=[Depends(auth)])
+async def create_job(payload: JobCreateRequest) -> JobView:
+    data = payload.model_dump(mode="json")
+    job_id = engine.create_job(data)
+    if payload.auto_run:
+        await engine.enqueue(job_id)
+    row = storage.get(job_id)
+    assert row is not None
+    return view(row)
+
+
+@app.post("/v1/jobs/{job_id}/run", response_model=JobView, dependencies=[Depends(auth)])
+async def run_job(job_id: str, payload: JobRunRequest) -> JobView:
+    try:
+        row = await engine.resume(
+            job_id,
+            reset_transient_provider_failures=payload.reset_transient_provider_failures,
+            reroute=payload.reroute,
+        )
+    except RuntimeError as exc:
+        raise runtime_error(exc) from exc
+    return view(row)
+
+
+@app.post("/v1/jobs/{job_id}/decision", response_model=JobView, dependencies=[Depends(auth)])
+async def resolve_decision(job_id: str, payload: HumanDecisionRequest) -> JobView:
+    try:
+        row = await engine.resolve_human_decision(job_id, action=payload.action, note=payload.note)
+    except RuntimeError as exc:
+        raise runtime_error(exc) from exc
+    return view(row)
 
 
 @app.post("/v1/control-actions/{action_id}/execute", dependencies=[Depends(auth)])
@@ -238,84 +284,3 @@ async def execute_control_action(
         )
     except RuntimeError as exc:
         raise HTTPException(409, str(exc)) from exc
-
-
-@app.post("/v1/jobs", response_model=JobView, dependencies=[Depends(auth)])
-async def create_job(payload: JobCreateRequest) -> JobView:
-    try:
-        job_id = engine.create_job(payload.model_dump(mode="json"))
-    except (RuntimeError, KeyError, ValueError) as exc:
-        raise HTTPException(422, str(exc)) from exc
-    if payload.auto_run:
-        await engine.enqueue(job_id)
-    row = storage.get(job_id)
-    assert row is not None
-    return view(row)
-
-
-@app.get("/v1/jobs", response_model=JobList, dependencies=[Depends(auth)])
-def list_jobs(limit: int = Query(50, ge=1, le=500)) -> JobList:
-    return JobList(jobs=[view(row) for row in storage.list(limit)])
-
-
-@app.get("/v1/jobs/{job_id}", response_model=JobView, dependencies=[Depends(auth)])
-def get_job(job_id: str) -> JobView:
-    row = storage.get(job_id)
-    if not row:
-        raise HTTPException(404, "Unknown job")
-    return view(row)
-
-
-@app.post("/v1/jobs/{job_id}/run", response_model=JobView, dependencies=[Depends(auth)])
-async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
-    request = payload or JobRunRequest()
-    try:
-        orchestration_resume = prepare_orchestrated_job_resume(plan_orchestrator.store, job_id)
-        row = await engine.resume(
-            job_id,
-            reset_transient_provider_failures=request.reset_transient_provider_failures,
-            reroute=request.reroute,
-            _allow_failed_orchestrated_resume=bool(
-                orchestration_resume and orchestration_resume.get("reopen")
-            ),
-        )
-        reopen_orchestrated_job(plan_orchestrator.store, orchestration_resume, job_id)
-    except RuntimeError as exc:
-        raise runtime_error(exc) from exc
-    return view(row)
-
-
-@app.post("/v1/jobs/{job_id}/cancel", response_model=JobView, dependencies=[Depends(auth)])
-async def cancel_job(job_id: str) -> JobView:
-    try:
-        await engine.ddev.cancel(job_id=job_id)
-        active = engine.active_jobs.get(job_id)
-        if active and not active.done():
-            active.cancel()
-            await asyncio.gather(active, return_exceptions=True)
-        row = await engine.cancel(job_id)
-    except RuntimeError as exc:
-        raise runtime_error(exc) from exc
-    return view(row)
-
-
-@app.post("/v1/jobs/{job_id}/decision", response_model=JobView, dependencies=[Depends(auth)])
-async def resolve_decision(job_id: str, payload: HumanDecisionRequest) -> JobView:
-    try:
-        row = await engine.resolve_human_decision(
-            job_id,
-            action=payload.action,
-            note=payload.note,
-        )
-    except RuntimeError as exc:
-        raise runtime_error(exc) from exc
-    await plan_orchestrator.tick()
-    return view(row)
-
-
-@app.post("/v1/jobs/{job_id}/cleanup", dependencies=[Depends(auth)])
-async def cleanup_job(job_id: str, remove_workspace: bool = False) -> dict[str, Any]:
-    try:
-        return await engine.cleanup(job_id, remove_workspace=remove_workspace)
-    except RuntimeError as exc:
-        raise HTTPException(404, str(exc)) from exc
