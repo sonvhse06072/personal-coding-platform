@@ -368,3 +368,13 @@ PM should normally run when:
 - a PR has passed its required gates and is ready for PM merge review.
 
 A first lint failure, test typo, or ordinary bounded retry remains Runtime/Developer responsibility.
+
+## 16. Human Owner diagnostic-block convention
+
+Normal ChatGPT/operator collaboration continues to use ordinary terminal-safe read-only blocks. The existence of the planned Telegram terminal operations gateway does not change the default response format.
+
+Only when the Human Owner explicitly asks for a read-only block that is ready to send through Telegram should ChatGPT emit the Telegram-specific metadata/format described in `telegram-terminal-operations.md`.
+
+This convention exists so local terminal work remains simple while Telegram execution remains an opt-in transport with a distinct security boundary.
+
+The detailed approved target design for `/run-ro`, the read-only broker, optional `/run-op`, sandbox/database/secret boundaries, Telegram-ready metadata, WSL lifecycle and implementation phases is authoritative in `telegram-terminal-operations.md`.
