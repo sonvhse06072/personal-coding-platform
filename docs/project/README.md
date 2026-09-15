@@ -11,6 +11,7 @@ These documents are intentionally stored in the repository so ChatGPT, Codex, an
 - `operating-model.md` — responsibilities and communication contracts for Human Owner, Product Manager, Router, Runtime, Developer, Reviewer, and n8n.
 - `provider-policy.md` — provider/model resource tiers, Router authority, privacy/failover rules, and the approved OpenRouter opportunistic free-tier policy.
 - `roadmap.md` — implementation sequence, current priorities, and explicitly deferred work.
+- `efficiency-model.md` — Human Owner-approved personal-scale efficiency policy: task-specific adaptive budgets, Human-attention minimization, layered verification, bounded inter-agent collaboration, risk-proportionate review, compact evidence packs, telemetry calibration, and continuity automation.
 - `telegram-terminal-operations.md` — approved target design and operator convention for a separate owner-only Telegram terminal operations gateway, including read-only sandbox/broker boundaries and the rule that Telegram-ready diagnostic blocks are emitted only when explicitly requested.
 - `current-state.md` — mutable cross-chat handoff snapshot: active work, branches/issues/PRs/WorkOrders/jobs, blockers, evidence, next safe actions, and operational gates.
 - additional topical policy documents may be added as approved decisions require them; `current-state.md` should point a new session to the relevant ones.
