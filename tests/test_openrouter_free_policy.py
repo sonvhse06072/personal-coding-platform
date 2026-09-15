@@ -52,17 +52,18 @@ def test_openrouter_free_uses_one_explicit_effectiveness_first_model() -> None:
     assert model["free_tier"]["authoritative_remaining_available"] is False
 
 
-def test_openrouter_free_is_opportunistic_and_excluded_from_critical_and_pm() -> None:
+def test_openrouter_free_is_preferred_for_routine_work_and_excluded_from_critical_and_pm() -> None:
     _, policy = documents()
     profiles = policy["profiles"]
 
-    assert policy["version"] == 9
+    assert policy["version"] == 10
     assert "fast_executor" in profiles["fast"]["executor_roles"]
     assert profiles["fast"]["preferred_executor_ids"][0] == MODEL_ID
 
     assert "standard_executor" in profiles["standard"]["executor_roles"]
+    assert profiles["standard"]["preferred_order_bonus"] == 0.14
     standard = profiles["standard"]["preferred_executor_ids"]
-    assert standard[:2] == ["antigravity_free", MODEL_ID]
+    assert standard[:2] == [MODEL_ID, "antigravity_free"]
 
     assert MODEL_ID not in profiles["complex"]["preferred_executor_ids"]
     assert MODEL_ID not in profiles["complex"]["preferred_planner_ids"]
