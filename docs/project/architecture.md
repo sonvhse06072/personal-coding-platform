@@ -202,6 +202,33 @@ The system should staff logical roles such as:
 
 A role is mapped to a model/provider by Router according to capability, risk, availability, privacy, historical performance, and budget. A model name must never become the role identity.
 
+### Owner-only Telegram terminal operations gateway
+
+A separate owner-only Telegram terminal operations gateway is an approved target convenience layer and is **not implemented yet**. Its authoritative detailed design is `telegram-terminal-operations.md`.
+
+The gateway is distinct from the existing PCP Telegram governance/notification bot and must use a separate bot/token and trust boundary.
+
+Target capability split:
+
+```text
+Human Owner Telegram private chat
+  -> separate Terminal Bot
+     -> /run-ro: arbitrary diagnostic logic inside a capability-restricted read-only runner
+        -> PCP read-only broker / SELECT-only observer paths
+     -> /run-op: named bounded operations with explicit confirmation and fresh state revalidation
+     -> /run-admin: disabled by default
+```
+
+The read-only runner must not receive source/workspace write access, Runtime/provider/GitHub credentials, Docker socket, SSH agent, root/sudo capability or database mutation authority. Repository/workspace/log views are read-only and scratch writes are confined to a bounded temporary area.
+
+Security must be enforced by OS/container/database permissions and brokered capabilities, not by regex or shell-text classification. A diagnostic script may be syntactically arbitrary while remaining unable to mutate protected state.
+
+The read-only broker exists so common PCP diagnostics can inspect jobs, plans, actions, events, quota and bounded logs without exporting mutable Runtime/database credentials into the diagnostic process.
+
+`/run-op`, if implemented, maps only to approved named operations through official Runtime/service interfaces. It must not become a generic elevated shell and must preserve active-job rollout gates, stale/replay checks, current project/WorkOrder identity and production decision boundaries.
+
+This target does not change the normal ChatGPT/operator interaction convention: ordinary read-only blocks remain ordinary terminal-safe blocks. Telegram-specific metadata/format is emitted only when the Human Owner explicitly requests a Telegram-ready block.
+
 ### Cross-model review
 
 Review diversity is a first-class target, but it must be risk-proportionate.
@@ -275,6 +302,16 @@ n8n
   - Runtime API credential
   - control-plane ingress secrets
   - no Router/provider/executor/GitHub credentials
+
+Telegram terminal /run-ro target
+  - owner/private-chat authenticated ingress
+  - arbitrary diagnostic logic inside read-only capability sandbox
+  - repository/workspace/log views read-only
+  - brokered PCP inspection only
+  - no Runtime/provider/GitHub/SSH secrets
+  - no Docker socket
+  - no database mutation
+  - no source/workspace mutation
 ```
 
 Security boundaries must fail closed. Convenience is not sufficient justification for giving a lower-trust role a higher-trust credential.

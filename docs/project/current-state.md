@@ -89,6 +89,28 @@ Runtime currently still has manual-merge orchestration behavior from the previou
 9. Once C1 returns active, do not restart/rebuild Runtime/DDEV/n8n until it reaches another safe terminal/stable blocked state.
 10. Use the new read-only Live Developer Activity stream to monitor model/tool/verification work; dashboard disconnect/reconnect must never change execution state.
 
+## Telegram terminal operations target
+
+Human Owner approved the design/documentation direction on 2026-09-15; issue #138 tracks the documentation PR. The capability is **not implemented** yet.
+
+Authoritative topical document: `docs/project/telegram-terminal-operations.md`.
+
+Durable interaction convention:
+
+- ChatGPT continues to provide ordinary terminal-safe read-only blocks by default.
+- Telegram-specific read-only formatting is emitted only when the Human Owner explicitly requests a Telegram-ready block.
+- The planned terminal bot is separate from the existing PCP Telegram governance/notification bot and uses a separate owner-only/private-chat trust boundary.
+
+Approved target implementation order:
+
+1. `/run-ro` in a capability-restricted read-only sandbox with no source/workspace writes, secrets, Docker socket, sudo/root, arbitrary SSH or database mutation;
+2. `pcp-readonly-broker`/equivalent for jobs/plans/actions/events/quota/logs and optional SELECT-only DB access without exposing Runtime credentials;
+3. optional Telegram-ready block metadata/hash/TTL ergonomics;
+4. later `/run-op` named bounded mutations with explicit confirmation and fresh state revalidation;
+5. generic `/run-admin` remains disabled unless separately justified/approved.
+
+Security is enforced by OS/container/database capabilities, not by regex/shell-text classification. Runtime durable state, official control endpoints, stale-action checks, active-job rollout gates, PM governance and production decision boundaries remain authoritative.
+
 ## Global operational gates
 
 - Do not commit implementation work directly to `main`; use issue -> `ai/*` branch -> tests/CI -> PR.
