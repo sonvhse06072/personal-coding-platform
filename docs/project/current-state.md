@@ -11,87 +11,115 @@ Read, in order:
 1. repository-root `AGENTS.md`;
 2. `docs/project/README.md`;
 3. this file;
-4. every topical project document referenced below;
+4. topical documents referenced by the active work, especially `efficiency-model.md` for the current platform-improvement initiative;
 5. the active GitHub issue/PR and current branch diff before editing.
 
-Do not rely on chat history as project state. Repository docs and current executable evidence win according to the authority order in `AGENTS.md`.
+Do not rely on chat history as authoritative project state. Repository docs and current executable evidence win according to the authority order in `AGENTS.md`.
 
 ## Mandatory continuity rule
 
-Before a material task is complete or handed off, update the relevant topical document for durable decisions and update this file for mutable execution state. Handoff prompts to Codex/platform agents must require those documentation updates as part of Definition of Done.
+Before a material task is complete or handed off, update the relevant topical document for durable decisions and this file for mutable execution state. Replace stale state instead of appending raw chronological history; Git history is the audit trail.
 
-## Current repository state
+## Current platform baseline
 
-- PR #90 (`Recover wall-budget-bounded agent timeouts safely`) is merged; source Runtime behavior advanced to `1.0.31`.
-- PR #92 (`Make Codex unattended execution fail closed`) is merged at `7d05c68dc36a481fbece98540bc4d0e6888643a2`; post-merge GitHub Actions run #187 passed. Source Runtime behavior advanced to `1.0.32`.
-- PR #92 policy: Codex planner/evaluator use `read-only`, execute/repair use `workspace-write`, every Codex Runtime turn uses `approval_policy="never"`, workspace-write network is explicitly disabled, and full-access/bypass flags remain forbidden.
-- PR #97 (`Delegate routine PR review and merge to PM`) is merged at `9574cc61a46cecb2ad88ae0983e7cb8eef8fbf7c`; GitHub Actions run #195 passed on exact head `6381507c112cd524d3fd71f3abbebaf69b999535` before PM merge.
-- PR #97 updates the Constitution, Architecture, Operating Model, `AGENTS.md`, and continuity policy so PM may review and merge eligible in-scope PRs autonomously after all required gates pass and when no unresolved Human Owner decision trigger exists.
-- PR #95 was closed unmerged as superseded; issue #93 was closed completed because its durable shell-command guidance is now included in `AGENTS.md` via PR #97.
-- PR #102 (`Re-emit attention when owner actions change`) is merged at `bdba1a34d3f154f0e0e1e757cc7a341a188645b2`; exact-head GitHub Actions run #201 passed before PM merge. Issue #101 is resolved. Source Runtime is `1.0.33`.
-- PR #102 fixes a rollout rematerialization bug: attention notification dedupe includes a deterministic fingerprint of the rendered control-action set, so a stable blocked/waiting/merge state emits one fresh owner notification when newly valid actions appear while repeated ticks with the same action set remain deduped.
-- PR #106 (`Keep Telegram callback acknowledgement non-blocking`) is merged at `03cd3a918fbf1de8f4ad1eabdd844d45f2ec8e73`; exact-head GitHub Actions run #205 passed before PM merge. Issue #105 is resolved.
-- PR #106 makes Telegram `answerCallbackQuery` best-effort in `pcpTelegramControl1`, so Telegram HTTP 400 acknowledgement failures cannot prevent a valid opaque Runtime control action from being attempted. Runtime remains authoritative for owner identity, stale/replayed action rejection and one-time live state revalidation.
-- PR #114 (`Stream sanitized live developer transcript`) is merged at `a60b15523c30c6b6884c040f76cb608131bdcb3f`; exact-head GitHub Actions run #212 passed all four jobs before PM merge. Issue #109 is resolved.
-- PR #114 incrementally consumes Codex `--json` stdout, persists only bounded sanitized developer/tool/file/error events, adds authenticated recent-event replay + SSE under the existing read-only dashboard session, and makes the Live Developer Console the primary active-job view while preserving a separate high-level audit timeline.
-- PR #118 (`Expand Live Developer Activity across providers`) is merged at `d389c60517dfe19357d57414b1f0795df39e703d`; exact-head GitHub Actions run #225 passed before merge. Issue #117 is resolved.
-- PR #118 expands the read-only activity stream across Codex, OpenCode, OpenRouter-backed OpenCode, constrained Antigravity host `stream-json`, and Runtime-native verification/block activity. Adapter/provider/model identity is separate, and Antigravity prompt/user-input plus unknown event fields are dropped at the host boundary before Runtime.
-- Raw chain-of-thought/reasoning, full prompts, credentials, unrestricted environment data and unbounded subprocess output remain excluded. Observability failures remain fail-open for coding execution and cannot authorize control mutations.
-- Issue #119 tracks release-identity alignment after PR #118. Source Runtime release identity is advanced to `1.0.34` on branch `ai/runtime-release-identity-119`; local rollout waits for its green CI/merge so health can prove the new Runtime image deterministically.
-- Local rollout currently proves Router `1.0.15`, deployed Runtime `1.0.33`, ddev-executor `1.0.14`, model registry `v7`, routing policy `v7`, n8n healthy, and all service-scoped secret boundaries healthy. PR #118 is merged but not yet rolled out locally.
-- Codex CLI `0.154.0` passed the bounded unattended policy smoke from a disposable trusted Git repository with `workspace-write`, `approval_policy="never"`, and workspace network disabled.
-- Durable operator command guidance: avoid fragile nested `python3 -c '...'` quoting, prefer heredocs/readable multi-line commands, verify `curl | python3` pipelines, and prefer deterministic explicit guards.
+The currently relevant merged platform state is:
 
-## Effective PM merge governance
+- PM routine in-scope PR review/merge authority is approved by issue #96 / PR #97; developer agents still cannot merge and production deployment remains separately Human Owner-controlled.
+- Runtime source is `1.0.38` after PR #137 (`Recover provider-blocked jobs with multiple exhausted budgets`).
+- Router source is `1.0.16`; routing/model policy is v8.
+- Antigravity host bridge is `1.10` after PR #135 and live verification proved safety settings survive proactive quota probes.
+- Provider quota telemetry/proactive refresh is implemented through PRs #129/#131 plus follow-up safety fixes.
+- Live Developer Activity is implemented across supported providers and Runtime-native phases.
+- PR #139 (`Document Telegram terminal operations gateway`) is merged at `9683250a7669b47e9d81f6df648bb769ca5e3893`; the terminal gateway remains an approved target, not implemented.
+- Issue #98 (`Implement constrained PM-controlled PR merge in Runtime`) remains open and is still required for full executable alignment with the approved PM merge governance.
 
-Human Owner decision adopted on 2026-09-14 through issue #96 / PR #97:
+## Active `chonhac` DEC-025C state
 
-- PM may review and merge routine PRs autonomously when the change stays inside the already-approved project frame.
-- PR, deterministic verification, required independent review, and green CI remain mandatory gates.
-- PM must inspect the WorkOrder/Task Contract, WorkReport, verification evidence, review findings, CI state, unresolved risks, and human-decision triggers before merge.
-- Developer agents still cannot merge and must not receive GitHub merge credentials.
-- Force push remains forbidden.
-- Production deployment is separate from PR merge and remains under existing Human Owner decision policy.
-- Human Owner approval is still required for important protected decisions: scope/non-goal changes, architecture invariants, major dependencies/services, authentication/authorization/security/trust boundaries, destructive data changes, production policy/actions, high-authority governance amendments, and material budget expansion.
-- If a PR introduces or depends on one of those decisions, PM must pause for explicit Human Owner approval. After approval and remaining green gates, PM may complete the merge.
+GitHub ticket: `chonhac` GH-5.
 
-Runtime currently still has manual-merge orchestration behavior from the previous policy. Issue #98 (`Implement constrained PM-controlled PR merge in Runtime`) tracks executable alignment. The future implementation must keep merge capability behind Runtime -> constrained `ddev-executor`, validate exact PR/head/project/WorkOrder/CI/review/human-decision state, preserve developer-agent credential isolation, and fail closed on stale/replayed/unauthorized merge requests.
+Orchestration identity:
 
-## DEC-025C / `chonhac` recovery tooling
+- plan: `pm-gh-5650852312`;
+- WorkOrder: `DEC-025C-1-recovery-tooling-r2`;
+- job: `eec59b13651c54559c10ce204380a68e`;
+- branch: `ai/eec59b13651c`;
+- workspace: `/home/sonvh/.coding-platform/workspaces/eec59b13651c54559c10ce204380a68e`.
 
-- GitHub ticket: `chonhac` issue GH-5.
-- Orchestration plan: `pm-gh-5650852312`.
-- WorkOrder: `DEC-025C-1-recovery-tooling-r2`.
-- Runtime job: `eec59b13651c54559c10ce204380a68e`.
-- C1 still must satisfy two evaluator findings before normal delivery completion:
-  1. derive/verify deployed release identity from the deployed tree instead of trusting local Git SHA/fingerprint supplied by `run.sh`;
-  2. provide deterministic passing evidence for the DEC-025C-specific Python/PHP/shell/static checks required by AC6.
-- Bounded recoveries already approved on the same job without resetting usage:
-  - `max_model_calls`: `14 -> 18`;
-  - `max_repair_iterations`: `2 -> 3`;
-  - `max_iterations`: `8 -> 10`;
-  - compatibility recovery: `max_wall_time_minutes +20` only when the persisted legacy timeout matches live policy.
-- The exact C1 job is now stably blocked because its selected provider reported quota exhaustion. Same job/workspace/durable counters are preserved; Runtime durable state remains authoritative.
-- While C1 is stably blocked, the approved targeted platform rollout may rebuild/restart only the components required for PR #118/#119. Do not manually mutate job/database state, replace C1, reset counters, or call generic `/v1/jobs/{job_id}/run`.
-- After rollout verification, rematerialize the existing blocked-state owner actions through normal orchestration. If provider quota is still exhausted, prefer the explicit `reroute_provider` owner action; use `provider_quota_reset` only when quota has actually reset. Both paths resume the same job and preserve durable usage.
-- C2/C3 remain gated until C1 satisfies both evaluator findings and clears its delivery/merge gate under the effective governance policy.
+The same job/workspace has been preserved across recovery. The successful Runtime 1.0.38 owner action `7Xgt2C_4GrhIIYEeAFfG5fEc` atomically extended:
 
-## Live Developer Activity rollout gate
+- `max_wall_time_minutes`: `90 -> 110`;
+- `max_iterations`: `12 -> 14`;
 
-1. PR #118 is merged at `d389c60517dfe19357d57414b1f0795df39e703d`; exact-head CI run #225 is green.
-2. Complete issue #119 so Runtime reports `1.0.34`; merge only after exact-head CI is green.
-3. Re-read C1 before local rollout and require the same job id to be stably blocked/non-active.
-4. Pull the exact merged main head, restart only the Antigravity host bridge, and rebuild/restart only `coding-runtime` with DDEV service-scoped rebuild. Router, ddev-executor and n8n do not require rollout for this change.
-5. Verify Antigravity bridge health reports `version=1.7` and `streaming=true`; verify Runtime health reports `version=1.0.34` with Router/executor healthy.
-6. Re-read C1 after rollout and require the same job/workspace/counters to remain blocked and unchanged apart from safe startup metadata/events.
-7. Trigger a normal orchestrator tick to rematerialize owner attention. Do not manually claim notification leases. Let the existing n8n outbox deliver the Telegram control message.
-8. If provider quota remains exhausted, select `🔀 Chuyển provider`; if quota has genuinely reset, select `✅ Quota đã reset — tiếp tục`. Runtime revalidates the opaque action id and resumes the same job with a fresh route.
-9. Once C1 returns active, do not restart/rebuild Runtime/DDEV/n8n until it reaches another safe terminal/stable blocked state.
-10. Use the new read-only Live Developer Activity stream to monitor model/tool/verification work; dashboard disconnect/reconnect must never change execution state.
+and rerouted the same job while preserving failed-provider state.
+
+C1 then progressed through verification into reassessment and is currently stably blocked with:
+
+- job status: `blocked`;
+- result reason: `reassessment_stopped`;
+- reassessment action: `stop`;
+- reassessment reason: `repair budget exhausted`;
+- signal: `hard_budget_guard`.
+
+Latest observed counters:
+
+- model calls: `21 / 22`;
+- tool calls: `65 / 160`;
+- test runs: `14 / 14`;
+- wall time: `93.168 / 110` minutes;
+- repair iterations: `4 / 4`.
+
+Fresh exact recovery action materialized for the current state:
+
+- action id: `abXzvyU2pvALZ5YpovNveDcr`;
+- type: `budget_extend`;
+- payload: `max_repair_iterations +1`;
+- status at last inspection: pending/valid.
+
+Older provider-recovery controls may still exist in storage but belong to older state generations and must not be used in place of the fresh current-state action.
+
+C2/C3 remain gated behind C1 completion. No manual DB/job mutation, counter reset, job replacement, or generic `/v1/jobs/{job_id}/run` bypass is allowed.
+
+## Efficiency initiative — active platform priority
+
+On 2026-09-15 the Human Owner approved a platform-wide efficiency direction whose goal is higher throughput/quality while keeping resource usage at personal scale and minimizing routine Human Owner attention.
+
+Authoritative policy/design: `docs/project/efficiency-model.md`.
+
+GitHub tracking:
+
+- #146 — umbrella efficiency initiative;
+- #147 — Phase A: task-specific adaptive budgets and Human-attention circuit breakers;
+- #148 — Phase B: layered verification and failure-budget separation;
+- #149 — Phase C: bounded inter-agent collaboration and review dialogue;
+- #150 — Phase D: risk-proportionate review and role-specific evidence packs;
+- #151 — Phase E: telemetry calibration, Human-attention metrics, and continuity automation;
+- #98 — constrained PM-controlled merge remains part of the low-touch delivery target.
+
+Approved execution priority:
+
+1. #147 adaptive budgeting first because current profile-fixed hard stops are creating avoidable owner interruptions on healthy work;
+2. #148 layered verification/failure accounting;
+3. #149 bounded collaboration after budget semantics can absorb normal teamwork without new approval loops;
+4. #150 risk-proportionate review/context compaction;
+5. #151 telemetry calibration/continuity automation;
+6. complete #98 as part of removing the remaining routine end-of-task human checkpoint.
+
+Telegram terminal convenience work is lower priority than this execution-efficiency initiative unless an operational need changes the ordering.
+
+## Durable efficiency policy now approved
+
+- Profile remains a staffing/risk signal, but fixed profile counters should not be the only task resource estimate.
+- Budget semantics target three layers: expected estimate, autonomous healthy working envelope, deterministic emergency hard ceiling.
+- Reaching an estimate/working target alone must not stop a healthy execution or require Human Owner approval.
+- Provider quota/resource exhaustion is separate from task-budget estimation.
+- Anti-loop/no-progress/oscillation/scope/cost/quota/emergency-ceiling signals are the primary circuit breakers.
+- Final deterministic verification remains mandatory, but iteration should use targeted/focused checks before expensive full-suite checkpoints.
+- Engineering repair accounting must be separated from provider, infrastructure, verification and delivery retries.
+- Inter-agent collaboration is bounded: one primary writer by default, read-only consultants/reviewers, Router-selected logical roles, compact evidence packs, normally 1-2 rounds, no recursive swarm.
+- Review strength is risk-proportionate and should be calibrated using useful-finding telemetry.
+- Human Owner attention is a first-class resource; routine targets are `human_interventions_per_task -> 0` and `avoidable_blocks_per_task -> 0`.
 
 ## Telegram terminal operations target
-
-Human Owner approved the design/documentation direction on 2026-09-15; issue #138 tracks the documentation PR. The capability is **not implemented** yet.
 
 Authoritative topical document: `docs/project/telegram-terminal-operations.md`.
 
@@ -99,30 +127,30 @@ Durable interaction convention:
 
 - ChatGPT continues to provide ordinary terminal-safe read-only blocks by default.
 - Telegram-specific read-only formatting is emitted only when the Human Owner explicitly requests a Telegram-ready block.
-- The planned terminal bot is separate from the existing PCP Telegram governance/notification bot and uses a separate owner-only/private-chat trust boundary.
-
-Approved target implementation order:
-
-1. `/run-ro` in a capability-restricted read-only sandbox with no source/workspace writes, secrets, Docker socket, sudo/root, arbitrary SSH or database mutation;
-2. `pcp-readonly-broker`/equivalent for jobs/plans/actions/events/quota/logs and optional SELECT-only DB access without exposing Runtime credentials;
-3. optional Telegram-ready block metadata/hash/TTL ergonomics;
-4. later `/run-op` named bounded mutations with explicit confirmation and fresh state revalidation;
-5. generic `/run-admin` remains disabled unless separately justified/approved.
-
-Security is enforced by OS/container/database capabilities, not by regex/shell-text classification. Runtime durable state, official control endpoints, stale-action checks, active-job rollout gates, PM governance and production decision boundaries remain authoritative.
+- The future terminal bot is separate from the existing PCP Telegram governance/notification bot.
+- `/run-ro` must use capability-restricted read-only execution; `/run-op` is a later named/confirmed operation layer; generic `/run-admin` stays disabled by default.
 
 ## Global operational gates
 
-- Do not commit implementation work directly to `main`; use issue -> `ai/*` branch -> tests/CI -> PR.
+- Normal implementation flow: issue -> `ai/*` branch -> deterministic tests/CI -> PR -> PM merge when eligible.
 - Never force push.
-- Developer agents never merge.
-- PM may merge only after required gates pass and only when no unresolved Human Owner decision trigger exists.
-- Human Owner remains final authority over important protected decisions listed in the Constitution.
-- Do not restart Runtime/DDEV while a job is in flight. Terminal `failed`/stable blocked states may be restarted when needed for an approved rollout.
-- Runtime durable state is authoritative; do not mutate job/database state manually to bypass state-machine logic.
-- Provider/control-plane credentials remain service-scoped and must never be committed to repository docs or intentionally sent to model prompts.
-- Developer agents remain inside the approved isolated workspace/sandbox boundary; avoiding human approval prompts is not permission to grant host-level full access.
+- Developer agents never merge and never receive GitHub merge credentials.
+- Human Owner remains final authority over protected decisions in the Constitution.
+- Production deployment is not implied by PR merge.
+- Do not restart/rebuild Runtime/DDEV/n8n while a job is active. A stable blocked/terminal state is required for an approved local rollout.
+- Runtime durable state is authoritative; never edit DB/job state manually to bypass state-machine logic.
+- Provider/control-plane credentials remain service-scoped and must not enter developer prompts or repository docs.
+- Avoiding human approval prompts is not permission to weaken sandbox, credential, Docker, source-repository, or production boundaries.
 
-## Updating this file
+## Immediate next safe actions
 
-Keep this file compact. Replace stale state rather than appending raw conversation history. Git history is the audit trail. When an active item is merged/completed, replace it with the rollout/verification state a future session still needs.
+Platform development:
+
+1. merge the documentation update for #146 after exact-head CI is green;
+2. implement #147 as the first code phase on its own `ai/*` branch/PR with backward-compatible persisted-job semantics;
+3. do not roll out Router/Runtime locally while any engineering job is active; use the current stable-blocked C1 state only if/when a targeted rollout is explicitly required and revalidate the same job before/after rollout.
+
+DEC-025C:
+
+- the fresh `max_repair_iterations +1` action remains the current normal recovery path if the Human Owner chooses to continue C1 under the existing Runtime 1.0.38 semantics;
+- the new adaptive-budget policy is a future platform behavior and must not be simulated by manually altering C1 counters/state.
