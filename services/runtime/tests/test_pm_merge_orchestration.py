@@ -28,6 +28,8 @@ def plan_row(work_orders) -> dict:
         "status": "active",
         "ticket": {"id": "GH-98", "title": "PM merge"},
         "plan": {"work_orders": work_orders, "decision_boundaries": []},
+        "baseline_revision": "baseline-r1",
+        "baseline_source_commit": SOURCE,
     }
 
 
