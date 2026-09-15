@@ -1,4 +1,4 @@
-version: 9
+version: 10
 complexity_weights:
   scope: 0.18
   dependency_depth: 0.1
@@ -75,6 +75,7 @@ profiles:
   standard:
     min_score: 30
     max_score: 59
+    preferred_order_bonus: 0.14
     analysis_depth: 1
     planner: false
     evaluator: false
@@ -98,8 +99,8 @@ profiles:
     - executor
     - standard_executor
     preferred_executor_ids:
-    - antigravity_free
     - openrouter_qwen3_coder_free
+    - antigravity_free
     - codex_terra
     - antigravity_flash_high
     - antigravity_gemini_pro
