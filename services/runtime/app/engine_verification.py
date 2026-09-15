@@ -1,22 +1,50 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
+from .collaboration import (
+    CollaborationCreateRequest,
+    CollaborationEvidence,
+    CollaborationManager,
+    CollaborationRecheckRequest,
+    DeveloperCollaborationRequest,
+)
 from .developer_stream import runtime_activity_event
 from .engine_execution import RuntimeEngine as ExecutionRuntimeEngine
+from .repo import diff_state
+from .shell import run_command
 from .work_order import work_order_snapshot
 
 
-class RuntimeEngine(ExecutionRuntimeEngine):
-    """Add WorkOrder-aware progressive verification and retry attribution.
+_COLLABORATION_REQUEST_FILE = ".pcp-collaboration-request.json"
+_MAX_COLLABORATION_REQUEST_BYTES = 32768
 
-    Legacy WorkOrders have no intermediate phases and delegate to the historical
-    verification path unchanged. New WorkOrders gate expensive final checks behind
-    explicitly declared cheap/intermediate phases. The final required phases still
-    determine acceptance; a narrow check only avoids wasting later checks in a
-    repair cycle that is already known to be bad.
+
+class _CollaborationRequested(RuntimeError):
+    def __init__(self, request: DeveloperCollaborationRequest, clean_diff: dict[str, Any]) -> None:
+        self.request = request
+        self.clean_diff = clean_diff
+        super().__init__("Primary developer requested bounded collaboration")
+
+
+class RuntimeEngine(ExecutionRuntimeEngine):
+    """Add layered verification, retry attribution and bounded collaboration.
+
+    A primary developer may emit one temporary structured collaboration artifact.
+    Runtime consumes and removes that control artifact before deterministic tests,
+    runs one bounded read-only role, then requeues the same job/workspace without
+    charging an engineering repair iteration.
     """
+
+    def __init__(self, storage: Any) -> None:
+        super().__init__(storage)
+        self.collaboration = CollaborationManager(
+            self.storage,
+            router=self.router,
+            ddev=self.ddev,
+        )
 
     def _runtime_event(
         self,
@@ -66,7 +94,213 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                     status="preflight_retry",
                     output={"attempt": progress["infrastructure_retry_attempts"]},
                 )
-        await super().run_job(job_id)
+        try:
+            await super().run_job(job_id)
+        except _CollaborationRequested as requested:
+            await self._handle_collaboration_request(job_id, requested)
+
+    async def _consume_collaboration_request(
+        self,
+        *,
+        job_id: str,
+        workspace: Path,
+        project: dict[str, Any],
+        progress: dict[str, Any],
+    ) -> _CollaborationRequested | None:
+        request_path = workspace / _COLLABORATION_REQUEST_FILE
+        if not request_path.exists():
+            return None
+        if not request_path.is_file():
+            raise RuntimeError("Reserved collaboration request path must be a regular file")
+        if request_path.stat().st_size > _MAX_COLLABORATION_REQUEST_BYTES:
+            raise RuntimeError("Collaboration request artifact exceeds the 32 KiB limit")
+
+        tracked = await run_command(
+            ["git", "ls-files", "--error-unmatch", _COLLABORATION_REQUEST_FILE],
+            cwd=workspace,
+            timeout=20,
+        )
+        if tracked.returncode == 0:
+            raise RuntimeError(
+                f"Reserved collaboration request path {_COLLABORATION_REQUEST_FILE!r} is tracked by the repository"
+            )
+
+        try:
+            raw = json.loads(request_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError("Collaboration request artifact must contain one valid JSON object") from exc
+        if not isinstance(raw, dict):
+            raise RuntimeError("Collaboration request artifact must contain one JSON object")
+        try:
+            request = DeveloperCollaborationRequest.model_validate(raw)
+        except ValueError as exc:
+            raise RuntimeError(f"Invalid collaboration request artifact: {exc}") from exc
+
+        request_path.unlink()
+        max_diff = int(project.get("runtime", {}).get("max_diff_bytes", 500000))
+        clean_diff = diff_state(workspace, max_diff)
+        progress["changed_files"] = clean_diff["changed_file_count"]
+        progress["material_change_present"] = clean_diff["changed_file_count"] > 0
+        hashes = progress.setdefault("diff_hashes", [])
+        if hashes:
+            hashes[-1] = clean_diff["diff_hash"]
+        else:
+            hashes.append(clean_diff["diff_hash"])
+        self.storage.update(job_id, progress=progress)
+        self._runtime_event(
+            job_id,
+            kind="collaboration_request",
+            message="Primary developer requested a bounded read-only collaborator before verification",
+            phase="collaboration",
+            status=request.action,
+            output={
+                "action": request.action,
+                "role": request.role,
+                "thread_id": request.thread_id,
+                "changed_files_after_control_artifact_removal": clean_diff["changed_file_count"],
+            },
+        )
+        return _CollaborationRequested(request, clean_diff)
+
+    @staticmethod
+    def _runtime_diff_evidence(clean_diff: dict[str, Any]) -> CollaborationEvidence | None:
+        changed = int(clean_diff.get("changed_file_count", 0) or 0)
+        diff = str(clean_diff.get("diff") or "")
+        if changed <= 0 and not diff.strip():
+            return None
+        summary = (
+            f"Runtime-cleaned current diff after removing the collaboration control artifact; "
+            f"changed_file_count={changed}.\n{diff[:3200]}"
+        )
+        return CollaborationEvidence(ref="runtime:current_diff", summary=summary[:4000])
+
+    async def _handle_collaboration_request(
+        self,
+        job_id: str,
+        requested: _CollaborationRequested,
+    ) -> None:
+        row = self.storage.get(job_id)
+        if not row:
+            raise RuntimeError("Unknown job")
+        checkpoint = dict(row.get("checkpoint") or {})
+        progress = dict(row.get("progress") or {})
+        request = requested.request
+        evidence = list(request.evidence)
+        runtime_evidence = self._runtime_diff_evidence(requested.clean_diff)
+        if runtime_evidence is not None:
+            evidence = evidence[:7] + [runtime_evidence]
+
+        try:
+            if request.action == "consult":
+                assert request.role is not None
+                thread = await self.collaboration.create(
+                    job_id,
+                    CollaborationCreateRequest(
+                        role=request.role,
+                        topic=str(request.topic),
+                        objective=str(request.objective),
+                        question=str(request.question),
+                        evidence=evidence,
+                        initiator_role="developer",
+                        deadline_seconds=request.deadline_seconds,
+                    ),
+                )
+            else:
+                assert request.thread_id is not None
+                assert request.developer_response is not None
+                thread = await self.collaboration.recheck(
+                    job_id,
+                    request.thread_id,
+                    CollaborationRecheckRequest(
+                        developer_response=request.developer_response,
+                        evidence=evidence,
+                        initiator_role="developer",
+                        deadline_seconds=request.deadline_seconds,
+                    ),
+                )
+        except Exception as exc:
+            latest = self.storage.get(job_id) or row
+            self._block(
+                job_id=job_id,
+                progress=dict(latest.get("progress") or progress),
+                checkpoint=dict(latest.get("checkpoint") or checkpoint),
+                reason="collaboration_failed",
+                last_failure=f"{type(exc).__name__}: {exc}"[-12000:],
+                collaboration_request=request.model_dump(mode="json"),
+            )
+            return
+
+        latest = self.storage.get(job_id)
+        if not latest:
+            raise RuntimeError("Unknown job")
+        progress = dict(latest.get("progress") or progress)
+        checkpoint = dict(latest.get("checkpoint") or checkpoint)
+        thread_payload = thread.model_dump(mode="json")
+        progress.setdefault("progress_markers", []).append(
+            f"collaboration:{thread.id}:round:{thread.rounds}:{thread.status}"
+        )
+
+        if thread.status == "pm_handoff":
+            self._block(
+                job_id=job_id,
+                progress=progress,
+                checkpoint=checkpoint,
+                reason="collaboration_pm_handoff",
+                last_failure="Bounded collaboration remained unresolved after the maximum dialogue rounds.",
+                collaboration=thread_payload,
+            )
+            return
+        if thread.status == "cancelled":
+            self._block(
+                job_id=job_id,
+                progress=progress,
+                checkpoint=checkpoint,
+                reason="collaboration_cancelled",
+                last_failure="Collaboration was cancelled before verification could continue.",
+                collaboration=thread_payload,
+            )
+            return
+
+        previous_failure = checkpoint.get("pre_collaboration_failure")
+        if previous_failure is None:
+            current_failure = checkpoint.get("last_failure")
+            if isinstance(current_failure, str) and not current_failure.startswith("PCP_COLLABORATION_CONTEXT:"):
+                previous_failure = current_failure
+            checkpoint["pre_collaboration_failure"] = previous_failure
+        context = {
+            "thread_id": thread.id,
+            "role": thread.participant_role,
+            "status": thread.status,
+            "round": thread.rounds,
+            "recommendation": thread.response.recommendation if thread.response else None,
+            "risks": thread.response.risks if thread.response else [],
+            "suggested_tests": thread.response.suggested_tests if thread.response else [],
+            "unresolved": thread.response.unresolved if thread.response else False,
+            "previous_failure": previous_failure,
+        }
+        checkpoint["collaboration_context"] = context
+        checkpoint["last_failure"] = "PCP_COLLABORATION_CONTEXT: " + json.dumps(
+            context,
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        self.storage.update(
+            job_id,
+            status="queued",
+            progress=progress,
+            checkpoint=checkpoint,
+            result=None,
+            error=None,
+        )
+        self._runtime_event(
+            job_id,
+            kind="collaboration_resume",
+            message="Returning the structured collaboration artifact to the primary developer",
+            phase="collaboration",
+            status=thread.status,
+            output={"thread_id": thread.id, "round": thread.rounds},
+        )
+        await self.enqueue(job_id)
 
     async def _provider_failover(
         self,
@@ -122,6 +356,15 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         started: float,
         progress: dict[str, Any],
     ) -> dict[str, Any]:
+        collaboration_request = await self._consume_collaboration_request(
+            job_id=job_id,
+            workspace=workspace,
+            project=project,
+            progress=progress,
+        )
+        if collaboration_request is not None:
+            raise collaboration_request
+
         attempt = int(progress.get("verification_attempts", 0)) + 1
         progress["verification_attempts"] = attempt
         if attempt > 1:
@@ -168,8 +411,6 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         intermediate = list(work_order.verification.intermediate_phases)
         required = list(work_order.verification.required_phases)
         profile = str(strategy.get("profile") or "")
-        # Preserve the historical complex/critical acceptance strength even when
-        # the PM omitted full_tests from a newer contract.
         if profile in {"complex", "critical"} and "full_tests" not in required:
             required.append("full_tests")
 
@@ -180,9 +421,6 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 entries.append((phase, "intermediate"))
                 seen.add(phase)
         for phase in required:
-            # The governance facade historically owns the extra full_tests call
-            # for fast/standard WorkOrders; leave that one phase to it so this
-            # layer remains backward-compatible with the existing final gate.
             if phase == "full_tests" and profile not in {"complex", "critical"}:
                 self._runtime_event(
                     job_id,
@@ -256,8 +494,6 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                     status=f"failed:{layer}:{phase}",
                     output={"attempt": attempt, "later_phases_skipped": True},
                 )
-                # Progressive gate: a known-bad candidate does not spend the
-                # remaining focused/full verification budget in this repair loop.
                 break
 
         return {
