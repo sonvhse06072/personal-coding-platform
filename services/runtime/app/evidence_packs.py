@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from typing import Any
 
@@ -11,6 +12,7 @@ _MAX_FAILURE_CHARS = 4000
 _MAX_SUMMARY_CHARS = 3000
 _MAX_FILES = 40
 _DIFF_FILE_RE = re.compile(r"^diff --git a/(.+?) b/(.+?)$", re.MULTILINE)
+_CANONICAL_WORK_ORDER_PREFIX = "AUTHORITATIVE WORKORDER / TASK CONTRACT."
 
 
 def _clip(value: Any, limit: int) -> str:
@@ -32,6 +34,29 @@ def _changed_files(diff: str) -> list[str]:
         if len(result) >= _MAX_FILES:
             break
     return result
+
+
+def _canonical_work_order_from_task(task: dict[str, Any]) -> dict[str, Any] | None:
+    """Recover the authoritative WorkOrder object from a canonical legacy task.
+
+    Runtime passes an explicit WorkOrder on normal governed jobs. This fallback
+    keeps evaluator-prompt compatibility for callers/tests that only carry the
+    canonical task description, while avoiding propagation of the surrounding
+    prose or an unbounded raw task transcript.
+    """
+    description = str(task.get("description") or "").strip()
+    if not description.startswith(_CANONICAL_WORK_ORDER_PREFIX):
+        return None
+    for line in description.splitlines()[1:]:
+        candidate = line.strip()
+        if not candidate.startswith("{"):
+            continue
+        try:
+            payload = json.loads(candidate)
+        except json.JSONDecodeError:
+            return None
+        return payload if isinstance(payload, dict) else None
+    return None
 
 
 def _compact_verification(verification: dict[str, Any]) -> dict[str, Any]:
@@ -91,11 +116,14 @@ def reviewer_evidence_pack(
     developer_report: str | None = None,
 ) -> dict[str, Any]:
     diff_text = str(diff or "")
-    contract = work_order if isinstance(work_order, dict) else {
-        "title": task.get("title"),
-        "description": _clip(task.get("description"), _MAX_CONTRACT_CHARS),
-        "flags": list(task.get("flags") or [])[:20],
-    }
+    canonical = _canonical_work_order_from_task(task)
+    contract = work_order if isinstance(work_order, dict) else canonical
+    if not isinstance(contract, dict):
+        contract = {
+            "title": task.get("title"),
+            "description": _clip(task.get("description"), _MAX_CONTRACT_CHARS),
+            "flags": list(task.get("flags") or [])[:20],
+        }
     return {
         "role": "reviewer",
         "task_contract": contract,
