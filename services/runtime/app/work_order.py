@@ -13,6 +13,7 @@ from .baseline import ProjectBaseline, SourceReference
 ProfileName = Literal["fast", "standard", "complex", "critical"]
 RiskLevel = Literal["routine", "standard", "high", "critical"]
 VerificationPhase = Literal["targeted_tests", "static_analysis", "full_tests"]
+BudgetMode = Literal["legacy_hard", "adaptive"]
 
 _ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$"
 _ROLE_PATTERN = r"^[a-z][a-z0-9_]{1,79}$"
@@ -63,6 +64,10 @@ class WorkOrderRisk(BaseModel):
 
 
 class WorkOrderBudget(BaseModel):
+    # Backward compatibility is deliberately fail-closed: every persisted or
+    # manually-created WorkOrder that predates adaptive budgeting has no `mode`
+    # and therefore retains the historical hard-ceiling behavior.
+    mode: BudgetMode = "legacy_hard"
     max_profile: ProfileName = "standard"
     max_model_calls: int = Field(default=8, ge=1, le=100)
     max_repair_iterations: int = Field(default=2, ge=0, le=20)
@@ -249,7 +254,14 @@ def rehydrate_task_from_work_order(
 
 
 def apply_work_order_budget(route: dict[str, Any], work_order: WorkOrder) -> dict[str, Any]:
-    """Apply the WorkOrder as a hard execution ceiling without weakening Router budgets."""
+    """Apply WorkOrder policy without turning adaptive estimates into hard stops.
+
+    ``legacy_hard`` preserves the historical behavior exactly for old/pinned
+    WorkOrders. ``adaptive`` still hard-bounds profile and changed-file scope,
+    while Router/Runtime own the task-specific working/emergency execution
+    envelope. If adaptive metadata is absent, fail closed by falling back to the
+    legacy clamps rather than silently widening an old Router contract.
+    """
 
     updated = deepcopy(route)
     strategy = updated.get("strategy") or {}
@@ -263,17 +275,32 @@ def apply_work_order_budget(route: dict[str, Any], work_order: WorkOrder) -> dic
         )
 
     budget = dict(strategy.get("budget") or {})
-    ceilings = {
-        "max_model_calls": work_order.budget.max_model_calls,
-        "max_repair_iterations": work_order.budget.max_repair_iterations,
-        "max_wall_time_minutes": work_order.budget.max_wall_time_minutes,
-        "max_changed_files": work_order.budget.max_changed_files,
-    }
-    for key, ceiling in ceilings.items():
-        current = budget.get(key)
-        if current is None:
-            raise WorkOrderPolicyError(f"Router strategy is missing required budget field {key!r}")
-        budget[key] = min(current, ceiling)
+    if "max_changed_files" not in budget:
+        raise WorkOrderPolicyError("Router strategy is missing required budget field 'max_changed_files'")
+    budget["max_changed_files"] = min(
+        int(budget["max_changed_files"]),
+        work_order.budget.max_changed_files,
+    )
+
+    adaptive = strategy.get("adaptive_budget")
+    adaptive_enabled = (
+        work_order.budget.mode == "adaptive"
+        and isinstance(adaptive, dict)
+        and bool(adaptive.get("enabled", False))
+    )
+
+    if not adaptive_enabled:
+        ceilings = {
+            "max_model_calls": work_order.budget.max_model_calls,
+            "max_repair_iterations": work_order.budget.max_repair_iterations,
+            "max_wall_time_minutes": work_order.budget.max_wall_time_minutes,
+        }
+        for key, ceiling in ceilings.items():
+            current = budget.get(key)
+            if current is None:
+                raise WorkOrderPolicyError(f"Router strategy is missing required budget field {key!r}")
+            budget[key] = min(current, ceiling)
+
     strategy["budget"] = budget
     updated["strategy"] = strategy
     return updated
