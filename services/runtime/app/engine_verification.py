@@ -128,6 +128,14 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             progress["verification_retry_attempts"] = int(
                 progress.get("verification_retry_attempts", 0)
             ) + 1
+            self._runtime_event(
+                job_id,
+                kind="verification_retry",
+                message="Retrying deterministic verification after an earlier verification cycle",
+                phase="verification",
+                status="verification_retry",
+                output={"attempt": attempt},
+            )
 
         row = self.storage.get(job_id) or {}
         checkpoint = row.get("checkpoint") or {}
@@ -176,6 +184,19 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             # for fast/standard WorkOrders; leave that one phase to it so this
             # layer remains backward-compatible with the existing final gate.
             if phase == "full_tests" and profile not in {"complex", "critical"}:
+                self._runtime_event(
+                    job_id,
+                    kind="verification_layer",
+                    message="Verification final phase delegated to WorkOrder final gate: full_tests",
+                    phase="verification",
+                    status="pending:final:full_tests",
+                    output={
+                        "attempt": attempt,
+                        "retry": attempt > 1,
+                        "required_for_final": True,
+                        "delegated_to_governance": True,
+                    },
+                )
                 continue
             if phase not in seen:
                 entries.append((phase, "final"))
