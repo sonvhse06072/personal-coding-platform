@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import time
 from pathlib import Path
@@ -8,9 +9,17 @@ from typing import Any
 from .adapters import build_adapter
 from .config import project_config
 from .engine_core import RuntimeEngineCore
+from .evidence_packs import developer_repair_evidence_pack, pm_evidence_pack
 from .fingerprint import failure_fingerprint
 from .prompts import evaluator_prompt, execution_prompt, planning_prompt
 from .repo import analyze_repo, commit_changes, diff_state
+from .review import (
+    mark_actioned_review_findings,
+    parse_review_output,
+    record_review_telemetry,
+    review_report_summary,
+    should_run_review,
+)
 from .state import checkpoint_from_row, existing_repo_analysis, merge_progress, validate_workspace
 
 
@@ -26,8 +35,6 @@ class RuntimeEngine(RuntimeEngineCore):
         task = dict(job["task"])
         checkpoint = checkpoint_from_row(job)
         progress = merge_progress(self._new_progress(), job.get("progress"))
-        # elapsed_minutes is durable. Back-date the monotonic start so wall-time
-        # budget continues across resume rather than resetting.
         started = time.monotonic() - float(progress.get("elapsed_minutes", 0.0)) * 60.0
         hints = dict(checkpoint.get("hints") or {})
         provider_state = dict(checkpoint.get("provider_state") or {})
@@ -123,7 +130,7 @@ class RuntimeEngine(RuntimeEngineCore):
                         last_failure=budget_reason,
                     )
                     return
-                progress["model_calls"] += 1  # pre-charge before a side-effecting provider call
+                progress["model_calls"] += 1
                 checkpoint["planner_choice"] = choice
                 checkpoint["provider_state"] = provider_state
                 self.storage.update(job_id, status="planning", progress=progress, checkpoint=checkpoint)
@@ -238,7 +245,7 @@ class RuntimeEngine(RuntimeEngineCore):
                 return
 
             progress["iteration"] += 1
-            progress["model_calls"] += 1  # pre-charge before starting the provider request
+            progress["model_calls"] += 1
             checkpoint.update({
                 "executor_choice": executor_choice,
                 "last_failure": last_failure,
@@ -257,6 +264,9 @@ class RuntimeEngine(RuntimeEngineCore):
                     repo_analysis=repo_analysis,
                     plan=plan,
                     failure=last_failure,
+                    work_order=checkpoint.get("work_order"),
+                    baseline=checkpoint.get("project_baseline"),
+                    collaboration_context=checkpoint.get("collaboration_context"),
                 ),
                 mode="execute",
                 timeout=self._remaining_seconds(strategy, started, 2400),
@@ -318,6 +328,11 @@ class RuntimeEngine(RuntimeEngineCore):
             progress["changed_files"] = diff["changed_file_count"]
             progress["material_change_present"] = diff["changed_file_count"] > 0
             progress["diff_hashes"].append(diff["diff_hash"])
+            mark_actioned_review_findings(
+                checkpoint,
+                progress,
+                current_diff_hash=diff["diff_hash"],
+            )
 
             material_required = "material_change" in strategy.get("definition_of_done", {}).get("required", [])
             if material_required and not progress["material_change_present"]:
@@ -369,7 +384,19 @@ class RuntimeEngine(RuntimeEngineCore):
 
             evaluator_output = None
             evaluator_ok = True
-            if verification["passed"] and strategy.get("evaluator"):
+            review_report = None
+            review_policy = strategy.get("review_policy") or {}
+            if "review_policy" in strategy:
+                run_review = should_run_review(
+                    review_policy,
+                    verification,
+                    changed_files=diff["changed_file_count"],
+                    unexpected_scope=progress["unexpected_scope"],
+                )
+            else:
+                run_review = bool(strategy.get("evaluator"))
+
+            if verification["passed"] and strategy.get("evaluator") and run_review:
                 choice = dict(checkpoint.get("evaluator_choice") or strategy["evaluator"])
                 while True:
                     budget_reason = self._pre_model_budget_reason(progress, strategy, include_iteration=False)
@@ -384,7 +411,13 @@ class RuntimeEngine(RuntimeEngineCore):
                         choice["adapter"], choice["model"], choice.get("reasoning_effort")
                     ).run(
                         workspace=workspace,
-                        prompt=evaluator_prompt(task=enriched_task, diff=diff["diff"], verification=verification),
+                        prompt=evaluator_prompt(
+                            task=enriched_task,
+                            diff=diff["diff"],
+                            verification=verification,
+                            work_order=checkpoint.get("work_order"),
+                            baseline=checkpoint.get("project_baseline"),
+                        ),
                         mode="evaluate",
                         timeout=self._remaining_seconds(strategy, started, 1200),
                     )
@@ -426,10 +459,37 @@ class RuntimeEngine(RuntimeEngineCore):
                         )
                         return
                     evaluator_output = evaluation.output[-20000:]
-                    evaluator_ok = evaluation.returncode == 0 and evaluator_output.strip().upper().startswith("PASS")
+                    review_report = parse_review_output(evaluator_output)
+                    evaluator_ok = evaluation.returncode == 0 and review_report.verdict == "pass"
+                    record_review_telemetry(
+                        progress,
+                        review_report,
+                        review_level=str(review_policy.get("level") or strategy.get("profile") or "legacy"),
+                        model_id=choice.get("id"),
+                        provider=choice.get("provider"),
+                        raw_usage=evaluation.usage,
+                    )
+                    checkpoint["last_review_report"] = review_report_summary(review_report)
+                    if review_report.verdict == "fail":
+                        checkpoint["pending_review_findings"] = {
+                            "diff_hash": diff["diff_hash"],
+                            "findings": [item.model_dump(mode="json") for item in review_report.findings],
+                        }
                     checkpoint.pop("evaluator_choice", None)
                     self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
                     break
+            elif verification["passed"] and strategy.get("evaluator") and not run_review:
+                progress["review_skipped_strong_evidence"] = int(
+                    progress.get("review_skipped_strong_evidence", 0)
+                ) + 1
+                checkpoint["last_review_report"] = {
+                    "verdict": "skipped",
+                    "summary": "Model review skipped by policy because deterministic evidence is strong",
+                    "finding_count": 0,
+                    "findings": [],
+                    "jit_context_used": False,
+                }
+                self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
 
             progress["required_checks_passed"] = verification["passed"] and evaluator_ok and not progress["unexpected_scope"]
 
@@ -465,6 +525,20 @@ class RuntimeEngine(RuntimeEngineCore):
                     commit_sha = None
                     if strategy.get("permissions", {}).get("commit", False):
                         commit_sha = commit_changes(workspace, f"AI: {enriched_task['title']}")
+                    review_summary = (
+                        review_report_summary(review_report)
+                        if review_report is not None
+                        else checkpoint.get("last_review_report")
+                    )
+                    work_order = checkpoint.get("work_order") or {}
+                    pm_pack = pm_evidence_pack(
+                        work_order_ref=str(work_order.get("id") or "legacy-task"),
+                        outcome="accepted",
+                        verification_summary=verification,
+                        review_summary=review_summary if isinstance(review_summary, dict) else None,
+                        unresolved_risks=[],
+                        protected_decision_flags=list(progress.get("important_decision_flags") or []),
+                    )
                     result = {
                         "status": "accepted",
                         "branch": branch,
@@ -472,6 +546,8 @@ class RuntimeEngine(RuntimeEngineCore):
                         "diff": diff,
                         "verification": verification,
                         "evaluator": evaluator_output,
+                        "review": review_summary,
+                        "pm_evidence": pm_pack,
                         "route": route,
                         "route_history": route_history,
                         "progress": progress,
@@ -511,7 +587,21 @@ class RuntimeEngine(RuntimeEngineCore):
             elif not verification["passed"]:
                 last_failure = verification.get("failure_text") or last_failure or "Verification failed"
             elif not evaluator_ok:
-                last_failure = f"Evaluator failed:\n{evaluator_output or 'no PASS result'}"
+                findings = [item.model_dump(mode="json") for item in review_report.findings] if review_report else []
+                work_order = checkpoint.get("work_order") or {}
+                repair_pack = developer_repair_evidence_pack(
+                    work_order_ref=str(work_order.get("id") or "legacy-task"),
+                    current_diff_ref=f"sha256:{diff['diff_hash']}",
+                    failing_check=None,
+                    reviewer_findings=findings,
+                    relevant_files=list(diff.get("changed_files") or []),
+                    prior_attempt_summary=review_report.summary if review_report else evaluator_output,
+                )
+                last_failure = "PCP_REVIEW_FINDINGS: " + json.dumps(
+                    repair_pack,
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
             elif progress["unexpected_scope"]:
                 last_failure = "Evaluator completed but the diff exceeded the approved changed-file scope."
 
@@ -523,6 +613,9 @@ class RuntimeEngine(RuntimeEngineCore):
                 progress["progress_markers"].append(diff["diff_hash"][:24])
             progress["repair_iterations"] += 1
             self._update_elapsed(progress, started)
+            total_findings = int(progress.get("review_findings", 0))
+            actioned = int(progress.get("review_findings_actioned", 0))
+            progress["review_useful_finding_yield"] = round(actioned / total_findings, 4) if total_findings else 0.0
             checkpoint.update({
                 "executor_choice": executor_choice,
                 "last_failure": last_failure,
