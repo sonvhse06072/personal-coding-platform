@@ -51,9 +51,6 @@ def _estimated_resources(strategy: dict[str, Any]) -> dict[str, float]:
     if result:
         return result
 
-    # Legacy routes did not carry an explicit estimate. Preserve their selected
-    # profile ceiling as historical evidence, but label the source separately in
-    # the snapshot so it is not confused with a modern adaptive estimate.
     budget = strategy.get("budget") or {}
     for dimension in _RESOURCE_COUNTERS:
         if dimension not in budget:
@@ -110,12 +107,7 @@ def _ci_pass(result: dict[str, Any]) -> bool | None:
 
 
 def task_telemetry_snapshot(row: dict[str, Any]) -> dict[str, Any]:
-    """Build one compact durable measurement from the current job row.
-
-    Stable blocked/waiting states are observable but are excluded from historical
-    calibration by ``terminal``. A later resume simply replaces the same job
-    snapshot, so one interrupted task never becomes multiple training samples.
-    """
+    """Build one compact durable measurement from the current job row."""
     status = str(row.get("status") or "unknown")
     task = dict(row.get("task") or {})
     work_order = _work_order(row)
@@ -193,20 +185,23 @@ def task_telemetry_snapshot(row: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def classify_budget_attention(row: dict[str, Any]) -> dict[str, Any]:
-    """Classify an owner-approved budget extension without redefining policy.
+def classify_attention_event(kind: str, row: dict[str, Any]) -> dict[str, Any]:
+    """Classify owner attention as protected-decision or routine operations."""
+    normalized = str(kind).strip().lower()
+    if normalized == "human_decision":
+        return {"category": "decision_boundary", "avoidable": False}
+    if normalized == "budget_extension":
+        strategy = ((row.get("route") or {}).get("strategy") or {})
+        adaptive = strategy.get("adaptive_budget") or {}
+        return {
+            "category": "routine_operational",
+            "avoidable": not bool(adaptive.get("enabled", False)),
+        }
+    return {"category": "routine_operational", "avoidable": False}
 
-    Legacy fixed-ceiling continuation is considered avoidable operational
-    attention because adaptive headroom did not exist for that persisted route.
-    Reaching a modern adaptive emergency ceiling is real resource-risk attention
-    and is therefore not marked avoidable.
-    """
-    strategy = ((row.get("route") or {}).get("strategy") or {})
-    adaptive = strategy.get("adaptive_budget") or {}
-    return {
-        "category": "routine_operational",
-        "avoidable": not bool(adaptive.get("enabled", False)),
-    }
+
+def classify_budget_attention(row: dict[str, Any]) -> dict[str, Any]:
+    return classify_attention_event("budget_extension", row)
 
 
 def aggregate_calibration(
@@ -214,12 +209,7 @@ def aggregate_calibration(
     *,
     minimum_sample_size: int = 5,
 ) -> dict[str, Any]:
-    """Return deliberately simple historical calibration evidence.
-
-    No statistical model is fitted. Ratios are arithmetic means over comparable
-    terminal jobs and are bounded so sparse/noisy history cannot overwhelm the
-    Router's existing risk/profile and emergency-ceiling policy.
-    """
+    """Return deliberately simple historical calibration evidence."""
     terminal = [item for item in snapshots if item.get("terminal")]
     total = len(terminal)
     resource_ratios: dict[str, list[float]] = defaultdict(list)
@@ -278,6 +268,7 @@ def aggregate_calibration(
 
 __all__ = [
     "aggregate_calibration",
+    "classify_attention_event",
     "classify_budget_attention",
     "task_telemetry_snapshot",
 ]
