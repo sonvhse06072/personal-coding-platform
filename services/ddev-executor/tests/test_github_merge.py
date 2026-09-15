@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 
@@ -63,8 +65,9 @@ def test_merge_revalidates_pr_ancestry_ci_expected_head_and_confirmation(monkeyp
         if path == f"/repos/acme/demo/commits/{HEAD}/status":
             return httpx.Response(200, json={"state": "success", "total_count": 1, "statuses": [{"id": 2, "context": "ci", "state": "success"}]})
         if path == "/repos/acme/demo/pulls/7/merge" and request.method == "PUT":
-            assert request.json()["sha"] == HEAD
-            assert request.json()["merge_method"] == "merge"
+            payload = json.loads(request.content.decode("utf-8"))
+            assert payload["sha"] == HEAD
+            assert payload["merge_method"] == "merge"
             state["merge_calls"] += 1
             state["merged"] = True
             return httpx.Response(200, json={"merged": True, "sha": "c" * 40, "message": "merged"})
