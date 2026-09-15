@@ -42,11 +42,11 @@ Human participation is required for:
 - security/authentication/authorization/trust-boundary changes;
 - destructive data changes;
 - production writes or deployment;
-- material budget expansion;
+- material project/personal budget expansion or emergency-ceiling override;
 - high-authority governance amendments;
 - ambiguities that cannot be resolved from approved source of truth.
 
-Routine PR review and merge inside the approved project frame is delegated to PM after required verification/review/CI gates pass. A merge must stop for Human Owner input whenever the PR introduces or depends on one of the decision boundaries above.
+Routine execution continuation inside an already-approved task working envelope is not a Human Owner decision. Routine PR review and merge inside the approved project frame is delegated to PM after required verification/review/CI gates pass. A merge must stop for Human Owner input whenever the PR introduces or depends on one of the decision boundaries above.
 
 ## 3. Product Manager
 
@@ -62,7 +62,9 @@ PM may receive:
 - ReviewReports;
 - deterministic verification results;
 - CI/delivery outcomes;
-- Runtime/provider/budget evidence.
+- Runtime/provider/budget evidence;
+- collaboration/consultation conclusions;
+- historical efficiency telemetry when meaningful.
 
 ### Responsibilities
 
@@ -71,15 +73,16 @@ PM must:
 1. check the request against project scope and constraints;
 2. identify relevant requirements, architecture constraints, dependencies, and risk;
 3. decompose approved work into bounded WorkOrders;
-4. maintain dependency ordering and the mutable Execution Plan;
-5. request staffing from Router rather than hard-code a preferred model;
-6. interpret meaningful reports/evidence and choose the next action;
-7. keep work aligned with the approved Project Plan;
-8. create a ChangeProposal instead of silently changing project intent;
-9. produce a TaskOutcome after meaningful completion/failure;
-10. select the next approved in-scope task when appropriate;
-11. perform the final engineering review of PR evidence before merge;
-12. merge eligible PRs when all required gates pass and no Human Owner decision trigger remains unresolved.
+4. record a practical effort/resource shape, verification shape, and expected collaboration/review level for each non-trivial WorkOrder;
+5. maintain dependency ordering and the mutable Execution Plan;
+6. request staffing from Router rather than hard-code a preferred model;
+7. interpret meaningful reports/evidence and choose the next action;
+8. keep work aligned with the approved Project Plan;
+9. create a ChangeProposal instead of silently changing project intent;
+10. produce a TaskOutcome after meaningful completion/failure;
+11. select the next approved in-scope task when appropriate;
+12. perform the final engineering review of PR evidence before merge;
+13. merge eligible PRs when all required gates pass and no Human Owner decision trigger remains unresolved.
 
 ### PM autonomy
 
@@ -87,11 +90,12 @@ PM may autonomously:
 
 - split/reorder in-scope work;
 - reassign a failed WorkOrder;
-- request bounded repair or additional review;
+- request bounded repair, specialist consultation, or additional review;
 - change execution tactics;
 - update Execution Plan state;
 - record discovered follow-up work;
-- defer an in-scope task because of dependency or budget evidence;
+- defer an in-scope task because of dependency or resource evidence;
+- use approved adaptive task-budget/headroom policy inside the existing personal/project resource envelope;
 - review and merge an in-scope PR after deterministic checks, required independent review, and CI are green;
 - continue to the next dependency-satisfied in-scope task after the merge gate clears.
 
@@ -103,7 +107,7 @@ PM may not autonomously:
 - add a major framework/service/dependency;
 - weaken security boundaries;
 - approve destructive/production operations outside existing policy;
-- materially expand budget;
+- materially expand the project/personal resource envelope or override an emergency ceiling;
 - merge a PR whose content or unresolved finding requires a Human Owner decision.
 
 ## 4. Router / Staffing Policy
@@ -113,20 +117,26 @@ Router answers **who/how expensive/how strong**, not **what/why**.
 Inputs include:
 
 - WorkOrder role and task class;
+- PM effort/resource-shape estimate;
 - repository/task complexity signals;
+- verification difficulty/shape;
 - risk/profile;
 - privacy constraints;
 - provider/model availability and health;
-- budget/resource envelope;
+- authoritative quota/resource state;
+- personal/project resource envelope;
 - eventually historical performance telemetry.
 
 Outputs include:
 
 - selected logical execution profile;
 - model/provider/adapter for the requested role;
-- bounded execution budget;
-- optional planner/evaluator staffing;
+- task-specific budget estimate;
+- approved elastic working envelope and emergency hard ceilings where supported;
+- optional planner/evaluator/consultant staffing;
 - deterministic human-decision triggers.
+
+Profile budgets are priors and safety defaults, not necessarily the final task estimate. Provider quota is resource state and must not be conflated with task estimate exhaustion.
 
 Router must not modify product scope or project state.
 
@@ -139,17 +149,21 @@ Responsibilities:
 - persist job/work state;
 - pin source commit;
 - request isolated workspace creation;
-- invoke selected agent roles with bounded context;
-- track model/tool/token/time/resource usage;
-- enforce anti-loop and hard budgets;
-- run deterministic verification;
+- invoke selected agent roles with bounded role-specific context/evidence;
+- track model/tool/token/time/resource usage and Human Attention events;
+- preserve consumed counters across retry/recovery/headroom changes;
+- permit bounded automatic healthy-progress headroom inside approved policy;
+- enforce anti-loop/circuit-break signals and emergency hard ceilings;
+- run layered deterministic verification while preserving mandatory final acceptance verification;
+- distinguish engineering repair from provider recovery, infrastructure retry, verification retry and delivery retry;
 - perform bounded retries/failover/escalation;
-- pause for human decisions when required;
+- coordinate bounded consultant/reviewer dialogue where configured;
+- pause for human decisions only when required by protected decisions, real resource risk, emergency ceilings or abnormal execution;
 - checkpoint/recover interrupted work;
 - coordinate bounded GitHub delivery and CI repair;
 - support the PM-controlled merge gate without giving developer agents merge authority.
 
-Runtime should handle routine test/lint/repair mechanics without invoking PM for every iteration.
+Runtime should handle routine test/lint/repair mechanics, healthy continuation, and non-material resource headroom without invoking PM or Human Owner for every iteration.
 
 ## 6. Developer / Specialist role
 
@@ -170,6 +184,14 @@ acceptance_criteria: [...]
 constraints: [...]
 verification: [...]
 role: backend_developer
+effort:
+  implementation: medium
+  verification: high
+  uncertainty: medium
+expected:
+  repair_turns: 2
+  consultations: 0
+  review_rounds: 1
 budget_profile: standard
 ```
 
@@ -180,8 +202,12 @@ Developer responsibilities:
 - use existing project patterns where practical;
 - implement the smallest sufficient change;
 - add/adjust relevant tests;
+- use targeted checks during iteration where appropriate;
+- request a purpose-specific consultation when uncertainty/risk justifies the cost rather than blindly repeating a failed approach;
 - report assumptions, risks, deviations, and unresolved items;
 - never broaden scope because a different solution seems more interesting.
+
+The Primary Developer is the default sole workspace writer. Consultants/testers/debuggers/specialists/reviewers are read-only unless a separately approved capability says otherwise.
 
 A developer must not merge, deploy, change project governance, or bypass trust boundaries.
 
@@ -201,6 +227,7 @@ criteria:
 changed_components: [...]
 tests_added: [...]
 tests_passed: [...]
+consultations: [...]
 assumptions: [...]
 risks: [...]
 deviations: []
@@ -216,9 +243,13 @@ Raw execution logs remain available for diagnostics but should not be the primar
 
 Deterministic verification is independent of the developer's claims.
 
-It should run the checked-in project phases appropriate to the WorkOrder/profile. The system may later add a cheap pre-edit baseline check and narrower intermediate checks, but final acceptance must remain deterministic and reproducible.
+Verification should be layered:
 
-Model review does not replace deterministic tests/static analysis.
+1. cheap/targeted checks during implementation or narrow repair;
+2. focused affected tests/static checks as the patch stabilizes;
+3. full checked-in deterministic verification at required acceptance/delivery checkpoints.
+
+Layering is an efficiency mechanism, not a way to weaken final acceptance. Model review does not replace deterministic tests/static analysis.
 
 ## 9. Independent Reviewer
 
@@ -249,16 +280,18 @@ Where practical, reviewer should use a different model/provider from the impleme
 
 Risk proportionality:
 
-- routine: lightweight alternate-model review when economical;
-- standard: independent Task Contract + diff review;
+- routine with strong deterministic checks: no or very lightweight model review where policy permits;
+- standard: lightweight independent Task Contract + diff review;
 - complex: strong independent reviewer;
 - critical/security/architecture: different-model/provider review required if eligible capacity exists.
+
+Reviewer/developer dialogue may use a small bounded number of finding -> response/repair -> re-check rounds. Persistent disagreement is summarized to PM rather than debated recursively.
 
 Do not recursively review reviewers by default.
 
 ## 10. PM TaskOutcome
 
-At a meaningful checkpoint, PM consumes WorkReport + deterministic checks + ReviewReport + CI evidence and writes a compact outcome.
+At a meaningful checkpoint, PM consumes WorkReport + deterministic checks + required ReviewReport + CI evidence and writes a compact outcome.
 
 Target shape:
 
@@ -351,7 +384,9 @@ PM may request parallel WorkOrders only when:
 - budget/quota permits;
 - there is a meaningful wall-time benefit.
 
-The team resource envelope includes more than USD: model calls, subscription quota/scarcity, token usage, wall time, repair count, and provider reliability are all legitimate budget signals.
+The team resource envelope includes more than USD: model calls, subscription quota/scarcity, token usage, wall time, verification/repair cost, provider reliability, and Human Owner attention are all legitimate budget signals.
+
+The detailed adaptive-budget, collaboration, review-efficiency, evidence-pack and telemetry policy is `efficiency-model.md`.
 
 ## 15. Practical checkpoint rule
 
@@ -362,12 +397,12 @@ PM should normally run when:
 - a new ticket arrives;
 - an initial plan/decomposition is needed;
 - a developer completes meaningful work;
-- review fails after bounded routine repair;
+- review fails after bounded routine repair/dialogue;
 - a decision boundary or scope conflict is discovered;
 - a task completes and the next action must be selected;
 - a PR has passed its required gates and is ready for PM merge review.
 
-A first lint failure, test typo, or ordinary bounded retry remains Runtime/Developer responsibility.
+A first lint failure, test typo, ordinary bounded retry, healthy automatic budget headroom, or non-material provider recovery remains Runtime/Developer responsibility.
 
 ## 16. Human Owner diagnostic-block convention
 
@@ -378,3 +413,19 @@ Only when the Human Owner explicitly asks for a read-only block that is ready to
 This convention exists so local terminal work remains simple while Telegram execution remains an opt-in transport with a distinct security boundary.
 
 The detailed approved target design for `/run-ro`, the read-only broker, optional `/run-op`, sandbox/database/secret boundaries, Telegram-ready metadata, WSL lifecycle and implementation phases is authoritative in `telegram-terminal-operations.md`.
+
+## 17. Bounded collaboration protocol
+
+A developer may request a specialist/tester/debugger/reviewer consultation through Router using a logical role and a concrete objective. The request must include a bounded evidence package and must not name a provider/model as the role identity.
+
+Default consultation properties:
+
+- concrete question required;
+- relevant evidence/source references required;
+- consultant read-only;
+- small round limit;
+- duplicate-question guard;
+- recursive consultation disabled by default;
+- compact conclusion/recommendation persisted as a CollaborationThread artifact target rather than an unbounded transcript.
+
+The detailed policy and implementation order are authoritative in `efficiency-model.md` and parent initiative #146.
