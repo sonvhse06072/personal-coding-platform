@@ -22,72 +22,59 @@ Repository docs and current executable evidence are authoritative over chat hist
 - Phase A #147 merged through PR #154: adaptive task budgets with emergency ceilings.
 - Phase B #148 merged through PR #156: layered verification and separated retry/failure accounting.
 - Phase C #149 merged through PR #157 at `754233a17572b4631f418dfbab1c667790dc7fc5`: bounded single-writer collaboration with compact durable artifacts.
-- Phase D #150 merged through PR #158 at `8eca5469f1a884511e0cf36cb9b6b51e0602a7bf`: policy-driven risk-proportionate review, compact role evidence packs, read-only JIT repository retrieval, structured review reports and review-usefulness telemetry.
-- Phase E #151 merged through PR #159 at `71db5f20a7ee1bd5b0c525b51b3433d7f9dfeec7` after exact-head CI passed all four jobs. Merged source versions are Runtime `1.0.43`, Router `1.0.21`, routing policy v12.
-- Phase E adds compact per-job telemetry persistence/aggregation, bounded historical Router calibration, first-class Human Owner attention metrics and compact continuity proposals without weakening deterministic verification or governance boundaries.
+- Phase D #150 merged through PR #158 at `8eca5469f1a884511e0cf36cb9b6b51e0602a7bf`: policy-driven risk-proportionate review, compact role evidence packs, read-only JIT retrieval, structured review reports and review-usefulness telemetry.
+- Phase E #151 merged through PR #159 at `71db5f20a7ee1bd5b0c525b51b3433d7f9dfeec7`: compact task telemetry, bounded historical Router calibration, Human Owner attention metrics and continuity proposals. Source versions remain Runtime `1.0.43`, Router `1.0.21`, routing policy v12.
+- Constrained PM-controlled merge #98 merged through PR #160 at `a9dfde049196ff2d02e56e99a86f80ca2af88dad` after final exact-head workflow run #311 (`34999337692`) passed Runtime, Router, ddev-executor and structure-tests.
+- #98 keeps GitHub merge authority behind Runtime -> constrained ddev-executor, revalidates exact PR/head/base/source ancestry/current CI, uses expected-head merge semantics, persists durable merge audit evidence, rejects replay/uncertain outcomes fail-closed, and advances dependencies only after GitHub confirms the exact merge.
+- Accepted actual changed-file paths provide an additional fail-closed protected-decision signal for governance/workflow, scope, dependency/service, security/auth, migration/schema and production/deployment changes; matching Human Owner approval remains required where protected authority is implicated.
+- `chonhac` still has `autonomy.allow_auto_merge_low_risk: false`, so its merge behavior remains manual until project policy is explicitly changed.
 - PR #155 keeps the healthy routine Standard OpenRouter preference. A second OpenRouter model remains out of scope until provider/tool-use evidence supports activation.
 - Antigravity host bridge remains `1.10`.
-- Issue #98 constrained PM-controlled merge is the active remaining low-touch delivery dependency before PCP can claim a routine zero-human-touch happy path.
-- PR #139 documents the separate Telegram terminal gateway target; it remains lower priority and unimplemented.
+- PR #139 documents the separate Telegram terminal gateway target; it remains approved but lower priority and unimplemented.
 
-## Efficiency initiative
+## Efficiency initiative #146
 
 Authoritative policy/design: `docs/project/efficiency-model.md`.
 
-Tracking:
+Source implementation status:
 
-- #146 umbrella initiative;
 - #147 Phase A — complete/merged;
 - #148 Phase B — complete/merged;
 - #149 Phase C — complete/merged;
 - #150 Phase D — complete/merged;
-- #151 Phase E — complete/merged through PR #159;
-- #98 constrained PM-controlled merge — active through PR #160.
+- #151 Phase E — complete/merged;
+- #98 Phase F constrained PM merge — complete/merged.
 
-## Active constrained PM merge / issue #98 state
+The A-F source implementation sequence is complete. Issue #146 remains open for operational validation/calibration rather than additional scope by default. The next evidence should come from safe rollout and real routine-task execution: human interventions/task, avoidable blocks/task, model/test usage, CI/review yield, wall time and merge throughput. Do not close #146 solely because source code merged if the deployed system has not yet produced the intended operational evidence.
 
-Branch: `ai/pm-controlled-merge-98`, created from the exact Phase E merge commit `71db5f20a7ee1bd5b0c525b51b3433d7f9dfeec7`.
+No new feature branch is automatically implied by completion of #98. In particular, do not jump to the lower-priority Telegram terminal gateway merely because the efficiency implementation sequence is source-complete.
 
-Pull request: #160, `Add constrained PM-controlled pull request merge`.
+## PM-controlled merge implementation evidence
 
-Current branch implementation:
+PR #160 final head: `b5e381bd2750b6cdce55d6df152cb5daf1c2263b`.
 
-- Runtime derives PM merge eligibility deterministically from durable project/ExecutionPlan/WorkOrder/job evidence rather than asking a model to decide merge authority;
-- the existing project gate `autonomy.allow_auto_merge_low_risk` is the explicit opt-in; projects with it disabled keep the stable manual merge gate;
-- eligible work must be an accepted completed non-dry-run job with exact WorkOrder/job/PR identity, a verified commit, deterministic verification success, required review success or the policy-authorized strong-evidence fast skip, finalized successful CI and no unexpected scope;
-- protected scope/architecture/dependency/security/auth/trust-boundary/destructive-data/production/governance/material-budget signals cannot enter automatic merge unless the matching Human Owner decision was durably approved; unresolved/high-risk work remains at the owner/manual merge gate;
-- accepted actual changed-file paths receive a second fail-closed classification before merge, so sensitive governance/workflow, project-scope, dependency/service-manifest, authentication/security, migration/schema and production/deployment paths cannot silently bypass an initially incomplete task-risk classification; mutable `docs/project/current-state.md` is not treated as a protected policy document;
-- merge capability stays Runtime -> constrained ddev-executor -> GitHub. Developer/model processes receive no GitHub delivery or merge credentials;
-- ddev-executor independently re-reads and validates the configured repository, exact PR number, AI branch, base branch, expected head SHA, pinned source ancestry and current GitHub CI immediately before mutation;
-- GitHub merge uses the expected-head guard, no force push, and a fresh post-merge PR read before Runtime may mark the WorkOrder completed;
-- Runtime persists a durable PM merge approval/result audit before/after the side effect. Existing approval records are never blindly replayed;
-- approved-without-result crash recovery is observation-only: if GitHub confirms the exact PR was merged, Runtime records that observation; otherwise it blocks as an uncertain merge attempt;
-- transport or confirmation ambiguity after mutation starts is treated as uncertain and fail-closed, not as permission to retry;
-- downstream WorkOrders remain gated until GitHub confirms the exact PR merged;
-- confirmed PM merge may emit the existing Phase E continuity `pr_merged` evidence, but continuity persistence failure cannot invalidate a merge already confirmed by GitHub;
-- no production deployment or production side effect is added.
+Validation history:
 
-Regression coverage on the branch includes low-risk eligible one-shot merge and downstream unlock, manual opt-out stability, protected-change owner gating and durable owner approval, sensitive actual-path classification, stale head rejection, source-ancestry failure, non-success CI rejection, replay rejection, exact merge confirmation, approved-without-result crash recovery and constrained PM-bridge policy/auth boundaries.
+- an earlier Runtime-only failure was a synthetic orchestration fixture missing `baseline_revision`; production state-machine logic was not changed to hide that failure;
+- after the fixture fix, all four jobs passed;
+- self-review then added actual changed-file protected-path classification and dedicated regression coverage;
+- code head `fbbad479f22f204b392ecaca818705f27f27dc69` passed all four jobs in workflow run #310;
+- final continuity-only head `b5e381bd2750b6cdce55d6df152cb5daf1c2263b` passed all four jobs in workflow run #311;
+- PR comments, submitted reviews and inline review threads were empty; the PR was mergeable;
+- merge used the exact expected-head guard and produced main merge commit `a9dfde049196ff2d02e56e99a86f80ca2af88dad`;
+- issue #98 closed automatically through `Closes #98`.
 
-CI history on PR #160:
-
-- exact-head `a3d7ef499ec1844ebf0790182e42415e9bc1e246`: Router, structure and ddev-executor passed; Runtime had one test-fixture compatibility failure because the synthetic plan omitted `baseline_revision` when the downstream WorkOrder was unlocked;
-- the fixture was corrected on the same branch to match the real orchestration shape;
-- exact-head `3e77a6445f14738fc1972fa7559759dd3891d44e`, workflow run #308, passed Runtime, Router, ddev-executor and structure-tests;
-- self-review then added the actual changed-file protected-path guard plus regression coverage, so run #308 was deliberately superseded;
-- exact-head `fbbad479f22f204b392ecaca818705f27f27dc69`, workflow run #310 (`34999137678`), passed Runtime, Router, ddev-executor and structure-tests. This continuity-only commit must receive one final exact-head CI run before merge.
-
-No local Runtime/ddev-executor/DDEV/n8n rollout has been performed for #98. Merge must not be treated as permission to restart active local services.
+No local Runtime/ddev-executor/DDEV/n8n rollout was performed as part of this merge. Source completion must not be confused with deployed behavior.
 
 <!-- PCP:CONTINUITY:START -->
 ## Automated continuity snapshot
 
-- Event: `pm_controlled_merge_exact_head_green`.
+- Event: `pm_controlled_merge_source_complete`.
 - Project/job: `personal-coding-platform` / `n/a`.
-- Runtime state: `development`; outcome: `pending_final_doc_only_ci_and_merge_gate`.
-- WorkOrder: `GH-98`; branch: `ai/pm-controlled-merge-98`; PR: `#160`.
-- Verification: code head `fbbad479f22f204b392ecaca818705f27f27dc69`; workflow run #310 passed Runtime, Router, ddev-executor and structure-tests.
-- Human attention: issue #96 / PR #97 already provide the Human Owner-approved governance delegation that #98 implements; protected merge boundaries remain fail-closed.
+- Runtime state: `source_merged`; outcome: `awaiting_explicit_rollout_and_operational_validation`.
+- WorkOrder: `GH-98`; merged PR: `#160`; merge commit: `a9dfde049196ff2d02e56e99a86f80ca2af88dad`.
+- Verification: final exact-head workflow run #311 passed Runtime, Router, ddev-executor and structure-tests.
+- Human authority: issue #96 / PR #97 provide the Human Owner-approved governance delegation implemented by #98; protected decision boundaries remain Human Owner-controlled.
 - Deployment: not performed.
 - This section is mutable execution state only. Durable architecture/policy changes still require their normal reviewed Git path.
 <!-- PCP:CONTINUITY:END -->
@@ -148,13 +135,13 @@ C2/C3 remain gated behind C1. Do not manually mutate DB/job state, reset counter
 
 ## Immediate next safe actions
 
-Platform development:
+Platform:
 
-1. require final exact-head CI for PR #160 after this continuity-only commit;
-2. inspect PR comments/reviews and verify the exact head, mergeability and absence of unresolved Human Owner decision triggers;
-3. merge #160 only when the final exact-head CI and review gates are green, using an expected-head guard;
-4. do not roll out/restart Runtime or ddev-executor merely because #160 merges;
-5. after merge, reassess the roadmap from the new main baseline before starting another feature branch.
+1. merge this docs-only post-#98 continuity update after exact-head CI;
+2. keep #146 open for operational validation until real deployed evidence supports its success metrics;
+3. do not roll out/restart Runtime, ddev-executor, DDEV or n8n merely because source implementation is complete;
+4. when the Human Owner explicitly chooses a local rollout window and the active-job gate is satisfied, deploy the merged source, verify service health/version/merge trust boundaries, then run a bounded routine ticket through WorkOrder -> implementation -> verification -> review -> PR/CI -> PM merge and collect Phase E telemetry;
+5. choose any next feature only from that evidence or an explicit Human Owner priority, rather than assuming #139 is next.
 
 DEC-025C:
 
