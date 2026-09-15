@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .engine_budget import RouterEngine as BudgetRouterEngine
+from .engine_adaptive import RouterEngine as BudgetRouterEngine
 from .schemas import (
     DimensionScores,
     ProviderState,
@@ -72,8 +72,8 @@ class RouterEngine(BudgetRouterEngine):
 
         `quota:model:<id>` is created from a concrete model quota/rate-limit
         failure. `quota:<group>` is reserved for authoritative shared-bucket
-        evidence (for example future statusline telemetry). Base Router still
-        combines this model view with `provider:<name>` health afterwards.
+        evidence. Base Router still combines this model view with
+        `provider:<name>` health afterwards.
         """
         updated = request.model_copy(deep=True)
         state = dict(updated.provider_state)
@@ -165,7 +165,12 @@ class RouterEngine(BudgetRouterEngine):
         ceiling = request.route.strategy.reasoning_ceiling.get("executor")
         boosted = self._next_reasoning_choice(current, ceiling)
         should_replace_model_escalation = result.action == "escalate" and result.next_executor is not None
-        should_use_signal_escalation = result.action == "continue" and bool(result.signals)
+        actionable_signals = [
+            signal
+            for signal in result.signals
+            if not signal.startswith(("budget_estimate_exceeded:", "budget_headroom_active:"))
+        ]
+        should_use_signal_escalation = result.action == "continue" and bool(actionable_signals)
         if boosted is not None and (should_replace_model_escalation or should_use_signal_escalation):
             return ReassessResponse(
                 action="escalate",

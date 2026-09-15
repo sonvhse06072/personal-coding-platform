@@ -142,6 +142,18 @@ class Budget(BaseModel):
     max_changed_files: int
 
 
+class AdaptiveBudgetDimension(BaseModel):
+    estimate: float = Field(ge=0.0)
+    working_target: float = Field(ge=0.0)
+    emergency_limit: float = Field(ge=0.0)
+
+
+class AdaptiveBudgetPolicy(BaseModel):
+    enabled: bool = False
+    effort_pressure: float = Field(default=0.0, ge=0.0, le=1.0)
+    dimensions: dict[str, AdaptiveBudgetDimension] = Field(default_factory=dict)
+
+
 class ExecutionStrategy(BaseModel):
     profile: ProfileName
     analysis_depth: int
@@ -151,6 +163,7 @@ class ExecutionStrategy(BaseModel):
     reasoning_ceiling: dict[str, ReasoningEffort] = Field(default_factory=dict)
     human_decision: HumanDecision
     budget: Budget
+    adaptive_budget: AdaptiveBudgetPolicy | None = None
     anti_loop: dict[str, Any]
     permissions: dict[str, bool]
     definition_of_done: dict[str, list[str]]
