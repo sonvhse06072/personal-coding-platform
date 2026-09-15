@@ -4,6 +4,7 @@ from copy import deepcopy
 
 from app.telemetry import (
     aggregate_calibration,
+    aggregate_telemetry_summary,
     classify_attention_event,
     classify_budget_attention,
     task_telemetry_snapshot,
@@ -15,6 +16,7 @@ def completed_row() -> dict:
         "id": "job-telemetry-1",
         "project_id": "project-a",
         "status": "completed",
+        "dry_run": False,
         "task": {"title": "Add test", "task_type": "test"},
         "checkpoint": {
             "work_order": {"id": "WO-1", "requested_role": "backend_developer"},
@@ -91,6 +93,7 @@ def test_task_snapshot_captures_outcome_verification_review_and_resources() -> N
     snapshot = task_telemetry_snapshot(completed_row())
 
     assert snapshot["terminal"] is True
+    assert snapshot["calibration_eligible"] is True
     assert snapshot["task_outcome"] == "accepted"
     assert snapshot["first_pass_success"] is True
     assert snapshot["role"] == "backend_developer"
@@ -125,6 +128,35 @@ def test_sparse_calibration_falls_back_then_uses_bounded_observed_ratios() -> No
     assert result["fallback"] is None
 
 
+def test_dry_run_cancelled_and_legacy_ceiling_data_do_not_pollute_budget_calibration() -> None:
+    base = task_telemetry_snapshot(completed_row())
+
+    dry = completed_row()
+    dry["dry_run"] = True
+    dry["result"] = {"dry_run": True}
+    dry_snapshot = task_telemetry_snapshot(dry)
+    assert dry_snapshot["terminal"] is True
+    assert dry_snapshot["calibration_eligible"] is False
+    assert dry_snapshot["task_outcome"] == "dry_run"
+
+    cancelled = completed_row()
+    cancelled["status"] = "cancelled"
+    cancelled_snapshot = task_telemetry_snapshot(cancelled)
+    assert cancelled_snapshot["terminal"] is True
+    assert cancelled_snapshot["calibration_eligible"] is False
+
+    legacy_samples = []
+    for _ in range(5):
+        legacy = deepcopy(base)
+        legacy["resources"]["estimate_source"] = "legacy_profile_ceiling"
+        legacy["resources"]["actual"]["max_model_calls"] = 99.0
+        legacy_samples.append(legacy)
+    result = aggregate_calibration(legacy_samples, minimum_sample_size=5)
+    assert result["sufficient_sample"] is True
+    assert result["resource_multipliers"] == {}
+    assert result["model_success"]["codex_terra"]["success_rate"] == 1.0
+
+
 def test_attention_classification_separates_protected_decisions_from_routine_operations() -> None:
     adaptive = completed_row()
     legacy = completed_row()
@@ -153,5 +185,44 @@ def test_blocked_snapshot_surfaces_budget_without_useful_outcome_but_is_not_cali
     snapshot = task_telemetry_snapshot(row)
 
     assert snapshot["terminal"] is False
+    assert snapshot["calibration_eligible"] is False
     assert snapshot["task_outcome"] == "blocked"
     assert snapshot["resources"]["budget_without_useful_outcome"] is True
+
+
+def test_operational_summary_aggregates_required_efficiency_and_attention_metrics() -> None:
+    first = task_telemetry_snapshot(completed_row())
+    second_row = completed_row()
+    second_row["id"] = "job-2"
+    second_row["progress"]["repair_iterations"] = 2
+    second_row["progress"]["iteration"] = 3
+    second_row["progress"]["review_findings"] = 1
+    second_row["progress"]["review_findings_actioned"] = 1
+    second = task_telemetry_snapshot(second_row)
+
+    summary = aggregate_telemetry_summary(
+        [first, second],
+        attention={
+            "human_interventions": 1,
+            "avoidable_blocks": 0,
+            "human_interventions_per_task": 0.5,
+            "avoidable_blocks_per_task": 0.0,
+            "time_waiting_for_owner_seconds": 18.0,
+        },
+    )
+
+    assert summary["task_count"] == 2
+    assert summary["calibration_eligible_tasks"] == 2
+    assert summary["observed_success_rate"] == 1.0
+    assert summary["first_pass_success_rate"] == 0.5
+    assert summary["average_repair_count"] == 1.0
+    assert summary["verification"] == {"targeted_runs": 2, "full_runs": 2, "retries": 0}
+    assert summary["ci"]["pass_rate"] == 1.0
+    assert summary["review"]["findings"] == 3
+    assert summary["review"]["findings_actioned"] == 2
+    assert summary["review"]["useful_finding_yield"] == 0.6667
+    assert summary["resources"]["model_calls"] == 8.0
+    assert summary["provider_failures"] == 2
+    assert summary["quota_failures"] == 2
+    assert summary["provider_model_breakdown"][0]["tasks"] == 2
+    assert summary["human_attention"]["human_interventions_per_task"] == 0.5
