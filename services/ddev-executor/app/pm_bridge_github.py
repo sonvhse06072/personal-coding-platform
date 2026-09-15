@@ -10,11 +10,21 @@ from typing import Any
 import httpx
 import yaml
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from pydantic import BaseModel, Field
 
 from .github_delivery import GitHubDelivery, github_repository_from_origin
+from .github_merge import merge_pull_request
 
 
 router = APIRouter(prefix="/v1/github/pm-bridge", tags=["pm-bridge"])
+_BRANCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$")
+
+
+class MergePullRequestRequest(BaseModel):
+    job_id: str = Field(min_length=8, max_length=100)
+    branch: str = Field(min_length=1, max_length=200)
+    source_commit: str = Field(min_length=7, max_length=64)
+    expected_head: str = Field(min_length=7, max_length=64)
 
 
 def auth(authorization: str | None = Header(default=None)) -> None:
@@ -76,6 +86,13 @@ def _issue_number(issue_url: str) -> int:
     if not match:
         raise ValueError("GitHub comment does not reference a bounded issue URL")
     return int(match.group(1))
+
+
+def _validate_ai_branch(cfg: dict[str, Any], branch: str) -> None:
+    prefix = str(cfg.get("runtime", {}).get("branch_prefix", "ai")).strip("/")
+    expected_prefix = f"{prefix}/"
+    if not _BRANCH_RE.fullmatch(branch) or ".." in branch or not branch.startswith(expected_prefix):
+        raise HTTPException(422, f"Branch must be a bounded {expected_prefix}* branch")
 
 
 @router.get("/comments", dependencies=[Depends(auth)])
@@ -169,3 +186,38 @@ def pull_request(
         "head_ref": (raw.get("head") or {}).get("ref"),
         "base_ref": (raw.get("base") or {}).get("ref"),
     }
+
+
+@router.post("/pulls/{pr_number}/merge", dependencies=[Depends(auth)])
+def merge_pr(
+    pr_number: int,
+    payload: MergePullRequestRequest,
+    project_id: str = Query(..., min_length=1, max_length=200),
+) -> dict[str, Any]:
+    """Merge one exact low-risk PR after revalidating GitHub state.
+
+    Runtime decides PM eligibility from durable task evidence. This boundary does
+    not trust that decision for GitHub facts: repository, branch, base, ancestry,
+    current CI and expected head are independently re-read here.
+    """
+    if pr_number < 1:
+        raise HTTPException(422, "pr_number must be positive")
+    cfg = _project(project_id)
+    autonomy = dict(cfg.get("autonomy") or {})
+    if not bool(autonomy.get("allow_auto_merge_low_risk", False)):
+        raise HTTPException(403, "Project policy does not allow constrained PM auto-merge")
+    _validate_ai_branch(cfg, payload.branch)
+    delivery, repository = _repository(project_id)
+    try:
+        result = merge_pull_request(
+            delivery,
+            repository=repository,
+            pr_number=pr_number,
+            branch=payload.branch,
+            base_branch=str(cfg.get("base_branch") or "main"),
+            source_commit=payload.source_commit,
+            expected_head=payload.expected_head,
+        )
+    except (httpx.HTTPError, RuntimeError, ValueError) as exc:
+        raise _github_error(exc) from exc
+    return {"project_id": project_id, "job_id": payload.job_id, **result}

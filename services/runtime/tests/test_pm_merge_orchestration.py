@@ -1,0 +1,383 @@
+from __future__ import annotations
+
+import asyncio
+from copy import deepcopy
+
+import app.orchestrator_merge as merge_module
+from app.orchestrator_merge import PlanOrchestrator
+
+
+HEAD = "b" * 40
+SOURCE = "a" * 40
+
+
+def work_order(work_order_id: str, *, dependencies=None, security=False) -> dict:
+    return {
+        "id": work_order_id,
+        "objective": "bounded",
+        "requested_role": "developer",
+        "risk": {"level": "standard", "flags": ["security_boundary_change"] if security else []},
+        "dependencies": dependencies or [],
+    }
+
+
+def plan_row(work_orders) -> dict:
+    return {
+        "plan_id": "plan-1",
+        "project_id": "default",
+        "status": "active",
+        "ticket": {"id": "GH-98", "title": "PM merge"},
+        "plan": {"work_orders": work_orders, "decision_boundaries": []},
+        "baseline_revision": "baseline-r1",
+        "baseline_source_commit": SOURCE,
+    }
+
+
+def tracked(work_order_id: str, sequence_no: int, *, state="pending", job_id=None, pr_number=None) -> dict:
+    return {
+        "plan_id": "plan-1",
+        "work_order_id": work_order_id,
+        "sequence_no": sequence_no,
+        "execution_mode": "agent",
+        "state": state,
+        "job_id": job_id,
+        "pr_number": pr_number,
+        "pr_url": f"https://github.com/acme/demo/pull/{pr_number}" if pr_number else None,
+        "detail": {},
+    }
+
+
+def accepted_job(work_order_id="WO-1", *, security=False) -> dict:
+    human = {
+        "required": security,
+        "triggers": ["security_boundary_change"] if security else [],
+        "reason": "security" if security else None,
+    }
+    route = {
+        "strategy": {
+            "human_decision": human,
+            "review_policy": {
+                "required": True,
+                "independent": True,
+                "independence_satisfied": True,
+                "conditional_on_strong_evidence": False,
+            },
+        }
+    }
+    return {
+        "id": "job-12345678",
+        "project_id": "default",
+        "status": "completed",
+        "dry_run": False,
+        "source_commit": SOURCE,
+        "branch": "ai/job-123456",
+        "task": {"title": "Fix", "flags": []},
+        "repo_analysis": {
+            "security_sensitive": security,
+            "authentication_change": False,
+            "authorization_change": False,
+            "destructive_migration": False,
+            "production_write": False,
+        },
+        "checkpoint": {
+            "work_order": work_order(work_order_id, security=security),
+            "approved_decisions": [],
+        },
+        "route": route,
+        "progress": {"required_checks_passed": True, "unexpected_scope": False},
+        "result": {
+            "status": "accepted",
+            "commit": HEAD,
+            "verification": {"passed": True},
+            "review": {"verdict": "pass"},
+            "pm_evidence": {"unresolved_risks": [], "protected_decision_flags": []},
+            "route": route,
+            "progress": {"required_checks_passed": True, "unexpected_scope": False},
+            "delivery": {
+                "state": "ci_success",
+                "ci": {"state": "success", "commit": HEAD},
+                "pull_request": {
+                    "number": 7,
+                    "head": HEAD,
+                    "head_ref": "ai/job-123456",
+                    "base_ref": "main",
+                },
+            },
+            "delivery_finalized": True,
+        },
+    }
+
+
+class FakeStorage:
+    def __init__(self, jobs):
+        self.jobs = jobs
+        self.continuity = []
+
+    def get(self, job_id):
+        return deepcopy(self.jobs.get(job_id))
+
+    def get_execution_plan(self, plan_id):
+        return None
+
+    def record_external_continuity(self, **payload):
+        self.continuity.append(deepcopy(payload))
+
+
+class FakeStore:
+    def __init__(self, plan, rows):
+        self.plan = deepcopy(plan)
+        self.rows = [deepcopy(row) for row in rows]
+        self.plan_status = "active"
+        self.notifications = []
+
+    def ensure(self):
+        return None
+
+    def register_new_plans(self):
+        return []
+
+    def active_plans(self):
+        if self.plan_status in {"completed", "blocked"}:
+            return []
+        value = deepcopy(self.plan)
+        value["status"] = self.plan_status
+        return [value]
+
+    def orchestration(self, plan_id):
+        return {"plan_id": plan_id, "project_id": "default", "status": self.plan_status}
+
+    def work_orders(self, plan_id):
+        return [deepcopy(row) for row in sorted(self.rows, key=lambda item: item["sequence_no"])]
+
+    def update_plan(self, plan_id, *, status):
+        self.plan_status = status
+
+    def update_work_order(self, plan_id, work_order_id, **fields):
+        row = next(item for item in self.rows if item["work_order_id"] == work_order_id)
+        row.update(deepcopy(fields))
+
+    def any_busy_work_order(self):
+        return any(row["state"] in {"running", "awaiting_merge", "waiting_human"} for row in self.rows)
+
+    def emit_notification(self, **payload):
+        self.notifications.append(deepcopy(payload))
+        return True
+
+
+class FakeDdev:
+    def __init__(self):
+        self.merged = False
+        self.merge_calls = 0
+
+    async def github_pull_request(self, *, project_id, pr_number):
+        return {
+            "project_id": project_id,
+            "repository": "acme/demo",
+            "number": pr_number,
+            "state": "closed" if self.merged else "open",
+            "merged": self.merged,
+            "merged_at": "2026-09-15T12:00:00Z" if self.merged else None,
+            "merge_commit_sha": "c" * 40 if self.merged else None,
+            "head": HEAD,
+            "head_ref": "ai/job-123456",
+            "base_ref": "main",
+        }
+
+    async def github_merge_pull_request(self, **payload):
+        self.merge_calls += 1
+        assert payload["expected_head"] == HEAD
+        assert payload["source_commit"] == SOURCE
+        self.merged = True
+        return {
+            "merged": True,
+            "expected_head": HEAD,
+            "merge_commit_sha": "c" * 40,
+            "merged_at": "2026-09-15T12:00:00Z",
+        }
+
+
+class FakeEngine:
+    def __init__(self, storage):
+        self.storage = storage
+        self.ddev = FakeDdev()
+        self.created = []
+        self.enqueued = []
+
+    def create_job(self, payload):
+        self.created.append(deepcopy(payload))
+        job_id = payload["_job_id"]
+        self.storage.jobs[job_id] = {
+            "id": job_id,
+            "project_id": payload["project_id"],
+            "status": "queued",
+            "checkpoint": {"work_order": payload["work_order"]},
+            "progress": {},
+        }
+        return job_id
+
+    async def enqueue(self, job_id):
+        self.enqueued.append(job_id)
+
+
+class FakeAudit:
+    def __init__(self):
+        self.records = {}
+
+    def ensure(self):
+        return None
+
+    def _key(self, plan_id, work_order_id, expected_head):
+        return (plan_id, work_order_id, expected_head)
+
+    def get(self, *, plan_id, work_order_id, expected_head):
+        value = self.records.get(self._key(plan_id, work_order_id, expected_head))
+        return deepcopy(value) if value else None
+
+    def approve(self, **payload):
+        key = self._key(payload["plan_id"], payload["work_order_id"], payload["expected_head"])
+        if key in self.records:
+            value = deepcopy(self.records[key])
+            value["created"] = False
+            return value
+        value = {**deepcopy(payload), "status": "approved", "result": None}
+        self.records[key] = value
+        return {**deepcopy(value), "created": True}
+
+    def finish(self, *, plan_id, work_order_id, expected_head, status, result):
+        key = self._key(plan_id, work_order_id, expected_head)
+        self.records[key].update({"status": status, "result": deepcopy(result)})
+        return deepcopy(self.records[key])
+
+
+def service(rows, jobs, work_orders, monkeypatch, *, allow_auto=True):
+    storage = FakeStorage(deepcopy(jobs))
+    engine = FakeEngine(storage)
+    store = FakeStore(plan_row(work_orders), rows)
+    orchestrator = PlanOrchestrator(storage, engine, store=store)
+    orchestrator.merge_audit = FakeAudit()
+    monkeypatch.setattr(
+        merge_module,
+        "project_config",
+        lambda project_id: {
+            "base_branch": "main",
+            "autonomy": {"allow_auto_merge_low_risk": allow_auto, "allow_production_deploy": False},
+        },
+    )
+    return orchestrator, storage, engine, store
+
+
+def test_eligible_pr_merges_once_then_unlocks_dependency(monkeypatch) -> None:
+    first = work_order("WO-1")
+    second = work_order("WO-2", dependencies=["WO-1"])
+    svc, storage, engine, store = service(
+        [
+            tracked("WO-1", 0, state="awaiting_merge", job_id="job-12345678", pr_number=7),
+            tracked("WO-2", 1),
+        ],
+        {"job-12345678": accepted_job()},
+        [first, second],
+        monkeypatch,
+    )
+
+    result = asyncio.run(svc.tick())
+
+    assert engine.ddev.merge_calls == 1
+    assert store.rows[0]["state"] == "completed"
+    assert store.rows[0]["detail"]["merge_commit_sha"] == "c" * 40
+    assert result["launched"]["work_order_id"] == "WO-2"
+    assert store.rows[1]["state"] == "running"
+    audit = next(iter(svc.merge_audit.records.values()))
+    assert audit["status"] == "merged"
+    assert storage.continuity[0]["event_type"] == "pr_merged"
+
+
+def test_project_opt_out_keeps_stable_manual_merge_gate(monkeypatch) -> None:
+    svc, storage, engine, store = service(
+        [tracked("WO-1", 0, state="awaiting_merge", job_id="job-12345678", pr_number=7)],
+        {"job-12345678": accepted_job()},
+        [work_order("WO-1")],
+        monkeypatch,
+        allow_auto=False,
+    )
+
+    asyncio.run(svc.tick())
+    first_detail = deepcopy(store.rows[0]["detail"])
+    asyncio.run(svc.tick())
+
+    assert engine.ddev.merge_calls == 0
+    assert store.rows[0]["state"] == "awaiting_merge"
+    assert store.rows[0]["detail"] == first_detail
+    assert store.rows[0]["detail"]["pm_merge"]["manual_only"] is True
+
+
+def test_protected_unapproved_work_stays_owner_manual_merge_gate(monkeypatch) -> None:
+    svc, storage, engine, store = service(
+        [tracked("WO-1", 0, state="awaiting_merge", job_id="job-12345678", pr_number=7)],
+        {"job-12345678": accepted_job(security=True)},
+        [work_order("WO-1", security=True)],
+        monkeypatch,
+    )
+
+    asyncio.run(svc.tick())
+    asyncio.run(svc.tick())
+
+    assert engine.ddev.merge_calls == 0
+    assert store.rows[0]["state"] == "awaiting_merge"
+    assert store.rows[0]["detail"]["pm_merge"]["owner_required"] is True
+    assert "protected_change_without_matching_owner_approval" in store.rows[0]["detail"]["pm_merge"]["blockers"]
+
+
+def test_approved_without_result_is_observation_only_and_never_replayed(monkeypatch) -> None:
+    svc, storage, engine, store = service(
+        [tracked("WO-1", 0, state="awaiting_merge", job_id="job-12345678", pr_number=7)],
+        {"job-12345678": accepted_job()},
+        [work_order("WO-1")],
+        monkeypatch,
+    )
+    key = ("plan-1", "WO-1", HEAD)
+    svc.merge_audit.records[key] = {
+        "plan_id": "plan-1",
+        "work_order_id": "WO-1",
+        "job_id": "job-12345678",
+        "project_id": "default",
+        "pr_number": 7,
+        "expected_head": HEAD,
+        "source_commit": SOURCE,
+        "status": "approved",
+        "result": None,
+    }
+
+    asyncio.run(svc.tick())
+
+    assert engine.ddev.merge_calls == 0
+    assert store.rows[0]["state"] == "blocked"
+    assert store.rows[0]["detail"]["reason"] == "uncertain_merge_attempt"
+    assert svc.merge_audit.records[key]["status"] == "uncertain"
+
+
+def test_crash_recovery_accepts_only_observed_exact_merged_pr(monkeypatch) -> None:
+    svc, storage, engine, store = service(
+        [tracked("WO-1", 0, state="awaiting_merge", job_id="job-12345678", pr_number=7)],
+        {"job-12345678": accepted_job()},
+        [work_order("WO-1")],
+        monkeypatch,
+    )
+    engine.ddev.merged = True
+    key = ("plan-1", "WO-1", HEAD)
+    svc.merge_audit.records[key] = {
+        "plan_id": "plan-1",
+        "work_order_id": "WO-1",
+        "job_id": "job-12345678",
+        "project_id": "default",
+        "pr_number": 7,
+        "expected_head": HEAD,
+        "source_commit": SOURCE,
+        "status": "approved",
+        "result": None,
+    }
+
+    asyncio.run(svc.tick())
+
+    assert engine.ddev.merge_calls == 0
+    assert store.rows[0]["state"] == "completed"
+    assert svc.merge_audit.records[key]["status"] == "observed_merged"

@@ -139,6 +139,31 @@ class DdevExecutorClient:
             _raise_for_status_with_detail(response)
             return response.json()
 
+    async def github_merge_pull_request(
+        self,
+        *,
+        job_id: str,
+        project_id: str,
+        pr_number: int,
+        branch: str,
+        source_commit: str,
+        expected_head: str,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=90) as client:
+            response = await client.post(
+                f"{self.base}/v1/github/pm-bridge/pulls/{pr_number}/merge",
+                params={"project_id": project_id},
+                json={
+                    "job_id": job_id,
+                    "branch": branch,
+                    "source_commit": source_commit,
+                    "expected_head": expected_head,
+                },
+                headers=self.headers,
+            )
+            _raise_for_status_with_detail(response)
+            return response.json()
+
     async def remove_workspace(self, *, job_id: str, project_id: str, workspace: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.delete(

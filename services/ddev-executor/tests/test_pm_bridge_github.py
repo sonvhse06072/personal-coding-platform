@@ -1,3 +1,6 @@
+import pytest
+from fastapi import HTTPException
+
 from app import pm_bridge_github
 
 
@@ -31,8 +34,8 @@ class FakeClient:
 class FakeDelivery:
     base = "https://api.github.test"
 
-    def __init__(self, responses):
-        self.client = FakeClient(responses)
+    def __init__(self, responses=None):
+        self.client = FakeClient(responses or [])
 
     def _client(self):
         return self.client
@@ -124,3 +127,67 @@ def test_pull_request_status_exposes_only_merge_gate_metadata(monkeypatch):
         "base_ref": "main",
     }
     assert delivery.client.calls == [("https://api.github.test/repos/example/repo/pulls/12", None)]
+
+
+def test_merge_bridge_preserves_project_opt_out(monkeypatch):
+    monkeypatch.setattr(
+        pm_bridge_github,
+        "_project",
+        lambda project_id: {
+            "base_branch": "main",
+            "runtime": {"branch_prefix": "ai"},
+            "autonomy": {"allow_auto_merge_low_risk": False},
+        },
+    )
+    payload = pm_bridge_github.MergePullRequestRequest(
+        job_id="job-12345678",
+        branch="ai/job-123456",
+        source_commit="a" * 40,
+        expected_head="b" * 40,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        pm_bridge_github.merge_pr(7, payload, "demo")
+    assert exc.value.status_code == 403
+
+
+def test_merge_bridge_passes_only_bounded_project_derived_context(monkeypatch):
+    delivery = FakeDelivery()
+    captured = {}
+    monkeypatch.setattr(
+        pm_bridge_github,
+        "_project",
+        lambda project_id: {
+            "base_branch": "develop",
+            "runtime": {"branch_prefix": "ai"},
+            "autonomy": {"allow_auto_merge_low_risk": True},
+        },
+    )
+    monkeypatch.setattr(pm_bridge_github, "_repository", lambda project_id: (delivery, "example/repo"))
+
+    def fake_merge(delivery_arg, **kwargs):
+        assert delivery_arg is delivery
+        captured.update(kwargs)
+        return {"merged": True, "merge_commit_sha": "c" * 40}
+
+    monkeypatch.setattr(pm_bridge_github, "merge_pull_request", fake_merge)
+    payload = pm_bridge_github.MergePullRequestRequest(
+        job_id="job-12345678",
+        branch="ai/job-123456",
+        source_commit="a" * 40,
+        expected_head="b" * 40,
+    )
+
+    result = pm_bridge_github.merge_pr(7, payload, "demo")
+
+    assert captured == {
+        "repository": "example/repo",
+        "pr_number": 7,
+        "branch": "ai/job-123456",
+        "base_branch": "develop",
+        "source_commit": "a" * 40,
+        "expected_head": "b" * 40,
+    }
+    assert result["project_id"] == "demo"
+    assert result["job_id"] == "job-12345678"
+    assert result["merged"] is True
