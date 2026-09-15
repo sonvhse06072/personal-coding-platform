@@ -5,7 +5,6 @@ import math
 from .engine_budget import RouterEngine as BudgetRouterEngine
 from .schemas import (
     AdaptiveBudgetDimension,
-    AdaptiveBudgetGrant,
     AdaptiveBudgetPolicy,
     ReassessRequest,
     ReassessResponse,
@@ -25,17 +24,17 @@ _ELASTIC_COUNTERS = {
 
 
 class RouterEngine(BudgetRouterEngine):
-    """Task-specific estimates plus bounded healthy-progress headroom.
+    """Attach task-specific estimates and pre-authorized elastic headroom.
 
-    New routes start at a task-specific working target rather than at the
-    emergency ceiling. Runtime may ask reassessment for additional headroom when
-    a current/projected operation reaches that working limit. The Router first
-    evaluates the same progress against the emergency envelope, so existing
-    human-decision, scope and anti-loop signals remain authoritative. Only a
-    healthy ``continue``/``escalate`` result can carry an automatic grant.
+    For new routes the profile values are priors, not routine stop points. Router
+    derives an estimate and working target from task pressure while the effective
+    max_* fields become bounded emergency ceilings. Runtime therefore continues
+    healthy work without owner clicks; its normal reassessment still applies the
+    existing anti-loop, scope, escalation and human-decision policy after each
+    meaningful iteration.
 
-    Legacy persisted routes omit ``adaptive_budget`` and retain historical hard
-    max_* semantics exactly.
+    Legacy persisted routes omit ``adaptive_budget`` and keep the historical
+    max_* hard-stop semantics exactly.
     """
 
     @staticmethod
@@ -66,7 +65,6 @@ class RouterEngine(BudgetRouterEngine):
         max_ratio = float(cfg.get("estimate_max_ratio", 1.35))
         working_ratio = float(cfg.get("working_headroom_ratio", 1.25))
         emergency_ratio = float(cfg.get("emergency_multiplier", 1.5))
-        default_grant_ratio = float(cfg.get("grant_increment_ratio", 0.25))
         estimate_ratio = min_ratio + (max_ratio - min_ratio) * pressure
 
         budget = route.strategy.budget.model_copy(deep=True)
@@ -89,24 +87,20 @@ class RouterEngine(BudgetRouterEngine):
                 hard_cap,
                 max(working_target, math.ceil(working_target * emergency_ratio)),
             )
-            grant_increment = float(
-                spec.get("grant_increment", max(1, math.ceil(baseline * default_grant_ratio)))
-            )
 
-            # Current Budget fields are integral, including wall-time minutes.
+            # Budget fields are integral, including wall-time minutes.
             estimate = float(int(estimate))
             working_target = float(int(working_target))
             emergency_limit = float(int(emergency_limit))
-            grant_increment = float(max(1, int(math.ceil(grant_increment))))
 
-            # The effective route starts at the working target. Emergency capacity
-            # remains metadata until Runtime receives a healthy bounded grant.
-            setattr(budget, dimension, int(working_target))
+            # The emergency ceiling is pre-authorized personal-scale headroom.
+            # Estimate/working target are telemetry/reassessment thresholds, not
+            # user-interruption gates.
+            setattr(budget, dimension, int(emergency_limit))
             dimensions[dimension] = AdaptiveBudgetDimension(
                 estimate=estimate,
                 working_target=working_target,
                 emergency_limit=emergency_limit,
-                grant_increment=grant_increment,
             )
 
         if not dimensions:
@@ -126,7 +120,7 @@ class RouterEngine(BudgetRouterEngine):
             return result
         result.strategy.adaptive_budget = adaptive
         result.strategy.reasons = list(result.strategy.reasons) + [
-            "Adaptive personal-scale budget enabled: estimate is advisory, working target is initially effective, and emergency ceiling requires healthy-progress grants."
+            "Adaptive personal-scale budget enabled: estimate/working targets are non-blocking and max_* values are bounded emergency circuit breakers."
         ]
         return result
 
@@ -148,97 +142,13 @@ class RouterEngine(BudgetRouterEngine):
                 signals.append(f"budget_estimate_exceeded:{dimension}")
         return signals
 
-    @staticmethod
-    def _emergency_probe(request: ReassessRequest) -> ReassessRequest:
-        probe = request.model_copy(deep=True)
-        adaptive = probe.route.strategy.adaptive_budget
-        if adaptive is None or not adaptive.enabled:
-            return probe
-        for dimension, envelope in adaptive.dimensions.items():
-            if hasattr(probe.route.strategy.budget, dimension):
-                setattr(probe.route.strategy.budget, dimension, int(envelope.emergency_limit))
-        probe.requested_headroom = {}
-        return probe
-
-    @staticmethod
-    def _grant_proposals(
-        request: ReassessRequest,
-    ) -> tuple[list[AdaptiveBudgetGrant], list[str]]:
-        adaptive = request.route.strategy.adaptive_budget
-        if adaptive is None or not adaptive.enabled:
-            return [], []
-
-        grants: list[AdaptiveBudgetGrant] = []
-        blocked: list[str] = []
-        budget = request.route.strategy.budget
-
-        for dimension, envelope in adaptive.dimensions.items():
-            counter = _ELASTIC_COUNTERS.get(dimension)
-            if not counter or not hasattr(budget, dimension):
-                continue
-            used = float(getattr(request.progress, counter, 0.0))
-            current = float(getattr(budget, dimension))
-            emergency = float(envelope.emergency_limit)
-            requested = max(0.0, float(request.requested_headroom.get(dimension, 0.0)))
-            projected = used + requested
-
-            needs_grant = projected > current if requested > 0 else used >= current
-            if not needs_grant:
-                continue
-            if used >= emergency or projected > emergency or current >= emergency:
-                blocked.append(dimension)
-                continue
-
-            target = max(current + float(envelope.grant_increment), projected)
-            new_limit = min(emergency, float(math.ceil(target)))
-            if new_limit <= current:
-                blocked.append(dimension)
-                continue
-
-            grants.append(AdaptiveBudgetGrant(
-                dimension=dimension,
-                previous_limit=current,
-                new_limit=new_limit,
-                emergency_limit=emergency,
-                used=used,
-                projected=projected,
-            ))
-
-        return grants, blocked
-
     def reassess(self, request: ReassessRequest) -> ReassessResponse:
-        adaptive = request.route.strategy.adaptive_budget
-        if adaptive is None or not adaptive.enabled:
-            return super().reassess(request)
-
-        # Evaluate health against the emergency envelope so the current working
-        # target does not preempt the more meaningful anti-loop/decision guards.
-        result = super().reassess(self._emergency_probe(request))
+        result = super().reassess(request)
+        extra = self._adaptive_signals(request)
+        if not extra:
+            return result
         signals = list(result.signals)
-        for signal in self._adaptive_signals(request):
+        for signal in extra:
             if signal not in signals:
                 signals.append(signal)
-
-        # Completion, protected human decisions and real circuit breakers always
-        # win over convenience headroom.
-        if result.action in {"complete", "human_decision", "stop"}:
-            return result.model_copy(update={"signals": signals})
-
-        grants, blocked = self._grant_proposals(request)
-        if blocked:
-            dimension = blocked[0]
-            return ReassessResponse(
-                action="stop",
-                reason=f"adaptive emergency budget ceiling would be exceeded: {dimension}",
-                current_profile=request.route.strategy.profile,
-                remaining=result.remaining,
-                signals=signals + [f"emergency_budget_guard:{item}" for item in blocked],
-            )
-
-        for grant in grants:
-            signals.append(f"adaptive_budget_grant:{grant.dimension}")
-
-        return result.model_copy(update={
-            "signals": signals,
-            "adaptive_budget_grants": grants,
-        })
+        return result.model_copy(update={"signals": signals})
