@@ -10,6 +10,12 @@ from typing import Any, Literal
 from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
+from .collaboration import (
+    CollaborationCreateRequest,
+    CollaborationManager,
+    CollaborationRecheckRequest,
+    CollaborationView,
+)
 from .dashboard import _require_session, create_dashboard_router
 from .engine_antigravity import RuntimeEngine
 from .orchestrator_notifications import PlanOrchestrator
@@ -58,6 +64,7 @@ class ControlActionExecuteRequest(BaseModel):
 storage = Storage()
 engine = RuntimeEngine(storage)
 pm_planner = PMPlanner(storage)
+collaboration_manager = CollaborationManager(storage)
 plan_orchestrator = PlanOrchestrator(storage, engine)
 
 
@@ -109,7 +116,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.40", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.41", lifespan=lifespan)
 app.include_router(pm_bridge_router)
 app.include_router(create_dashboard_router(storage, plan_orchestrator.store))
 
@@ -121,7 +128,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.40",
+        version="1.0.41",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
@@ -264,6 +271,62 @@ def get_job(job_id: str) -> JobView:
     if not row:
         raise HTTPException(404, "Unknown job")
     return view(row)
+
+
+@app.post(
+    "/v1/jobs/{job_id}/collaborations",
+    response_model=CollaborationView,
+    dependencies=[Depends(auth)],
+)
+async def create_collaboration(job_id: str, payload: CollaborationCreateRequest) -> CollaborationView:
+    try:
+        return await collaboration_manager.create(job_id, payload)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except RuntimeError as exc:
+        raise runtime_error(exc) from exc
+
+
+@app.get(
+    "/v1/jobs/{job_id}/collaborations",
+    response_model=list[CollaborationView],
+    dependencies=[Depends(auth)],
+)
+def list_collaborations(job_id: str) -> list[CollaborationView]:
+    try:
+        return collaboration_manager.list(job_id)
+    except RuntimeError as exc:
+        raise runtime_error(exc) from exc
+
+
+@app.get(
+    "/v1/jobs/{job_id}/collaborations/{thread_id}",
+    response_model=CollaborationView,
+    dependencies=[Depends(auth)],
+)
+def get_collaboration(job_id: str, thread_id: str) -> CollaborationView:
+    try:
+        return collaboration_manager.get(job_id, thread_id)
+    except RuntimeError as exc:
+        raise HTTPException(404, str(exc)) from exc
+
+
+@app.post(
+    "/v1/jobs/{job_id}/collaborations/{thread_id}/recheck",
+    response_model=CollaborationView,
+    dependencies=[Depends(auth)],
+)
+async def recheck_collaboration(
+    job_id: str,
+    thread_id: str,
+    payload: CollaborationRecheckRequest,
+) -> CollaborationView:
+    try:
+        return await collaboration_manager.recheck(job_id, thread_id, payload)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except RuntimeError as exc:
+        raise runtime_error(exc) from exc
 
 
 @app.post("/v1/jobs/{job_id}/run", response_model=JobView, dependencies=[Depends(auth)])
