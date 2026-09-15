@@ -231,14 +231,16 @@ class PlanOrchestrator(CorePlanOrchestrator):
                     expected_head=eligibility.expected_head,
                 )
             except Exception as exc:
+                # The request may have reached GitHub even if Runtime did not get
+                # a response. Record uncertainty and never replay automatically.
                 self.merge_audit.finish(
                     plan_id=plan_id,
                     work_order_id=str(tracked["work_order_id"]),
                     expected_head=eligibility.expected_head,
-                    status="failed",
+                    status="uncertain",
                     result={"error": f"{type(exc).__name__}: {exc}"[-12000:]},
                 )
-                self._block_tracked(plan, tracked, "pm_merge_failed")
+                self._block_tracked(plan, tracked, "uncertain_merge_attempt")
                 return
 
             confirmed = await self.engine.ddev.github_pull_request(
@@ -254,14 +256,14 @@ class PlanOrchestrator(CorePlanOrchestrator):
                     plan_id=plan_id,
                     work_order_id=str(tracked["work_order_id"]),
                     expected_head=eligibility.expected_head,
-                    status="failed",
+                    status="uncertain",
                     result={
                         "reason": "merge_not_confirmed",
                         "merge_result": merge_result,
                         "confirmed_pr": confirmed,
                     },
                 )
-                self._block_tracked(plan, tracked, "pm_merge_not_confirmed")
+                self._block_tracked(plan, tracked, "uncertain_merge_attempt")
                 return
 
             self.merge_audit.finish(
