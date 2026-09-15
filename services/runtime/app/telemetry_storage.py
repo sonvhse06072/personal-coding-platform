@@ -7,7 +7,12 @@ from typing import Any
 
 from .continuity import continuity_proposal
 from .storage import Storage, now
-from .telemetry import aggregate_calibration, classify_budget_attention, task_telemetry_snapshot
+from .telemetry import (
+    aggregate_calibration,
+    aggregate_telemetry_summary,
+    classify_attention_event,
+    task_telemetry_snapshot,
+)
 
 
 TELEMETRY_DDL = """
@@ -19,12 +24,15 @@ CREATE TABLE IF NOT EXISTS cp_task_telemetry (
   provider TEXT NOT NULL,
   model_id TEXT NOT NULL,
   terminal BOOLEAN NOT NULL DEFAULT FALSE,
+  calibration_eligible BOOLEAN NOT NULL DEFAULT FALSE,
   outcome TEXT NOT NULL,
   snapshot JSONB NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
+ALTER TABLE cp_task_telemetry
+  ADD COLUMN IF NOT EXISTS calibration_eligible BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS cp_task_telemetry_lookup_idx
-  ON cp_task_telemetry(project_id, task_type, role, terminal, updated_at DESC);
+  ON cp_task_telemetry(project_id, task_type, role, calibration_eligible, updated_at DESC);
 CREATE INDEX IF NOT EXISTS cp_task_telemetry_model_idx
   ON cp_task_telemetry(project_id, provider, model_id, updated_at DESC);
 
@@ -119,8 +127,9 @@ class TelemetryStorage(Storage):
         with self.connect() as conn:
             conn.execute(
                 """INSERT INTO cp_task_telemetry
-                (job_id, project_id, task_type, role, provider, model_id, terminal, outcome, snapshot, updated_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s)
+                (job_id, project_id, task_type, role, provider, model_id, terminal,
+                 calibration_eligible, outcome, snapshot, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s)
                 ON CONFLICT (job_id) DO UPDATE SET
                   project_id=EXCLUDED.project_id,
                   task_type=EXCLUDED.task_type,
@@ -128,6 +137,7 @@ class TelemetryStorage(Storage):
                   provider=EXCLUDED.provider,
                   model_id=EXCLUDED.model_id,
                   terminal=EXCLUDED.terminal,
+                  calibration_eligible=EXCLUDED.calibration_eligible,
                   outcome=EXCLUDED.outcome,
                   snapshot=EXCLUDED.snapshot,
                   updated_at=EXCLUDED.updated_at""",
@@ -139,6 +149,7 @@ class TelemetryStorage(Storage):
                     snapshot["provider"],
                     snapshot["model_id"],
                     bool(snapshot["terminal"]),
+                    bool(snapshot["calibration_eligible"]),
                     snapshot["task_outcome"],
                     json.dumps(snapshot),
                     now(),
@@ -162,14 +173,17 @@ class TelemetryStorage(Storage):
                 event_key = self._decision_event_key(current)
                 checkpoint = current.get("checkpoint") or {}
                 pending = checkpoint.get("pending_decision") or {}
+                classification = classify_attention_event("human_decision", current)
                 conn.execute(
                     """INSERT INTO cp_attention_events
                     (job_id, event_key, category, kind, avoidable, opened_at, metadata)
-                    VALUES (%s,%s,'decision_boundary','human_decision',FALSE,%s,%s::jsonb)
+                    VALUES (%s,%s,%s,'human_decision',%s,%s,%s::jsonb)
                     ON CONFLICT (event_key) DO NOTHING""",
                     (
                         current["id"],
                         event_key,
+                        classification["category"],
+                        bool(classification["avoidable"]),
                         timestamp,
                         json.dumps({"source": pending.get("source"), "decision": pending.get("decision") or {}}),
                     ),
@@ -198,7 +212,7 @@ class TelemetryStorage(Storage):
         if not additions:
             return
 
-        classification = classify_budget_attention(current)
+        classification = classify_attention_event("budget_extension", current)
         timestamp = now()
         opened_at = previous.get("updated_at") or timestamp
         with self.connect() as conn:
@@ -238,6 +252,85 @@ class TelemetryStorage(Storage):
                 (job_id,),
             ).fetchone()
         return dict(row or {})
+
+    @staticmethod
+    def _telemetry_filters(
+        project_id: str,
+        task_type: str | None,
+        role: str | None,
+    ) -> tuple[str, list[Any]]:
+        clauses = ["project_id=%s"]
+        params: list[Any] = [project_id]
+        if task_type:
+            clauses.append("task_type=%s")
+            params.append(task_type)
+        if role:
+            clauses.append("role=%s")
+            params.append(role)
+        return " AND ".join(clauses), params
+
+    def aggregate_attention_summary(
+        self,
+        *,
+        project_id: str,
+        task_type: str | None = None,
+        role: str | None = None,
+    ) -> dict[str, Any]:
+        where, params = self._telemetry_filters(project_id, task_type, role)
+        with self.connect() as conn:
+            row = conn.execute(
+                f"""SELECT
+                  COUNT(a.id)::int AS human_interventions,
+                  COUNT(a.id) FILTER (WHERE a.avoidable)::int AS avoidable_blocks,
+                  COUNT(a.id) FILTER (WHERE a.category='decision_boundary')::int AS decision_boundary_interventions,
+                  COUNT(a.id) FILTER (WHERE a.category='routine_operational')::int AS routine_operational_interventions,
+                  COALESCE(SUM(a.wait_seconds),0)::double precision AS time_waiting_for_owner_seconds
+                FROM cp_task_telemetry t
+                LEFT JOIN cp_attention_events a ON a.job_id=t.job_id
+                WHERE {where.replace('project_id', 't.project_id').replace('task_type', 't.task_type').replace('role', 't.role')}""",
+                tuple(params),
+            ).fetchone()
+        value = dict(row or {})
+        with self.connect() as conn:
+            count_row = conn.execute(
+                f"SELECT COUNT(*)::int AS task_count FROM cp_task_telemetry WHERE {where}",
+                tuple(params),
+            ).fetchone()
+        task_count = int((count_row or {}).get("task_count", 0) or 0)
+        interventions = int(value.get("human_interventions", 0) or 0)
+        avoidable = int(value.get("avoidable_blocks", 0) or 0)
+        value["human_interventions_per_task"] = round(interventions / task_count, 4) if task_count else 0.0
+        value["avoidable_blocks_per_task"] = round(avoidable / task_count, 4) if task_count else 0.0
+        return value
+
+    def telemetry_summary(
+        self,
+        *,
+        project_id: str,
+        task_type: str | None = None,
+        role: str | None = None,
+        limit: int = 1000,
+    ) -> dict[str, Any]:
+        where, params = self._telemetry_filters(project_id, task_type, role)
+        params.append(max(1, min(int(limit), 2000)))
+        with self.connect() as conn:
+            rows = conn.execute(
+                f"""SELECT snapshot FROM cp_task_telemetry
+                WHERE {where}
+                ORDER BY updated_at DESC LIMIT %s""",
+                tuple(params),
+            ).fetchall()
+        snapshots = [dict(row["snapshot"]) for row in rows if isinstance(row.get("snapshot"), dict)]
+        result = aggregate_telemetry_summary(
+            snapshots,
+            attention=self.aggregate_attention_summary(
+                project_id=project_id,
+                task_type=task_type,
+                role=role,
+            ),
+        )
+        result.update({"project_id": project_id, "task_type": task_type, "role": role})
+        return result
 
     def _persist_continuity(
         self,
@@ -280,6 +373,8 @@ class TelemetryStorage(Storage):
             raise ValueError("Unsupported external continuity event")
         row = self.get(job_id) if job_id else None
         if row:
+            if str(row.get("project_id") or "") != str(project_id):
+                raise ValueError("Continuity event project_id does not match job project")
             return self._persist_continuity(
                 row,
                 event_type=event_type,
@@ -337,9 +432,9 @@ class TelemetryStorage(Storage):
         with self.connect() as conn:
             rows = conn.execute(
                 f"""SELECT snapshot FROM cp_task_telemetry
-                WHERE project_id=%s AND task_type=%s AND terminal=TRUE{role_sql}
+                WHERE project_id=%s AND task_type=%s AND calibration_eligible=TRUE{role_sql}
                 ORDER BY updated_at DESC LIMIT %s""",
-                params,
+                tuple(params),
             ).fetchall()
         snapshots = [dict(row["snapshot"]) for row in rows if isinstance(row.get("snapshot"), dict)]
         result = aggregate_calibration(
