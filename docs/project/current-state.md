@@ -25,13 +25,59 @@ Before a material task is complete or handed off, update the relevant topical do
 The currently relevant merged platform state is:
 
 - PM routine in-scope PR review/merge authority is approved by issue #96 / PR #97; developer agents still cannot merge and production deployment remains separately Human Owner-controlled.
-- Runtime source is `1.0.38` after PR #137 (`Recover provider-blocked jobs with multiple exhausted budgets`).
-- Router source is `1.0.16`; routing/model policy is v8.
-- Antigravity host bridge is `1.10` after PR #135 and live verification proved safety settings survive proactive quota probes.
-- Provider quota telemetry/proactive refresh is implemented through PRs #129/#131 plus follow-up safety fixes.
-- Live Developer Activity is implemented across supported providers and Runtime-native phases.
-- PR #139 (`Document Telegram terminal operations gateway`) is merged at `9683250a7669b47e9d81f6df648bb769ca5e3893`; the terminal gateway remains an approved target, not implemented.
+- PR #154 (`Add adaptive task budgets with emergency ceilings`) merged Phase A / issue #147. Merged Runtime source is `1.0.39`, Router source is `1.0.17`, and routing policy v9 at that point.
+- PR #155 (`Prefer OpenRouter for routine standard coding`) then merged on top of #154. Current merged Router source is `1.0.18` and routing/model policy is v10; current `main` is based at merge commit `3fe8050807026c8f8f669d93c7052605a72cc556` before the active Phase B PR.
+- Antigravity host bridge remains `1.10`; provider quota telemetry/proactive refresh and live Developer Activity remain implemented.
+- PR #139 (`Document Telegram terminal operations gateway`) is merged; the terminal gateway remains an approved target, not implemented.
 - Issue #98 (`Implement constrained PM-controlled PR merge in Runtime`) remains open and is still required for full executable alignment with the approved PM merge governance.
+
+## Efficiency initiative — active platform priority
+
+Authoritative policy/design: `docs/project/efficiency-model.md`.
+
+Tracking:
+
+- #146 — umbrella efficiency initiative;
+- #147 — Phase A adaptive task budgets: implemented and merged through PR #154;
+- #148 — Phase B layered verification and failure-budget separation: active through PR #156;
+- #149 — Phase C bounded inter-agent collaboration and review dialogue;
+- #150 — Phase D risk-proportionate review and role-specific evidence packs;
+- #151 — Phase E telemetry calibration, Human-attention metrics, and continuity automation;
+- #98 — constrained PM-controlled merge remains part of the low-touch delivery target.
+
+PR #155 also partially addresses #153 by preferring the existing OpenRouter coding model for healthy routine standard work while preserving privacy/quota/risk fallback behavior. A second OpenRouter model remains out of scope until current tool-use/provider-policy evidence supports activation.
+
+Approved execution priority remains:
+
+1. #147 adaptive budgeting — complete/merged;
+2. #148 layered verification/failure accounting — active now;
+3. #149 bounded collaboration;
+4. #150 risk-proportionate review/context compaction;
+5. #151 telemetry calibration/continuity automation;
+6. complete #98 as part of removing the remaining routine end-of-task human checkpoint.
+
+Telegram terminal convenience work remains lower priority unless an operational need changes the ordering.
+
+## Active Phase B / issue #148 state
+
+Branch: `ai/layered-verification-148`.
+
+Pull request: #156 (`Add layered verification and retry attribution`), targeting `main`.
+
+The branch is based directly on current `main` after PR #155 and targets Coding Runtime `1.0.40`.
+
+Implemented behavior on the branch:
+
+- WorkOrder verification can declare `intermediate_phases` separately from `required_phases`;
+- persisted/legacy WorkOrders without `intermediate_phases` normalize to the historical verification path;
+- intermediate checks stop later expensive checks for a known-bad repair candidate, while WorkOrder-required final verification remains mandatory for acceptance;
+- fast/standard WorkOrders that require `full_tests` still receive that final gate through the existing governance facade;
+- provider recovery, infrastructure retry, verification retry and delivery retry have separate counters/categories and do not consume engineering repair iterations merely for retrying infrastructure/provider/delivery work;
+- an actual GitHub CI failure still counts as engineering repair because code repair is required;
+- verification layers and retry categories emit Runtime activity for telemetry;
+- regression coverage includes layered progression/final-gate behavior, legacy compatibility, provider recovery, preflight/infrastructure retry, verification retry and delivery retry attribution.
+
+No local Router/Runtime/DDEV/n8n rollout has been performed for Phase B. PR/CI evidence must be green at the exact PR head before merge. A merge does not authorize a local service restart while an engineering job is active.
 
 ## Active `chonhac` DEC-025C state
 
@@ -45,14 +91,7 @@ Orchestration identity:
 - branch: `ai/eec59b13651c`;
 - workspace: `/home/sonvh/.coding-platform/workspaces/eec59b13651c54559c10ce204380a68e`.
 
-The same job/workspace has been preserved across recovery. The successful Runtime 1.0.38 owner action `7Xgt2C_4GrhIIYEeAFfG5fEc` atomically extended:
-
-- `max_wall_time_minutes`: `90 -> 110`;
-- `max_iterations`: `12 -> 14`;
-
-and rerouted the same job while preserving failed-provider state.
-
-C1 then progressed through verification into reassessment and is currently stably blocked with:
+The same job/workspace has been preserved across recovery. Under the currently deployed pre-adaptive Runtime semantics, C1 is stably blocked with:
 
 - job status: `blocked`;
 - result reason: `reassessment_stopped`;
@@ -60,7 +99,7 @@ C1 then progressed through verification into reassessment and is currently stabl
 - reassessment reason: `repair budget exhausted`;
 - signal: `hard_budget_guard`.
 
-Latest observed counters:
+Last recorded counters remain:
 
 - model calls: `21 / 22`;
 - tool calls: `65 / 160`;
@@ -68,67 +107,27 @@ Latest observed counters:
 - wall time: `93.168 / 110` minutes;
 - repair iterations: `4 / 4`.
 
-Fresh exact recovery action materialized for the current state:
+Fresh exact recovery action recorded for that state:
 
 - action id: `abXzvyU2pvALZ5YpovNveDcr`;
 - type: `budget_extend`;
 - payload: `max_repair_iterations +1`;
-- status at last inspection: pending/valid.
+- last recorded status: pending/valid.
 
-Older provider-recovery controls may still exist in storage but belong to older state generations and must not be used in place of the fresh current-state action.
+C2/C3 remain gated behind C1 completion. No manual DB/job mutation, counter reset, job replacement, or generic `/v1/jobs/{job_id}/run` bypass is allowed. The new adaptive/layered policies must not be simulated by manually altering this preserved job's counters/state.
 
-C2/C3 remain gated behind C1 completion. No manual DB/job mutation, counter reset, job replacement, or generic `/v1/jobs/{job_id}/run` bypass is allowed.
+## Durable efficiency policy already approved
 
-## Efficiency initiative — active platform priority
-
-On 2026-09-15 the Human Owner approved a platform-wide efficiency direction whose goal is higher throughput/quality while keeping resource usage at personal scale and minimizing routine Human Owner attention.
-
-Authoritative policy/design: `docs/project/efficiency-model.md`.
-
-GitHub tracking:
-
-- #146 — umbrella efficiency initiative;
-- #147 — Phase A: task-specific adaptive budgets and Human-attention circuit breakers;
-- #148 — Phase B: layered verification and failure-budget separation;
-- #149 — Phase C: bounded inter-agent collaboration and review dialogue;
-- #150 — Phase D: risk-proportionate review and role-specific evidence packs;
-- #151 — Phase E: telemetry calibration, Human-attention metrics, and continuity automation;
-- #98 — constrained PM-controlled merge remains part of the low-touch delivery target.
-
-Approved execution priority:
-
-1. #147 adaptive budgeting first because current profile-fixed hard stops are creating avoidable owner interruptions on healthy work;
-2. #148 layered verification/failure accounting;
-3. #149 bounded collaboration after budget semantics can absorb normal teamwork without new approval loops;
-4. #150 risk-proportionate review/context compaction;
-5. #151 telemetry calibration/continuity automation;
-6. complete #98 as part of removing the remaining routine end-of-task human checkpoint.
-
-Telegram terminal convenience work is lower priority than this execution-efficiency initiative unless an operational need changes the ordering.
-
-## Durable efficiency policy now approved
-
-- Profile remains a staffing/risk signal, but fixed profile counters should not be the only task resource estimate.
-- Budget semantics target three layers: expected estimate, autonomous healthy working envelope, deterministic emergency hard ceiling.
-- Reaching an estimate/working target alone must not stop a healthy execution or require Human Owner approval.
+- Profile remains a staffing/risk signal, but fixed profile counters are not the sole task resource estimate.
+- Budget semantics have estimate, autonomous healthy working envelope and deterministic emergency hard ceiling.
+- Reaching an estimate/working target alone must not stop healthy execution or require Human Owner approval.
 - Provider quota/resource exhaustion is separate from task-budget estimation.
-- Anti-loop/no-progress/oscillation/scope/cost/quota/emergency-ceiling signals are the primary circuit breakers.
-- Final deterministic verification remains mandatory, but iteration should use targeted/focused checks before expensive full-suite checkpoints.
-- Engineering repair accounting must be separated from provider, infrastructure, verification and delivery retries.
+- Anti-loop/no-progress/oscillation/scope/cost/quota/emergency-ceiling signals are primary circuit breakers.
+- Final deterministic verification remains mandatory; targeted/focused checks optimize iteration rather than weaken Definition of Done.
+- Engineering repair accounting is separate from provider, infrastructure, verification and delivery retries.
 - Inter-agent collaboration is bounded: one primary writer by default, read-only consultants/reviewers, Router-selected logical roles, compact evidence packs, normally 1-2 rounds, no recursive swarm.
 - Review strength is risk-proportionate and should be calibrated using useful-finding telemetry.
 - Human Owner attention is a first-class resource; routine targets are `human_interventions_per_task -> 0` and `avoidable_blocks_per_task -> 0`.
-
-## Telegram terminal operations target
-
-Authoritative topical document: `docs/project/telegram-terminal-operations.md`.
-
-Durable interaction convention:
-
-- ChatGPT continues to provide ordinary terminal-safe read-only blocks by default.
-- Telegram-specific read-only formatting is emitted only when the Human Owner explicitly requests a Telegram-ready block.
-- The future terminal bot is separate from the existing PCP Telegram governance/notification bot.
-- `/run-ro` must use capability-restricted read-only execution; `/run-op` is a later named/confirmed operation layer; generic `/run-admin` stays disabled by default.
 
 ## Global operational gates
 
@@ -146,11 +145,12 @@ Durable interaction convention:
 
 Platform development:
 
-1. merge the documentation update for #146 after exact-head CI is green;
-2. implement #147 as the first code phase on its own `ai/*` branch/PR with backward-compatible persisted-job semantics;
-3. do not roll out Router/Runtime locally while any engineering job is active; use the current stable-blocked C1 state only if/when a targeted rollout is explicitly required and revalidate the same job before/after rollout.
+1. require exact-head deterministic CI for PR #156 and fix any failure on the same branch;
+2. when #156 is green and review/governance gates are satisfied, merge it under the approved routine PM authority;
+3. do not roll out Runtime `1.0.40` locally merely because the PR merges; respect the active-job service-restart gate and revalidate the preserved C1 job before/after any explicitly chosen targeted rollout;
+4. after Phase B is merged, continue with #149 bounded inter-agent collaboration/review dialogue unless new evidence changes priority.
 
 DEC-025C:
 
-- the fresh `max_repair_iterations +1` action remains the current normal recovery path if the Human Owner chooses to continue C1 under the existing Runtime 1.0.38 semantics;
-- the new adaptive-budget policy is a future platform behavior and must not be simulated by manually altering C1 counters/state.
+- the fresh `max_repair_iterations +1` action remains the normal recovery path if the Human Owner chooses to continue C1 under the currently deployed semantics;
+- future adaptive/layered Runtime behavior must not be backported to C1 by manual state manipulation.

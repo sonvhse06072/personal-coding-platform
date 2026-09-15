@@ -91,9 +91,30 @@ class WorkOrderBudget(BaseModel):
 
 
 class WorkOrderVerification(BaseModel):
+    # New PM contracts explicitly identify cheap/intermediate checks separately
+    # from final acceptance checks. Legacy persisted payloads predate this field;
+    # the before-validator injects [] so their historical verification behavior
+    # remains unchanged after a Runtime rollout.
+    intermediate_phases: list[VerificationPhase] = Field(
+        ...,
+        max_length=3,
+        description=(
+            "Cheap verification phases to gate repair iterations before final checks. "
+            "Use an empty list only when no safe intermediate check exists."
+        ),
+    )
     required_phases: list[VerificationPhase] = Field(min_length=1, max_length=3)
 
-    @field_validator("required_phases")
+    @model_validator(mode="before")
+    @classmethod
+    def legacy_intermediate_phases(cls, value: Any) -> Any:
+        if isinstance(value, dict) and "intermediate_phases" not in value:
+            updated = dict(value)
+            updated["intermediate_phases"] = []
+            return updated
+        return value
+
+    @field_validator("intermediate_phases", "required_phases")
     @classmethod
     def deduplicate_phases(cls, values: list[VerificationPhase]) -> list[VerificationPhase]:
         result: list[VerificationPhase] = []
@@ -222,7 +243,10 @@ def validate_work_order_against_baseline(
     ddev = project.get("ddev", {}) or {}
     if not ddev.get("enabled", False):
         raise ValueError("WorkOrder deterministic verification requires an enabled DDEV project")
-    for phase in work_order.verification.required_phases:
+    phases = list(work_order.verification.intermediate_phases) + list(
+        work_order.verification.required_phases
+    )
+    for phase in dict.fromkeys(phases):
         commands = ddev.get(phase, []) or []
         if not commands:
             raise ValueError(
