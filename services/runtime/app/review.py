@@ -1,0 +1,198 @@
+from __future__ import annotations
+
+import json
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+class ReviewFinding(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=120)
+    severity: Literal["low", "medium", "high", "critical"] = "medium"
+    category: str = Field(default="correctness", min_length=1, max_length=100)
+    message: str = Field(min_length=1, max_length=2000)
+    evidence_refs: list[str] = Field(default_factory=list, max_length=10)
+
+    @field_validator("id", "category", "message")
+    @classmethod
+    def normalize_text(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("review finding text must not be blank")
+        return normalized
+
+
+class ReviewReport(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    verdict: Literal["pass", "fail"]
+    summary: str = Field(min_length=1, max_length=4000)
+    findings: list[ReviewFinding] = Field(default_factory=list, max_length=20)
+    jit_context_used: bool = False
+
+    @field_validator("summary")
+    @classmethod
+    def normalize_summary(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("review summary must not be blank")
+        return normalized
+
+
+def parse_review_output(output: str) -> ReviewReport:
+    """Parse the new structured protocol while retaining legacy PASS/FAIL output."""
+    text = (output or "").strip()
+    if not text:
+        return ReviewReport(verdict="fail", summary="Reviewer returned no output")
+
+    lines = text.splitlines()
+    first = lines[0].strip().upper()
+    verdict: Literal["pass", "fail"] = "pass" if first.startswith("PASS") else "fail"
+
+    marker = "REVIEW_JSON:"
+    payload_text = None
+    for line in lines[1:]:
+        if line.strip().startswith(marker):
+            payload_text = line.strip()[len(marker) :].strip()
+            break
+    if payload_text:
+        try:
+            payload = json.loads(payload_text)
+            if isinstance(payload, dict):
+                payload.setdefault("verdict", verdict)
+                return ReviewReport.model_validate(payload)
+        except (json.JSONDecodeError, ValueError):
+            pass
+
+    # Backward-compatible fallback. It deliberately keeps only a compact
+    # summary instead of persisting an arbitrary reviewer transcript.
+    summary = text[:4000]
+    findings = []
+    if verdict == "fail":
+        findings = [
+            ReviewFinding(
+                id="legacy-review-failure",
+                severity="medium",
+                category="review",
+                message=summary,
+                evidence_refs=[],
+            )
+        ]
+    return ReviewReport(
+        verdict=verdict,
+        summary=summary,
+        findings=findings,
+        jit_context_used=False,
+    )
+
+
+def strong_deterministic_evidence(
+    verification: dict[str, Any],
+    *,
+    changed_files: int,
+    unexpected_scope: bool,
+) -> bool:
+    if not verification.get("passed", False) or unexpected_scope or changed_files > 3:
+        return False
+    phases = [item for item in verification.get("phases", []) if isinstance(item, dict)]
+    if not phases:
+        return False
+    if any(not item.get("passed", False) for item in phases):
+        return False
+    # A final/full gate or at least two deterministic layers is enough for a
+    # small routine change. This is intentionally conservative for fast work.
+    names = {str(item.get("phase") or "") for item in phases}
+    has_final = "full_tests" in names or any(
+        item.get("verification_layer") == "final" and item.get("required_for_final")
+        for item in phases
+    )
+    return has_final or len(names) >= 2
+
+
+def should_run_review(
+    review_policy: dict[str, Any] | None,
+    verification: dict[str, Any],
+    *,
+    changed_files: int,
+    unexpected_scope: bool,
+) -> bool:
+    policy = review_policy or {}
+    if str(policy.get("level") or "none") == "none":
+        return False
+    if bool(policy.get("required", False)):
+        return True
+    if bool(policy.get("conditional_on_strong_evidence", False)):
+        return not strong_deterministic_evidence(
+            verification,
+            changed_files=changed_files,
+            unexpected_scope=unexpected_scope,
+        )
+    return False
+
+
+def review_report_summary(report: ReviewReport) -> dict[str, Any]:
+    return {
+        "verdict": report.verdict,
+        "summary": report.summary,
+        "finding_count": len(report.findings),
+        "findings": [item.model_dump(mode="json") for item in report.findings],
+        "jit_context_used": report.jit_context_used,
+    }
+
+
+def record_review_telemetry(
+    progress: dict[str, Any],
+    report: ReviewReport,
+    *,
+    review_level: str,
+    model_id: str | None,
+    provider: str | None,
+) -> None:
+    progress["review_runs"] = int(progress.get("review_runs", 0)) + 1
+    progress["review_findings"] = int(progress.get("review_findings", 0)) + len(report.findings)
+    progress["review_jit_context_runs"] = int(progress.get("review_jit_context_runs", 0)) + int(
+        report.jit_context_used
+    )
+    history = list(progress.get("review_history") or [])
+    history.append(
+        {
+            "level": review_level,
+            "verdict": report.verdict,
+            "finding_count": len(report.findings),
+            "model": model_id,
+            "provider": provider,
+            "jit_context_used": report.jit_context_used,
+        }
+    )
+    progress["review_history"] = history[-12:]
+
+
+def mark_actioned_review_findings(
+    checkpoint: dict[str, Any],
+    progress: dict[str, Any],
+    *,
+    current_diff_hash: str,
+) -> None:
+    pending = checkpoint.get("pending_review_findings")
+    if not isinstance(pending, dict):
+        return
+    previous_hash = str(pending.get("diff_hash") or "")
+    if not previous_hash or previous_hash == current_diff_hash:
+        return
+    findings = [item for item in pending.get("findings", []) if isinstance(item, dict)]
+    progress["review_findings_actioned"] = int(progress.get("review_findings_actioned", 0)) + len(findings)
+    checkpoint.pop("pending_review_findings", None)
+
+
+__all__ = [
+    "ReviewFinding",
+    "ReviewReport",
+    "mark_actioned_review_findings",
+    "parse_review_output",
+    "record_review_telemetry",
+    "review_report_summary",
+    "should_run_review",
+    "strong_deterministic_evidence",
+]
