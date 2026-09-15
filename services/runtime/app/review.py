@@ -5,6 +5,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .usage import estimated_cost_usd, normalize_usage
+
 
 class ReviewFinding(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -66,8 +68,6 @@ def parse_review_output(output: str) -> ReviewReport:
         except (json.JSONDecodeError, ValueError):
             pass
 
-    # Backward-compatible fallback. It deliberately keeps only a compact
-    # summary instead of persisting an arbitrary reviewer transcript.
     summary = text[:4000]
     findings = []
     if verdict == "fail":
@@ -101,8 +101,6 @@ def strong_deterministic_evidence(
         return False
     if any(not item.get("passed", False) for item in phases):
         return False
-    # A final/full gate or at least two deterministic layers is enough for a
-    # small routine change. This is intentionally conservative for fast work.
     names = {str(item.get("phase") or "") for item in phases}
     has_final = "full_tests" in names or any(
         item.get("verification_layer") == "final" and item.get("required_for_final")
@@ -149,12 +147,22 @@ def record_review_telemetry(
     review_level: str,
     model_id: str | None,
     provider: str | None,
+    raw_usage: dict[str, Any] | None = None,
 ) -> None:
+    usage = normalize_usage(raw_usage)
+    cost = estimated_cost_usd(str(model_id or ""), raw_usage) if model_id else 0.0
     progress["review_runs"] = int(progress.get("review_runs", 0)) + 1
     progress["review_findings"] = int(progress.get("review_findings", 0)) + len(report.findings)
     progress["review_jit_context_runs"] = int(progress.get("review_jit_context_runs", 0)) + int(
         report.jit_context_used
     )
+    progress["review_input_tokens"] = int(progress.get("review_input_tokens", 0)) + int(
+        usage["input_tokens"]
+    )
+    progress["review_output_tokens"] = int(progress.get("review_output_tokens", 0)) + int(
+        usage["output_tokens"]
+    )
+    progress["review_cost_usd"] = round(float(progress.get("review_cost_usd", 0.0)) + cost, 8)
     history = list(progress.get("review_history") or [])
     history.append(
         {
@@ -164,6 +172,9 @@ def record_review_telemetry(
             "model": model_id,
             "provider": provider,
             "jit_context_used": report.jit_context_used,
+            "input_tokens": int(usage["input_tokens"]),
+            "output_tokens": int(usage["output_tokens"]),
+            "estimated_cost_usd": cost,
         }
     )
     progress["review_history"] = history[-12:]
