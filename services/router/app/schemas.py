@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 ProfileName = Literal["fast", "standard", "complex", "critical"]
 RouteAction = Literal["continue", "escalate", "stop", "complete", "human_decision"]
 ReasoningEffort = Literal["low", "medium", "high"]
+ReviewLevel = Literal["none", "lightweight", "standard", "strong", "critical"]
 
 
 class SemanticSignals(BaseModel):
@@ -154,12 +155,26 @@ class AdaptiveBudgetPolicy(BaseModel):
     dimensions: dict[str, AdaptiveBudgetDimension] = Field(default_factory=dict)
 
 
+class ReviewPolicy(BaseModel):
+    level: ReviewLevel = "none"
+    required: bool = False
+    conditional_on_strong_evidence: bool = False
+    independent: bool = False
+    different_model_required: bool = False
+    different_provider_required: bool = False
+    independence_satisfied: bool = True
+    evidence_mode: Literal["compact"] = "compact"
+    jit_repository_retrieval: bool = True
+    reason: str = ""
+
+
 class ExecutionStrategy(BaseModel):
     profile: ProfileName
     analysis_depth: int
     planner: ModelChoice | None = None
     executor: ModelChoice
     evaluator: ModelChoice | None = None
+    review_policy: ReviewPolicy = Field(default_factory=ReviewPolicy)
     reasoning_ceiling: dict[str, ReasoningEffort] = Field(default_factory=dict)
     human_decision: HumanDecision
     budget: Budget
