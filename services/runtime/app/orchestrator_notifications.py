@@ -4,7 +4,7 @@ import hashlib
 from typing import Any
 
 from .control_actions_reroute import ControlActionService
-from .plan_orchestrator import PlanOrchestrator as CorePlanOrchestrator
+from .orchestrator_merge import PlanOrchestrator as CorePlanOrchestrator
 
 
 _SUPERSEDED_WORK_ORDER_EVENTS = {
