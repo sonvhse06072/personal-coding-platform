@@ -4,6 +4,15 @@ import json
 from typing import Any
 
 
+_COLLABORATION_ROLES = [
+    "consultant",
+    "test_engineer",
+    "debugger",
+    "security_specialist",
+    "reviewer",
+]
+
+
 def _contract_lines(
     *,
     work_order: dict[str, Any] | None,
@@ -28,6 +37,31 @@ def _contract_lines(
     ]
 
 
+def _collaboration_lines(collaboration_context: dict[str, Any] | None) -> list[str]:
+    lines = [
+        "",
+        "BOUNDED COLLABORATION:",
+        "You are the only write-capable implementation role in this workspace.",
+        "Use collaboration only when a second read-only viewpoint is likely cheaper or safer than another blind implementation attempt.",
+        f"Allowed logical roles: {', '.join(_COLLABORATION_ROLES)}. Never name or choose a provider/model.",
+        "At most one collaboration request may be emitted in one turn. Do not ask a collaborator to contact another collaborator.",
+        "A consultation needs a concrete question plus compact evidence references/summaries; do not embed raw transcripts or large file dumps.",
+        "To request a new consultation, append exactly one final line in this form:",
+        'PCP_COLLABORATION_REQUEST: {"action":"consult","role":"test_engineer","topic":"verification","objective":"challenge the verification strategy","question":"What focused checks best prove this change?","evidence":[{"ref":"path/or/check","summary":"why this evidence matters"}]}',
+        "To request the second/final re-check of an existing unresolved thread, append exactly one final line in this form:",
+        'PCP_COLLABORATION_REQUEST: {"action":"recheck","thread_id":"ct-...","developer_response":"what you changed or why you disagree","evidence":[{"ref":"current_diff","summary":"compact evidence after the response/repair"}]}',
+        "A collaboration request is not task completion. Runtime will run the read-only role and return its structured artifact in a later turn.",
+    ]
+    if collaboration_context:
+        lines += [
+            "",
+            "LATEST COLLABORATION ARTIFACT (STRUCTURED, ADVISORY; WORKORDER REMAINS AUTHORITATIVE):",
+            json.dumps(collaboration_context, ensure_ascii=False, sort_keys=True),
+            "Use this artifact to make or justify the next bounded implementation decision. If it remains unresolved and another check is necessary, use the same thread_id with action=recheck.",
+        ]
+    return lines
+
+
 def execution_prompt(
     *,
     task: dict[str, Any],
@@ -37,6 +71,7 @@ def execution_prompt(
     failure: str | None = None,
     work_order: dict[str, Any] | None = None,
     baseline: dict[str, Any] | None = None,
+    collaboration_context: dict[str, Any] | None = None,
 ) -> str:
     strategy = route["strategy"]
     lines = [
@@ -48,6 +83,7 @@ def execution_prompt(
         "Stop when the requested behavior is implemented. The runtime will run deterministic verification afterward.",
     ]
     lines += _contract_lines(work_order=work_order, baseline=baseline)
+    lines += _collaboration_lines(collaboration_context)
     lines += [
         "",
         f"CANONICAL TASK:\n{task.get('title')}\n{task.get('description','')}",
