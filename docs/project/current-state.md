@@ -56,6 +56,7 @@ Current branch implementation:
 - the existing project gate `autonomy.allow_auto_merge_low_risk` is the explicit opt-in; projects with it disabled keep the stable manual merge gate;
 - eligible work must be an accepted completed non-dry-run job with exact WorkOrder/job/PR identity, a verified commit, deterministic verification success, required review success or the policy-authorized strong-evidence fast skip, finalized successful CI and no unexpected scope;
 - protected scope/architecture/dependency/security/auth/trust-boundary/destructive-data/production/governance/material-budget signals cannot enter automatic merge unless the matching Human Owner decision was durably approved; unresolved/high-risk work remains at the owner/manual merge gate;
+- accepted actual changed-file paths receive a second fail-closed classification before merge, so sensitive governance/workflow, project-scope, dependency/service-manifest, authentication/security, migration/schema and production/deployment paths cannot silently bypass an initially incomplete task-risk classification; mutable `docs/project/current-state.md` is not treated as a protected policy document;
 - merge capability stays Runtime -> constrained ddev-executor -> GitHub. Developer/model processes receive no GitHub delivery or merge credentials;
 - ddev-executor independently re-reads and validates the configured repository, exact PR number, AI branch, base branch, expected head SHA, pinned source ancestry and current GitHub CI immediately before mutation;
 - GitHub merge uses the expected-head guard, no force push, and a fresh post-merge PR read before Runtime may mark the WorkOrder completed;
@@ -66,23 +67,27 @@ Current branch implementation:
 - confirmed PM merge may emit the existing Phase E continuity `pr_merged` evidence, but continuity persistence failure cannot invalidate a merge already confirmed by GitHub;
 - no production deployment or production side effect is added.
 
-Regression coverage on the branch includes low-risk eligible one-shot merge and downstream unlock, manual opt-out stability, protected-change owner gating and durable owner approval, stale head rejection, source-ancestry failure, non-success CI rejection, replay rejection, exact merge confirmation, approved-without-result crash recovery and constrained PM-bridge policy/auth boundaries.
+Regression coverage on the branch includes low-risk eligible one-shot merge and downstream unlock, manual opt-out stability, protected-change owner gating and durable owner approval, sensitive actual-path classification, stale head rejection, source-ancestry failure, non-success CI rejection, replay rejection, exact merge confirmation, approved-without-result crash recovery and constrained PM-bridge policy/auth boundaries.
 
 CI history on PR #160:
 
 - exact-head `a3d7ef499ec1844ebf0790182e42415e9bc1e246`: Router, structure and ddev-executor passed; Runtime had one test-fixture compatibility failure because the synthetic plan omitted `baseline_revision` when the downstream WorkOrder was unlocked;
-- the fixture was corrected on the same branch to match the real orchestration shape; a fresh exact-head CI run is required after this continuity update before merge.
+- the fixture was corrected on the same branch to match the real orchestration shape;
+- exact-head `3e77a6445f14738fc1972fa7559759dd3891d44e`, workflow run #308, passed Runtime, Router, ddev-executor and structure-tests;
+- self-review then added the actual changed-file protected-path guard plus regression coverage, so run #308 was deliberately superseded;
+- exact-head `fbbad479f22f204b392ecaca818705f27f27dc69`, workflow run #310 (`34999137678`), passed Runtime, Router, ddev-executor and structure-tests. This continuity-only commit must receive one final exact-head CI run before merge.
 
 No local Runtime/ddev-executor/DDEV/n8n rollout has been performed for #98. Merge must not be treated as permission to restart active local services.
 
 <!-- PCP:CONTINUITY:START -->
 ## Automated continuity snapshot
 
-- Event: `pm_controlled_merge_implementation_active`.
+- Event: `pm_controlled_merge_exact_head_green`.
 - Project/job: `personal-coding-platform` / `n/a`.
-- Runtime state: `development`; outcome: `pending_exact_head_ci`.
+- Runtime state: `development`; outcome: `pending_final_doc_only_ci_and_merge_gate`.
 - WorkOrder: `GH-98`; branch: `ai/pm-controlled-merge-98`; PR: `#160`.
-- Human attention: no new product/governance decision requested by this implementation; protected merge boundaries remain fail-closed.
+- Verification: code head `fbbad479f22f204b392ecaca818705f27f27dc69`; workflow run #310 passed Runtime, Router, ddev-executor and structure-tests.
+- Human attention: issue #96 / PR #97 already provide the Human Owner-approved governance delegation that #98 implements; protected merge boundaries remain fail-closed.
 - Deployment: not performed.
 - This section is mutable execution state only. Durable architecture/policy changes still require their normal reviewed Git path.
 <!-- PCP:CONTINUITY:END -->
@@ -145,12 +150,11 @@ C2/C3 remain gated behind C1. Do not manually mutate DB/job state, reset counter
 
 Platform development:
 
-1. run fresh exact-head CI for PR #160 after the latest fixture/continuity commits;
-2. fix any Runtime/Router/structure/ddev-executor regression on the same branch and require another exact-head run after every code/doc change;
-3. inspect PR comments/reviews and verify the expected head, mergeability and absence of unresolved Human Owner decision triggers;
-4. merge #160 only when exact-head CI and review gates are green, using an expected-head guard;
-5. do not roll out/restart Runtime or ddev-executor merely because #160 merges;
-6. after merge, reassess the roadmap from the new main baseline before starting another feature branch.
+1. require final exact-head CI for PR #160 after this continuity-only commit;
+2. inspect PR comments/reviews and verify the exact head, mergeability and absence of unresolved Human Owner decision triggers;
+3. merge #160 only when the final exact-head CI and review gates are green, using an expected-head guard;
+4. do not roll out/restart Runtime or ddev-executor merely because #160 merges;
+5. after merge, reassess the roadmap from the new main baseline before starting another feature branch.
 
 DEC-025C:
 
