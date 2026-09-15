@@ -48,6 +48,26 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             ),
         )
 
+    async def run_job(self, job_id: str) -> None:
+        before = self.storage.get(job_id)
+        if before and before.get("status") == "queued":
+            result = before.get("result") or {}
+            if result.get("reason") == "preflight_failed":
+                progress = dict(before.get("progress") or {})
+                progress["infrastructure_retry_attempts"] = int(
+                    progress.get("infrastructure_retry_attempts", 0)
+                ) + 1
+                self.storage.update(job_id, progress=progress)
+                self._runtime_event(
+                    job_id,
+                    kind="infrastructure_retry",
+                    message="Retrying deterministic preflight after an infrastructure/preflight block",
+                    phase="verification",
+                    status="preflight_retry",
+                    output={"attempt": progress["infrastructure_retry_attempts"]},
+                )
+        await super().run_job(job_id)
+
     async def _provider_failover(
         self,
         *,
