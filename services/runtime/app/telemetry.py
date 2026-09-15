@@ -13,6 +13,7 @@ _RESOURCE_COUNTERS = {
     "max_wall_time_minutes": "elapsed_minutes",
 }
 _TERMINAL = {"completed", "failed", "cancelled"}
+_CALIBRATION_TERMINAL = {"completed", "failed"}
 
 
 def _accepted_result(row: dict[str, Any]) -> dict[str, Any]:
@@ -107,7 +108,12 @@ def _ci_pass(result: dict[str, Any]) -> bool | None:
 
 
 def task_telemetry_snapshot(row: dict[str, Any]) -> dict[str, Any]:
-    """Build one compact durable measurement from the current job row."""
+    """Build one compact durable measurement from the current job row.
+
+    ``terminal`` describes lifecycle state. ``calibration_eligible`` is stricter:
+    dry-runs and user-cancelled jobs remain observable but never become historical
+    staffing/budget training evidence.
+    """
     status = str(row.get("status") or "unknown")
     task = dict(row.get("task") or {})
     work_order = _work_order(row)
@@ -118,7 +124,12 @@ def task_telemetry_snapshot(row: dict[str, Any]) -> dict[str, Any]:
     executor = _executor(row)
     estimated = _estimated_resources(strategy)
     actual = _actual_resources(progress)
-    accepted = status == "completed" and result.get("status") in {None, "accepted"}
+    dry_run = bool(row.get("dry_run", False) or result.get("dry_run", False))
+    accepted = (
+        status == "completed"
+        and not dry_run
+        and result.get("status") in {None, "accepted"}
+    )
     first_pass = bool(
         accepted
         and int(progress.get("repair_iterations", 0) or 0) == 0
@@ -138,6 +149,19 @@ def task_telemetry_snapshot(row: dict[str, Any]) -> dict[str, Any]:
         if estimate > 0
     ) and not accepted
     adaptive = strategy.get("adaptive_budget") or {}
+    terminal = status in _TERMINAL
+    calibration_eligible = status in _CALIBRATION_TERMINAL and not dry_run
+
+    if dry_run:
+        task_outcome = "dry_run"
+    elif accepted:
+        task_outcome = "accepted"
+    elif status == "failed":
+        task_outcome = "failed"
+    elif status == "cancelled":
+        task_outcome = "cancelled"
+    else:
+        task_outcome = "blocked"
 
     return {
         "job_id": str(row.get("id") or ""),
@@ -148,10 +172,10 @@ def task_telemetry_snapshot(row: dict[str, Any]) -> dict[str, Any]:
         "provider": str(executor.get("provider") or "unknown"),
         "model_id": str(executor.get("id") or "unknown"),
         "status": status,
-        "terminal": status in _TERMINAL,
-        "task_outcome": (
-            "accepted" if accepted else "failed" if status == "failed" else "cancelled" if status == "cancelled" else "blocked"
-        ),
+        "terminal": terminal,
+        "calibration_eligible": calibration_eligible,
+        "dry_run": dry_run,
+        "task_outcome": task_outcome,
         "first_pass_success": first_pass,
         "repair_count": int(progress.get("repair_iterations", 0) or 0),
         "verification": _verification_counts(result, progress),
@@ -209,24 +233,33 @@ def aggregate_calibration(
     *,
     minimum_sample_size: int = 5,
 ) -> dict[str, Any]:
-    """Return deliberately simple historical calibration evidence."""
-    terminal = [item for item in snapshots if item.get("terminal")]
-    total = len(terminal)
+    """Return deliberately simple historical calibration evidence.
+
+    Only calibration-eligible completed/failed jobs count. Resource multipliers
+    use modern adaptive estimates only; legacy fixed ceilings are intentionally
+    excluded so historical hard-stop policy cannot masquerade as an estimate.
+    """
+    eligible = [
+        item for item in snapshots
+        if item.get("calibration_eligible", item.get("terminal", False))
+    ]
+    total = len(eligible)
     resource_ratios: dict[str, list[float]] = defaultdict(list)
     model_stats: dict[str, dict[str, Any]] = {}
 
-    for item in terminal:
+    for item in eligible:
         resources = item.get("resources") or {}
         estimated = resources.get("estimated") or {}
         actual = resources.get("actual") or {}
-        for dimension in _RESOURCE_COUNTERS:
-            try:
-                estimate = float(estimated.get(dimension, 0.0) or 0.0)
-                used = float(actual.get(dimension, 0.0) or 0.0)
-            except (TypeError, ValueError):
-                continue
-            if estimate > 0:
-                resource_ratios[dimension].append(used / estimate)
+        if resources.get("estimate_source") == "adaptive":
+            for dimension in _RESOURCE_COUNTERS:
+                try:
+                    estimate = float(estimated.get(dimension, 0.0) or 0.0)
+                    used = float(actual.get(dimension, 0.0) or 0.0)
+                except (TypeError, ValueError):
+                    continue
+                if estimate > 0:
+                    resource_ratios[dimension].append(used / estimate)
 
         model_id = str(item.get("model_id") or "")
         if model_id and model_id != "unknown":
@@ -238,7 +271,7 @@ def aggregate_calibration(
     multipliers: dict[str, float] = {}
     if sufficient:
         for dimension, values in resource_ratios.items():
-            if not values:
+            if len(values) < int(minimum_sample_size):
                 continue
             multipliers[dimension] = round(max(0.75, min(1.75, sum(values) / len(values))), 4)
 
@@ -252,8 +285,8 @@ def aggregate_calibration(
             "success_rate": round(float(stats["accepted"]) / sample_size, 4),
         }
 
-    accepted = sum(1 for item in terminal if item.get("task_outcome") == "accepted")
-    first_pass = sum(1 for item in terminal if item.get("first_pass_success"))
+    accepted = sum(1 for item in eligible if item.get("task_outcome") == "accepted")
+    first_pass = sum(1 for item in eligible if item.get("first_pass_success"))
     return {
         "sample_size": total,
         "minimum_sample_size": int(minimum_sample_size),
@@ -266,8 +299,115 @@ def aggregate_calibration(
     }
 
 
+def aggregate_telemetry_summary(
+    snapshots: list[dict[str, Any]],
+    *,
+    attention: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Aggregate operational KPIs without fitting a statistical model."""
+    rows = list(snapshots)
+    eligible = [item for item in rows if item.get("calibration_eligible", False)]
+    accepted = [item for item in eligible if item.get("task_outcome") == "accepted"]
+    ci_observed = [item for item in rows if item.get("ci_pass") is not None]
+    review_findings = sum(int((item.get("review") or {}).get("findings", 0) or 0) for item in rows)
+    review_actioned = sum(
+        int((item.get("review") or {}).get("findings_actioned", 0) or 0) for item in rows
+    )
+    resource_totals = {
+        "model_calls": 0.0,
+        "input_tokens": 0.0,
+        "output_tokens": 0.0,
+        "tool_calls": 0.0,
+        "test_runs": 0.0,
+        "wall_time_minutes": 0.0,
+        "cost_usd": 0.0,
+    }
+    provider_model: dict[str, dict[str, Any]] = {}
+    budget_without_outcome = 0
+    targeted_runs = 0
+    full_runs = 0
+    verification_retries = 0
+    provider_failures = 0
+    quota_failures = 0
+
+    for item in rows:
+        verification = item.get("verification") or {}
+        targeted_runs += int(verification.get("targeted_runs", 0) or 0)
+        full_runs += int(verification.get("full_runs", 0) or 0)
+        verification_retries += int(verification.get("verification_retries", 0) or 0)
+        provider_failures += int(item.get("provider_failures", 0) or 0)
+        quota_failures += int(item.get("quota_failures", 0) or 0)
+        resources = item.get("resources") or {}
+        budget_without_outcome += int(bool(resources.get("budget_without_useful_outcome")))
+        for key in resource_totals:
+            try:
+                resource_totals[key] += float(resources.get(key, 0.0) or 0.0)
+            except (TypeError, ValueError):
+                pass
+
+        provider = str(item.get("provider") or "unknown")
+        model_id = str(item.get("model_id") or "unknown")
+        key = f"{provider}:{model_id}"
+        bucket = provider_model.setdefault(
+            key,
+            {"provider": provider, "model_id": model_id, "tasks": 0, "accepted": 0},
+        )
+        bucket["tasks"] += 1
+        bucket["accepted"] += int(item.get("task_outcome") == "accepted")
+
+    task_count = len(rows)
+    eligible_count = len(eligible)
+    first_pass_count = sum(int(bool(item.get("first_pass_success"))) for item in eligible)
+    repair_total = sum(int(item.get("repair_count", 0) or 0) for item in eligible)
+    model_breakdown = []
+    for bucket in provider_model.values():
+        tasks = int(bucket["tasks"])
+        model_breakdown.append(
+            {
+                **bucket,
+                "success_rate": round(int(bucket["accepted"]) / tasks, 4) if tasks else None,
+            }
+        )
+    model_breakdown.sort(key=lambda item: (-int(item["tasks"]), item["provider"], item["model_id"]))
+
+    return {
+        "task_count": task_count,
+        "calibration_eligible_tasks": eligible_count,
+        "accepted_tasks": len(accepted),
+        "observed_success_rate": round(len(accepted) / eligible_count, 4) if eligible_count else None,
+        "first_pass_success_rate": round(first_pass_count / eligible_count, 4) if eligible_count else None,
+        "average_repair_count": round(repair_total / eligible_count, 4) if eligible_count else None,
+        "verification": {
+            "targeted_runs": targeted_runs,
+            "full_runs": full_runs,
+            "retries": verification_retries,
+        },
+        "ci": {
+            "observed_tasks": len(ci_observed),
+            "pass_rate": (
+                round(sum(int(bool(item.get("ci_pass"))) for item in ci_observed) / len(ci_observed), 4)
+                if ci_observed else None
+            ),
+        },
+        "review": {
+            "findings": review_findings,
+            "findings_actioned": review_actioned,
+            "useful_finding_yield": round(review_actioned / review_findings, 4) if review_findings else None,
+        },
+        "resources": {
+            key: round(value, 4) for key, value in resource_totals.items()
+        },
+        "provider_failures": provider_failures,
+        "quota_failures": quota_failures,
+        "budget_without_useful_outcome_tasks": budget_without_outcome,
+        "provider_model_breakdown": model_breakdown,
+        "human_attention": dict(attention or {}),
+    }
+
+
 __all__ = [
     "aggregate_calibration",
+    "aggregate_telemetry_summary",
     "classify_attention_event",
     "classify_budget_attention",
     "task_telemetry_snapshot",
