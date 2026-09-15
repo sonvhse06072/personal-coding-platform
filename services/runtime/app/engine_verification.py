@@ -103,10 +103,11 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         self,
         *,
         job_id: str,
-        workspace: Path,
+        workspace: Path | str,
         project: dict[str, Any],
         progress: dict[str, Any],
     ) -> _CollaborationRequested | None:
+        workspace = Path(workspace)
         request_path = workspace / _COLLABORATION_REQUEST_FILE
         if not request_path.exists():
             return None
