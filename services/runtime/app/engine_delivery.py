@@ -147,6 +147,14 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 progress["delivery_retry_attempts"] = int(
                     progress.get("delivery_retry_attempts", 0)
                 ) + 1
+                self._runtime_event(
+                    job_id,
+                    kind="delivery_retry",
+                    message="Retrying GitHub delivery/CI observation after an earlier delivery attempt",
+                    phase="delivery",
+                    status="delivery_retry",
+                    output={"attempt": progress["delivery_attempts"]},
+                )
             self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
 
             verification = result.get("verification") or {}
