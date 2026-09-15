@@ -17,7 +17,49 @@ from .schemas import (
 
 _REASONING_ORDER = ["low", "medium", "high"]
 _REASONING_ADAPTERS = {"codex_cli", "antigravity_host"}
-_PM_REASONING_BY_PROFILE = {"standard": "low", "complex": "medium", "critical": "high"}
+_STAFF_REASONING_BY_PROFILE = {
+    "fast": "low",
+    "standard": "low",
+    "complex": "medium",
+    "critical": "high",
+}
+_COLLABORATION_CAPABILITY_WEIGHTS = {
+    "consultant": {
+        "reasoning": 0.34,
+        "planning": 0.24,
+        "repo_exploration": 0.22,
+        "review": 0.12,
+        "structured_output": 0.08,
+    },
+    "test_engineer": {
+        "debugging": 0.28,
+        "review": 0.24,
+        "reasoning": 0.20,
+        "repo_exploration": 0.16,
+        "structured_output": 0.12,
+    },
+    "debugger": {
+        "debugging": 0.36,
+        "reasoning": 0.28,
+        "repo_exploration": 0.20,
+        "review": 0.10,
+        "structured_output": 0.06,
+    },
+    "security_specialist": {
+        "review": 0.32,
+        "reasoning": 0.30,
+        "debugging": 0.14,
+        "repo_exploration": 0.12,
+        "structured_output": 0.12,
+    },
+    "reviewer": {
+        "review": 0.38,
+        "reasoning": 0.28,
+        "debugging": 0.14,
+        "repo_exploration": 0.10,
+        "structured_output": 0.10,
+    },
+}
 
 
 class RouterEngine(BudgetRouterEngine):
@@ -30,17 +72,20 @@ class RouterEngine(BudgetRouterEngine):
         dimensions: DimensionScores,
         profile: str,
     ) -> float:
-        if role != "product_manager":
-            return super()._capability_match(model, role, dimensions, profile)
+        if role == "product_manager":
+            required = {
+                "planning": 0.30,
+                "reasoning": 0.30,
+                "structured_output": 0.22,
+                "review": 0.10,
+                "repo_exploration": 0.08,
+            }
+        else:
+            required = _COLLABORATION_CAPABILITY_WEIGHTS.get(role)
+            if required is None:
+                return super()._capability_match(model, role, dimensions, profile)
 
         cap = model.get("capabilities", {})
-        required = {
-            "planning": 0.30,
-            "reasoning": 0.30,
-            "structured_output": 0.22,
-            "review": 0.10,
-            "repo_exploration": 0.08,
-        }
         score = sum((float(cap.get(name, 0)) / 10.0) * weight for name, weight in required.items())
         difficulty = (
             dimensions.reasoning_requirement
@@ -221,7 +266,7 @@ class RouterEngine(BudgetRouterEngine):
             dimensions=dimensions,
             profile=request.profile,
         )
-        self._apply_reasoning(choice, _PM_REASONING_BY_PROFILE.get(request.profile))
+        self._apply_reasoning(choice, _STAFF_REASONING_BY_PROFILE.get(request.profile))
         return StaffingResponse(
             request_id=request.request_id,
             project_id=request.project_id,
