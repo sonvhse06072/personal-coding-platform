@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from .evidence_packs import reviewer_evidence_pack
+
 
 _COLLABORATION_ROLES = [
     "consultant",
@@ -113,6 +115,14 @@ def execution_prompt(
                 payload,
                 "Use this artifact to make or justify the next bounded implementation decision. If it remains unresolved and another check is necessary, use the same thread_id with action=recheck.",
             ]
+        elif failure.startswith("PCP_REVIEW_FINDINGS:"):
+            payload = failure.split(":", 1)[1].strip()
+            lines += [
+                "",
+                "INDEPENDENT REVIEW FINDINGS (COMPACT EVIDENCE PACK):",
+                payload,
+                "Repair only the actionable findings within the WorkOrder. Do not reinterpret scope or copy a reviewer transcript into the repository.",
+            ]
         else:
             lines += [
                 "",
@@ -150,17 +160,29 @@ def evaluator_prompt(
     verification: dict[str, Any],
     work_order: dict[str, Any] | None = None,
     baseline: dict[str, Any] | None = None,
+    developer_report: str | None = None,
 ) -> str:
-    lines = [
-        "Review the current workspace changes read-only. Do not edit files.",
-        "Use built-in file tools and sandboxed/read-only Git commands only. Do not request sandbox bypass or unsandboxed execution.",
-        "Return PASS only if the implementation satisfies the authoritative WorkOrder (when present), acceptance criteria, project alignment, and deterministic evidence with no material correctness, security, regression, scope, or missing-test issue. Otherwise return FAIL and concise actionable findings.",
-    ]
-    lines += _contract_lines(work_order=work_order, baseline=baseline)
-    lines += [
-        f"CANONICAL TASK: {task.get('title')}\n{task.get('description','')}",
-        f"VERIFICATION: {json.dumps(verification, ensure_ascii=False)}",
-        "DIFF:",
-        diff,
-    ]
-    return "\n".join(lines)
+    pack = reviewer_evidence_pack(
+        task=task,
+        diff=diff,
+        verification=verification,
+        work_order=work_order,
+        developer_report=developer_report,
+    )
+    baseline_summary = {
+        "revision": (baseline or {}).get("revision"),
+        "source_commit": (baseline or {}).get("source_commit"),
+    }
+    return "\n".join(
+        [
+            "Review the current workspace changes read-only. Do not edit files.",
+            "The compact REVIEW_EVIDENCE_PACK is the default context. Do not request or reconstruct full agent/model transcripts.",
+            "If the pack is insufficient for one concrete finding, use the permitted read-only repository access just in time and retrieve only the smallest relevant context.",
+            "PASS only when the authoritative Task Contract/WorkOrder, scope, deterministic evidence, correctness, security, regressions and required tests are satisfactory.",
+            "FAIL only for concise actionable findings that can change code/tests/decision; avoid style-only or speculative findings.",
+            "Return exactly two lines: first PASS or FAIL; second REVIEW_JSON: followed by one compact JSON object.",
+            'REVIEW_JSON schema: {"verdict":"pass|fail","summary":"...","findings":[{"id":"...","severity":"low|medium|high|critical","category":"correctness|security|regression|scope|tests|other","message":"...","evidence_refs":["path/check/ref"]}],"jit_context_used":false}',
+            f"BASELINE_REF: {json.dumps(baseline_summary, ensure_ascii=False, sort_keys=True)}",
+            f"REVIEW_EVIDENCE_PACK: {json.dumps(pack, ensure_ascii=False, sort_keys=True)}",
+        ]
+    )
