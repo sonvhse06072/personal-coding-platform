@@ -43,8 +43,11 @@ def test_collaboration_roles_are_staffed_by_logical_capability_not_model_identit
     for role, allowed_model_roles in role_to_model_roles.items():
         result = engine.staff(request(role))
         assert result.role == role
-        assert result.choice.reasoning_effort == "low"
         assert set(engine.models[result.choice.id]["roles"]) & allowed_model_roles
+        if result.choice.adapter in {"codex_cli", "antigravity_host"}:
+            assert result.choice.reasoning_effort == "low"
+        else:
+            assert result.choice.reasoning_effort is None
 
 
 def test_security_specialist_uses_architecture_capable_model() -> None:
