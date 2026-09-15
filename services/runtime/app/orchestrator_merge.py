@@ -53,10 +53,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 work_order_id=work_order_id,
                 expected_head=expected_head,
                 status="observed_merged",
-                result={
-                    "recovered_by_observation": True,
-                    "pr": pr,
-                },
+                result={"recovered_by_observation": True, "pr": pr},
             )
             self._record_merge_continuity(plan, job, pr)
             return True
@@ -66,10 +63,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
             work_order_id=work_order_id,
             expected_head=expected_head,
             status="uncertain",
-            result={
-                "reason": "approved_merge_has_no_confirmed_result",
-                "pr": pr,
-            },
+            result={"reason": "approved_merge_has_no_confirmed_result", "pr": pr},
         )
         self._block_tracked(plan, tracked, "uncertain_merge_attempt")
         return False
@@ -122,6 +116,14 @@ class PlanOrchestrator(CorePlanOrchestrator):
             tracked = dict(tracked_raw)
             if str(tracked.get("state") or "") != "awaiting_merge":
                 continue
+            detail = dict(tracked.get("detail") or {})
+            prior_pm_merge = dict(detail.get("pm_merge") or {})
+            # A protected merge that was routed to explicit owner/manual review is
+            # intentionally stable until GitHub observes the owner merge. Core ran
+            # first above, so a newly merged PR would already be completed.
+            if prior_pm_merge.get("owner_required"):
+                continue
+
             job_id = str(tracked.get("job_id") or "")
             pr_number = tracked.get("pr_number")
             if not job_id or not pr_number:
@@ -147,33 +149,38 @@ class PlanOrchestrator(CorePlanOrchestrator):
             decision = eligibility.model_dump()
 
             # Project-level opt-out intentionally preserves the pre-#98 manual
-            # merge gate and its existing owner notification path.
+            # merge gate and its existing owner notification path. Avoid rewriting
+            # unchanged detail every polling cycle.
             if eligibility.manual_only:
-                detail = dict(tracked.get("detail") or {})
-                detail["pm_merge"] = {
+                manual = {
                     "eligible": False,
                     "manual_only": True,
+                    "owner_required": False,
                     "blockers": list(eligibility.blockers),
                 }
+                if prior_pm_merge != manual:
+                    detail["pm_merge"] = manual
+                    self.store.update_work_order(
+                        plan_id,
+                        str(tracked["work_order_id"]),
+                        detail=detail,
+                    )
+                continue
+
+            if eligibility.requires_human:
+                decision["owner_required"] = True
+                detail["pm_merge"] = decision
+                detail["reason"] = "pm_merge_owner_review_required"
+                # Keep awaiting_merge as the stable owner/manual merge gate. A
+                # completed coding job cannot meaningfully resume a Runtime human
+                # decision; the owner can review/merge the PR, and core will
+                # observe that merge before dependencies advance.
                 self.store.update_work_order(
                     plan_id,
                     str(tracked["work_order_id"]),
                     detail=detail,
                 )
                 continue
-
-            if eligibility.requires_human:
-                detail = dict(tracked.get("detail") or {})
-                detail["pm_merge"] = decision
-                detail["reason"] = "pm_merge_human_decision_required"
-                self.store.update_work_order(
-                    plan_id,
-                    str(tracked["work_order_id"]),
-                    state="waiting_human",
-                    detail=detail,
-                )
-                self.store.update_plan(plan_id, status="waiting_human")
-                return
 
             if not eligibility.eligible:
                 reason = eligibility.blockers[0] if eligibility.blockers else "pm_merge_ineligible"
@@ -193,9 +200,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 source_commit=eligibility.source_commit,
                 decision=decision,
             )
-            # A pre-existing audit means another process/earlier tick already
-            # crossed the durable approval boundary. Do not replay.
-            if str(audit.get("status") or "") != "approved" or audit.get("result") is not None:
+            if not bool(audit.get("created")):
                 self._block_tracked(plan, tracked, "pm_merge_replay_rejected")
                 return
 
@@ -247,10 +252,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 work_order_id=str(tracked["work_order_id"]),
                 expected_head=eligibility.expected_head,
                 status="merged",
-                result={
-                    "merge_result": merge_result,
-                    "confirmed_pr": confirmed,
-                },
+                result={"merge_result": merge_result, "confirmed_pr": confirmed},
             )
             detail = dict(tracked.get("detail") or {})
             detail.update(
