@@ -238,6 +238,39 @@ Candidates, only after telemetry demonstrates value:
 
 These are optimizations, not prerequisites for the PM/team model.
 
+## Phase 11 — Owner-only Telegram terminal operations gateway
+
+Goal: allow the Human Owner to run local diagnostics from Telegram without turning Telegram into an unrestricted remote shell or weakening PCP trust boundaries.
+
+The authoritative design is `telegram-terminal-operations.md`.
+
+Implementation order:
+
+1. separate Telegram bot/token and owner/private-chat authentication;
+2. WSL long-polling daemon/service lifecycle;
+3. `/run-ro` arbitrary diagnostic scripts inside a capability-restricted read-only sandbox;
+4. timeout/output/audit controls and secret-free execution environment;
+5. PCP read-only broker for jobs/plans/actions/events/quota/logs and optional SELECT-only database principal;
+6. optional Telegram-ready block metadata/hash/TTL ergonomics;
+7. only after the read-only path is stable, `/run-op` named bounded mutations with explicit confirmation and fresh state revalidation;
+8. keep generic `/run-admin` disabled unless a later concrete need passes a separate security/architecture decision.
+
+Critical constraints:
+
+- security must be enforced by OS/container/database capability boundaries, not shell-text regex allow/deny parsing;
+- diagnostic scripts receive no Runtime/provider/GitHub/Docker/SSH secrets;
+- repository/workspace/log sources are read-only and `/tmp` is the only normal writable scratch area;
+- no Docker socket, sudo/root, arbitrary SSH, source-repository writes, database mutation or production authority in `/run-ro`;
+- `/run-op` uses named official Runtime/service operations rather than a generic elevated shell;
+- existing Runtime durable state, stale-action validation, active-job rollout gates, PM governance and production boundaries remain authoritative;
+- ordinary ChatGPT read-only blocks remain ordinary terminal-safe blocks; Telegram-specific formatting is emitted only when the Human Owner explicitly asks for a Telegram-ready block.
+
+Exit criteria:
+
+- the Human Owner can paste a Telegram-ready multi-line diagnostic block and receive bounded output from the local machine while mutation authority and secrets remain unavailable to the diagnostic process;
+- common PCP inspection no longer requires exposing mutable Runtime/database credentials to the Telegram-run script;
+- any enabled operational mutation preserves the same state-machine and owner-confirmation guarantees as local execution.
+
 ## Deferred until demonstrated need
 
 Do not build these merely because multi-agent systems often include them:
