@@ -12,38 +12,33 @@ complexity_weights:
 adaptive_budget:
   enabled: true
   # Profile values remain conservative personal-scale priors. New routes derive
-  # a task estimate and an initially effective working target, then Runtime may
-  # receive bounded healthy-progress grants up to the emergency ceiling.
+  # task-specific estimate/working thresholds while the effective max_* values
+  # become bounded emergency circuit breakers. Healthy execution may use the
+  # pre-authorized headroom between working_target and emergency_limit without a
+  # Human Owner continuation click.
   estimate_min_ratio: 0.65
   estimate_max_ratio: 1.35
   working_headroom_ratio: 1.25
   emergency_multiplier: 1.5
-  grant_increment_ratio: 0.25
   dimensions:
     max_model_calls:
       minimum: 2
       hard_max: 40
-      grant_increment: 2
     max_tool_calls:
       minimum: 10
       hard_max: 400
-      grant_increment: 20
     max_iterations:
       minimum: 2
       hard_max: 24
-      grant_increment: 2
     max_repair_iterations:
       minimum: 1
       hard_max: 12
-      grant_increment: 1
     max_test_runs:
       minimum: 2
       hard_max: 40
-      grant_increment: 2
     max_wall_time_minutes:
       minimum: 10
       hard_max: 180
-      grant_increment: 20
 profiles:
   fast:
     max_score: 29
