@@ -64,15 +64,30 @@ class WorkOrderRisk(BaseModel):
 
 
 class WorkOrderBudget(BaseModel):
-    # Backward compatibility is deliberately fail-closed: every persisted or
-    # manually-created WorkOrder that predates adaptive budgeting has no `mode`
-    # and therefore retains the historical hard-ceiling behavior.
-    mode: BudgetMode = "legacy_hard"
+    # New PM-generated contracts must choose the semantics explicitly. The
+    # before-validator preserves every legacy persisted/API payload that predates
+    # this field by injecting the historical hard-ceiling behavior.
+    mode: BudgetMode = Field(
+        ...,
+        description=(
+            "Use adaptive for new routine PM WorkOrders so task estimates do not become owner-interruption gates. "
+            "Use legacy_hard only for compatibility or an explicitly required hard task ceiling."
+        ),
+    )
     max_profile: ProfileName = "standard"
     max_model_calls: int = Field(default=8, ge=1, le=100)
     max_repair_iterations: int = Field(default=2, ge=0, le=20)
     max_wall_time_minutes: int = Field(default=25, ge=1, le=240)
     max_changed_files: int = Field(default=14, ge=1, le=200)
+
+    @model_validator(mode="before")
+    @classmethod
+    def legacy_mode_for_pre_adaptive_payloads(cls, value: Any) -> Any:
+        if isinstance(value, dict) and "mode" not in value:
+            updated = dict(value)
+            updated["mode"] = "legacy_hard"
+            return updated
+        return value
 
 
 class WorkOrderVerification(BaseModel):
@@ -106,7 +121,7 @@ class WorkOrder(BaseModel):
     requested_role: str = Field(default="developer", min_length=2, max_length=80, pattern=_ROLE_PATTERN)
     verification: WorkOrderVerification
     risk: WorkOrderRisk = Field(default_factory=WorkOrderRisk)
-    budget: WorkOrderBudget = Field(default_factory=WorkOrderBudget)
+    budget: WorkOrderBudget
     dependencies: list[str] = Field(default_factory=list, max_length=50)
 
     @model_validator(mode="before")
@@ -258,7 +273,7 @@ def apply_work_order_budget(route: dict[str, Any], work_order: WorkOrder) -> dic
 
     ``legacy_hard`` preserves the historical behavior exactly for old/pinned
     WorkOrders. ``adaptive`` still hard-bounds profile and changed-file scope,
-    while Router/Runtime own the task-specific working/emergency execution
+    while Router/Runtime own the task-specific estimate/working/emergency
     envelope. If adaptive metadata is absent, fail closed by falling back to the
     legacy clamps rather than silently widening an old Router contract.
     """
