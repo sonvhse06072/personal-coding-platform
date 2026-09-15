@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from pathlib import PurePosixPath
 from typing import Any
 
 from .state import decision_key
@@ -32,6 +33,69 @@ _PROTECTED_ALIASES = {
     "material_budget_expansion": "material_budget_expansion",
 }
 
+_HIGH_AUTHORITY_PATHS = {
+    "agents.md",
+    "docs/project/constitution.md",
+    "docs/project/architecture.md",
+    "docs/project/operating-model.md",
+    "docs/project/efficiency-model.md",
+    "config/projects.yml",
+    "config/routing-policy.yml",
+    "config/models.yml",
+}
+_SCOPE_PATHS = {
+    "docs/project/roadmap.md",
+    "docs/project/requirements.md",
+    "docs/project/project-plan.md",
+}
+_DEPENDENCY_MANIFESTS = {
+    "composer.json",
+    "composer.lock",
+    "package.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "pyproject.toml",
+    "poetry.lock",
+    "pipfile",
+    "pipfile.lock",
+    "go.mod",
+    "go.sum",
+    "cargo.toml",
+    "cargo.lock",
+    "gemfile",
+    "gemfile.lock",
+    "dockerfile",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "compose.yml",
+    "compose.yaml",
+}
+_SECURITY_PATH_TERMS = {
+    "auth",
+    "authentication",
+    "authorization",
+    "permission",
+    "permissions",
+    "security",
+    "secret",
+    "secrets",
+    "credential",
+    "credentials",
+    "access_control",
+}
+_PRODUCTION_PATH_TERMS = {
+    "deploy",
+    "deployment",
+    "production",
+    "prod",
+    "terraform",
+    "ansible",
+    "helm",
+    "kubernetes",
+    "k8s",
+}
+
 
 @dataclass(frozen=True)
 class MergeEligibility:
@@ -53,6 +117,64 @@ class MergeEligibility:
 
 def _dict(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
+
+
+def _changed_paths(job: dict[str, Any]) -> list[str]:
+    result = _dict(job.get("result"))
+    diff = _dict(result.get("diff"))
+    paths: list[str] = []
+    for raw in diff.get("changed_files") or []:
+        value = str(raw).strip().replace("\\", "/")
+        if not value:
+            continue
+        candidates = value.split(" -> ") if " -> " in value else [value]
+        for candidate in candidates:
+            normalized = candidate.strip()
+            while normalized.startswith("./"):
+                normalized = normalized[2:]
+            normalized = normalized.lower()
+            if normalized and normalized not in paths:
+                paths.append(normalized)
+    return paths
+
+
+def _path_protected_signals(job: dict[str, Any]) -> set[str]:
+    """Infer protected decision classes from the actual accepted diff paths.
+
+    WorkOrder/task risk metadata is predictive. The accepted diff is executable
+    evidence, so sensitive path families get a second deterministic fail-closed
+    check before merge. These rules intentionally prefer a manual owner merge over
+    silently merging an unclassified governance/security/dependency change.
+    """
+    signals: set[str] = set()
+    for path in _changed_paths(job):
+        pure = PurePosixPath(path)
+        name = pure.name.lower()
+        parts = {part.lower() for part in pure.parts}
+        stem_parts = set(name.replace("-", "_").replace(".", "_").split("_"))
+
+        if path in _HIGH_AUTHORITY_PATHS or path.startswith(".github/workflows/"):
+            signals.add("high_authority_governance")
+        if path in _SCOPE_PATHS:
+            signals.add("scope_change")
+
+        if (
+            name in _DEPENDENCY_MANIFESTS
+            or (name.startswith("requirements") and name.endswith(".txt"))
+            or path.startswith(("helm/", "charts/", "k8s/", "kubernetes/"))
+        ):
+            signals.add("major_dependency_addition")
+
+        if _SECURITY_PATH_TERMS & (parts | stem_parts):
+            signals.add("security_boundary_change")
+
+        if "migration" in parts or "migrations" in parts or "schema" in stem_parts:
+            signals.add("destructive_migration")
+
+        if _PRODUCTION_PATH_TERMS & (parts | stem_parts):
+            signals.add("production_write")
+
+    return signals
 
 
 def _protected_signals(job: dict[str, Any]) -> set[str]:
@@ -78,6 +200,7 @@ def _protected_signals(job: dict[str, Any]) -> set[str]:
         canonical = _PROTECTED_ALIASES.get(str(raw).strip().lower())
         if canonical:
             signals.add(canonical)
+    signals.update(_path_protected_signals(job))
     return signals
 
 
@@ -241,6 +364,7 @@ def evaluate_pm_merge(
         "review_verdict": review.get("verdict"),
         "review_required": bool(review_policy.get("required")),
         "risk_level": risk_level,
+        "changed_files": _changed_paths(job),
     }
     return MergeEligibility(
         eligible=eligible,
