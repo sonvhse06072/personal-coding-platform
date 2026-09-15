@@ -115,12 +115,16 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         if request_path.stat().st_size > _MAX_COLLABORATION_REQUEST_BYTES:
             raise RuntimeError("Collaboration request artifact exceeds the 32 KiB limit")
 
-        tracked = await run_command(
-            ["git", "ls-files", "--error-unmatch", _COLLABORATION_REQUEST_FILE],
+        # Base execution computes a diff before verification. diff_state() uses
+        # `git add -N` for untracked files so the control artifact can appear in
+        # the index as intent-to-add. That is not a repository-tracked file. Only
+        # reject when the reserved path actually exists in the pinned HEAD tree.
+        tracked_in_head = await run_command(
+            ["git", "cat-file", "-e", f"HEAD:{_COLLABORATION_REQUEST_FILE}"],
             cwd=workspace,
             timeout=20,
         )
-        if tracked.returncode == 0:
+        if tracked_in_head.returncode == 0:
             raise RuntimeError(
                 f"Reserved collaboration request path {_COLLABORATION_REQUEST_FILE!r} is tracked by the repository"
             )
@@ -137,6 +141,16 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             raise RuntimeError(f"Invalid collaboration request artifact: {exc}") from exc
 
         request_path.unlink()
+        reset = await run_command(
+            ["git", "reset", "-q", "--", _COLLABORATION_REQUEST_FILE],
+            cwd=workspace,
+            timeout=20,
+        )
+        if reset.returncode != 0:
+            raise RuntimeError(
+                reset.stderr or reset.stdout or "Unable to clear collaboration control artifact from Git index"
+            )
+
         max_diff = int(project.get("runtime", {}).get("max_diff_bytes", 500000))
         clean_diff = diff_state(workspace, max_diff)
         progress["changed_files"] = clean_diff["changed_file_count"]
