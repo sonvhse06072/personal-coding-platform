@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from .schemas import (
     ProviderState,
     ReviewPolicy,
@@ -10,21 +12,13 @@ from .schemas import (
 from .staffing_collaboration import RouterEngine as CollaborationRouterEngine
 
 
-_SECURITY_FLAGS = {
-    "security_sensitive",
-    "security_boundary_change",
-    "authentication_change",
-    "authorization_change",
-    "secret_management_change",
-}
-
-
 class RouterEngine(CollaborationRouterEngine):
-    """Select review spend and reviewer independence from task risk.
+    """Select review spend and reviewer independence from calibratable policy.
 
     The logical role remains ``reviewer``. The Router may choose any eligible
     provider/model for that role; Runtime never asks an implementation agent to
-    name a reviewer model directly.
+    name a reviewer model directly. Review levels/thresholds live in
+    routing-policy.yml so PM calibration does not require code changes.
     """
 
     @staticmethod
@@ -37,62 +31,41 @@ class RouterEngine(CollaborationRouterEngine):
             latency_ms=0,
         )
 
-    @staticmethod
-    def _high_impact_review(request: RoutingRequest, result: RoutingResponse) -> bool:
-        flags = set(request.task.flags)
+    def _review_config(self) -> dict[str, Any]:
+        config = self.policy.get("review_policy") or {}
+        if not isinstance(config, dict):
+            raise RuntimeError("routing review_policy must be an object")
+        profiles = config.get("profiles") or {}
+        high_impact = config.get("high_impact") or {}
+        if not isinstance(profiles, dict) or not isinstance(high_impact, dict):
+            raise RuntimeError("routing review_policy profiles/high_impact must be objects")
+        return config
+
+    def _high_impact_review(self, request: RoutingRequest, result: RoutingResponse) -> bool:
+        config = self._review_config().get("high_impact") or {}
+        flags = {str(item) for item in config.get("flags", []) if str(item).strip()}
+        architecture_min = int(config.get("architecture_impact_min", 101))
+        risk_min = int(config.get("risk_min", 101))
         return bool(
-            flags & _SECURITY_FLAGS
+            set(request.task.flags) & flags
             or request.repo.security_sensitive
             or request.repo.authentication_change
             or request.repo.authorization_change
-            or result.dimensions.architecture_impact >= 70
-            or result.dimensions.risk >= 85
+            or result.dimensions.architecture_impact >= architecture_min
+            or result.dimensions.risk >= risk_min
         )
 
-    @staticmethod
-    def _policy_for(request: RoutingRequest, result: RoutingResponse) -> ReviewPolicy:
-        profile = result.strategy.profile
-        if RouterEngine._high_impact_review(request, result):
-            return ReviewPolicy(
-                level="critical",
-                required=True,
-                independent=True,
-                different_model_required=True,
-                different_provider_required=True,
-                reason="security/architecture/high-risk work requires cross-provider review when eligible",
+    def _policy_for(self, request: RoutingRequest, result: RoutingResponse) -> ReviewPolicy:
+        config = self._review_config()
+        if self._high_impact_review(request, result):
+            raw = (config.get("high_impact") or {}).get("policy") or {}
+        else:
+            raw = (config.get("profiles") or {}).get(result.strategy.profile) or {}
+        if not isinstance(raw, dict) or not raw:
+            raise RuntimeError(
+                f"No review policy configured for profile {result.strategy.profile!r}"
             )
-        if profile == "critical":
-            return ReviewPolicy(
-                level="critical",
-                required=True,
-                independent=True,
-                different_model_required=True,
-                different_provider_required=True,
-                reason="critical profile requires cross-provider review when eligible",
-            )
-        if profile == "complex":
-            return ReviewPolicy(
-                level="strong",
-                required=True,
-                independent=True,
-                different_model_required=True,
-                reason="complex profile requires a stronger independent reviewer",
-            )
-        if profile == "standard":
-            return ReviewPolicy(
-                level="standard",
-                required=True,
-                independent=True,
-                reason="standard profile requires bounded independent Task Contract/diff review",
-            )
-        return ReviewPolicy(
-            level="lightweight",
-            required=False,
-            conditional_on_strong_evidence=True,
-            independent=True,
-            different_model_required=True,
-            reason="routine work skips model review only when deterministic evidence is strong",
-        )
+        return ReviewPolicy.model_validate(raw)
 
     def _staff_reviewer(
         self,
@@ -126,7 +99,7 @@ class RouterEngine(CollaborationRouterEngine):
         policy = self._policy_for(request, result)
 
         # Always prepare a reviewer for policy levels that might need one. Fast
-        # jobs may skip the actual call later when full deterministic evidence is
+        # jobs may skip the actual call later when deterministic evidence is
         # strong, so staffing here does not itself spend provider tokens.
         evaluator = result.strategy.evaluator
         independence_satisfied = True
