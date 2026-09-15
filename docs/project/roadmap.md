@@ -8,6 +8,33 @@ This roadmap is a planning artifact beneath the Project Constitution. PM may reo
 
 Build the smallest layer that enables the next layer safely. Do not add swarm infrastructure, dashboards, or model orchestration complexity before the underlying team contracts and source-of-truth rules are durable.
 
+## Current priority overlay — personal-budget execution efficiency
+
+Human Owner approved initiative #146 on 2026-09-15. The authoritative policy is `efficiency-model.md`.
+
+This initiative takes priority over convenience-only work such as the Telegram terminal gateway because it directly improves autonomous throughput, model/test efficiency, and Human Owner attention.
+
+Implementation order:
+
+1. source-of-truth amendment for the approved execution-efficiency policy;
+2. #147 Adaptive task budgeting and Human-attention circuit breakers;
+3. #148 Layered verification and failure-budget separation;
+4. #149 Bounded inter-agent collaboration and review dialogue;
+5. #150 Risk-proportionate review and role-specific evidence packs;
+6. #151 Telemetry calibration, Human-attention metrics, and continuity automation;
+7. #98 Constrained PM-controlled PR merge may proceed where dependencies permit, but must be complete before PCP can claim a routine zero-human-touch happy path.
+
+Guiding constraints for the initiative:
+
+- routine healthy tasks should target zero avoidable Human Owner interventions;
+- task estimates are planning/resource signals, while emergency ceilings/circuit breakers protect against abnormal execution and material resource risk;
+- provider quota is separate from task estimate exhaustion;
+- full required deterministic verification/CI remain mandatory;
+- inter-agent collaboration is selective, bounded, and single-writer by default;
+- no always-on swarm or recursive agent meeting;
+- strong/scarce models and heavy review are risk/value proportional;
+- telemetry improves heuristics only after meaningful evidence exists.
+
 ## Phase 0 — Trust-boundary hardening
 
 Goal: developer workers must be safe enough to become a reusable primitive for later PM-driven orchestration.
@@ -209,12 +236,14 @@ Collect first:
 - role/task class;
 - model/provider;
 - first-pass success;
-- repair count;
+- repair count by category;
+- verification cycles;
 - CI pass rate;
-- reviewer finding rate;
+- reviewer finding/useful-finding rate;
 - wall time;
 - token/resource use;
 - provider failure/quota pressure;
+- Human Attention metrics;
 - task outcome.
 
 Then calibrate Router decisions by project/task/role where sample size is meaningful.
@@ -223,26 +252,32 @@ Do not prematurely add statistical complexity from very small samples.
 
 Exit criteria:
 
-- model staffing decisions can cite observed project performance rather than only hand-authored capability/base-success values.
+- model staffing and effort/budget decisions can cite observed project performance rather than only hand-authored capability/base-success values.
 
 ## Phase 10 — Efficiency improvements driven by evidence
 
-Candidates, only after telemetry demonstrates value:
+The following items are pulled forward under initiative #146 rather than deferred until late optimization:
 
-- cheap pre-edit baseline tests;
-- narrower intermediate verification before final full checks;
+- task-specific estimated/elastic budgets;
+- Human Attention metrics;
+- cheap/targeted intermediate verification before final full checks;
+- separated retry/failure accounting;
+- bounded specialist consultation/review dialogue;
+- smarter evidence/context compaction;
+- provider/quota resource weights beyond USD.
+
+Candidates that remain evidence-dependent:
+
 - lightweight structural repo map;
-- smarter context compaction;
-- provider/quota resource weights beyond USD;
 - carefully bounded parallel WorkOrders.
-
-These are optimizations, not prerequisites for the PM/team model.
 
 ## Phase 11 — Owner-only Telegram terminal operations gateway
 
 Goal: allow the Human Owner to run local diagnostics from Telegram without turning Telegram into an unrestricted remote shell or weakening PCP trust boundaries.
 
 The authoritative design is `telegram-terminal-operations.md`.
+
+This remains approved but is lower priority than the execution-efficiency initiative because it is primarily an operator convenience layer.
 
 Implementation order:
 
@@ -278,12 +313,13 @@ Do not build these merely because multi-agent systems often include them:
 - always-on parallel agent swarm;
 - Best-of-N implementation generation for routine work;
 - recursive reviewer-of-reviewer loops;
-- automatic PR merge;
 - production deployment by agents;
 - large vector/RAG infrastructure for code retrieval;
 - separate containers/services for PM, developer, QA, architect, and reviewer roles;
-- complex provider quota dashboards before enough telemetry exists;
+- complex dashboards with no demonstrated decision value;
 - additional model gateways/services with no active use case.
+
+PM-controlled autonomous merge is no longer a deferred concept; issue #98 tracks its constrained implementation under already-approved governance.
 
 ## Current development workflow while building the platform
 
@@ -295,7 +331,7 @@ Human Owner
   -> Codex or bounded implementation agent: implementation / tests / repair
   -> ChatGPT High or alternate model: independent review
   -> GitHub CI
-  -> Human Owner: merge
+  -> PM merge where executable support exists; otherwise follow the current constrained implementation state
 ```
 
 For very small, obvious patches, direct implementation may be acceptable, but non-trivial subsystem work should follow the WorkOrder/review pattern.
