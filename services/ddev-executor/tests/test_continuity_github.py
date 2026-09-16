@@ -76,6 +76,13 @@ def test_replace_managed_changes_only_the_bounded_section() -> None:
     assert "## Durable policy note\nKeep me." in result
 
 
+def test_replace_managed_is_idempotent_when_snapshot_is_already_current() -> None:
+    section = f"{START}\nnew\n{END}"
+    existing = f"# Current state\n\n{section}\n\n## Durable policy note\nKeep me.\n"
+
+    assert _replace_managed(existing, section) == existing
+
+
 def test_one_file_guard_allows_only_current_state() -> None:
     _assert_one_file_pr(
         FakeClient([{"filename": _CONTINUITY_PATH}]),
