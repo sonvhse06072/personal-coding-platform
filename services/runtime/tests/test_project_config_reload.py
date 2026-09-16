@@ -6,6 +6,10 @@ from app import config
 
 
 def _write_projects(path: Path, projects: dict[str, str]) -> None:
+    if not projects:
+        path.write_text("version: 1\nprojects: {}\n", encoding="utf-8")
+        return
+
     lines = ["version: 1", "projects:"]
     for project_id, project_path in projects.items():
         lines.extend(
