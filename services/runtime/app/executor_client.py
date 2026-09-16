@@ -164,6 +164,32 @@ class DdevExecutorClient:
             _raise_for_status_with_detail(response)
             return response.json()
 
+    async def apply_continuity(
+        self,
+        *,
+        continuity_key: str,
+        event_type: str,
+        project_id: str,
+        managed_section: str,
+        ci_wait_seconds: int = 240,
+    ) -> dict[str, Any]:
+        """Request one executor-owned bounded continuity PR application."""
+        timeout_seconds = max(15, min(int(ci_wait_seconds), 300))
+        async with httpx.AsyncClient(timeout=timeout_seconds + 45) as client:
+            response = await client.post(
+                f"{self.base}/v1/github/pm-bridge/continuity/apply",
+                json={
+                    "continuity_key": continuity_key,
+                    "event_type": event_type,
+                    "project_id": project_id,
+                    "managed_section": managed_section,
+                    "ci_wait_seconds": timeout_seconds,
+                },
+                headers=self.headers,
+            )
+            _raise_for_status_with_detail(response)
+            return response.json()
+
     async def remove_workspace(self, *, job_id: str, project_id: str, workspace: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.delete(
