@@ -33,3 +33,34 @@ projects:
             - path: PROJECT-CONTEXT.md
             - path: docs/09-roadmap.md
             - path: infra/staging/DEC-025-PRE-BETA-HARDENING.md
+  pcp-validation-fixture:
+    active_revision: validation-v1-2026-09-16
+    revisions:
+      validation-v1-2026-09-16:
+        status: approved
+        source_commit: ba3207af0ce28b607b1d3dd9eb00bc69072ac234
+        references:
+          goals:
+            - path: PROJECT-BASELINE.md
+              section: Goals
+          non_goals:
+            - path: PROJECT-BASELINE.md
+              section: Non-goals
+          requirements:
+            - path: PROJECT-BASELINE.md
+              section: Requirements
+          architecture_constraints:
+            - path: PROJECT-BASELINE.md
+              section: Architecture constraints
+          quality_policy:
+            - path: PROJECT-BASELINE.md
+              section: Quality policy
+          security_policy:
+            - path: PROJECT-BASELINE.md
+              section: Security policy
+          budget_policy:
+            - path: PROJECT-BASELINE.md
+              section: Budget policy
+          roadmap_frame:
+            - path: PROJECT-BASELINE.md
+              section: Roadmap frame
