@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 from typing import Any
 
-from .control_actions_reroute import ControlActionService
+from .control_actions_attention import ControlActionService
 from .orchestrator_merge import PlanOrchestrator as CorePlanOrchestrator
 
 
