@@ -29,6 +29,7 @@ Repository docs and current executable evidence are authoritative over chat hist
 - Version-identity prerequisite #163 completed through PR #164 / merge `a4735880fbabcc57303ee80f971204906a51fbb0`: Runtime `1.0.44`, ddev-executor `1.0.15`; Router remains `1.0.21`, routing policy v12.
 - Operator shell-safety follow-up #165 completed through PR #166 / merge `d4109c77244b3e53cb751af085c71204971cd805`; pasted validation blocks that can fail must isolate `exit`/non-zero status from the Human Owner's parent Ubuntu/WSL shell.
 - Host-secret test-harness follow-up #167 completed through PR #168 / merge `7c7ff717ef9f38c4d5a6ed8559a1a99636e5bd99`; `platform-test` now invokes Antigravity bridge status through `scripts/with-host-secrets.sh`.
+- Runtime local/container test-portability follow-up #169 completed through PR #170 / merge `fcc92eff906d89d3a6eb10ddf3925d8e0bdb93f9`; exact-head CI #324 passed all four jobs.
 - `chonhac` still has `autonomy.allow_auto_merge_low_risk: false`; do not change it merely to exercise auto-merge.
 - PR #139 / Telegram terminal gateway remains approved but lower priority than #162 operational validation.
 
@@ -65,7 +66,7 @@ Post-rebuild health evidence:
 
 All three explicit deployed-version gates passed. This proves the new Runtime/Router/ddev-executor source is deployed.
 
-### Resolved harness blocker #167 and current test-portability blocker #169
+### Resolved test blockers #167/#169 and required second rebuild
 
 #167 / PR #168 fixed the first post-rollout `platform-test` failure by loading the host-scoped Antigravity bridge token through `scripts/with-host-secrets.sh`. After the Human Owner fast-forwarded local `main` to `7c7ff717ef9f38c4d5a6ed8559a1a99636e5bd99`, the service suites ran.
 
@@ -75,26 +76,31 @@ Observed local evidence on that rerun:
 - Router suite: `76 passed`;
 - Runtime suite: `288 passed, 2 failed`.
 
-The two failures are deterministic test-layer defects rather than deployed service-health failures:
+The two failures were deterministic test-layer defects rather than deployed service-health failures:
 
-1. `services/runtime/tests/test_quota_policy_doc.py` assumes a full repository checkout and walks `parents[3]` to repo-level `docs/`. The Runtime production image intentionally copies only `/app/app` and `/app/tests`, so repo documentation does not exist inside that service image. Provider-quota documentation coverage belongs in root structure tests instead.
-2. `services/runtime/tests/test_router_staffing_client.py` assumes the outbound staffing JSON is exactly the caller payload. `RouterClient.staff()` intentionally applies `quota_coordinator.enrich(payload)` before POST. Clean CI quota state can make the stale assertion pass accidentally; durable local quota telemetry exposes the mismatch. The unit test must mock enrichment deterministically and assert the enriched payload without mutating caller input.
+1. `services/runtime/tests/test_quota_policy_doc.py` assumed a full repository checkout even though the Runtime image intentionally contains `/app/app` and `/app/tests`, not repo-level `docs/`.
+2. `services/runtime/tests/test_router_staffing_client.py` assumed outbound staffing JSON exactly matched caller input even though `RouterClient.staff()` intentionally applies quota telemetry enrichment first; durable local quota state exposed the stale assertion.
 
-Bounded follow-up #169 moves the repo-documentation assertion to root structure tests and makes staffing-client quota enrichment deterministic. It does not change Runtime/Router/executor behavior or weaken credential boundaries.
+#169 / PR #170 fixed both issues by moving the provider-quota documentation assertion to root structure tests and mocking staffing quota enrichment deterministically. Exact-head CI #324 passed structure, Router, Runtime and ddev-executor jobs.
 
-Until #169 merges and the Human Owner reruns the post-rollout checks:
+Important validation correction tracked by #171: the Runtime Dockerfile copies `tests` into `/app/tests` during image build, and the Runtime service does not bind-mount the platform repository. Therefore a host fast-forward alone does **not** update the tests executed by `ddev platform-test`. The running Runtime container still contains the pre-#170 baked tests until a rebuild occurs.
+
+Because every rebuild/restart is safety-gated, do not rebuild merely because #170 merged. First re-query authenticated durable Runtime job state and require every job to be stable blocked/terminal again. Only after that fresh gate passes may the Human Owner run the DDEV rebuild path to load the corrected tests.
+
+Until the second rebuild, corrected `platform-test`, and DEC-025C comparison complete:
 
 - #162 rollout acceptance remains incomplete;
 - do not start the routine fixture WorkOrder yet;
-- do not record the Phase-E `rollout` continuity event yet;
-- post-rebuild DEC-025C full result/counter/recovery-action comparison remains required because the safety block stopped at `platform-test`.
+- do not record the Phase-E `rollout` continuity event yet.
 
 ### Remaining #162 safety gates
 
-- preserve the existing `chonhac` DEC-025C job/workspace/counters and pending recovery action exactly;
-- do not resume, replace, reset or migrate DEC-025C as part of rollout validation;
-- after #169 merges, fast-forward local `main`, rerun `ddev platform-test`, then capture the preserved DEC-025C job result and orchestration state and compare identity/status/counters/recovery action with the pre-rollout state;
-- because #169 changes only tests/documentation, no service rebuild should be required merely to consume the corrected tests; if executable evidence contradicts this, stop and reassess rather than bypassing it;
+- fast-forward local platform repository to the current reviewed `main` only after the #171 continuity correction merges;
+- re-query authenticated `GET /v1/jobs` immediately before the second rebuild and require every job to be stable `blocked`/terminal; also require ddev-executor `active_jobs: 0` and Antigravity `active_runs: 0`;
+- preserve the existing `chonhac` DEC-025C job/workspace/counters and pending recovery action exactly; do not resume, replace, reset or migrate it;
+- only after the fresh active-job gate passes, rebuild the DDEV custom images so the Runtime image contains the #170 corrected tests;
+- rerun `ddev platform-status` and `ddev platform-test` and require all service tests to pass;
+- capture the preserved DEC-025C job result plus plan orchestration and compare identity/status/counters/recovery action with the authoritative pre-rollout state;
 - only after post-rollout test and DEC-025C preservation gates pass, verify trust/secret boundaries and record the Phase-E `rollout` continuity event;
 - use a clean registered fixture with `allow_auto_merge_low_risk: true`; prefer `example-drupal`, otherwise use `default` only if its verification contract is sufficient;
 - never fall back to `chonhac` for the auto-merge proof;
@@ -103,14 +109,14 @@ Until #169 merges and the Human Owner reruns the post-rollout checks:
 <!-- PCP:CONTINUITY:START -->
 ## Automated continuity snapshot
 
-- Event: `rollout_validation_blocked_by_runtime_test_portability`.
+- Event: `rollout_validation_requires_baked_test_rebuild`.
 - Project/job: `personal-coding-platform` / `n/a`.
-- Runtime state: deployed and healthy at Runtime `1.0.44`, Router `1.0.21`, ddev-executor `1.0.15`; outcome: `awaiting_issue_169_fix_and_post_rollout_retest`.
-- Active issue: `#169`; parent rollout validation: `#162`; initiative: `#146`.
-- Safety evidence: pre-rollout active-job gate passed; rebuild occurred only after the gate; post-rebuild health remains green and executor/bridge active counts remain zero.
-- Resolved blocker: #167 fixed host-scoped Antigravity secret loading in `platform-test`.
-- Current blocker: one repo-documentation test is incorrectly located inside Runtime service tests, and one staffing-client test is nondeterministic with respect to local durable quota telemetry.
-- Human attention: no additional local action required while #169 is in repository PR/CI flow.
+- Runtime state: deployed and healthy at Runtime `1.0.44`, Router `1.0.21`, ddev-executor `1.0.15`; outcome: `awaiting_fresh_active_job_gate_and_second_rebuild`.
+- Active correction issue: `#171`; parent rollout validation: `#162`; initiative: `#146`.
+- Resolved blockers: #167 fixed host-scoped Antigravity secret loading; #169 / PR #170 fixed the two Runtime test portability/determinism defects and passed exact-head CI #324.
+- Validation constraint: corrected Runtime tests are baked into the service image and are not visible to the currently running container until a safety-gated rebuild.
+- Safety evidence: the first rebuild occurred only after the original active-job gate; post-rebuild health stayed green and executor/bridge active counts were zero at the latest health check.
+- Human attention: after #171 merges, a fresh read-only active-job gate is required before any second rebuild.
 - Production deployment: not performed.
 - This section is mutable execution state only. Durable architecture/policy changes still require their normal reviewed Git path.
 <!-- PCP:CONTINUITY:END -->
@@ -145,7 +151,7 @@ Latest recorded recovery action:
 
 C2/C3 remain gated behind C1. Do not manually mutate DB/job state, reset counters, replace the job, or simulate newer adaptive/layered/collaboration/review/telemetry/PM-merge semantics inside this preserved job.
 
-The post-rebuild preservation comparison has not yet completed; perform it only after #169 allows `platform-test` to pass.
+The post-rebuild preservation comparison has not yet completed; perform it only after the corrected tests are loaded by the safety-gated second rebuild and `platform-test` passes.
 
 ## Durable efficiency policy already approved
 
@@ -177,14 +183,15 @@ The post-rebuild preservation comparison has not yet completed; perform it only 
 
 Platform:
 
-1. complete #169 through exact-head CI/review/merge; keep the change limited to test portability and continuity documentation;
-2. Human Owner fast-forwards local `main` after #169 merges; no service restart/rebuild merely for this tests/docs-only follow-up;
-3. rerun `ddev platform-test` and require all Router/Runtime/ddev-executor tests to pass;
-4. capture `GET /v1/jobs/eec59b13651c54559c10ce204380a68e` plus `/v1/plans/pm-gh-5650852312/orchestration` and verify DEC-025C identity/status/result/counters/recovery action remain unchanged after rebuild;
-5. verify coding-agent secret/trust boundaries and then record the Phase-E `rollout` continuity event;
-6. inspect `config/projects.yml` plus local fixture availability and verification contract; prefer `example-drupal` for the routine end-to-end task;
-7. run one bounded routine fixture ticket end-to-end without manual merge and capture telemetry/continuity evidence;
-8. keep #146 open until operational evidence demonstrates the intended low-touch behavior.
+1. complete #171 as a documentation/procedure correction only;
+2. Human Owner fast-forwards local `main` after #171 merges and performs a fresh read-only job/active-process gate;
+3. only if that gate passes, run the DDEV no-cache rebuild so the Runtime image contains the #170 corrected tests;
+4. rerun `ddev platform-status` and `ddev platform-test` and require all Router/Runtime/ddev-executor tests to pass;
+5. capture `GET /v1/jobs/eec59b13651c54559c10ce204380a68e` plus `/v1/plans/pm-gh-5650852312/orchestration` and verify DEC-025C identity/status/result/counters/recovery action remain unchanged;
+6. verify coding-agent secret/trust boundaries and then record the Phase-E `rollout` continuity event;
+7. inspect `config/projects.yml` plus local fixture availability and verification contract; prefer `example-drupal` for the routine end-to-end task;
+8. run one bounded routine fixture ticket end-to-end without manual merge and capture telemetry/continuity evidence;
+9. keep #146 open until operational evidence demonstrates the intended low-touch behavior.
 
 DEC-025C:
 
