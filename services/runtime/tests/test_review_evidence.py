@@ -191,3 +191,71 @@ def test_role_specific_packs_remain_small_structured_artifacts():
     assert consultant["role"] == "consultant"
     assert pm["role"] == "product_manager"
     assert all(pack["jit_retrieval"]["mode"] == "repository_read_only" for pack in [repair, consultant, pm])
+
+
+
+def test_legacy_fail_review_finding_is_bounded():
+    report = parse_review_output("FAIL\n" + ("x" * 5000))
+
+    assert report.verdict == "fail"
+    assert len(report.summary) == 4000
+    assert len(report.findings) == 1
+    assert len(report.findings[0].message) == 2000
+
+
+def test_streaming_or_unstructured_review_output_fails_closed():
+    raw_event = json.dumps(
+        {
+            "type": "step_start",
+            "title": "Independent review",
+            "detail": "x" * 5000,
+        }
+    )
+
+    report = parse_review_output(raw_event)
+
+    assert report.verdict == "fail"
+    assert len(report.findings) == 1
+    assert report.findings[0].message == (
+        "Reviewer returned malformed or unstructured output; "
+        "no valid REVIEW_JSON failure report was available."
+    )
+    assert "step_start" not in report.findings[0].message
+
+
+def test_invalid_structured_review_fails_closed_without_validation_error():
+    report = parse_review_output(
+        "FAIL\nREVIEW_JSON: "
+        + json.dumps(
+            {
+                "verdict": "fail",
+                "summary": "Malformed oversized finding",
+                "findings": [
+                    {
+                        "id": "F-oversized",
+                        "severity": "medium",
+                        "category": "review",
+                        "message": "x" * 2501,
+                        "evidence_refs": [],
+                    }
+                ],
+                "jit_context_used": False,
+            }
+        )
+    )
+
+    assert report.verdict == "fail"
+    assert len(report.findings) == 1
+    assert "malformed or unstructured" in report.findings[0].message
+    assert len(report.findings[0].message) < 2000
+
+
+
+def test_malformed_structured_pass_fails_closed():
+    report = parse_review_output(
+        'PASS\nREVIEW_JSON: {"verdict":"pass","summary":'
+    )
+
+    assert report.verdict == "fail"
+    assert len(report.findings) == 1
+    assert "malformed or unstructured" in report.findings[0].message
