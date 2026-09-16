@@ -129,7 +129,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.45", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.44", lifespan=lifespan)
 app.include_router(pm_bridge_router)
 app.include_router(create_dashboard_router(storage, plan_orchestrator.store))
 
@@ -141,7 +141,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.45",
+        version="1.0.44",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
@@ -417,16 +417,34 @@ async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
 @app.post("/v1/jobs/{job_id}/cancel", response_model=JobView, dependencies=[Depends(auth)])
 async def cancel_job(job_id: str) -> JobView:
     try:
+        await engine.ddev.cancel(job_id=job_id)
+        active = engine.active_jobs.get(job_id)
+        if active and not active.done():
+            active.cancel()
+            await asyncio.gather(active, return_exceptions=True)
         row = await engine.cancel(job_id)
     except RuntimeError as exc:
         raise runtime_error(exc) from exc
     return view(row)
 
 
-@app.post("/v1/jobs/{job_id}/decisions", response_model=JobView, dependencies=[Depends(auth)])
+@app.post("/v1/jobs/{job_id}/decision", response_model=JobView, dependencies=[Depends(auth)])
 async def resolve_decision(job_id: str, payload: HumanDecisionRequest) -> JobView:
     try:
-        row = await engine.resolve_human_decision(job_id, payload.action, payload.note)
+        row = await engine.resolve_human_decision(
+            job_id,
+            action=payload.action,
+            note=payload.note,
+        )
     except RuntimeError as exc:
         raise runtime_error(exc) from exc
+    await plan_orchestrator.tick()
     return view(row)
+
+
+@app.post("/v1/jobs/{job_id}/cleanup", dependencies=[Depends(auth)])
+async def cleanup_job(job_id: str, remove_workspace: bool = False) -> dict[str, Any]:
+    try:
+        return await engine.cleanup(job_id, remove_workspace=remove_workspace)
+    except RuntimeError as exc:
+        raise HTTPException(404, str(exc)) from exc
