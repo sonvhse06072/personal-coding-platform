@@ -56,10 +56,28 @@ def test_router_client_staff_posts_only_to_staffing_endpoint(monkeypatch) -> Non
         "profile": "standard",
         "provider_state": {},
     }
+    enriched_provider_state = {
+        "quota:test": {
+            "available": True,
+            "healthy": True,
+        }
+    }
+
+    async def fake_enrich(candidate: dict) -> dict:
+        enriched = dict(candidate)
+        enriched["provider_state"] = enriched_provider_state
+        return enriched
+
+    monkeypatch.setattr(router_client_module.quota_coordinator, "enrich", fake_enrich)
+
     result = asyncio.run(RouterClient().staff(payload))
 
     assert capture["url"] == "http://router.test:8090/v1/staff"
-    assert capture["json"] == payload
+    assert capture["json"] == {
+        **payload,
+        "provider_state": enriched_provider_state,
+    }
+    assert payload["provider_state"] == {}
     assert capture["headers"] == {"Authorization": "Bearer router-secret"}
     assert capture["timeout"] == 30
     assert result["choice"]["id"] == "codex_plus"
