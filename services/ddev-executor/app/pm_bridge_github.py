@@ -12,11 +12,13 @@ import yaml
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from .continuity_github import router as continuity_router
 from .github_delivery import GitHubDelivery, github_repository_from_origin
 from .github_merge import merge_pull_request
 
 
 router = APIRouter(prefix="/v1/github/pm-bridge", tags=["pm-bridge"])
+router.include_router(continuity_router)
 _BRANCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$")
 
 
