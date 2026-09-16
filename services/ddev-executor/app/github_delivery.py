@@ -55,6 +55,12 @@ def github_git_env(token: str) -> dict[str, str]:
         "GIT_ASKPASS_REQUIRE": "force",
         "GIT_ASKPASS": ensure_askpass_script(),
         "GITHUB_DELIVERY_TOKEN": token,
+        # GitHub delivery must use only the executor-scoped token above. The
+        # executor mounts the host .gitconfig for non-secret identity/settings,
+        # but host credential helpers (for example `gh auth git-credential`)
+        # must never participate in this privileged publish subprocess.
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
     }
 
 
