@@ -8,7 +8,7 @@ Last updated: 2026-09-17
 
 1. Read repository-root `AGENTS.md`.
 2. Read `docs/project/README.md` and this file.
-3. Read `docs/project/efficiency-model.md` and `docs/project/provider-policy.md` for active #146/#153 work.
+3. Read `docs/project/efficiency-model.md` and `docs/project/provider-policy.md` for active #146 calibration work.
 4. Inspect the active issue/PR and current branch diff before editing.
 
 ## Platform baseline
@@ -70,9 +70,9 @@ Issue #162 and fixture issue #7 are closed `completed`. No R4 is required for #1
 - This section is mutable execution state only. Durable architecture/policy changes still require their normal reviewed Git path.
 <!-- PCP:CONTINUITY:END -->
 
-## Efficiency initiative #146: implementation complete, calibration/follow-up remains
+## Efficiency initiative #146: implementation complete, calibration remains
 
-Issues #147, #148, #149, #150, #151, #98 and #162 are closed `completed`. Keep #146 open while collecting naturally occurring routine-task evidence rather than manufacturing validation-only jobs. Calibration should compare estimate vs actual usage, first-pass success, repair/retry categories, verification runs, review yield, wall time, provider/model share and Human Attention metrics.
+Issues #147, #148, #149, #150, #151, #98, #153 and #162 are closed `completed`. Keep #146 open while collecting naturally occurring routine-task evidence rather than manufacturing validation-only jobs. Calibration should compare estimate vs actual usage, first-pass success, repair/retry categories, verification runs, review yield, wall time, provider/model share and Human Attention metrics.
 
 ### Continuity B1: source merged and locally activated
 
@@ -101,18 +101,19 @@ PR #208 exact head `40ab0cf6b5149ff79465091a202eeb0f3ed4dd24` passed workflow ru
 
 The Human Owner subsequently confirmed the local activation block passed fully: exact-source/idle gates, full platform tests, deployed `control_actions_attention` module and orchestrator wiring, idempotence/source semantics, unchanged historical R2 attention with zero `owner_delivery_recovery` backfill, exact DEC-025C/action preservation, and final idle/source gates. The next naturally occurring successful owner `retry_delivery` or `recheck_ci` action should provide live accounting evidence; do not manufacture one solely for validation.
 
-## Provider optimization #153
+## Provider optimization #153: complete
 
-Issue #153 remains open and is now the next approved feature-oriented optimization.
+Issue #153 is closed `completed`; do not open another routing-preference PR for the same behavior.
 
-Current safe direction:
+Implemented evidence:
 
-- prefer the already integrated/smoke-proven OpenRouter North Mini Code resource for eligible fast/standard routine execution where capability/privacy/health gates allow it;
-- preserve stronger-model routing for critical/security/architecture work;
-- do not add a second active OpenRouter model pool until provider-wide vs model-level health/failover semantics are intentionally redesigned and tested;
-- use real telemetry before widening complex-role eligibility.
+- PR #155 made the existing `openrouter_qwen3_coder_free` / North Mini Code resource the first preferred executor for healthy `fast` and `standard` routes and gave standard the bounded preferred-order bonus needed for that preference to be effective;
+- #155 regression coverage proves fallback when OpenRouter provider/model is unavailable, privacy rejection when training providers are disallowed, quota-pressure fallback, and critical/security exclusion;
+- OpenRouter remains excluded from critical execution/planning and Product Manager staffing; complex use remains bounded to reviewer eligibility rather than routine complex execution;
+- Phase E telemetry persists selected provider/model and TaskOutcome and aggregates provider/model task share plus accepted-task success for calibration;
+- R3 supplied positive clean first-pass evidence for the existing OpenRouter executor, but a single task is not treated as statistically meaningful calibration.
 
-R3 provides positive first-pass evidence for the existing OpenRouter executor, but one successful task is not a statistically meaningful calibration sample.
+Do not activate a second OpenRouter model merely to increase free-model count. Current OpenRouter Runtime failure semantics remain provider-wide, so multiple active models under the same provider would not produce an effective PCP fallback. A multi-model OpenRouter pool requires an intentional model-level health/failover redesign and tests first.
 
 ## Preserved `chonhac` DEC-025C
 
@@ -140,8 +141,8 @@ The existing pending recovery action `abXzvyU2pvALZ5YpovNveDcr` remains preserve
 
 ## Immediate next safe actions
 
-1. Complete #211 through its one-file docs-only PR and normal CI/merge.
-2. Resume #153 with one bounded North Mini Code fast/standard routing-preference slice: prefer the existing healthy `openrouter_qwen3_coder_free` executor when eligible, add routing tests proving it wins routine healthy routes and loses on unavailable/privacy-ineligible/critical routes, and preserve current provider-wide health semantics.
-3. Do not add a second active OpenRouter model pool or widen complex-role eligibility in this slice.
-4. Collect naturally occurring routine-task calibration evidence under #146; close #146 only after the sample is meaningful enough to evaluate trends.
+1. Complete #213 through its one-file docs-only PR and normal CI/merge.
+2. Keep #146 in calibration mode and collect naturally occurring routine-task evidence. Do not create synthetic jobs solely to satisfy a sample-size threshold.
+3. Periodically inspect the existing telemetry summary/calibration endpoints for provider/model share, accepted success, first-pass success, repair/retry categories, verification/review spend, wall time/cost and Human Attention. Historical evidence may refine estimates only after the configured meaningful sample size is reached.
+4. Close #146 only when the naturally occurring sample is sufficient to evaluate the initiative success trends; if calibration exposes a concrete regression or optimization opportunity, open a new bounded issue from that evidence rather than widening an already-completed phase.
 5. Telegram terminal operations remains approved but lower priority until the efficiency/calibration work above is sufficiently mature.
