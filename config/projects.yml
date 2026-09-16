@@ -66,6 +66,40 @@ projects:
       - ddev exec vendor/bin/phpunit
       cleanup:
       - ddev stop --unlist --omit-snapshot
+  pcp-validation-fixture:
+    path: ${CODING_PROJECTS_ROOT}/pcp-validation-fixture
+    base_branch: main
+    privacy:
+      private_code: true
+      allow_training_provider: true
+      require_zero_retention: false
+    human_policy:
+      routine_review: false
+      important_decisions_only: true
+    autonomy:
+      allow_commit: true
+      allow_push_ai_branch: true
+      allow_create_pr: true
+      allow_auto_merge_low_risk: true
+      allow_production_deploy: false
+    runtime:
+      branch_prefix: ai
+      max_diff_bytes: 100000
+      keep_workspace_on_success: true
+      keep_workspace_on_failure: true
+    ddev:
+      enabled: true
+      preflight:
+      - ddev start -y
+      targeted_tests:
+      - ddev exec php tools/check-style.php
+      static_analysis:
+      - >-
+        ddev exec sh -lc 'find web tests tools -type f -name "*.php" -print0 | xargs -0 -n1 php -l'
+      full_tests:
+      - ddev exec php tools/run-tests.php
+      cleanup:
+      - ddev stop --unlist --omit-snapshot
   chonhac:
     path: /home/sonvh/chonhac
     base_branch: main
