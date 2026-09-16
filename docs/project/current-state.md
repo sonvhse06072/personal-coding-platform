@@ -22,9 +22,11 @@ Last updated: 2026-09-16
 - #173/#174 recorded successful rollout health/test/DEC-025C preservation.
 - #175/#176 added the service-secret migration/status guard and documented existing-install migrate-before-restart ordering.
 - #177/#178 fixed the guard's DDEV command parsing; merge commit `a2ff829aaa3501db6170a5a7f401749456387522`, exact-head CI #334 green.
+- #179/#180 recorded completed trust-boundary/n8n health evidence; merge commit `bed45048adc5b78d53dda52305b97909ed44d881`.
+- #181 is the active blocker: provision or explicitly select a real dedicated non-production GitHub-backed fixture before the #162 routine auto-merge proof.
 - `chonhac` remains `autonomy.allow_auto_merge_low_risk: false`; never enable it merely to exercise auto-merge.
 
-## #162 rollout and preservation evidence complete
+## #162 rollout, preservation, trust and continuity evidence complete
 
 The safety-gated rollout/rebuild completed with zero active Runtime jobs, zero active ddev-executor jobs and zero active Antigravity runs.
 
@@ -44,61 +46,62 @@ Verified deployed identities:
 
 The preserved `chonhac` DEC-025C state survived rollout unchanged. A direct read-only `cp_control_actions` query confirmed recovery action `abXzvyU2pvALZ5YpovNveDcr` remained pending, unexpired, result null and never mutated.
 
-Do not repeat the earlier no-cache rollout rebuild unless later service-image source actually requires it.
-
-## Trust/secret boundary gate complete
-
-The existing local install originally lacked the newly introduced Runtime-side `PLATFORM_INTERNAL_TOKEN`. The Human Owner safely completed the canonical remediation after a fresh no-active-work gate:
-
-- `scripts/scope-service-secrets.sh` completed successfully;
-- Runtime/executor scoped files contain the same real `PLATFORM_INTERNAL_TOKEN`;
-- global `.ddev/.env` contains no platform credential;
-- a normal `ddev restart` reloaded the migrated service env;
-- deployed versions remained Runtime `1.0.44`, Router `1.0.21`, ddev-executor `1.0.15`.
-
-After #177/#178 corrected the host-side probe semantics, the deployed strict boundary passed on local main `a2ff829aaa3501db6170a5a7f401749456387522`:
+The existing-install service-secret migration was completed after a fresh no-active-work gate. Runtime/executor scoped files share the same real `PLATFORM_INTERNAL_TOKEN`, global `.ddev/.env` contains no platform credential, and the corrected deployed strict boundary returned `ok:true`:
 
 - coding-runtime: internal token present; GitHub delivery and Telegram bot credentials absent;
 - ddev-executor: internal token and GitHub delivery present; Runtime API credential absent;
-- n8n: Runtime API credential present; GitHub delivery and internal executor credential absent;
-- corrected guard returned `ok:true` and strict mode exited 0;
-- `CORE_CREDENTIAL_GATE=PASS` and `TRUST_AND_N8N_GATE=PASS`.
+- n8n: Runtime API credential present; GitHub delivery and internal executor credential absent.
 
-In the same run, `ddev platform-status` printed `n8n DOWN`, but the immediate direct in-container `/healthz` probe returned `{"status":"ok"}`. Preserve the direct health evidence for this gate; do not treat that single status line as a demonstrated outage. No extra restart is required from this observation alone.
+A Phase-E external continuity event was then recorded through authenticated `POST /v1/continuity/events` with `event_type=rollout`, `project_id=personal-coding-platform`, `status=external_event`, and successful rollout/trust/DEC-025C detail. Authenticated read-back through `/v1/continuity/proposal?project_id=personal-coding-platform` returned the same latest rollout event. This gate is complete; do not record a duplicate event merely to resume a later chat.
 
-The secret migration and trust-boundary remediation are complete. Future sessions must not repeat migration/restart unless a later source/config change actually requires it.
-
-Phase-E `rollout` continuity event has **not** been recorded yet. The routine validation job has **not** been created yet.
+Do not repeat the earlier no-cache rollout rebuild or secret migration/restart unless later service-image/config source actually requires it.
 
 <!-- PCP:CONTINUITY:START -->
 ## Automated continuity snapshot
 
-- Event: `rollout_trust_boundary_completed`.
+- Event: `rollout_complete_fixture_missing`.
 - Parent validation: `#162`; initiative: `#146`.
 - Rollout health/tests/DEC-025C preservation: complete.
-- Service-secret migration: complete; scoped Runtime/executor internal token present and matching; global env clean.
-- Trust boundary: strict corrected guard `ok:true`; Runtime/executor/n8n scopes match intended authority boundaries.
-- n8n: direct `/healthz` returned `status=ok`; one `platform-status` line reported DOWN in the same run and is treated as a transient/false-negative observation, not an established outage.
-- Source follow-ups #175 and #177: complete via PRs #176 and #178.
-- Phase-E rollout event: not recorded yet.
-- Routine `example-drupal` job: not created yet.
+- Service-secret migration and deployed trust boundary: complete; strict guard `ok:true`.
+- n8n: direct `/healthz` healthy.
+- Phase-E rollout continuity event: recorded and durably readable.
+- Preferred routine fixture: blocked because `/home/sonvh/example-drupal` is not a Git repository and no accessible GitHub repository named `example-drupal` was found.
+- Active bounded blocker: `#181` provision/select a real dedicated non-production GitHub-backed fixture.
+- Routine validation job: not created.
 - Production deployment: not performed.
 <!-- PCP:CONTINUITY:END -->
 
-## `example-drupal` validation fixture policy
+## Routine validation fixture blocker #181
 
-`config/projects.yml` registers `example-drupal` with:
+`config/projects.yml` registers `example-drupal` with the desired proof contract:
 
 - base branch `develop`;
 - `autonomy.allow_auto_merge_low_risk: true`;
 - production deploy disabled;
 - DDEV preflight (`ddev start -y`, `ddev drush cr`);
-- PHPCS targeted verification;
-- PHPStan static analysis;
+- enforcing PHPCS targeted verification;
+- enforcing PHPStan static analysis;
 - PHPUnit full tests;
 - cleanup via DDEV stop.
 
-Local fixture existence/cleanliness/remote/baseline have not yet been proven. If `example-drupal` is unsuitable, stop and record the blocker; never fall back to `chonhac` merely to exercise auto-merge.
+However, local readiness stopped fail-closed before any routine job was created:
+
+- `${CODING_PROJECTS_ROOT}/example-drupal` resolved to `/home/sonvh/example-drupal`;
+- that path is not a Git repository;
+- GitHub discovery found no accessible/owned repository named `example-drupal`, so the registration currently has no discoverable backing repo.
+
+Do not fall back to `chonhac`; its auto-merge opt-in is intentionally false. Do not use `default` for the #162 proof in its current form: required PHPCS/PHPStan commands are non-enforcing (`|| true`) and no full-test stage is configured.
+
+Issue #181 requires a real dedicated non-production fixture to be provisioned or explicitly selected. Before any routine WorkOrder, prove:
+
+1. the fixture exists locally and is clean;
+2. its backing GitHub repository is accessible;
+3. the configured base branch matches origin;
+4. production deployment is disabled and low-risk PM auto-merge is explicitly enabled;
+5. deterministic enforcing preflight/targeted/static/full baseline passes;
+6. there is a small safe non-security/non-architecture/non-dependency/non-migration/non-production implementation surface for a non-empty diff.
+
+Do not weaken verification to make the proof pass and do not create the validation job until #181 readiness is complete.
 
 ## Preserved `chonhac` DEC-025C
 
@@ -133,9 +136,10 @@ Recovery action `abXzvyU2pvALZ5YpovNveDcr` is `budget_extend` for `max_repair_it
 
 ## Immediate next safe actions
 
-1. Complete #179 as this mutable continuity update only; no platform restart/rebuild.
-2. Record the Phase-E `rollout` continuity event through authenticated Runtime API now that health/tests/preservation/trust gates are complete.
-3. Verify local `example-drupal` repository existence, cleanliness, `develop`/remote alignment and configured deterministic baseline.
-4. If fixture readiness passes, create exactly one small routine validation WorkOrder with deterministic non-empty diff and no manual merge.
-5. Let the system proceed through implementation, layered verification, proportional review, PR/CI and constrained PM merge without Human Owner merge intervention.
-6. Capture telemetry, Human attention, PM-merge audit and continuity evidence in #162 and #146.
+1. Complete docs-only #182 so this handoff is durable; do not restart/rebuild the platform.
+2. Resolve #181 by provisioning or explicitly selecting a dedicated non-production GitHub-backed validation fixture; do not use `chonhac` merely to exercise auto-merge.
+3. Register the fixture through normal reviewed config if needed, with production deployment disabled and enforcing deterministic verification.
+4. Human Owner clones/prepares the chosen fixture locally only after its repository/source is explicitly known, then run the fixture readiness/baseline gate.
+5. If readiness passes, create exactly one small routine validation WorkOrder with deterministic non-empty diff and no manual merge.
+6. Let the system proceed through implementation, layered verification, proportional review, PR/CI and constrained PM merge without Human Owner merge intervention.
+7. Capture telemetry, Human attention, PM-merge audit and continuity evidence in #162 and #146.
