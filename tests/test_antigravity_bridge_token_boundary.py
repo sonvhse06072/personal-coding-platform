@@ -11,6 +11,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 LAUNCHER_PATH = ROOT / "scripts" / "antigravity-bridge-launcher.py"
 BRIDGE_SCRIPT = ROOT / "scripts" / "antigravity-bridge.sh"
+PLATFORM_TEST = ROOT / ".ddev" / "commands" / "host" / "platform-test"
 
 
 def load_launcher_module():
@@ -111,3 +112,13 @@ def test_host_script_never_places_bridge_token_in_child_argv_or_environment() ->
     assert 'env -u ANTIGRAVITY_BRIDGE_TOKEN curl -fsS -H @-' in script
     assert 'env -u ANTIGRAVITY_BRIDGE_TOKEN ANTIGRAVITY_BRIDGE_TOKEN_FD=3' in script
     assert '3<<<"$ANTIGRAVITY_BRIDGE_TOKEN"' in script
+
+
+def test_platform_test_loads_host_scoped_bridge_secret() -> None:
+    script = PLATFORM_TEST.read_text(encoding="utf-8")
+
+    assert (
+        "bash ./scripts/with-host-secrets.sh ./scripts/antigravity-bridge.sh status"
+        in script
+    )
+    assert "\n./scripts/antigravity-bridge.sh status" not in script
