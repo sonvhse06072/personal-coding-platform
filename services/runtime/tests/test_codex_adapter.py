@@ -107,8 +107,14 @@ def test_codex_output_uses_only_last_agent_message(monkeypatch, tmp_path: Path):
     assert run.returncode == 0
     assert run.output == final_json
     assert progress not in run.output
-    assert progress in run.raw
-    assert final_json in run.raw
+    raw_events = [json.loads(line) for line in run.raw.splitlines()]
+    raw_messages = [
+        event["item"]["text"]
+        for event in raw_events
+        if event.get("type") == "item.completed"
+        and event.get("item", {}).get("type") == "agent_message"
+    ]
+    assert raw_messages == [progress, final_json]
     assert "--output-last-message" in captured["argv"]
     _assert_bounded_unattended_policy(captured["argv"], sandbox="read-only")
     assert not captured["path"].exists()
