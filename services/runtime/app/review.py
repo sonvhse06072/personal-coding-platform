@@ -44,49 +44,72 @@ class ReviewReport(BaseModel):
 
 
 def parse_review_output(output: str) -> ReviewReport:
-    """Parse the new structured protocol while retaining legacy PASS/FAIL output."""
+    """Parse the structured protocol while retaining bounded legacy PASS/FAIL output."""
     text = (output or "").strip()
     if not text:
         return ReviewReport(verdict="fail", summary="Reviewer returned no output")
 
     lines = text.splitlines()
     first = lines[0].strip().upper()
-    verdict: Literal["pass", "fail"] = "pass" if first.startswith("PASS") else "fail"
+    first_is_pass = first.startswith("PASS")
+    first_is_fail = first.startswith("FAIL")
+    verdict: Literal["pass", "fail"] = "pass" if first_is_pass else "fail"
 
     marker = "REVIEW_JSON:"
     payload_text = None
+    payload_marker_seen = False
+
     for line in lines[1:]:
         if line.strip().startswith(marker):
+            payload_marker_seen = True
             payload_text = line.strip()[len(marker) :].strip()
             break
-    if payload_text:
-        try:
-            payload = json.loads(payload_text)
-            if isinstance(payload, dict):
-                payload.setdefault("verdict", verdict)
-                return ReviewReport.model_validate(payload)
-        except (json.JSONDecodeError, ValueError):
-            pass
+
+    payload_invalid = False
+
+    if payload_marker_seen:
+        if payload_text:
+            try:
+                payload = json.loads(payload_text)
+                if isinstance(payload, dict):
+                    payload.setdefault("verdict", verdict)
+                    return ReviewReport.model_validate(payload)
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        payload_invalid = True
+
+    if payload_invalid:
+        verdict = "fail"
 
     summary = text[:4000]
     findings = []
+
     if verdict == "fail":
+        if payload_invalid or not first_is_fail:
+            message = (
+                "Reviewer returned malformed or unstructured output; "
+                "no valid REVIEW_JSON failure report was available."
+            )
+        else:
+            message = summary[:2000]
+
         findings = [
             ReviewFinding(
                 id="legacy-review-failure",
                 severity="medium",
                 category="review",
-                message=summary,
+                message=message,
                 evidence_refs=[],
             )
         ]
+
     return ReviewReport(
         verdict=verdict,
         summary=summary,
         findings=findings,
         jit_context_used=False,
     )
-
 
 def strong_deterministic_evidence(
     verification: dict[str, Any],
