@@ -75,10 +75,18 @@ Issues #147, #148, #149, #150, #151 and #98 are closed `completed`; #162 now pro
 
 Keep #146 open while collecting real routine-task evidence rather than manufacturing validation-only jobs. Calibration should use naturally occurring work and compare estimate vs actual usage, first-pass success, repair/retry categories, verification runs, review yield, wall time, provider/model share and Human Attention metrics.
 
-Two bounded improvements discovered by operational evidence should be handled before treating the continuity/attention layer as fully mature:
+Continuity B1 source implementation is now complete:
 
-1. continuity proposals are persisted and renderable, but `current-state.md` can still drift because the proposal is not yet applied automatically through the normal Git branch/PR authority path;
-2. owner-executed operational recovery such as `retry_delivery` is not currently represented in Human Attention events, so R2 could report attention zero while task telemetry correctly reported delivery retries.
+- #201 / PR #202 refreshed this handoff after R3;
+- #203 / PR #204 added constrained automatic application for `pr_merged` proposals only;
+- PR #204 exact head `40805c8b0ffb35806b2c42035ca9e13a778291e9` passed fresh workflow run `35139240879` (run #367) across structure, Router, Runtime and ddev-executor;
+- PR #204 merged to PCP `main` at `cb8668fefc328f8ab664cfbce223a9231cbba742`;
+- Runtime still receives no GitHub/source-write credentials; ddev-executor constrains continuity mutation to the configured PCP repository and exactly `docs/project/current-state.md`, through `ai/continuity/*` PR + CI + exact-head merge;
+- application is deliberately advisory after the engineering merge and currently auto-applies only `pr_merged`.
+
+The B1 source is merged but has not yet been locally activated. Do not treat the new continuity applicator as deployed until a fresh no-active-work gate, exact-source synchronization, DDEV rebuild/restart, full platform tests, credential-boundary verification and DEC-025C preservation check pass.
+
+One remaining telemetry correctness gap should be handled after B1 activation: owner-executed operational recovery such as `retry_delivery` is not currently represented in Human Attention events, so R2 could report attention zero while task telemetry correctly reported delivery retries.
 
 ## Provider optimization #153
 
@@ -119,9 +127,10 @@ The existing pending recovery action `abXzvyU2pvALZ5YpovNveDcr` remains preserve
 
 ## Immediate next safe actions
 
-1. Complete #201 docs-only continuity refresh through normal CI/PR merge.
-2. Open and implement a bounded continuity-application follow-up: apply persisted continuity proposals to `docs/project/current-state.md` only through normal Git branch/PR authority, keeping Runtime free of GitHub/source-write credentials.
-3. Open and implement a bounded Human Attention follow-up so owner-executed routine operational recovery is represented in attention telemetry without conflating provider/delivery retry counters with engineering repair.
-4. Resume #153 with a small North Mini Code fast/standard routing-preference slice and routing/telemetry tests; do not activate a multi-model OpenRouter pool yet.
-5. Collect naturally occurring routine-task calibration evidence under #146; close #146 only after the sample is meaningful enough to evaluate trends.
-6. Telegram terminal operations remains approved but lower priority until the efficiency/calibration work above is sufficiently mature.
+1. Synchronize local PCP source to the exact current `main` only after a fresh no-active-work gate.
+2. Rebuild/restart the platform from the merged B1 source, then run platform health/tests, verify the secret boundary and confirm DEC-025C/pending action remain unchanged.
+3. Verify the executor-side PCP GitHub delivery credential can authorize the new continuity repository path without exposing the token; do not create a manual continuity PR merely as a smoke test.
+4. After B1 activation passes, open and implement a bounded Human Attention follow-up so owner-executed routine operational recovery is represented in attention telemetry without conflating provider/delivery retry counters with engineering repair.
+5. Resume #153 with a small North Mini Code fast/standard routing-preference slice and routing/telemetry tests; do not activate a multi-model OpenRouter pool yet.
+6. Collect naturally occurring routine-task calibration evidence under #146; close #146 only after the sample is meaningful enough to evaluate trends.
+7. Telegram terminal operations remains approved but lower priority until the efficiency/calibration work above is sufficiently mature.
