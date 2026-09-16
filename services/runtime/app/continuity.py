@@ -43,12 +43,8 @@ def continuity_proposal(
     }
 
 
-def render_managed_current_state(existing: str, proposal: dict[str, Any]) -> str:
-    """Replace one bounded mutable section; never append a chronological log."""
-    if MANAGED_START not in existing or MANAGED_END not in existing:
-        raise ValueError("current-state.md is missing the managed continuity markers")
-    start = existing.index(MANAGED_START)
-    end = existing.index(MANAGED_END, start) + len(MANAGED_END)
+def render_managed_section(proposal: dict[str, Any]) -> str:
+    """Render only the bounded mutable section allowed for continuity automation."""
     attention = proposal.get("attention") or {}
     telemetry = proposal.get("telemetry") or {}
     lines = [
@@ -75,7 +71,16 @@ def render_managed_current_state(existing: str, proposal: dict[str, Any]) -> str
         "- This section is mutable execution state only. Durable architecture/policy changes still require their normal reviewed Git path.",
         MANAGED_END,
     ]
-    replacement = "\n".join(lines)
+    return "\n".join(lines)
+
+
+def render_managed_current_state(existing: str, proposal: dict[str, Any]) -> str:
+    """Replace one bounded mutable section; never append a chronological log."""
+    if MANAGED_START not in existing or MANAGED_END not in existing:
+        raise ValueError("current-state.md is missing the managed continuity markers")
+    start = existing.index(MANAGED_START)
+    end = existing.index(MANAGED_END, start) + len(MANAGED_END)
+    replacement = render_managed_section(proposal)
     return existing[:start] + replacement + existing[end:]
 
 
@@ -90,4 +95,5 @@ __all__ = [
     "assert_mutable_continuity_target",
     "continuity_proposal",
     "render_managed_current_state",
+    "render_managed_section",
 ]
