@@ -4,6 +4,7 @@ import asyncio
 from copy import deepcopy
 from types import SimpleNamespace
 
+from app.engine import WorkOrderRouterProxy
 from app.legacy_adaptive_recovery import LegacyAdaptiveRecovery
 from app.work_order import WorkOrder
 
@@ -284,3 +285,36 @@ def test_current_usage_at_fresh_emergency_ceiling_fails_closed():
     assert asyncio.run(recovery.recover_one()) is None
     assert storage.job["status"] == "blocked"
     assert engine.enqueued == []
+
+
+def test_adopted_job_keeps_adaptive_budget_on_later_reroute():
+    storage = FakeStorage(blocked_job())
+    delegate = FakeDelegate()
+    recovery = LegacyAdaptiveRecovery(storage, FakeEngine(delegate), FakeStore())
+
+    assert asyncio.run(recovery.recover_one()) is not None
+    assert storage.job["checkpoint"]["work_order"]["budget"]["mode"] == "legacy_hard"
+    assert storage.job["checkpoint"]["legacy_adaptive_adoptions"]
+
+    proxy = WorkOrderRouterProxy(delegate, storage)
+    rerouted = asyncio.run(
+        proxy.route(
+            {
+                "job_id": "job-1",
+                "project_id": "chonhac",
+                "repository": "chonhac",
+                "source_commit": "b143fbb",
+                "task": {"title": "DEC-025C"},
+                "repo": {"estimated_files": 8},
+                "provider_state": {},
+            }
+        )
+    )
+
+    budget = rerouted["strategy"]["budget"]
+    assert budget["max_model_calls"] == 40
+    assert budget["max_test_runs"] == 40
+    assert budget["max_repair_iterations"] == 12
+    assert budget["max_wall_time_minutes"] == 180
+    # The stored governing WorkOrder remains immutable despite effective adaptive routing.
+    assert storage.job["checkpoint"]["work_order"]["budget"]["mode"] == "legacy_hard"
