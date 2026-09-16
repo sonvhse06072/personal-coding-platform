@@ -8,18 +8,19 @@ Last updated: 2026-09-17
 
 1. Read repository-root `AGENTS.md`.
 2. Read `docs/project/README.md` and this file.
-3. Read `docs/project/efficiency-model.md` and `docs/project/provider-policy.md` for active #146 calibration work.
+3. Read `docs/project/efficiency-model.md` and `docs/project/provider-policy.md` for active #146 calibration/follow-up work.
 4. Inspect the active issue/PR and current branch diff before editing.
 
 ## Platform baseline
 
-- Efficiency initiative #146 source phases A-F are implemented.
+- Efficiency initiative #146 source phases A-F are implemented; calibration and evidence-driven follow-ups remain.
 - Constrained PM-controlled merge #98 is implemented and operationally proven.
 - Low-touch routine-path validation #162 is complete via a clean zero-avoidable-intervention R3 run.
 - PM routine in-scope merge authority is approved; Developer agents never merge and production remains Human Owner-controlled.
-- Last verified deployed service labels remain Runtime `1.0.44`, Router `1.0.21`, ddev-executor `1.0.15`, routing policy v12.
+- Last verified deployed service labels remain Runtime `1.0.44`, Router `1.0.21`, ddev-executor `1.0.15`, routing policy v12 until a later local rollout proves otherwise.
 - Continuity B1 was locally activated from exact PCP source `45e83ec97dbd8a03944d5b85e7a9c5218028d0fe`; the Human Owner confirmed both activation blocks passed completely, including no-active-work gates, full platform tests, Runtime/executor authority-boundary checks, executor PCP delivery-token dry-run authorization, and exact DEC-025C/pending-action preservation.
-- Human Attention delivery-recovery accounting was locally activated from exact PCP source `6894775862c35e271e159a4202d5a6d27b33c8f7`; full platform tests and deployed `control_actions_attention` wiring passed, historical R2 remained unmodified with no synthetic backfill, and DEC-025C plus its pending action remained exactly preserved.
+- Human Attention delivery-recovery accounting was locally activated from exact PCP source `6894775862c35e271e159a4202d5a6d27b33c8f7`; full platform tests and deployed `control_actions_attention` wiring passed, historical R2 remained unmodified with no synthetic backfill, and DEC-025C plus its then-pending action remained exactly preserved.
+- #215 legacy adaptive recovery is merged in source at `6bc1f1a13c02acc6d747329c332a777535b75733` but is **not locally activated yet**. Keep DEC-025C blocked until the guarded rollout described below.
 - Do not repeat R3, B1 or Human Attention rollout/rebuild validation merely to recreate already captured evidence.
 
 ## #162 operational validation: complete
@@ -70,9 +71,11 @@ Issue #162 and fixture issue #7 are closed `completed`. No R4 is required for #1
 - This section is mutable execution state only. Durable architecture/policy changes still require their normal reviewed Git path.
 <!-- PCP:CONTINUITY:END -->
 
-## Efficiency initiative #146: implementation complete, calibration remains
+## Efficiency initiative #146: implementation complete, calibration and bounded follow-ups remain
 
 Issues #147, #148, #149, #150, #151, #98, #153 and #162 are closed `completed`. Keep #146 open while collecting naturally occurring routine-task evidence rather than manufacturing validation-only jobs. Calibration should compare estimate vs actual usage, first-pass success, repair/retry categories, verification runs, review yield, wall time, provider/model share and Human Attention metrics.
+
+DEC-025C exposed one real-world compatibility defect after those phases: a pre-adaptive persisted WorkOrder retained old `legacy_hard` counter semantics and therefore required repeated Human Owner budget clicks despite continuing engineering progress. #215 / PR #216 implements a bounded compatibility bridge for that exact class of orchestrated job.
 
 ### Continuity B1: source merged and locally activated
 
@@ -101,6 +104,21 @@ PR #208 exact head `40ab0cf6b5149ff79465091a202eeb0f3ed4dd24` passed workflow ru
 
 The Human Owner subsequently confirmed the local activation block passed fully: exact-source/idle gates, full platform tests, deployed `control_actions_attention` module and orchestrator wiring, idempotence/source semantics, unchanged historical R2 attention with zero `owner_delivery_recovery` backfill, exact DEC-025C/action preservation, and final idle/source gates. The next naturally occurring successful owner `retry_delivery` or `recheck_ci` action should provide live accounting evidence; do not manufacture one solely for validation.
 
+### Legacy adaptive recovery #215: source merged, local activation pending
+
+#215 was opened after DEC-025C demonstrated avoidable budget-counter choreography on a persisted pre-adaptive WorkOrder. PR #216:
+
+- checks the original durable ExecutionPlan WorkOrder and auto-adopts only when raw `budget.mode` is genuinely absent; explicit `legacy_hard` remains owner-controlled;
+- only considers execution/reassessment budget-only blocks;
+- resolves a fresh current Router route and requires adaptive metadata;
+- reassesses current durable progress and refuses adoption on repeated failure, oscillation, no-progress, scope/decision anomalies or an exhausted fresh emergency ceiling;
+- preserves the same deterministic job, source, workspace, diff, immutable WorkOrder snapshot and all durable usage counters;
+- persists an adoption audit with previous/new envelopes and keeps effective adaptive semantics across later reroutes without mutating the governing WorkOrder snapshot.
+
+PR #216 exact head `88333fec543568907507aa4ffeb847f2d311e1f6` passed workflow run `35148278560` (run #383) across all four jobs and merged at `6bc1f1a13c02acc6d747329c332a777535b75733`. Issue #215 is closed `completed`.
+
+Do not manually resume DEC-025C or execute another budget extension before this source is locally activated. Rollout must start from an idle gate. Because Runtime startup invokes orchestrator reconciliation, restart with #215 deployed may immediately adopt and enqueue the preserved DEC job; run deterministic PCP source tests **before** restart, not after the job becomes active.
+
 ## Provider optimization #153: complete
 
 Issue #153 is closed `completed`; do not open another routing-preference PR for the same behavior.
@@ -122,11 +140,12 @@ Do not activate a second OpenRouter model merely to increase free-model count. C
 - job `eec59b13651c54559c10ce204380a68e`;
 - branch `ai/eec59b13651c`;
 - workspace `/home/sonvh/.coding-platform/workspaces/eec59b13651c54559c10ce204380a68e`;
-- status `blocked`;
-- result remains `reassessment_stopped` / `repair budget exhausted` / `hard_budget_guard`;
-- preserved usage remains model calls `21 / 22`, tool calls `65 / 160`, test runs `14 / 14`, wall time `93.168 / 110` minutes, repair iterations `4 / 4`.
+- source remains approved `chonhac` baseline `b143fbb001c2006ec82570619802b607085fbeb0`;
+- status remains `blocked` before #215 local activation;
+- latest observed result is `reassessment_stopped` with Router signal `hard_budget_guard` after the previous designed recovery actions resumed the same job;
+- latest preserved usage: model calls `22 / 22`, tool calls `73 / 160`, test runs `16 / 16`, wall time `96.02 / 110` minutes, repair iterations `5 / 5`.
 
-The existing pending recovery action `abXzvyU2pvALZ5YpovNveDcr` remains preserved with no result. Never manually mutate durable job/action state or counters and never resume it as part of #146 follow-up work.
+The earlier `max_repair_iterations +1` action and subsequent test-budget extension already served their designed recovery purpose. A newer Telegram notification recommends another model-budget extension, but **do not execute it before #215 rollout**. Pending/used control actions are durable evidence and must not be edited, cancelled, backfilled or replayed manually. Never reset counters, replace the plan/job, or bypass the state machine.
 
 ## Global operational gates
 
@@ -141,8 +160,9 @@ The existing pending recovery action `abXzvyU2pvALZ5YpovNveDcr` remains preserve
 
 ## Immediate next safe actions
 
-1. Complete #213 through its one-file docs-only PR and normal CI/merge.
-2. Keep #146 in calibration mode and collect naturally occurring routine-task evidence. Do not create synthetic jobs solely to satisfy a sample-size threshold.
-3. Periodically inspect the existing telemetry summary/calibration endpoints for provider/model share, accepted success, first-pass success, repair/retry categories, verification/review spend, wall time/cost and Human Attention. Historical evidence may refine estimates only after the configured meaningful sample size is reached.
-4. Close #146 only when the naturally occurring sample is sufficient to evaluate the initiative success trends; if calibration exposes a concrete regression or optimization opportunity, open a new bounded issue from that evidence rather than widening an already-completed phase.
-5. Telegram terminal operations remains approved but lower priority until the efficiency/calibration work above is sufficiently mature.
+1. Complete #217 through its one-file docs-only PR and normal CI/merge.
+2. With DEC-025C still blocked and no other active engineering job, run a guarded #215 local activation preflight: verify exact PCP main, raw pre-adaptive plan provenance, immutable normalized WorkOrder mode, same DEC source/branch/workspace/counters, and snapshot pending control actions without executing them.
+3. Fast-forward local PCP and run deterministic platform source tests while DEC remains blocked. Only if they pass, restart once from the #215 source.
+4. After restart, do read-only observation. Runtime may immediately auto-adopt the current adaptive envelope and resume the **same** DEC-025C job. Do not run a second restart/rebuild while it is active and do not create a replacement job.
+5. If adoption occurs, verify the audit marker, same source/workspace/branch, non-decreasing durable counters, preserved WorkOrder snapshot, and new adaptive emergency envelope. Then let normal execution/verification/delivery/PM merge continue unless a real anomaly or protected decision boundary blocks it.
+6. Keep #146 open for naturally occurring calibration evidence; do not create synthetic jobs solely to satisfy sample-size thresholds.
