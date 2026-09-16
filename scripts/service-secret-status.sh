@@ -3,13 +3,24 @@ set -uo pipefail
 
 MODE="${1:-}"
 
+valid_variable_name() {
+  [[ "$1" =~ ^[A-Z_][A-Z0-9_]*$ ]]
+}
+
 is_present() {
-  local service="$1" variable="$2"
-  if ddev exec -s "$service" sh -lc '
-    name="$1"
-    eval "value=\${$name-}"
-    [ -n "$value" ] && [ "$value" != "CHANGE_ME" ] && [ "$value" != "change-me" ]
-  ' sh "$variable" >/dev/null 2>&1; then
+  local service="$1" variable="$2" command
+
+  if ! valid_variable_name "$variable"; then
+    printf 'false'
+    return
+  fi
+
+  # ddev exec interprets a single command argument through the target
+  # container shell. Keep the variable name validated and never print the
+  # value; only the command exit status crosses the service boundary.
+  command='value="${'"$variable"'-}"; [ -n "$value" ] && [ "$value" != "CHANGE_ME" ] && [ "$value" != "change-me" ]'
+
+  if ddev exec -s "$service" "$command" >/dev/null 2>&1; then
     printf 'true'
   else
     printf 'false'
@@ -17,12 +28,16 @@ is_present() {
 }
 
 is_absent() {
-  local service="$1" variable="$2"
-  if ddev exec -s "$service" sh -lc '
-    name="$1"
-    eval "value=\${$name-}"
-    [ -z "$value" ]
-  ' sh "$variable" >/dev/null 2>&1; then
+  local service="$1" variable="$2" command
+
+  if ! valid_variable_name "$variable"; then
+    printf 'false'
+    return
+  fi
+
+  command='[ -z "${'"$variable"'-}" ]'
+
+  if ddev exec -s "$service" "$command" >/dev/null 2>&1; then
     printf 'true'
   else
     printf 'false'
