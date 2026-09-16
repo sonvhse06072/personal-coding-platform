@@ -43,8 +43,7 @@ class LegacyAdaptiveRecovery:
             with self.storage.connect() as conn:
                 plans = list(
                     conn.execute(
-                        """SELECT plan_id
-                        FROM cp_plan_orchestrations
+                        """SELECT plan_id FROM cp_plan_orchestrations
                         WHERE status='blocked'
                         ORDER BY updated_at, plan_id"""
                     ).fetchall()
@@ -203,9 +202,6 @@ class LegacyAdaptiveRecovery:
         previous_budget = dict((previous_route.get("strategy") or {}).get("budget") or {})
         new_budget = dict((fresh_route.get("strategy") or {}).get("budget") or {})
 
-        # Current durable usage must fit strictly inside the new emergency
-        # envelope. Router reassessment already rejects overruns/exhaustion; this
-        # explicit check makes the adoption audit self-evident for key counters.
         counter_map = {
             "max_model_calls": "model_calls",
             "max_tool_calls": "tool_calls",
@@ -240,8 +236,6 @@ class LegacyAdaptiveRecovery:
         checkpoint["legacy_adaptive_adoptions"] = adoptions[-10:]
         checkpoint["provider_state"] = provider_state
 
-        # Preserve result/diff/usage/source/workspace. Only the effective route,
-        # checkpoint audit and runnable status change before the same job resumes.
         self.storage.update(
             job_id,
             status="queued",

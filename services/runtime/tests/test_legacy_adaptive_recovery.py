@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 from copy import deepcopy
 from types import SimpleNamespace
-
-import pytest
 
 from app.legacy_adaptive_recovery import LegacyAdaptiveRecovery
 from app.work_order import WorkOrder
@@ -212,15 +211,14 @@ class FakeEngine:
         self.enqueued.append(job_id)
 
 
-@pytest.mark.asyncio
-async def test_pre_adaptive_budget_block_adopts_fresh_envelope_and_same_job():
+def test_pre_adaptive_budget_block_adopts_fresh_envelope_and_same_job():
     storage = FakeStorage(blocked_job())
     store = FakeStore()
     delegate = FakeDelegate()
     engine = FakeEngine(delegate)
     recovery = LegacyAdaptiveRecovery(storage, engine, store)
 
-    result = await recovery.recover_one()
+    result = asyncio.run(recovery.recover_one())
 
     assert result is not None
     assert result["job_id"] == "job-1"
@@ -240,21 +238,19 @@ async def test_pre_adaptive_budget_block_adopts_fresh_envelope_and_same_job():
     assert engine.enqueued == ["job-1"]
 
 
-@pytest.mark.asyncio
-async def test_explicit_legacy_hard_raw_contract_is_never_auto_adopted():
+def test_explicit_legacy_hard_raw_contract_is_never_auto_adopted():
     raw = deepcopy(RAW_WORK_ORDER)
     raw["budget"]["mode"] = "legacy_hard"
     storage = FakeStorage(blocked_job(), raw_work_order=raw)
     delegate = FakeDelegate()
     recovery = LegacyAdaptiveRecovery(storage, FakeEngine(delegate), FakeStore())
 
-    assert await recovery.recover_one() is None
+    assert asyncio.run(recovery.recover_one()) is None
     assert delegate.route_calls == 0
     assert storage.job["status"] == "blocked"
 
 
-@pytest.mark.asyncio
-async def test_repeated_failure_signal_fails_closed_without_resuming():
+def test_repeated_failure_signal_fails_closed_without_resuming():
     storage = FakeStorage(blocked_job())
     delegate = FakeDelegate(
         reassess={
@@ -266,18 +262,17 @@ async def test_repeated_failure_signal_fails_closed_without_resuming():
     engine = FakeEngine(delegate)
     recovery = LegacyAdaptiveRecovery(storage, engine, FakeStore())
 
-    assert await recovery.recover_one() is None
+    assert asyncio.run(recovery.recover_one()) is None
     assert storage.job["status"] == "blocked"
     assert engine.enqueued == []
 
 
-@pytest.mark.asyncio
-async def test_current_usage_at_fresh_emergency_ceiling_fails_closed():
+def test_current_usage_at_fresh_emergency_ceiling_fails_closed():
     storage = FakeStorage(blocked_job(model_calls=40))
     delegate = FakeDelegate()
     engine = FakeEngine(delegate)
     recovery = LegacyAdaptiveRecovery(storage, engine, FakeStore())
 
-    assert await recovery.recover_one() is None
+    assert asyncio.run(recovery.recover_one()) is None
     assert storage.job["status"] == "blocked"
     assert engine.enqueued == []
