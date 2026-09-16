@@ -2,7 +2,7 @@
 
 Status: mutable continuity document. Update this file whenever a material decision, implementation state, blocker, rollout decision, or handoff changes. Durable architecture/product/policy decisions belong in the relevant topical source-of-truth document.
 
-Last updated: 2026-09-15
+Last updated: 2026-09-16
 
 ## How to resume in a new chat or agent session
 
@@ -22,59 +22,66 @@ Repository docs and current executable evidence are authoritative over chat hist
 - Phase A #147 merged through PR #154: adaptive task budgets with emergency ceilings.
 - Phase B #148 merged through PR #156: layered verification and separated retry/failure accounting.
 - Phase C #149 merged through PR #157 at `754233a17572b4631f418dfbab1c667790dc7fc5`: bounded single-writer collaboration with compact durable artifacts.
-- Phase D #150 merged through PR #158 at `8eca5469f1a884511e0cf36cb9b6b51e0602a7bf`: policy-driven risk-proportionate review, compact role evidence packs, read-only JIT retrieval, structured review reports and review-usefulness telemetry.
-- Phase E #151 merged through PR #159 at `71db5f20a7ee1bd5b0c525b51b3433d7f9dfeec7`: compact task telemetry, bounded historical Router calibration, Human Owner attention metrics and continuity proposals. Source versions remain Runtime `1.0.43`, Router `1.0.21`, routing policy v12.
-- Constrained PM-controlled merge #98 merged through PR #160 at `a9dfde049196ff2d02e56e99a86f80ca2af88dad` after final exact-head workflow run #311 (`34999337692`) passed Runtime, Router, ddev-executor and structure-tests.
-- #98 keeps GitHub merge authority behind Runtime -> constrained ddev-executor, revalidates exact PR/head/base/source ancestry/current CI, uses expected-head merge semantics, persists durable merge audit evidence, rejects replay/uncertain outcomes fail-closed, and advances dependencies only after GitHub confirms the exact merge.
-- Accepted actual changed-file paths provide an additional fail-closed protected-decision signal for governance/workflow, scope, dependency/service, security/auth, migration/schema and production/deployment changes; matching Human Owner approval remains required where protected authority is implicated.
-- `chonhac` still has `autonomy.allow_auto_merge_low_risk: false`, so its merge behavior remains manual until project policy is explicitly changed.
-- PR #155 keeps the healthy routine Standard OpenRouter preference. A second OpenRouter model remains out of scope until provider/tool-use evidence supports activation.
-- Antigravity host bridge remains `1.10`.
-- PR #139 documents the separate Telegram terminal gateway target; it remains approved but lower priority and unimplemented.
+- Phase D #150 merged through PR #158 at `8eca5469f1a884511e0cf36cb9b6b51e0602a7bf`: risk-proportionate review and compact evidence packs.
+- Phase E #151 merged through PR #159 at `71db5f20a7ee1bd5b0c525b51b3433d7f9dfeec7`: telemetry calibration, Human Owner attention metrics and continuity proposals.
+- Constrained PM-controlled merge #98 merged through PR #160 at `a9dfde049196ff2d02e56e99a86f80ca2af88dad`; post-merge continuity PR #161 merged at `b465cc016dd063032ad5a06188f2c552a8ffe39b`.
+- The A-F source implementation sequence for initiative #146 is complete. Operational rollout/validation is tracked by #162.
+- #163 is the active pre-rollout prerequisite: give the post-#98 Runtime and ddev-executor distinct deployed identities so #162 can prove rebuilt containers are actually running the new source.
+- Router remains `1.0.21`, routing policy v12, and Antigravity host bridge remains `1.10`.
+- `chonhac` still has `autonomy.allow_auto_merge_low_risk: false`; do not change it merely to exercise auto-merge.
+- PR #139 / Telegram terminal gateway remains approved but lower priority than #162 operational validation.
 
-## Efficiency initiative #146
+## Active version-identity prerequisite / issue #163
 
-Authoritative policy/design: `docs/project/efficiency-model.md`.
+Branch: `ai/version-identity-163`, created from main `b465cc016dd063032ad5a06188f2c552a8ffe39b`.
 
-Source implementation status:
+Scope is version/build identity only. No PM-merge policy, Runtime state-machine, credentials, project autonomy or rollout behavior changes are allowed.
 
-- #147 Phase A — complete/merged;
-- #148 Phase B — complete/merged;
-- #149 Phase C — complete/merged;
-- #150 Phase D — complete/merged;
-- #151 Phase E — complete/merged;
-- #98 Phase F constrained PM merge — complete/merged.
+Target identities after #163 merges and #162 performs a rebuild:
 
-The A-F source implementation sequence is complete. Issue #146 remains open for operational validation/calibration rather than additional scope by default. The next evidence should come from safe rollout and real routine-task execution: human interventions/task, avoidable blocks/task, model/test usage, CI/review yield, wall time and merge throughput. Do not close #146 solely because source code merged if the deployed system has not yet produced the intended operational evidence.
+- Coding Runtime source/FastAPI/health: `1.0.44`;
+- ddev-executor source/FastAPI/health: `1.0.15`;
+- Router: unchanged at `1.0.21`;
+- routing policy: unchanged at v12.
 
-No new feature branch is automatically implied by completion of #98. In particular, do not jump to the lower-priority Telegram terminal gateway merely because the efficiency implementation sequence is source-complete.
+Branch changes:
 
-## PM-controlled merge implementation evidence
+- Runtime FastAPI and `/health` identity bumped from `1.0.43` to `1.0.44`;
+- ddev-executor FastAPI and `/health` identity bumped from `1.0.14` to `1.0.15`;
+- Runtime exact version regression assertion updated;
+- ddev-executor version and health regression assertions added;
+- no local rollout/restart is performed by #163.
 
-PR #160 final head: `b5e381bd2750b6cdce55d6df152cb5daf1c2263b`.
+#162 remains the operational rollout/validation issue after #163 merges.
 
-Validation history:
+## Operational validation / issue #162
 
-- an earlier Runtime-only failure was a synthetic orchestration fixture missing `baseline_revision`; production state-machine logic was not changed to hide that failure;
-- after the fixture fix, all four jobs passed;
-- self-review then added actual changed-file protected-path classification and dedicated regression coverage;
-- code head `fbbad479f22f204b392ecaca818705f27f27dc69` passed all four jobs in workflow run #310;
-- final continuity-only head `b5e381bd2750b6cdce55d6df152cb5daf1c2263b` passed all four jobs in workflow run #311;
-- PR comments, submitted reviews and inline review threads were empty; the PR was mergeable;
-- merge used the exact expected-head guard and produced main merge commit `a9dfde049196ff2d02e56e99a86f80ca2af88dad`;
-- issue #98 closed automatically through `Closes #98`.
+Target proof:
 
-No local Runtime/ddev-executor/DDEV/n8n rollout was performed as part of this merge. Source completion must not be confused with deployed behavior.
+`WorkOrder -> implementation -> targeted/focused verification -> final deterministic verification -> proportional review -> PR/CI -> constrained PM merge -> telemetry/continuity`
+
+with zero avoidable Human Owner intervention on one eligible routine fixture.
+
+Safety gates before any local rebuild/restart:
+
+- query durable Runtime state and require every existing job to be stable blocked/terminal;
+- preserve the existing `chonhac` DEC-025C job/workspace/counters and pending recovery action exactly;
+- do not resume, replace, reset or migrate DEC-025C as part of rollout validation;
+- use a clean registered fixture with `allow_auto_merge_low_risk: true`; prefer `example-drupal`, otherwise use `default` only if its verification contract is sufficient;
+- never fall back to `chonhac` for the auto-merge proof;
+- no production deployment or production write.
+
+After #163 is merged, local rollout must prove Runtime `1.0.44`, Router `1.0.21`, and ddev-executor `1.0.15` before the routine end-to-end validation begins.
 
 <!-- PCP:CONTINUITY:START -->
 ## Automated continuity snapshot
 
-- Event: `pm_controlled_merge_source_complete`.
+- Event: `rollout_version_identity_preparation`.
 - Project/job: `personal-coding-platform` / `n/a`.
-- Runtime state: `source_merged`; outcome: `awaiting_explicit_rollout_and_operational_validation`.
-- WorkOrder: `GH-98`; merged PR: `#160`; merge commit: `a9dfde049196ff2d02e56e99a86f80ca2af88dad`.
-- Verification: final exact-head workflow run #311 passed Runtime, Router, ddev-executor and structure-tests.
-- Human authority: issue #96 / PR #97 provide the Human Owner-approved governance delegation implemented by #98; protected decision boundaries remain Human Owner-controlled.
+- Runtime state: `source_change_in_pr_flow`; outcome: `awaiting_issue_163_exact_head_ci`.
+- Active issue: `#163`; parent rollout validation: `#162`; initiative: `#146`.
+- Target deployed identity after the later #162 rebuild: Runtime `1.0.44`, Router `1.0.21`, ddev-executor `1.0.15`.
+- Human attention: no local action required while #163 is in repository CI/merge flow.
 - Deployment: not performed.
 - This section is mutable execution state only. Durable architecture/policy changes still require their normal reviewed Git path.
 <!-- PCP:CONTINUITY:END -->
@@ -129,7 +136,7 @@ C2/C3 remain gated behind C1. Do not manually mutate DB/job state, reset counter
 - Developer agents never merge and never receive GitHub merge credentials.
 - Human Owner retains final authority over Constitution-protected decisions.
 - Production deployment is not implied by PR merge.
-- Do not restart/rebuild Runtime/DDEV/n8n while a job is active; require a stable blocked/terminal state for an explicitly chosen local rollout.
+- Do not restart/rebuild Runtime/Router/ddev-executor/DDEV/n8n while a job is active; require stable blocked/terminal state first.
 - Runtime durable state is authoritative; never edit DB/job state manually to bypass the state machine.
 - Provider/control-plane credentials remain service-scoped and must not enter Developer prompts or repository docs.
 
@@ -137,13 +144,14 @@ C2/C3 remain gated behind C1. Do not manually mutate DB/job state, reset counter
 
 Platform:
 
-1. merge this docs-only post-#98 continuity update after exact-head CI;
-2. keep #146 open for operational validation until real deployed evidence supports its success metrics;
-3. do not roll out/restart Runtime, ddev-executor, DDEV or n8n merely because source implementation is complete;
-4. when the Human Owner explicitly chooses a local rollout window and the active-job gate is satisfied, deploy the merged source, verify service health/version/merge trust boundaries, then run a bounded routine ticket through WorkOrder -> implementation -> verification -> review -> PR/CI -> PM merge and collect Phase E telemetry;
-5. choose any next feature only from that evidence or an explicit Human Owner priority, rather than assuming #139 is next.
+1. open the #163 PR from `ai/version-identity-163` and require exact-head Runtime/Router/ddev-executor/structure CI;
+2. merge #163 only when exact-head CI and review gates are green; do not roll out merely because it merges;
+3. then begin #162 by collecting pre-rollout local evidence and checking the active-job gate;
+4. only after that gate passes, perform the explicit local rebuild/restart and validate deployed versions/health;
+5. run one bounded routine fixture ticket end-to-end without manual merge and capture telemetry/continuity evidence;
+6. keep #146 open until operational evidence demonstrates the intended low-touch behavior.
 
 DEC-025C:
 
 - the recorded `max_repair_iterations +1` action remains the normal recovery path only if the Human Owner chooses to continue C1 under currently deployed semantics;
-- newer adaptive/layered/collaboration/review/telemetry/PM-merge behavior must not be backported by manual state manipulation.
+- newer behavior must not be backported by manual state manipulation.
