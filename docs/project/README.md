@@ -13,6 +13,7 @@ These documents are intentionally stored in the repository so ChatGPT, Codex, an
 - `roadmap.md` — implementation sequence, current priorities, and explicitly deferred work.
 - `efficiency-model.md` — Human Owner-approved personal-scale efficiency policy: task-specific adaptive budgets, Human-attention minimization, layered verification, bounded inter-agent collaboration, risk-proportionate review, compact evidence packs, telemetry calibration, and continuity automation.
 - `telegram-terminal-operations.md` — approved target design and operator convention for a separate owner-only Telegram terminal operations gateway, including read-only sandbox/broker boundaries and the rule that Telegram-ready diagnostic blocks are emitted only when explicitly requested.
+- `service-secret-upgrades.md` — existing-install upgrade procedure for service-scoped credentials, including the required migrate-before-rebuild order and non-secret deployed boundary checks.
 - `current-state.md` — mutable cross-chat handoff snapshot: active work, branches/issues/PRs/WorkOrders/jobs, blockers, evidence, next safe actions, and operational gates.
 - additional topical policy documents may be added as approved decisions require them; `current-state.md` should point a new session to the relevant ones.
 
