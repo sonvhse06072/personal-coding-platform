@@ -8,80 +8,80 @@ Last updated: 2026-09-16
 
 1. Read repository-root `AGENTS.md`.
 2. Read `docs/project/README.md` and this file.
-3. Read `docs/project/efficiency-model.md` and `docs/project/service-secret-upgrades.md` for the active #162 work.
+3. Read `docs/project/efficiency-model.md` and `docs/project/service-secret-upgrades.md` for active #162 work.
 4. Inspect the active issue/PR and current branch diff before editing.
 
 ## Current source baseline
 
-- Efficiency initiative #146 source phases A-F are implemented. Operational proof is tracked by #162.
+- Efficiency initiative #146 source phases A-F are implemented; operational proof is tracked by #162.
 - PM routine in-scope merge authority is approved; Developer agents never merge and production remains Human Owner-controlled.
-- Runtime target/deployed version: `1.0.44`; Router: `1.0.21`; ddev-executor: `1.0.15`; routing policy v12.
-- #165/#166 established mandatory operator shell isolation for pasted blocks that can fail.
+- Deployed platform remains Runtime `1.0.44`, Router `1.0.21`, ddev-executor `1.0.15`, routing policy v12.
+- #165/#166 established mandatory operator-shell isolation for pasted blocks that can fail.
 - #167/#168 fixed host-secret loading in `platform-test`.
-- #169/#170 fixed local/container test portability; #171/#172 corrected the rebuild procedure required to consume baked Runtime tests.
+- #169/#170 fixed local/container test portability; #171/#172 corrected the rebuild procedure for baked Runtime tests.
 - #173/#174 recorded successful rollout health/test/DEC-025C preservation.
-- #175/#176 added a service-secret migration/status guard and documented existing-install migrate-before-restart ordering.
+- #175/#176 added the service-secret migration/status guard and documented existing-install migrate-before-restart ordering.
+- #177/#178 fixed the guard's DDEV command parsing; merge commit `a2ff829aaa3501db6170a5a7f401749456387522`, exact-head CI #334 green.
 - `chonhac` remains `autonomy.allow_auto_merge_low_risk: false`; never enable it merely to exercise auto-merge.
 
-## #162 rollout evidence already complete
+## #162 rollout and preservation evidence complete
 
-The safety-gated rollout/rebuild completed with no active Runtime jobs, no active ddev-executor jobs and no active Antigravity runs.
+The safety-gated rollout/rebuild completed with zero active Runtime jobs, zero active ddev-executor jobs and zero active Antigravity runs.
 
-Verified deployed identities before the later service-secret remediation restart:
+Verified deployed identities:
 
 - Antigravity host bridge `1.10`, safety settings intact;
 - Router `1.0.21`, routing policy v12;
 - Coding Runtime `1.0.44`;
 - ddev-executor `1.0.15`, GitHub delivery configured;
-- n8n healthy at that point.
+- n8n direct `/healthz` healthy.
 
-`ddev platform-test` passed completely after the corrected Runtime tests were rebuilt:
+`ddev platform-test` passed after corrected tests were rebuilt:
 
-- Router: `76 passed`;
-- Runtime: `289 passed`;
-- ddev-executor: `34 passed`.
+- Router `76 passed`;
+- Runtime `289 passed`;
+- ddev-executor `34 passed`.
 
-The preserved `chonhac` DEC-025C state survived rollout unchanged. A direct read-only `cp_control_actions` query also confirmed recovery action `abXzvyU2pvALZ5YpovNveDcr` remained pending, unexpired, result null and never mutated.
+The preserved `chonhac` DEC-025C state survived rollout unchanged. A direct read-only `cp_control_actions` query confirmed recovery action `abXzvyU2pvALZ5YpovNveDcr` remained pending, unexpired, result null and never mutated.
 
-Do not repeat the earlier no-cache rollout rebuild sequence unless later service-image source actually requires it.
+Do not repeat the earlier no-cache rollout rebuild unless later service-image source actually requires it.
 
-## Active #162 blocker: #177 credential guard semantics and n8n health
+## Trust/secret boundary gate complete
 
-The first trust-boundary check after #174 revealed that the existing local install had not previously loaded `PLATFORM_INTERNAL_TOKEN` into deployed Runtime. #175/#176 added a canonical migration/status procedure.
+The existing local install originally lacked the newly introduced Runtime-side `PLATFORM_INTERNAL_TOKEN`. The Human Owner safely completed the canonical remediation after a fresh no-active-work gate:
 
-Human Owner then executed the #176 remediation safely:
-
-- local platform source synced to merge `f52add265f05d19708c387e4ac67428cf15052a3`;
-- fresh active-work gate passed: Antigravity `active_runs=0`, ddev-executor `active_jobs=0`, Runtime no in-flight jobs;
 - `scripts/scope-service-secrets.sh` completed successfully;
-- local `.env.coding-runtime.local` and `.env.ddev-executor.local` both contain a real `PLATFORM_INTERNAL_TOKEN` and the values match;
-- global `.ddev/.env` has no `PLATFORM_INTERNAL_TOKEN`;
-- immediate pre-restart job gate passed;
-- `ddev restart` completed successfully and deployed versions remained Runtime `1.0.44`, Router `1.0.21`, ddev-executor `1.0.15`.
+- Runtime/executor scoped files contain the same real `PLATFORM_INTERNAL_TOKEN`;
+- global `.ddev/.env` contains no platform credential;
+- a normal `ddev restart` reloaded the migrated service env;
+- deployed versions remained Runtime `1.0.44`, Router `1.0.21`, ddev-executor `1.0.15`.
 
-Two post-restart observations remain unresolved:
+After #177/#178 corrected the host-side probe semantics, the deployed strict boundary passed on local main `a2ff829aaa3501db6170a5a7f401749456387522`:
 
-1. `scripts/service-secret-status.sh` reported every presence/absence boolean false. Root cause is now identified as a host-side guard bug: it used `ddev exec ... sh -lc ... sh "$variable"` and relied on a `$1` positional contract that does not survive DDEV command parsing as assumed. Both positive and negative checks therefore failed. This does **not** prove the migrated token files are wrong.
-2. `ddev platform-status` reported `n8n DOWN`. Treat this independently from the guard bug. It may be startup timing or a real n8n failure; do not infer the cause without read-only health/log evidence.
+- coding-runtime: internal token present; GitHub delivery and Telegram bot credentials absent;
+- ddev-executor: internal token and GitHub delivery present; Runtime API credential absent;
+- n8n: Runtime API credential present; GitHub delivery and internal executor credential absent;
+- corrected guard returned `ok:true` and strict mode exited 0;
+- `CORE_CREDENTIAL_GATE=PASS` and `TRUST_AND_N8N_GATE=PASS`.
 
-Issue #177 is the active bounded follow-up. Branch `ai/fix-secret-status-177` changes the guard to pass one validated command string to `ddev exec`, never prints secret values, and adds regression coverage rejecting the broken positional-argument pattern.
+In the same run, `ddev platform-status` printed `n8n DOWN`, but the immediate direct in-container `/healthz` probe returned `{"status":"ok"}`. Preserve the direct health evidence for this gate; do not treat that single status line as a demonstrated outage. No extra restart is required from this observation alone.
 
-After #177 merges, its host-side guard change requires only a local source fast-forward, **not** another platform rebuild. Re-run the corrected strict guard first. If n8n remains down, collect read-only n8n status/logs before considering any restart.
+The secret migration and trust-boundary remediation are complete. Future sessions must not repeat migration/restart unless a later source/config change actually requires it.
 
-Phase-E `rollout` continuity event has **not** been recorded yet. The routine fixture job has **not** been created yet.
+Phase-E `rollout` continuity event has **not** been recorded yet. The routine validation job has **not** been created yet.
 
 <!-- PCP:CONTINUITY:START -->
 ## Automated continuity snapshot
 
-- Event: `rollout_validation_blocked_by_guard_bug_and_n8n_health`.
+- Event: `rollout_trust_boundary_completed`.
 - Parent validation: `#162`; initiative: `#146`.
 - Rollout health/tests/DEC-025C preservation: complete.
-- Canonical service-secret migration: completed locally; Runtime/executor internal token files present and matching; global env clean.
-- Latest restart: completed; Runtime `1.0.44`, Router `1.0.21`, ddev-executor `1.0.15`.
-- Active source follow-up: `#177` fixes `service-secret-status.sh` DDEV command parsing.
-- Independent operational observation: `n8n DOWN` after the remediation restart; diagnosis pending.
-- Phase-E rollout event: not recorded.
-- Routine `example-drupal` job: not created.
+- Service-secret migration: complete; scoped Runtime/executor internal token present and matching; global env clean.
+- Trust boundary: strict corrected guard `ok:true`; Runtime/executor/n8n scopes match intended authority boundaries.
+- n8n: direct `/healthz` returned `status=ok`; one `platform-status` line reported DOWN in the same run and is treated as a transient/false-negative observation, not an established outage.
+- Source follow-ups #175 and #177: complete via PRs #176 and #178.
+- Phase-E rollout event: not recorded yet.
+- Routine `example-drupal` job: not created yet.
 - Production deployment: not performed.
 <!-- PCP:CONTINUITY:END -->
 
@@ -98,7 +98,7 @@ Phase-E `rollout` continuity event has **not** been recorded yet. The routine fi
 - PHPUnit full tests;
 - cleanup via DDEV stop.
 
-Local fixture existence/cleanliness/remote/baseline have not yet been proven because trust-boundary/n8n gates stopped first. If `example-drupal` is unsuitable, stop and record the blocker; never fall back to `chonhac` merely to exercise auto-merge.
+Local fixture existence/cleanliness/remote/baseline have not yet been proven. If `example-drupal` is unsuitable, stop and record the blocker; never fall back to `chonhac` merely to exercise auto-merge.
 
 ## Preserved `chonhac` DEC-025C
 
@@ -133,11 +133,9 @@ Recovery action `abXzvyU2pvALZ5YpovNveDcr` is `budget_extend` for `max_repair_it
 
 ## Immediate next safe actions
 
-1. Complete #177 through reviewed PR/CI.
-2. Human Owner fast-forwards local `main`; no rebuild is needed for the host-side guard fix.
-3. Re-run `scripts/service-secret-status.sh --strict` and `ddev platform-status` without printing secret values.
-4. If the corrected credential boundary passes but n8n is still down, collect read-only `ddev logs -s n8n` and container/status evidence; do not restart again until the cause is known and active-work gate is rechecked.
-5. Once trust boundary and n8n are healthy, record the Phase-E `rollout` continuity event.
-6. Verify local `example-drupal` repository and deterministic baseline.
-7. Create exactly one small routine validation WorkOrder with deterministic non-empty diff and no manual merge.
-8. Capture telemetry, Human attention, PM-merge audit and continuity evidence in #162 and #146.
+1. Complete #179 as this mutable continuity update only; no platform restart/rebuild.
+2. Record the Phase-E `rollout` continuity event through authenticated Runtime API now that health/tests/preservation/trust gates are complete.
+3. Verify local `example-drupal` repository existence, cleanliness, `develop`/remote alignment and configured deterministic baseline.
+4. If fixture readiness passes, create exactly one small routine validation WorkOrder with deterministic non-empty diff and no manual merge.
+5. Let the system proceed through implementation, layered verification, proportional review, PR/CI and constrained PM merge without Human Owner merge intervention.
+6. Capture telemetry, Human attention, PM-merge audit and continuity evidence in #162 and #146.
