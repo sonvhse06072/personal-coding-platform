@@ -16,55 +16,49 @@ Last updated: 2026-09-16
 - Efficiency initiative #146 source phases A-F are implemented; operational proof remains #162.
 - PM routine in-scope merge authority is approved; Developer agents never merge and production remains Human Owner-controlled.
 - Deployed platform remains Runtime `1.0.44`, Router `1.0.21`, ddev-executor `1.0.15`, routing policy v12.
-- Rollout health/tests, DEC-025C preservation, service-secret migration, deployed trust boundary, direct n8n health and Phase-E rollout continuity event are complete.
-- `ddev platform-test` rollout evidence: Router `76 passed`, Runtime `289 passed`, ddev-executor `34 passed`.
-- Do not repeat rollout rebuild, service-secret migration or rollout continuity event unless later source/config actually requires it.
+- Rollout health/tests, DEC-025C preservation, service-boundary validation, n8n health and the Phase-E rollout continuity event are complete.
+- Do not repeat the rollout rebuild or rollout continuity event unless later source/config requires it.
 
-## #162 current stage: first routine validation job blocked by #186
+## #162 current stage: ProjectBaseline follow-up #190
 
-Dedicated private non-production fixture `sonvhse06072/pcp-validation-fixture` is provisioned and ready:
+The dedicated non-production repository `sonvhse06072/pcp-validation-fixture` is provisioned and registered. Fixture blocker #181, registration #184/#185, and project-registry reload defect #186/#187 are complete.
 
-- fixture issue `pcp-validation-fixture#1` and bootstrap PR `pcp-validation-fixture#2` complete;
-- fixture bootstrap merge `553e4c595551ea0d0ee73d0094c943f88b5bba97`;
-- GitHub CI passed style, PHP syntax and full self-contained tests;
-- PCP issue #184 / PR #185 registered project id `pcp-validation-fixture` with base `main`, low-risk PM auto-merge enabled and production deploy disabled;
-- PCP registration merge `f42f132a44f29aac55e234358b0e2e4387304950`;
-- local fixture path `/home/sonvh/pcp-validation-fixture` exists, is clean and matches origin `main` at the fixture merge commit;
-- local DDEV baseline passed targeted style, static PHP syntax and full deterministic tests; cleanup left the repository clean;
-- issue #181 is closed complete.
+One historical direct validation job, `b2fb7ae243734ef9bbfc344934c3911c`, reached independent review and failed because malformed reviewer fallback output could exceed the ReviewFinding schema. #188/#189 fixed that defect. Preserve the failed job/workspace as historical evidence; do not resume or mutate it.
 
-The intended single routine validation task remains test-only: add a regression case for whitespace-only `Greeter` input, preserving existing public behavior. Do not create a second or substitute validation task.
+Further validation must use the real orchestration path:
 
-The first `./scripts/create-job.sh pcp-validation-fixture ...` attempt returned HTTP 422 before a job row was created. Source inspection identified Runtime project-registry caching as the cause: `project_config()` reads `projects_doc()`, which was process-cached, while ddev-executor reads the bind-mounted `projects.yml` live. After config-only project registration, Runtime and executor could therefore disagree until Runtime restart.
+`POST /v1/plans -> ExecutionPlan -> tracked WorkOrder -> orchestrator-created job -> verification/review -> PR/CI -> constrained PM merge`
 
-Issue #186 is the active bounded defect: make Runtime project-registry reads observe reviewed bind-mounted `projects.yml` changes without restart. Branch `ai/reload-project-registry-186` contains the fix and regression test. Do not retry the routine validation job until #186 is merged and the Runtime code change is safely loaded.
+Pre-mutation inspection found that `pcp-validation-fixture` had no approved ProjectBaseline. #190 tracks that bounded governance gap.
 
-The #186 branch must remain narrow:
+The Human Owner approved initial baseline revision `validation-v1-2026-09-16` on 2026-09-16. The approved frame is dedicated non-production PCP validation only, preserving the existing generic PHP+DDEV fixture, enforcing its existing deterministic checks and CI, and keeping the immediate task test-only: add whitespace-only Greeter regression coverage without changing public behavior.
 
-- remove only the `projects_doc()` process cache; keep model/baseline caches unchanged;
-- preserve unknown-project and unresolved-path fail-closed behavior;
-- regression-test adding a project to the same registry file without `clear_config_cache()` or process restart;
-- no PM-merge, auth, state-machine, cancellation, decision, cleanup, verification or production behavior changes;
-- Runtime API version remains `1.0.44` for this patch; post-load acceptance is behavioral (the newly registered fixture becomes visible and job creation proceeds) rather than version-only identity.
+Fixture issue #3 / PR #4 added `PROJECT-BASELINE.md` and merged after CI at exact fixture commit `ba3207af0ce28b607b1d3dd9eb00bc69072ac234`.
+
+PCP branch `ai/fixture-project-baseline-190` registers that exact commit as active approved revision `validation-v1-2026-09-16`, adds regression coverage for the pinned baseline contract, and updates this handoff.
+
+The Runtime caches the ProjectBaseline registry in-process. After the registry PR merges and local source is synchronized, activation requires a fresh no-active-work gate before a bounded Runtime restart/recreate so the new baseline is read. A full no-cache rebuild is not required solely for this config activation.
+
+After activation, re-check platform health and the preserved DEC-025C state, then re-check fixture cleanliness/base branch/deterministic baseline before creating the validation plan. Do not create another direct legacy fixture job and do not record a duplicate rollout continuity event.
 
 <!-- PCP:CONTINUITY:START -->
 ## Automated continuity snapshot
 
-- Event: `fixture_ready_project_registry_reload_blocked`.
-- Parent validation: `#162`; initiative: `#146`.
-- Rollout/preservation/trust/n8n/Phase-E rollout event: complete.
-- Dedicated fixture: provisioned, registered, cloned locally and deterministic baseline green.
-- Fixture blocker #181: closed complete.
-- First routine job attempt: HTTP 422 before job creation; no validation job exists from that attempt.
-- Active bounded defect: `#186` Runtime project registry cache mismatch.
-- Active branch: `ai/reload-project-registry-186`.
-- Routine validation job: not yet created successfully.
+- Event: `fixture_project_baseline_registration_in_progress`.
+- Parent validation: `#162`; initiative: `#146`; active follow-up: `#190`.
+- Earlier rollout/preservation/service-boundary/n8n/continuity gates: complete.
+- Fixture provisioning/registration/readiness: complete.
+- #186/#187 project-registry reload defect: complete.
+- #188/#189 review fallback defect: complete.
+- Historical direct validation job: `b2fb7ae243734ef9bbfc344934c3911c`, failed and preserved.
+- Approved fixture baseline: `validation-v1-2026-09-16`.
+- Fixture baseline source commit: `ba3207af0ce28b607b1d3dd9eb00bc69072ac234`.
+- PCP baseline registration: in progress on `ai/fixture-project-baseline-190`.
+- Legitimate orchestrated validation plan/job: not yet created.
 - Production deployment: not performed.
 <!-- PCP:CONTINUITY:END -->
 
 ## Preserved `chonhac` DEC-025C
-
-GitHub ticket: `chonhac` GH-5.
 
 - plan `pm-gh-5650852312`;
 - WorkOrder `DEC-025C-1-recovery-tooling-r2`;
@@ -72,32 +66,28 @@ GitHub ticket: `chonhac` GH-5.
 - branch `ai/eec59b13651c`;
 - workspace `/home/sonvh/.coding-platform/workspaces/eec59b13651c54559c10ce204380a68e`;
 - status `blocked`;
-- result `reassessment_stopped` / `repair budget exhausted` / `hard_budget_guard`;
-- model calls `21 / 22`;
-- tool calls `65 / 160`;
-- test runs `14 / 14`;
-- wall time `93.168 / 110` minutes;
-- repair iterations `4 / 4`.
+- result remains `reassessment_stopped` / `repair budget exhausted` / `hard_budget_guard`;
+- preserved usage remains model calls `21 / 22`, tool calls `65 / 160`, test runs `14 / 14`, wall time `93.168 / 110` minutes, repair iterations `4 / 4`.
 
-Recovery action `abXzvyU2pvALZ5YpovNveDcr` is `budget_extend` for `max_repair_iterations +1`, pending and unexpired after rollout. Never manually mutate DB/job state, counters or this action.
+The existing pending recovery action remains preserved. Never manually mutate durable job/action state or counters.
 
 ## Global operational gates
 
-- Normal flow: issue -> `ai/*` branch -> deterministic tests/CI -> PR -> PM merge when eligible.
+- Normal flow: issue -> `ai/*` branch -> deterministic tests/CI -> PR -> eligible PM merge.
 - Never force push.
-- Developer agents never merge or receive GitHub delivery credentials.
+- Developer agents never merge.
 - Human Owner retains protected architecture/security/production/governance authority.
 - Production deployment is never implied by PR merge.
-- Do not restart/rebuild platform services while any engineering job is active.
-- Runtime durable state is authoritative; never edit DB/job state to bypass the state machine.
-- Provider/control-plane credentials remain service-scoped and never enter prompts/docs/logs.
-- Potentially failing Human Owner command blocks must run in a subshell or standalone script so controlled non-zero exits cannot terminate the parent Ubuntu/WSL shell.
+- Do not restart/rebuild platform services while engineering work is active.
+- Runtime durable state is authoritative; never edit durable state to bypass the state machine.
+- Potentially failing Human Owner command blocks must remain isolated from the parent interactive shell.
 
 ## Immediate next safe actions
 
-1. Finish #186 through exact-head CI and reviewed PR, with no out-of-scope Runtime API changes.
-2. Before loading the Runtime code change locally, re-run the no-active-work safety gate; preserve DEC-025C unchanged.
-3. Rebuild/restart only as required to load the Runtime source patch, then run `ddev platform-test` and verify trust/preservation gates remain intact.
-4. Retry exactly one `pcp-validation-fixture` routine job for the whitespace-only regression test.
-5. Do not manual-merge its fixture PR; allow constrained PM merge to proceed after verification/review/CI.
-6. Capture telemetry, Human attention, PM-merge audit and continuity evidence in #162 and #146.
+1. Finish #190 through exact-head CI and reviewed PCP PR.
+2. Synchronize local PCP source, run a fresh idle gate, and activate the merged baseline with a bounded Runtime restart/recreate only if the gate passes.
+3. Re-check platform health and preserved DEC-025C state after activation.
+4. Re-check fixture `main`, duplicate/open-PR state, local cleanliness and deterministic baseline.
+5. Create exactly one authenticated `POST /v1/plans` request for `Add whitespace-only Greeter regression test` and verify it becomes a tracked WorkOrder/orchestrator-created job.
+6. Do not manually merge the fixture validation PR; allow constrained PM merge after verification/review/CI.
+7. Capture telemetry, Human attention, PM-merge audit and continuity evidence in #162 and #146.
