@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from typing import Any
 
 from .config import project_config
+from .continuity import render_managed_section
 from .plan_orchestrator import PlanOrchestrator as CorePlanOrchestrator
 from .pm_merge import evaluate_pm_merge
 from .pm_merge_audit import PMMergeAuditStore
@@ -129,6 +132,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
             return
 
         merged_any = False
+        continuity_apps: list[dict[str, Any]] = []
         for tracked_raw in self.store.work_orders(plan_id):
             tracked = dict(tracked_raw)
             if str(tracked.get("state") or "") != "awaiting_merge":
@@ -288,7 +292,9 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 state="completed",
                 detail=detail,
             )
-            self._record_merge_continuity(plan, job, confirmed)
+            proposal = self._record_merge_continuity(plan, job, confirmed)
+            if proposal:
+                continuity_apps.append(proposal)
             merged_any = True
 
         if merged_any:
@@ -297,17 +303,23 @@ class PlanOrchestrator(CorePlanOrchestrator):
             # eligible later in the same orchestrator tick.
             await super()._reconcile_plan(plan)
 
+            # Continuity publication happens only after durable orchestration state
+            # has reconciled. It is advisory: failure may leave a diagnostic PR or
+            # persisted proposal, but it cannot roll back an engineering merge.
+            for proposal in continuity_apps:
+                await self._apply_merge_continuity(proposal)
+
     def _record_merge_continuity(
         self,
         plan: dict[str, Any],
         job: dict[str, Any],
         pr: dict[str, Any],
-    ) -> None:
+    ) -> dict[str, Any] | None:
         recorder = getattr(self.storage, "record_external_continuity", None)
         if not callable(recorder):
-            return
+            return None
         try:
-            recorder(
+            proposal = recorder(
                 project_id=str(plan["project_id"]),
                 event_type="pr_merged",
                 job_id=str(job.get("id") or "") or None,
@@ -318,10 +330,29 @@ class PlanOrchestrator(CorePlanOrchestrator):
                     "authority": "pm_controlled_merge",
                 },
             )
+            return dict(proposal) if isinstance(proposal, dict) else None
         except Exception:
             # Continuity is advisory evidence. A continuity persistence failure
             # must not invalidate a GitHub merge already confirmed as durable.
-            pass
+            return None
+
+    async def _apply_merge_continuity(self, proposal: dict[str, Any]) -> None:
+        if str(proposal.get("event_type") or "") != "pr_merged":
+            return
+        try:
+            encoded = json.dumps(proposal, sort_keys=True, separators=(",", ":"), default=str)
+            continuity_key = hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+            await self.engine.ddev.apply_continuity(
+                continuity_key=continuity_key,
+                event_type="pr_merged",
+                project_id=str(proposal.get("project_id") or ""),
+                managed_section=render_managed_section(proposal),
+            )
+        except Exception:
+            # Git continuity is deliberately downstream/advisory. The persisted
+            # proposal remains authoritative evidence for diagnosis/retry and an
+            # already-confirmed engineering merge must never be invalidated here.
+            return
 
 
 __all__ = ["PlanOrchestrator"]
