@@ -48,8 +48,14 @@ def model_config(model_id: str) -> dict[str, Any]:
     return dict(models.get(model_id, {}))
 
 
-@lru_cache(maxsize=1)
 def projects_doc() -> dict[str, Any]:
+    """Read the bind-mounted project registry on every access.
+
+    Project registrations are operational configuration shared with the
+    ddev-executor. Keeping an in-process snapshot here lets Runtime and the
+    executor disagree after a reviewed config-only update until Runtime is
+    restarted. The registry is small, so correctness is preferable to caching.
+    """
     return _load_yaml(os.getenv("PROJECTS_FILE", _default_config_file("projects.yml", "/config/projects.yml")))
 
 
@@ -77,6 +83,5 @@ def project_config(project_id: str) -> dict[str, Any]:
 
 
 def clear_config_cache() -> None:
-    projects_doc.cache_clear()
     project_baselines_doc.cache_clear()
     models_doc.cache_clear()
