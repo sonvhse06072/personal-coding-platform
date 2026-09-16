@@ -124,6 +124,14 @@ def blocked_job(*, model_calls=22):
     }
 
 
+class FakeQueryResult:
+    def __init__(self, rows):
+        self.rows = rows
+
+    def fetchall(self):
+        return deepcopy(self.rows)
+
+
 class FakeConnection:
     def __enter__(self):
         return self
@@ -132,7 +140,7 @@ class FakeConnection:
         return False
 
     def execute(self, _query):
-        return [{"plan_id": "plan-1"}]
+        return FakeQueryResult([{"plan_id": "plan-1"}])
 
 
 class FakeStorage:
