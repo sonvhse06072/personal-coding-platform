@@ -106,6 +106,16 @@ class WorkOrderRouterProxy:
         work_order = work_order_snapshot(checkpoint.get("work_order"))
         if work_order is None:
             return route
+        if checkpoint.get("legacy_adaptive_adoptions"):
+            # The durable WorkOrder snapshot intentionally stays immutable and
+            # therefore remains normalized as legacy_hard. A successful recovery
+            # writes this internal audit marker only after proving raw pre-adaptive
+            # provenance and healthy current-policy reassessment. Reuse adaptive
+            # semantics for later reroutes so they cannot silently re-clamp the
+            # same job to obsolete ceilings. Missing adaptive Router metadata
+            # still fails closed inside apply_work_order_budget().
+            work_order = work_order.model_copy(deep=True)
+            work_order.budget.mode = "adaptive"
         bounded = apply_work_order_budget(route, work_order)
         return _apply_owner_budget_authorizations(bounded, checkpoint)
 

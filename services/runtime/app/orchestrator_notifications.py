@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 from typing import Any
 
 from .control_actions_attention import ControlActionService
+from .legacy_adaptive_recovery import LegacyAdaptiveRecovery
 from .orchestrator_merge import PlanOrchestrator as CorePlanOrchestrator
 
 
@@ -35,6 +37,8 @@ class PlanOrchestrator(CorePlanOrchestrator):
     ) -> None:
         super().__init__(storage, engine, store=store)
         self.controls = controls or ControlActionService(storage, engine, self.store, self)
+        self.legacy_adaptive_recovery = LegacyAdaptiveRecovery(storage, engine, self.store)
+        self._notification_tick_lock = asyncio.Lock()
         if controls is not None and hasattr(controls, "orchestrator"):
             controls.orchestrator = self
 
@@ -43,16 +47,29 @@ class PlanOrchestrator(CorePlanOrchestrator):
         self.controls.ensure()
         # Core start calls self.tick(), and this subclass materializes all stable
         # attention states after that tick. Existing blocked/waiting/merge gates
-        # therefore receive controls after an upgrade without being resumed.
+        # therefore receive controls after an upgrade without being resumed unless
+        # the narrow legacy-adaptive recovery policy proves them safe to continue.
         await super().start()
 
     async def tick(self) -> dict[str, Any]:
-        result = await super().tick()
-        # Read-only observation after every core transition/launch. Dedupe keys are
-        # tied to the durable WorkOrder state generation and rendered action set,
-        # so polling is quiet while a rollout may still surface newly valid actions.
-        self._notify_existing_attention_states()
-        return result
+        async with self._notification_tick_lock:
+            # Recover an already-blocked pre-adaptive job before core scheduling so
+            # rollout cannot launch unrelated work ahead of the preserved job.
+            recovered = await self.legacy_adaptive_recovery.recover_one()
+            result = await super().tick()
+
+            # A job may have become blocked during the core reconciliation above.
+            # Re-evaluate exactly one safe legacy budget block after that durable
+            # transition; anomaly/decision/provider/cost cases remain blocked.
+            if recovered is None:
+                recovered = await self.legacy_adaptive_recovery.recover_one()
+            if recovered is not None:
+                result = {**result, "legacy_adaptive_recovery": recovered}
+
+            # Read-only observation after every core transition/launch. Dedupe keys
+            # are tied to durable state generation and the rendered action set.
+            self._notify_existing_attention_states()
+            return result
 
     def _notify_existing_attention_states(self) -> None:
         with self.storage.connect() as conn:
