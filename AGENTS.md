@@ -70,6 +70,10 @@ Lower-authority artifacts must not silently redefine higher-authority artifacts.
 - Prefer `.format()` or a heredoc when either approach reduces nested shell/Python quoting risk.
 - For `curl | python3` pipelines, verify both the shell quoting and the Python quoting before presenting the command.
 - Prefer readable multi-line commands over fragile one-liners when a command is moderately complex.
+- Treat the Human Owner's interactive Ubuntu/WSL shell as persistent operator state. Do not provide a pasted command block that can intentionally return non-zero or call `exit` while `set -e`/`set -euo pipefail` is active in the parent interactive shell if that could terminate the shell/session.
+- Any operator validation block that may intentionally fail, use `exit N`, or stop on a failed gate must run inside an explicit subshell `( ... )` or a standalone script/process. Non-zero status must terminate only that isolated process, never the Human Owner's parent shell.
+- When using a subshell, capture/report the subshell return code after `)` when useful so the Human Owner can distinguish `PASS`, a controlled gate failure, and an unexpected command failure without losing the terminal session.
+- For rollout/restart/deploy gates, default to a fail-closed subshell pattern: perform read-only checks first, print a clear stop reason, return non-zero from the subshell, and do not place the mutating restart/rebuild command in the same block unless all prerequisites have already passed.
 
 ## Mandatory documentation continuity
 
