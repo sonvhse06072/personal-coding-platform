@@ -2,59 +2,96 @@
 
 Status: mutable continuity document. Repository docs and executable evidence are authoritative over chat history. Durable architecture/product/policy decisions remain in their topical source-of-truth documents.
 
-Last updated: 2026-09-16
+Last updated: 2026-09-17
 
 ## Resume order
 
 1. Read repository-root `AGENTS.md`.
 2. Read `docs/project/README.md` and this file.
-3. Read `docs/project/efficiency-model.md` and `docs/project/service-secret-upgrades.md` for active #162 work.
+3. Read `docs/project/efficiency-model.md` and `docs/project/provider-policy.md` for active #146/#153 work.
 4. Inspect the active issue/PR and current branch diff before editing.
 
 ## Platform baseline
 
-- Efficiency initiative #146 source phases A-F are implemented; operational proof remains #162.
+- Efficiency initiative #146 source phases A-F are implemented.
+- Constrained PM-controlled merge #98 is implemented and operationally proven.
+- Low-touch routine-path validation #162 is complete via a clean zero-avoidable-intervention R3 run.
 - PM routine in-scope merge authority is approved; Developer agents never merge and production remains Human Owner-controlled.
-- Deployed platform remains Runtime `1.0.44`, Router `1.0.21`, ddev-executor `1.0.15`, routing policy v12.
-- Rollout health/tests, DEC-025C preservation, service-boundary validation, n8n health and the Phase-E rollout continuity event are complete.
-- Do not repeat the rollout rebuild or rollout continuity event unless later source/config requires it.
+- Last verified deployed service labels remain Runtime `1.0.44`, Router `1.0.21`, ddev-executor `1.0.15`, routing policy v12.
+- Rollout health/tests, DEC-025C preservation, service-boundary validation, direct n8n health and the Phase-E rollout continuity event are complete.
+- Do not repeat rollout/rebuild/validation work merely to recreate #162 evidence.
 
-## #162 current stage: approved fixture baseline activation
+## #162 operational validation: complete
 
-The dedicated non-production repository `sonvhse06072/pcp-validation-fixture` is provisioned and registered. Fixture blocker #181, registration #184/#185, and project-registry reload defect #186/#187 are complete.
+The dedicated non-production repository `sonvhse06072/pcp-validation-fixture` is provisioned, registered and uses an explicitly approved ProjectBaseline.
 
-One historical direct validation job, `b2fb7ae243734ef9bbfc344934c3911c`, reached independent review and failed because malformed reviewer fallback output could exceed the ReviewFinding schema. #188/#189 fixed that defect. Preserve the failed job/workspace as historical evidence; do not resume or mutate it.
+Important historical validation evidence remains preserved:
 
-Further validation must use the real orchestration path:
+- historical direct fixture job `b2fb7ae243734ef9bbfc344934c3911c` failed because reviewer fallback output could exceed the ReviewFinding schema; #188/#189 fixed it; do not resume or mutate that job;
+- R2 plan `pm-a38174598db14b97a1a1888eab32bff4` / job `99e69711b2545c3fabdc2f42013a7bd1` proved the PM merge path after exposing and recovering delivery defects #196 and #198; R2 required Human Owner recovery and is not the clean acceptance proof;
+- R3 is the clean acceptance proof.
 
-`POST /v1/plans -> ExecutionPlan -> tracked WorkOrder -> orchestrator-created job -> verification/review -> PR/CI -> constrained PM merge`
+R3 exact evidence:
 
-The Human Owner approved initial fixture baseline revision `validation-v1-2026-09-16` on 2026-09-16. Fixture #3 / PR #4 added the approved `PROJECT-BASELINE.md` and merged at fixture commit `ba3207af0ce28b607b1d3dd9eb00bc69072ac234`.
+- approved baseline revision: `validation-v2-2026-09-16-r3`;
+- fixture baseline/source before R3: `6395655ec311692493d9e93c2573b1bd946c7331`;
+- plan: `pm-79996418ddf046ed90bbae6f45ab5207`;
+- WorkOrder: `FIXTURE-GH-7-R3-TEST`;
+- job: `c04c0af200d95d6583de70616e8ea7d3`;
+- branch: `ai/c04c0af200d9`;
+- verified implementation head: `310d007e626267568534fe56d1da15d0bb40e47f`;
+- fixture PR: `pcp-validation-fixture#9`;
+- PM merge commit: `3ecd9ce66260245089efe2533080d1b5191b810c`;
+- orchestration/WorkOrder: `completed`;
+- PM merge audit: `merged`, `requires_human=false`;
+- first-pass success: true;
+- engineering repairs: 0;
+- delivery retries: 0;
+- provider failures/failovers: 0;
+- Human Owner interventions: 0;
+- avoidable blocks: 0;
+- control actions: none;
+- blocked/error events: 0;
+- continuity event: `pr_merged` with `authority=pm_controlled_merge`.
 
-PCP #190 / PR #191 is complete. PR #191 merged to PCP `main` at `0c3a4760404e52828206f3b4625a6c0f00c7998a`, registering the exact fixture commit above as active approved revision `validation-v1-2026-09-16` with regression coverage for the pinned baseline contract.
-
-The Runtime caches the ProjectBaseline registry in-process. The next operational gate is therefore local source synchronization followed by a fresh no-active-work gate. Only if that gate passes should Runtime be restarted/recreated so the new baseline registry is read. A full no-cache rebuild is not required solely for this config activation.
-
-After activation, re-check platform health and the preserved DEC-025C state, then re-check fixture cleanliness/base branch/deterministic baseline before creating the validation plan. Do not create another direct legacy fixture job and do not record a duplicate rollout continuity event.
+Issue #162 and fixture issue #7 are closed `completed`. No R4 is required for #162.
 
 <!-- PCP:CONTINUITY:START -->
 ## Automated continuity snapshot
 
-- Event: `fixture_project_baseline_registered_activation_pending`.
-- Parent validation: `#162`; initiative: `#146`.
-- Earlier rollout/preservation/service-boundary/n8n/continuity gates: complete.
-- Fixture provisioning/registration/readiness: complete.
-- #186/#187 project-registry reload defect: complete.
-- #188/#189 review fallback defect: complete.
-- #190/#191 approved fixture ProjectBaseline registration: complete.
-- Historical direct validation job: `b2fb7ae243734ef9bbfc344934c3911c`, failed and preserved.
-- Approved fixture baseline: `validation-v1-2026-09-16`.
-- Fixture baseline source commit: `ba3207af0ce28b607b1d3dd9eb00bc69072ac234`.
-- PCP baseline registration merge: `0c3a4760404e52828206f3b4625a6c0f00c7998a`.
-- Active operational gate: load the merged baseline into Runtime after a fresh idle gate.
-- Legitimate orchestrated validation plan/job: not yet created.
-- Production deployment: not performed.
+- Event: `pr_merged`.
+- Project/job: `pcp-validation-fixture` / `c04c0af200d95d6583de70616e8ea7d3`.
+- Runtime state: `completed`; outcome: `accepted`.
+- WorkOrder: `FIXTURE-GH-7-R3-TEST`; branch: `ai/c04c0af200d9`.
+- Human attention: interventions `0`, avoidable `0`, owner wait `0.0` seconds.
+- Execution evidence: first-pass `True`, repairs `0`, provider failures `0`, quota failures `0`.
+- Merge evidence: PR `9`, merge commit `3ecd9ce66260245089efe2533080d1b5191b810c`, authority `pm_controlled_merge`.
+- This section is mutable execution state only. Durable architecture/policy changes still require their normal reviewed Git path.
 <!-- PCP:CONTINUITY:END -->
+
+## Efficiency initiative #146: implementation complete, calibration/follow-up remains
+
+Issues #147, #148, #149, #150, #151 and #98 are closed `completed`; #162 now provides the clean operational routine-path proof.
+
+Keep #146 open while collecting real routine-task evidence rather than manufacturing validation-only jobs. Calibration should use naturally occurring work and compare estimate vs actual usage, first-pass success, repair/retry categories, verification runs, review yield, wall time, provider/model share and Human Attention metrics.
+
+Two bounded improvements discovered by operational evidence should be handled before treating the continuity/attention layer as fully mature:
+
+1. continuity proposals are persisted and renderable, but `current-state.md` can still drift because the proposal is not yet applied automatically through the normal Git branch/PR authority path;
+2. owner-executed operational recovery such as `retry_delivery` is not currently represented in Human Attention events, so R2 could report attention zero while task telemetry correctly reported delivery retries.
+
+## Provider optimization #153
+
+Issue #153 remains open and is the next approved feature-oriented optimization after continuity/attention correctness work.
+
+Current safe direction:
+
+- prefer the already integrated/smoke-proven OpenRouter North Mini Code resource for eligible fast/standard routine execution where capability/privacy/health gates allow it;
+- preserve stronger-model routing for critical/security/architecture work;
+- do not add a second active OpenRouter model pool until provider-wide vs model-level health/failover semantics are intentionally redesigned and tested;
+- use real telemetry before widening complex-role eligibility.
+
+R3 provides positive first-pass evidence for the existing OpenRouter executor, but one successful task is not a statistically meaningful calibration sample.
 
 ## Preserved `chonhac` DEC-025C
 
@@ -67,7 +104,7 @@ After activation, re-check platform health and the preserved DEC-025C state, the
 - result remains `reassessment_stopped` / `repair budget exhausted` / `hard_budget_guard`;
 - preserved usage remains model calls `21 / 22`, tool calls `65 / 160`, test runs `14 / 14`, wall time `93.168 / 110` minutes, repair iterations `4 / 4`.
 
-The existing pending recovery action remains preserved. Never manually mutate durable job/action state or counters.
+The existing pending recovery action `abXzvyU2pvALZ5YpovNveDcr` remains preserved with no result. Never manually mutate durable job/action state or counters and never resume it as part of #146 follow-up work.
 
 ## Global operational gates
 
@@ -82,11 +119,9 @@ The existing pending recovery action remains preserved. Never manually mutate du
 
 ## Immediate next safe actions
 
-1. Synchronize local PCP source to current `main`.
-2. Run a fresh idle gate; preserve DEC-025C and historical failed fixture evidence unchanged.
-3. If the gate passes, restart/recreate Runtime so the cached ProjectBaseline registry reloads.
-4. Re-check platform health and preserved DEC-025C state after activation.
-5. Re-check fixture `main`, duplicate/open-PR state, local cleanliness and deterministic baseline.
-6. Create exactly one authenticated `POST /v1/plans` request for `Add whitespace-only Greeter regression test` and verify it becomes a tracked WorkOrder/orchestrator-created job.
-7. Do not manually merge the fixture validation PR; allow constrained PM merge after verification/review/CI.
-8. Capture telemetry, Human attention, PM-merge audit and continuity evidence in #162 and #146.
+1. Complete #201 docs-only continuity refresh through normal CI/PR merge.
+2. Open and implement a bounded continuity-application follow-up: apply persisted continuity proposals to `docs/project/current-state.md` only through normal Git branch/PR authority, keeping Runtime free of GitHub/source-write credentials.
+3. Open and implement a bounded Human Attention follow-up so owner-executed routine operational recovery is represented in attention telemetry without conflating provider/delivery retry counters with engineering repair.
+4. Resume #153 with a small North Mini Code fast/standard routing-preference slice and routing/telemetry tests; do not activate a multi-model OpenRouter pool yet.
+5. Collect naturally occurring routine-task calibration evidence under #146; close #146 only after the sample is meaningful enough to evaluate trends.
+6. Telegram terminal operations remains approved but lower priority until the efficiency/calibration work above is sufficiently mature.
