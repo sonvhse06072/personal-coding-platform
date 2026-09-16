@@ -3,7 +3,7 @@
 ## Usage: platform-test
 set -euo pipefail
 
-./scripts/antigravity-bridge.sh status >/dev/null
+bash ./scripts/with-host-secrets.sh ./scripts/antigravity-bridge.sh status >/dev/null
 
 # Router and executor install test dependencies globally.
 ddev exec -s router sh -c 'PYTHONPATH=/app pytest -q /app/tests'
