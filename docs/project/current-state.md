@@ -19,7 +19,7 @@ Last updated: 2026-09-16
 - Rollout health/tests, DEC-025C preservation, service-boundary validation, n8n health and the Phase-E rollout continuity event are complete.
 - Do not repeat the rollout rebuild or rollout continuity event unless later source/config requires it.
 
-## #162 current stage: ProjectBaseline follow-up #190
+## #162 current stage: approved fixture baseline activation
 
 The dedicated non-production repository `sonvhse06072/pcp-validation-fixture` is provisioned and registered. Fixture blocker #181, registration #184/#185, and project-registry reload defect #186/#187 are complete.
 
@@ -29,31 +29,29 @@ Further validation must use the real orchestration path:
 
 `POST /v1/plans -> ExecutionPlan -> tracked WorkOrder -> orchestrator-created job -> verification/review -> PR/CI -> constrained PM merge`
 
-Pre-mutation inspection found that `pcp-validation-fixture` had no approved ProjectBaseline. #190 tracks that bounded governance gap.
+The Human Owner approved initial fixture baseline revision `validation-v1-2026-09-16` on 2026-09-16. Fixture #3 / PR #4 added the approved `PROJECT-BASELINE.md` and merged at fixture commit `ba3207af0ce28b607b1d3dd9eb00bc69072ac234`.
 
-The Human Owner approved initial baseline revision `validation-v1-2026-09-16` on 2026-09-16. The approved frame is dedicated non-production PCP validation only, preserving the existing generic PHP+DDEV fixture, enforcing its existing deterministic checks and CI, and keeping the immediate task test-only: add whitespace-only Greeter regression coverage without changing public behavior.
+PCP #190 / PR #191 is complete. PR #191 merged to PCP `main` at `0c3a4760404e52828206f3b4625a6c0f00c7998a`, registering the exact fixture commit above as active approved revision `validation-v1-2026-09-16` with regression coverage for the pinned baseline contract.
 
-Fixture issue #3 / PR #4 added `PROJECT-BASELINE.md` and merged after CI at exact fixture commit `ba3207af0ce28b607b1d3dd9eb00bc69072ac234`.
-
-PCP branch `ai/fixture-project-baseline-190` registers that exact commit as active approved revision `validation-v1-2026-09-16`, adds regression coverage for the pinned baseline contract, and updates this handoff.
-
-The Runtime caches the ProjectBaseline registry in-process. After the registry PR merges and local source is synchronized, activation requires a fresh no-active-work gate before a bounded Runtime restart/recreate so the new baseline is read. A full no-cache rebuild is not required solely for this config activation.
+The Runtime caches the ProjectBaseline registry in-process. The next operational gate is therefore local source synchronization followed by a fresh no-active-work gate. Only if that gate passes should Runtime be restarted/recreated so the new baseline registry is read. A full no-cache rebuild is not required solely for this config activation.
 
 After activation, re-check platform health and the preserved DEC-025C state, then re-check fixture cleanliness/base branch/deterministic baseline before creating the validation plan. Do not create another direct legacy fixture job and do not record a duplicate rollout continuity event.
 
 <!-- PCP:CONTINUITY:START -->
 ## Automated continuity snapshot
 
-- Event: `fixture_project_baseline_registration_in_progress`.
-- Parent validation: `#162`; initiative: `#146`; active follow-up: `#190`.
+- Event: `fixture_project_baseline_registered_activation_pending`.
+- Parent validation: `#162`; initiative: `#146`.
 - Earlier rollout/preservation/service-boundary/n8n/continuity gates: complete.
 - Fixture provisioning/registration/readiness: complete.
 - #186/#187 project-registry reload defect: complete.
 - #188/#189 review fallback defect: complete.
+- #190/#191 approved fixture ProjectBaseline registration: complete.
 - Historical direct validation job: `b2fb7ae243734ef9bbfc344934c3911c`, failed and preserved.
 - Approved fixture baseline: `validation-v1-2026-09-16`.
 - Fixture baseline source commit: `ba3207af0ce28b607b1d3dd9eb00bc69072ac234`.
-- PCP baseline registration: in progress on `ai/fixture-project-baseline-190`.
+- PCP baseline registration merge: `0c3a4760404e52828206f3b4625a6c0f00c7998a`.
+- Active operational gate: load the merged baseline into Runtime after a fresh idle gate.
 - Legitimate orchestrated validation plan/job: not yet created.
 - Production deployment: not performed.
 <!-- PCP:CONTINUITY:END -->
@@ -84,10 +82,11 @@ The existing pending recovery action remains preserved. Never manually mutate du
 
 ## Immediate next safe actions
 
-1. Finish #190 through exact-head CI and reviewed PCP PR.
-2. Synchronize local PCP source, run a fresh idle gate, and activate the merged baseline with a bounded Runtime restart/recreate only if the gate passes.
-3. Re-check platform health and preserved DEC-025C state after activation.
-4. Re-check fixture `main`, duplicate/open-PR state, local cleanliness and deterministic baseline.
-5. Create exactly one authenticated `POST /v1/plans` request for `Add whitespace-only Greeter regression test` and verify it becomes a tracked WorkOrder/orchestrator-created job.
-6. Do not manually merge the fixture validation PR; allow constrained PM merge after verification/review/CI.
-7. Capture telemetry, Human attention, PM-merge audit and continuity evidence in #162 and #146.
+1. Synchronize local PCP source to current `main`.
+2. Run a fresh idle gate; preserve DEC-025C and historical failed fixture evidence unchanged.
+3. If the gate passes, restart/recreate Runtime so the cached ProjectBaseline registry reloads.
+4. Re-check platform health and preserved DEC-025C state after activation.
+5. Re-check fixture `main`, duplicate/open-PR state, local cleanliness and deterministic baseline.
+6. Create exactly one authenticated `POST /v1/plans` request for `Add whitespace-only Greeter regression test` and verify it becomes a tracked WorkOrder/orchestrator-created job.
+7. Do not manually merge the fixture validation PR; allow constrained PM merge after verification/review/CI.
+8. Capture telemetry, Human attention, PM-merge audit and continuity evidence in #162 and #146.
