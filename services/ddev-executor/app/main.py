@@ -267,7 +267,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.14")
+app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.15")
 app.include_router(pm_bridge_github_router)
 
 
@@ -282,7 +282,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok" if ok else "degraded",
         "service": "ddev-executor",
-        "version": "1.0.14",
+        "version": "1.0.15",
         "ddev": (result.stdout or result.stderr).strip(),
         "docker": (docker.stdout or docker.stderr).strip(),
         "buildx": (buildx.stdout or buildx.stderr).strip(),
