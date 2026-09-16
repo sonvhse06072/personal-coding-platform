@@ -158,6 +158,19 @@ def apply_continuity(payload: ContinuityApplyRequest) -> dict[str, Any]:
             if not base_sha:
                 raise RuntimeError("Configured continuity base branch is missing")
 
+            # Idempotence/no-op guard: if the authoritative base already carries
+            # this exact bounded snapshot, do not create an empty branch/PR.
+            base_current, _ = _file(client, delivery, repository, base_branch)
+            if _replace_managed(base_current, section) == base_current:
+                return {
+                    "state": "already_current",
+                    "repository": repository,
+                    "path": _CONTINUITY_PATH,
+                    "branch": None,
+                    "head": base_sha,
+                    "pr_number": None,
+                }
+
             branch_sha = _ref_sha(client, delivery, repository, branch)
             if branch_sha is None:
                 _json(
