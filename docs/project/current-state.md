@@ -18,8 +18,8 @@ Last updated: 2026-09-17
 - Low-touch routine-path validation #162 is complete via a clean zero-avoidable-intervention R3 run.
 - PM routine in-scope merge authority is approved; Developer agents never merge and production remains Human Owner-controlled.
 - Last verified deployed service labels remain Runtime `1.0.44`, Router `1.0.21`, ddev-executor `1.0.15`, routing policy v12.
-- Rollout health/tests, DEC-025C preservation, service-boundary validation, direct n8n health and the Phase-E rollout continuity event are complete.
-- Do not repeat rollout/rebuild/validation work merely to recreate #162 evidence.
+- Continuity B1 was locally activated from exact PCP source `45e83ec97dbd8a03944d5b85e7a9c5218028d0fe`; the Human Owner confirmed both activation blocks passed completely, including no-active-work gates, full platform tests, Runtime/executor authority-boundary checks, executor PCP delivery-token dry-run authorization, and exact DEC-025C/pending-action preservation.
+- Do not repeat R3 or B1 rollout/rebuild validation merely to recreate already captured evidence.
 
 ## #162 operational validation: complete
 
@@ -71,26 +71,38 @@ Issue #162 and fixture issue #7 are closed `completed`. No R4 is required for #1
 
 ## Efficiency initiative #146: implementation complete, calibration/follow-up remains
 
-Issues #147, #148, #149, #150, #151 and #98 are closed `completed`; #162 now provides the clean operational routine-path proof.
+Issues #147, #148, #149, #150, #151, #98 and #162 are closed `completed`. Keep #146 open while collecting naturally occurring routine-task evidence rather than manufacturing validation-only jobs. Calibration should compare estimate vs actual usage, first-pass success, repair/retry categories, verification runs, review yield, wall time, provider/model share and Human Attention metrics.
 
-Keep #146 open while collecting real routine-task evidence rather than manufacturing validation-only jobs. Calibration should use naturally occurring work and compare estimate vs actual usage, first-pass success, repair/retry categories, verification runs, review yield, wall time, provider/model share and Human Attention metrics.
+### Continuity B1: source merged and locally activated
 
-Continuity B1 source implementation is now complete:
+- #201 / PR #202 refreshed the handoff after R3.
+- #203 / PR #204 added constrained automatic application for `pr_merged` continuity proposals only.
+- PR #204 exact head `40805c8b0ffb35806b2c42035ca9e13a778291e9` passed workflow run `35139240879` (run #367) across structure, Router, Runtime and ddev-executor.
+- PR #204 merged at `cb8668fefc328f8ab664cfbce223a9231cbba742`; #205 / PR #206 then recorded the activation gate, producing PCP main `45e83ec97dbd8a03944d5b85e7a9c5218028d0fe`.
+- Human Owner subsequently confirmed both local B1 activation blocks passed fully: source sync, no-active-work gates, full platform tests, Runtime GitHub-authority absence, executor continuity authority, invalid-payload fail-closed probe, PCP delivery-token dry-run authorization, and DEC-025C/action preservation.
+- Runtime still receives no GitHub/source-write credential. ddev-executor constrains continuity mutation to the configured PCP repository and exactly `docs/project/current-state.md`, through `ai/continuity/*` PR + CI + exact-head merge.
+- B1 remains deliberately advisory after the engineering merge and currently auto-applies only `pr_merged`.
 
-- #201 / PR #202 refreshed this handoff after R3;
-- #203 / PR #204 added constrained automatic application for `pr_merged` proposals only;
-- PR #204 exact head `40805c8b0ffb35806b2c42035ca9e13a778291e9` passed fresh workflow run `35139240879` (run #367) across structure, Router, Runtime and ddev-executor;
-- PR #204 merged to PCP `main` at `cb8668fefc328f8ab664cfbce223a9231cbba742`;
-- Runtime still receives no GitHub/source-write credentials; ddev-executor constrains continuity mutation to the configured PCP repository and exactly `docs/project/current-state.md`, through `ai/continuity/*` PR + CI + exact-head merge;
-- application is deliberately advisory after the engineering merge and currently auto-applies only `pr_merged`.
+### Human Attention delivery-recovery fix: source merged, local activation pending
 
-The B1 source is merged but has not yet been locally activated. Do not treat the new continuity applicator as deployed until a fresh no-active-work gate, exact-source synchronization, DDEV rebuild/restart, full platform tests, credential-boundary verification and DEC-025C preservation check pass.
+Operational R2 evidence exposed a telemetry correctness gap: task telemetry correctly recorded `delivery_retries=2`, but successful owner-executed `retry_delivery` controls were absent from `cp_attention_events` and the Human Attention summary therefore remained zero.
 
-One remaining telemetry correctness gap should be handled after B1 activation: owner-executed operational recovery such as `retry_delivery` is not currently represented in Human Attention events, so R2 could report attention zero while task telemetry correctly reported delivery retries.
+#207 / PR #208 fixes that bounded gap without changing recovery semantics or retry counters:
+
+- successful owner-executed `retry_delivery` and `recheck_ci` actions become `routine_operational` Human Attention events with `avoidable=true`;
+- durable `action_id` is the event-key authority, so replay is idempotent and can repair missing telemetry without double-counting;
+- owner wait is measured from durable control-action creation to successful execution;
+- only sanitized identifiers/type/channel metadata is stored;
+- `budget_extend`, protected human decisions, provider/reroute/operator controls and task retry/repair counters remain unchanged by this slice;
+- attention persistence is downstream observability only and cannot roll back an already-successful control action.
+
+PR #208 exact head `40ab0cf6b5149ff79465091a202eeb0f3ed4dd24` passed workflow run `35142013882` (run #371) across all four jobs and merged at `a0b886ba68c34ec81bb374a9eaa7c145db0f2b6c`.
+
+The attention-fix source is merged but is not yet treated as locally deployed. Activate it only after this handoff PR is merged and a fresh no-active-work gate passes. Do not backfill historical R2 by manually inserting attention rows or replaying its old control actions.
 
 ## Provider optimization #153
 
-Issue #153 remains open and is the next approved feature-oriented optimization after continuity/attention correctness work.
+Issue #153 remains open and is the next approved feature-oriented optimization after the attention fix is locally activated.
 
 Current safe direction:
 
@@ -127,10 +139,9 @@ The existing pending recovery action `abXzvyU2pvALZ5YpovNveDcr` remains preserve
 
 ## Immediate next safe actions
 
-1. Synchronize local PCP source to the exact current `main` only after a fresh no-active-work gate.
-2. Rebuild/restart the platform from the merged B1 source, then run platform health/tests, verify the secret boundary and confirm DEC-025C/pending action remain unchanged.
-3. Verify the executor-side PCP GitHub delivery credential can authorize the new continuity repository path without exposing the token; do not create a manual continuity PR merely as a smoke test.
-4. After B1 activation passes, open and implement a bounded Human Attention follow-up so owner-executed routine operational recovery is represented in attention telemetry without conflating provider/delivery retry counters with engineering repair.
-5. Resume #153 with a small North Mini Code fast/standard routing-preference slice and routing/telemetry tests; do not activate a multi-model OpenRouter pool yet.
-6. Collect naturally occurring routine-task calibration evidence under #146; close #146 only after the sample is meaningful enough to evaluate trends.
-7. Telegram terminal operations remains approved but lower priority until the efficiency/calibration work above is sufficiently mature.
+1. Complete #209 through its one-file docs-only PR and normal CI/merge.
+2. With a fresh no-active-work gate, synchronize local PCP to the exact new `main`, rebuild/restart the platform, run full platform tests, verify the new `control_actions_attention` wiring, and reconfirm DEC-025C/pending action remain unchanged.
+3. Do not create or execute a synthetic `retry_delivery` action merely to test telemetry. Validate deployment structurally/unit-wise and let the next naturally occurring owner delivery-recovery event prove live accounting.
+4. After attention activation passes, resume #153 with a small North Mini Code fast/standard routing-preference slice and routing/telemetry tests; do not activate a multi-model OpenRouter pool yet.
+5. Collect naturally occurring routine-task calibration evidence under #146; close #146 only after the sample is meaningful enough to evaluate trends.
+6. Telegram terminal operations remains approved but lower priority until the efficiency/calibration work above is sufficiently mature.
