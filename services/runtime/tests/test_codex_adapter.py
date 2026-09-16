@@ -2,6 +2,8 @@ import asyncio
 import json
 from pathlib import Path
 
+import pytest
+
 from app.adapters.codex import CodexAdapter
 from app.developer_stream import bind_developer_sink
 from app.shell import CommandResult
@@ -59,6 +61,88 @@ def test_codex_turn_completed_is_authoritative_over_transient_rate_limit_text(mo
     assert 'model_reasoning_effort="medium"' in captured["argv"]
     _assert_bounded_unattended_policy(captured["argv"], sandbox="workspace-write")
     assert "sandbox_workspace_write.network_access=false" in captured["argv"]
+
+
+def test_codex_output_uses_only_last_agent_message(monkeypatch, tmp_path: Path):
+    progress = "Inspecting the approved baseline before planning."
+    final_json = json.dumps({
+        "scope_assessment": "in_scope",
+        "summary": "The ticket is routine and bounded.",
+        "work_orders": [],
+        "decision_boundaries": [],
+    })
+    stdout = "\n".join([
+        _event({"type": "turn.started"}),
+        _event({
+            "type": "item.completed",
+            "item": {"type": "agent_message", "text": progress},
+        }),
+        _event({
+            "type": "item.completed",
+            "item": {"type": "agent_message", "text": final_json},
+        }),
+        _event({"type": "turn.completed", "usage": {"input_tokens": 100, "output_tokens": 50}}),
+    ])
+    captured: dict[str, object] = {}
+
+    async def fake_run_command(argv, *, cwd, timeout, on_stdout_line=None):
+        output_index = argv.index("--output-last-message")
+        output_path = Path(argv[output_index + 1])
+        captured["path"] = output_path
+        captured["argv"] = argv
+        assert output_path.exists()
+        output_path.write_text(final_json, encoding="utf-8")
+        return CommandResult(argv=argv, returncode=0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr("app.adapters.codex.run_command", fake_run_command)
+    run = asyncio.run(
+        CodexAdapter("gpt-5.6-terra", "low").run(
+            workspace=tmp_path,
+            prompt="return one JSON object",
+            mode="plan",
+            timeout=30,
+        )
+    )
+
+    assert run.returncode == 0
+    assert run.output == final_json
+    assert progress not in run.output
+    raw_events = [json.loads(line) for line in run.raw.splitlines()]
+    raw_messages = [
+        event["item"]["text"]
+        for event in raw_events
+        if event.get("type") == "item.completed"
+        and event.get("item", {}).get("type") == "agent_message"
+    ]
+    assert raw_messages == [progress, final_json]
+    assert "--output-last-message" in captured["argv"]
+    _assert_bounded_unattended_policy(captured["argv"], sandbox="read-only")
+    assert not captured["path"].exists()
+
+
+def test_codex_last_message_tempfile_is_removed_on_cancellation(monkeypatch, tmp_path: Path):
+    captured: dict[str, Path] = {}
+
+    async def fake_run_command(argv, *, cwd, timeout, on_stdout_line=None):
+        output_index = argv.index("--output-last-message")
+        output_path = Path(argv[output_index + 1])
+        captured["path"] = output_path
+        output_path.write_text("partial", encoding="utf-8")
+        raise asyncio.CancelledError()
+
+    monkeypatch.setattr("app.adapters.codex.run_command", fake_run_command)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(
+            CodexAdapter("gpt-5.6-terra").run(
+                workspace=tmp_path,
+                prompt="plan",
+                mode="plan",
+                timeout=30,
+            )
+        )
+
+    assert not captured["path"].exists()
 
 
 def test_codex_read_only_modes_are_noninteractive_without_write_network_override(monkeypatch, tmp_path: Path):
