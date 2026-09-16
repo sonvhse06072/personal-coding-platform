@@ -4,8 +4,8 @@ from app.baseline import resolve_project_baseline
 from app.config import clear_config_cache
 
 
-EXPECTED_COMMIT = "ba3207af0ce28b607b1d3dd9eb00bc69072ac234"
-EXPECTED_REVISION = "validation-v1-2026-09-16"
+EXPECTED_COMMIT = "6395655ec311692493d9e93c2573b1bd946c7331"
+EXPECTED_REVISION = "validation-v2-2026-09-16-r3"
 EXPECTED_SOURCE = "PROJECT-BASELINE.md"
 
 
