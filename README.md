@@ -297,3 +297,53 @@ The n8n service is intentionally lower privilege: it receives the Runtime API to
 - Runtime supports bounded successful commits, non-force `ai/*` branch publishing, PR create/update and GitHub CI monitoring when project policy grants those capabilities.
 - GitHub CI failures can feed bounded diagnostics back into the Runtime repair loop and update the same branch/PR. Auto-merge remains off for the current real-project policy and production deployment remains forbidden.
 - n8n is intentionally thin: current responsibilities are job ingress, job status and human-decision forwarding. External notifications, scheduled intake and third-party event connectors are future control-plane extensions, not Runtime logic.
+- Per-job token/cost enforcement is active. Cross-job/monthly provider quota telemetry is the next layer; it is not yet inferred automatically from subscription dashboards.
+
+## Why LiteLLM is not a running service in v1
+
+The registry already reserves `adapter: litellm` for Groq, Cloudflare and Luna utility calls, but Router v1 is deterministic-first and Coding Runtime v1 does not need raw utility-model calls yet. Starting an idle gateway would add another moving part without improving the execution path. When semantic classification/context compaction is enabled, LiteLLM can be added as another DDEV custom service without changing the Router/Coding Runtime contracts.
+
+## Model IDs
+
+`config/models.yml` currently uses `gpt-5.6-sol` for the normal Codex Plus pool and `gpt-6-astra` for frontier escalation. Plus includes Sol and Astra access subject to your account's current Codex allowance/availability. OpenCode model IDs are catalog/provider IDs; if a provider changes an alias, verify it once with `opencode models` and update only `config/models.yml`.
+
+## v1.0.3 integration fixes
+
+- Router API tests now authenticate with the actual `ROUTER_API_TOKEN` supplied by DDEV instead of the placeholder `change-me`.
+- The constrained DDEV executor image now includes Docker Buildx and reports Buildx health explicitly. DDEV requires Buildx for project image builds.
+
+## v1.0.5 writable service HOME fix
+
+The coding-runtime and ddev-executor images now prepare `/home/coder` using the host DDEV UID/GID. This fixes CLI failures such as OpenCode being unable to create `/home/coder/.cache`, while keeping the services non-root at runtime.
+
+## v1.0.6 quota-aware failover and strict completion
+
+- Coding-agent provider failures such as usage/quota exhaustion, rate limits, authentication failures, and provider outages are detected even when a CLI exits with code 0.
+- A provider-level failure disables that provider for the current job and reroutes planner/executor/evaluator work to another eligible provider without consuming repair iterations.
+- Provider failovers have their own hard budget and never reset the job budget.
+- Implementation tasks inferred to require repository changes now include `material_change` in the Definition of Done. An empty diff can no longer be accepted as a successful implementation.
+- Runtime now completes only when Router returns `complete`; `continue` no longer aliases success.
+- Agent success itself is part of completion state, preventing green deterministic checks from hiding an agent invocation failure.
+- Known provider exhaustion can be declared before a job with `CODING_DISABLED_PROVIDERS=openai ./scripts/create-job.sh ...`, avoiding a wasted probe call.
+
+## v1.0.9 Antigravity migration
+
+- Removed Gemini CLI from the runtime image, registry, routing policy, mounts, tests and documentation. Google Individual coding now uses Antigravity CLI.
+- Added `antigravity_free` (`provider: google_antigravity`, `adapter: antigravity_host`, `quota_group: antigravity_individual`).
+- Added a constrained WSL-host bridge because Antigravity Individual account sessions live in the OS keyring and should not be mounted into Docker.
+- The bridge accepts only authenticated `/health` and `/run` requests, rejects workspaces outside `$CODING_WORKSPACES_ROOT`, and never accepts arbitrary command text.
+- Antigravity runs headlessly with JSON output, native sandboxing and bounded execution timeout. Token usage from `agy` is fed into the existing per-job budget counters.
+- `ddev start` starts the bridge through a host hook; `ddev stop` stops it. `ddev platform-status` now reports bridge health.
+- Routing prefers Antigravity for Fast/Standard work and includes it as a Complex planner/executor option. Critical routing remains biased toward stronger independent pools.
+
+To temporarily disable the Antigravity pool for one job:
+
+```bash
+CODING_DISABLED_PROVIDERS=google_antigravity ./scripts/create-job.sh ...
+```
+
+## v1.0.10 Test harness fix
+
+- Antigravity async unit tests use `asyncio.run(...)`, so `pytest-asyncio` is not required.
+- Runtime pytest cache is disabled in `ddev platform-test` because `/app` is intentionally read-only to the runtime user.
+- No routing or runtime execution behavior changed.
