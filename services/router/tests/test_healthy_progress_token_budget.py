@@ -1,3 +1,5 @@
+import pytest
+
 from app.config import clear_config_cache, get_config
 from app.schemas import ExecutionProgress, ReassessRequest, RoutingRequest
 from app.staffing import RouterEngine
@@ -127,3 +129,11 @@ def test_repeated_failure_still_circuit_breaks_before_material_token_cap():
 
     assert result.action in {"escalate", "stop"}
     assert any(signal.startswith("repeated_failure:") for signal in result.signals)
+
+
+def test_profile_prior_above_configured_hard_cap_fails_closed():
+    engine = make_engine()
+    engine.policy["adaptive_budget"]["dimensions"]["max_input_tokens"]["hard_max"] = 1
+
+    with pytest.raises(RuntimeError, match="exceeds configured hard_max"):
+        engine.route(request())
