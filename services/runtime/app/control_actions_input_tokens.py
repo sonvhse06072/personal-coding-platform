@@ -75,6 +75,26 @@ class ControlActionService(BaseControlActionService):
         return used is not None and limit is not None and used >= limit
 
     @classmethod
+    def _input_token_extension_target(
+        cls,
+        job: dict[str, Any],
+    ) -> tuple[int, int, int] | None:
+        route = dict(job.get("route") or {})
+        budget = dict((route.get("strategy") or {}).get("budget") or {})
+        progress = dict(job.get("progress") or {})
+        used_value = cls._numeric(progress.get(_INPUT_TOKEN_COUNTER))
+        limit_value = cls._numeric(budget.get(_INPUT_TOKEN_DIMENSION))
+        if used_value is None or limit_value is None:
+            return None
+
+        used = int(used_value)
+        previous_limit = int(limit_value)
+        new_limit = min(previous_limit + _INPUT_TOKEN_INCREMENT, _INPUT_TOKEN_HARD_MAX)
+        if new_limit <= previous_limit or new_limit <= used:
+            return None
+        return previous_limit, used, new_limit
+
+    @classmethod
     def _input_token_metric(cls, job: dict[str, Any]) -> dict[str, Any] | None:
         route = dict(job.get("route") or {})
         budget = dict((route.get("strategy") or {}).get("budget") or {})
@@ -119,17 +139,19 @@ class ControlActionService(BaseControlActionService):
             if isinstance(item, dict)
             and str(item.get("action_type") or "") in {"details", "keep_blocked"}
         ]
-        safe_actions.insert(
-            0,
-            {
-                "action_type": "budget_extend",
-                "label": "➕ +1.000.000 input token",
-                "payload": {
-                    "dimension": _INPUT_TOKEN_DIMENSION,
-                    "increment": _INPUT_TOKEN_INCREMENT,
+        target = self._input_token_extension_target(current_job)
+        if target is not None:
+            safe_actions.insert(
+                0,
+                {
+                    "action_type": "budget_extend",
+                    "label": "➕ +1.000.000 input token",
+                    "payload": {
+                        "dimension": _INPUT_TOKEN_DIMENSION,
+                        "increment": _INPUT_TOKEN_INCREMENT,
+                    },
                 },
-            },
-        )
+            )
         advisory["action_specs"] = safe_actions
         advisory["summary"] = "Runtime đã chạm giới hạn input-token cứng của route hiện tại."
         advisory["cause"] = (
@@ -137,10 +159,16 @@ class ControlActionService(BaseControlActionService):
             "đã vượt giới hạn hiện tại; Runtime giữ blocked cho đến khi Human Owner phê duyệt "
             "một mở rộng có giới hạn."
         )
-        advisory["recommended"] = (
-            "Chỉ phê duyệt +1.000.000 input token nếu WorkOrder hiện tại vẫn cần hoàn tất "
-            "verification/review; usage đã tiêu thụ không bị reset và tổng limit không thể vượt 4.000.000."
-        )
+        if target is not None:
+            advisory["recommended"] = (
+                "Chỉ phê duyệt +1.000.000 input token nếu WorkOrder hiện tại vẫn cần hoàn tất "
+                "verification/review; usage đã tiêu thụ không bị reset và tổng limit không thể vượt 4.000.000."
+            )
+        else:
+            advisory["recommended"] = (
+                "Giữ WorkOrder blocked: +1.000.000 không thể tạo runnable headroom trong hard maximum 4.000.000. "
+                "Không reset counter, không tăng trần tự động và không force-complete."
+            )
         return advisory
 
     def _apply_budget_extension(self, action: dict[str, Any]) -> dict[str, Any]:
@@ -165,19 +193,18 @@ class ControlActionService(BaseControlActionService):
         if increment != _INPUT_TOKEN_INCREMENT:
             raise RuntimeError("Input-token budget extension increment is not authorized")
 
+        target = self._input_token_extension_target(job)
+        if target is None:
+            raise RuntimeError(
+                "Input-token budget extension cannot restore runnable headroom within the platform hard maximum"
+            )
+        previous_limit, used, new_limit = target
+
         route = deepcopy(job.get("route") or {})
         strategy = dict(route.get("strategy") or {})
         budget = dict(strategy.get("budget") or {})
         if _INPUT_TOKEN_DIMENSION not in budget:
             raise RuntimeError("Current route does not expose max_input_tokens")
-
-        previous_limit = int(budget[_INPUT_TOKEN_DIMENSION])
-        used = int((job.get("progress") or {}).get(_INPUT_TOKEN_COUNTER, 0) or 0)
-        new_limit = min(previous_limit + _INPUT_TOKEN_INCREMENT, _INPUT_TOKEN_HARD_MAX)
-        if new_limit <= previous_limit:
-            raise RuntimeError("Input-token budget extension reached the platform hard maximum")
-        if new_limit <= used:
-            raise RuntimeError("Input-token budget extension would not restore runnable headroom")
 
         budget[_INPUT_TOKEN_DIMENSION] = new_limit
         strategy["budget"] = budget
