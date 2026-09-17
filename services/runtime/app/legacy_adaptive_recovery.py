@@ -15,6 +15,19 @@ _ANOMALY_SIGNALS = {
     "decision_boundary",
     "hard_budget_overrun",
 }
+_BUDGET_STOP_SIGNALS = {"hard_budget_guard", "hard_budget_overrun"}
+_BUDGET_FAILURE_MARKERS = (
+    "model-call budget exhausted",
+    "input-token budget exhausted",
+    "input-token budget exceeded",
+    "output-token budget exhausted",
+    "output-token budget exceeded",
+    "tool-call budget exhausted",
+    "iteration budget exhausted",
+    "repair budget exhausted",
+    "test-run budget exhausted",
+    "wall-time budget exhausted",
+)
 
 
 class LegacyAdaptiveRecovery:
@@ -25,6 +38,12 @@ class LegacyAdaptiveRecovery:
     are never adopted automatically. Durable usage, source/workspace, diff and
     WorkOrder scope remain untouched; only the effective Router route is
     refreshed after a fail-closed health reassessment.
+
+    A historical budget guard/overrun is only a candidate for recovery. The
+    freshly routed job must fit the current adaptive emergency envelope and the
+    fresh reassessment must return ``continue`` without anomaly/protected-decision
+    signals. This lets healthy legacy work cross obsolete profile counters while
+    preserving genuine circuit breakers.
     """
 
     def __init__(self, storage: Any, engine: Any, store: Any) -> None:
@@ -104,8 +123,8 @@ class LegacyAdaptiveRecovery:
         reason = str(result.get("reason") or "")
         last_failure = str(result.get("last_failure") or "").lower()
 
-        if reason == "execution_budget_exhausted":
-            return "budget exhausted" in last_failure
+        if reason in {"planner_budget_exhausted", "execution_budget_exhausted"}:
+            return any(marker in last_failure for marker in _BUDGET_FAILURE_MARKERS)
 
         if reason != "reassessment_stopped":
             return False
@@ -113,7 +132,9 @@ class LegacyAdaptiveRecovery:
         reassess = dict(result.get("reassess") or {})
         signals = {str(value) for value in reassess.get("signals") or []}
         reassess_reason = str(reassess.get("reason") or "").lower()
-        return "hard_budget_guard" in signals and "budget exhausted" in reassess_reason
+        return bool(signals & _BUDGET_STOP_SIGNALS) and any(
+            marker in reassess_reason for marker in _BUDGET_FAILURE_MARKERS
+        )
 
     @staticmethod
     def _has_anomaly(signals: list[Any]) -> bool:
@@ -204,6 +225,8 @@ class LegacyAdaptiveRecovery:
 
         counter_map = {
             "max_model_calls": "model_calls",
+            "max_input_tokens": "input_tokens",
+            "max_output_tokens": "output_tokens",
             "max_tool_calls": "tool_calls",
             "max_iterations": "iteration",
             "max_repair_iterations": "repair_iterations",

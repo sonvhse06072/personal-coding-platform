@@ -15,6 +15,8 @@ from .schemas import (
 
 _ELASTIC_COUNTERS = {
     "max_model_calls": "model_calls",
+    "max_input_tokens": "input_tokens",
+    "max_output_tokens": "output_tokens",
     "max_tool_calls": "tool_calls",
     "max_iterations": "iteration",
     "max_repair_iterations": "repair_iterations",
@@ -24,21 +26,20 @@ _ELASTIC_COUNTERS = {
 
 
 class RouterEngine(BudgetRouterEngine):
-    """Attach task-specific estimates and pre-authorized elastic headroom.
+    """Attach task-specific estimates and pre-authorized healthy-progress headroom.
 
-    For new routes the profile values are priors, not routine stop points. Router
-    derives an estimate and working target from task pressure while the effective
-    max_* fields become bounded emergency ceilings. Runtime therefore continues
-    healthy work without owner clicks; its normal reassessment still applies the
-    existing anti-loop, scope, escalation and human-decision policy after each
-    meaningful iteration.
+    Profile values are planning priors, not routine stop points. Router derives an
+    estimate and working target from task pressure while the effective max_* fields
+    are the configured personal-scale emergency hard caps. Those caps are reserved
+    for genuinely abnormal/material resource use; normal healthy execution may
+    cross profile/default and working thresholds without a Human Owner click.
 
-    Historical telemetry may adjust an estimate only after the configured
-    minimum sample size. Sparse evidence falls back to the hand-authored policy
-    defaults and can never expand the configured emergency hard caps.
+    Historical telemetry may adjust estimates only after the configured minimum
+    sample size. It can never expand the configured emergency hard caps.
 
-    Legacy persisted routes omit ``adaptive_budget`` and keep the historical
-    max_* hard-stop semantics exactly.
+    Legacy persisted routes omit ``adaptive_budget`` and keep historical hard-stop
+    semantics until the explicit compatibility recovery proves a fresh adaptive
+    route healthy.
     """
 
     @staticmethod
@@ -98,7 +99,6 @@ class RouterEngine(BudgetRouterEngine):
         min_ratio = float(cfg.get("estimate_min_ratio", 0.65))
         max_ratio = float(cfg.get("estimate_max_ratio", 1.35))
         working_ratio = float(cfg.get("working_headroom_ratio", 1.25))
-        emergency_ratio = float(cfg.get("emergency_multiplier", 1.5))
         estimate_ratio = min_ratio + (max_ratio - min_ratio) * pressure
         calibration = self._calibration_multipliers(request)
 
@@ -110,7 +110,11 @@ class RouterEngine(BudgetRouterEngine):
                 continue
             spec = dict(spec_value or {})
             baseline = float(getattr(budget, dimension))
-            hard_cap = max(baseline, float(spec.get("hard_max", baseline)))
+            hard_cap = float(spec.get("hard_max", baseline))
+            if baseline > hard_cap:
+                raise RuntimeError(
+                    f"Adaptive budget profile prior {dimension}={baseline:g} exceeds configured hard_max={hard_cap:g}"
+                )
             minimum = float(spec.get("minimum", 1.0))
             historical_multiplier = float(calibration.get(dimension, 1.0))
 
@@ -122,19 +126,17 @@ class RouterEngine(BudgetRouterEngine):
                 hard_cap,
                 max(baseline, math.ceil(estimate * working_ratio)),
             )
-            emergency_limit = min(
-                hard_cap,
-                max(working_target, math.ceil(working_target * emergency_ratio)),
-            )
+
+            # The configured hard maximum is the actual technical stop. Do not
+            # synthesize another low per-task ceiling from a multiplier: doing so
+            # recreates owner-click checkpoints for otherwise healthy work.
+            emergency_limit = hard_cap
 
             # Budget fields are integral, including wall-time minutes.
             estimate = float(int(estimate))
             working_target = float(int(working_target))
             emergency_limit = float(int(emergency_limit))
 
-            # The emergency ceiling is pre-authorized personal-scale headroom.
-            # Estimate/working target are telemetry/reassessment thresholds, not
-            # user-interruption gates.
             setattr(budget, dimension, int(emergency_limit))
             dimensions[dimension] = AdaptiveBudgetDimension(
                 estimate=estimate,
@@ -160,7 +162,7 @@ class RouterEngine(BudgetRouterEngine):
             return result
         result.strategy.adaptive_budget = adaptive
         reasons = list(result.strategy.reasons) + [
-            "Adaptive personal-scale budget enabled: estimate/working targets are non-blocking and max_* values are bounded emergency circuit breakers."
+            "Healthy-progress budget policy enabled: profile/default counters and working targets are non-blocking; configured hard maxima are abnormal/material-risk circuit breakers."
         ]
         if multipliers and request.calibration is not None:
             reasons.append(

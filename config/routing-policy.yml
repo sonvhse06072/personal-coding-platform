@@ -1,4 +1,4 @@
-version: 12
+version: 13
 complexity_weights:
   scope: 0.18
   dependency_depth: 0.1
@@ -11,19 +11,23 @@ complexity_weights:
   reasoning_requirement: 0.05
 adaptive_budget:
   enabled: true
-  # Profile values remain conservative personal-scale priors. New routes derive
-  # task-specific estimate/working thresholds while the effective max_* values
-  # become bounded emergency circuit breakers. Healthy execution may use the
-  # pre-authorized headroom between working_target and emergency_limit without a
-  # Human Owner continuation click.
+  # Profile values are planning priors, not Human Owner continuation gates.
+  # Estimate/working thresholds remain telemetry signals. The configured hard
+  # maxima are deliberately much higher material-risk circuit breakers and are
+  # the only technical stop for these dimensions on adaptive routes.
   estimate_min_ratio: 0.65
   estimate_max_ratio: 1.35
   working_headroom_ratio: 1.25
-  emergency_multiplier: 1.5
   dimensions:
     max_model_calls:
       minimum: 2
       hard_max: 40
+    max_input_tokens:
+      minimum: 250000
+      hard_max: 8000000
+    max_output_tokens:
+      minimum: 40000
+      hard_max: 1000000
     max_tool_calls:
       minimum: 10
       hard_max: 400
