@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .control_actions_reroute import ControlActionService as BaseControlActionService
+from .control_actions_input_tokens import ControlActionService as BaseControlActionService
 
 
 _DELIVERY_ATTENTION_ACTIONS = frozenset({"retry_delivery", "recheck_ci"})

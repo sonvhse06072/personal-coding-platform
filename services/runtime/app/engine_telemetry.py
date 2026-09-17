@@ -1,8 +1,53 @@
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
 from .engine_antigravity import RuntimeEngine as AntigravityRuntimeEngine
+
+
+_INPUT_TOKEN_DIMENSION = "max_input_tokens"
+_INPUT_TOKEN_OWNER_HARD_MAX = 4_000_000
+
+
+def _apply_input_token_owner_authorizations(
+    route: dict[str, Any],
+    checkpoint: dict[str, Any],
+) -> dict[str, Any]:
+    """Preserve audited input-token owner headroom across later fresh routes.
+
+    The core WorkOrder route overlay predates #221 and therefore does not know
+    this token dimension. Keep this narrow compatibility overlay at the outermost
+    Runtime Router proxy so a provider reroute cannot silently re-clamp an
+    already-authorized same-job token limit. The immutable WorkOrder is untouched.
+    """
+    updated = deepcopy(route)
+    strategy = dict(updated.get("strategy") or {})
+    budget = dict(strategy.get("budget") or {})
+    if _INPUT_TOKEN_DIMENSION not in budget:
+        return updated
+
+    for authorization in checkpoint.get("budget_authorizations") or []:
+        if not isinstance(authorization, dict):
+            continue
+        if authorization.get("channel") != "telegram" or not authorization.get("action_id"):
+            continue
+        if str(authorization.get("dimension") or "") != _INPUT_TOKEN_DIMENSION:
+            continue
+        try:
+            previous_limit = int(authorization["previous_limit"])
+            new_limit = int(authorization["new_limit"])
+            current = int(budget[_INPUT_TOKEN_DIMENSION])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if new_limit <= previous_limit:
+            continue
+        authorized = min(new_limit, _INPUT_TOKEN_OWNER_HARD_MAX)
+        budget[_INPUT_TOKEN_DIMENSION] = max(current, authorized)
+
+    strategy["budget"] = budget
+    updated["strategy"] = strategy
+    return updated
 
 
 class TelemetryRouterProxy:
@@ -68,7 +113,8 @@ class TelemetryRouterProxy:
             "resource_multipliers": dict(calibration.get("resource_multipliers") or {}),
             "source": "project_task_role_history",
         }
-        return await self.delegate.route(updated)
+        routed = await self.delegate.route(updated)
+        return _apply_input_token_owner_authorizations(routed, checkpoint)
 
 
 class RuntimeEngine(AntigravityRuntimeEngine):
@@ -77,4 +123,8 @@ class RuntimeEngine(AntigravityRuntimeEngine):
         self.router = TelemetryRouterProxy(self.router, self.storage)
 
 
-__all__ = ["RuntimeEngine", "TelemetryRouterProxy"]
+__all__ = [
+    "RuntimeEngine",
+    "TelemetryRouterProxy",
+    "_apply_input_token_owner_authorizations",
+]
