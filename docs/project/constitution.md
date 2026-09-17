@@ -21,6 +21,7 @@ The system should reduce the amount of routine supervision required from the hum
 - Keep deterministic checks, Git, CI, bounded retries, budgets, checkpoints, and explicit trust boundaries as hard controls around model behavior.
 - Keep operating cost practical for one person. Strong or scarce models should be used where they create meaningful value, not by default.
 - Minimize avoidable Human Owner intervention in routine healthy execution; human attention is itself a scarce project resource.
+- Preserve healthy-progress autonomy: routine work that is demonstrably progressing must not be converted into a Human Owner continuation gate merely because a static task counter or profile default was reached.
 - Preserve a repository-resident source of truth so any capable agent can resume project work from source control alone.
 
 ## 3. Non-goals
@@ -143,13 +144,19 @@ Agents must not confuse these two levels.
 - Task budget should distinguish **estimate**, **elastic working envelope**, and **emergency hard ceiling** semantics where implementation supports it.
 - A task estimate is primarily a planning/resource-allocation forecast; merely reaching the estimate should not interrupt healthy execution.
 - Runtime may autonomously use bounded headroom inside the approved working envelope when progress remains healthy, consumed usage is preserved, no protected decision is implicated, provider/quota state is acceptable, and no circuit-break condition exists.
-- Hard task ceilings exist mainly as safety/circuit-break controls for abnormal execution or real material resource risk; they must not be tuned so low that routine healthy tasks repeatedly require owner continuation clicks.
+- **Healthy-progress non-blocking is a mandatory platform invariant.** A job that is making meaningful progress must not be blocked solely because it reached a static profile/default limit for model calls, input/output tokens, tool calls, test runs, wall time, repair iterations, iterations, or a similar task counter.
+- A static counter crossing by itself is not a sufficient Human Owner decision trigger. A hard stop must have an independent reason such as repeated failure/no progress, solution oscillation, unexpected scope growth, runaway or abnormal resource growth, authoritative provider exhaustion without an eligible fallback, a protected decision boundary, or a genuinely material expansion of the approved project/personal resource envelope.
+- Emergency hard ceilings are safety/circuit-break controls for abnormal execution or real material resource risk. They must be calibrated and implemented so healthy routine work does not repeatedly hit them as ordinary continuation checkpoints.
+- When a healthy task approaches or crosses a working/default limit inside the already-approved personal resource envelope, Router/Runtime must prefer bounded autonomous continuation/headroom on the same durable job/workspace/counters. If the implementation instead requires an owner click merely to continue otherwise healthy work, that is an avoidable workflow defect to be corrected rather than an acceptable steady-state design.
+- Human Owner continuation actions are reserved for true exceptional conditions or protected/material decisions; they must not compensate for arbitrary low counters or profile defaults.
 - Provider quota/resource state is separate from task execution estimates. Authoritative provider exhaustion may block/reroute work; estimate exhaustion alone is not equivalent to provider quota exhaustion.
 - Cheap/free/subscription capacity should be preferred for routine work when expected quality is sufficient.
 - Stronger or scarce models should be reserved for high-risk, high-reasoning, repeated-failure, architecture, specialist consultation, or review work where they create meaningful value.
 - Repeated failures, no progress, solution oscillation, unexpected scope growth, or other abnormal execution signals should trigger reassessment/escalation/circuit breaking rather than unbounded retries.
-- Material expansion of the approved project/personal resource envelope or override of an emergency ceiling requires Human Owner approval.
+- Material expansion of the approved project/personal resource envelope or override of a justified emergency ceiling requires Human Owner approval.
+- Consumed counters are durable audit evidence and must never be reset to create artificial headroom.
 - Human attention should be measured as a scarce resource; routine healthy tasks should target zero avoidable owner interventions.
+- All future Router/Runtime budget, recovery, reassessment, and Human Attention work must be reviewed against this healthy-progress non-blocking invariant as a required acceptance criterion.
 - The detailed Human Owner-approved execution-efficiency policy is `docs/project/efficiency-model.md`.
 
 ## 12. Change control
