@@ -49,6 +49,7 @@ Lower-authority artifacts must not silently redefine higher-authority artifacts.
 - Developer agents must never merge.
 - Deterministic verification is authoritative for executable checks; model review supplements it rather than replacing it.
 - Important product, architecture, security, destructive-data, production, major-dependency, governance, and material budget decisions require human approval.
+- **Healthy-progress non-blocking is mandatory:** a task that is demonstrably making meaningful progress must not require Human Owner continuation merely because a static model/token/tool/test/time/repair/iteration/profile counter was reached. Hard stops require an independent anomaly, protected-decision, provider-exhaustion, or material-resource-risk reason.
 - Default execution concurrency is one. Parallel agent work is an explicit optimization only for independent WorkOrders.
 
 ## Change discipline
@@ -58,8 +59,11 @@ Lower-authority artifacts must not silently redefine higher-authority artifacts.
 - Keep changes minimal and do not refactor unrelated code.
 - Do not weaken a trust boundary to make an agent/tool easier to run.
 - Do not add infrastructure, agents, services, frameworks, or model calls without a demonstrated project need.
-- New automation should reduce failure rate, reduce model/tool time, or strengthen a security/governance boundary.
-- Preserve budget limits and anti-loop behavior; escalation must not reset consumed job budget.
+- New automation should reduce failure rate, reduce model/tool time, reduce avoidable Human Owner attention, or strengthen a security/governance boundary.
+- Preserve durable counters and anti-loop behavior; escalation/headroom must not reset consumed job budget.
+- When changing Router/Runtime budget, reassessment, recovery, or control-action behavior, explicitly verify that healthy-progress jobs continue autonomously inside the approved resource envelope and that counter exhaustion alone cannot become a Human Owner gate.
+- Treat a routine owner `continue` / `+N` action caused only by an underestimated healthy task as a platform defect requiring follow-up, not as normal operation.
+- Keep anomaly circuit breakers fail-closed for repeated failure/no progress, oscillation, unexpected scope growth, authoritative provider exhaustion without fallback, abnormal/runaway resource growth, protected decisions, and genuine material resource-envelope expansion.
 - A CI-green PR is a mandatory gate before a task is considered ready for merge.
 - Before merge, PM must review the WorkOrder/Task Contract, developer evidence, deterministic verification, independent review when required, CI state, unresolved risks, and any Human Owner decision triggers.
 - PM must not merge while a required human decision is unresolved. Once the Human Owner explicitly approves such a decision, PM may complete the merge after the remaining gates pass.
