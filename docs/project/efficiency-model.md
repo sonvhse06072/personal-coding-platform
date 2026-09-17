@@ -1,6 +1,6 @@
 # Personal-Scale Efficiency Model
 
-Status: Human Owner-approved target policy and implementation direction. Approved 2026-09-15. Most behaviors in this document are not implemented yet; issues #146-#151 track delivery.
+Status: Human Owner-approved target policy and implementation direction. Approved 2026-09-15; healthy-progress non-blocking invariant reaffirmed and elevated 2026-09-17. Most behaviors in this document are not implemented yet; issues #146-#151 and follow-up work track delivery.
 
 This document defines how the Personal Coding Platform should maximize useful engineering throughput and quality while keeping model/provider/resource consumption appropriate for one person. It complements `architecture.md`, `operating-model.md`, `provider-policy.md`, and `roadmap.md` without weakening any existing trust, security, production, or governance boundary.
 
@@ -23,7 +23,7 @@ Ticket
 
 without Human Owner intervention.
 
-Human Owner attention is intentionally reserved for material decisions and true exceptional conditions. A routine execution must not stop merely because a heuristic estimate or profile-default counter was reached while the job is still making healthy progress inside the approved personal resource envelope.
+Human Owner attention is intentionally reserved for material decisions and true exceptional conditions. A routine execution must not stop merely because a heuristic estimate, profile-default counter, or static task limit was reached while the job is still making healthy progress inside the approved personal resource envelope.
 
 ## 2. Efficiency objective
 
@@ -55,7 +55,8 @@ Examples of undesirable routine interruptions:
 
 - `repair 4/4 -> approve +1` while the repair loop is making useful progress;
 - `tests 14/14 -> approve +2` when required verification still has a healthy path forward;
-- `wall time reached -> approve +20 min` when no loop/anomaly/resource problem exists.
+- `wall time reached -> approve +20 min` when no loop/anomaly/resource problem exists;
+- `input tokens reached profile default -> approve +1M` while the same WorkOrder is still making meaningful progress and no independent risk condition exists.
 
 These events should be treated as workflow inefficiency and measured separately from legitimate Human Owner decisions.
 
@@ -81,11 +82,22 @@ Crossing an estimate or working target should create telemetry/activity, not Hum
 
 ### 4.3 Emergency hard ceiling
 
-The emergency ceiling is a deterministic circuit breaker. It protects against runaway execution, unexpected resource consumption, implementation bugs, or a task whose real shape materially exceeds the approved envelope.
+The emergency ceiling is a deterministic circuit breaker for abnormal execution or real material resource risk. It exists to protect against runaway loops, repeated no-progress behavior, implementation defects, unexpected scope/resource growth, or a task whose real resource shape materially exceeds the approved personal/project envelope.
 
-Reaching an emergency ceiling may block and require PM/Human Owner action according to the existing authority model.
+A static numerical ceiling is not, by itself, a sufficient reason to classify a healthy task as abnormal. If a healthy job reaches a profile/default counter with no independent anomaly, protected decision, provider exhaustion, or material resource-risk signal, the platform should treat the limit as a working-envelope/calibration problem and continue through bounded autonomous headroom rather than creating a Human Owner continuation gate.
 
 Durable counters are never reset when headroom is extended.
+
+### 4.4 Mandatory healthy-progress non-blocking invariant
+
+This is a required design and acceptance rule for all Router, Runtime, reassessment, recovery, budget, and Human Attention work:
+
+- A job making meaningful progress must not be blocked solely because it reached a static model-call, token, tool-call, test-run, wall-time, repair, iteration, profile, or similar counter.
+- A hard stop must cite an independent stop justification beyond counter exhaustion: repeated failure/no progress, solution oscillation, unexpected scope growth, runaway or abnormal resource growth, authoritative provider exhaustion without eligible fallback, a protected decision boundary, or a genuinely material expansion of the approved personal/project resource envelope.
+- Healthy continuation inside the approved resource envelope should occur automatically on the same durable job/workspace with non-decreasing counters and auditable headroom changes.
+- A Human Owner `continue`, `+N`, or budget-extension click whose only purpose is to compensate for an underestimated healthy task is an avoidable platform defect, not an acceptable steady-state control flow.
+- Hard ceilings must be calibrated high enough and/or coupled to behavioral anomaly evidence so routine progressing tasks do not encounter them as ordinary workflow checkpoints.
+- Existing compatibility/recovery controls may remain temporarily while migrating old persisted jobs, but they must not be mistaken for the target behavior when the underlying task is healthy.
 
 ## 5. Task-specific effort/resource estimation
 
@@ -114,7 +126,7 @@ Router should derive resource estimates from available signals including:
 - dependency depth;
 - ambiguity;
 - architecture impact;
-- verification difficulty;
+- verification difficulty/shape;
 - security/risk;
 - context requirement;
 - novelty;
@@ -125,7 +137,7 @@ Router should derive resource estimates from available signals including:
 
 ## 6. Healthy-progress automatic headroom
 
-When a working estimate/envelope is reached, Runtime should evaluate execution health before deciding whether to continue.
+When a working estimate/envelope or profile/default counter is reached, Runtime must evaluate execution health before deciding whether to continue.
 
 Healthy progress means, at minimum:
 
@@ -136,11 +148,13 @@ Healthy progress means, at minimum:
 - no protected decision boundary has been discovered;
 - provider/resource state remains eligible;
 - cost/quota policy still permits continuation;
-- the emergency hard ceiling has not been reached.
+- there is no independent evidence of runaway/abnormal resource growth or a genuinely material resource-envelope expansion.
 
-If healthy, Runtime may grant bounded automatic headroom to the same job/workspace and persist an auditable event describing the dimension, previous working limit, new working limit, current usage, reason, and applicable emergency ceiling.
+If healthy, Runtime should grant bounded automatic headroom to the same job/workspace and persist an auditable event describing the dimension, previous working limit, new working limit, current usage, reason, and applicable safety ceiling. Merely crossing a static counter is telemetry, not a Human Owner stop reason.
 
-If unhealthy, existing circuit-break behavior applies.
+If unhealthy, existing circuit-break behavior applies. The block reason must identify the anomaly/material decision condition, not only the exhausted counter.
+
+If the platform repeatedly needs Human Owner continuation for otherwise healthy work, the relevant limit/policy is considered miscalibrated and should become implementation follow-up work.
 
 ## 7. Provider quota is not task budget
 
@@ -154,16 +168,16 @@ task estimate
   = expected resource shape for this WorkOrder
 
 emergency execution ceiling
-  = safety circuit breaker
+  = safety circuit breaker for abnormal/material-risk execution
 ```
 
-Authoritative provider exhaustion can exclude/reroute a resource or block when no eligible fallback exists. A task estimate being reached must not be presented as if the provider itself is exhausted.
+Authoritative provider exhaustion can exclude/reroute a resource or block when no eligible fallback exists. A task estimate or profile counter being reached must not be presented as if the provider itself is exhausted.
 
 Router should allocate scarce provider capacity across work while avoiding unnecessary interruption of a healthy task.
 
 ## 8. Anti-loop and anomaly detection are primary circuit breakers
 
-The system should prefer behavioral evidence over arbitrary low counters when deciding that execution is unhealthy.
+The system must prefer behavioral evidence over arbitrary low counters when deciding that execution is unhealthy.
 
 Primary circuit-break signals include:
 
@@ -174,9 +188,9 @@ Primary circuit-break signals include:
 - protected decision boundaries;
 - provider/resource exhaustion without fallback;
 - abnormal cost/resource growth;
-- emergency hard ceiling reached.
+- emergency-limit usage accompanied by independent evidence that continuation would be abnormal or materially exceed the approved envelope.
 
-Normal engineering activity such as one more targeted test or a productive repair turn should not itself be considered an anomaly.
+Normal engineering activity such as one more targeted test, a productive repair turn, or higher-than-estimated token use while progress remains meaningful should not itself be considered an anomaly.
 
 ## 9. Layered deterministic verification
 
@@ -389,7 +403,7 @@ decision_boundary_interventions
 routine_operational_interventions
 ```
 
-A protected decision is not an avoidable interruption. A routine '+1 repair' caused only by an underestimated healthy task is.
+A protected decision is not an avoidable interruption. A routine continuation action caused only by an underestimated but healthy task is avoidable and should be classified as a platform efficiency defect.
 
 ## 17. Continuity automation
 
@@ -429,11 +443,12 @@ Ticket
   -> Router
      - logical staffing
      - provider quota awareness
-     - task estimate + working envelope + emergency ceiling
+     - task estimate + working envelope + anomaly/material-risk circuit breaker
   -> Primary Developer
      - targeted checks
      - optional bounded consultation
      - autonomous healthy repair loop
+     - automatic healthy-progress headroom when needed
   -> final deterministic verification
   -> risk-proportionate reviewer
      - optional bounded dialogue
@@ -451,13 +466,14 @@ Umbrella: issue #146.
 
 Priority order:
 
-1. **#147 — Adaptive execution budgets + Human-attention circuit breakers.** Remove avoidable routine budget-block approvals while preserving emergency ceilings and compatibility.
+1. **#147 — Adaptive execution budgets + Human-attention circuit breakers.** Remove avoidable routine budget-block approvals while preserving justified emergency ceilings and compatibility.
 2. **#148 — Layered verification + failure-budget separation.** Reduce unnecessary full-suite runs and make repair telemetry accurate.
 3. **#149 — Bounded inter-agent collaboration + review dialogue.** Add read-only consultants and bounded role-to-role collaboration after budget semantics can absorb normal teamwork.
 4. **#150 — Risk-proportionate review + role-specific evidence packs.** Spend review/context where useful.
 5. **#151 — Telemetry calibration + Human-attention metrics + continuity automation.** Learn from real project data and prevent state-document drift.
 6. **#98 — Constrained PM-controlled merge path.** Complete executable alignment so routine eligible PRs have no leftover manual merge checkpoint.
-7. Telegram terminal convenience work remains lower priority than the execution-efficiency initiative unless an operational need changes that priority.
+7. Any discovered static-counter continuation gate affecting healthy work takes priority as a bounded follow-up under this policy.
+8. Telegram terminal convenience work remains lower priority than the execution-efficiency initiative unless an operational need changes that priority.
 
 PM may split these issues further when implementation evidence shows a smaller safe delivery boundary.
 
@@ -467,6 +483,7 @@ PM may split these issues further when implementation evidence shows a smaller s
 - Existing explicit owner budget-extension records remain valid audit history.
 - No implementation may reset durable usage counters or replace a job merely to adopt new budget semantics.
 - During transition, old profile-fixed budgets may be interpreted as legacy working/emergency values only through an explicit compatibility rule tested against persisted state.
+- Compatibility controls that still require owner continuation for healthy work are temporary migration mechanisms and must have a follow-up path to the mandatory non-blocking invariant.
 - Router/Runtime rollout must respect the active-job safety gate: no restart/rebuild while a job is active.
 - Rollout verification must prove same-job/workspace/counter preservation for any pre-existing blocked job.
 
@@ -483,6 +500,7 @@ Do not optimize by adding complexity with no demonstrated return. Specifically, 
 - production deployment by agents;
 - weakened security/trust boundaries;
 - arbitrary expansion of the personal resource envelope;
+- silent counter resets or unbounded continuation;
 - large retrieval/vector infrastructure without evidence it is needed.
 
 ## 23. Success criteria
@@ -491,6 +509,8 @@ The initiative succeeds when evidence shows that, without weakening final qualit
 
 - routine Human Owner interventions approach zero;
 - avoidable budget blocks approach zero;
+- no healthy-progress task requires owner continuation solely because a static task/profile counter was reached;
+- hard stops can identify a real anomaly, protected decision, provider exhaustion, or material resource-risk reason beyond mere counter exhaustion;
 - accepted tasks use fewer unnecessary model calls/full-suite runs;
 - wall-clock time from accepted ticket to merged PR improves;
 - provider quota is used deliberately rather than through arbitrary per-task counter stops;

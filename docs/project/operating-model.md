@@ -42,11 +42,11 @@ Human participation is required for:
 - security/authentication/authorization/trust-boundary changes;
 - destructive data changes;
 - production writes or deployment;
-- material project/personal budget expansion or emergency-ceiling override;
+- material project/personal budget expansion or justified emergency-ceiling override;
 - high-authority governance amendments;
 - ambiguities that cannot be resolved from approved source of truth.
 
-Routine execution continuation inside an already-approved task working envelope is not a Human Owner decision. Routine PR review and merge inside the approved project frame is delegated to PM after required verification/review/CI gates pass. A merge must stop for Human Owner input whenever the PR introduces or depends on one of the decision boundaries above.
+Routine execution continuation inside an already-approved task working envelope is not a Human Owner decision. Static task/profile counter exhaustion by itself is also not a Human Owner decision when the WorkOrder is still making meaningful progress and no independent anomaly, protected boundary, provider-exhaustion or material-resource-risk condition exists. Routine PR review and merge inside the approved project frame is delegated to PM after required verification/review/CI gates pass. A merge must stop for Human Owner input whenever the PR introduces or depends on one of the decision boundaries above.
 
 ## 3. Product Manager
 
@@ -107,7 +107,7 @@ PM may not autonomously:
 - add a major framework/service/dependency;
 - weaken security boundaries;
 - approve destructive/production operations outside existing policy;
-- materially expand the project/personal resource envelope or override an emergency ceiling;
+- materially expand the project/personal resource envelope or override a justified emergency ceiling;
 - merge a PR whose content or unresolved finding requires a Human Owner decision.
 
 ## 4. Router / Staffing Policy
@@ -132,11 +132,11 @@ Outputs include:
 - selected logical execution profile;
 - model/provider/adapter for the requested role;
 - task-specific budget estimate;
-- approved elastic working envelope and emergency hard ceilings where supported;
+- approved elastic working envelope and justified emergency circuit-break ceilings where supported;
 - optional planner/evaluator/consultant staffing;
-- deterministic human-decision triggers.
+- deterministic human-decision triggers tied to protected/material/anomalous conditions.
 
-Profile budgets are priors and safety defaults, not necessarily the final task estimate. Provider quota is resource state and must not be conflated with task estimate exhaustion.
+Profile budgets are priors and safety defaults, not necessarily the final task estimate and not sufficient Human Owner stop reasons by themselves. Provider quota is resource state and must not be conflated with task estimate/profile-counter exhaustion.
 
 Router must not modify product scope or project state.
 
@@ -153,17 +153,18 @@ Responsibilities:
 - track model/tool/token/time/resource usage and Human Attention events;
 - preserve consumed counters across retry/recovery/headroom changes;
 - permit bounded automatic healthy-progress headroom inside approved policy;
-- enforce anti-loop/circuit-break signals and emergency hard ceilings;
+- treat static task/profile counter exhaustion as telemetry/reassessment input rather than an automatic Human Owner gate;
+- enforce anti-loop/circuit-break signals and emergency ceilings only when an independent anomaly/material-risk condition justifies stopping;
 - run layered deterministic verification while preserving mandatory final acceptance verification;
 - distinguish engineering repair from provider recovery, infrastructure retry, verification retry and delivery retry;
 - perform bounded retries/failover/escalation;
 - coordinate bounded consultant/reviewer dialogue where configured;
-- pause for human decisions only when required by protected decisions, real resource risk, emergency ceilings or abnormal execution;
+- pause for Human Owner decisions only when required by protected decisions, genuine material resource risk, authoritative provider exhaustion without eligible fallback, or abnormal execution;
 - checkpoint/recover interrupted work;
 - coordinate bounded GitHub delivery and CI repair;
 - support the PM-controlled merge gate without giving developer agents merge authority.
 
-Runtime should handle routine test/lint/repair mechanics, healthy continuation, and non-material resource headroom without invoking PM or Human Owner for every iteration.
+Runtime should handle routine test/lint/repair mechanics, healthy continuation, static-counter headroom, and non-material resource growth without invoking PM or Human Owner for every iteration. A routine owner `continue`/budget-extension action whose only reason is an underestimated but healthy task is a platform defect, not the target operating model.
 
 ## 6. Developer / Specialist role
 
@@ -386,6 +387,8 @@ PM may request parallel WorkOrders only when:
 
 The team resource envelope includes more than USD: model calls, subscription quota/scarcity, token usage, wall time, verification/repair cost, provider reliability, and Human Owner attention are all legitimate budget signals.
 
+Mandatory budget rule: healthy-progress work continues autonomously inside the approved envelope. Static task/profile counter exhaustion alone must not create a Human Owner checkpoint; hard blocking requires independent anomaly/protected/provider/material-risk evidence.
+
 The detailed adaptive-budget, collaboration, review-efficiency, evidence-pack and telemetry policy is `efficiency-model.md`.
 
 ## 15. Practical checkpoint rule
@@ -402,7 +405,7 @@ PM should normally run when:
 - a task completes and the next action must be selected;
 - a PR has passed its required gates and is ready for PM merge review.
 
-A first lint failure, test typo, ordinary bounded retry, healthy automatic budget headroom, or non-material provider recovery remains Runtime/Developer responsibility.
+A first lint failure, test typo, ordinary bounded retry, healthy automatic budget headroom, static-counter crossing during healthy progress, or non-material provider recovery remains Runtime/Developer responsibility.
 
 ## 16. Human Owner diagnostic-block convention
 

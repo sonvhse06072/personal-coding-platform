@@ -17,10 +17,12 @@ Last updated: 2026-09-17
 - Constrained PM-controlled merge #98 is implemented and operationally proven.
 - Low-touch routine-path validation #162 is complete via the clean R3 run with zero avoidable Human Owner intervention.
 - PM routine in-scope merge authority is approved; Developer agents never merge and production remains Human Owner-controlled.
+- **Human Owner approved a mandatory healthy-progress non-blocking invariant on 2026-09-17:** static task/profile counters are not sufficient Human Owner stop reasons while a WorkOrder is still making meaningful progress inside the approved resource envelope. Hard stops require an independent anomaly, protected-decision, provider-exhaustion or material-resource-risk reason. This is now a required platform design/acceptance rule.
+- #224 tracks executable alignment with that invariant, including the DEC-025C input-token case.
 - Last verified deployed service labels remain Runtime `1.0.44`, Router `1.0.21`, ddev-executor `1.0.15`, routing policy v12 until a later guarded rollout proves otherwise.
 - Continuity B1 and Human Attention delivery-recovery accounting were locally activated and validated. Do not repeat those rollouts solely to recreate evidence.
 - #215 legacy adaptive recovery and #219 effective-budget reconciliation are merged and were proven live by the preserved DEC-025C job resuming on the same durable job/workspace/counters.
-- #221 bounded input-token owner recovery is merged on `main` at `2f4babbe33dfcf96fe6d6ef500243d2a0baec020`. Merge alone does not activate or resume DEC-025C; the job must remain blocked until guarded local activation and a newly materialized exact Human Owner action.
+- #221 bounded input-token owner recovery is merged on `main` at `2f4babbe33dfcf96fe6d6ef500243d2a0baec020`, but its owner-click continuation path is now treated as transitional recovery rather than the desired steady-state for healthy work. Do not locally activate that path for DEC-025C until #224 resolves the new higher-authority invariant or a fresh protected/material-risk reason independently justifies owner intervention.
 
 ## #162 operational validation: complete
 
@@ -64,10 +66,26 @@ Issue #162 and fixture issue #7 are closed `completed`. No R4 is required for #1
 
 Issues #147, #148, #149, #150, #151, #98, #153 and #162 are closed `completed`. Keep #146 open while collecting naturally occurring task evidence rather than manufacturing validation-only jobs. Calibration should compare estimate vs actual usage, first-pass success, repair/retry categories, verification runs, review yield, wall time, provider/model share and Human Attention metrics.
 
-DEC-025C has supplied two useful real-world follow-ups:
+DEC-025C has supplied three useful real-world follow-ups:
 
 1. #215 introduced bounded compatibility recovery for a genuinely pre-adaptive persisted WorkOrder; #219 corrected the temporary effective adaptive envelope so that recovery could use the Router-advertised emergency limits rather than stale historical counters.
-2. After that path was active, DEC-025C made additional progress and exposed #221: legitimate cache-aware input-token usage can cross the current 2M complex-profile ceiling while Definition of Done is incomplete. This remains an explicit Human Owner circuit-break decision rather than automatic token-ceiling growth.
+2. After that path was active, DEC-025C made additional progress and exposed #221: legitimate cache-aware input-token usage can cross the current 2M complex-profile ceiling while Definition of Done is incomplete. #221 added a safe bounded owner recovery control without resetting counters.
+3. Human Owner then clarified the higher-level mandatory rule captured in the Constitution/efficiency policy: a static counter crossing is not itself a valid reason to stop healthy work and request Human Owner continuation. #224 therefore supersedes the owner-click path as the desired steady-state design for healthy-progress budget exhaustion.
+
+## Mandatory healthy-progress non-blocking invariant / #224
+
+Issue #224 is open: **Make healthy-progress budget continuation autonomous**.
+
+Required platform behavior:
+
+- model/token/tool/test/wall/repair/iteration/profile counter exhaustion alone must not block a WorkOrder that is still making meaningful progress;
+- Runtime/Router must evaluate independent anomaly/material-risk evidence before creating a hard stop;
+- healthy work inside the approved project/personal resource envelope should receive bounded auditable automatic headroom on the same durable job/workspace with non-decreasing counters;
+- real repeated failure/no-progress, solution oscillation, unexpected scope growth, runaway resource growth, authoritative provider exhaustion without fallback, protected decisions, or genuine material resource-envelope expansion remain valid fail-closed reasons;
+- Human Owner continuation solely to compensate for an underestimated healthy task is an avoidable platform defect and must not be the target steady-state workflow;
+- deterministic verification, CI, final quality gates and trust boundaries remain unchanged.
+
+#224 acceptance must include the DEC-025C input-token scenario and prove that `used >= static_limit` alone is insufficient to create an owner continuation gate.
 
 ## Legacy adaptive recovery #215 / effective-budget fix #219
 
@@ -77,7 +95,7 @@ DEC-025C has supplied two useful real-world follow-ups:
 
 Live DEC-025C evidence after these changes proves the recovery path progressed beyond the old model/test/wall/repair ceilings. Do not repeat the old manual budget-extension choreography or create a replacement job.
 
-## Bounded input-token owner recovery #221: source merged, local activation pending
+## Bounded input-token owner recovery #221: merged transitional recovery
 
 #221 / PR #222 is closed `completed`. The final reviewed PR head `26cd99d46e7bdbadea7eca5cef4c0b54f1b7f3cd` passed workflow run #390 across structure, Router, Runtime and ddev-executor. PM merged the exact head into `main` at `2f4babbe33dfcf96fe6d6ef500243d2a0baec020`.
 
@@ -94,10 +112,9 @@ Merged behavior remains intentionally narrow:
 - execution re-fetches and revalidates the exact live blocked token state before mutation;
 - usage/counters are never reset; the same job/workspace/source/diff and immutable WorkOrder are preserved;
 - the durable Telegram budget authorization survives a later fresh route without changing Router autonomous defaults;
-- no `max_output_tokens` or cost extension is added;
-- rollout/startup alone must not auto-resume the job. Human Owner execution of the newly materialized exact action remains required.
+- no `max_output_tokens` or cost extension is added.
 
-Regression coverage reproduces the live DEC-025C state and covers advisory shape, exact +1M mutation, same-job resume, second authorization to 4M, hard-max/headroom fail-closed behavior, stale/in-flight state rejection, non-token reassessment preservation and fresh-route authorization overlay.
+Under the newly approved higher-authority invariant, this owner action remains valid as bounded compatibility/recovery tooling for a genuinely exceptional or legacy state, but must not become the routine continuation mechanism for a healthy task solely because its static input-token counter was reached.
 
 ## Preserved `chonhac` DEC-025C
 
@@ -107,7 +124,7 @@ Regression coverage reproduces the live DEC-025C state and covers advisory shape
 - branch: `ai/eec59b13651c`;
 - workspace: `/home/sonvh/.coding-platform/workspaces/eec59b13651c54559c10ce204380a68e`;
 - approved `chonhac` source baseline remains `b143fbb001c2006ec82570619802b607085fbeb0`;
-- last verified status before #221 local activation: `blocked`;
+- last verified status: `blocked`;
 - top-level result: `reassessment_stopped`;
 - nested reassessment: `action=stop`, `reason=input-token budget exceeded`, signal `hard_budget_overrun`;
 - cache-aware durable `progress.input_tokens = 2,274,574`;
@@ -115,7 +132,7 @@ Regression coverage reproduces the live DEC-025C state and covers advisory shape
 
 This is not the historical cache-accounting bug. Existing telemetry already preserves gross/cached input usage and charges cache-miss input tokens; later Antigravity attempts legitimately contributed uncached usage that pushed the durable counter above 2M.
 
-Operational constraint before local activation/action: do not execute historical budget actions, manually resume, mutate database/counters, force-complete, or create a replacement plan/job. Pending/used control actions remain durable evidence and must not be edited, backfilled or replayed manually.
+Current operational constraint: keep DEC-025C blocked and preserved while #224 aligns the executable policy. Do not execute historical/new #221 budget actions, manually resume, mutate database/counters, force-complete, or create a replacement plan/job solely to bypass this state. Pending/used control actions remain durable evidence and must not be edited, backfilled or replayed manually.
 
 ## Global operational gates
 
@@ -123,6 +140,7 @@ Operational constraint before local activation/action: do not execute historical
 - Never force push.
 - Developer agents never merge; PM may merge eligible in-scope work after required gates.
 - Human Owner retains protected architecture/security/production/governance/material-budget authority.
+- Healthy-progress non-blocking is mandatory: static task/profile counter exhaustion alone is not a valid Human Owner gate.
 - Production deployment is never implied by PR merge.
 - Do not restart/rebuild platform services while engineering work is active.
 - Runtime durable state is authoritative; never edit durable state to bypass the state machine.
@@ -130,12 +148,10 @@ Operational constraint before local activation/action: do not execute historical
 
 ## Immediate next safe actions
 
-1. Keep DEC-025C blocked and verify there is no other active engineering work before local rollout.
-2. Fast-forward the local PCP repository to exact `main` `2f4babbe33dfcf96fe6d6ef500243d2a0baec020`; do not merge/rebase local source into the rollout target.
-3. While DEC remains blocked, run the required deterministic PCP/platform source checks before any restart.
-4. Only if source, idle and test gates pass, restart/rebuild once as required to load the merged Runtime source. Do not perform a second restart while work is active.
-5. Verify deployed Runtime includes `control_actions_input_tokens` and that the same DEC job/workspace/source/branch/counters remain preserved, still blocked, with `input_tokens=2,274,574` and initial effective `max_input_tokens=2,000,000`.
-6. Allow Runtime/notification flow to materialize a new exact `max_input_tokens +1,000,000` owner action. Do not execute or replay an old action. Merge/startup alone must not resume the job.
-7. Human Owner deliberately executes only the newly materialized exact action. Then verify effective `max_input_tokens=3,000,000`, `input_tokens` remains 2,274,574, the same job/workspace/source continues, no durable counter decreases, and normal orchestration resumes.
-8. If a later legitimate token stop occurs, a second explicit authorization may advance the same job to at most 4,000,000; never higher.
-9. Keep #146 open for naturally occurring calibration evidence; do not create synthetic jobs solely to satisfy sample-size thresholds.
+1. Keep DEC-025C blocked/preserved and do not locally activate #221 as the routine owner-click continuation path.
+2. Complete the Human Owner-approved source-of-truth amendment establishing healthy-progress non-blocking as a mandatory Constitution/efficiency invariant.
+3. Implement #224 on an `ai/*` branch with deterministic regression coverage for healthy counter exhaustion versus genuine anomaly/material-risk blocking.
+4. Require normal structure/Router/Runtime/ddev-executor CI and PM review on the exact #224 PR head.
+5. After #224 merges, plan one guarded local activation from an idle gate that includes the #221 compatibility code plus the #224 healthy-progress behavior, preserving the exact DEC job/workspace/source/counters.
+6. On activation, DEC-025C should continue autonomously if current evidence still classifies it as healthy and no independent protected/material/anomaly condition exists; Human Owner action is used only if such a condition is actually present.
+7. Keep #146 open for naturally occurring calibration evidence; do not create synthetic jobs solely to satisfy sample-size thresholds.
