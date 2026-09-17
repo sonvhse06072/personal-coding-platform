@@ -22,6 +22,14 @@ _RISK_SCORE = {"routine": 20, "standard": 40, "high": 70, "critical": 90}
 _PROVIDER_ROLE_WORDS = {
     "openai", "codex", "claude", "anthropic", "deepseek", "antigravity", "groq", "openrouter"
 }
+_ADAPTIVE_ELASTIC_DIMENSIONS = (
+    "max_model_calls",
+    "max_tool_calls",
+    "max_iterations",
+    "max_repair_iterations",
+    "max_test_runs",
+    "max_wall_time_minutes",
+)
 # Router TaskDescriptor.description is capped at 20k. Leave headroom for the
 # canonical-task wrapper so a schema-valid WorkOrder cannot fail later at Router.
 _MAX_SERIALIZED_BYTES = 16000
@@ -292,6 +300,63 @@ def rehydrate_task_from_work_order(
     return canonical
 
 
+def _reconcile_adaptive_emergency_budget(
+    budget: dict[str, Any], adaptive: dict[str, Any]
+) -> dict[str, Any]:
+    """Make effective adaptive ceilings match Router-advertised emergency limits.
+
+    Router adaptive metadata is the authority for elastic task headroom. This
+    validation is deliberately strict so version skew or malformed metadata can
+    never silently widen a job. A lower effective field may be promoted only to
+    its advertised emergency limit; an already-higher field fails closed.
+    """
+
+    dimensions = adaptive.get("dimensions")
+    if not isinstance(dimensions, dict):
+        raise WorkOrderPolicyError("Adaptive Router strategy is missing a dimensions object")
+
+    reconciled = dict(budget)
+    for dimension in _ADAPTIVE_ELASTIC_DIMENSIONS:
+        if dimension not in reconciled:
+            raise WorkOrderPolicyError(
+                f"Router strategy is missing required adaptive budget field {dimension!r}"
+            )
+        envelope = dimensions.get(dimension)
+        if not isinstance(envelope, dict):
+            raise WorkOrderPolicyError(
+                f"Adaptive Router strategy is missing envelope for {dimension!r}"
+            )
+        try:
+            estimate = float(envelope["estimate"])
+            working_target = float(envelope["working_target"])
+            emergency_limit = float(envelope["emergency_limit"])
+            current = float(reconciled[dimension])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise WorkOrderPolicyError(
+                f"Adaptive Router envelope for {dimension!r} is malformed"
+            ) from exc
+
+        if not (0 <= estimate <= working_target <= emergency_limit):
+            raise WorkOrderPolicyError(
+                f"Adaptive Router envelope for {dimension!r} is not monotonic"
+            )
+        if current > emergency_limit:
+            raise WorkOrderPolicyError(
+                f"Router effective budget {dimension!r} exceeds its advertised emergency limit"
+            )
+
+        if dimension == "max_wall_time_minutes":
+            reconciled[dimension] = emergency_limit
+        else:
+            if not emergency_limit.is_integer():
+                raise WorkOrderPolicyError(
+                    f"Adaptive Router emergency limit for {dimension!r} must be integral"
+                )
+            reconciled[dimension] = int(emergency_limit)
+
+    return reconciled
+
+
 def apply_work_order_budget(route: dict[str, Any], work_order: WorkOrder) -> dict[str, Any]:
     """Apply WorkOrder policy without turning adaptive estimates into hard stops.
 
@@ -328,7 +393,9 @@ def apply_work_order_budget(route: dict[str, Any], work_order: WorkOrder) -> dic
         and bool(adaptive.get("enabled", False))
     )
 
-    if not adaptive_enabled:
+    if adaptive_enabled:
+        budget = _reconcile_adaptive_emergency_budget(budget, adaptive)
+    else:
         ceilings = {
             "max_model_calls": work_order.budget.max_model_calls,
             "max_repair_iterations": work_order.budget.max_repair_iterations,

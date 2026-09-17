@@ -37,13 +37,15 @@ def fresh_route():
     return {
         "strategy": {
             "profile": "complex",
+            # Reproduce the live #219 mismatch: selected effective fields still
+            # carry legacy values while adaptive metadata advertises headroom.
             "budget": {
-                "max_model_calls": 40,
+                "max_model_calls": 22,
                 "max_tool_calls": 400,
                 "max_iterations": 24,
-                "max_repair_iterations": 12,
+                "max_repair_iterations": 5,
                 "max_test_runs": 40,
-                "max_wall_time_minutes": 180,
+                "max_wall_time_minutes": 110,
                 "max_changed_files": 30,
             },
             "adaptive_budget": {
@@ -55,15 +57,30 @@ def fresh_route():
                         "working_target": 25,
                         "emergency_limit": 40,
                     },
-                    "max_test_runs": {
-                        "estimate": 18,
-                        "working_target": 24,
-                        "emergency_limit": 40,
+                    "max_tool_calls": {
+                        "estimate": 200,
+                        "working_target": 260,
+                        "emergency_limit": 400,
+                    },
+                    "max_iterations": {
+                        "estimate": 12,
+                        "working_target": 16,
+                        "emergency_limit": 24,
                     },
                     "max_repair_iterations": {
                         "estimate": 5,
                         "working_target": 7,
                         "emergency_limit": 12,
+                    },
+                    "max_test_runs": {
+                        "estimate": 18,
+                        "working_target": 24,
+                        "emergency_limit": 40,
+                    },
+                    "max_wall_time_minutes": {
+                        "estimate": 90,
+                        "working_target": 120,
+                        "emergency_limit": 180,
                     },
                 },
             },
@@ -193,21 +210,24 @@ class FakeStore:
 
 
 class FakeDelegate:
-    def __init__(self, *, reassess=None):
+    def __init__(self, *, reassess=None, route=None):
         self.route_calls = 0
         self.reassess_calls = 0
+        self.route_result = deepcopy(route or fresh_route())
         self.reassess_result = reassess or {
             "action": "continue",
             "reason": "Within budget and no circuit-break condition detected",
             "signals": ["budget_headroom_active:max_model_calls"],
         }
+        self.last_reassess_payload = None
 
     async def route(self, _payload):
         self.route_calls += 1
-        return fresh_route()
+        return deepcopy(self.route_result)
 
-    async def reassess(self, _payload):
+    async def reassess(self, payload):
         self.reassess_calls += 1
+        self.last_reassess_payload = deepcopy(payload)
         return deepcopy(self.reassess_result)
 
 
@@ -234,6 +254,11 @@ def test_pre_adaptive_budget_block_adopts_fresh_envelope_and_same_job():
     assert result["previous_budget"]["max_model_calls"] == 22
     assert result["new_budget"]["max_model_calls"] == 40
     assert result["new_budget"]["max_test_runs"] == 40
+    assert result["new_budget"]["max_repair_iterations"] == 12
+    assert result["new_budget"]["max_wall_time_minutes"] == 180
+    assert delegate.last_reassess_payload["route"]["strategy"]["budget"]["max_model_calls"] == 40
+    assert delegate.last_reassess_payload["route"]["strategy"]["budget"]["max_repair_iterations"] == 12
+    assert delegate.last_reassess_payload["route"]["strategy"]["budget"]["max_wall_time_minutes"] == 180
     assert storage.job["status"] == "queued"
     assert storage.job["workspace"] == "/workspaces/job-1"
     assert storage.job["source_commit"] == "b143fbb"
@@ -287,6 +312,20 @@ def test_current_usage_at_fresh_emergency_ceiling_fails_closed():
     assert engine.enqueued == []
 
 
+def test_malformed_adaptive_envelope_fails_closed_without_resuming():
+    storage = FakeStorage(blocked_job())
+    route = fresh_route()
+    del route["strategy"]["adaptive_budget"]["dimensions"]["max_model_calls"]
+    delegate = FakeDelegate(route=route)
+    engine = FakeEngine(delegate)
+    recovery = LegacyAdaptiveRecovery(storage, engine, FakeStore())
+
+    assert asyncio.run(recovery.recover_one()) is None
+    assert storage.job["status"] == "blocked"
+    assert engine.enqueued == []
+    assert delegate.reassess_calls == 0
+
+
 def test_adopted_job_keeps_adaptive_budget_on_later_reroute():
     storage = FakeStorage(blocked_job())
     delegate = FakeDelegate()
@@ -313,6 +352,8 @@ def test_adopted_job_keeps_adaptive_budget_on_later_reroute():
 
     budget = rerouted["strategy"]["budget"]
     assert budget["max_model_calls"] == 40
+    assert budget["max_tool_calls"] == 400
+    assert budget["max_iterations"] == 24
     assert budget["max_test_runs"] == 40
     assert budget["max_repair_iterations"] == 12
     assert budget["max_wall_time_minutes"] == 180
