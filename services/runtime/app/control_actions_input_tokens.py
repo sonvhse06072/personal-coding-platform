@@ -47,6 +47,9 @@ class ControlActionService(BaseControlActionService):
 
     @classmethod
     def _input_token_budget_block(cls, job: dict[str, Any]) -> bool:
+        if str(job.get("status") or "") != "blocked":
+            return False
+
         result = dict(job.get("result") or {})
         top_reason = str(result.get("reason") or "")
         failure_reason = ""
