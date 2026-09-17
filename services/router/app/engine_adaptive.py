@@ -110,7 +110,11 @@ class RouterEngine(BudgetRouterEngine):
                 continue
             spec = dict(spec_value or {})
             baseline = float(getattr(budget, dimension))
-            hard_cap = max(baseline, float(spec.get("hard_max", baseline)))
+            hard_cap = float(spec.get("hard_max", baseline))
+            if baseline > hard_cap:
+                raise RuntimeError(
+                    f"Adaptive budget profile prior {dimension}={baseline:g} exceeds configured hard_max={hard_cap:g}"
+                )
             minimum = float(spec.get("minimum", 1.0))
             historical_multiplier = float(calibration.get(dimension, 1.0))
 
