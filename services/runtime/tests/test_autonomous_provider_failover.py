@@ -20,9 +20,21 @@ class Router:
         return deepcopy(self.route_value)
 
 
+class Storage:
+    def __init__(self) -> None:
+        self.events: list[tuple[str, dict]] = []
+
+    def get(self, job_id: str) -> dict:
+        return {"id": job_id, "workspace": "/tmp/provider-failover-test"}
+
+    def append_event(self, job_id: str, event: dict) -> None:
+        self.events.append((job_id, deepcopy(event)))
+
+
 def engine(router: Router) -> RuntimeEngine:
     value = RuntimeEngine.__new__(RuntimeEngine)
     value.router = router
+    value.storage = Storage()
     return value
 
 
