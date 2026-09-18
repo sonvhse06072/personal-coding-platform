@@ -2,83 +2,112 @@
 
 Status: mutable continuity document. Repository docs and executable evidence are authoritative over chat history. Durable architecture/product/policy decisions remain in their topical source-of-truth documents.
 
-Last updated: 2026-09-17
+Last updated: 2026-09-18
 
 ## Resume order
 
 1. Read repository-root `AGENTS.md`.
-2. Read `docs/project/constitution.md`, `docs/project/operating-model.md`, and `docs/project/efficiency-model.md`.
+2. Read `docs/project/constitution.md`, `docs/project/operating-model.md`, `docs/project/efficiency-model.md`, and `docs/project/provider-policy.md`.
 3. Read this continuity document.
-4. Inspect the current GitHub `main`, local source/deployment state, and preserved DEC-025C durable state before any rollout or resume action.
+4. Inspect current GitHub `main`, active issue/PR, local service versions, and the exact durable DEC-025C-r2 state before any rollout or resume action.
 
 ## Platform baseline
 
 - Efficiency initiative #146 source phases A-F are implemented; calibration and evidence-driven follow-ups remain.
 - PM-controlled routine merge #98 is implemented and operationally proven. Developer agents never merge; production remains Human Owner-controlled.
 - Low-touch validation #162 completed with zero avoidable Human Owner intervention.
-- The Human Owner approved the mandatory **healthy-progress non-blocking** invariant on 2026-09-17: static model/token/tool/test/time/repair/iteration/profile counters are not sufficient Human Owner stop reasons while a WorkOrder is demonstrably progressing inside the approved resource envelope.
-- PR #225 merged that invariant into the high-authority source of truth at `101062e9db554a7c610de634d8e7b3c4e72cbf48` after CI #394 passed.
-- Hard stops remain required for independent abnormal/material conditions such as repeated failure/no progress, solution/diff oscillation, unexpected scope growth, authoritative provider exhaustion without fallback, protected decisions, runaway/material resource growth, or a justified emergency hard ceiling.
-- Last verified deployed labels remain Runtime `1.0.44`, Router `1.0.21`, ddev-executor `1.0.15`, routing policy v12. The merged #224 source is not locally activated yet.
+- Healthy-progress non-blocking is mandatory: static task/profile counters are not sufficient Human Owner stop reasons while work is making meaningful progress inside the approved resource envelope.
+- Hard stops remain required for independent abnormal/material conditions such as repeated failure/no progress, solution/diff oscillation, unexpected scope growth, authoritative provider exhaustion **without eligible fallback**, protected decisions, runaway/material resource growth, or a justified emergency hard ceiling.
+- Routine provider recovery is Runtime/Router responsibility. Human Owner attention is a scarce resource and should not be used merely because one provider/model/quota bucket failed while another eligible route remains.
 
-## Healthy-progress executable alignment #224: merged
+## Local activation evidence through 2026-09-18
 
-Issue #224, **Make healthy-progress budget continuation autonomous**, is closed `completed`.
+The Human Owner completed guarded local activation/diagnostics after #224:
 
-PR #226, **runtime: keep healthy budget progress autonomous**, was PM-reviewed and merged from exact final head `7302c3d2e3faf02d35775f30a205383e7f253468` into `main` at merge commit `892fd2ba30f0ba0426c6239384ead43d1b2c3d95`.
+- local PCP checkout was exact `2bef1bcbbfa3cfc52e21e06f5314ccb676551853`;
+- Router `1.0.21` was rebuilt from reviewed source and serves routing policy v13;
+- rebuilt Router tests passed `81 passed` and host/container `engine_adaptive.py` hashes matched;
+- Runtime still reports `1.0.44`, but read-only diagnostics confirmed its #224 files match the reviewed host source;
+- direct n8n `/healthz` returned HTTP 200 and PCP workflows were active; the aggregate `platform-status` n8n line has shown a false-negative/transient mismatch and should not override the direct probe without further evidence.
 
-Final CI run #401 passed across all required jobs: structure, Router, Runtime, and ddev-executor.
+No further Router/Runtime rebuild should occur while engineering work is active.
 
-Merged behavior:
+## Healthy-progress executable alignment #224: live proof obtained
 
-- routing policy advances from v12 to v13;
-- profile/default values are planning priors and working-threshold inputs rather than owner-click stop points;
-- adaptive execution includes `max_input_tokens` and `max_output_tokens` alongside model/tool/iteration/repair/test/wall dimensions;
-- adaptive routes use configured `hard_max` values as the technical abnormal/material-risk circuit breakers rather than synthesizing a lower per-task emergency ceiling;
-- material token circuit breakers are 8,000,000 input tokens and 1,000,000 output tokens per job;
-- estimates and working targets remain observable telemetry/reassessment thresholds inside those caps;
-- legacy/pre-adaptive blocked jobs may adopt a fresh adaptive route only after a fresh Router reassessment returns `continue`, no anomaly/protected signal exists, and every durable counter remains below the fresh emergency ceiling;
-- historical budget guard/overrun evidence is only a candidate for safe re-evaluation, never an unconditional resume signal;
-- consumed counters, immutable WorkOrder, source, workspace, branch, diff, and job identity are never reset/replaced to create headroom;
-- #221 Human Owner token extension remains compatibility recovery for genuinely exceptional/legacy states, not the healthy steady-state continuation path.
+Issue #224 / PR #226 is merged; final source CI #401 passed.
 
-Final PM review also corrected two issues before merge:
+The preserved DEC-025C-r2 job subsequently proved the merged behavior in durable state:
 
-1. stale tests that still expected routing policy v12 were aligned to v13;
-2. Router now fails closed if a profile/default prior exceeds a configured adaptive `hard_max`, so a contradictory policy cannot silently widen a material circuit breaker.
+- same job/workspace/source/branch identity was preserved;
+- legacy adaptive adoption audit exists;
+- fresh adaptive route uses `max_input_tokens = 8,000,000`;
+- `adaptive_budget.enabled = true`;
+- fresh reassessment returned `continue`;
+- consumed counters were not reset;
+- the job resumed and continued beyond the historical 2,000,000-token route prior.
 
-Regression coverage proves profile token priors are non-blocking for healthy adaptive work, DEC-025C usage `2,274,574 / 2,000,000` is below the fresh material input-token circuit breaker, hard caps still stop fail-closed, repeated-failure evidence still circuit-breaks early, and a healthy DEC-like legacy block can adopt a fresh route without changing durable identity/counters.
+This closes the earlier question of whether #224 works in the live preserved job: it does.
 
-No local Runtime/Router restart or rollout has occurred for #224/#226 yet.
+## Active provider-recovery alignment #228 / PR #229
 
-## Preserved `chonhac` DEC-025C
+Issue #228, **Keep provider recovery autonomous until eligible capacity is exhausted**, is the active source fix.
+
+Active branch: `ai/228-autonomous-provider-recovery`.
+
+PR #229, **runtime: keep provider recovery autonomous**, currently targets `main`. Current reviewed branch head before CI is `8846cbb213dc5ca47eed6855b7f6b13124678f92`.
+
+The defect exposed by DEC-025C-r2 is:
+
+- Runtime currently treats `max_provider_failovers` as a hard pre-routing stop after the profile prior is consumed;
+- Router reassessment also treats `provider_failovers > max_provider_failovers` as a hard budget overrun;
+- therefore one-provider failure can become an avoidable Human Owner reroute click even when Router still has another eligible provider/model.
+
+PR #229 changes the intended semantics without changing the provider registry or material resource envelope:
+
+- `max_provider_failovers` becomes planning/telemetry evidence, not a Human Owner continuation gate;
+- every observed provider/model/quota failure is persisted first, then Router may select another distinct eligible candidate;
+- planner, executor and evaluator share the same autonomous recovery behavior;
+- failed provider/model/quota state remains durable, so recovery cannot loop back to already-proven-bad capacity merely to stay under a counter;
+- no eligible route, contradictory same-choice routing, protected decisions, scope anomalies, repeated/no-progress/oscillation guards and material resource boundaries remain fail-closed;
+- target service labels after merge/activation are Runtime `1.0.45` and Router `1.0.22`; routing policy remains v13.
+
+No local activation of #228 has occurred yet.
+
+## Preserved `chonhac` DEC-025C-r2
+
+Identity remains:
 
 - plan: `pm-gh-5650852312`;
 - WorkOrder: `DEC-025C-1-recovery-tooling-r2`;
 - job: `eec59b13651c54559c10ce204380a68e`;
 - branch: `ai/eec59b13651c`;
 - workspace: `/home/sonvh/.coding-platform/workspaces/eec59b13651c54559c10ce204380a68e`;
-- approved source baseline: `b143fbb001c2006ec82570619802b607085fbeb0`;
-- last verified status: `blocked`;
-- top-level result: `reassessment_stopped`;
-- nested reassessment: `action=stop`, `reason=input-token budget exceeded`, signal `hard_budget_overrun`;
-- cache-aware durable `progress.input_tokens = 2,274,574`;
-- currently deployed effective `max_input_tokens = 2,000,000`.
+- approved source baseline: `b143fbb001c2006ec82570619802b607085fbeb0`.
 
-This is legitimate cache-aware usage, not the historical cache-accounting bug.
+Latest owner-visible provider sequence:
 
-Keep this exact job blocked/preserved until guarded local activation loads the merged Runtime/Router source. Do not execute historical/new #221 token actions, manually resume, edit DB/counters, force-complete, or create a replacement plan/job merely to bypass the state.
+1. `antigravity_free` / `google_antigravity` failed with `quota_exhausted` during execution;
+2. the Human Owner manually chose **Chuyển provider**;
+3. the same job continued;
+4. evaluator `openrouter_qwen3_coder_free` / `openrouter` then failed with `authentication`;
+5. latest notification again reports `evaluator_provider_failure_without_fallback`.
 
-After guarded activation, the preferred recovery is automatic fresh-route adoption **only if** current durable evidence still proves healthy progress and no independent anomaly/protected/material-risk condition exists. Otherwise the job remains blocked fail-closed.
+Latest notification metrics were model calls `30/40`, tool calls `93/400`, test runs `24/40`, wall time `140.757/180`, repair iterations `7/12`.
+
+Those manual reroute clicks are now classified as avoidable Human Owner attention when another valid provider remains; #228 is the executable fix.
+
+Do not reset counters/provider state, create a replacement job, force-complete, or broaden the WorkOrder simply to recover this job.
+
+A separate read-only diagnostic observed `changed_files=16` while the WorkOrder route limit was `14`; agent evidence reported generated `infra/staging/dec025c/__pycache__` residue. This is not permission to raise `max_changed_files`. Before same-job recovery after #228 activation, verify that any overage is exactly generated residue and that the semantic diff remains inside the approved 14-file scope.
 
 ## Relevant completed follow-ups
 
 - #215 / PR #216: bounded legacy adaptive adoption, merged at `6bc1f1a13c02acc6d747329c332a777535b75733`.
 - #219 / PR #220: effective adaptive-envelope reconciliation, merged at `d078f5e3ce8e47555b12e459cdce4fa43114cae0`.
-- #221 / PR #222: bounded Human Owner input-token recovery compatibility path, merged at `2f4babbe33dfcf96fe6d6ef500243d2a0baec020`; PM review added a fresh `status=blocked` mutation gate.
-- PR #223: continuity after #221, merged at `a0b28223f10686a5fa993397e0e1084e2f4dcb3c`.
+- #221 / PR #222: bounded Human Owner input-token recovery compatibility path, merged at `2f4babbe33dfcf96fe6d6ef500243d2a0baec020`.
 - PR #225: mandatory healthy-progress non-blocking policy amendment, merged at `101062e9db554a7c610de634d8e7b3c4e72cbf48`.
 - #224 / PR #226: executable healthy-progress autonomy, merged at `892fd2ba30f0ba0426c6239384ead43d1b2c3d95` after CI #401 passed.
+- PR #227: continuity after #224 merge, merged at `2bef1bcbbfa3cfc52e21e06f5314ccb676551853`.
 
 ## Global operational gates
 
@@ -86,19 +115,20 @@ After guarded activation, the preferred recovery is automatic fresh-route adopti
 - Never force push.
 - Developer agents never merge.
 - Human Owner retains protected scope/architecture/security/destructive-data/production/governance/material-budget authority.
-- Healthy-progress non-blocking is mandatory; a static task/profile counter crossing alone is not a valid Human Owner gate.
+- Healthy-progress non-blocking is mandatory; static task/profile/provider-failover counters alone are not Human Owner gates.
 - Production deployment is never implied by PR merge.
 - Do not restart/rebuild platform services while engineering work is active.
 - Runtime durable state is authoritative; never edit durable state to bypass its state machine.
-- Potentially failing Human Owner command blocks must run in an isolated subshell/process, not terminate the parent interactive shell.
+- Potentially failing Human Owner command blocks must run in an isolated subshell/process.
 
 ## Immediate next safe actions
 
-1. Fast-forward the local PCP checkout to current GitHub `main` containing `892fd2ba30f0ba0426c6239384ead43d1b2c3d95` (plus this continuity-only follow-up once merged).
-2. Before any restart, verify the PCP working tree/source, no active engineering work, and the exact preserved DEC-025C job/workspace/source/branch/status/counters.
-3. Run the required deterministic platform/source tests while services remain in the current safe state.
-4. Only after those preflight gates pass, perform the minimum one-time Runtime/Router restart/rebuild required to load routing policy v13 and merged #224 behavior.
-5. Verify startup/rollout itself did not mutate or resume DEC-025C and that its durable identity/counters remain unchanged.
-6. Allow normal orchestration to re-evaluate the preserved budget-only block. It may auto-resume the same job only if fresh adaptive routing + fresh reassessment prove the state healthy and under material emergency caps.
-7. If fresh evidence identifies a real anomaly/protected/material-risk condition, keep the job blocked and surface that actual reason instead of manufacturing a continuation click.
-8. Keep #146 open for naturally occurring calibration evidence.
+1. Run exact-head CI for PR #229 and inspect all Runtime/Router/structure/executor results.
+2. PM-review the exact PR head for regression risk: provider failure state must remain durable, no eligible route must still fail closed, and protected/anomaly/scope/material gates must remain unchanged.
+3. If all gates are green and no protected decision is unresolved, PM may merge PR #229 autonomously.
+4. Record the exact merge/CI evidence in continuity before operational handoff.
+5. Keep DEC-025C-r2 blocked while source work is under review; do not perform more manual provider-reroute clicks merely to bypass the current implementation.
+6. After merge, use the normal idle gate and deterministic preflight before selectively activating Router `1.0.22` and Runtime `1.0.45`.
+7. Before same-job recovery, verify the 14-file semantic scope and remove only proven generated residue; do not expand `max_changed_files`.
+8. Once #228 is active, let Runtime/Router automatically move through eligible provider capacity. Surface Human Owner attention only when no eligible route remains or an independent anomaly/protected/material boundary requires it.
+9. Keep #146 open for naturally occurring calibration evidence.
