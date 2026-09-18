@@ -79,6 +79,10 @@ selected explicit OpenRouter free model
 
 Do not aggressively retry a pressured free provider. A provider overload such as HTTP/API 502 should move routing toward another eligible provider/model rather than consume budget on repeated retries.
 
+Provider recovery is autonomous while eligible capacity remains. The per-profile `max_provider_failovers` value is a planning/telemetry prior, not a Human Owner continuation gate: Runtime may exceed it when each observed failure is durably excluded and Router returns a distinct eligible candidate. Quota, rate-limit, authentication, configuration or availability failure of one provider/model must therefore fall through to another valid route for the same job/workspace/counters. Human Owner attention is appropriate only when no eligible route remains, contradictory/oscillating provider evidence is detected, or another protected/anomaly/material-resource boundary independently requires a stop.
+
+Failed provider/model/quota health must remain durable across those automatic reroutes. Runtime must not clear failed-capacity state merely to stay under a failover counter; this preserves a finite recovery sequence and prevents cycling back to capacity already proven unusable.
+
 Current Runtime provider-failure semantics intentionally remain provider-wide for OpenRouter. Therefore multiple active OpenRouter models do **not** currently provide an effective same-provider PCP fallback: one provider-level failure would exclude all of them. Do not register a multi-model OpenRouter pool until its health semantics are intentionally redesigned and tested.
 
 ## 6. Current OpenRouter model strategy

@@ -20,7 +20,7 @@ from .schemas import (
 
 app = FastAPI(
     title="Personal Coding Router Service",
-    version="1.0.21",
+    version="1.0.22",
     description="Deterministic-first model/agent routing for a personal coding automation platform.",
 )
 

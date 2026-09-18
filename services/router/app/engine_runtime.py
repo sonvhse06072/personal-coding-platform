@@ -9,9 +9,12 @@ from .schemas import HumanDecision, ReassessRequest, ReassessResponse, RoutingRe
 class RouterEngine(BaseRouterEngine):
     """Router engine with completion-aware budget reassessment.
 
-    Reaching a hard limit means no *further* work may start. A turn that finishes
-    exactly on the allowed limit can still be accepted when Definition of Done is
-    already satisfied. True overruns remain an unconditional stop.
+    Reaching a hard execution/resource limit means no *further* work may start.
+    A turn that finishes exactly on the allowed limit can still be accepted when
+    Definition of Done is already satisfied. Provider-failover counts are
+    telemetry/planning priors instead: known-bad capacity is excluded durably and
+    Router eligibility, not a static failover count, decides when recovery is
+    exhausted. True execution/resource overruns remain an unconditional stop.
     """
 
     def reassess(self, request: ReassessRequest) -> ReassessResponse:
@@ -46,7 +49,6 @@ class RouterEngine(BaseRouterEngine):
             (progress.tool_calls > budget.max_tool_calls, "tool-call budget exceeded"),
             (progress.iteration > budget.max_iterations, "iteration budget exceeded"),
             (progress.repair_iterations > budget.max_repair_iterations, "repair budget exceeded"),
-            (progress.provider_failovers > budget.max_provider_failovers, "provider-failover budget exceeded"),
             (progress.model_failovers > budget.max_model_failovers, "model-failover budget exceeded"),
             (progress.test_runs > budget.max_test_runs, "test-run budget exceeded"),
             (progress.elapsed_minutes > budget.max_wall_time_minutes, "wall-time budget exceeded"),
