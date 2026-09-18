@@ -54,7 +54,7 @@ Issue #228, **Keep provider recovery autonomous until eligible capacity is exhau
 
 Active branch: `ai/228-autonomous-provider-recovery`.
 
-PR #229, **runtime: keep provider recovery autonomous**, currently targets `main`. Current reviewed branch head before CI is `8846cbb213dc5ca47eed6855b7f6b13124678f92`.
+PR #229, **runtime: keep provider recovery autonomous**, currently targets `main`. Always inspect the exact current PR head and CI run before merge; this mutable handoff deliberately does not self-pin its own branch SHA.
 
 The defect exposed by DEC-025C-r2 is:
 
