@@ -48,30 +48,26 @@ The preserved DEC-025C-r2 job subsequently proved the merged behavior in durable
 
 This closes the earlier question of whether #224 works in the live preserved job: it does.
 
-## Active provider-recovery alignment #228 / PR #229
+## Autonomous provider recovery #228: merged, activation pending
 
-Issue #228, **Keep provider recovery autonomous until eligible capacity is exhausted**, is the active source fix.
+Issue #228, **Keep provider recovery autonomous until eligible capacity is exhausted**, is closed `completed`.
 
-Active branch: `ai/228-autonomous-provider-recovery`.
+PR #229, **runtime: keep provider recovery autonomous**, was PM-reviewed and merged from exact final head `ebabb195f2fef171e0ce9d90519c7870cb544c6b` into `main` at merge commit `bd24f18a0983ed370681f253edeb0606cf9e80cf`.
 
-PR #229, **runtime: keep provider recovery autonomous**, currently targets `main`. Always inspect the exact current PR head and CI run before merge; this mutable handoff deliberately does not self-pin its own branch SHA.
+Exact-head CI run #408 passed all required jobs: structure, Router, Runtime, and ddev-executor. The earlier run #407 exposed only an incomplete new test harness; the harness was corrected without changing production semantics before the green final run.
 
-The defect exposed by DEC-025C-r2 is:
+Merged behavior:
 
-- Runtime currently treats `max_provider_failovers` as a hard pre-routing stop after the profile prior is consumed;
-- Router reassessment also treats `provider_failovers > max_provider_failovers` as a hard budget overrun;
-- therefore one-provider failure can become an avoidable Human Owner reroute click even when Router still has another eligible provider/model.
-
-PR #229 changes the intended semantics without changing the provider registry or material resource envelope:
-
-- `max_provider_failovers` becomes planning/telemetry evidence, not a Human Owner continuation gate;
-- every observed provider/model/quota failure is persisted first, then Router may select another distinct eligible candidate;
-- planner, executor and evaluator share the same autonomous recovery behavior;
-- failed provider/model/quota state remains durable, so recovery cannot loop back to already-proven-bad capacity merely to stay under a counter;
+- `max_provider_failovers` is planning/telemetry evidence, not a Human Owner continuation gate;
+- every observed provider/model/quota failure is persisted before Router selects another distinct eligible candidate;
+- planner, executor and evaluator share the same autonomous provider recovery semantics;
+- quota, rate-limit, authentication, configuration and provider-unavailable failures may fall through automatically while eligible capacity remains;
+- failed provider/model/quota health remains durable, so automatic recovery cannot cycle back to already-proven-bad capacity merely to stay under a counter;
+- Router reassessment no longer treats `provider_failovers > max_provider_failovers` as an unconditional hard-budget overrun;
 - no eligible route, contradictory same-choice routing, protected decisions, scope anomalies, repeated/no-progress/oscillation guards and material resource boundaries remain fail-closed;
-- target service labels after merge/activation are Runtime `1.0.45` and Router `1.0.22`; routing policy remains v13.
+- merged service labels are Runtime `1.0.45` and Router `1.0.22`; routing policy remains v13.
 
-No local activation of #228 has occurred yet.
+No local activation of #228/#229 has occurred yet. Local Router/Runtime must not be rebuilt while engineering work is active.
 
 ## Preserved `chonhac` DEC-025C-r2
 
@@ -108,6 +104,7 @@ A separate read-only diagnostic observed `changed_files=16` while the WorkOrder 
 - PR #225: mandatory healthy-progress non-blocking policy amendment, merged at `101062e9db554a7c610de634d8e7b3c4e72cbf48`.
 - #224 / PR #226: executable healthy-progress autonomy, merged at `892fd2ba30f0ba0426c6239384ead43d1b2c3d95` after CI #401 passed.
 - PR #227: continuity after #224 merge, merged at `2bef1bcbbfa3cfc52e21e06f5314ccb676551853`.
+- #228 / PR #229: autonomous provider recovery, exact-head CI #408 green, merged at `bd24f18a0983ed370681f253edeb0606cf9e80cf`.
 
 ## Global operational gates
 
@@ -123,12 +120,13 @@ A separate read-only diagnostic observed `changed_files=16` while the WorkOrder 
 
 ## Immediate next safe actions
 
-1. Run exact-head CI for PR #229 and inspect all Runtime/Router/structure/executor results.
-2. PM-review the exact PR head for regression risk: provider failure state must remain durable, no eligible route must still fail closed, and protected/anomaly/scope/material gates must remain unchanged.
-3. If all gates are green and no protected decision is unresolved, PM may merge PR #229 autonomously.
-4. Record the exact merge/CI evidence in continuity before operational handoff.
-5. Keep DEC-025C-r2 blocked while source work is under review; do not perform more manual provider-reroute clicks merely to bypass the current implementation.
-6. After merge, use the normal idle gate and deterministic preflight before selectively activating Router `1.0.22` and Runtime `1.0.45`.
-7. Before same-job recovery, verify the 14-file semantic scope and remove only proven generated residue; do not expand `max_changed_files`.
-8. Once #228 is active, let Runtime/Router automatically move through eligible provider capacity. Surface Human Owner attention only when no eligible route remains or an independent anomaly/protected/material boundary requires it.
-9. Keep #146 open for naturally occurring calibration evidence.
+1. Fast-forward the local PCP checkout to current GitHub `main` containing `bd24f18a0983ed370681f253edeb0606cf9e80cf` plus this continuity-only follow-up once merged.
+2. Before any service mutation, verify a clean PCP source tree, no active engineering job/busy WorkOrder, direct n8n health, and the exact DEC-025C-r2 job/workspace/source/branch/status/counters.
+3. Verify the observed DEC workspace file overage: any files above the approved 14-file semantic scope must be proven generated residue such as `__pycache__/*.pyc`; remove only proven generated artifacts and never expand `max_changed_files` to hide scope drift.
+4. Run deterministic platform/source tests while services are idle.
+5. Selectively activate Router `1.0.22` and Runtime `1.0.45`; routing policy stays v13. Do not use a full-project restart when targeted rebuild is sufficient.
+6. Verify deployed service versions/code and that the preserved job identity/counters were not reset by activation.
+7. Recover the same DEC-025C-r2 job through normal Runtime/orchestration. Do not clear durable failed-provider state merely to make a provider eligible again.
+8. Let Runtime/Router automatically move through distinct eligible provider capacity. Human Owner attention is required only if no eligible route remains or an independent anomaly/protected/material boundary fires.
+9. Continue normal verification/delivery/PM-merge flow if the WorkOrder reaches acceptance; operator WorkOrders remain pending until their own authorized execution.
+10. Keep #146 open for naturally occurring calibration evidence.
