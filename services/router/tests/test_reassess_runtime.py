@@ -142,3 +142,36 @@ def test_dynamic_human_decision_still_precedes_completion_with_token_overrun():
         ),
     ))
     assert result.action == "human_decision"
+
+def test_provider_failover_prior_overrun_does_not_stop_healthy_incomplete_work():
+    engine = make_engine()
+    route = engine.route(base_request())
+    result = engine.reassess(ReassessRequest(
+        route=route,
+        progress=ExecutionProgress(
+            provider_failovers=route.strategy.budget.max_provider_failovers + 3,
+            agent_succeeded=True,
+            material_change_present=True,
+            tests_passed=False,
+            required_checks_passed=False,
+        ),
+    ))
+
+    assert result.action == "continue"
+    assert result.remaining["provider_failovers"] == 0
+
+
+def test_provider_failover_prior_overrun_does_not_block_completed_work():
+    engine = make_engine()
+    route = engine.route(base_request())
+    result = engine.reassess(ReassessRequest(
+        route=route,
+        progress=green_progress(
+            provider_failovers=route.strategy.budget.max_provider_failovers + 3,
+            material_change_present=True,
+        ),
+    ))
+
+    assert result.action == "complete"
+    assert result.remaining["provider_failovers"] == 0
+

@@ -335,8 +335,12 @@ class RuntimeEngineCore:
         return candidate, reroute
 
     async def _provider_failover(self, *, route_payload: dict[str, Any], provider_state: dict[str, Any], current_choice: dict[str, Any], failure_kind: str, progress: dict[str, Any], strategy: dict[str, Any], role: str = "executor") -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-        if progress.get("provider_failovers", 0) >= int(strategy["budget"].get("max_provider_failovers", 2)):
-            return None, None
+        # Provider-failover counts are durable telemetry/planning priors, not a
+        # Human Owner continuation gate. Each observed failure is first written
+        # into provider/model/quota health and Router must return a distinct
+        # eligible choice. Preserved failed-capacity state makes this sequence
+        # finite; no eligible route or a contradictory same-choice route still
+        # fails closed without resetting the consumed counter.
         self._mark_provider_failure(provider_state, current_choice, failure_kind)
         payload = dict(route_payload)
         payload["provider_state"] = provider_state
