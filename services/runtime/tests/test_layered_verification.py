@@ -87,9 +87,10 @@ def row(*, layered=True):
     }
 
 
-def strategy():
+def strategy(*, mode="adaptive"):
     return {
         "profile": "standard",
+        "budget_mode": mode,
         "budget": {
             "max_tool_calls": 100,
             "max_test_runs": 100,
@@ -264,3 +265,54 @@ def test_provider_recovery_has_its_own_counter_and_does_not_spend_repair_budget(
         )
 
     asyncio.run(scenario())
+
+def test_adaptive_verification_crosses_tool_and_test_high_water_marks():
+    async def scenario():
+        storage = FakeStorage(row())
+        engine = RuntimeEngine(storage)
+        ddev = FakeDdev()
+        engine.ddev = ddev
+        state = progress()
+        state["tool_calls"] = 100
+        state["test_runs"] = 100
+
+        result = await engine._verify(
+            "job148",
+            "demo",
+            "/workspaces/job148",
+            project(),
+            strategy(mode="adaptive"),
+            time.monotonic(),
+            state,
+        )
+
+        assert result["passed"] is True
+        assert ddev.calls == ["targeted_tests", "static_analysis", "full_tests"]
+
+
+def test_legacy_hard_verification_keeps_tool_test_ceiling():
+    async def scenario():
+        storage = FakeStorage(row())
+        engine = RuntimeEngine(storage)
+        ddev = FakeDdev()
+        engine.ddev = ddev
+        state = progress()
+        state["tool_calls"] = 100
+        state["test_runs"] = 100
+
+        result = await engine._verify(
+            "job148",
+            "demo",
+            "/workspaces/job148",
+            project(),
+            strategy(mode="legacy_hard"),
+            time.monotonic(),
+            state,
+        )
+
+        assert result["passed"] is False
+        assert ddev.calls == []
+        assert "verification budget would be exceeded" in result["failure_text"]
+
+    asyncio.run(scenario())
+

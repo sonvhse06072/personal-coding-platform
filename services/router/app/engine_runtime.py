@@ -9,12 +9,12 @@ from .schemas import HumanDecision, ReassessRequest, ReassessResponse, RoutingRe
 class RouterEngine(BaseRouterEngine):
     """Router engine with completion-aware budget reassessment.
 
-    Reaching a hard execution/resource limit means no *further* work may start.
-    A turn that finishes exactly on the allowed limit can still be accepted when
-    Definition of Done is already satisfied. Provider-failover counts are
-    telemetry/planning priors instead: known-bad capacity is excluded durably and
-    Router eligibility, not a static failover count, decides when recovery is
-    exhausted. True execution/resource overruns remain an unconditional stop.
+    Adaptive routes distinguish material resource ceilings from work-shape
+    telemetry. Model/tool/test/iteration/repair/failover counters may cross their
+    high-water marks while execution remains healthy; anti-loop, scope, provider
+    eligibility and protected-decision signals still control abnormal work.
+    Legacy-hard routes retain historical strict counter semantics. Token volume,
+    wall time and hard cost remain material circuit breakers for every route.
     """
 
     def reassess(self, request: ReassessRequest) -> ReassessResponse:
@@ -22,6 +22,7 @@ class RouterEngine(BaseRouterEngine):
         progress = request.progress
         budget = route.strategy.budget
         anti = route.strategy.anti_loop
+        adaptive_work_shape = route.strategy.budget_mode == "adaptive"
         signals: list[str] = []
 
         remaining = {
@@ -40,20 +41,24 @@ class RouterEngine(BaseRouterEngine):
             "changed_files": max(0, budget.max_changed_files - progress.changed_files),
         }
 
-        # Overshooting is never acceptable, even if deterministic checks happen
-        # to be green. Runtime pre-checks should normally prevent these states.
+        # Material resource overruns remain unconditional stops. Adaptive
+        # work-shape counters are telemetry and anti-loop inputs; legacy-hard
+        # routes preserve the historical strict ceilings.
         overruns = [
-            (progress.model_calls > budget.max_model_calls, "model-call budget exceeded"),
             (progress.input_tokens > budget.max_input_tokens, "input-token budget exceeded"),
             (progress.output_tokens > budget.max_output_tokens, "output-token budget exceeded"),
-            (progress.tool_calls > budget.max_tool_calls, "tool-call budget exceeded"),
-            (progress.iteration > budget.max_iterations, "iteration budget exceeded"),
-            (progress.repair_iterations > budget.max_repair_iterations, "repair budget exceeded"),
-            (progress.model_failovers > budget.max_model_failovers, "model-failover budget exceeded"),
-            (progress.test_runs > budget.max_test_runs, "test-run budget exceeded"),
             (progress.elapsed_minutes > budget.max_wall_time_minutes, "wall-time budget exceeded"),
             (progress.cost_usd > budget.hard_cost_usd, "hard cost budget exceeded"),
         ]
+        if not adaptive_work_shape:
+            overruns.extend([
+                (progress.model_calls > budget.max_model_calls, "model-call budget exceeded"),
+                (progress.tool_calls > budget.max_tool_calls, "tool-call budget exceeded"),
+                (progress.iteration > budget.max_iterations, "iteration budget exceeded"),
+                (progress.repair_iterations > budget.max_repair_iterations, "repair budget exceeded"),
+                (progress.model_failovers > budget.max_model_failovers, "model-failover budget exceeded"),
+                (progress.test_runs > budget.max_test_runs, "test-run budget exceeded"),
+            ])
         for hit, reason in overruns:
             if hit:
                 return ReassessResponse(
@@ -92,19 +97,23 @@ class RouterEngine(BaseRouterEngine):
                 signals=["done"],
             )
 
-        # Exact exhaustion is allowed for the just-finished turn above, but once
-        # DoD is still incomplete no additional model/tool/test work may start.
+        # Once DoD is incomplete, material ceilings still prevent another turn.
+        # Adaptive work-shape thresholds do not; they remain visible in remaining
+        # telemetry and adaptive-budget signals.
         exhausted = [
-            (progress.model_calls >= budget.max_model_calls, "model-call budget exhausted"),
             (progress.input_tokens >= budget.max_input_tokens, "input-token budget exhausted"),
             (progress.output_tokens >= budget.max_output_tokens, "output-token budget exhausted"),
-            (progress.tool_calls >= budget.max_tool_calls, "tool-call budget exhausted"),
-            (progress.iteration >= budget.max_iterations, "iteration budget exhausted"),
-            (progress.repair_iterations >= budget.max_repair_iterations, "repair budget exhausted"),
-            (progress.test_runs >= budget.max_test_runs, "test-run budget exhausted"),
             (progress.elapsed_minutes >= budget.max_wall_time_minutes, "wall-time budget exhausted"),
             (progress.cost_usd >= budget.hard_cost_usd, "hard cost budget exhausted"),
         ]
+        if not adaptive_work_shape:
+            exhausted.extend([
+                (progress.model_calls >= budget.max_model_calls, "model-call budget exhausted"),
+                (progress.tool_calls >= budget.max_tool_calls, "tool-call budget exhausted"),
+                (progress.iteration >= budget.max_iterations, "iteration budget exhausted"),
+                (progress.repair_iterations >= budget.max_repair_iterations, "repair budget exhausted"),
+                (progress.test_runs >= budget.max_test_runs, "test-run budget exhausted"),
+            ])
         for hit, reason in exhausted:
             if hit:
                 return ReassessResponse(
@@ -190,10 +199,12 @@ class RouterEngine(BaseRouterEngine):
             except RuntimeError:
                 pass
 
-        if repeated or oscillation:
+        if repeated or oscillation or "no_progress" in signals or "scope_expansion" in signals:
             return ReassessResponse(
                 action="stop",
-                reason="Circuit breaker: repeated failure or solution oscillation without a valid escalation path",
+                reason=(
+                    "Circuit breaker: abnormal execution signal without a valid escalation path"
+                ),
                 current_profile=route.strategy.profile,
                 remaining=remaining,
                 signals=signals,
@@ -201,7 +212,11 @@ class RouterEngine(BaseRouterEngine):
 
         return ReassessResponse(
             action="continue",
-            reason="Within budget and no circuit-break condition detected",
+            reason=(
+                "No material circuit-break or anomaly detected; adaptive work-shape counters are telemetry"
+                if adaptive_work_shape
+                else "Within budget and no circuit-break condition detected"
+            ),
             current_profile=route.strategy.profile,
             remaining=remaining,
             signals=signals,

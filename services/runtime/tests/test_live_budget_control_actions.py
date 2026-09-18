@@ -38,6 +38,7 @@ def job(
     max_tool_calls=160,
     status="blocked",
     error=None,
+    budget_mode=None,
 ):
     return {
         "id": "job-1",
@@ -45,6 +46,7 @@ def job(
         "error": error,
         "route": {
             "strategy": {
+                "budget_mode": budget_mode,
                 "budget": {
                     "max_model_calls": max_model_calls,
                     "max_tool_calls": max_tool_calls,
@@ -67,7 +69,10 @@ def job(
         "checkpoint": {
             "work_order": {
                 "id": "WO-1",
-                "budget": {"max_model_calls": 10},
+                "budget": {
+                    "max_model_calls": 10,
+                    **({"mode": budget_mode} if budget_mode else {}),
+                },
             },
             "route_history": [],
         },
@@ -249,3 +254,54 @@ def test_multiple_live_exhausted_dimensions_without_matching_hint_fail_closed():
         "details",
         "keep_blocked",
     ]
+
+def test_adaptive_model_call_exhaustion_does_not_offer_owner_extension():
+    current = job(
+        model_calls=14,
+        max_model_calls=14,
+        elapsed_minutes=30,
+        budget_mode="adaptive",
+    )
+    controls, _ = service(current)
+
+    advisory = controls.blocked_advisory(work_order(), current)
+
+    assert budget_actions(advisory) == []
+    assert all(
+        item.get("payload", {}).get("dimension") != "max_model_calls"
+        for item in advisory["action_specs"]
+    )
+
+
+def test_adaptive_provider_recovery_only_exposes_material_wall_extension():
+    current = job(
+        last_failure="model-call budget exhausted",
+        model_calls=14,
+        max_model_calls=14,
+        elapsed_minutes=50,
+        max_wall_time_minutes=50,
+        budget_mode="adaptive",
+    )
+    current["result"] = {
+        "reason": "provider_failure_without_fallback",
+        "last_failure": "provider failed",
+    }
+    current["progress"]["provider_failures"] = [
+        {
+            "kind": "provider_unavailable",
+            "model": "broken",
+            "provider": "provider-a",
+        }
+    ]
+    controls, _ = service(current)
+
+    advisory = controls.blocked_advisory(work_order(), current)
+
+    actions = budget_actions(advisory)
+    assert len(actions) == 1
+    assert actions[0]["payload"]["dimension"] == "max_wall_time_minutes"
+    assert all(
+        item.get("payload", {}).get("dimension") != "max_model_calls"
+        for item in advisory["action_specs"]
+    )
+

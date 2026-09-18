@@ -4,7 +4,7 @@ from copy import deepcopy
 import hashlib
 from typing import Any
 
-from .control_actions import _BUDGET_EXTENSION_SPECS
+from .control_actions import _ADAPTIVE_WORK_SHAPE_DIMENSIONS, _BUDGET_EXTENSION_SPECS
 from .control_actions_live import ControlActionService as LiveControlActionService
 from .state import checkpoint_from_row
 from .storage import now
@@ -41,8 +41,11 @@ class ControlActionService(LiveControlActionService):
         strategy = dict(route.get("strategy") or {})
         budget = dict(strategy.get("budget") or {})
         progress = dict(job.get("progress") or {})
+        adaptive_work_shape = cls._adaptive_work_shape_nonblocking(job)
         exhausted: list[str] = []
         for dimension, spec in _BUDGET_EXTENSION_SPECS.items():
+            if adaptive_work_shape and dimension in _ADAPTIVE_WORK_SHAPE_DIMENSIONS:
+                continue
             if dimension not in budget:
                 continue
             used = cls._numeric(progress.get(spec["counter"], 0))

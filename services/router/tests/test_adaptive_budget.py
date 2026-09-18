@@ -56,8 +56,9 @@ def test_new_routes_expose_estimate_working_target_and_emergency_ceiling():
         envelope = adaptive.dimensions[dimension]
         assert envelope.estimate <= envelope.working_target <= envelope.emergency_limit
         assert envelope.working_target >= float(profile_cfg[dimension])
-        # Only the emergency ceiling is a technical stop point. Estimate and
-        # working target remain observable resource-management thresholds.
+        # The emergency value is a stable high-water threshold. Effective
+        # WorkOrder budget_mode decides whether that dimension is a material stop
+        # or adaptive work-shape telemetry.
         assert float(getattr(route.strategy.budget, dimension)) == envelope.emergency_limit
 
 
@@ -78,9 +79,10 @@ def test_task_pressure_increases_effort_pressure_and_estimated_capacity():
     )
 
 
-def test_working_target_is_non_blocking_and_emergency_limit_still_stops():
+def test_effective_adaptive_work_shape_emergency_threshold_is_non_blocking():
     engine = make_engine()
     route = engine.route(request())
+    route.strategy.budget_mode = "adaptive"
     adaptive = route.strategy.adaptive_budget
     assert adaptive is not None
     repair = adaptive.dimensions["max_repair_iterations"]
@@ -106,9 +108,9 @@ def test_working_target_is_non_blocking_and_emergency_limit_still_stops():
             agent_succeeded=True,
         ),
     ))
-    assert emergency.action == "stop"
-    assert emergency.reason == "repair budget exhausted"
-    assert "hard_budget_guard" in emergency.signals
+    assert emergency.action != "stop"
+    assert "budget_emergency_threshold_reached:max_repair_iterations" in emergency.signals
+    assert "hard_budget_guard" not in emergency.signals
 
 
 def test_non_blocking_budget_signals_do_not_force_reasoning_escalation():

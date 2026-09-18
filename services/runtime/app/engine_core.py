@@ -225,20 +225,46 @@ class RuntimeEngineCore:
         progress["elapsed_minutes"] = round((time.monotonic() - started) / 60.0, 3)
 
     @staticmethod
-    def _pre_model_budget_reason(progress: dict[str, Any], strategy: dict[str, Any], *, include_iteration: bool) -> str | None:
+    def _adaptive_work_shape_nonblocking(strategy: dict[str, Any]) -> bool:
+        """Whether static work-shape counters are telemetry rather than stop gates.
+
+        The marker is written by WorkOrder policy after Router staffing. Missing
+        markers fail closed so persisted/legacy routes retain historical behavior.
+        """
+        return str(strategy.get("budget_mode") or "") == "adaptive"
+
+    @classmethod
+    def _pre_model_budget_reason(
+        cls,
+        progress: dict[str, Any],
+        strategy: dict[str, Any],
+        *,
+        include_iteration: bool,
+    ) -> str | None:
         budget = strategy["budget"]
+
+        # Material resource ceilings remain hard for adaptive and legacy work.
         checks = [
-            (progress["model_calls"] >= int(budget["max_model_calls"]), "model-call budget exhausted"),
             (progress["input_tokens"] >= int(budget["max_input_tokens"]), "input-token budget exhausted"),
             (progress["output_tokens"] >= int(budget["max_output_tokens"]), "output-token budget exhausted"),
-            (progress["tool_calls"] >= int(budget["max_tool_calls"]), "tool-call budget exhausted"),
-            (progress["test_runs"] >= int(budget["max_test_runs"]), "test-run budget exhausted"),
-            (progress["repair_iterations"] >= int(budget["max_repair_iterations"]), "repair budget exhausted"),
             (progress["elapsed_minutes"] >= float(budget["max_wall_time_minutes"]), "wall-time budget exhausted"),
             (progress["cost_usd"] >= float(budget["hard_cost_usd"]), "hard cost budget exhausted"),
         ]
-        if include_iteration:
-            checks.append((progress["iteration"] >= int(budget["max_iterations"]), "iteration budget exhausted"))
+
+        # Work-shape counters are telemetry/reassessment inputs on adaptive jobs.
+        # Explicit legacy-hard routes preserve historical strict counter ceilings.
+        if not cls._adaptive_work_shape_nonblocking(strategy):
+            checks.extend([
+                (progress["model_calls"] >= int(budget["max_model_calls"]), "model-call budget exhausted"),
+                (progress["tool_calls"] >= int(budget["max_tool_calls"]), "tool-call budget exhausted"),
+                (progress["test_runs"] >= int(budget["max_test_runs"]), "test-run budget exhausted"),
+                (progress["repair_iterations"] >= int(budget["max_repair_iterations"]), "repair budget exhausted"),
+            ])
+            if include_iteration:
+                checks.append(
+                    (progress["iteration"] >= int(budget["max_iterations"]), "iteration budget exhausted")
+                )
+
         for hit, reason in checks:
             if hit:
                 return reason
@@ -319,8 +345,13 @@ class RuntimeEngineCore:
             del attempts[:-12]
 
     async def _model_failover(self, *, route_payload: dict[str, Any], provider_state: dict[str, Any], current_choice: dict[str, Any], progress: dict[str, Any], strategy: dict[str, Any], reason: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-        if progress.get("model_failovers", 0) >= int(strategy["budget"].get("max_model_failovers", 2)):
+        if (
+            not self._adaptive_work_shape_nonblocking(strategy)
+            and progress.get("model_failovers", 0) >= int(strategy["budget"].get("max_model_failovers", 2))
+        ):
             return None, None
+        # Adaptive model-failover counts are telemetry. Durable failed-model state
+        # makes recovery finite because Router must select a distinct eligible model.
         self._mark_model_failure(provider_state, current_choice, reason)
         payload = dict(route_payload)
         payload["provider_state"] = provider_state

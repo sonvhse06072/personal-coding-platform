@@ -466,8 +466,11 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             commands = project.get("ddev", {}).get(phase, []) or []
             count = len(commands)
             if (
-                progress["tool_calls"] + tool_calls + count > int(budget["max_tool_calls"])
-                or progress["test_runs"] + test_runs + count > int(budget["max_test_runs"])
+                not self._adaptive_work_shape_nonblocking(strategy)
+                and (
+                    progress["tool_calls"] + tool_calls + count > int(budget["max_tool_calls"])
+                    or progress["test_runs"] + test_runs + count > int(budget["max_test_runs"])
+                )
             ):
                 failures.append(f"{phase}: verification budget would be exceeded")
                 break

@@ -101,6 +101,7 @@ def test_pre_adaptive_work_order_payload_stays_legacy_hard():
 
     bounded = apply_work_order_budget(route_payload(), work_order)
     budget = bounded["strategy"]["budget"]
+    assert bounded["strategy"]["budget_mode"] == "legacy_hard"
     assert budget["max_model_calls"] == 5
     assert budget["max_repair_iterations"] == 1
     assert budget["max_wall_time_minutes"] == 15
@@ -112,6 +113,7 @@ def test_explicit_adaptive_work_order_does_not_turn_estimates_into_hard_stops():
     bounded = apply_work_order_budget(route_payload(), work_order)
     budget = bounded["strategy"]["budget"]
 
+    assert bounded["strategy"]["budget_mode"] == "adaptive"
     # Adaptive execution keeps Router's bounded emergency envelope while scope
     # and profile remain WorkOrder hard policy boundaries.
     assert budget["max_model_calls"] == 18
@@ -194,6 +196,7 @@ def test_adaptive_mode_fails_closed_if_router_has_no_adaptive_metadata():
     route["strategy"].pop("adaptive_budget")
     bounded = apply_work_order_budget(route, work_order)
     budget = bounded["strategy"]["budget"]
+    assert bounded["strategy"]["budget_mode"] == "legacy_hard"
     assert budget["max_model_calls"] == 5
     assert budget["max_repair_iterations"] == 1
     assert budget["max_wall_time_minutes"] == 15

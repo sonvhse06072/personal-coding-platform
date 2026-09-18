@@ -328,3 +328,31 @@ def test_multi_budget_bundle_rejects_stale_dimension_set_before_resume():
 
     assert controls.storage.job["route"] == before
     assert controls.calls == []
+
+def test_adaptive_provider_block_ignores_work_shape_exhaustion_but_keeps_wall_gate():
+    job = provider_multi_budget_block()
+    job["route"]["strategy"]["budget_mode"] = "adaptive"
+    job["checkpoint"] = {
+        "work_order": {
+            "id": "wo-1",
+            "budget": {"mode": "adaptive"},
+        }
+    }
+    controls = Harness(job)
+
+    assert controls._provider_budget_dimensions(job) == ["max_wall_time_minutes"]
+
+    advisory = controls.blocked_advisory({}, job)
+    mutation_actions = [
+        item for item in advisory["action_specs"]
+        if item.get("action_type") not in {"details", "keep_blocked"}
+    ]
+
+    assert len(mutation_actions) == 1
+    assert mutation_actions[0]["action_type"] == "budget_extend"
+    assert mutation_actions[0]["payload"]["dimension"] == "max_wall_time_minutes"
+    assert all(
+        item.get("payload", {}).get("dimension") != "max_iterations"
+        for item in advisory["action_specs"]
+    )
+
