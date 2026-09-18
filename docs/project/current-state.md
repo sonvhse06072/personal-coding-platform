@@ -67,9 +67,9 @@ Merged behavior:
 - no eligible route, contradictory same-choice routing, protected decisions, scope anomalies, repeated/no-progress/oscillation guards and material resource boundaries remain fail-closed;
 - merged service labels are Runtime `1.0.45` and Router `1.0.22`; routing policy remains v13.
 
-Local activation of #228/#229 has started but is not complete. The guarded preflight passed with zero active jobs/busy WorkOrders/planning plans, DEC-025C-r2 blocked, and the workspace at exactly 14/14 semantic files. Local source fast-forwarded to `435301ba571adf0eb166208c501c65497db9f685` and Router was selectively rebuilt. Activation then stopped fail-closed at exit code 51 because Router `/health` still hard-coded version `1.0.21` even though the service metadata/source version is `1.0.22`. Runtime was not rebuilt and no job resume action was issued. Issue #232 / PR #233 fixed this health-contract defect; exact-head CI #412 passed all required jobs and PR #233 merged at `8c3e0348720f236eb3d5786396fc7ad6a0866e74`. Router now uses one version source for FastAPI metadata and `/health`, with direct health regression coverage.
+Local activation of #228/#229 is complete. The guarded activation re-entry passed with exit code 0 on source `141d630f2523a968352ee86e80d2002d5f3fe6b3`: Router `1.0.22`, Runtime `1.0.45`, routing policy v13, deterministic platform tests green, and the preserved DEC-025C-r2 remained blocked and was not resumed during rollout. The workspace was exactly 14/14 semantic files and no job/counter/provider-state reset or replacement occurred.
 
-Before any further service mutation, re-check the exact DEC durable state and idle gate. Local Router/Runtime must not be rebuilt while engineering work is active.
+The next operation is no longer a rollout. Recover the exact same DEC-025C-r2 job once through a fresh explicit reroute with `reset_transient_provider_failures=false`; then let Runtime/Router autonomously traverse eligible provider capacity. Do not use historical Telegram reroute buttons merely to advance provider selection.
 
 ## Preserved `chonhac` DEC-025C-r2
 
@@ -122,12 +122,11 @@ A separate read-only diagnostic observed `changed_files=16` while the WorkOrder 
 
 ## Immediate next safe actions
 
-1. Fast-forward local PCP source to current GitHub `main` containing PR #233 plus this continuity follow-up once merged; re-check clean source, zero active engineering work, direct n8n health, and the exact DEC-025C-r2 durable state before any further service mutation.
-2. Re-verify Router `1.0.22` / policy v13 using the corrected `/health` contract and source/image hash. Rebuild Router only if the deployed code/hash is not the merged source.
-3. Run deterministic platform tests while idle.
-4. Selectively activate Runtime `1.0.45`; do not use a full-project restart when targeted rebuild is sufficient.
-6. Verify deployed service versions/code and that the preserved job identity/counters were not reset by activation.
-7. Recover the same DEC-025C-r2 job through normal Runtime/orchestration. Do not clear durable failed-provider state merely to make a provider eligible again.
-8. Let Runtime/Router automatically move through distinct eligible provider capacity. Human Owner attention is required only if no eligible route remains or an independent anomaly/protected/material boundary fires.
-9. Continue normal verification/delivery/PM-merge flow if the WorkOrder reaches acceptance; operator WorkOrders remain pending until their own authorized execution.
-10. Keep #146 open for naturally occurring calibration evidence.
+1. Re-check DEC-025C-r2 is still the same blocked job/workspace/source/branch/WorkOrder and that no unrelated engineering work is active.
+2. Issue exactly one explicit same-job fresh reroute with `reroute=true` and `reset_transient_provider_failures=false`.
+3. Do not reset counters or clear durable provider/quota state. The explicit reroute must preserve the same job/workspace/plan/WorkOrder.
+4. After enqueue, observe the same job. Runtime/Router should automatically move through distinct eligible provider/model/quota capacity without Human Owner clicks.
+5. If a provider fails, do not press old Telegram provider buttons while the job remains active; allow automatic failover to proceed.
+6. Human Owner attention is required only if Router proves no eligible route remains or an independent anomaly/protected/material boundary fires.
+7. If the WorkOrder reaches verification/delivery/PR, continue the normal deterministic CI and PM merge gates. Operator WorkOrders remain pending until their own authorized execution.
+8. Keep #146 open for naturally occurring calibration evidence.
