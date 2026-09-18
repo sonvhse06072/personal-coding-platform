@@ -18,9 +18,12 @@ from .schemas import (
 )
 
 
+ROUTER_VERSION = "1.0.22"
+
+
 app = FastAPI(
     title="Personal Coding Router Service",
-    version="1.0.22",
+    version=ROUTER_VERSION,
     description="Deterministic-first model/agent routing for a personal coding automation platform.",
 )
 
@@ -46,7 +49,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok",
         "service": "router-service",
-        "version": "1.0.21",
+        "version": ROUTER_VERSION,
         "registry_version": cfg["models"].get("version", 1),
         "policy_version": cfg["policy"].get("version", 1),
     }

@@ -67,7 +67,9 @@ Merged behavior:
 - no eligible route, contradictory same-choice routing, protected decisions, scope anomalies, repeated/no-progress/oscillation guards and material resource boundaries remain fail-closed;
 - merged service labels are Runtime `1.0.45` and Router `1.0.22`; routing policy remains v13.
 
-No local activation of #228/#229 has occurred yet. Local Router/Runtime must not be rebuilt while engineering work is active.
+Local activation of #228/#229 has started but is not complete. The guarded preflight passed with zero active jobs/busy WorkOrders/planning plans, DEC-025C-r2 blocked, and the workspace at exactly 14/14 semantic files. Local source fast-forwarded to `435301ba571adf0eb166208c501c65497db9f685` and Router was selectively rebuilt. Activation then stopped fail-closed at exit code 51 because Router `/health` still hard-coded version `1.0.21` even though the service metadata/source version is `1.0.22`. Runtime was not rebuilt and no job resume action was issued. Issue #232 tracks this health-contract defect.
+
+Before any further service mutation, re-check the exact DEC durable state and idle gate. Local Router/Runtime must not be rebuilt while engineering work is active.
 
 ## Preserved `chonhac` DEC-025C-r2
 
@@ -120,11 +122,11 @@ A separate read-only diagnostic observed `changed_files=16` while the WorkOrder 
 
 ## Immediate next safe actions
 
-1. Fast-forward the local PCP checkout to current GitHub `main` containing `bd24f18a0983ed370681f253edeb0606cf9e80cf` plus this continuity-only follow-up once merged.
-2. Before any service mutation, verify a clean PCP source tree, no active engineering job/busy WorkOrder, direct n8n health, and the exact DEC-025C-r2 job/workspace/source/branch/status/counters.
-3. Verify the observed DEC workspace file overage: any files above the approved 14-file semantic scope must be proven generated residue such as `__pycache__/*.pyc`; remove only proven generated artifacts and never expand `max_changed_files` to hide scope drift.
-4. Run deterministic platform/source tests while services are idle.
-5. Selectively activate Router `1.0.22` and Runtime `1.0.45`; routing policy stays v13. Do not use a full-project restart when targeted rebuild is sufficient.
+1. Complete #232: fix the Router health/version contract, require exact-head CI, PM-review, and merge.
+2. Fast-forward local PCP source to the resulting GitHub `main`; re-check clean source, zero active engineering work, direct n8n health, and the exact DEC-025C-r2 durable state before any further service mutation.
+3. Re-verify Router `1.0.22` / policy v13 using the corrected `/health` contract and source/image hash. Rebuild Router only if the deployed code/hash is not the merged source.
+4. Run deterministic platform tests while idle.
+5. Selectively activate Runtime `1.0.45`; do not use a full-project restart when targeted rebuild is sufficient.
 6. Verify deployed service versions/code and that the preserved job identity/counters were not reset by activation.
 7. Recover the same DEC-025C-r2 job through normal Runtime/orchestration. Do not clear durable failed-provider state merely to make a provider eligible again.
 8. Let Runtime/Router automatically move through distinct eligible provider capacity. Human Owner attention is required only if no eligible route remains or an independent anomaly/protected/material boundary fires.
