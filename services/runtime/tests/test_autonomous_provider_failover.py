@@ -66,6 +66,29 @@ def test_executor_provider_failover_continues_past_profile_prior() -> None:
     assert router.payloads[0]["provider_state"]["provider:openrouter"]["available"] is False
 
 
+def test_planner_provider_failover_continues_past_profile_prior() -> None:
+    current = choice("openrouter_qwen3_coder_free", "openrouter")
+    fallback = choice("codex_terra", "openai")
+    router = Router({"strategy": {"planner": fallback}})
+    runtime = engine(router)
+    provider_state: dict = {}
+    progress = {"provider_failovers": 2}
+
+    candidate, _ = asyncio.run(runtime._provider_failover(
+        route_payload={"job_id": "job-plan", "provider_state": {}},
+        provider_state=provider_state,
+        current_choice=current,
+        failure_kind="authentication",
+        progress=progress,
+        strategy=strategy(),
+        role="planner",
+    ))
+
+    assert candidate == fallback
+    assert progress["provider_failovers"] == 3
+    assert provider_state["provider:openrouter"]["available"] is False
+
+
 def test_evaluator_provider_failover_continues_past_profile_prior() -> None:
     current = choice("openrouter_qwen3_coder_free", "openrouter")
     fallback = choice("codex_terra", "openai")
