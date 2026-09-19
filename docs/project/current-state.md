@@ -2,7 +2,7 @@
 
 Status: mutable continuity document. Repository docs and executable evidence are authoritative over chat history. Durable architecture/product/policy decisions remain in their topical source-of-truth documents.
 
-Last updated: 2026-09-18
+Last updated: 2026-09-19
 
 ## Resume order
 
@@ -105,9 +105,11 @@ The same-job recovery preserved job/workspace/source/branch/counters and proved 
 
 The scope signal was confirmed as a Runtime accounting defect rather than semantic WorkOrder expansion: the workspace was verified at exactly 14/14 semantic files immediately before recovery, and agent/test traces repeatedly generated `infra/staging/dec025c/__pycache__/*.pyc`. Issue #238 / PR #239 fixed Runtime so untracked Python bytecode cannot be intent-added, counted, diffed or committed while intentionally tracked bytecode remains visible; PR #239 merged at `b21868ec157aa5a7d3d550813de8b7c51c1cdb88` after exact-head CI #418 passed.
 
-The remaining block exposed a second executable mismatch. Model calls `40/40`, iterations `24/24`, and repair iterations `12/12` are static work-shape counters. The Human Owner reaffirmed that healthy-progress work must not stop solely at those counters. Issue #240 aligns Runtime/Router so effective adaptive WorkOrders treat model/tool/test/iteration/repair/model-failover/provider-failover thresholds as telemetry/reassessment inputs, while token volume, wall time, hard cost, changed-file scope, anomaly, protected-decision and authoritative provider-exhaustion boundaries remain fail-closed.
+The remaining block exposed a second executable mismatch. Model calls `40/40`, iterations `24/24`, and repair iterations `12/12` are static work-shape counters. The Human Owner reaffirmed that healthy-progress work must not stop solely at those counters.
 
-Do not reset counters/provider state, create a replacement job, force-complete, or increase `max_changed_files`. Keep the same job blocked until #240 is reviewed, CI-green, merged and locally activated.
+Issue #240 / PR #241 is now merged. Exact-head CI #422 passed structure, Router, Runtime and ddev-executor at `c92f75a9b6738c8bd572d4103d71e84989846e57`; PM merged PR #241 at `757a35f8823c9c3c30c1dfc95084dce369ef2308`. Effective adaptive WorkOrders now treat model/tool/test/iteration/repair/model-failover/provider-failover thresholds as telemetry/reassessment inputs, while token volume, wall time, hard cost, changed-file scope, anomaly, protected-decision and authoritative provider-exhaustion boundaries remain fail-closed. Router is labeled `1.0.23`, Runtime `1.0.46`, routing policy v14.
+
+Local activation is still pending. Do not reset counters/provider state, create a replacement job, force-complete, or increase `max_changed_files`. Keep the same DEC-025C-r2 job blocked until the guarded local activation proves #238 and #240 are both active.
 
 ## Relevant completed follow-ups
 
@@ -119,6 +121,7 @@ Do not reset counters/provider state, create a replacement job, force-complete, 
 - PR #227: continuity after #224 merge, merged at `2bef1bcbbfa3cfc52e21e06f5314ccb676551853`.
 - #228 / PR #229: autonomous provider recovery, exact-head CI #408 green, merged at `bd24f18a0983ed370681f253edeb0606cf9e80cf`.
 - #238 / PR #239: generated Python bytecode excluded from Runtime diff/commit scope, exact-head CI #418 green, merged at `b21868ec157aa5a7d3d550813de8b7c51c1cdb88`.
+- #240 / PR #241: adaptive work-shape counters made non-blocking while material/anomaly boundaries remain strict; exact-head CI #422 green; merged at `757a35f8823c9c3c30c1dfc95084dce369ef2308`.
 
 ## Global operational gates
 
@@ -134,11 +137,12 @@ Do not reset counters/provider state, create a replacement job, force-complete, 
 
 ## Immediate next safe actions
 
-1. Complete #240 on branch `ai/240-healthy-work-shape-counters`: effective adaptive WorkOrders must not stop solely on model/tool/test/iteration/repair/failover counters.
-2. Require exact-head Router/Runtime/structure/executor CI and PM review. Legacy-hard semantics, material token/wall/cost ceilings, scope boundaries and behavioral circuit breakers must remain strict.
-3. Target rollout identity after merge: Router `1.0.23`, Runtime `1.0.46`, routing policy v14.
-4. Keep DEC-025C-r2 blocked during source work. Do not reset counters/provider state, create a replacement job, force-complete, or expand changed-file scope.
-5. After #240 merge, use the normal idle guarded activation. #238 must be active at the same time so Runtime recomputes the workspace back to the real 14-file semantic scope.
-6. Re-enter the same DEC-025C-r2 job through a fresh route after activation; preserve job/workspace/source/branch/counters. Work-shape counters may remain above their telemetry thresholds.
-7. Let Runtime continue autonomously until Definition of Done, an actual material token/wall/cost boundary, scope/anomaly/protected decision, or authoritative provider exhaustion without fallback occurs.
-8. Keep #146 open for natural calibration evidence from this job.
+1. Keep DEC-025C-r2 blocked until local rollout; do not reset counters/provider state, replace the job, force-complete, or widen changed-file scope.
+2. Update the local PCP checkout to exact main `757a35f8823c9c3c30c1dfc95084dce369ef2308` and require a clean tree before service mutation.
+3. Require no active engineering work before rebuild: zero active jobs, zero planning plans and zero busy/running WorkOrders.
+4. Guardedly rebuild Router and Runtime only; target Router `1.0.23`, Runtime `1.0.46`, routing policy v14. Keep direct n8n `/healthz` as the n8n health gate.
+5. Verify #238 and #240 source/image hashes, deterministic service tests, service health, and unchanged DEC identity/counters after rollout.
+6. Re-enter the exact same DEC-025C-r2 job once through a fresh reroute with transient provider failures preserved. Do not use historical superseded Telegram actions.
+7. Confirm recomputed workspace scope returns to the real semantic 14 files and that work-shape counters may remain at/above `40/24/12` without causing a standalone stop.
+8. Let Runtime continue autonomously until Definition of Done or an independent material/anomaly/protected/provider-capacity boundary occurs.
+9. Keep #146 open for natural calibration evidence.
