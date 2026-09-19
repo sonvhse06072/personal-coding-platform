@@ -119,9 +119,9 @@ The v14 live run then provided stronger calibration evidence. Without any counte
 
 The next block occurred at total elapsed wall time `180.084/180` with result reason `execution_budget_exhausted`; plan and WorkOrder both became blocked. No concurrent scope, token, cost, protected-decision, provider-capacity, repeated-failure, no-progress, or oscillation reason was reported. This is a fixed wall-time continuation gate of the exact kind the approved efficiency policy classifies as avoidable Human Owner attention.
 
-Issue #244 now aligns executable behavior with the existing healthy-progress policy: on effective adaptive WorkOrders, total elapsed wall time is telemetry/calibration rather than a standalone stop gate. Planner/executor/evaluator/verification operations remain bounded by their per-operation timeout caps; input/output token ceilings, hard cost, scope, behavioral circuit breakers, protected decisions, and provider exhaustion remain fail-closed. Legacy-hard WorkOrders keep strict total wall-time behavior.
+Issue #244 / PR #245 is now merged. Exact-head CI #428 passed structure, Router, Runtime and ddev-executor at `b58e590adf3c722249395babd219e804d4f4768b`; PM merged PR #245 at `5d7a812a6945c94fe85d27e7aa16e882ca2e85b0`. Effective adaptive WorkOrders now treat total elapsed wall time as telemetry/calibration rather than a standalone stop gate. Planner/executor/evaluator/verification operations remain bounded by their per-operation timeout caps; adaptive GitHub delivery keeps its own bounded attempt cap; input/output token ceilings, hard cost, scope, behavioral circuit breakers, protected decisions, and provider exhaustion remain fail-closed. Legacy-hard WorkOrders keep strict total wall-time behavior. Router is labeled `1.0.24`, Runtime `1.0.47`, routing policy v15.
 
-Keep the same DEC job blocked while #244 source work/CI/rollout is in progress. Do not apply a `+20 minutes` owner extension, reset counters/provider state, replace the job, or use historical Telegram actions.
+Local activation is pending. Keep the same DEC job blocked until guarded rollout proves #244 is active. Do not apply a `+20 minutes` owner extension, reset counters/provider state, replace the job, or use historical Telegram actions.
 
 ## Relevant completed follow-ups
 
@@ -134,6 +134,7 @@ Keep the same DEC job blocked while #244 source work/CI/rollout is in progress. 
 - #228 / PR #229: autonomous provider recovery, exact-head CI #408 green, merged at `bd24f18a0983ed370681f253edeb0606cf9e80cf`.
 - #238 / PR #239: generated Python bytecode excluded from Runtime diff/commit scope, exact-head CI #418 green, merged at `b21868ec157aa5a7d3d550813de8b7c51c1cdb88`.
 - #240 / PR #241: adaptive work-shape counters made non-blocking while material/anomaly boundaries remain strict; exact-head CI #422 green; merged at `757a35f8823c9c3c30c1dfc95084dce369ef2308`.
+- #244 / PR #245: adaptive total wall time made telemetry while per-operation timeouts and independent safety gates remain strict; exact-head CI #428 green; merged at `5d7a812a6945c94fe85d27e7aa16e882ca2e85b0`.
 
 ## Global operational gates
 
@@ -149,12 +150,12 @@ Keep the same DEC job blocked while #244 source work/CI/rollout is in progress. 
 
 ## Immediate next safe actions
 
-1. Complete #244 on branch `ai/244-adaptive-wall-time`: effective adaptive WorkOrders must not stop solely because total elapsed wall time crossed `max_wall_time_minutes`.
-2. Preserve per-operation planner/executor/evaluator/verification/delivery timeout caps and all independent token/cost/scope/anomaly/protected/provider-capacity gates.
-3. Require exact-head structure, Router, Runtime and ddev-executor CI plus PM review. Legacy-hard wall-time behavior must remain strict.
-4. Target rollout identity after merge: Router `1.0.24`, Runtime `1.0.47`, routing policy v15.
-5. Keep DEC-025C-r2 blocked during source/rollout work. Do not authorize `+20 minutes`, reset counters/provider state, replace the job, force-complete, or widen scope.
-6. After guarded activation, re-enter the exact same job once through the governed same-job recovery path, preserving job/workspace/source/branch/counters/provider state.
-7. Confirm live execution may continue with elapsed wall time already above `180` while semantic scope remains `14` and token/cost/anomaly gates remain healthy.
-8. If a later stop occurs, require an independent stop reason; total elapsed wall time alone is telemetry on effective adaptive routes.
-9. Keep #146 open for this natural calibration evidence.
+1. Keep DEC-025C-r2 blocked until local rollout; do not authorize `+20 minutes`, reset counters/provider state, replace the job, force-complete, or widen scope.
+2. Update the local PCP checkout to exact main after this continuity merge and require a clean tree before service mutation.
+3. Require zero active jobs, zero planning plans and zero busy/running WorkOrders before selective service rebuilds.
+4. Guardedly rebuild Router and Runtime only; target Router `1.0.24`, Runtime `1.0.47`, routing policy v15.
+5. Verify #244 host/image hashes, deterministic Router/Runtime suites, direct n8n health, and unchanged DEC identity/counters after rollout.
+6. Re-enter the exact same DEC job once through a fresh governed reroute with transient provider failures preserved. Do not use historical Telegram actions.
+7. Confirm the job may resume with elapsed wall time already above `180`, semantic scope `14`, and counters/provider state unchanged.
+8. Let Runtime continue autonomously until Definition of Done or an independent token/cost/scope/anomaly/protected/provider-capacity/per-operation-failure boundary occurs.
+9. Keep #146 open for natural calibration evidence from this job.
