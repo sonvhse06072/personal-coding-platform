@@ -273,7 +273,7 @@ def test_adaptive_model_call_exhaustion_does_not_offer_owner_extension():
     )
 
 
-def test_adaptive_provider_recovery_only_exposes_material_wall_extension():
+def test_adaptive_provider_block_does_not_expose_work_shape_budget_extension_in_live_surface():
     current = job(
         last_failure="model-call budget exhausted",
         model_calls=14,
@@ -297,9 +297,10 @@ def test_adaptive_provider_recovery_only_exposes_material_wall_extension():
 
     advisory = controls.blocked_advisory(work_order(), current)
 
-    actions = budget_actions(advisory)
-    assert len(actions) == 1
-    assert actions[0]["payload"]["dimension"] == "max_wall_time_minutes"
+    # Provider-aware combined wall-time+routing recovery belongs to the
+    # control_actions_reroute layer. This live layer must at least avoid
+    # reintroducing an owner extension for adaptive model-call telemetry.
+    assert budget_actions(advisory) == []
     assert all(
         item.get("payload", {}).get("dimension") != "max_model_calls"
         for item in advisory["action_specs"]

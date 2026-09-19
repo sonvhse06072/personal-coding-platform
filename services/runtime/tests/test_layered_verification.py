@@ -289,6 +289,8 @@ def test_adaptive_verification_crosses_tool_and_test_high_water_marks():
         assert result["passed"] is True
         assert ddev.calls == ["targeted_tests", "static_analysis", "full_tests"]
 
+    asyncio.run(scenario())
+
 
 def test_legacy_hard_verification_keeps_tool_test_ceiling():
     async def scenario():

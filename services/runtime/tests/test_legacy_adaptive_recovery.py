@@ -301,15 +301,19 @@ def test_repeated_failure_signal_fails_closed_without_resuming():
     assert engine.enqueued == []
 
 
-def test_current_usage_at_fresh_emergency_ceiling_fails_closed():
+def test_current_usage_at_fresh_work_shape_threshold_recovers_when_reassessment_is_healthy():
     storage = FakeStorage(blocked_job(model_calls=40))
     delegate = FakeDelegate()
     engine = FakeEngine(delegate)
     recovery = LegacyAdaptiveRecovery(storage, engine, FakeStore())
 
-    assert asyncio.run(recovery.recover_one()) is None
-    assert storage.job["status"] == "blocked"
-    assert engine.enqueued == []
+    result = asyncio.run(recovery.recover_one())
+
+    assert result is not None
+    assert result["job_id"] == "job-1"
+    assert storage.job["status"] == "queued"
+    assert storage.job["progress"]["model_calls"] == 40
+    assert engine.enqueued == ["job-1"]
 
 
 def test_malformed_adaptive_envelope_fails_closed_without_resuming():
