@@ -1,4 +1,4 @@
-version: 14
+version: 15
 complexity_weights:
   scope: 0.18
   dependency_depth: 0.1
@@ -13,9 +13,9 @@ adaptive_budget:
   enabled: true
   # Profile values are planning priors, not Human Owner continuation gates.
   # Estimate/working/emergency thresholds remain telemetry for work-shape
-  # dimensions (calls/tools/tests/iterations/repairs). On effective adaptive
-  # WorkOrders only material resource dimensions (token volume, wall time, hard
-  # cost) are standalone technical circuit breakers; scope/anomaly/protected
+  # dimensions (calls/tools/tests/iterations/repairs/wall time). On effective
+  # adaptive WorkOrders only token volume and hard cost are standalone resource
+  # circuit breakers; per-operation timeouts plus scope/anomaly/protected
   # boundaries remain independently fail-closed.
   estimate_min_ratio: 0.65
   estimate_max_ratio: 1.35

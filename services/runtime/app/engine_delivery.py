@@ -80,8 +80,17 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         permissions = (route.get("strategy") or {}).get("permissions") or {}
         return bool(permissions.get("push_ai_branch", False)) and bool(result.get("commit"))
 
-    @staticmethod
-    def _delivery_wait_seconds(strategy: dict[str, Any], progress: dict[str, Any]) -> int:
+    @classmethod
+    def _delivery_wait_seconds(
+        cls,
+        strategy: dict[str, Any],
+        progress: dict[str, Any],
+    ) -> int:
+        # Adaptive jobs keep delivery bounded by a 15-minute attempt cap without
+        # turning accumulated engineering wall time into an owner checkpoint.
+        if cls._adaptive_work_shape_nonblocking(strategy):
+            return 900
+
         total = int(float(strategy.get("budget", {}).get("max_wall_time_minutes", 60)) * 60)
         elapsed = int(float(progress.get("elapsed_minutes", 0.0)) * 60)
         remaining = total - elapsed

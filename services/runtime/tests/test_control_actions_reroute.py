@@ -329,7 +329,7 @@ def test_multi_budget_bundle_rejects_stale_dimension_set_before_resume():
     assert controls.storage.job["route"] == before
     assert controls.calls == []
 
-def test_adaptive_provider_block_ignores_work_shape_exhaustion_but_keeps_wall_gate():
+def test_adaptive_provider_block_ignores_wall_and_work_shape_exhaustion():
     job = provider_multi_budget_block()
     job["route"]["strategy"]["budget_mode"] = "adaptive"
     job["checkpoint"] = {
@@ -340,7 +340,7 @@ def test_adaptive_provider_block_ignores_work_shape_exhaustion_but_keeps_wall_ga
     }
     controls = Harness(job)
 
-    assert controls._provider_budget_dimensions(job) == ["max_wall_time_minutes"]
+    assert controls._provider_budget_dimensions(job) == []
 
     advisory = controls.blocked_advisory({}, job)
     mutation_actions = [
@@ -348,11 +348,7 @@ def test_adaptive_provider_block_ignores_work_shape_exhaustion_but_keeps_wall_ga
         if item.get("action_type") not in {"details", "keep_blocked"}
     ]
 
-    assert len(mutation_actions) == 1
-    assert mutation_actions[0]["action_type"] == "budget_extend"
-    assert mutation_actions[0]["payload"]["dimension"] == "max_wall_time_minutes"
-    assert all(
-        item.get("payload", {}).get("dimension") != "max_iterations"
-        for item in advisory["action_specs"]
-    )
+    assert any(item.get("action_type") == "reroute_provider" for item in mutation_actions)
+    assert all(item.get("action_type") != "budget_extend" for item in mutation_actions)
+    assert all(item.get("action_type") != "budget_extend_bundle" for item in mutation_actions)
 

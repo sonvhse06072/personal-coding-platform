@@ -70,6 +70,7 @@ _ADAPTIVE_WORK_SHAPE_DIMENSIONS = {
     "max_test_runs",
     "max_repair_iterations",
     "max_iterations",
+    "max_wall_time_minutes",
 }
 
 
@@ -317,22 +318,32 @@ class ControlActionService:
             ]
 
         elif reason == "github_delivery_budget_exhausted":
-            advisory["summary"] = "GitHub delivery ran out of the Runtime wall-time budget."
-            advisory["cause"] = "The locally verified accepted result is preserved, but no delivery time remains."
-            advisory["recommended"] = "Approve a bounded wall-time extension, then retry the same delivery state."
             metric = self._budget_metric(job, "max_wall_time_minutes")
             if metric:
                 advisory["metrics"].append(metric)
-            spec = _BUDGET_EXTENSION_SPECS["max_wall_time_minutes"]
-            advisory["action_specs"] = [
-                {
-                    "action_type": "budget_extend",
-                    "label": f"➕ +{spec['increment']} phút",
-                    "payload": {"dimension": "max_wall_time_minutes", "increment": spec["increment"]},
-                },
-                {"action_type": "details", "label": "📋 Chi tiết", "payload": {}},
-                {"action_type": "keep_blocked", "label": "⛔ Giữ blocked", "payload": {}},
-            ]
+            if self._adaptive_work_shape_nonblocking(job):
+                advisory["summary"] = "Verified adaptive work hit a historical total wall-time delivery gate."
+                advisory["cause"] = "The accepted commit is preserved; total adaptive wall time is telemetry under the current policy."
+                advisory["recommended"] = "Retry the preserved delivery state; no wall-time extension is required."
+                advisory["action_specs"] = [
+                    {"action_type": "retry_delivery", "label": "🔄 Thử lại delivery", "payload": {}},
+                    {"action_type": "details", "label": "📋 Chi tiết", "payload": {}},
+                    {"action_type": "keep_blocked", "label": "⛔ Giữ blocked", "payload": {}},
+                ]
+            else:
+                advisory["summary"] = "GitHub delivery ran out of the Runtime wall-time budget."
+                advisory["cause"] = "The locally verified accepted result is preserved, but no delivery time remains."
+                advisory["recommended"] = "Approve a bounded wall-time extension, then retry the same delivery state."
+                spec = _BUDGET_EXTENSION_SPECS["max_wall_time_minutes"]
+                advisory["action_specs"] = [
+                    {
+                        "action_type": "budget_extend",
+                        "label": f"➕ +{spec['increment']} phút",
+                        "payload": {"dimension": "max_wall_time_minutes", "increment": spec["increment"]},
+                    },
+                    {"action_type": "details", "label": "📋 Chi tiết", "payload": {}},
+                    {"action_type": "keep_blocked", "label": "⛔ Giữ blocked", "payload": {}},
+                ]
 
         elif reason == "delivery_missing_verified_commit":
             advisory["summary"] = "Delivery cannot proceed because the accepted result has no verified commit."

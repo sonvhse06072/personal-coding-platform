@@ -249,3 +249,48 @@ def test_adaptive_work_shape_overrun_does_not_mask_scope_expansion():
     assert "hard_budget_guard" not in result.signals
     assert "hard_budget_overrun" not in result.signals
 
+def test_adaptive_total_wall_time_overrun_is_non_blocking_when_healthy():
+    engine = make_engine()
+    route = engine.route(base_request())
+    route.strategy.budget_mode = "adaptive"
+    budget = route.strategy.budget
+
+    result = engine.reassess(ReassessRequest(
+        route=route,
+        progress=ExecutionProgress(
+            elapsed_minutes=budget.max_wall_time_minutes + 0.084,
+            input_tokens=max(0, budget.max_input_tokens // 2),
+            output_tokens=max(0, budget.max_output_tokens // 2),
+            agent_succeeded=True,
+            material_change_present=True,
+            tests_passed=False,
+            required_checks_passed=False,
+        ),
+    ))
+
+    assert result.action in {"continue", "escalate"}
+    assert "hard_budget_guard" not in result.signals
+    assert "hard_budget_overrun" not in result.signals
+
+
+def test_legacy_hard_total_wall_time_remains_strict():
+    engine = make_engine()
+    route = engine.route(base_request())
+    route.strategy.budget_mode = "legacy_hard"
+    budget = route.strategy.budget
+
+    result = engine.reassess(ReassessRequest(
+        route=route,
+        progress=ExecutionProgress(
+            elapsed_minutes=budget.max_wall_time_minutes,
+            agent_succeeded=True,
+            material_change_present=True,
+            tests_passed=False,
+            required_checks_passed=False,
+        ),
+    ))
+
+    assert result.action == "stop"
+    assert result.reason == "wall-time budget exhausted"
+    assert "hard_budget_guard" in result.signals
+

@@ -212,8 +212,19 @@ class RuntimeEngineCore:
             "provider_failures": [], "agent_attempts": [],
         }
 
-    @staticmethod
-    def _remaining_seconds(strategy: dict[str, Any], started: float, per_call_cap: int) -> int:
+    @classmethod
+    def _remaining_seconds(
+        cls,
+        strategy: dict[str, Any],
+        started: float,
+        per_call_cap: int,
+    ) -> int:
+        # Effective adaptive WorkOrders treat total elapsed wall time as
+        # telemetry/calibration. Keep each individual operation bounded by its
+        # existing phase cap so one command/model call still cannot hang forever.
+        if cls._adaptive_work_shape_nonblocking(strategy):
+            return max(10, int(per_call_cap))
+
         total = int(strategy["budget"]["max_wall_time_minutes"] * 60)
         remaining = total - int(time.monotonic() - started)
         if remaining <= 0:
@@ -226,10 +237,12 @@ class RuntimeEngineCore:
 
     @staticmethod
     def _adaptive_work_shape_nonblocking(strategy: dict[str, Any]) -> bool:
-        """Whether static work-shape counters are telemetry rather than stop gates.
+        """Whether static execution counters are telemetry rather than stop gates.
 
-        The marker is written by WorkOrder policy after Router staffing. Missing
-        markers fail closed so persisted/legacy routes retain historical behavior.
+        This includes total elapsed wall time on effective adaptive WorkOrders.
+        Individual operation timeouts, tokens, cost, scope and behavioral
+        circuit-breakers remain bounded. Missing markers fail closed so
+        persisted/legacy routes retain historical behavior.
         """
         return str(strategy.get("budget_mode") or "") == "adaptive"
 
@@ -243,18 +256,19 @@ class RuntimeEngineCore:
     ) -> str | None:
         budget = strategy["budget"]
 
-        # Material resource ceilings remain hard for adaptive and legacy work.
+        # Token volume and hard cost remain standalone material ceilings.
         checks = [
             (progress["input_tokens"] >= int(budget["max_input_tokens"]), "input-token budget exhausted"),
             (progress["output_tokens"] >= int(budget["max_output_tokens"]), "output-token budget exhausted"),
-            (progress["elapsed_minutes"] >= float(budget["max_wall_time_minutes"]), "wall-time budget exhausted"),
             (progress["cost_usd"] >= float(budget["hard_cost_usd"]), "hard cost budget exhausted"),
         ]
 
-        # Work-shape counters are telemetry/reassessment inputs on adaptive jobs.
-        # Explicit legacy-hard routes preserve historical strict counter ceilings.
+        # Static counters, including total elapsed wall time, are telemetry on
+        # effective adaptive jobs. Explicit legacy-hard routes preserve the
+        # historical strict wall/work-shape ceilings.
         if not cls._adaptive_work_shape_nonblocking(strategy):
             checks.extend([
+                (progress["elapsed_minutes"] >= float(budget["max_wall_time_minutes"]), "wall-time budget exhausted"),
                 (progress["model_calls"] >= int(budget["max_model_calls"]), "model-call budget exhausted"),
                 (progress["tool_calls"] >= int(budget["max_tool_calls"]), "tool-call budget exhausted"),
                 (progress["test_runs"] >= int(budget["max_test_runs"]), "test-run budget exhausted"),

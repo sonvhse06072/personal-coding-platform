@@ -237,3 +237,28 @@ def test_pull_request_body_never_claims_auto_merge():
     )
     assert "not auto-merged" in body
     assert "targeted_tests" in body
+
+def test_adaptive_delivery_uses_bounded_attempt_cap_after_total_wall_threshold():
+    strategy = {
+        "budget_mode": "adaptive",
+        "budget": {"max_wall_time_minutes": 10},
+    }
+
+    assert RuntimeEngine._delivery_wait_seconds(
+        strategy,
+        {"elapsed_minutes": 12.5},
+    ) == 900
+
+
+def test_legacy_delivery_still_blocks_after_total_wall_threshold():
+    strategy = {
+        "budget_mode": "legacy_hard",
+        "budget": {"max_wall_time_minutes": 10},
+    }
+
+    with pytest.raises(DeliveryError, match="wall-time budget"):
+        RuntimeEngine._delivery_wait_seconds(
+            strategy,
+            {"elapsed_minutes": 10.1},
+        )
+

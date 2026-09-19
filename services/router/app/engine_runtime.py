@@ -13,8 +13,10 @@ class RouterEngine(BaseRouterEngine):
     telemetry. Model/tool/test/iteration/repair/failover counters may cross their
     high-water marks while execution remains healthy; anti-loop, scope, provider
     eligibility and protected-decision signals still control abnormal work.
-    Legacy-hard routes retain historical strict counter semantics. Token volume,
-    wall time and hard cost remain material circuit breakers for every route.
+    Legacy-hard routes retain historical strict counter semantics. Token volume
+    and hard cost remain standalone material circuit breakers for every route;
+    total elapsed wall time is telemetry on effective adaptive routes and is
+    governed by per-operation timeouts plus behavioral anomaly guards.
     """
 
     def reassess(self, request: ReassessRequest) -> ReassessResponse:
@@ -41,17 +43,17 @@ class RouterEngine(BaseRouterEngine):
             "changed_files": max(0, budget.max_changed_files - progress.changed_files),
         }
 
-        # Material resource overruns remain unconditional stops. Adaptive
-        # work-shape counters are telemetry and anti-loop inputs; legacy-hard
-        # routes preserve the historical strict ceilings.
+        # Token volume and hard cost remain unconditional material stops.
+        # Adaptive total wall/work-shape thresholds are telemetry and anti-loop
+        # inputs; legacy-hard routes preserve the historical strict ceilings.
         overruns = [
             (progress.input_tokens > budget.max_input_tokens, "input-token budget exceeded"),
             (progress.output_tokens > budget.max_output_tokens, "output-token budget exceeded"),
-            (progress.elapsed_minutes > budget.max_wall_time_minutes, "wall-time budget exceeded"),
             (progress.cost_usd > budget.hard_cost_usd, "hard cost budget exceeded"),
         ]
         if not adaptive_work_shape:
             overruns.extend([
+                (progress.elapsed_minutes > budget.max_wall_time_minutes, "wall-time budget exceeded"),
                 (progress.model_calls > budget.max_model_calls, "model-call budget exceeded"),
                 (progress.tool_calls > budget.max_tool_calls, "tool-call budget exceeded"),
                 (progress.iteration > budget.max_iterations, "iteration budget exceeded"),
@@ -97,17 +99,16 @@ class RouterEngine(BaseRouterEngine):
                 signals=["done"],
             )
 
-        # Once DoD is incomplete, material ceilings still prevent another turn.
-        # Adaptive work-shape thresholds do not; they remain visible in remaining
-        # telemetry and adaptive-budget signals.
+        # Once DoD is incomplete, token/cost ceilings still prevent another
+        # turn. Adaptive wall/work-shape thresholds remain telemetry.
         exhausted = [
             (progress.input_tokens >= budget.max_input_tokens, "input-token budget exhausted"),
             (progress.output_tokens >= budget.max_output_tokens, "output-token budget exhausted"),
-            (progress.elapsed_minutes >= budget.max_wall_time_minutes, "wall-time budget exhausted"),
             (progress.cost_usd >= budget.hard_cost_usd, "hard cost budget exhausted"),
         ]
         if not adaptive_work_shape:
             exhausted.extend([
+                (progress.elapsed_minutes >= budget.max_wall_time_minutes, "wall-time budget exhausted"),
                 (progress.model_calls >= budget.max_model_calls, "model-call budget exhausted"),
                 (progress.tool_calls >= budget.max_tool_calls, "tool-call budget exhausted"),
                 (progress.iteration >= budget.max_iterations, "iteration budget exhausted"),
@@ -213,7 +214,7 @@ class RouterEngine(BaseRouterEngine):
         return ReassessResponse(
             action="continue",
             reason=(
-                "No material circuit-break or anomaly detected; adaptive work-shape counters are telemetry"
+                "No material circuit-break or anomaly detected; adaptive static counters including wall time are telemetry"
                 if adaptive_work_shape
                 else "Within budget and no circuit-break condition detected"
             ),

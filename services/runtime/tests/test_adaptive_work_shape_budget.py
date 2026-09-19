@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from copy import deepcopy
 
 from app.engine_core import RuntimeEngineCore
@@ -70,6 +71,55 @@ def test_adaptive_material_token_ceiling_remains_hard() -> None:
     )
 
     assert reason == "input-token budget exhausted"
+
+
+def test_adaptive_total_wall_time_is_non_blocking() -> None:
+    state = progress()
+    state["elapsed_minutes"] = 180.084
+
+    reason = RuntimeEngineCore._pre_model_budget_reason(
+        state,
+        strategy=strategy(mode="adaptive"),
+        include_iteration=True,
+    )
+
+    assert reason is None
+    assert RuntimeEngineCore._remaining_seconds(
+        strategy(mode="adaptive"),
+        time.monotonic() - (181 * 60),
+        2400,
+    ) == 2400
+
+
+def test_legacy_hard_total_wall_time_remains_strict() -> None:
+    state = progress()
+    state.update({
+        "model_calls": 1,
+        "tool_calls": 1,
+        "test_runs": 1,
+        "repair_iterations": 1,
+        "iteration": 1,
+        "elapsed_minutes": 180.0,
+    })
+
+    reason = RuntimeEngineCore._pre_model_budget_reason(
+        state,
+        strategy=strategy(mode="legacy_hard"),
+        include_iteration=True,
+    )
+
+    assert reason == "wall-time budget exhausted"
+
+    try:
+        RuntimeEngineCore._remaining_seconds(
+            strategy(mode="legacy_hard"),
+            time.monotonic() - (181 * 60),
+            2400,
+        )
+    except RuntimeError as exc:
+        assert "wall-time budget exhausted" in str(exc)
+    else:
+        raise AssertionError("legacy-hard wall-time exhaustion must remain strict")
 
 
 class Router:

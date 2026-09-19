@@ -20,11 +20,16 @@ class FakeStorage:
         self.rows[job_id].update(deepcopy(fields))
 
 
-def row(*, status: str, elapsed_minutes: float, wall_limit: float = 70.0):
+def row(*, status: str, elapsed_minutes: float, wall_limit: float = 70.0, budget_mode: str | None = None):
     return {
         "id": "job-1",
         "status": status,
-        "route": {"strategy": {"budget": {"max_wall_time_minutes": wall_limit}}},
+        "route": {
+            "strategy": {
+                "budget_mode": budget_mode,
+                "budget": {"max_wall_time_minutes": wall_limit},
+            }
+        },
         "progress": {
             "elapsed_minutes": elapsed_minutes,
             "model_calls": 10,
@@ -84,3 +89,22 @@ def test_per_call_timeout_with_wall_time_remaining_is_not_reclassified():
 
     assert handled is False
     assert storage.get("job-1")["status"] == "executing"
+
+def test_adaptive_command_timeout_is_not_reclassified_as_total_wall_budget():
+    current = row(
+        status="executing",
+        elapsed_minutes=70.0,
+        wall_limit=70.0,
+        budget_mode="adaptive",
+    )
+    storage = FakeStorage(current)
+    engine = RuntimeEngine(storage)
+
+    handled = engine._block_wall_budget_command_timeout(
+        "job-1",
+        CommandTimeoutError(timeout=2400, argv=["agent", "run"]),
+    )
+
+    assert handled is False
+    assert storage.get("job-1")["status"] == "executing"
+
