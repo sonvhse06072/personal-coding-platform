@@ -306,3 +306,20 @@ def test_adaptive_provider_block_does_not_expose_work_shape_budget_extension_in_
         for item in advisory["action_specs"]
     )
 
+def test_adaptive_wall_time_exhaustion_does_not_offer_owner_extension():
+    current = job(
+        last_failure="wall-time budget exhausted",
+        elapsed_minutes=50.084,
+        max_wall_time_minutes=50,
+        budget_mode="adaptive",
+    )
+    controls, _ = service(current)
+
+    advisory = controls.blocked_advisory(work_order(), current)
+
+    assert budget_actions(advisory) == []
+    assert all(
+        item.get("payload", {}).get("dimension") != "max_wall_time_minutes"
+        for item in advisory["action_specs"]
+    )
+

@@ -30,10 +30,10 @@ class RouterEngine(BudgetRouterEngine):
 
     Profile values are planning priors, not routine stop points. Router derives an
     estimate and working target from task pressure while the effective max_* fields
-    are high-water emergency thresholds. Material dimensions (token volume and
-    wall time, plus hard cost from the route budget) remain circuit breakers.
-    Work-shape dimensions such as calls/iterations/repairs/tests/tools remain
-    telemetry and reassessment inputs on effective adaptive WorkOrders.
+    are high-water emergency thresholds. Token volume and hard cost remain
+    standalone material circuit breakers. Static execution dimensions such as
+    calls/iterations/repairs/tests/tools/total wall time remain telemetry and
+    reassessment inputs on effective adaptive WorkOrders.
 
     Historical telemetry may adjust estimates only after the configured minimum
     sample size. It can never expand the configured emergency hard caps.

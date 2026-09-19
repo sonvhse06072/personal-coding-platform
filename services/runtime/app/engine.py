@@ -208,7 +208,13 @@ class RuntimeEngine(_RuntimeEngine):
             return False
 
         route = dict(row.get("route") or {})
-        budget = dict((route.get("strategy") or {}).get("budget") or {})
+        strategy = dict(route.get("strategy") or {})
+        if self._adaptive_work_shape_nonblocking(strategy):
+            # Adaptive calls are bounded by their per-operation caps rather than
+            # remaining total wall time, so a CommandTimeoutError is not a
+            # wall-budget recovery event.
+            return False
+        budget = dict(strategy.get("budget") or {})
         try:
             wall_limit = float(budget["max_wall_time_minutes"])
         except (KeyError, TypeError, ValueError):

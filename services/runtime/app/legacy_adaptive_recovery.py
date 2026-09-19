@@ -228,7 +228,6 @@ class LegacyAdaptiveRecovery:
         counter_map = {
             "max_input_tokens": "input_tokens",
             "max_output_tokens": "output_tokens",
-            "max_wall_time_minutes": "elapsed_minutes",
         }
         for dimension, counter in counter_map.items():
             if dimension not in new_budget:

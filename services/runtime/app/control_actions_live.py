@@ -58,6 +58,8 @@ class ControlActionService(BaseControlActionService):
         exists so an already-failed orchestrated job can receive the same bounded
         +20-minute owner action without direct DB mutation or replacement jobs.
         """
+        if cls._adaptive_work_shape_nonblocking(job):
+            return False
         if str(job.get("status") or "") != "failed":
             return False
         match = _LEGACY_COMMAND_TIMEOUT_RE.match(str(job.get("error") or ""))
@@ -165,6 +167,9 @@ class ControlActionService(BaseControlActionService):
             # A structured current failure may disambiguate only when that same
             # dimension is also confirmed exhausted by the live durable counters.
             return hint if hint in exhausted else None
+
+        if adaptive_work_shape:
+            return None
 
         wall_spec = _BUDGET_EXTENSION_SPECS["max_wall_time_minutes"]
         wall_used = cls._numeric(progress.get(wall_spec["counter"], 0))
