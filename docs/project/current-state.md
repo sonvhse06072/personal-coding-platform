@@ -109,7 +109,13 @@ The remaining block exposed a second executable mismatch. Model calls `40/40`, i
 
 Issue #240 / PR #241 is now merged. Exact-head CI #422 passed structure, Router, Runtime and ddev-executor at `c92f75a9b6738c8bd572d4103d71e84989846e57`; PM merged PR #241 at `757a35f8823c9c3c30c1dfc95084dce369ef2308`. Effective adaptive WorkOrders now treat model/tool/test/iteration/repair/model-failover/provider-failover thresholds as telemetry/reassessment inputs, while token volume, wall time, hard cost, changed-file scope, anomaly, protected-decision and authoritative provider-exhaustion boundaries remain fail-closed. Router is labeled `1.0.23`, Runtime `1.0.46`, routing policy v14.
 
-Local activation is still pending. Do not reset counters/provider state, create a replacement job, force-complete, or increase `max_changed_files`. Keep the same DEC-025C-r2 job blocked until the guarded local activation proves #238 and #240 are both active.
+Local activation is complete. The guarded activation/re-entry passed on exact main `6c26bb3a4eb0bc6547f17e9dd7baa681dd61af97`: Router `1.0.23`, Runtime `1.0.46`, routing policy v14, direct n8n health green, zero active work before both selective rebuilds, Runtime deterministic suite `349 passed`, and startup did not mutate the preserved DEC job.
+
+Runtime #238 recomputed the workspace as exactly 14 semantic files, proving the prior `16/14` / `unexpected_scope=true` state was generated-bytecode residue. Before re-entry the material gate still had headroom: input `3,931,952/8,000,000`, output `236,484/1,000,000`, wall `158.232/180`, cost `0/5`, and zero important decisions.
+
+The exact same DEC job was then explicitly rerouted once with transient provider failures preserved. Identity and counters were unchanged across re-entry. Immediate live state was `verifying`, plan `executing`, WorkOrder `running`, effective `budget_mode=adaptive`, with work-shape counters still at model calls `40`, iterations `24`, repairs `12`, tests `34`, and tools `106`. This is the first live proof that the v14 route accepts a same-job re-entry at previously blocking work-shape thresholds.
+
+Do not reroute again or use historical Telegram actions while this job remains active. Observe the same job until it reaches delivery/PR or an independent material/anomaly/protected/provider-capacity boundary.
 
 ## Relevant completed follow-ups
 
@@ -137,12 +143,10 @@ Local activation is still pending. Do not reset counters/provider state, create 
 
 ## Immediate next safe actions
 
-1. Keep DEC-025C-r2 blocked until local rollout; do not reset counters/provider state, replace the job, force-complete, or widen changed-file scope.
-2. Update the local PCP checkout to exact main `757a35f8823c9c3c30c1dfc95084dce369ef2308` and require a clean tree before service mutation.
-3. Require no active engineering work before rebuild: zero active jobs, zero planning plans and zero busy/running WorkOrders.
-4. Guardedly rebuild Router and Runtime only; target Router `1.0.23`, Runtime `1.0.46`, routing policy v14. Keep direct n8n `/healthz` as the n8n health gate.
-5. Verify #238 and #240 source/image hashes, deterministic service tests, service health, and unchanged DEC identity/counters after rollout.
-6. Re-enter the exact same DEC-025C-r2 job once through a fresh reroute with transient provider failures preserved. Do not use historical superseded Telegram actions.
-7. Confirm recomputed workspace scope returns to the real semantic 14 files and that work-shape counters may remain at/above `40/24/12` without causing a standalone stop.
-8. Let Runtime continue autonomously until Definition of Done or an independent material/anomaly/protected/provider-capacity boundary occurs.
-9. Keep #146 open for natural calibration evidence.
+1. Do not reroute DEC-025C-r2 again while the job is active. Do not reset counters/provider state, replace the job, force-complete, or use historical Telegram actions.
+2. Observe the same job `eec59b13651c54559c10ce204380a68e`. Work-shape counters at/above `40/24/12` are expected telemetry on the effective adaptive route and must not be treated as standalone owner gates.
+3. On the next verification cycle, confirm durable `changed_files` returns to `14` and `unexpected_scope=false`; Runtime #238 already proved the fresh semantic diff is exactly 14 files.
+4. If the job advances to delivery/PR, apply normal deterministic CI and PM merge gates.
+5. If the job blocks again, classify the new blocker by independent evidence. Token volume, wall time, hard cost, real scope expansion, repeated/no-progress/oscillation, protected decision, or authoritative provider exhaustion remain legitimate stop classes; static work-shape counters do not.
+6. The current wall-time reading before re-entry was `158.232/180`. If the next stop is only wall-time while execution remains demonstrably healthy, treat that as fresh calibration evidence before deciding whether wall-time should remain a fixed material circuit breaker or move to a healthier runaway-risk policy.
+7. Keep #146 open for natural calibration evidence from this job.
