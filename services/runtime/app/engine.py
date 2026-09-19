@@ -452,10 +452,13 @@ class RuntimeEngine(_RuntimeEngine):
             count = len(commands)
             budget = strategy["budget"]
             if (
-                progress["tool_calls"] + int(result.get("tool_calls", 0)) + count
-                > int(budget["max_tool_calls"])
-                or progress["test_runs"] + int(result.get("test_runs", 0)) + count
-                > int(budget["max_test_runs"])
+                not self._adaptive_work_shape_nonblocking(strategy)
+                and (
+                    progress["tool_calls"] + int(result.get("tool_calls", 0)) + count
+                    > int(budget["max_tool_calls"])
+                    or progress["test_runs"] + int(result.get("test_runs", 0)) + count
+                    > int(budget["max_test_runs"])
+                )
             ):
                 result["passed"] = False
                 result["tests_passed"] = False

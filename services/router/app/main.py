@@ -18,7 +18,7 @@ from .schemas import (
 )
 
 
-ROUTER_VERSION = "1.0.22"
+ROUTER_VERSION = "1.0.23"
 
 
 app = FastAPI(

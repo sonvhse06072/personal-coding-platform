@@ -395,6 +395,7 @@ def apply_work_order_budget(route: dict[str, Any], work_order: WorkOrder) -> dic
 
     if adaptive_enabled:
         budget = _reconcile_adaptive_emergency_budget(budget, adaptive)
+        strategy["budget_mode"] = "adaptive"
     else:
         ceilings = {
             "max_model_calls": work_order.budget.max_model_calls,
@@ -406,6 +407,9 @@ def apply_work_order_budget(route: dict[str, Any], work_order: WorkOrder) -> dic
             if current is None:
                 raise WorkOrderPolicyError(f"Router strategy is missing required budget field {key!r}")
             budget[key] = min(current, ceiling)
+        # Missing/disabled adaptive metadata is a fail-closed route even when the
+        # declared WorkOrder requested adaptive semantics.
+        strategy["budget_mode"] = "legacy_hard"
 
     strategy["budget"] = budget
     updated["strategy"] = strategy

@@ -3,8 +3,8 @@ from fastapi.testclient import TestClient
 from app.main import ROUTER_VERSION, app
 
 
-def test_router_version_is_1_0_22():
-    assert ROUTER_VERSION == "1.0.22"
+def test_router_version_is_1_0_23():
+    assert ROUTER_VERSION == "1.0.23"
     assert app.version == ROUTER_VERSION
 
 

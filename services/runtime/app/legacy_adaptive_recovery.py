@@ -223,14 +223,11 @@ class LegacyAdaptiveRecovery:
         previous_budget = dict((previous_route.get("strategy") or {}).get("budget") or {})
         new_budget = dict((fresh_route.get("strategy") or {}).get("budget") or {})
 
+        # A fresh adaptive reassessment owns work-shape decisions. Only
+        # material resource ceilings independently prevent compatibility recovery.
         counter_map = {
-            "max_model_calls": "model_calls",
             "max_input_tokens": "input_tokens",
             "max_output_tokens": "output_tokens",
-            "max_tool_calls": "tool_calls",
-            "max_iterations": "iteration",
-            "max_repair_iterations": "repair_iterations",
-            "max_test_runs": "test_runs",
             "max_wall_time_minutes": "elapsed_minutes",
         }
         for dimension, counter in counter_map.items():

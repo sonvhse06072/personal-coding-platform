@@ -9,6 +9,7 @@ ProfileName = Literal["fast", "standard", "complex", "critical"]
 RouteAction = Literal["continue", "escalate", "stop", "complete", "human_decision"]
 ReasoningEffort = Literal["low", "medium", "high"]
 ReviewLevel = Literal["none", "lightweight", "standard", "strong", "critical"]
+BudgetMode = Literal["legacy_hard", "adaptive"]
 
 
 class SemanticSignals(BaseModel):
@@ -190,6 +191,7 @@ class ExecutionStrategy(BaseModel):
     reasoning_ceiling: dict[str, ReasoningEffort] = Field(default_factory=dict)
     human_decision: HumanDecision
     budget: Budget
+    budget_mode: BudgetMode | None = None
     adaptive_budget: AdaptiveBudgetPolicy | None = None
     anti_loop: dict[str, Any]
     permissions: dict[str, bool]

@@ -175,3 +175,77 @@ def test_provider_failover_prior_overrun_does_not_block_completed_work():
     assert result.action == "complete"
     assert result.remaining["provider_failovers"] == 0
 
+def test_adaptive_work_shape_overruns_do_not_stop_healthy_incomplete_work():
+    engine = make_engine()
+    route = engine.route(base_request())
+    route.strategy.budget_mode = "adaptive"
+    budget = route.strategy.budget
+
+    result = engine.reassess(ReassessRequest(
+        route=route,
+        progress=ExecutionProgress(
+            model_calls=budget.max_model_calls + 5,
+            tool_calls=budget.max_tool_calls + 20,
+            iteration=budget.max_iterations + 3,
+            repair_iterations=budget.max_repair_iterations + 2,
+            test_runs=budget.max_test_runs + 4,
+            model_failovers=budget.max_model_failovers + 2,
+            agent_succeeded=True,
+            material_change_present=True,
+            tests_passed=False,
+            required_checks_passed=False,
+        ),
+    ))
+
+    assert result.action in {"continue", "escalate"}
+    assert "hard_budget_guard" not in result.signals
+    assert "hard_budget_overrun" not in result.signals
+
+
+def test_adaptive_material_input_ceiling_still_stops_incomplete_work():
+    engine = make_engine()
+    route = engine.route(base_request())
+    route.strategy.budget_mode = "adaptive"
+
+    result = engine.reassess(ReassessRequest(
+        route=route,
+        progress=ExecutionProgress(
+            input_tokens=route.strategy.budget.max_input_tokens,
+            agent_succeeded=True,
+            material_change_present=True,
+            tests_passed=False,
+            required_checks_passed=False,
+        ),
+    ))
+
+    assert result.action == "stop"
+    assert result.reason == "input-token budget exhausted"
+    assert "hard_budget_guard" in result.signals
+
+
+def test_adaptive_work_shape_overrun_does_not_mask_scope_expansion():
+    engine = make_engine()
+    route = engine.route(base_request())
+    route.strategy.budget_mode = "adaptive"
+    budget = route.strategy.budget
+
+    result = engine.reassess(ReassessRequest(
+        route=route,
+        progress=ExecutionProgress(
+            model_calls=budget.max_model_calls + 2,
+            iteration=budget.max_iterations + 1,
+            repair_iterations=budget.max_repair_iterations + 1,
+            changed_files=budget.max_changed_files + 1,
+            unexpected_scope=True,
+            agent_succeeded=True,
+            material_change_present=True,
+            tests_passed=False,
+            required_checks_passed=False,
+        ),
+    ))
+
+    assert "scope_expansion" in result.signals
+    assert result.action in {"escalate", "stop"}
+    assert "hard_budget_guard" not in result.signals
+    assert "hard_budget_overrun" not in result.signals
+

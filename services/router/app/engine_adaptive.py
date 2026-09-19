@@ -30,9 +30,10 @@ class RouterEngine(BudgetRouterEngine):
 
     Profile values are planning priors, not routine stop points. Router derives an
     estimate and working target from task pressure while the effective max_* fields
-    are the configured personal-scale emergency hard caps. Those caps are reserved
-    for genuinely abnormal/material resource use; normal healthy execution may
-    cross profile/default and working thresholds without a Human Owner click.
+    are high-water emergency thresholds. Material dimensions (token volume and
+    wall time, plus hard cost from the route budget) remain circuit breakers.
+    Work-shape dimensions such as calls/iterations/repairs/tests/tools remain
+    telemetry and reassessment inputs on effective adaptive WorkOrders.
 
     Historical telemetry may adjust estimates only after the configured minimum
     sample size. It can never expand the configured emergency hard caps.
@@ -127,9 +128,9 @@ class RouterEngine(BudgetRouterEngine):
                 max(baseline, math.ceil(estimate * working_ratio)),
             )
 
-            # The configured hard maximum is the actual technical stop. Do not
-            # synthesize another low per-task ceiling from a multiplier: doing so
-            # recreates owner-click checkpoints for otherwise healthy work.
+            # Keep a stable high-water threshold for telemetry/calibration.
+            # Effective adaptive WorkOrder policy decides whether the dimension
+            # is a material stop or a non-blocking work-shape counter.
             emergency_limit = hard_cap
 
             # Budget fields are integral, including wall-time minutes.
@@ -162,11 +163,11 @@ class RouterEngine(BudgetRouterEngine):
             return result
         result.strategy.adaptive_budget = adaptive
         reasons = list(result.strategy.reasons) + [
-            "Healthy-progress budget policy enabled: profile/default counters and working targets are non-blocking; configured hard maxima are abnormal/material-risk circuit breakers."
+            "Healthy-progress budget policy enabled: profile/default and work-shape emergency thresholds are non-blocking on effective adaptive WorkOrders; material resource ceilings remain circuit breakers."
         ]
         if multipliers and request.calibration is not None:
             reasons.append(
-                f"Observed project/task/role calibration applied from {request.calibration.sample_size} comparable terminal jobs; emergency hard caps remain authoritative."
+                f"Observed project/task/role calibration applied from {request.calibration.sample_size} comparable terminal jobs; material circuit breakers remain authoritative."
             )
         result.strategy.reasons = reasons
         return result
@@ -183,9 +184,11 @@ class RouterEngine(BudgetRouterEngine):
             if not counter:
                 continue
             used = float(getattr(request.progress, counter, 0.0))
-            if used >= envelope.working_target and used < envelope.emergency_limit:
+            if used >= envelope.emergency_limit:
+                signals.append(f"budget_emergency_threshold_reached:{dimension}")
+            elif used >= envelope.working_target:
                 signals.append(f"budget_headroom_active:{dimension}")
-            elif used >= envelope.estimate and used < envelope.working_target:
+            elif used >= envelope.estimate:
                 signals.append(f"budget_estimate_exceeded:{dimension}")
         return signals
 

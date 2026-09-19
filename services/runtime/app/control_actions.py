@@ -64,6 +64,16 @@ _PROVIDER_BLOCK_REASONS = {
     "evaluator_provider_failure_without_fallback",
 }
 
+_ADAPTIVE_WORK_SHAPE_DIMENSIONS = {
+    "max_model_calls",
+    "max_tool_calls",
+    "max_test_runs",
+    "max_repair_iterations",
+    "max_iterations",
+}
+
+
+
 
 class ControlActionService:
     """Durable, one-time owner controls for Telegram and other trusted transports.
@@ -77,6 +87,19 @@ class ControlActionService:
         self.engine = engine
         self.store = store
         self.orchestrator = orchestrator
+
+    @staticmethod
+    def _adaptive_work_shape_nonblocking(job: dict[str, Any]) -> bool:
+        route = dict(job.get("route") or {})
+        strategy = dict(route.get("strategy") or {})
+        mode = str(strategy.get("budget_mode") or "")
+        if mode:
+            return mode == "adaptive"
+
+        checkpoint = dict(job.get("checkpoint") or {})
+        work_order = dict(checkpoint.get("work_order") or {})
+        budget = dict(work_order.get("budget") or {})
+        return str(budget.get("mode") or "") == "adaptive"
 
     def ensure(self) -> None:
         self.store.ensure()
@@ -194,6 +217,11 @@ class ControlActionService:
         }
 
         dimension = _BUDGET_FAILURE_MAP.get(last_failure)
+        if (
+            self._adaptive_work_shape_nonblocking(job)
+            and dimension in _ADAPTIVE_WORK_SHAPE_DIMENSIONS
+        ):
+            dimension = None
         if reason in {"planner_budget_exhausted", "preflight_budget_exhausted", "execution_budget_exhausted"}:
             advisory["summary"] = "Runtime execution budget was exhausted."
             advisory["cause"] = "A Runtime safety budget reached its current limit. This is not a provider rolling quota reset."

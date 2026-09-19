@@ -5,6 +5,7 @@ from typing import Any
 
 from .control_actions import (
     ControlActionService as BaseControlActionService,
+    _ADAPTIVE_WORK_SHAPE_DIMENSIONS,
     _BUDGET_EXTENSION_SPECS,
     _BUDGET_FAILURE_MAP,
 )
@@ -80,8 +81,8 @@ class ControlActionService(BaseControlActionService):
             return True
         return abs(remaining_seconds - timeout_seconds) <= 30.0
 
-    @staticmethod
-    def _reassessment_budget_hint(job: dict[str, Any]) -> str | None:
+    @classmethod
+    def _reassessment_budget_hint(cls, job: dict[str, Any]) -> str | None:
         result = dict(job.get("result") or {})
         if str(result.get("reason") or "") != "reassessment_stopped":
             return None
@@ -90,7 +91,15 @@ class ControlActionService(BaseControlActionService):
         if str(reassess.get("action") or "") != "stop" or "hard_budget_guard" not in signals:
             return None
         reason = str(reassess.get("reason") or "")
-        return reason if reason in _BUDGET_FAILURE_MAP else None
+        if reason not in _BUDGET_FAILURE_MAP:
+            return None
+        dimension = _BUDGET_FAILURE_MAP[reason]
+        if (
+            cls._adaptive_work_shape_nonblocking(job)
+            and dimension in _ADAPTIVE_WORK_SHAPE_DIMENSIONS
+        ):
+            return None
+        return reason
 
     @classmethod
     def _budget_hint(cls, job: dict[str, Any]) -> str | None:
@@ -100,15 +109,26 @@ class ControlActionService(BaseControlActionService):
         reason = str(result.get("reason") or "")
         if reason in _BUDGET_BLOCK_REASONS:
             last_failure = str(result.get("last_failure") or "")
-            return last_failure if last_failure in _BUDGET_FAILURE_MAP else None
+            if last_failure not in _BUDGET_FAILURE_MAP:
+                return None
+            dimension = _BUDGET_FAILURE_MAP[last_failure]
+            if (
+                cls._adaptive_work_shape_nonblocking(job)
+                and dimension in _ADAPTIVE_WORK_SHAPE_DIMENSIONS
+            ):
+                return None
+            return last_failure
         return cls._reassessment_budget_hint(job)
 
     @classmethod
     def _is_budget_recovery_state(cls, job: dict[str, Any]) -> bool:
         result = dict(job.get("result") or {})
+        reason = str(result.get("reason") or "")
+        if cls._adaptive_work_shape_nonblocking(job):
+            return cls._legacy_failed_wall_timeout(job) or cls._budget_hint(job) is not None
         return (
             cls._legacy_failed_wall_timeout(job)
-            or str(result.get("reason") or "") in _BUDGET_BLOCK_REASONS
+            or reason in _BUDGET_BLOCK_REASONS
             or cls._reassessment_budget_hint(job) is not None
         )
 
@@ -122,9 +142,14 @@ class ControlActionService(BaseControlActionService):
         budget = dict(strategy.get("budget") or {})
         progress = dict(job.get("progress") or {})
         hint = _BUDGET_FAILURE_MAP.get(str(failure_hint or ""))
+        adaptive_work_shape = cls._adaptive_work_shape_nonblocking(job)
+        if adaptive_work_shape and hint in _ADAPTIVE_WORK_SHAPE_DIMENSIONS:
+            hint = None
 
         exhausted: list[str] = []
         for dimension, spec in _BUDGET_EXTENSION_SPECS.items():
+            if adaptive_work_shape and dimension in _ADAPTIVE_WORK_SHAPE_DIMENSIONS:
+                continue
             if dimension not in budget:
                 continue
             used = cls._numeric(progress.get(spec["counter"], 0))

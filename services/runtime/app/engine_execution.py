@@ -196,7 +196,10 @@ class RuntimeEngine(RuntimeEngineCore):
 
         if project.get("ddev", {}).get("enabled", False):
             commands = project.get("ddev", {}).get("preflight", []) or []
-            if progress["tool_calls"] + len(commands) > int(strategy["budget"]["max_tool_calls"]):
+            if (
+                not self._adaptive_work_shape_nonblocking(strategy)
+                and progress["tool_calls"] + len(commands) > int(strategy["budget"]["max_tool_calls"])
+            ):
                 self._block(
                     job_id=job_id,
                     progress=progress,
@@ -704,8 +707,11 @@ class RuntimeEngine(RuntimeEngineCore):
             commands = project.get("ddev", {}).get(phase, []) or []
             count = len(commands)
             if (
-                progress["tool_calls"] + tool_calls + count > int(budget["max_tool_calls"])
-                or progress["test_runs"] + test_runs + count > int(budget["max_test_runs"])
+                not self._adaptive_work_shape_nonblocking(strategy)
+                and (
+                    progress["tool_calls"] + tool_calls + count > int(budget["max_tool_calls"])
+                    or progress["test_runs"] + test_runs + count > int(budget["max_test_runs"])
+                )
             ):
                 failures.append(f"{phase}: verification budget would be exceeded")
                 break
