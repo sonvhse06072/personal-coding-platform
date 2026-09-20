@@ -18,12 +18,13 @@ def test_antigravity_quota_exhaustion_marks_only_selected_model_quota():
 
     assert "provider:google_antigravity" not in state
     assert "quota:antigravity_gemini" not in state
-    assert state["quota:model:antigravity_free"] == {
-        "healthy": False,
-        "available": False,
-        "error_rate": 1.0,
-        "quota_pressure": 1.0,
-    }
+    marker = state["quota:model:antigravity_free"]
+    assert marker["healthy"] is False
+    assert marker["available"] is False
+    assert marker["error_rate"] == 1.0
+    assert marker["quota_pressure"] == 1.0
+    assert marker["failure_kind"] == "quota_exhausted"
+    assert marker["failed_at"]
 
 
 def test_antigravity_rate_limit_marks_only_selected_model_quota():
@@ -44,7 +45,7 @@ def test_antigravity_bridge_failure_remains_provider_wide():
     assert "quota:model:antigravity_free" not in state
 
 
-def test_other_provider_quota_failure_keeps_existing_provider_wide_semantics():
+def test_registered_shared_quota_failure_uses_quota_group_not_provider_scope():
     state = {}
     choice = {
         "id": "openrouter_qwen3_coder_free",
@@ -56,5 +57,23 @@ def test_other_provider_quota_failure_keeps_existing_provider_wide_semantics():
 
     RuntimeEngine._mark_provider_failure(state, choice, "quota_exhausted")
 
-    assert state["provider:openrouter"]["available"] is False
-    assert "quota:model:openrouter_qwen3_coder_free" not in state
+    assert "provider:openrouter" not in state
+    assert state["quota:openrouter_free"]["available"] is False
+    assert state["quota:openrouter_free"]["failure_kind"] == "quota_exhausted"
+
+def test_codex_quota_exhaustion_uses_shared_subscription_quota_group():
+    state = {}
+    choice = {
+        "id": "codex_terra",
+        "provider": "openai",
+        "adapter": "codex_cli",
+        "model": "gpt-5.6-terra",
+        "quota_group": "codex_chatgpt_plus",
+    }
+
+    RuntimeEngine._mark_provider_failure(state, choice, "quota_exhausted")
+
+    assert "provider:openai" not in state
+    assert state["quota:codex_chatgpt_plus"]["available"] is False
+    assert state["quota:codex_chatgpt_plus"]["failure_kind"] == "quota_exhausted"
+

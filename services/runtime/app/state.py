@@ -4,9 +4,115 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
+from .config import models_doc
 
-_ANTIGRAVITY_QUOTA_FAILURES = {"quota_exhausted", "rate_limited"}
 
+_QUOTA_FAILURES = {"quota_exhausted", "rate_limited"}
+_ANTIGRAVITY_PROVIDER = "google_antigravity"
+
+
+
+def _iso_timestamp(value: Any) -> str | None:
+    if value is None:
+        return None
+    if hasattr(value, "isoformat"):
+        try:
+            return str(value.isoformat())
+        except Exception:
+            return None
+    text = str(value).strip()
+    return text or None
+
+
+def quota_failure_state_key(choice: dict[str, Any]) -> str:
+    """Return the narrow durable quota key for one failed routed choice."""
+    model_id = str(choice.get("id") or "").strip()
+    provider = str(choice.get("provider") or "").strip()
+    quota_group = str(choice.get("quota_group") or "").strip()
+
+    # Antigravity's direct model failure is not proof that its whole shared
+    # family is exhausted; authoritative telemetry may separately mark a group.
+    if provider == _ANTIGRAVITY_PROVIDER and model_id:
+        return f"quota:model:{model_id}"
+    if quota_group:
+        return f"quota:{quota_group}"
+    if model_id:
+        return f"quota:model:{model_id}"
+    return f"provider:{provider}"
+
+
+def provider_failure_state_key(choice: dict[str, Any], kind: str) -> str:
+    if str(kind or "") in _QUOTA_FAILURES:
+        return quota_failure_state_key(choice)
+    return f"provider:{str(choice.get('provider') or '').strip()}"
+
+
+def migrate_legacy_provider_quota_failure(
+    checkpoint: dict[str, Any],
+    progress: dict[str, Any] | None,
+    *,
+    failed_at: Any = None,
+) -> dict[str, Any]:
+    """Narrow proven pre-fix provider-wide quota markers without clearing them.
+
+    Only the latest observed failure for a provider is considered. A later
+    authentication/config/provider failure therefore prevents quota migration.
+    """
+    updated = deepcopy(checkpoint)
+    state = dict(updated.get("provider_state") or {})
+    failures = [
+        dict(item)
+        for item in ((progress or {}).get("provider_failures") or [])
+        if isinstance(item, dict)
+    ]
+    if not failures:
+        return updated
+
+    models = models_doc().get("models", {}) or {}
+    by_provider: dict[str, dict[str, Any]] = {}
+    for item in reversed(failures):
+        provider = str(item.get("provider") or "").strip()
+        if provider and provider not in by_provider:
+            by_provider[provider] = item
+
+    changed = False
+    for provider, failure in by_provider.items():
+        provider_key = f"provider:{provider}"
+        marker = state.get(provider_key)
+        if not isinstance(marker, dict):
+            continue
+        kind = str(failure.get("kind") or "")
+        if kind not in _QUOTA_FAILURES:
+            continue
+        model_id = str(failure.get("model") or "").strip()
+        if not model_id:
+            continue
+        cfg = dict(models.get(model_id) or {})
+        choice = {
+            "id": model_id,
+            "provider": provider,
+            "quota_group": cfg.get("quota_group"),
+        }
+        quota_key = quota_failure_state_key(choice)
+        quota_marker = dict(state.get(quota_key) or {})
+        quota_marker.update(deepcopy(marker))
+        quota_marker.update({
+            "healthy": False,
+            "available": False,
+            "quota_pressure": 1.0,
+            "error_rate": 1.0,
+            "failure_kind": kind,
+        })
+        failure_time = _iso_timestamp(failed_at)
+        if failure_time and not quota_marker.get("failed_at"):
+            quota_marker["failed_at"] = failure_time
+        state[quota_key] = quota_marker
+        state.pop(provider_key, None)
+        changed = True
+
+    if changed:
+        updated["provider_state"] = state
+    return updated
 
 def merge_progress(defaults: dict[str, Any], existing: dict[str, Any] | None) -> dict[str, Any]:
     progress = deepcopy(defaults)
@@ -61,46 +167,8 @@ def migrate_legacy_antigravity_quota_failure(
     checkpoint: dict[str, Any],
     progress: dict[str, Any] | None,
 ) -> dict[str, Any]:
-    """Narrow old provider-wide Antigravity quota state to the failed model.
-
-    Runtime versions before model-aware Antigravity routing marked one model's
-    quota exhaustion as `provider:google_antigravity` unavailable. During a
-    preserved same-job reroute, narrow only a proven quota/rate-limit marker to
-    `quota:model:<logical-id>`. Other Antigravity models and quota families stay
-    eligible. Auth/bridge/provider failures deliberately remain provider-wide.
-    """
-    updated = deepcopy(checkpoint)
-    state = dict(updated.get("provider_state") or {})
-    provider_key = "provider:google_antigravity"
-    provider_marker = state.get(provider_key)
-    if not isinstance(provider_marker, dict):
-        return updated
-
-    failures = list((progress or {}).get("provider_failures") or [])
-    failure: dict[str, Any] | None = None
-    for item in reversed(failures):
-        if not isinstance(item, dict):
-            continue
-        if str(item.get("provider") or "") != "google_antigravity":
-            continue
-        if str(item.get("kind") or "") not in _ANTIGRAVITY_QUOTA_FAILURES:
-            continue
-        failure = item
-        break
-    if failure is None:
-        return updated
-
-    model_id = str(failure.get("model") or "").strip()
-    if not model_id:
-        return updated
-    quota_key = f"quota:model:{model_id}"
-    quota_marker = dict(state.get(quota_key) or {})
-    quota_marker.update(deepcopy(provider_marker))
-    quota_marker.update({"healthy": False, "available": False, "quota_pressure": 1.0})
-    state[quota_key] = quota_marker
-    state.pop(provider_key, None)
-    updated["provider_state"] = state
-    return updated
+    """Backward-compatible wrapper for the generic provider quota migration."""
+    return migrate_legacy_provider_quota_failure(checkpoint, progress)
 
 
 def clear_routing_choices_for_resume(checkpoint: dict[str, Any]) -> dict[str, Any]:

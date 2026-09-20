@@ -37,7 +37,7 @@ def test_codex_multi_bucket_maps_model_and_windows():
 
     assert len(snapshots) == 2
     by_window = {item["window_name"]: item for item in snapshots}
-    assert by_window["primary"]["state_key"] == "quota:model:codex_terra"
+    assert by_window["primary"]["state_key"] == "quota:codex_chatgpt_plus"
     assert by_window["primary"]["remaining_percent"] == 8.0
     assert by_window["primary"]["available"] is True
     assert by_window["secondary"]["remaining_percent"] == 0.0
@@ -125,25 +125,84 @@ def test_antigravity_statusline_group_fallback_is_preserved():
     assert snapshots[0]["metadata"]["source_supported"] is True
 
 
-def test_telemetry_merge_cannot_clear_durable_provider_failure():
+def test_newer_authoritative_quota_snapshot_rehabilitates_only_quota_failure():
     durable = {
-        "provider:openai": {
+        "quota:codex_chatgpt_plus": {
             "healthy": False,
             "available": False,
             "quota_pressure": 1.0,
             "error_rate": 1.0,
-            "latency_ms": 0,
-            "predicted_success": None,
+            "failure_kind": "quota_exhausted",
+            "failed_at": "2026-09-20T01:00:00+00:00",
         }
     }
     telemetry = {
-        "provider:openai": {
+        "quota:codex_chatgpt_plus": {
             "healthy": True,
             "available": True,
             "quota_pressure": 0.15,
             "error_rate": 0.0,
             "latency_ms": 0,
             "predicted_success": 0.9,
+            "authoritative": True,
+            "observed_at": "2026-09-20T01:05:00+00:00",
+        }
+    }
+
+    merged = merge_provider_state(durable, telemetry)
+
+    assert merged["quota:codex_chatgpt_plus"]["available"] is True
+    assert merged["quota:codex_chatgpt_plus"]["healthy"] is True
+    assert merged["quota:codex_chatgpt_plus"]["rehabilitated_from"] == "2026-09-20T01:00:00+00:00"
+
+
+def test_stale_authoritative_snapshot_cannot_rehabilitate_newer_quota_failure():
+    durable = {
+        "quota:codex_chatgpt_plus": {
+            "healthy": False,
+            "available": False,
+            "quota_pressure": 1.0,
+            "error_rate": 1.0,
+            "failure_kind": "quota_exhausted",
+            "failed_at": "2026-09-20T01:05:00+00:00",
+        }
+    }
+    telemetry = {
+        "quota:codex_chatgpt_plus": {
+            "healthy": True,
+            "available": True,
+            "quota_pressure": 0.1,
+            "error_rate": 0.0,
+            "authoritative": True,
+            "observed_at": "2026-09-20T01:00:00+00:00",
+        }
+    }
+
+    merged = merge_provider_state(durable, telemetry)
+
+    assert merged["quota:codex_chatgpt_plus"]["available"] is False
+    assert merged["quota:codex_chatgpt_plus"]["healthy"] is False
+
+
+def test_telemetry_cannot_clear_durable_provider_auth_failure():
+    durable = {
+        "provider:openai": {
+            "healthy": False,
+            "available": False,
+            "quota_pressure": 0.0,
+            "error_rate": 1.0,
+            "failure_kind": "authentication",
+            "failed_at": "2026-09-20T01:00:00+00:00",
+        }
+    }
+    telemetry = {
+        "provider:openai": {
+            "healthy": True,
+            "available": True,
+            "quota_pressure": 0.0,
+            "error_rate": 0.0,
+            "authoritative": True,
+            "observed_at": "2026-09-20T02:00:00+00:00",
         }
     }
 
@@ -151,5 +210,3 @@ def test_telemetry_merge_cannot_clear_durable_provider_failure():
 
     assert merged["provider:openai"]["available"] is False
     assert merged["provider:openai"]["healthy"] is False
-    assert merged["provider:openai"]["quota_pressure"] == 1.0
-    assert merged["provider:openai"]["error_rate"] == 1.0

@@ -68,18 +68,39 @@ class QuotaTelemetryCoordinator:
                 # repeated external reads even when both providers are unavailable.
                 self._last_refresh_monotonic = time.monotonic()
 
-    async def enrich(self, payload: dict[str, Any]) -> dict[str, Any]:
+    async def reconcile(
+        self,
+        provider_state: dict[str, Any] | None,
+    ) -> tuple[dict[str, Any], list[str], dict[str, Any]]:
+        """Merge live authoritative quota state and report rehabilitated keys."""
+        base = {
+            str(key): dict(value or {})
+            for key, value in (provider_state or {}).items()
+        }
         try:
             await self.refresh_if_due()
             telemetry = self.store.provider_state()
         except Exception:
-            # Quota telemetry is advisory resource state. It must never become a
-            # new execution/control-plane dependency.
+            # Advisory telemetry must never become a control-plane dependency.
             telemetry = {}
+
+        merged = merge_provider_state(base, telemetry)
+        rehabilitated = [
+            key
+            for key, current in base.items()
+            if str(key).startswith("quota:")
+            and isinstance(current, dict)
+            and current.get("available") is False
+            and isinstance(merged.get(key), dict)
+            and merged[key].get("available") is True
+            and merged[key].get("rehabilitated_from")
+        ]
+        return merged, sorted(rehabilitated), telemetry
+
+    async def enrich(self, payload: dict[str, Any]) -> dict[str, Any]:
         updated = dict(payload)
-        updated["provider_state"] = merge_provider_state(
-            updated.get("provider_state") or {}, telemetry
-        )
+        merged, _, _ = await self.reconcile(updated.get("provider_state") or {})
+        updated["provider_state"] = merged
         return updated
 
     def view(self) -> dict[str, Any]:

@@ -6,6 +6,7 @@ from typing import Any
 
 from .control_actions_attention import ControlActionService
 from .legacy_adaptive_recovery import LegacyAdaptiveRecovery
+from .provider_capacity_recovery import ProviderCapacityRecovery
 from .orchestrator_merge import PlanOrchestrator as CorePlanOrchestrator
 
 
@@ -37,6 +38,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
     ) -> None:
         super().__init__(storage, engine, store=store)
         self.controls = controls or ControlActionService(storage, engine, self.store, self)
+        self.provider_capacity_recovery = ProviderCapacityRecovery(storage, engine, self.store)
         self.legacy_adaptive_recovery = LegacyAdaptiveRecovery(storage, engine, self.store)
         self._notification_tick_lock = asyncio.Lock()
         if controls is not None and hasattr(controls, "orchestrator"):
@@ -53,18 +55,30 @@ class PlanOrchestrator(CorePlanOrchestrator):
 
     async def tick(self) -> dict[str, Any]:
         async with self._notification_tick_lock:
+            # Provider-capacity recovery has priority for already-blocked work:
+            # authoritative post-failure quota evidence may reopen the exact same
+            # job without Human Owner state clearing.
+            provider_recovered = await self.provider_capacity_recovery.recover_one()
+
             # Recover an already-blocked pre-adaptive job before core scheduling so
             # rollout cannot launch unrelated work ahead of the preserved job.
-            recovered = await self.legacy_adaptive_recovery.recover_one()
+            legacy_recovered = None
+            if provider_recovered is None:
+                legacy_recovered = await self.legacy_adaptive_recovery.recover_one()
+
             result = await super().tick()
 
-            # A job may have become blocked during the core reconciliation above.
-            # Re-evaluate exactly one safe legacy budget block after that durable
-            # transition; anomaly/decision/provider/cost cases remain blocked.
-            if recovered is None:
-                recovered = await self.legacy_adaptive_recovery.recover_one()
-            if recovered is not None:
-                result = {**result, "legacy_adaptive_recovery": recovered}
+            # A job may have become blocked during core reconciliation. Recheck one
+            # safe automatic recovery after that durable transition.
+            if provider_recovered is None and legacy_recovered is None:
+                provider_recovered = await self.provider_capacity_recovery.recover_one()
+            if provider_recovered is None and legacy_recovered is None:
+                legacy_recovered = await self.legacy_adaptive_recovery.recover_one()
+
+            if provider_recovered is not None:
+                result = {**result, "provider_capacity_recovery": provider_recovered}
+            if legacy_recovered is not None:
+                result = {**result, "legacy_adaptive_recovery": legacy_recovered}
 
             # Read-only observation after every core transition/launch. Dedupe keys
             # are tied to durable state generation and the rendered action set.
