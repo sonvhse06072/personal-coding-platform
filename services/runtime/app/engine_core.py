@@ -12,8 +12,13 @@ from .adapters.antigravity import cancel_all_antigravity_runs
 from .config import project_config
 from .executor_client import DdevExecutorClient
 from .router_client import RouterClient
-from .state import checkpoint_from_row, clear_transient_provider_failures, decision_key
-from .storage import Storage
+from .state import (
+    checkpoint_from_row,
+    clear_transient_provider_failures,
+    decision_key,
+    provider_failure_state_key,
+)
+from .storage import Storage, now
 from .usage import estimated_cost_usd, normalize_usage
 
 
@@ -325,12 +330,18 @@ class RuntimeEngineCore:
 
     @staticmethod
     def _mark_provider_failure(provider_state: dict[str, Any], choice: dict[str, Any], kind: str) -> None:
-        provider_key = f"provider:{choice.get('provider')}"
-        state = dict(provider_state.get(provider_key) or {})
-        state.update({"healthy": False, "available": False, "error_rate": 1.0})
+        key = provider_failure_state_key(choice, kind)
+        state = dict(provider_state.get(key) or {})
+        state.update({
+            "healthy": False,
+            "available": False,
+            "error_rate": 1.0,
+            "failure_kind": str(kind or "provider_unavailable"),
+            "failed_at": now().isoformat(),
+        })
         if kind in {"quota_exhausted", "rate_limited"}:
             state["quota_pressure"] = 1.0
-        provider_state[provider_key] = state
+        provider_state[key] = state
 
     @staticmethod
     def _mark_model_failure(provider_state: dict[str, Any], choice: dict[str, Any], reason: str) -> None:

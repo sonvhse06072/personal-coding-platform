@@ -48,10 +48,17 @@ class PolicyCodexQuotaCollector(CodexQuotaCollector):
             bucket = dict(bucket_raw)
             normal_model = str(bucket.get("normalModelSlug") or "").strip() or None
             logical_id = _logical_model_id("openai", normal_model)
-            # Codex ChatGPT allowance is a quota scope, not generic OpenAI provider
-            # health. Keeping account-wide buckets under the registered quota group
-            # avoids penalizing unrelated OpenAI utility/API calls.
-            state_key = f"quota:model:{logical_id}" if logical_id else "quota:codex_chatgpt_plus"
+            # Codex ChatGPT allowance is a shared registered quota scope, not
+            # generic OpenAI provider health and not a per-model health marker.
+            # Keep every Codex subscription bucket under the shared group so a
+            # Terra exhaustion does not mark provider:openai and post-reset
+            # telemetry can rehabilitate the exact durable quota key.
+            quota_group = ""
+            if logical_id:
+                quota_group = str(
+                    (models_doc().get("models", {}).get(logical_id, {}) or {}).get("quota_group") or ""
+                ).strip()
+            state_key = f"quota:{quota_group}" if quota_group else "quota:codex_chatgpt_plus"
             for window_name in ("primary", "secondary"):
                 window = bucket.get(window_name)
                 if not isinstance(window, dict):

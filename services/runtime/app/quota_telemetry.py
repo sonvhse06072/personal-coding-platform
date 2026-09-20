@@ -85,12 +85,65 @@ def _logical_model_id(provider: str, upstream_model: str | None) -> str | None:
     return None
 
 
+_QUOTA_FAILURE_KINDS = {"quota_exhausted", "rate_limited"}
+
+
+def _provider_state_timestamp(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str) and value.strip():
+        try:
+            parsed = datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    else:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _authoritative_quota_recovery(
+    key: str,
+    current: dict[str, Any],
+    incoming: dict[str, Any],
+) -> bool:
+    if not str(key).startswith("quota:"):
+        return False
+    if str(current.get("failure_kind") or "") not in _QUOTA_FAILURE_KINDS:
+        return False
+    if bool(current.get("available", True)):
+        return False
+    if incoming.get("authoritative") is not True or incoming.get("available") is not True:
+        return False
+    failed_at = _provider_state_timestamp(current.get("failed_at"))
+    observed_at = _provider_state_timestamp(incoming.get("observed_at"))
+    return failed_at is not None and observed_at is not None and observed_at > failed_at
+
+
 def merge_provider_state(base: dict[str, Any] | None, telemetry: dict[str, Any] | None) -> dict[str, Any]:
     result = {str(key): dict(value or {}) for key, value in (base or {}).items()}
     for key, incoming_raw in (telemetry or {}).items():
+        key = str(key)
         incoming = dict(incoming_raw or {})
-        current = dict(result.get(str(key)) or {})
-        result[str(key)] = {
+        current = dict(result.get(key) or {})
+
+        if _authoritative_quota_recovery(key, current, incoming):
+            result[key] = {
+                "healthy": bool(incoming.get("healthy", True)),
+                "quota_pressure": float(incoming.get("quota_pressure", 0.0) or 0.0),
+                "error_rate": float(incoming.get("error_rate", 0.0) or 0.0),
+                "latency_ms": int(incoming.get("latency_ms", 0) or 0),
+                "predicted_success": incoming.get("predicted_success"),
+                "available": True,
+                "authoritative": True,
+                "observed_at": incoming.get("observed_at"),
+                "rehabilitated_from": current.get("failed_at"),
+            }
+            continue
+
+        result[key] = {
+            **current,
             "healthy": bool(current.get("healthy", True)) and bool(incoming.get("healthy", True)),
             "quota_pressure": max(float(current.get("quota_pressure", 0.0) or 0.0), float(incoming.get("quota_pressure", 0.0) or 0.0)),
             "error_rate": max(float(current.get("error_rate", 0.0) or 0.0), float(incoming.get("error_rate", 0.0) or 0.0)),
@@ -163,7 +216,7 @@ class QuotaTelemetryStore:
         now = utcnow()
         with self.connect() as conn:
             rows = list(conn.execute(
-                """SELECT state_key, used_percent, available
+                """SELECT state_key, used_percent, available, observed_at
                 FROM cp_quota_snapshots
                 WHERE state_key IS NOT NULL AND authoritative=TRUE AND expires_at>%s""",
                 (now,),
@@ -180,7 +233,15 @@ class QuotaTelemetryStore:
                 "latency_ms": 0,
                 "predicted_success": None,
                 "available": True,
+                "authoritative": True,
+                "observed_at": None,
             })
+            observed = row.get("observed_at")
+            if observed is not None:
+                prior = _provider_state_timestamp(current.get("observed_at"))
+                candidate = _provider_state_timestamp(observed)
+                if candidate is not None and (prior is None or candidate < prior):
+                    current["observed_at"] = candidate.isoformat()
             used = _clamp_percent(row.get("used_percent"))
             if used is not None:
                 current["quota_pressure"] = max(float(current["quota_pressure"]), used / 100.0)

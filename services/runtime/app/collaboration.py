@@ -16,6 +16,7 @@ from .developer_stream import runtime_activity_event
 from .executor_client import DdevExecutorClient
 from .router_client import RouterClient
 from .shell import run_command
+from .state import provider_failure_state_key
 from .usage import estimated_cost_usd, normalize_usage
 from .work_order import work_order_snapshot
 
@@ -510,15 +511,15 @@ class CollaborationManager:
             return
         checkpoint = deepcopy(row.get("checkpoint") or {})
         provider_state = deepcopy(checkpoint.get("provider_state") or {})
-        model_id = str(choice.get("id") or "").strip()
-        provider = str(choice.get("provider") or "").strip()
-        key = f"quota:model:{model_id}" if kind in {"quota_exhausted", "rate_limited"} and model_id else f"provider:{provider}"
+        key = provider_failure_state_key(choice, kind)
         provider_state[key] = {
             "healthy": False,
             "available": False,
             "quota_pressure": 1.0 if kind in {"quota_exhausted", "rate_limited"} else 0.0,
             "error_rate": 1.0,
             "latency_ms": 0,
+            "failure_kind": str(kind or "provider_unavailable"),
+            "failed_at": datetime.now(timezone.utc).isoformat(),
         }
         checkpoint["provider_state"] = provider_state
         progress = deepcopy(row.get("progress") or {})
