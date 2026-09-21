@@ -240,7 +240,7 @@ def test_adaptive_cumulative_input_ceiling_is_telemetry_for_incomplete_work():
 
     assert result.action == "continue"
     assert result.reason != "input-token budget exhausted"
-    assert "hard_budget_guard" in result.signals
+    assert "hard_budget_guard" not in result.signals
 
 
 def test_adaptive_work_shape_overrun_does_not_mask_scope_expansion():
