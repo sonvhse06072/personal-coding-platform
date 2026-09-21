@@ -75,6 +75,7 @@ def test_token_profile_prior_is_not_a_stop_point():
 def test_dec_025c_input_usage_continues_inside_material_circuit_breaker():
     engine = make_engine()
     route = engine.route(request())
+    route.strategy.budget_mode = "adaptive"
 
     result = engine.reassess(ReassessRequest(
         route=route,
@@ -94,6 +95,7 @@ def test_dec_025c_input_usage_continues_inside_material_circuit_breaker():
 def test_adaptive_cumulative_input_token_high_water_is_non_blocking():
     engine = make_engine()
     route = engine.route(request())
+    route.strategy.budget_mode = "adaptive"
 
     result = engine.reassess(ReassessRequest(
         route=route,
@@ -135,6 +137,7 @@ def test_legacy_hard_cumulative_input_token_limit_still_fails_closed():
 def test_adaptive_hard_cost_remains_fail_closed_above_token_high_water():
     engine = make_engine()
     route = engine.route(request())
+    route.strategy.budget_mode = "adaptive"
 
     result = engine.reassess(ReassessRequest(
         route=route,
