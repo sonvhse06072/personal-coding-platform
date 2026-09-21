@@ -125,9 +125,11 @@ Local activation of #244 completed during the guarded provider diagnostic: Route
 
 The current blocker is now a genuine provider-capacity state: `codex_terra / openai` returned `quota_exhausted`, Runtime recorded `provider_failure_without_fallback`, and a fresh RouterClient diagnostic using durable provider state plus live quota telemetry returned `NO_ELIGIBLE_ROUTE`. No job/counter/provider-state reset occurred.
 
-Source review then exposed a recovery-liveness defect: pre-fix Codex quota failures can be stored provider-wide, and live authoritative quota telemetry is merged with durable failed-state using fail-closed AND semantics, so a quota bucket can remain durably unavailable even after an authoritative post-reset observation proves capacity returned. Issue #247 addresses this without weakening the current block: quota failures are narrowed to registered quota scope, timestamped, and may be rehabilitated only by a newer authoritative available observation for the exact quota key. Auth/config/provider-wide failures remain non-recoverable automatically. The existing orchestrator poll loop will reopen the exact same blocked job only after such rehabilitation also produces a valid fresh route.
+Source review then exposed a recovery-liveness defect: pre-fix Codex quota failures can be stored provider-wide, and live authoritative quota telemetry was merged with durable failed-state using fail-closed AND semantics, so a quota bucket could remain durably unavailable even after an authoritative post-reset observation proved capacity returned.
 
-Keep DEC-025C-r2 blocked during #247 source work. Do not clear provider state manually, do not use old Telegram buttons, and do not create a replacement job.
+Issue #247 / PR #248 is now merged. Exact-head CI #432 passed structure, Router, Runtime and ddev-executor at `b3a2c9aec07fe5326b50d2c59969a549face6e22`; PM merged PR #248 at `edb30cbcc9b3ce67bf971289a3bb1c193686b7e8`. Runtime now narrows quota/rate-limit failures to registered quota scope, timestamps durable quota failures, accepts rehabilitation only from a newer authoritative available observation for the exact quota key, and uses the existing orchestrator polling loop to reopen the exact same blocked job only when a fresh Router route also succeeds. Stale observations, reset time alone, auth/config/provider-wide failures, and fresh-route failures remain fail-closed without durable mutation.
+
+Merged service target is Runtime `1.0.48`; Router remains `1.0.24`; routing policy remains v15. Local Runtime activation is pending. Keep DEC-025C-r2 blocked until the guarded rollout; do not clear provider state manually, do not use old Telegram buttons, and do not create a replacement job.
 
 ## Relevant completed follow-ups
 
@@ -141,6 +143,7 @@ Keep DEC-025C-r2 blocked during #247 source work. Do not clear provider state ma
 - #238 / PR #239: generated Python bytecode excluded from Runtime diff/commit scope, exact-head CI #418 green, merged at `b21868ec157aa5a7d3d550813de8b7c51c1cdb88`.
 - #240 / PR #241: adaptive work-shape counters made non-blocking while material/anomaly boundaries remain strict; exact-head CI #422 green; merged at `757a35f8823c9c3c30c1dfc95084dce369ef2308`.
 - #244 / PR #245: adaptive total wall time made telemetry while per-operation timeouts and independent safety gates remain strict; exact-head CI #428 green; merged at `5d7a812a6945c94fe85d27e7aa16e882ca2e85b0`.
+- #247 / PR #248: authoritative quota-capacity rehabilitation plus same-job automatic reopen; exact-head CI #432 green; merged at `edb30cbcc9b3ce67bf971289a3bb1c193686b7e8`.
 
 ## Global operational gates
 
@@ -156,12 +159,12 @@ Keep DEC-025C-r2 blocked during #247 source work. Do not clear provider state ma
 
 ## Immediate next safe actions
 
-1. Complete #247 on `ai/247-authoritative-quota-recovery`.
-2. Require regression coverage for Codex shared quota scope, stale-vs-new authoritative observations, auth/provider non-rehabilitation, legacy provider-wide quota migration, fresh-route fail-closed behavior, and exact same-job orchestration reopen.
-3. Require exact-head structure, Router, Runtime and ddev-executor CI plus PM review.
-4. Target rollout identity: Runtime `1.0.48`; Router remains `1.0.24`; routing policy remains v15.
-5. Keep DEC-025C-r2 blocked while all eligible capacity is unavailable. Do not manually clear provider/quota state or reset counters.
-6. After guarded Runtime rollout, let the existing orchestrator poll loop watch authoritative quota telemetry. It must not resume merely because reset time passed.
-7. When a newer authoritative available observation rehabilitates an exact quota key and fresh Router routing succeeds, automatically reopen the same job/WorkOrder/plan with workspace/source/branch/counters and unrelated failure state preserved.
-8. If no authoritative capacity returns, remain blocked; Human Owner attention is then informational rather than a required continuation click.
-9. Keep #146 open for the resulting natural provider-recovery calibration evidence.
+1. Keep DEC-025C-r2 blocked until guarded local activation of Runtime `1.0.48`; do not clear provider/quota state, reset counters, replace the job, or use historical Telegram actions.
+2. Fast-forward the local PCP checkout to exact reviewed main after this continuity merge and require a clean tree plus zero active jobs/plans/busy WorkOrders before service mutation.
+3. Rebuild Runtime only. Router remains `1.0.24` on routing policy v15 and should be health-verified but not rebuilt.
+4. Require Runtime `1.0.48`, deterministic Runtime tests, direct n8n health, Router health, and unchanged preserved DEC identity/counters.
+5. Runtime startup/orchestrator polling may legitimately auto-recover DEC-025C-r2 during or after activation **only** if a newer authoritative available quota observation rehabilitates an exact failed quota key and a fresh Router route succeeds.
+6. If automatic recovery occurs, verify exact same job/workspace/source/branch, monotonic counters, WorkOrder/plan reopened, and a `provider_capacity_recoveries` audit record. Do not interpret this expected state transition as an activation failure.
+7. If the job remains blocked, leave it blocked. The existing orchestrator loop will continue checking authoritative quota evidence; no owner continuation click is required.
+8. Auth/config/provider-wide failures and genuine no-route states remain fail-closed; never clear them speculatively.
+9. Keep #146 open for the natural provider-capacity recovery evidence.
