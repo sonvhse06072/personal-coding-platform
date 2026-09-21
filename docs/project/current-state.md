@@ -107,7 +107,7 @@ The scope signal was confirmed as a Runtime accounting defect rather than semant
 
 The remaining block exposed a second executable mismatch. Model calls `40/40`, iterations `24/24`, and repair iterations `12/12` are static work-shape counters. The Human Owner reaffirmed that healthy-progress work must not stop solely at those counters.
 
-Issue #240 / PR #241 is now merged. Exact-head CI #422 passed structure, Router, Runtime and ddev-executor at `c92f75a9b6738c8bd572d4103d71e84989846e57`; PM merged PR #241 at `757a35f8823c9c3c30c1dfc95084dce369ef2308`. Effective adaptive WorkOrders now treat model/tool/test/iteration/repair/model-failover/provider-failover thresholds as telemetry/reassessment inputs, while token volume, wall time, hard cost, changed-file scope, anomaly, protected-decision and authoritative provider-exhaustion boundaries remain fail-closed. Router is labeled `1.0.23`, Runtime `1.0.46`, routing policy v14.
+Issue #240 / PR #241 is now merged. Exact-head CI #422 passed structure, Router, Runtime and ddev-executor at `c92f75a9b6738c8bd572d4103d71e84989846e57`; PM merged PR #241 at `757a35f8823c9c3c30c1dfc95084dce369ef2308`. At that rollout stage, effective adaptive WorkOrders treated model/tool/test/iteration/repair/model-failover/provider-failover thresholds as telemetry/reassessment inputs while token volume, wall time, hard cost, changed-file scope, anomaly, protected-decision and authoritative provider-exhaustion boundaries remained fail-closed. Router was labeled `1.0.23`, Runtime `1.0.46`, routing policy v14.
 
 Local activation is complete. The guarded activation/re-entry passed on exact main `6c26bb3a4eb0bc6547f17e9dd7baa681dd61af97`: Router `1.0.23`, Runtime `1.0.46`, routing policy v14, direct n8n health green, zero active work before both selective rebuilds, Runtime deterministic suite `349 passed`, and startup did not mutate the preserved DEC job.
 
@@ -119,7 +119,7 @@ The v14 live run then provided stronger calibration evidence. Without any counte
 
 The next block occurred at total elapsed wall time `180.084/180` with result reason `execution_budget_exhausted`; plan and WorkOrder both became blocked. No concurrent scope, token, cost, protected-decision, provider-capacity, repeated-failure, no-progress, or oscillation reason was reported. This is a fixed wall-time continuation gate of the exact kind the approved efficiency policy classifies as avoidable Human Owner attention.
 
-Issue #244 / PR #245 is now merged. Exact-head CI #428 passed structure, Router, Runtime and ddev-executor at `b58e590adf3c722249395babd219e804d4f4768b`; PM merged PR #245 at `5d7a812a6945c94fe85d27e7aa16e882ca2e85b0`. Effective adaptive WorkOrders now treat total elapsed wall time as telemetry/calibration rather than a standalone stop gate. Planner/executor/evaluator/verification operations remain bounded by their per-operation timeout caps; adaptive GitHub delivery keeps its own bounded attempt cap; input/output token ceilings, hard cost, scope, behavioral circuit breakers, protected decisions, and provider exhaustion remain fail-closed. Legacy-hard WorkOrders keep strict total wall-time behavior. Router is labeled `1.0.24`, Runtime `1.0.47`, routing policy v15.
+Issue #244 / PR #245 is now merged. Exact-head CI #428 passed structure, Router, Runtime and ddev-executor at `b58e590adf3c722249395babd219e804d4f4768b`; PM merged PR #245 at `5d7a812a6945c94fe85d27e7aa16e882ca2e85b0`. At that rollout stage, effective adaptive WorkOrders treated total elapsed wall time as telemetry/calibration rather than a standalone stop gate. Planner/executor/evaluator/verification operations remained bounded by their per-operation timeout caps; adaptive GitHub delivery kept its own bounded attempt cap; input/output token ceilings, hard cost, scope, behavioral circuit breakers, protected decisions, and provider exhaustion remained fail-closed. Legacy-hard WorkOrders kept strict total wall-time behavior. Router was labeled `1.0.24`, Runtime `1.0.47`, routing policy v15.
 
 Local activation of #244 completed during the guarded provider diagnostic: Router `1.0.24`, Runtime `1.0.47`, routing policy v15, deterministic suites green, and the preserved job was not resumed by activation. The same job had already advanced under v15 semantics to model calls `94`, iterations `51`, repairs `37`, tools `162`, tests `84`, input `5,814,761/8,000,000`, output `363,928/1,000,000`, elapsed `218.588`, semantic files `14`, and `unexpected_scope=false`.
 
@@ -154,7 +154,26 @@ Durable provider-wide failures for OpenRouter and Google Antigravity remained pr
 
 The stored `result_reason=provider_failure_without_fallback` immediately after reopen is historical terminal-result context from the prior blocked state, not the active state: durable job/orchestration state is authoritative and shows `verifying / running / executing`.
 
-Do not reroute, reset provider state, or use historical Telegram actions while this job remains active. Observe the same job until delivery/PR or an independent fail-closed condition appears.
+The same preserved job later advanced again without resets to model calls `132`, tools `206`, tests `122`, repairs `55`, elapsed `323.918` minutes and cache-aware input `8,072,466`. It then blocked at reassessment solely because the cumulative input counter crossed the adaptive high-water value `8,000,000`; no independent scope/protected-decision/provider-exhaustion condition was reported with that stop.
+
+## #252 cumulative-token healthy-progress alignment: source change in progress
+
+Live DEC-025C evidence proves that a fixed cumulative token total has the same structural problem previously found in work-shape and total-wall counters: a sufficiently large healthy ticket eventually crosses any absolute per-job total even when it is still making useful progress.
+
+Issue #252 therefore aligns executable behavior with the already-approved Constitution/#224 invariant rather than raising the 8M number again:
+
+- for effective `budget_mode=adaptive`, cumulative input/output token totals remain durable cache-aware telemetry and estimate/working/high-water signals, not standalone continuation gates;
+- strict cumulative token ceilings remain for explicit/legacy `legacy_hard` work;
+- hard monetary cost, authoritative provider exhaustion without fallback, scope/protected decisions, repeated failure/no-progress/diff oscillation and per-operation/provider context limits remain fail-closed;
+- historical #221 input-token owner-extension controls remain legacy compatibility only and are not exposed for adaptive jobs;
+- legacy-adaptive recovery may reopen the exact same blocked job only after a fresh route and fresh reassessment independently report healthy continuation;
+- no counter reset, job replacement, scope widening or production/trust-boundary change is authorized.
+
+Implementation branch: `ai/252-adaptive-cumulative-token-telemetry`.
+
+Planned rollout identities on that branch are Runtime `1.0.49`, Router `1.0.25`, routing policy v16.
+
+Keep DEC-025C-r2 blocked until #252 exact-head CI is green, the PR is merged, and a guarded local activation starts from zero active engineering work. Do not use the historical Telegram +1M token path to advance this adaptive job.
 
 ## Relevant completed follow-ups
 
@@ -184,11 +203,10 @@ Do not reroute, reset provider state, or use historical Telegram actions while t
 
 ## Immediate next safe actions
 
-1. Do not reroute DEC-025C-r2, clear provider/quota state, reset counters, replace the job, or use historical Telegram actions while the job is active.
-2. Observe the same job `eec59b13651c54559c10ce204380a68e`. Current authoritative state is `verifying / running / executing` after automatic quota rehabilitation.
-3. Treat `provider_capacity_recoveries=1` plus the audit record for `quota:codex_chatgpt_plus` as the live proof that #247 works end-to-end without Human Owner continuation clicks.
-4. Preserve the remaining OpenRouter and Google Antigravity provider-wide failures unless independent evidence proves they qualify for their own narrow recovery path; do not blanket-clear them.
-5. If the job reaches delivery/PR, apply normal deterministic CI and PM merge gates.
-6. If it blocks again, classify only the new independent blocker. Static work-shape counters and total adaptive wall time are telemetry; quota recovery should remain automatic when newer authoritative evidence restores an exact quota key and fresh Router routing succeeds.
-7. If a future blocker is provider-wide auth/config/provider-unavailable rather than quota/rate-limit, keep it fail-closed and surface the concrete provider evidence rather than auto-clearing it.
-8. Keep #146 open for the natural calibration evidence from this long-running same-job execution.
+1. Keep exact job `eec59b13651c54559c10ce204380a68e` blocked while #252 is under review. Do not reset counters/provider state, replace the job, force-complete it, or execute historical Telegram token actions.
+2. Complete #252 exact-head CI and PM review. The source change must prove adaptive cumulative-token thresholds are non-blocking while legacy-hard token ceilings, hard cost and independent anomaly/protected/provider gates remain strict.
+3. After merge, perform a guarded local activation only from zero active engineering work. Rebuild the affected Router/Runtime services from the merged source and run deterministic platform tests before allowing same-job recovery.
+4. On startup/reconciliation, permit automatic same-job legacy-adaptive recovery only if fresh Router route + fresh reassessment return healthy continuation. Preserve input `8,072,466` and every other durable counter monotonically.
+5. Preserve unrelated OpenRouter/Google Antigravity provider-wide failure state; do not blanket-clear it during #252 activation.
+6. If DEC-025C then reaches delivery/PR, apply normal deterministic CI and PM merge gates. If it blocks again, classify only the new independent blocker rather than another static cumulative counter.
+7. Keep #146 open for calibration evidence from this long-running same-job execution.
