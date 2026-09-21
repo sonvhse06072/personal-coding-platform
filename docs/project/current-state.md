@@ -156,11 +156,13 @@ The stored `result_reason=provider_failure_without_fallback` immediately after r
 
 The same preserved job later advanced again without resets to model calls `132`, tools `206`, tests `122`, repairs `55`, elapsed `323.918` minutes and cache-aware input `8,072,466`. It then blocked at reassessment solely because the cumulative input counter crossed the adaptive high-water value `8,000,000`; no independent scope/protected-decision/provider-exhaustion condition was reported with that stop.
 
-## #252 cumulative-token healthy-progress alignment: source change in progress
+## #252 cumulative-token healthy-progress alignment: merged, local activation pending
 
-Live DEC-025C evidence proves that a fixed cumulative token total has the same structural problem previously found in work-shape and total-wall counters: a sufficiently large healthy ticket eventually crosses any absolute per-job total even when it is still making useful progress.
+Live DEC-025C evidence proved that a fixed cumulative token total has the same structural problem previously found in work-shape and total-wall counters: a sufficiently large healthy ticket eventually crosses any absolute per-job total even when it is still making useful progress.
 
-Issue #252 therefore aligns executable behavior with the already-approved Constitution/#224 invariant rather than raising the 8M number again:
+Issue #252 / PR #253 is merged on `main`. Exact-head CI #442 passed structure, Router, Runtime and ddev-executor at `6b7a513ecb88c52b46f6f998b0dba94c9b952ef4`; PM merged PR #253 at `2c78d304bedbeda75a60f99b828e8820119b7f13`.
+
+Merged behavior aligns executable semantics with the already-approved Constitution/#224 invariant rather than raising the 8M number again:
 
 - for effective `budget_mode=adaptive`, cumulative input/output token totals remain durable cache-aware telemetry and estimate/working/high-water signals, not standalone continuation gates;
 - strict cumulative token ceilings remain for explicit/legacy `legacy_hard` work;
@@ -169,11 +171,9 @@ Issue #252 therefore aligns executable behavior with the already-approved Consti
 - legacy-adaptive recovery may reopen the exact same blocked job only after a fresh route and fresh reassessment independently report healthy continuation;
 - no counter reset, job replacement, scope widening or production/trust-boundary change is authorized.
 
-Implementation branch: `ai/252-adaptive-cumulative-token-telemetry`.
+Merged rollout identities are Runtime `1.0.49`, Router `1.0.25`, routing policy v16.
 
-Planned rollout identities on that branch are Runtime `1.0.49`, Router `1.0.25`, routing policy v16.
-
-Keep DEC-025C-r2 blocked until #252 exact-head CI is green, the PR is merged, and a guarded local activation starts from zero active engineering work. Do not use the historical Telegram +1M token path to advance this adaptive job.
+Local activation has **not** yet been proven. Keep DEC-025C-r2 blocked until a guarded local activation starts from zero active engineering work and deterministic platform validation passes. Do not use the historical Telegram +1M token path to advance this adaptive job.
 
 ## Relevant completed follow-ups
 
@@ -188,6 +188,7 @@ Keep DEC-025C-r2 blocked until #252 exact-head CI is green, the PR is merged, an
 - #240 / PR #241: adaptive work-shape counters made non-blocking while material/anomaly boundaries remain strict; exact-head CI #422 green; merged at `757a35f8823c9c3c30c1dfc95084dce369ef2308`.
 - #244 / PR #245: adaptive total wall time made telemetry while per-operation timeouts and independent safety gates remain strict; exact-head CI #428 green; merged at `5d7a812a6945c94fe85d27e7aa16e882ca2e85b0`.
 - #247 / PR #248: authoritative quota-capacity rehabilitation plus same-job automatic reopen; exact-head CI #432 green; merged at `edb30cbcc9b3ce67bf971289a3bb1c193686b7e8`.
+- #252 / PR #253: adaptive cumulative input/output token thresholds made non-blocking telemetry while legacy-hard token ceilings and independent safety gates remain strict; exact-head CI #442 green; merged at `2c78d304bedbeda75a60f99b828e8820119b7f13`.
 
 ## Global operational gates
 
@@ -203,9 +204,9 @@ Keep DEC-025C-r2 blocked until #252 exact-head CI is green, the PR is merged, an
 
 ## Immediate next safe actions
 
-1. Keep exact job `eec59b13651c54559c10ce204380a68e` blocked while #252 is under review. Do not reset counters/provider state, replace the job, force-complete it, or execute historical Telegram token actions.
-2. Complete #252 exact-head CI and PM review. The source change must prove adaptive cumulative-token thresholds are non-blocking while legacy-hard token ceilings, hard cost and independent anomaly/protected/provider gates remain strict.
-3. After merge, perform a guarded local activation only from zero active engineering work. Rebuild the affected Router/Runtime services from the merged source and run deterministic platform tests before allowing same-job recovery.
+1. Keep exact job `eec59b13651c54559c10ce204380a68e` blocked until #252 is locally activated. Do not reset counters/provider state, replace the job, force-complete it, or execute historical Telegram token actions.
+2. Sync local PCP to exact `main` containing merge `2c78d304bedbeda75a60f99b828e8820119b7f13`, verify zero active engineering work, then run deterministic source/platform checks before rebuilding the affected Router/Runtime services.
+3. After guarded activation, require deployed Runtime `1.0.49`, Router `1.0.25`, routing policy v16 and healthy platform checks.
 4. On startup/reconciliation, permit automatic same-job legacy-adaptive recovery only if fresh Router route + fresh reassessment return healthy continuation. Preserve input `8,072,466` and every other durable counter monotonically.
 5. Preserve unrelated OpenRouter/Google Antigravity provider-wide failure state; do not blanket-clear it during #252 activation.
 6. If DEC-025C then reaches delivery/PR, apply normal deterministic CI and PM merge gates. If it blocks again, classify only the new independent blocker rather than another static cumulative counter.
