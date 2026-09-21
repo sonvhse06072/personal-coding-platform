@@ -105,9 +105,30 @@ Retirement rules:
 - future DEC-025 progress belongs in the `chonhac` repository/operator evidence,
   not in PCP orchestration state.
 
+The local retirement cleanup is now complete:
+
+- Runtime job `eec59b13651c54559c10ce204380a68e` was observed `blocked` before cleanup;
+- the supported `POST /v1/jobs/{job_id}/cancel` transition persisted `cancelled`;
+- the supported cleanup endpoint with `remove_workspace=true` returned
+  `cleaned=true` and `workspace_removed=true`;
+- the exact workspace
+  `/home/sonvh/.coding-platform/workspaces/eec59b13651c54559c10ce204380a68e`
+  no longer exists;
+- a read after cleanup still returns the durable job identity with terminal
+  status `cancelled`; the public `JobView` intentionally does not expose the
+  internal progress/counter object, so the cleanup probe printing those fields
+  as null is not evidence of counter deletion;
+- ddev-executor reports `active_jobs=0`;
+- deployed Router is `1.0.25` with policy v16 and deployed Runtime is
+  `1.0.49`;
+- credential-boundary checks passed;
+- `n8n` was reported `DOWN` by aggregate `platform-status` during the
+  cleanup check and must be verified independently before claiming full
+  platform health.
+
 The merged #252 behavior remains part of the platform baseline: Runtime
-`1.0.49`, Router `1.0.25`, routing policy v16 when next activated for normal
-platform use. DEC-025 retirement is not a reason to roll those fixes back.
+`1.0.49`, Router `1.0.25`, routing policy v16. DEC-025 retirement is not a
+reason to roll those fixes back.
 
 ## Relevant completed follow-ups
 
@@ -138,10 +159,8 @@ platform use. DEC-025 retirement is not a reason to roll those fixes back.
 
 ## Immediate next safe actions
 
-1. Merge the `chonhac` documentation change that transfers DEC-025C–F to Human Owner/operator execution and supersedes the old PM plan.
-2. On the local PCP instance, confirm job `eec59b13651c54559c10ce204380a68e` is not actively executing, cancel it through the supported Runtime API, and then run job cleanup with `remove_workspace=true`.
-3. Verify the job is `cancelled`, the exact DEC workspace is gone, no other workspace/job was removed, and no active engineering job was affected.
-4. Keep the durable plan/WorkOrder/job rows as historical audit evidence; do not delete or rewrite Runtime database state.
-5. Do not create a replacement DEC-025 plan. Future DEC-025 evidence is Human Owner-managed in `chonhac`.
-6. Activate Runtime `1.0.49` / Router `1.0.25` / policy v16 later under the normal zero-active-work rollout gate when the platform next needs those merged fixes.
-7. Keep #146 open for calibration evidence already learned from the retired long-running DEC execution.
+1. DEC-025 cleanup is complete. Do not recreate or resume a PCP plan/job for DEC-025; future DEC-025 evidence is Human Owner-managed in `chonhac`.
+2. Keep the cancelled durable job/plan/WorkOrder rows as audit history and do not hand-edit Runtime database state.
+3. Independently verify the `n8n` health endpoint because aggregate `platform-status` reported `n8n DOWN`; treat this as a separate platform-health item, not a DEC cleanup failure.
+4. If n8n is actually down, recover it through the normal service path only while `active_jobs=0`, then re-run `ddev platform-status`.
+5. Keep #146 open for calibration evidence already learned from the retired long-running DEC execution.
