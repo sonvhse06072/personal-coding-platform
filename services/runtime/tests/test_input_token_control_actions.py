@@ -38,6 +38,7 @@ def live_job(
     reassess_reason="input-token budget exceeded",
     signals=None,
     last_failure="",
+    budget_mode=None,
 ):
     result = {"reason": reason}
     if reason == "reassessment_stopped":
@@ -59,6 +60,7 @@ def live_job(
         "updated_at": "2026-09-17T06:00:00+00:00",
         "route": {
             "strategy": {
+                "budget_mode": budget_mode,
                 "budget": {
                     "max_model_calls": 30,
                     "max_input_tokens": max_input_tokens,
@@ -145,6 +147,23 @@ def test_live_dec025c_overrun_exposes_exact_bounded_input_token_recovery():
         "details",
         "keep_blocked",
     ]
+
+
+def test_adaptive_dec_token_overrun_exposes_no_owner_token_extension():
+    current = live_job(
+        input_tokens=8_072_466,
+        max_input_tokens=8_000_000,
+        budget_mode="adaptive",
+    )
+    controls, _ = service(current)
+
+    advisory = controls.blocked_advisory(work_order_row(), current)
+
+    assert all(
+        item.get("payload", {}).get("dimension") != "max_input_tokens"
+        for item in advisory["action_specs"]
+    )
+    assert all("4.000.000" not in str(value) for value in advisory.values())
 
 
 def test_direct_input_token_exhaustion_maps_to_same_recovery_dimension():
