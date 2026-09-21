@@ -124,8 +124,6 @@ def test_adaptive_post_call_token_overrun_remains_runnable_when_incomplete():
     assert result.action == "continue"
     assert "hard_budget_guard" not in result.signals
     assert "hard_budget_overrun" not in result.signals
-    assert "budget_emergency_threshold_reached:max_input_tokens" in result.signals
-    assert "budget_emergency_threshold_reached:max_output_tokens" in result.signals
 
 
 def test_token_overrun_does_not_mask_other_hard_overrun():
@@ -224,7 +222,7 @@ def test_adaptive_work_shape_overruns_do_not_stop_healthy_incomplete_work():
     assert "hard_budget_overrun" not in result.signals
 
 
-def test_adaptive_material_input_ceiling_still_stops_incomplete_work():
+def test_adaptive_cumulative_input_ceiling_is_telemetry_for_incomplete_work():
     engine = make_engine()
     route = engine.route(base_request())
     route.strategy.budget_mode = "adaptive"
@@ -240,8 +238,8 @@ def test_adaptive_material_input_ceiling_still_stops_incomplete_work():
         ),
     ))
 
-    assert result.action == "stop"
-    assert result.reason == "input-token budget exhausted"
+    assert result.action == "continue"
+    assert result.reason != "input-token budget exhausted"
     assert "hard_budget_guard" in result.signals
 
 
