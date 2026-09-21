@@ -75,6 +75,7 @@ def test_token_profile_prior_is_not_a_stop_point():
 def test_dec_025c_input_usage_continues_inside_material_circuit_breaker():
     engine = make_engine()
     route = engine.route(request())
+    route.strategy.budget_mode = "adaptive"
 
     result = engine.reassess(ReassessRequest(
         route=route,
@@ -91,14 +92,37 @@ def test_dec_025c_input_usage_continues_inside_material_circuit_breaker():
     assert route.strategy.budget.max_input_tokens == 8_000_000
 
 
-def test_material_input_token_hard_cap_still_fails_closed():
+def test_adaptive_cumulative_input_token_high_water_is_non_blocking():
     engine = make_engine()
     route = engine.route(request())
+    route.strategy.budget_mode = "adaptive"
 
     result = engine.reassess(ReassessRequest(
         route=route,
         progress=ExecutionProgress(
-            input_tokens=8_000_000,
+            input_tokens=8_072_466,
+            tests_passed=False,
+            required_checks_passed=False,
+            agent_succeeded=True,
+        ),
+    ))
+
+    assert result.action != "stop"
+    assert result.reason != "input-token budget exhausted"
+    assert "hard_budget_guard" not in result.signals
+    assert "hard_budget_overrun" not in result.signals
+    assert "budget_emergency_threshold_reached:max_input_tokens" in result.signals
+
+
+def test_legacy_hard_cumulative_input_token_limit_still_fails_closed():
+    engine = make_engine()
+    route = engine.route(request())
+    route.strategy.budget_mode = "legacy_hard"
+
+    result = engine.reassess(ReassessRequest(
+        route=route,
+        progress=ExecutionProgress(
+            input_tokens=route.strategy.budget.max_input_tokens,
             tests_passed=False,
             required_checks_passed=False,
             agent_succeeded=True,
@@ -107,6 +131,27 @@ def test_material_input_token_hard_cap_still_fails_closed():
 
     assert result.action == "stop"
     assert result.reason == "input-token budget exhausted"
+    assert "hard_budget_guard" in result.signals
+
+
+def test_adaptive_hard_cost_remains_fail_closed_above_token_high_water():
+    engine = make_engine()
+    route = engine.route(request())
+    route.strategy.budget_mode = "adaptive"
+
+    result = engine.reassess(ReassessRequest(
+        route=route,
+        progress=ExecutionProgress(
+            input_tokens=8_072_466,
+            cost_usd=route.strategy.budget.hard_cost_usd,
+            tests_passed=False,
+            required_checks_passed=False,
+            agent_succeeded=True,
+        ),
+    ))
+
+    assert result.action == "stop"
+    assert result.reason == "hard cost budget exhausted"
     assert "hard_budget_guard" in result.signals
 
 

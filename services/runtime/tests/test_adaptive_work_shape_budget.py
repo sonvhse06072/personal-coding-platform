@@ -60,9 +60,10 @@ def test_legacy_hard_work_shape_counters_remain_strict() -> None:
     assert reason == "model-call budget exhausted"
 
 
-def test_adaptive_material_token_ceiling_remains_hard() -> None:
+def test_adaptive_cumulative_token_high_water_does_not_block_next_turn() -> None:
     state = progress()
-    state["input_tokens"] = 8_000_000
+    state["input_tokens"] = 8_072_466
+    state["output_tokens"] = 1_050_000
 
     reason = RuntimeEngineCore._pre_model_budget_reason(
         state,
@@ -70,7 +71,43 @@ def test_adaptive_material_token_ceiling_remains_hard() -> None:
         include_iteration=True,
     )
 
+    assert reason is None
+
+
+def test_legacy_hard_cumulative_token_ceiling_remains_strict() -> None:
+    state = progress()
+    state.update({
+        "model_calls": 1,
+        "input_tokens": 8_000_000,
+        "output_tokens": 100,
+        "tool_calls": 1,
+        "test_runs": 1,
+        "repair_iterations": 1,
+        "iteration": 1,
+        "elapsed_minutes": 10.0,
+    })
+
+    reason = RuntimeEngineCore._pre_model_budget_reason(
+        state,
+        strategy=strategy(mode="legacy_hard"),
+        include_iteration=True,
+    )
+
     assert reason == "input-token budget exhausted"
+
+
+def test_adaptive_hard_cost_still_blocks_above_token_high_water() -> None:
+    state = progress()
+    state["input_tokens"] = 8_072_466
+    state["cost_usd"] = 5.0
+
+    reason = RuntimeEngineCore._pre_model_budget_reason(
+        state,
+        strategy=strategy(mode="adaptive"),
+        include_iteration=True,
+    )
+
+    assert reason == "hard cost budget exhausted"
 
 
 def test_adaptive_total_wall_time_is_non_blocking() -> None:

@@ -39,11 +39,12 @@ class LegacyAdaptiveRecovery:
     WorkOrder scope remain untouched; only the effective Router route is
     refreshed after a fail-closed health reassessment.
 
-    A historical budget guard/overrun is only a candidate for recovery. The
-    freshly routed job must fit the current adaptive emergency envelope and the
-    fresh reassessment must return ``continue`` without anomaly/protected-decision
-    signals. This lets healthy legacy work cross obsolete profile counters while
-    preserving genuine circuit breakers.
+    A historical budget guard/overrun is only a candidate for recovery. A fresh
+    adaptive route plus fresh reassessment must return ``continue`` without
+    anomaly/protected-decision signals. Static cumulative token high-water marks
+    do not independently reject adoption; the fresh adaptive reassessment owns
+    material/anomaly decisions. This lets healthy legacy work cross obsolete
+    profile counters while preserving genuine circuit breakers.
     """
 
     def __init__(self, storage: Any, engine: Any, store: Any) -> None:
@@ -222,18 +223,6 @@ class LegacyAdaptiveRecovery:
         previous_route = dict(job.get("route") or {})
         previous_budget = dict((previous_route.get("strategy") or {}).get("budget") or {})
         new_budget = dict((fresh_route.get("strategy") or {}).get("budget") or {})
-
-        # A fresh adaptive reassessment owns work-shape decisions. Only
-        # material resource ceilings independently prevent compatibility recovery.
-        counter_map = {
-            "max_input_tokens": "input_tokens",
-            "max_output_tokens": "output_tokens",
-        }
-        for dimension, counter in counter_map.items():
-            if dimension not in new_budget:
-                continue
-            if float(progress.get(counter, 0) or 0) >= float(new_budget[dimension]):
-                return None
 
         checkpoint = clear_routing_choices_for_resume(checkpoint)
         route_history = list(checkpoint.get("route_history") or [])

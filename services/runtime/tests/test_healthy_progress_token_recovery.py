@@ -247,12 +247,20 @@ def test_dec_token_overrun_stays_blocked_when_fresh_reassessment_finds_anomaly()
     assert engine.enqueued == []
 
 
-def test_dec_token_overrun_stays_blocked_when_fresh_material_cap_is_already_exhausted():
+def test_dec_token_overrun_above_fresh_high_water_auto_adopts_when_reassessment_is_healthy():
     storage = FakeStorage()
-    storage.job["progress"]["input_tokens"] = 8_000_000
+    storage.job["progress"]["input_tokens"] = 8_072_466
+    store = FakeStore()
     engine = FakeEngine(FakeDelegate())
-    recovery = LegacyAdaptiveRecovery(storage, engine, FakeStore())
+    recovery = LegacyAdaptiveRecovery(storage, engine, store)
 
-    assert asyncio.run(recovery.recover_one()) is None
-    assert storage.job["status"] == "blocked"
-    assert engine.enqueued == []
+    result = asyncio.run(recovery.recover_one())
+
+    assert result is not None
+    assert result["job_id"] == "eec59b13651c54559c10ce204380a68e"
+    assert storage.job["status"] == "queued"
+    assert storage.job["progress"]["input_tokens"] == 8_072_466
+    assert storage.job["workspace"] == "/home/sonvh/.coding-platform/workspaces/eec59b13651c54559c10ce204380a68e"
+    assert engine.enqueued == ["eec59b13651c54559c10ce204380a68e"]
+    assert store.work_order_updates[-1][2]["state"] == "running"
+    assert store.plan_updates[-1] == ("pm-gh-5650852312", "executing")
