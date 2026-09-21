@@ -122,9 +122,11 @@ The local retirement cleanup is now complete:
 - deployed Router is `1.0.25` with policy v16 and deployed Runtime is
   `1.0.49`;
 - credential-boundary checks passed;
-- `n8n` was reported `DOWN` by aggregate `platform-status` during the
-  cleanup check and must be verified independently before claiming full
-  platform health.
+- aggregate `platform-status` reported `n8n DOWN` during the cleanup check,
+  but an immediate direct in-container probe of
+  `http://127.0.0.1:5678/healthz` returned HTTP 200 with
+  `{"status":"ok"}`; treat the earlier aggregate line as a transient
+  false-negative rather than an n8n outage.
 
 The merged #252 behavior remains part of the platform baseline: Runtime
 `1.0.49`, Router `1.0.25`, routing policy v16. DEC-025 retirement is not a
@@ -161,6 +163,5 @@ reason to roll those fixes back.
 
 1. DEC-025 cleanup is complete. Do not recreate or resume a PCP plan/job for DEC-025; future DEC-025 evidence is Human Owner-managed in `chonhac`.
 2. Keep the cancelled durable job/plan/WorkOrder rows as audit history and do not hand-edit Runtime database state.
-3. Independently verify the `n8n` health endpoint because aggregate `platform-status` reported `n8n DOWN`; treat this as a separate platform-health item, not a DEC cleanup failure.
-4. If n8n is actually down, recover it through the normal service path only while `active_jobs=0`, then re-run `ddev platform-status`.
-5. Keep #146 open for calibration evidence already learned from the retired long-running DEC execution.
+3. No n8n recovery is required: the direct health probe returned HTTP 200 with `{"status":"ok"}`; retain awareness that aggregate `platform-status` can transiently false-negative this service.
+4. Keep #146 open for calibration evidence already learned from the retired long-running DEC execution.
