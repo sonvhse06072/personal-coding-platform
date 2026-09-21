@@ -2,14 +2,14 @@
 
 Status: mutable continuity document. Repository docs and executable evidence are authoritative over chat history. Durable architecture/product/policy decisions remain in their topical source-of-truth documents.
 
-Last updated: 2026-09-21
+Last updated: 2026-09-22
 
 ## Resume order
 
 1. Read repository-root `AGENTS.md`.
 2. Read `docs/project/constitution.md`, `docs/project/operating-model.md`, `docs/project/efficiency-model.md`, and `docs/project/provider-policy.md`.
 3. Read this continuity document.
-4. Inspect current GitHub `main`, active issue/PR, local service versions, and the exact durable DEC-025C-r2 state before any rollout or resume action.
+4. Inspect current GitHub `main`, active issue/PR and local service versions. The former `chonhac` DEC-025C orchestration is retired and must not be resumed.
 
 ## Platform baseline
 
@@ -69,111 +69,45 @@ Merged behavior:
 
 Local activation of #228/#229 is complete. The guarded activation re-entry passed with exit code 0 on source `141d630f2523a968352ee86e80d2002d5f3fe6b3`: Router `1.0.22`, Runtime `1.0.45`, routing policy v13, deterministic platform tests green, and the preserved DEC-025C-r2 remained blocked and was not resumed during rollout. The workspace was exactly 14/14 semantic files and no job/counter/provider-state reset or replacement occurred.
 
-The next operation is no longer a rollout. Recover the exact same DEC-025C-r2 job once through a fresh explicit reroute with `reset_transient_provider_failures=false`; then let Runtime/Router autonomously traverse eligible provider capacity. Do not use historical Telegram reroute buttons merely to advance provider selection.
+This DEC-025C run later served as useful live calibration for provider recovery and adaptive-budget defects. It is now historical platform evidence only. The Human Owner has taken direct ownership of the remaining DEC-025 work in `chonhac`; do not reroute or resume this job.
 
-## Preserved `chonhac` DEC-025C-r2
+## Retired `chonhac` DEC-025C orchestration
 
-Identity remains:
+The Human Owner has taken direct operator ownership of the complete remaining
+DEC-025 pre-beta hardening gate in `chonhac`. Personal Coding Platform
+orchestration for DEC-025 is retired.
+
+Historical identity retained for audit:
 
 - plan: `pm-gh-5650852312`;
 - WorkOrder: `DEC-025C-1-recovery-tooling-r2`;
 - job: `eec59b13651c54559c10ce204380a68e`;
 - branch: `ai/eec59b13651c`;
 - workspace: `/home/sonvh/.coding-platform/workspaces/eec59b13651c54559c10ce204380a68e`;
-- approved source baseline: `b143fbb001c2006ec82570619802b607085fbeb0`.
+- source baseline: `b143fbb001c2006ec82570619802b607085fbeb0`.
 
-Provider recovery #228 was activated and the same preserved job was explicitly rerouted once without resetting counters/provider state. The job resumed successfully, advanced through additional execution/verification work, and later blocked again.
+Final retained telemetry before retirement included model calls `132`, tools
+`206`, tests `122`, repairs `55`, elapsed `323.918` minutes and
+cache-aware input `8,072,466`. The run exposed several PCP defects that were
+subsequently fixed (#238, #240, #244, #247 and #252); those fixes remain valid
+platform work independent of the retired product WorkOrder.
 
-Latest durable state:
+Retirement rules:
 
-- status: `blocked`;
-- result reason: `reassessment_stopped`;
-- reassessment reason: `model-call budget exhausted`;
-- model calls: `40/40`;
-- iterations: `24/24`;
-- repair iterations: `12/12`;
-- tool calls: `106/400`;
-- tests: `34/40`, with `tests_passed=true`;
-- input tokens: `3,931,952/8,000,000`;
-- output tokens: `236,484/1,000,000`;
-- changed files: `16/14`;
-- `unexpected_scope=true`;
-- executor remains `codex_terra / openai`;
-- evaluator route remains `openrouter_qwen3_coder_free / openrouter`.
+- do not activate #252 merely to continue this DEC job;
+- do not reroute, resume, force-complete or replay historical Telegram actions;
+- cancel the durable job through the Runtime API, then invoke the supported
+  cleanup endpoint with `remove_workspace=true`;
+- retain durable job/plan/WorkOrder records as audit history rather than
+  hand-editing/deleting database rows;
+- after cancellation, the old workspace may be removed because the Human Owner
+  explicitly chose to discard the unmerged C1 work and execute DEC-025 manually;
+- future DEC-025 progress belongs in the `chonhac` repository/operator evidence,
+  not in PCP orchestration state.
 
-The same-job recovery preserved job/workspace/source/branch/counters and proved that provider failover is no longer the immediate Human Owner gate. The current stop is instead the configured emergency execution ceiling plus an apparent scope signal.
-
-The scope signal was confirmed as a Runtime accounting defect rather than semantic WorkOrder expansion: the workspace was verified at exactly 14/14 semantic files immediately before recovery, and agent/test traces repeatedly generated `infra/staging/dec025c/__pycache__/*.pyc`. Issue #238 / PR #239 fixed Runtime so untracked Python bytecode cannot be intent-added, counted, diffed or committed while intentionally tracked bytecode remains visible; PR #239 merged at `b21868ec157aa5a7d3d550813de8b7c51c1cdb88` after exact-head CI #418 passed.
-
-The remaining block exposed a second executable mismatch. Model calls `40/40`, iterations `24/24`, and repair iterations `12/12` are static work-shape counters. The Human Owner reaffirmed that healthy-progress work must not stop solely at those counters.
-
-Issue #240 / PR #241 is now merged. Exact-head CI #422 passed structure, Router, Runtime and ddev-executor at `c92f75a9b6738c8bd572d4103d71e84989846e57`; PM merged PR #241 at `757a35f8823c9c3c30c1dfc95084dce369ef2308`. At that rollout stage, effective adaptive WorkOrders treated model/tool/test/iteration/repair/model-failover/provider-failover thresholds as telemetry/reassessment inputs while token volume, wall time, hard cost, changed-file scope, anomaly, protected-decision and authoritative provider-exhaustion boundaries remained fail-closed. Router was labeled `1.0.23`, Runtime `1.0.46`, routing policy v14.
-
-Local activation is complete. The guarded activation/re-entry passed on exact main `6c26bb3a4eb0bc6547f17e9dd7baa681dd61af97`: Router `1.0.23`, Runtime `1.0.46`, routing policy v14, direct n8n health green, zero active work before both selective rebuilds, Runtime deterministic suite `349 passed`, and startup did not mutate the preserved DEC job.
-
-Runtime #238 recomputed the workspace as exactly 14 semantic files, proving the prior `16/14` / `unexpected_scope=true` state was generated-bytecode residue. Before re-entry the material gate still had headroom: input `3,931,952/8,000,000`, output `236,484/1,000,000`, wall `158.232/180`, cost `0/5`, and zero important decisions.
-
-The exact same DEC job was then explicitly rerouted once with transient provider failures preserved. Identity and counters were unchanged across re-entry. Immediate live state was `verifying`, plan `executing`, WorkOrder `running`, effective `budget_mode=adaptive`, with work-shape counters still at model calls `40`, iterations `24`, repairs `12`, tests `34`, and tools `106`. This is the first live proof that the v14 route accepts a same-job re-entry at previously blocking work-shape thresholds.
-
-The v14 live run then provided stronger calibration evidence. Without any counter reset or replacement job, DEC-025C-r2 advanced from model calls `40` / iterations `24` / repairs `12` to model calls `59` / iterations `34` / repairs `21`, with tools `127`, tests `52`, semantic changed files `14`, `unexpected_scope=false`, input tokens `4,578,495/8,000,000`, and the same adaptive route. This proves #240 removed the former work-shape gates in live execution.
-
-The next block occurred at total elapsed wall time `180.084/180` with result reason `execution_budget_exhausted`; plan and WorkOrder both became blocked. No concurrent scope, token, cost, protected-decision, provider-capacity, repeated-failure, no-progress, or oscillation reason was reported. This is a fixed wall-time continuation gate of the exact kind the approved efficiency policy classifies as avoidable Human Owner attention.
-
-Issue #244 / PR #245 is now merged. Exact-head CI #428 passed structure, Router, Runtime and ddev-executor at `b58e590adf3c722249395babd219e804d4f4768b`; PM merged PR #245 at `5d7a812a6945c94fe85d27e7aa16e882ca2e85b0`. At that rollout stage, effective adaptive WorkOrders treated total elapsed wall time as telemetry/calibration rather than a standalone stop gate. Planner/executor/evaluator/verification operations remained bounded by their per-operation timeout caps; adaptive GitHub delivery kept its own bounded attempt cap; input/output token ceilings, hard cost, scope, behavioral circuit breakers, protected decisions, and provider exhaustion remained fail-closed. Legacy-hard WorkOrders kept strict total wall-time behavior. Router was labeled `1.0.24`, Runtime `1.0.47`, routing policy v15.
-
-Local activation of #244 completed during the guarded provider diagnostic: Router `1.0.24`, Runtime `1.0.47`, routing policy v15, deterministic suites green, and the preserved job was not resumed by activation. The same job had already advanced under v15 semantics to model calls `94`, iterations `51`, repairs `37`, tools `162`, tests `84`, input `5,814,761/8,000,000`, output `363,928/1,000,000`, elapsed `218.588`, semantic files `14`, and `unexpected_scope=false`.
-
-The current blocker is now a genuine provider-capacity state: `codex_terra / openai` returned `quota_exhausted`, Runtime recorded `provider_failure_without_fallback`, and a fresh RouterClient diagnostic using durable provider state plus live quota telemetry returned `NO_ELIGIBLE_ROUTE`. No job/counter/provider-state reset occurred.
-
-Source review then exposed a recovery-liveness defect: pre-fix Codex quota failures can be stored provider-wide, and live authoritative quota telemetry was merged with durable failed-state using fail-closed AND semantics, so a quota bucket could remain durably unavailable even after an authoritative post-reset observation proved capacity returned.
-
-Issue #247 / PR #248 is now merged. Exact-head CI #432 passed structure, Router, Runtime and ddev-executor at `b3a2c9aec07fe5326b50d2c59969a549face6e22`; PM merged PR #248 at `edb30cbcc9b3ce67bf971289a3bb1c193686b7e8`. Runtime now narrows quota/rate-limit failures to registered quota scope, timestamps durable quota failures, accepts rehabilitation only from a newer authoritative available observation for the exact quota key, and uses the existing orchestrator polling loop to reopen the exact same blocked job only when a fresh Router route also succeeds. Stale observations, reset time alone, auth/config/provider-wide failures, and fresh-route failures remain fail-closed without durable mutation.
-
-Merged service target is Runtime `1.0.48`; Router remains `1.0.24`; routing policy remains v15.
-
-Local activation is complete on exact main `85b2b79a89279063f7178da3ff68b87752701f91`. Guarded rollout preserved the exact DEC-025C-r2 identity, workspace, source, branch and counters. Runtime `1.0.48`, Router `1.0.24`, policy v15 and direct n8n health all passed.
-
-The live provider-capacity recovery path was then proven end-to-end. Before recovery, `provider_capacity_recoveries=0`. A fresh authoritative Codex quota snapshot reported `quota:codex_chatgpt_plus` available with `used_percent=0` / `remaining_percent=100`; the orchestrator recorded `authoritative_quota_capacity_recovered`, rehabilitated exactly `quota:codex_chatgpt_plus`, obtained a valid fresh route, and automatically reopened the exact same job/WorkOrder/plan without any Human Owner continuation action. The audit record preserved the prior block reason `provider_failure_without_fallback` and the authoritative observation timestamp.
-
-After automatic reopen:
-- job status: `verifying`;
-- WorkOrder state: `running`;
-- plan status: `executing`;
-- executor: `codex_terra / openai`;
-- evaluator: `codex_sol / openai`;
-- model calls `94`, iterations `51`, repairs `37`, tools `162`, tests `84`;
-- input `5,814,761`, output `363,928`, elapsed `218.588`;
-- semantic changed files `14`;
-- `unexpected_scope=false`;
-- same-job identity unchanged;
-- counters unchanged across reopen and monotonicity passed;
-- `provider_capacity_recoveries` increased `0 -> 1`;
-- no blanket provider reset occurred.
-
-Durable provider-wide failures for OpenRouter and Google Antigravity remained preserved. The recovered Codex quota key was not blanket-cleared with unrelated failure state; only the authoritative recovered quota scope was rehabilitated.
-
-The stored `result_reason=provider_failure_without_fallback` immediately after reopen is historical terminal-result context from the prior blocked state, not the active state: durable job/orchestration state is authoritative and shows `verifying / running / executing`.
-
-The same preserved job later advanced again without resets to model calls `132`, tools `206`, tests `122`, repairs `55`, elapsed `323.918` minutes and cache-aware input `8,072,466`. It then blocked at reassessment solely because the cumulative input counter crossed the adaptive high-water value `8,000,000`; no independent scope/protected-decision/provider-exhaustion condition was reported with that stop.
-
-## #252 cumulative-token healthy-progress alignment: merged, local activation pending
-
-Live DEC-025C evidence proved that a fixed cumulative token total has the same structural problem previously found in work-shape and total-wall counters: a sufficiently large healthy ticket eventually crosses any absolute per-job total even when it is still making useful progress.
-
-Issue #252 / PR #253 is merged on `main`. Exact-head CI #442 passed structure, Router, Runtime and ddev-executor at `6b7a513ecb88c52b46f6f998b0dba94c9b952ef4`; PM merged PR #253 at `2c78d304bedbeda75a60f99b828e8820119b7f13`.
-
-Merged behavior aligns executable semantics with the already-approved Constitution/#224 invariant rather than raising the 8M number again:
-
-- for effective `budget_mode=adaptive`, cumulative input/output token totals remain durable cache-aware telemetry and estimate/working/high-water signals, not standalone continuation gates;
-- strict cumulative token ceilings remain for explicit/legacy `legacy_hard` work;
-- hard monetary cost, authoritative provider exhaustion without fallback, scope/protected decisions, repeated failure/no-progress/diff oscillation and per-operation/provider context limits remain fail-closed;
-- historical #221 input-token owner-extension controls remain legacy compatibility only and are not exposed for adaptive jobs;
-- legacy-adaptive recovery may reopen the exact same blocked job only after a fresh route and fresh reassessment independently report healthy continuation;
-- no counter reset, job replacement, scope widening or production/trust-boundary change is authorized.
-
-Merged rollout identities are Runtime `1.0.49`, Router `1.0.25`, routing policy v16.
-
-Local activation has **not** yet been proven. Keep DEC-025C-r2 blocked until a guarded local activation starts from zero active engineering work and deterministic platform validation passes. Do not use the historical Telegram +1M token path to advance this adaptive job.
+The merged #252 behavior remains part of the platform baseline: Runtime
+`1.0.49`, Router `1.0.25`, routing policy v16 when next activated for normal
+platform use. DEC-025 retirement is not a reason to roll those fixes back.
 
 ## Relevant completed follow-ups
 
@@ -204,10 +138,10 @@ Local activation has **not** yet been proven. Keep DEC-025C-r2 blocked until a g
 
 ## Immediate next safe actions
 
-1. Keep exact job `eec59b13651c54559c10ce204380a68e` blocked until #252 is locally activated. Do not reset counters/provider state, replace the job, force-complete it, or execute historical Telegram token actions.
-2. Sync local PCP to exact `main` containing merge `2c78d304bedbeda75a60f99b828e8820119b7f13`, verify zero active engineering work, then run deterministic source/platform checks before rebuilding the affected Router/Runtime services.
-3. After guarded activation, require deployed Runtime `1.0.49`, Router `1.0.25`, routing policy v16 and healthy platform checks.
-4. On startup/reconciliation, permit automatic same-job legacy-adaptive recovery only if fresh Router route + fresh reassessment return healthy continuation. Preserve input `8,072,466` and every other durable counter monotonically.
-5. Preserve unrelated OpenRouter/Google Antigravity provider-wide failure state; do not blanket-clear it during #252 activation.
-6. If DEC-025C then reaches delivery/PR, apply normal deterministic CI and PM merge gates. If it blocks again, classify only the new independent blocker rather than another static cumulative counter.
-7. Keep #146 open for calibration evidence from this long-running same-job execution.
+1. Merge the `chonhac` documentation change that transfers DEC-025C–F to Human Owner/operator execution and supersedes the old PM plan.
+2. On the local PCP instance, confirm job `eec59b13651c54559c10ce204380a68e` is not actively executing, cancel it through the supported Runtime API, and then run job cleanup with `remove_workspace=true`.
+3. Verify the job is `cancelled`, the exact DEC workspace is gone, no other workspace/job was removed, and no active engineering job was affected.
+4. Keep the durable plan/WorkOrder/job rows as historical audit evidence; do not delete or rewrite Runtime database state.
+5. Do not create a replacement DEC-025 plan. Future DEC-025 evidence is Human Owner-managed in `chonhac`.
+6. Activate Runtime `1.0.49` / Router `1.0.25` / policy v16 later under the normal zero-active-work rollout gate when the platform next needs those merged fixes.
+7. Keep #146 open for calibration evidence already learned from the retired long-running DEC execution.
