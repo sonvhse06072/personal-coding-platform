@@ -129,7 +129,32 @@ Source review then exposed a recovery-liveness defect: pre-fix Codex quota failu
 
 Issue #247 / PR #248 is now merged. Exact-head CI #432 passed structure, Router, Runtime and ddev-executor at `b3a2c9aec07fe5326b50d2c59969a549face6e22`; PM merged PR #248 at `edb30cbcc9b3ce67bf971289a3bb1c193686b7e8`. Runtime now narrows quota/rate-limit failures to registered quota scope, timestamps durable quota failures, accepts rehabilitation only from a newer authoritative available observation for the exact quota key, and uses the existing orchestrator polling loop to reopen the exact same blocked job only when a fresh Router route also succeeds. Stale observations, reset time alone, auth/config/provider-wide failures, and fresh-route failures remain fail-closed without durable mutation.
 
-Merged service target is Runtime `1.0.48`; Router remains `1.0.24`; routing policy remains v15. Local Runtime activation is pending. Keep DEC-025C-r2 blocked until the guarded rollout; do not clear provider state manually, do not use old Telegram buttons, and do not create a replacement job.
+Merged service target is Runtime `1.0.48`; Router remains `1.0.24`; routing policy remains v15.
+
+Local activation is complete on exact main `85b2b79a89279063f7178da3ff68b87752701f91`. Guarded rollout preserved the exact DEC-025C-r2 identity, workspace, source, branch and counters. Runtime `1.0.48`, Router `1.0.24`, policy v15 and direct n8n health all passed.
+
+The live provider-capacity recovery path was then proven end-to-end. Before recovery, `provider_capacity_recoveries=0`. A fresh authoritative Codex quota snapshot reported `quota:codex_chatgpt_plus` available with `used_percent=0` / `remaining_percent=100`; the orchestrator recorded `authoritative_quota_capacity_recovered`, rehabilitated exactly `quota:codex_chatgpt_plus`, obtained a valid fresh route, and automatically reopened the exact same job/WorkOrder/plan without any Human Owner continuation action. The audit record preserved the prior block reason `provider_failure_without_fallback` and the authoritative observation timestamp.
+
+After automatic reopen:
+- job status: `verifying`;
+- WorkOrder state: `running`;
+- plan status: `executing`;
+- executor: `codex_terra / openai`;
+- evaluator: `codex_sol / openai`;
+- model calls `94`, iterations `51`, repairs `37`, tools `162`, tests `84`;
+- input `5,814,761`, output `363,928`, elapsed `218.588`;
+- semantic changed files `14`;
+- `unexpected_scope=false`;
+- same-job identity unchanged;
+- counters unchanged across reopen and monotonicity passed;
+- `provider_capacity_recoveries` increased `0 -> 1`;
+- no blanket provider reset occurred.
+
+Durable provider-wide failures for OpenRouter and Google Antigravity remained preserved. The recovered Codex quota key was not blanket-cleared with unrelated failure state; only the authoritative recovered quota scope was rehabilitated.
+
+The stored `result_reason=provider_failure_without_fallback` immediately after reopen is historical terminal-result context from the prior blocked state, not the active state: durable job/orchestration state is authoritative and shows `verifying / running / executing`.
+
+Do not reroute, reset provider state, or use historical Telegram actions while this job remains active. Observe the same job until delivery/PR or an independent fail-closed condition appears.
 
 ## Relevant completed follow-ups
 
@@ -159,12 +184,11 @@ Merged service target is Runtime `1.0.48`; Router remains `1.0.24`; routing poli
 
 ## Immediate next safe actions
 
-1. Keep DEC-025C-r2 blocked until guarded local activation of Runtime `1.0.48`; do not clear provider/quota state, reset counters, replace the job, or use historical Telegram actions.
-2. Fast-forward the local PCP checkout to exact reviewed main after this continuity merge and require a clean tree plus zero active jobs/plans/busy WorkOrders before service mutation.
-3. Rebuild Runtime only. Router remains `1.0.24` on routing policy v15 and should be health-verified but not rebuilt.
-4. Require Runtime `1.0.48`, deterministic Runtime tests, direct n8n health, Router health, and unchanged preserved DEC identity/counters.
-5. Runtime startup/orchestrator polling may legitimately auto-recover DEC-025C-r2 during or after activation **only** if a newer authoritative available quota observation rehabilitates an exact failed quota key and a fresh Router route succeeds.
-6. If automatic recovery occurs, verify exact same job/workspace/source/branch, monotonic counters, WorkOrder/plan reopened, and a `provider_capacity_recoveries` audit record. Do not interpret this expected state transition as an activation failure.
-7. If the job remains blocked, leave it blocked. The existing orchestrator loop will continue checking authoritative quota evidence; no owner continuation click is required.
-8. Auth/config/provider-wide failures and genuine no-route states remain fail-closed; never clear them speculatively.
-9. Keep #146 open for the natural provider-capacity recovery evidence.
+1. Do not reroute DEC-025C-r2, clear provider/quota state, reset counters, replace the job, or use historical Telegram actions while the job is active.
+2. Observe the same job `eec59b13651c54559c10ce204380a68e`. Current authoritative state is `verifying / running / executing` after automatic quota rehabilitation.
+3. Treat `provider_capacity_recoveries=1` plus the audit record for `quota:codex_chatgpt_plus` as the live proof that #247 works end-to-end without Human Owner continuation clicks.
+4. Preserve the remaining OpenRouter and Google Antigravity provider-wide failures unless independent evidence proves they qualify for their own narrow recovery path; do not blanket-clear them.
+5. If the job reaches delivery/PR, apply normal deterministic CI and PM merge gates.
+6. If it blocks again, classify only the new independent blocker. Static work-shape counters and total adaptive wall time are telemetry; quota recovery should remain automatic when newer authoritative evidence restores an exact quota key and fresh Router routing succeeds.
+7. If a future blocker is provider-wide auth/config/provider-unavailable rather than quota/rate-limit, keep it fail-closed and surface the concrete provider evidence rather than auto-clearing it.
+8. Keep #146 open for the natural calibration evidence from this long-running same-job execution.
