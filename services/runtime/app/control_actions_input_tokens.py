@@ -28,12 +28,12 @@ _REASSESSMENT_BUDGET_SIGNALS = {
 
 
 class ControlActionService(BaseControlActionService):
-    """Add explicit Human Owner recovery for input-token emergency exhaustion.
+    """Keep historical Human Owner token recovery for legacy-hard jobs.
 
-    Input-token limits remain hard Router/profile ceilings during autonomous
-    execution. This layer adds only the same durable, monotonic owner-approved
-    extension semantics used by existing Runtime budget controls. Consumed usage,
-    WorkOrder scope and job/workspace identity are never reset.
+    Effective adaptive jobs treat cumulative input-token totals as telemetry and
+    must not surface owner-click continuation actions solely for crossing them.
+    This compatibility layer remains only for historical strict token ceilings;
+    consumed usage, WorkOrder scope and job/workspace identity are never reset.
     """
 
     @staticmethod
@@ -71,7 +71,10 @@ class ControlActionService(BaseControlActionService):
             return False
 
         route = dict(job.get("route") or {})
-        budget = dict((route.get("strategy") or {}).get("budget") or {})
+        strategy = dict(route.get("strategy") or {})
+        if str(strategy.get("budget_mode") or "") == "adaptive":
+            return False
+        budget = dict(strategy.get("budget") or {})
         progress = dict(job.get("progress") or {})
         used = cls._numeric(progress.get(_INPUT_TOKEN_COUNTER))
         limit = cls._numeric(budget.get(_INPUT_TOKEN_DIMENSION))
