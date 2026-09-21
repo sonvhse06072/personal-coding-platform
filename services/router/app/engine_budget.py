@@ -5,17 +5,18 @@ from .schemas import ReassessRequest, ReassessResponse
 
 
 class RouterEngine(RuntimeRouterEngine):
-    """Completion-aware wrapper for indivisible provider token usage.
+    """Legacy completion-aware wrapper for indivisible provider token usage.
 
-    Model calls are launch-gated before execution, but providers such as Antigravity
-    only report their final token usage after the whole agent run has completed.
-    A single successful call can therefore cross a token ceiling even though no
-    further work was started outside budget. If the exact finished diff already
-    satisfies Definition of Done, keep the accepted result and record the overrun;
-    otherwise the normal hard-budget guard still stops any additional work.
+    Effective adaptive jobs treat cumulative input/output token totals as durable
+    telemetry, so their normal reassessment path owns completion/anomaly decisions.
+    Legacy-hard jobs retain historical token ceilings; for those jobs a successful
+    indivisible provider call may still cross the ceiling after satisfying DoD.
     """
 
     def reassess(self, request: ReassessRequest) -> ReassessResponse:
+        if request.route.strategy.budget_mode == "adaptive":
+            return super().reassess(request)
+
         budget = request.route.strategy.budget
         progress = request.progress
         token_overruns: list[str] = []
