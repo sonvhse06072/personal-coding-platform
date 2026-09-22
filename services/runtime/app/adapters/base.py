@@ -109,6 +109,7 @@ class AgentRun:
             "rate_limited",
             "authentication",
             "provider_unavailable",
+            "timeout",
         }
 
 
