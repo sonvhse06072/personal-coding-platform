@@ -223,6 +223,29 @@ the original plan/job/workspace as durable audit evidence.
 
 The safe recovery is one fresh R2 WorkOrder, using the same approved baseline,
 source, test-only scope and bounded budget after the fixed analyzer is live.
+
+R2 is now live and routed cleanly:
+
+- plan: `pm-gh-5772402026`;
+- WorkOrder: `UI-CL-1-responsive-regression-matrix-r2`;
+- job: `812aabd7ab0a5adbb18a7a5edc8d7009`;
+- status: `executing`;
+- source commit: `afc0901a6c073f763c440df4d492778c12fec11a`;
+- baseline: `mvp-v1-2026-09-22-design`;
+- profile: `standard`;
+- executor: `openrouter_qwen3_coder_free`;
+- branch: `ai/812aabd7ab0a`;
+- workspace:
+  `/home/sonvh/.coding-platform/workspaces/812aabd7ab0a5adbb18a7a5edc8d7009`;
+- route reason/failure: none;
+- orchestration plan: `executing`;
+- tracked WorkOrder state: `running`.
+
+This proves #262 corrected the protected-change false-positive for the same
+bounded test-only design contract: the R2 route remains within the WorkOrder
+`standard` ceiling. The original job `4283bb02...` remains blocked and
+audit-only.
+
 Issues #15 and #16 remain pending so only one Design Closure engineering task is
 active at a time.
 
@@ -255,19 +278,18 @@ active at a time.
 
 ## Immediate next safe actions
 
-1. Post exactly one fresh PM-plan for `chonhac#14` using WorkOrder
-   `UI-CL-1-responsive-regression-matrix-r2` after the #262 fix activation
-   proof; keep the original blocked plan/job as audit evidence and do not
-   resume/reroute it.
-2. Ingest R2 on baseline `mvp-v1-2026-09-22-design` / source
-   `afc0901a6c073f763c440df4d492778c12fec11a` and verify exactly one R2 job
-   exists.
-3. Confirm the R2 job no longer receives a false protected-change route and
-   remains within the WorkOrder profile ceiling before allowing model execution.
+1. Let R2 job `812aabd7ab0a5adbb18a7a5edc8d7009` continue autonomously; do
+   not manually /run, reroute, restart platform services, or create a
+   replacement while it is making progress.
+2. Observe branch `ai/812aabd7ab0a`, the resulting Chợ Nhạc PR and exact-head
+   CI. Review the diff against the test-only WorkOrder before merge.
+3. If R2 reports a genuine responsive product defect requiring production-code
+   change, keep UI-CL-1 test-only and open a separate bounded defect issue
+   rather than broadening the current WorkOrder.
 4. Keep Chợ Nhạc #15 and #16 pending until #14 R2 is reviewed and merged.
-5. DEC-025 cleanup remains complete. Do not recreate or resume a PCP plan/job
+5. Keep the original blocked UI-CL-1 job/plan as platform-defect audit history;
+   do not resume/reroute it or hand-edit durable Runtime state.
+6. DEC-025 cleanup remains complete. Do not recreate or resume a PCP plan/job
    for DEC-025; future DEC-025 evidence is Human Owner-managed in `chonhac`.
-6. Keep durable rejected/blocked/cancelled plan/job/WorkOrder rows as audit
-   history and do not hand-edit Runtime database state.
 7. Keep #146 open for calibration evidence already learned from the retired
    long-running DEC execution.
