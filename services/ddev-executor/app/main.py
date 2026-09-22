@@ -24,7 +24,7 @@ from .github_delivery import (
 from .pm_bridge_github import router as pm_bridge_github_router
 
 
-Phase = Literal["preflight", "targeted_tests", "static_analysis", "full_tests", "cleanup"]
+Phase = Literal["preflight", "targeted_tests", "static_analysis", "frontend_quality", "full_tests", "cleanup"]
 _BRANCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$")
 
 
@@ -155,26 +155,37 @@ def _validate_workspace(job_id: str, workspace: str) -> Path:
     return path
 
 
-def _reconcile_workspace_ddev_identity(workspace: Path, job_id: str) -> Path | None:
-    """Keep an isolated workspace on one deterministic DDEV project identity.
+def _reconcile_workspace_ddev_identity(
+    workspace: Path,
+    job_id: str,
+    *,
+    nodejs_version: str | None = None,
+) -> Path | None:
+    """Keep one deterministic private DDEV identity/runtime per workspace.
 
-    Source repositories may commit their own project name in .ddev/config.yaml.
-    The executor must not edit that tracked source file, so it owns one private
-    config.*.yaml override instead. Rewriting the override before every DDEV
-    phase also upgrades preserved/resumed workspaces created by older PCP
-    versions and avoids a source-name/global-registry collision.
+    Source repositories may commit their own project name/runtime settings in
+    .ddev/config.yaml. The executor must not edit that tracked source file, so
+    it owns one private config.*.yaml override instead. Rewriting the override
+    before every DDEV phase upgrades preserved/resumed workspaces in place.
     """
     ddev_dir = workspace / ".ddev"
     if not ddev_dir.is_dir():
         return None
 
     safe_name = re.sub(r"[^a-z0-9-]", "-", f"cp-{job_id[:10]}")
+    lines = [
+        "# PCP-managed isolated workspace identity; do not commit.",
+        "override_config: true",
+        f"name: {safe_name}",
+    ]
+    normalized_node = str(nodejs_version or "").strip()
+    if normalized_node:
+        if not re.fullmatch(r"\d{1,2}(?:\.\d{1,2})?", normalized_node):
+            raise HTTPException(500, "Invalid configured workspace_nodejs_version")
+        lines.append(f'nodejs_version: "{normalized_node}"')
+
     override = ddev_dir / "config.coding-platform.yaml"
-    content = (
-        "# PCP-managed isolated workspace identity; do not commit.\n"
-        "override_config: true\n"
-        f"name: {safe_name}\n"
-    )
+    content = "\n".join(lines) + "\n"
     if not override.exists() or override.read_text(encoding="utf-8") != content:
         override.write_text(content, encoding="utf-8")
     return override
@@ -292,7 +303,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.15")
+app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.16")
 app.include_router(pm_bridge_github_router)
 
 
@@ -307,7 +318,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok" if ok else "degraded",
         "service": "ddev-executor",
-        "version": "1.0.15",
+        "version": "1.0.16",
         "ddev": (result.stdout or result.stderr).strip(),
         "docker": (docker.stdout or docker.stderr).strip(),
         "buildx": (buildx.stdout or buildx.stderr).strip(),
@@ -356,7 +367,11 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
         branch = f"{prefix}/{payload.job_id[:12]}"
         git(workspace, "checkout", "-b", branch, source_commit)
 
-        _reconcile_workspace_ddev_identity(workspace, payload.job_id)
+        _reconcile_workspace_ddev_identity(
+            workspace,
+            payload.job_id,
+            nodejs_version=cfg.get("ddev", {}).get("workspace_nodejs_version"),
+        )
     except Exception:
         shutil.rmtree(workspace, ignore_errors=True)
         raise
@@ -493,7 +508,11 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
     if not workspace.exists():
         raise HTTPException(404, "Workspace does not exist")
 
-    _reconcile_workspace_ddev_identity(workspace, payload.job_id)
+    _reconcile_workspace_ddev_identity(
+        workspace,
+        payload.job_id,
+        nodejs_version=cfg.get("ddev", {}).get("workspace_nodejs_version"),
+    )
 
     commands = cfg.get("ddev", {}).get(payload.phase, []) or []
     if not isinstance(commands, list) or any(not isinstance(command, str) for command in commands):
