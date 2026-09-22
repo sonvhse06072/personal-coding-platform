@@ -6,9 +6,11 @@ import yaml
 from fastapi import HTTPException
 
 from app.main import (
+    PhaseRequest,
     PublishBranchRequest,
     WorkspaceRequest,
     create_workspace,
+    phase,
     publish_branch,
     remove_workspace,
 )
@@ -149,3 +151,81 @@ def test_github_publish_requires_dedicated_delivery_token(tmp_path, monkeypatch)
 
     assert exc.value.status_code == 503
     assert run("git", "remote", cwd=workspace) == ""
+
+def test_workspace_ddev_override_is_explicit_and_isolated(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure(monkeypatch, tmp_path, allow_push=False)
+    ddev = source / ".ddev"
+    ddev.mkdir()
+    (ddev / "config.yaml").write_text("name: demo\ntype: drupal11\n")
+    run("git", "add", ".ddev/config.yaml", cwd=source)
+    run("git", "commit", "-m", "add ddev config", cwd=source)
+    run("git", "push", "origin", "main", cwd=source)
+
+    result = create_workspace(
+        WorkspaceRequest(job_id="jobddev12345", project_id="demo")
+    )
+    workspace = Path(result["workspace"])
+    override = yaml.safe_load(
+        (workspace / ".ddev" / "config.coding-platform.yaml").read_text()
+    )
+
+    assert override == {
+        "override_config": True,
+        "name": "cp-jobddev123",
+    }
+    assert (workspace / ".ddev" / "config.yaml").read_text() == (
+        "name: demo\ntype: drupal11\n"
+    )
+
+
+def test_phase_reconciles_legacy_workspace_ddev_override(tmp_path, monkeypatch):
+    _source, _remote, workspaces = configure(
+        monkeypatch, tmp_path, allow_push=False
+    )
+    projects_file = tmp_path / "projects.yml"
+    data = yaml.safe_load(projects_file.read_text())
+    data["projects"]["demo"]["ddev"] = {
+        "enabled": True,
+        "targeted_tests": ["ddev exec echo ok"],
+    }
+    projects_file.write_text(yaml.safe_dump(data))
+
+    job_id = "jobreconcile12"
+    workspace = workspaces / job_id
+    ddev = workspace / ".ddev"
+    ddev.mkdir(parents=True)
+    (ddev / "config.yaml").write_text("name: demo\ntype: drupal11\n")
+    override_path = ddev / "config.coding-platform.yaml"
+    override_path.write_text("name: cp-jobreconci\n")
+
+    observed = {}
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        observed["job"] = job
+        observed["argv"] = argv
+        observed["cwd"] = cwd
+        observed["override"] = yaml.safe_load(override_path.read_text())
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+
+    response = phase(
+        PhaseRequest(
+            job_id=job_id,
+            project_id="demo",
+            workspace=str(workspace),
+            phase="targeted_tests",
+        )
+    )
+
+    assert response.passed is True
+    assert observed["job"] == job_id
+    assert observed["cwd"] == workspace
+    assert observed["override"] == {
+        "override_config": True,
+        "name": "cp-jobreconci",
+    }
+    assert (ddev / "config.yaml").read_text() == (
+        "name: demo\ntype: drupal11\n"
+    )
+
