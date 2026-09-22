@@ -169,6 +169,63 @@ The merged #252 behavior remains part of the platform baseline: Runtime
 `1.0.49`, Router `1.0.25`, routing policy v16. DEC-025 retirement is not a
 reason to roll those fixes back.
 
+## Chợ Nhạc UI-CL-1 routing false-positive and R2 recovery
+
+The first bounded Design Closure WorkOrder for `chonhac#14` was ingested on the
+approved design baseline as:
+
+- plan: `pm-gh-5771361558`;
+- WorkOrder: `UI-CL-1-responsive-regression-matrix`;
+- job: `4283bb02a28a5c96b71f7bb1bc5e3676`;
+- source commit: `afc0901a6c073f763c440df4d492778c12fec11a`;
+- baseline: `mvp-v1-2026-09-22-design`.
+
+The job blocked before any planner/executor/model work ran:
+
+- status: `blocked`;
+- profile/executor remained unset;
+- reason: `work_order_policy_rejected`;
+- failure: Router selected profile `critical` while WorkOrder
+  `max_profile=standard`.
+
+Root cause was a platform false-positive, not Chợ Nhạc task complexity. The
+canonical WorkOrder description contains explicit out-of-scope/preservation
+language. Repo keyword analysis interpreted phrases about authentication,
+security, schema/API changes and proof secrecy as intended protected changes.
+That stale analysis forced Router's protected minimum-profile logic.
+
+PCP #262 / PR #263 fixes the boundary and is merged at
+`427b930c44a91b1e262419d488aa8469298c80c1`:
+
+- plan-orchestrated WorkOrders now supply authoritative protected-change
+  RepoHints from explicit WorkOrder risk flags;
+- final task protected flags are derived from the final repo analysis rather
+  than raw pre-hint keyword booleans;
+- legacy free-text jobs keep their historical keyword inference;
+- CI #459 passed structure, Runtime, Router and ddev-executor suites.
+
+The Human Owner then activated the merge locally under the zero-active-work
+gate. Live Runtime proof confirmed:
+
+- PCP main is `427b930c44a91b1e262419d488aa8469298c80c1`;
+- WorkOrder protected-change hint probe passed with false values for
+  schema/security/auth/authz/external-api/production/destructive changes when
+  those flags are absent;
+- Chợ Nhạc baseline still resolves
+  `mvp-v1-2026-09-22-design` at
+  `afc0901a6c073f763c440df4d492778c12fec11a`;
+- direct n8n and Antigravity bridge probes are healthy;
+- original job `4283bb02...` remains blocked and untouched.
+
+Do not resume/reroute the original job. It persisted the stale false-positive
+repo analysis/task flags, and explicit reroute reuses persisted analysis. Keep
+the original plan/job/workspace as durable audit evidence.
+
+The safe recovery is one fresh R2 WorkOrder, using the same approved baseline,
+source, test-only scope and bounded budget after the fixed analyzer is live.
+Issues #15 and #16 remain pending so only one Design Closure engineering task is
+active at a time.
+
 ## Relevant completed follow-ups
 
 - #215 / PR #216: bounded legacy adaptive adoption, merged at `6bc1f1a13c02acc6d747329c332a777535b75733`.
@@ -198,10 +255,19 @@ reason to roll those fixes back.
 
 ## Immediate next safe actions
 
-1. Direct-probe n8n and the Antigravity host bridge after the restart because aggregate `platform-status` reported both down.
-2. If n8n is healthy, treat PM-plan comment `5771302871` on `chonhac#14` as the only active ingestion request; do not post plans for #15/#16.
-3. If the Antigravity bridge remains down, preserve provider state and let Router use eligible fallback capacity; repair the bridge only through its normal service path and only while zero engineering jobs are active.
-4. Observe issue #14 / Runtime for the new WorkOrder/job identity. Do not create a replacement job if ingestion is merely delayed.
-5. DEC-025 cleanup remains complete. Do not recreate or resume a PCP plan/job for DEC-025; future DEC-025 evidence is Human Owner-managed in `chonhac`.
-6. Keep the cancelled durable DEC job/plan/WorkOrder rows as audit history and do not hand-edit Runtime database state.
-7. Keep #146 open for calibration evidence already learned from the retired long-running DEC execution.
+1. Post exactly one fresh PM-plan for `chonhac#14` using WorkOrder
+   `UI-CL-1-responsive-regression-matrix-r2` after the #262 fix activation
+   proof; keep the original blocked plan/job as audit evidence and do not
+   resume/reroute it.
+2. Ingest R2 on baseline `mvp-v1-2026-09-22-design` / source
+   `afc0901a6c073f763c440df4d492778c12fec11a` and verify exactly one R2 job
+   exists.
+3. Confirm the R2 job no longer receives a false protected-change route and
+   remains within the WorkOrder profile ceiling before allowing model execution.
+4. Keep Chợ Nhạc #15 and #16 pending until #14 R2 is reviewed and merged.
+5. DEC-025 cleanup remains complete. Do not recreate or resume a PCP plan/job
+   for DEC-025; future DEC-025 evidence is Human Owner-managed in `chonhac`.
+6. Keep durable rejected/blocked/cancelled plan/job/WorkOrder rows as audit
+   history and do not hand-edit Runtime database state.
+7. Keep #146 open for calibration evidence already learned from the retired
+   long-running DEC execution.
