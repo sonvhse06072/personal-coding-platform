@@ -78,3 +78,52 @@ def test_specific_terms_rank_small_relevant_set(tmp_path: Path):
     assert analysis["candidate_modules"] == ["payments"]
     assert analysis["relevance"][0]["path"].endswith("SalesforceSync.php")
     assert "salesforce" in analysis["relevance"][0]["matched_terms"]
+
+def test_authoritative_work_order_hints_override_out_of_scope_security_keywords(tmp_path: Path):
+    repo = _repo(tmp_path)
+    path = repo / "frontend/tests/browser/example.spec.ts"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("responsive verification browser test\n")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+
+    analysis, task = analyze_repo(
+        repo,
+        {
+            "title": "Add responsive browser regression coverage",
+            "description": (
+                "Add tests only. Out of scope: authentication strategy, authorization changes, "
+                "schema changes, API changes, security behavior, CSRF behavior and secret handling. "
+                "Preserve all current verification security boundaries."
+            ),
+            "task_type": "developer",
+            "semantic": {
+                "ambiguity": 25,
+                "architecture_impact": 10,
+                "verification_difficulty": 25,
+                "risk": 40,
+                "context_requirement": 30,
+                "novelty": 25,
+                "reasoning_requirement": 40,
+            },
+            "flags": ["frontend_tests", "verification_secrecy"],
+        },
+        {
+            "schema_change": False,
+            "security_sensitive": False,
+            "authentication_change": False,
+            "authorization_change": False,
+            "external_api": False,
+            "production_write": False,
+            "destructive_migration": False,
+        },
+    )
+
+    assert analysis["schema_change"] is False
+    assert analysis["security_sensitive"] is False
+    assert analysis["authentication_change"] is False
+    assert analysis["authorization_change"] is False
+    assert analysis["external_api"] is False
+    assert analysis["production_write"] is False
+    assert analysis["destructive_migration"] is False
+    assert "security_boundary_change" not in task["flags"]
+
