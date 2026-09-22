@@ -459,12 +459,15 @@ class RuntimeEngine(_RuntimeEngine):
         # diff even when an older immutable WorkOrder snapshot predates that
         # verification phase. This is deliberately path-scoped so backend-only
         # work does not pay frontend verification cost.
-        current_diff = diff_state(
-            Path(workspace),
-            int(project.get("runtime", {}).get("max_diff_bytes", 750000)),
-        )
-        changed_files = list(current_diff.get("changed_files") or [])
-        for rule in ddev_cfg.get("auto_required_phases", []) or []:
+        auto_rules = ddev_cfg.get("auto_required_phases", []) or []
+        changed_files: list[str] = []
+        if auto_rules:
+            current_diff = diff_state(
+                Path(workspace),
+                int(project.get("runtime", {}).get("max_diff_bytes", 750000)),
+            )
+            changed_files = list(current_diff.get("changed_files") or [])
+        for rule in auto_rules:
             if not isinstance(rule, dict):
                 continue
             phase = str(rule.get("phase") or "").strip()
