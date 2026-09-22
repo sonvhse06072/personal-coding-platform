@@ -142,5 +142,5 @@ def test_opencode_timeout_returns_structured_transient_failure(monkeypatch, tmp_
         for event in seen
         if event["event_type"] == "developer_step"
     ]
-    assert lifecycle == ["started", "failed"]
+    assert lifecycle == ["started", "step_started", "failed"]
 
