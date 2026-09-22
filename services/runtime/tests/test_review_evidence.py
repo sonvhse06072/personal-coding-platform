@@ -215,6 +215,7 @@ def test_streaming_or_unstructured_review_output_fails_closed():
     report = parse_review_output(raw_event)
 
     assert report.verdict == "fail"
+    assert report.protocol_valid is False
     assert len(report.findings) == 1
     assert report.findings[0].message == (
         "Reviewer returned malformed or unstructured output; "
@@ -245,6 +246,7 @@ def test_invalid_structured_review_fails_closed_without_validation_error():
     )
 
     assert report.verdict == "fail"
+    assert report.protocol_valid is False
     assert len(report.findings) == 1
     assert "malformed or unstructured" in report.findings[0].message
     assert len(report.findings[0].message) < 2000
@@ -257,5 +259,36 @@ def test_malformed_structured_pass_fails_closed():
     )
 
     assert report.verdict == "fail"
+    assert report.protocol_valid is False
     assert len(report.findings) == 1
     assert "malformed or unstructured" in report.findings[0].message
+
+def test_legacy_fail_review_remains_protocol_valid():
+    report = parse_review_output("FAIL\nOne bounded correctness concern.")
+
+    assert report.verdict == "fail"
+    assert report.protocol_valid is True
+    assert len(report.findings) == 1
+
+
+def test_protocol_invalid_review_is_telemetry_not_actionable_finding(monkeypatch):
+    report = parse_review_output('{"type":"step_start","detail":"not a review verdict"}')
+    assert report.protocol_valid is False
+
+    monkeypatch.setattr("app.review.estimated_cost_usd", lambda model_id, raw: 0.0)
+    progress = {}
+    record_review_telemetry(
+        progress,
+        report,
+        review_level="standard",
+        model_id="reviewer",
+        provider="provider",
+        raw_usage={"input_tokens": 10, "output_tokens": 5},
+    )
+
+    assert progress["review_runs"] == 1
+    assert progress["review_protocol_failures"] == 1
+    assert progress["review_findings"] == 0
+    assert progress["review_history"][-1]["protocol_valid"] is False
+    assert progress["review_history"][-1]["finding_count"] == 0
+

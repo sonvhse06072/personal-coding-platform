@@ -374,7 +374,17 @@ class RuntimeEngineCore:
         if len(attempts) > 12:
             del attempts[:-12]
 
-    async def _model_failover(self, *, route_payload: dict[str, Any], provider_state: dict[str, Any], current_choice: dict[str, Any], progress: dict[str, Any], strategy: dict[str, Any], reason: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    async def _model_failover(
+        self,
+        *,
+        route_payload: dict[str, Any],
+        provider_state: dict[str, Any],
+        current_choice: dict[str, Any],
+        progress: dict[str, Any],
+        strategy: dict[str, Any],
+        reason: str,
+        role: str = "executor",
+    ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
         if (
             not self._adaptive_work_shape_nonblocking(strategy)
             and progress.get("model_failovers", 0) >= int(strategy["budget"].get("max_model_failovers", 2))
@@ -389,7 +399,7 @@ class RuntimeEngineCore:
             reroute = await self.router.route(payload)
         except Exception:
             return None, None
-        candidate = reroute.get("strategy", {}).get("executor")
+        candidate = reroute.get("strategy", {}).get(role)
         if not candidate or candidate.get("id") == current_choice.get("id"):
             return None, reroute
         progress["model_failovers"] = int(progress.get("model_failovers", 0)) + 1

@@ -33,6 +33,7 @@ class ReviewReport(BaseModel):
     summary: str = Field(min_length=1, max_length=4000)
     findings: list[ReviewFinding] = Field(default_factory=list, max_length=20)
     jit_context_used: bool = False
+    protocol_valid: bool = True
 
     @field_validator("summary")
     @classmethod
@@ -47,7 +48,11 @@ def parse_review_output(output: str) -> ReviewReport:
     """Parse the structured protocol while retaining bounded legacy PASS/FAIL output."""
     text = (output or "").strip()
     if not text:
-        return ReviewReport(verdict="fail", summary="Reviewer returned no output")
+        return ReviewReport(
+            verdict="fail",
+            summary="Reviewer returned no output",
+            protocol_valid=False,
+        )
 
     lines = text.splitlines()
     first = lines[0].strip().upper()
@@ -79,8 +84,12 @@ def parse_review_output(output: str) -> ReviewReport:
 
         payload_invalid = True
 
+    protocol_valid = True
     if payload_invalid:
         verdict = "fail"
+        protocol_valid = False
+    elif not first_is_pass and not first_is_fail:
+        protocol_valid = False
 
     summary = text[:4000]
     findings = []
@@ -109,6 +118,7 @@ def parse_review_output(output: str) -> ReviewReport:
         summary=summary,
         findings=findings,
         jit_context_used=False,
+        protocol_valid=protocol_valid,
     )
 
 def strong_deterministic_evidence(
@@ -160,6 +170,7 @@ def review_report_summary(report: ReviewReport) -> dict[str, Any]:
         "finding_count": len(report.findings),
         "findings": [item.model_dump(mode="json") for item in report.findings],
         "jit_context_used": report.jit_context_used,
+        "protocol_valid": report.protocol_valid,
     }
 
 
@@ -181,7 +192,10 @@ def record_review_telemetry(
     usage = normalize_usage(raw_usage)
     cost = estimated_cost_usd(str(model_id or ""), raw_usage) if model_id else 0.0
     progress["review_runs"] = int(progress.get("review_runs", 0)) + 1
-    progress["review_findings"] = int(progress.get("review_findings", 0)) + len(report.findings)
+    actionable_findings = report.findings if report.protocol_valid else []
+    progress["review_findings"] = int(progress.get("review_findings", 0)) + len(actionable_findings)
+    if not report.protocol_valid:
+        progress["review_protocol_failures"] = int(progress.get("review_protocol_failures", 0)) + 1
     progress["review_jit_context_runs"] = int(progress.get("review_jit_context_runs", 0)) + int(
         report.jit_context_used
     )
@@ -197,7 +211,8 @@ def record_review_telemetry(
         {
             "level": review_level,
             "verdict": report.verdict,
-            "finding_count": len(report.findings),
+            "finding_count": len(actionable_findings),
+            "protocol_valid": report.protocol_valid,
             "model": model_id,
             "provider": provider,
             "jit_context_used": report.jit_context_used,
