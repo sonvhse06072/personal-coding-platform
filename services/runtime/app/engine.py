@@ -158,6 +158,7 @@ class RuntimeEngine(_RuntimeEngine):
         progress: dict[str, Any],
         strategy: dict[str, Any],
         reason: str,
+        role: str = "executor",
     ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
         # A deterministic/no-effect repair is cheaper to retry with more reasoning
         # on the same Codex model before consuming a stronger model tier. Provider
@@ -168,7 +169,7 @@ class RuntimeEngine(_RuntimeEngine):
                 progress["escalations"] = int(progress.get("escalations", 0)) + 1
                 return boosted, {
                     "reason": "reasoning_effort_escalation",
-                    "strategy": {"executor": boosted},
+                    "strategy": {role: boosted},
                 }
         return await super()._model_failover(
             route_payload=route_payload,
@@ -177,6 +178,7 @@ class RuntimeEngine(_RuntimeEngine):
             progress=progress,
             strategy=strategy,
             reason=reason,
+            role=role,
         )
 
     def _record_agent_attempt(self, progress: dict[str, Any], choice: dict[str, Any], run: Any) -> None:
