@@ -14,8 +14,9 @@ Last updated: 2026-09-22
 ## Chợ Nhạc ProjectBaseline design revision
 
 Human Owner-approved Chợ Nhạc design governance has advanced beyond the old
-DEC-025B-era baseline. Issue #258 updates the active immutable ProjectBaseline
-for new `chonhac` work to:
+DEC-025B-era baseline. Issue #258 / PR #259 is merged at
+`80ec29bbda4b74a0dcf718c6498bce00228e902b` and updates the active immutable
+ProjectBaseline for new `chonhac` work to:
 
 - revision: `mvp-v1-2026-09-22-design`;
 - source commit: `afc0901a6c073f763c440df4d492778c12fec11a`;
@@ -28,9 +29,10 @@ resolvable for audit/history. This amendment does not reopen DEC-025 for PCP:
 DEC-025C–F remain Human Owner/operator-managed.
 
 The Runtime mounts `config/` read-only but caches ProjectBaseline YAML in
-process. After #258 merges, local Runtime must be restarted/reloaded under the
-zero-active-job gate before a new PM plan is ingested; otherwise it can keep the
-old cached revision even though the host file changed.
+process. Source merge is complete, but local activation is still pending:
+Runtime must be restarted/reloaded under the zero-active-job gate before a new
+PM plan is ingested; otherwise it can keep the old cached revision even though
+the host file changed.
 
 ## Platform baseline
 
@@ -182,9 +184,9 @@ reason to roll those fixes back.
 
 ## Immediate next safe actions
 
-1. Complete #258 exact-head CI and merge the new `chonhac` ProjectBaseline revision.
-2. With zero active engineering jobs, sync local PCP main and restart/reload Runtime so its cached ProjectBaseline resolves `mvp-v1-2026-09-22-design` at `afc0901a6c073f763c440df4d492778c12fec11a`.
-3. Only after that activation, ingest the bounded Chợ Nhạc UI-CL-1 responsive-test WorkOrder; do not ingest UI-CL-2/3 concurrently.
+1. With zero active engineering jobs, sync local PCP main through merge `80ec29bbda4b74a0dcf718c6498bce00228e902b` and restart/reload Runtime so its cached ProjectBaseline resolves `mvp-v1-2026-09-22-design` at `afc0901a6c073f763c440df4d492778c12fec11a`.
+2. Read back the resolved baseline inside the deployed Runtime before ingesting any new Chợ Nhạc work.
+3. Only after that activation proof, ingest bounded issue #14 / UI-CL-1 responsive-test WorkOrder; keep #15 and #16 pending so there is only one active engineering task.
 4. DEC-025 cleanup remains complete. Do not recreate or resume a PCP plan/job for DEC-025; future DEC-025 evidence is Human Owner-managed in `chonhac`.
 5. Keep the cancelled durable DEC job/plan/WorkOrder rows as audit history and do not hand-edit Runtime database state.
 6. No n8n recovery is required: the direct health probe returned HTTP 200 with `{"status":"ok"}`; retain awareness that aggregate `platform-status` can transiently false-negative this service.
