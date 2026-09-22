@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .base import AgentAdapter, AgentRun, classify_provider_failure
 from ..developer_stream import agent_lifecycle_event, agent_public_event, emit_developer_event
-from ..shell import run_command
+from ..shell import CommandResult, CommandTimeoutError, run_command
 
 
 class CodexAdapter(AgentAdapter):
@@ -77,12 +77,23 @@ class CodexAdapter(AgentAdapter):
                     )
                 )
 
-            result = await run_command(
-                argv,
-                cwd=workspace,
-                timeout=timeout,
-                on_stdout_line=on_stdout_line,
-            )
+            timed_out: CommandTimeoutError | None = None
+            try:
+                result = await run_command(
+                    argv,
+                    cwd=workspace,
+                    timeout=timeout,
+                    on_stdout_line=on_stdout_line,
+                )
+            except CommandTimeoutError as exc:
+                timed_out = exc
+                result = CommandResult(
+                    argv=argv,
+                    returncode=124,
+                    stdout=exc.stdout,
+                    stderr=exc.stderr or str(exc),
+                )
+
             messages: list[str] = []
             errors: list[str] = []
             usage: dict = {}
@@ -123,7 +134,11 @@ class CodexAdapter(AgentAdapter):
             # earlier/transient telemetry or stderr contains phrases such as
             # "rate limit". Scanning the whole raw stream in that case can turn a
             # completed, side-effecting run into a false provider failure.
-            structured_success = terminal_event == "turn.completed" and result.returncode == 0
+            structured_success = (
+                timed_out is None
+                and terminal_event == "turn.completed"
+                and result.returncode == 0
+            )
             if structured_success:
                 failure_kind = None
                 failure_message = None
@@ -134,9 +149,13 @@ class CodexAdapter(AgentAdapter):
                     diagnostics.append(result.stdout)
                 failure_kind, failure_message = classify_provider_failure(*diagnostics)
                 effective_returncode = result.returncode
-                if errors and effective_returncode == 0:
+                if timed_out is not None:
+                    failure_kind = "timeout"
+                    failure_message = str(timed_out)
+                    effective_returncode = 124
+                elif errors and effective_returncode == 0:
                     effective_returncode = 70
-                if failure_kind and effective_returncode == 0:
+                elif failure_kind and effective_returncode == 0:
                     effective_returncode = 75
                 if errors and not failure_message:
                     failure_message = "\n".join(errors)[-12000:]
