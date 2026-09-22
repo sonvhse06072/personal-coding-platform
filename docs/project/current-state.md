@@ -246,6 +246,38 @@ bounded test-only design contract: the R2 route remains within the WorkOrder
 `standard` ceiling. The original job `4283bb02...` remains blocked and
 audit-only.
 
+R2 later exposed three PCP/runtime infrastructure defects while preserving the
+same job/workspace/diff/counters:
+
+- #266 / PR #267, merged at
+  `ec32ab4e7367efdd997b6f848c35d151c8c1f3fa`: coding CLI timeouts are
+  converted to structured `failure_kind=timeout` attempts so normal provider
+  failover can run instead of crashing the Runtime worker;
+- #268 / PR #269, merged at
+  `60b416aedb27a6589e41a17a504b6943d3068456`: malformed reviewer protocol
+  output is no longer converted into a synthetic developer repair finding;
+  evaluator/model failover handles the protocol failure instead;
+- #270 / PR #271, merged at
+  `8cf37611e4e61a5bbdde5c85ca4496bd1bdd07c3`: ddev-executor now reconciles
+  the private workspace DDEV identity at creation and before every configured
+  phase using `override_config: true` and deterministic `cp-<job>` naming.
+
+The Human Owner activated these fixes under zero-active-work gates and recovered
+the same R2 job rather than creating R3. Live evidence now proves:
+
+- the preserved workspace DDEV override resolves to `cp-812aabd7ab` while
+  tracked source `.ddev/config.yaml` remains `name: chonhac`;
+- the exact configured `targeted_tests` phase passes with PHPUnit 27/27
+  tests / 406 assertions;
+- the exact configured `static_analysis` phase passes with PHPCS 8/8;
+- tracked diff remains exactly
+  `frontend/tests/browser/musician-profile.spec.ts` and
+  `frontend/tests/browser/verification.spec.ts`;
+- R2 was resumed on the same job/workspace with durable counters preserved;
+- the fresh route remains `standard` and currently selected `codex_terra`;
+- orchestration is again `executing` with the R2 WorkOrder `running`;
+- Antigravity bridge and n8n direct health are healthy.
+
 Issues #15 and #16 remain pending so only one Design Closure engineering task is
 active at a time.
 
@@ -278,18 +310,22 @@ active at a time.
 
 ## Immediate next safe actions
 
-1. Let R2 job `812aabd7ab0a5adbb18a7a5edc8d7009` continue autonomously; do
-   not manually /run, reroute, restart platform services, or create a
-   replacement while it is making progress.
+1. Let R2 job `812aabd7ab0a5adbb18a7a5edc8d7009` continue autonomously on
+   the recovered DDEV identity; do not manually /run, reroute, restart platform
+   services, or create a replacement while it is making progress.
 2. Observe branch `ai/812aabd7ab0a`, the resulting Chợ Nhạc PR and exact-head
-   CI. Review the diff against the test-only WorkOrder before merge.
-3. If R2 reports a genuine responsive product defect requiring production-code
+   CI. Review the exact test-only diff before merge.
+3. Treat any future deterministic verification failure as project evidence only
+   after confirming the command actually reached PHPUnit/PHPCS/Playwright;
+   infrastructure-start failures must not be sent back to the developer as code
+   repairs.
+4. If R2 reports a genuine responsive product defect requiring production-code
    change, keep UI-CL-1 test-only and open a separate bounded defect issue
    rather than broadening the current WorkOrder.
-4. Keep Chợ Nhạc #15 and #16 pending until #14 R2 is reviewed and merged.
-5. Keep the original blocked UI-CL-1 job/plan as platform-defect audit history;
+5. Keep Chợ Nhạc #15 and #16 pending until #14 R2 is reviewed and merged.
+6. Keep the original blocked UI-CL-1 job/plan as platform-defect audit history;
    do not resume/reroute it or hand-edit durable Runtime state.
-6. DEC-025 cleanup remains complete. Do not recreate or resume a PCP plan/job
+7. DEC-025 cleanup remains complete. Do not recreate or resume a PCP plan/job
    for DEC-025; future DEC-025 evidence is Human Owner-managed in `chonhac`.
-7. Keep #146 open for calibration evidence already learned from the retired
+8. Keep #146 open for calibration evidence already learned from the retired
    long-running DEC execution.
