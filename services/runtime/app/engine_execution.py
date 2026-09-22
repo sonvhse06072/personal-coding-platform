@@ -463,7 +463,6 @@ class RuntimeEngine(RuntimeEngineCore):
                         return
                     evaluator_output = evaluation.output[-20000:]
                     review_report = parse_review_output(evaluator_output)
-                    evaluator_ok = evaluation.returncode == 0 and review_report.verdict == "pass"
                     record_review_telemetry(
                         progress,
                         review_report,
@@ -473,6 +472,39 @@ class RuntimeEngine(RuntimeEngineCore):
                         raw_usage=evaluation.usage,
                     )
                     checkpoint["last_review_report"] = review_report_summary(review_report)
+
+                    if not review_report.protocol_valid:
+                        next_choice, reroute = await self._model_failover(
+                            route_payload=route_payload,
+                            provider_state=provider_state,
+                            current_choice=choice,
+                            progress=progress,
+                            strategy=strategy,
+                            reason="malformed_reviewer_output",
+                            role="evaluator",
+                        )
+                        checkpoint["provider_state"] = provider_state
+                        if next_choice:
+                            route_history.append({
+                                "reason": f"evaluator_model_failover:{choice['id']}:malformed_review",
+                                "route": reroute,
+                            })
+                            choice = next_choice
+                            checkpoint["evaluator_choice"] = choice
+                            checkpoint["route_history"] = route_history
+                            self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
+                            continue
+                        self._block(
+                            job_id=job_id,
+                            progress=progress,
+                            checkpoint=checkpoint,
+                            reason="evaluator_protocol_failure_without_fallback",
+                            last_failure=review_report.summary,
+                            diff=diff,
+                        )
+                        return
+
+                    evaluator_ok = evaluation.returncode == 0 and review_report.verdict == "pass"
                     if review_report.verdict == "fail":
                         checkpoint["pending_review_findings"] = {
                             "diff_hash": diff["diff_hash"],
