@@ -157,7 +157,9 @@ projects:
         - >-
           ddev exec bash -lc 'cd frontend && NEXT_TELEMETRY_DISABLED=1 npm run build'
         - >-
-          ddev exec -u root bash -lc 'cd /var/www/html/frontend && npx playwright install --with-deps chromium'
+          ddev exec -u root bash -lc 'cd /var/www/html/frontend && npx playwright install-deps chromium'
+        - >-
+          ddev exec bash -lc 'cd frontend && npx playwright install chromium'
         - >-
           ddev exec bash -lc 'cd frontend && NEXT_TELEMETRY_DISABLED=1 npm run test:browser'
 
