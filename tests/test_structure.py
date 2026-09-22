@@ -122,3 +122,26 @@ def test_antigravity_bridge_is_bounded_for_headless_automation():
 def test_patch_backups_are_not_committed():
     backups = [path for path in ROOT.rglob("*.bak-*") if ".git" not in path.parts]
     assert backups == []
+
+def test_chonhac_frontend_quality_installs_playwright_browser_for_runtime_user():
+    doc = yaml.safe_load((ROOT / "config/projects.yml").read_text())
+    ddev = doc["projects"]["chonhac"]["ddev"]
+    commands = ddev["frontend_quality"]
+
+    assert ddev["workspace_nodejs_version"] == "24"
+    assert any(
+        "playwright install-deps chromium" in command
+        and "ddev exec -u root" in command
+        for command in commands
+    )
+    assert any(
+        "playwright install chromium" in command
+        and "ddev exec -u root" not in command
+        for command in commands
+    )
+    assert any("npm run test:browser" in command for command in commands)
+    assert all(
+        "playwright install --with-deps chromium" not in command
+        for command in commands
+    )
+
