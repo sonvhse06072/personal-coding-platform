@@ -29,10 +29,24 @@ resolvable for audit/history. This amendment does not reopen DEC-025 for PCP:
 DEC-025C–F remain Human Owner/operator-managed.
 
 The Runtime mounts `config/` read-only but caches ProjectBaseline YAML in
-process. Source merge is complete, but local activation is still pending:
-Runtime must be restarted/reloaded under the zero-active-job gate before a new
-PM plan is ingested; otherwise it can keep the old cached revision even though
-the host file changed.
+process. Local activation is now proven:
+
+- local PCP main synced to `91b31010e038944d2365f32bd30dc96faaa8ca37`;
+- preflight and post-restart checks both reported zero active engineering work;
+- Runtime read-back resolved project `chonhac` to revision
+  `mvp-v1-2026-09-22-design`, status `approved`, source commit
+  `afc0901a6c073f763c440df4d492778c12fec11a`;
+- baseline activation exited successfully.
+
+Issue #14 / `UI-CL-1-responsive-regression-matrix` has now been submitted for
+orchestration via PM-plan comment `5771302871`. Issues #15 and #16 remain
+pending to preserve single-active-engineering-task execution.
+
+Immediately after restart, aggregate `platform-status` reported
+`antigravity-bridge down` and `n8n DOWN` while Router, Runtime,
+ddev-executor and credential-boundary checks were healthy. Treat those two lines
+as requiring direct probe before claiming orchestration/provider health; they do
+not invalidate the ProjectBaseline activation proof.
 
 ## Platform baseline
 
@@ -184,10 +198,10 @@ reason to roll those fixes back.
 
 ## Immediate next safe actions
 
-1. With zero active engineering jobs, sync local PCP main through merge `80ec29bbda4b74a0dcf718c6498bce00228e902b` and restart/reload Runtime so its cached ProjectBaseline resolves `mvp-v1-2026-09-22-design` at `afc0901a6c073f763c440df4d492778c12fec11a`.
-2. Read back the resolved baseline inside the deployed Runtime before ingesting any new Chợ Nhạc work.
-3. Only after that activation proof, ingest bounded issue #14 / UI-CL-1 responsive-test WorkOrder; keep #15 and #16 pending so there is only one active engineering task.
-4. DEC-025 cleanup remains complete. Do not recreate or resume a PCP plan/job for DEC-025; future DEC-025 evidence is Human Owner-managed in `chonhac`.
-5. Keep the cancelled durable DEC job/plan/WorkOrder rows as audit history and do not hand-edit Runtime database state.
-6. No n8n recovery is required: the direct health probe returned HTTP 200 with `{"status":"ok"}`; retain awareness that aggregate `platform-status` can transiently false-negative this service.
+1. Direct-probe n8n and the Antigravity host bridge after the restart because aggregate `platform-status` reported both down.
+2. If n8n is healthy, treat PM-plan comment `5771302871` on `chonhac#14` as the only active ingestion request; do not post plans for #15/#16.
+3. If the Antigravity bridge remains down, preserve provider state and let Router use eligible fallback capacity; repair the bridge only through its normal service path and only while zero engineering jobs are active.
+4. Observe issue #14 / Runtime for the new WorkOrder/job identity. Do not create a replacement job if ingestion is merely delayed.
+5. DEC-025 cleanup remains complete. Do not recreate or resume a PCP plan/job for DEC-025; future DEC-025 evidence is Human Owner-managed in `chonhac`.
+6. Keep the cancelled durable DEC job/plan/WorkOrder rows as audit history and do not hand-edit Runtime database state.
 7. Keep #146 open for calibration evidence already learned from the retired long-running DEC execution.
