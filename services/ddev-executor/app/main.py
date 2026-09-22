@@ -155,6 +155,31 @@ def _validate_workspace(job_id: str, workspace: str) -> Path:
     return path
 
 
+def _reconcile_workspace_ddev_identity(workspace: Path, job_id: str) -> Path | None:
+    """Keep an isolated workspace on one deterministic DDEV project identity.
+
+    Source repositories may commit their own project name in .ddev/config.yaml.
+    The executor must not edit that tracked source file, so it owns one private
+    config.*.yaml override instead. Rewriting the override before every DDEV
+    phase also upgrades preserved/resumed workspaces created by older PCP
+    versions and avoids a source-name/global-registry collision.
+    """
+    ddev_dir = workspace / ".ddev"
+    if not ddev_dir.is_dir():
+        return None
+
+    safe_name = re.sub(r"[^a-z0-9-]", "-", f"cp-{job_id[:10]}")
+    override = ddev_dir / "config.coding-platform.yaml"
+    content = (
+        "# PCP-managed isolated workspace identity; do not commit.\n"
+        "override_config: true\n"
+        f"name: {safe_name}\n"
+    )
+    if not override.exists() or override.read_text(encoding="utf-8") != content:
+        override.write_text(content, encoding="utf-8")
+    return override
+
+
 def _validate_ai_branch(cfg: dict[str, Any], branch: str) -> None:
     prefix = str(cfg.get("runtime", {}).get("branch_prefix", "ai")).strip("/")
     expected_prefix = f"{prefix}/"
@@ -331,11 +356,7 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
         branch = f"{prefix}/{payload.job_id[:12]}"
         git(workspace, "checkout", "-b", branch, source_commit)
 
-        if (workspace / ".ddev").exists():
-            safe_name = re.sub(r"[^a-z0-9-]", "-", f"cp-{payload.job_id[:10]}")
-            (workspace / ".ddev" / "config.coding-platform.yaml").write_text(
-                f"name: {safe_name}\n", encoding="utf-8"
-            )
+        _reconcile_workspace_ddev_identity(workspace, payload.job_id)
     except Exception:
         shutil.rmtree(workspace, ignore_errors=True)
         raise
@@ -471,6 +492,8 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
         raise HTTPException(403, "Workspace is outside configured root or does not match job")
     if not workspace.exists():
         raise HTTPException(404, "Workspace does not exist")
+
+    _reconcile_workspace_ddev_identity(workspace, payload.job_id)
 
     commands = cfg.get("ddev", {}).get(payload.phase, []) or []
     if not isinstance(commands, list) or any(not isinstance(command, str) for command in commands):
