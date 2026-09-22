@@ -6,7 +6,7 @@ import pytest
 
 from app.adapters.codex import CodexAdapter
 from app.developer_stream import bind_developer_sink
-from app.shell import CommandResult
+from app.shell import CommandResult, CommandTimeoutError
 
 
 def _event(payload: dict) -> str:
@@ -261,3 +261,52 @@ def test_codex_emits_provider_neutral_activity_during_stdout_stream(monkeypatch,
     assert messages[0]["data"]["model"] == "gpt-5.6-terra"
     lifecycle = [event["data"].get("status") for event in seen if event["event_type"] == "developer_step"]
     assert lifecycle == ["started", "completed"]
+
+def test_codex_timeout_returns_structured_failure_and_removes_last_message_file(monkeypatch, tmp_path: Path):
+    captured: dict[str, Path] = {}
+    seen: list[dict] = []
+    partial = _event({
+        "type": "item.completed",
+        "item": {"type": "agent_message", "text": "Partial progress before timeout."},
+    })
+
+    async def fake_run_command(argv, *, cwd, timeout, on_stdout_line=None):
+        output_index = argv.index("--output-last-message")
+        output_path = Path(argv[output_index + 1])
+        captured["path"] = output_path
+        assert output_path.exists()
+        assert on_stdout_line is not None
+        on_stdout_line(partial)
+        raise CommandTimeoutError(
+            timeout=timeout,
+            argv=argv,
+            stdout=partial + "\n",
+        )
+
+    monkeypatch.setattr("app.adapters.codex.run_command", fake_run_command)
+    bind_developer_sink(seen.append)
+    try:
+        run = asyncio.run(
+            CodexAdapter("gpt-5.6-terra").run(
+                workspace=tmp_path,
+                prompt="implement",
+                mode="execute",
+                timeout=30,
+            )
+        )
+    finally:
+        bind_developer_sink(None)
+
+    assert run.returncode == 124
+    assert run.failure_kind == "timeout"
+    assert run.failure_message == "Command timed out after 30s"
+    assert run.provider_failed is True
+    assert run.output == "Partial progress before timeout."
+    assert not captured["path"].exists()
+    lifecycle = [
+        event["data"].get("status")
+        for event in seen
+        if event["event_type"] == "developer_step"
+    ]
+    assert lifecycle == ["started", "failed"]
+

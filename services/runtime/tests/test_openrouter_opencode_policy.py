@@ -8,7 +8,7 @@ import pytest
 
 from app.adapters.opencode import OpenCodeAdapter, opencode_env_for_model
 from app.developer_stream import bind_developer_sink
-from app.shell import CommandResult, agent_subprocess_env
+from app.shell import CommandResult, CommandTimeoutError, agent_subprocess_env
 
 
 MODEL = "openrouter/cohere/north-mini-code:free"
@@ -104,3 +104,43 @@ def test_non_openrouter_model_keeps_existing_provider_env_contract(monkeypatch) 
     assert env == {"DEEPSEEK_API_KEY": "deepseek-secret"}
     assert "OPENCODE_CONFIG_CONTENT" not in env
     assert "OPENCODE_AUTO_SHARE" not in env
+
+def test_opencode_timeout_returns_structured_transient_failure(monkeypatch, tmp_path: Path) -> None:
+    seen: list[dict] = []
+    event_line = json.dumps({"type": "step_start", "part": {"type": "step-start"}})
+
+    async def fake_run_command(argv, *, cwd, timeout, env, on_stdout_line=None):
+        assert on_stdout_line is not None
+        on_stdout_line(event_line)
+        raise CommandTimeoutError(
+            timeout=timeout,
+            argv=argv,
+            stdout=event_line + "\n",
+        )
+
+    monkeypatch.setattr("app.adapters.opencode.run_command", fake_run_command)
+    bind_developer_sink(seen.append)
+    try:
+        run = asyncio.run(
+            OpenCodeAdapter(MODEL).run(
+                workspace=tmp_path,
+                prompt="bounded test prompt",
+                mode="execute",
+                timeout=30,
+            )
+        )
+    finally:
+        bind_developer_sink(None)
+
+    assert run.returncode == 124
+    assert run.failure_kind == "timeout"
+    assert run.failure_message == "Command timed out after 30s"
+    assert run.provider_failed is True
+    assert event_line in run.raw
+    lifecycle = [
+        event["data"].get("status")
+        for event in seen
+        if event["event_type"] == "developer_step"
+    ]
+    assert lifecycle == ["started", "step_started", "failed"]
+

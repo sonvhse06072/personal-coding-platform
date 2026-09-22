@@ -11,7 +11,7 @@ from ..developer_stream import (
     emit_developer_event,
     provider_for_adapter,
 )
-from ..shell import run_command
+from ..shell import CommandResult, CommandTimeoutError, run_command
 
 
 _PROVIDER_KEY_BY_MODEL_PREFIX = {
@@ -134,13 +134,24 @@ class OpenCodeAdapter(AgentAdapter):
                 )
             )
 
-        result = await run_command(
-            argv,
-            cwd=workspace,
-            timeout=timeout,
-            env=opencode_env_for_model(self.model),
-            on_stdout_line=on_stdout_line,
-        )
+        timed_out: CommandTimeoutError | None = None
+        try:
+            result = await run_command(
+                argv,
+                cwd=workspace,
+                timeout=timeout,
+                env=opencode_env_for_model(self.model),
+                on_stdout_line=on_stdout_line,
+            )
+        except CommandTimeoutError as exc:
+            timed_out = exc
+            result = CommandResult(
+                argv=argv,
+                returncode=124,
+                stdout=exc.stdout,
+                stderr=exc.stderr or str(exc),
+            )
+
         chunks: list[str] = []
         errors: list[str] = []
         usage: dict = {}
@@ -158,11 +169,20 @@ class OpenCodeAdapter(AgentAdapter):
                 err = event["error"]
                 errors.append(json.dumps(err, ensure_ascii=False) if isinstance(err, (dict, list)) else str(err))
         output = "\n".join(chunks) or result.stdout
-        failure_kind, failure_message = classify_provider_failure(result.stderr, result.stdout, "\n".join(errors), output)
+        failure_kind, failure_message = classify_provider_failure(
+            result.stderr,
+            result.stdout,
+            "\n".join(errors),
+            output,
+        )
         effective_returncode = result.returncode
-        if errors and effective_returncode == 0:
+        if timed_out is not None:
+            failure_kind = "timeout"
+            failure_message = str(timed_out)
+            effective_returncode = 124
+        elif errors and effective_returncode == 0:
             effective_returncode = 70
-        if failure_kind and effective_returncode == 0:
+        elif failure_kind and effective_returncode == 0:
             effective_returncode = 75
         emit_developer_event(
             agent_lifecycle_event(

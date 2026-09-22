@@ -25,9 +25,22 @@ class CommandTimeoutError(RuntimeError):
     classify the timeout use the typed attributes instead of parsing logs.
     """
 
-    def __init__(self, *, timeout: int | float, argv: list[str]) -> None:
+    def __init__(
+        self,
+        *,
+        timeout: int | float,
+        argv: list[str],
+        stdout: str = "",
+        stderr: str = "",
+    ) -> None:
         self.timeout = float(timeout)
         self.argv = tuple(argv)
+        # Preserve bounded process output already observed before timeout so
+        # adapters can classify/report the failed attempt without rerunning it.
+        # argv may contain the full model prompt and intentionally remains absent
+        # from the exception string.
+        self.stdout = stdout[-12000:]
+        self.stderr = stderr[-12000:]
         super().__init__(f"Command timed out after {timeout}s")
 
 
@@ -190,7 +203,12 @@ async def run_command(
     except TimeoutError as exc:
         await _terminate_process_group(proc)
         await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
-        raise CommandTimeoutError(timeout=timeout, argv=argv) from exc
+        raise CommandTimeoutError(
+            timeout=timeout,
+            argv=argv,
+            stdout="".join(stdout_chunks),
+            stderr="".join(stderr_chunks),
+        ) from exc
     return CommandResult(
         argv=argv,
         returncode=int(proc.returncode or 0),
