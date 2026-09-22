@@ -127,3 +127,23 @@ def test_authoritative_work_order_hints_override_out_of_scope_security_keywords(
     assert analysis["destructive_migration"] is False
     assert "security_boundary_change" not in task["flags"]
 
+def test_legacy_free_text_security_inference_remains_enabled(tmp_path: Path):
+    repo = _repo(tmp_path)
+    path = repo / "README.md"
+    path.write_text("authentication security notes\n")
+    subprocess.run(["git", "-C", str(repo), "add", "."], check=True)
+
+    analysis, task = analyze_repo(
+        repo,
+        {
+            "title": "Change authentication security behavior",
+            "description": "Update login authentication and security behavior.",
+            "task_type": "implementation",
+        },
+        {},
+    )
+
+    assert analysis["authentication_change"] is True
+    assert analysis["security_sensitive"] is True
+    assert "security_boundary_change" in task["flags"]
+
