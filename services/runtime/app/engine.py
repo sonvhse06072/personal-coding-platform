@@ -10,11 +10,13 @@ from __future__ import annotations
 
 import uuid
 from copy import deepcopy
+from pathlib import Path
 from typing import Any
 
 from .baseline import resolve_project_baseline
 from .config import project_config
 from .engine_delivery import RuntimeEngine as _RuntimeEngine
+from .repo import diff_state
 from .shell import CommandTimeoutError
 from .state import (
     checkpoint_from_row,
@@ -449,14 +451,65 @@ class RuntimeEngine(_RuntimeEngine):
         if work_order is None or not result.get("passed", False):
             return result
 
-        required = set(work_order.verification.required_phases)
-        base_profile = str(strategy.get("profile") or "")
-        extra_phases: list[str] = []
-        if "full_tests" in required and base_profile not in {"complex", "critical"}:
-            extra_phases.append("full_tests")
+        ddev_cfg = project.get("ddev", {}) or {}
+        required_order = list(work_order.verification.required_phases)
+        required = set(required_order)
+
+        # Project-owned final checks may be required by the shape of the actual
+        # diff even when an older immutable WorkOrder snapshot predates that
+        # verification phase. This is deliberately path-scoped so backend-only
+        # work does not pay frontend verification cost.
+        auto_rules = ddev_cfg.get("auto_required_phases", []) or []
+        changed_files: list[str] = []
+        if auto_rules:
+            current_diff = diff_state(
+                Path(workspace),
+                int(project.get("runtime", {}).get("max_diff_bytes", 750000)),
+            )
+            changed_files = list(current_diff.get("changed_files") or [])
+        for rule in auto_rules:
+            if not isinstance(rule, dict):
+                continue
+            phase = str(rule.get("phase") or "").strip()
+            prefixes = [
+                str(item).strip()
+                for item in (rule.get("path_prefixes") or [])
+                if str(item).strip()
+            ]
+            if (
+                phase
+                and prefixes
+                and any(
+                    path.startswith(prefix)
+                    for path in changed_files
+                    for prefix in prefixes
+                )
+                and phase not in required
+            ):
+                required.add(phase)
+                required_order.append(phase)
+
+        completed_phases = {
+            str(item.get("phase") or "")
+            for item in (result.get("phases") or [])
+            if isinstance(item, dict)
+        }
+        extra_phases = [
+            phase
+            for phase in required_order
+            if phase not in completed_phases
+        ]
 
         for phase in extra_phases:
-            commands = project.get("ddev", {}).get(phase, []) or []
+            commands = ddev_cfg.get(phase, []) or []
+            if not commands:
+                result["passed"] = False
+                result["tests_passed"] = False
+                result["failure_text"] = (
+                    str(result.get("failure_text") or "")
+                    + f"\n{phase}: required verification has no configured commands"
+                ).strip()[-30000:]
+                return result
             count = len(commands)
             budget = strategy["budget"]
             if (
@@ -483,7 +536,10 @@ class RuntimeEngine(_RuntimeEngine):
                 phase=phase,
                 timeout_seconds=self._remaining_seconds(strategy, started, 1200),
             )
-            result.setdefault("phases", []).append(phase_result)
+            annotated = dict(phase_result)
+            annotated["verification_layer"] = "final"
+            annotated["required_for_final"] = True
+            result.setdefault("phases", []).append(annotated)
             result["tool_calls"] = int(result.get("tool_calls", 0)) + len(phase_result.get("commands", []))
             result["test_runs"] = int(result.get("test_runs", 0)) + len(phase_result.get("commands", []))
             if not phase_result.get("passed", False):

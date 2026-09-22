@@ -318,3 +318,97 @@ def test_legacy_hard_verification_keeps_tool_test_ceiling():
 
     asyncio.run(scenario())
 
+def test_frontend_diff_gets_project_owned_final_quality_phase(monkeypatch):
+    async def scenario():
+        storage = FakeStorage(row())
+        engine = RuntimeEngine(storage)
+        ddev = FakeDdev()
+        engine.ddev = ddev
+        state = progress()
+        cfg = project()
+        cfg["runtime"] = {"max_diff_bytes": 750000}
+        cfg["ddev"]["frontend_quality"] = ["frontend-quality"]
+        cfg["ddev"]["auto_required_phases"] = [
+            {
+                "phase": "frontend_quality",
+                "path_prefixes": ["frontend/"],
+            }
+        ]
+        monkeypatch.setattr(
+            "app.engine.diff_state",
+            lambda workspace, max_bytes: {
+                "changed_files": ["frontend/tests/browser/profile.spec.ts"],
+            },
+        )
+
+        result = await engine._verify(
+            "job148",
+            "demo",
+            "/workspaces/job148",
+            cfg,
+            strategy(),
+            time.monotonic(),
+            state,
+        )
+
+        assert result["passed"] is True
+        assert ddev.calls == [
+            "targeted_tests",
+            "static_analysis",
+            "full_tests",
+            "frontend_quality",
+        ]
+        frontend = result["phases"][-1]
+        assert frontend["phase"] == "frontend_quality"
+        assert frontend["verification_layer"] == "final"
+        assert frontend["required_for_final"] is True
+
+    asyncio.run(scenario())
+
+
+def test_backend_diff_does_not_pay_frontend_quality_cost(monkeypatch):
+    async def scenario():
+        storage = FakeStorage(row())
+        engine = RuntimeEngine(storage)
+        ddev = FakeDdev()
+        engine.ddev = ddev
+        state = progress()
+        cfg = project()
+        cfg["runtime"] = {"max_diff_bytes": 750000}
+        cfg["ddev"]["frontend_quality"] = ["frontend-quality"]
+        cfg["ddev"]["auto_required_phases"] = [
+            {
+                "phase": "frontend_quality",
+                "path_prefixes": ["frontend/"],
+            }
+        ]
+        monkeypatch.setattr(
+            "app.engine.diff_state",
+            lambda workspace, max_bytes: {
+                "changed_files": ["web/modules/custom/demo/demo.module"],
+            },
+        )
+
+        result = await engine._verify(
+            "job148",
+            "demo",
+            "/workspaces/job148",
+            cfg,
+            strategy(),
+            time.monotonic(),
+            state,
+        )
+
+        assert result["passed"] is True
+        assert ddev.calls == [
+            "targeted_tests",
+            "static_analysis",
+            "full_tests",
+        ]
+        assert all(
+            item.get("phase") != "frontend_quality"
+            for item in result["phases"]
+        )
+
+    asyncio.run(scenario())
+

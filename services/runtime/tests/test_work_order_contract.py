@@ -445,3 +445,46 @@ def test_checkpoint_and_job_view_preserve_contract_identity() -> None:
     result = view(row)
     assert result.baseline_revision == "v1"
     assert result.work_order_id == "WO-123"
+
+def test_work_order_accepts_frontend_quality_phase_when_configured(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    configure(monkeypatch, tmp_path)
+    projects = project_config_doc()
+    projects["projects"]["demo"]["ddev"]["frontend_quality"] = [
+        "frontend-quality"
+    ]
+    projects_file = tmp_path / "projects.yml"
+    projects_file.write_text(
+        yaml.safe_dump(projects, sort_keys=False),
+        encoding="utf-8",
+    )
+    clear_config_cache()
+
+    storage = CaptureStorage()
+    engine = RuntimeEngine(storage)
+    contract = work_order(
+        verification={
+            "required_phases": [
+                "targeted_tests",
+                "frontend_quality",
+            ]
+        }
+    )
+
+    job_id = engine.create_job(
+        JobCreateRequest(
+            project_id="demo",
+            work_order=contract,
+            auto_run=False,
+        ).model_dump(mode="json")
+    )
+
+    assert storage.rows[job_id]["checkpoint"]["work_order"][
+        "verification"
+    ]["required_phases"] == [
+        "targeted_tests",
+        "frontend_quality",
+    ]
+

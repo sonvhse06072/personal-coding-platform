@@ -12,7 +12,7 @@ from .baseline import ProjectBaseline, SourceReference
 
 ProfileName = Literal["fast", "standard", "complex", "critical"]
 RiskLevel = Literal["routine", "standard", "high", "critical"]
-VerificationPhase = Literal["targeted_tests", "static_analysis", "full_tests"]
+VerificationPhase = Literal["targeted_tests", "static_analysis", "frontend_quality", "full_tests"]
 BudgetMode = Literal["legacy_hard", "adaptive"]
 
 _ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$"
