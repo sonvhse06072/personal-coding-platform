@@ -197,3 +197,32 @@ def test_contradictory_same_failed_choice_is_rejected_without_counting_failover(
     assert reroute == {"strategy": {"executor": current}}
     assert progress["provider_failovers"] == 2
     assert provider_state["provider:openrouter"]["available"] is False
+
+def test_evaluator_model_failover_selects_evaluator_role() -> None:
+    current = choice("reviewer-a", "openrouter")
+    fallback = choice("reviewer-b", "openai")
+    router = Router({
+        "strategy": {
+            "executor": choice("executor-stays", "openrouter"),
+            "evaluator": fallback,
+        }
+    })
+    runtime = engine(router)
+    provider_state: dict = {}
+    progress = {"model_failovers": 0}
+
+    candidate, reroute = asyncio.run(runtime._model_failover(
+        route_payload={"job_id": "job-review-protocol", "provider_state": {}},
+        provider_state=provider_state,
+        current_choice=current,
+        progress=progress,
+        strategy={"budget": {"max_model_failovers": 2}},
+        reason="malformed_reviewer_output",
+        role="evaluator",
+    ))
+
+    assert candidate == fallback
+    assert reroute["strategy"]["evaluator"] == fallback
+    assert progress["model_failovers"] == 1
+    assert provider_state["reviewer-a"]["available"] is False
+
