@@ -250,11 +250,19 @@ def analyze_repo(repo: Path, task: dict[str, Any], hints: dict[str, Any]) -> tup
     flags = list(task.get("flags") or [])
     if task_requires_material_change(task) and "material_change_required" not in flags:
         flags.append("material_change_required")
-    if destructive and "destructive_migration" not in flags:
+
+    # Use the final derived analysis rather than the raw keyword booleans.
+    # Authoritative WorkOrder repo hints may intentionally override keywords
+    # that appear only in out-of-scope/preservation text. Legacy free-text jobs
+    # have no such hints, so their derived values retain the historical keyword
+    # inference.
+    if derived["destructive_migration"] and "destructive_migration" not in flags:
         flags.append("destructive_migration")
-    if production_write and "production_write" not in flags:
+    if derived["production_write"] and "production_write" not in flags:
         flags.append("production_write")
-    if (authn or authz) and "security_boundary_change" not in flags:
+    if (
+        derived["authentication_change"] or derived["authorization_change"]
+    ) and "security_boundary_change" not in flags:
         flags.append("security_boundary_change")
     task_enriched = dict(task)
     task_enriched["semantic"] = semantic

@@ -300,3 +300,37 @@ def test_deterministic_job_id_is_stable_per_plan_work_order():
     assert first == second
     assert first != other
     assert len(first) == 32
+
+def test_repo_hints_treat_work_order_risk_flags_as_protected_change_authority():
+    wo = work_order("WO-1")
+    wo["risk"]["flags"] = ["frontend_tests", "verification_secrecy"]
+
+    hints = PlanOrchestrator._repo_hints(wo)
+
+    assert hints["security_sensitive"] is False
+    assert hints["authentication_change"] is False
+    assert hints["authorization_change"] is False
+    assert hints["schema_change"] is False
+    assert hints["external_api"] is False
+    assert hints["production_write"] is False
+    assert hints["destructive_migration"] is False
+
+    wo["risk"]["flags"] = [
+        "security_sensitive",
+        "authentication_change",
+        "authorization_change",
+        "schema_change",
+        "external_api",
+        "production_write",
+        "destructive_migration",
+    ]
+    hints = PlanOrchestrator._repo_hints(wo)
+
+    assert hints["security_sensitive"] is True
+    assert hints["authentication_change"] is True
+    assert hints["authorization_change"] is True
+    assert hints["schema_change"] is True
+    assert hints["external_api"] is True
+    assert hints["production_write"] is True
+    assert hints["destructive_migration"] is True
+

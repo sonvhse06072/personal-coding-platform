@@ -719,14 +719,32 @@ class PlanOrchestrator:
     @staticmethod
     def _repo_hints(work_order: dict[str, Any]) -> dict[str, Any]:
         flags = set(work_order.get("risk", {}).get("flags") or [])
-        return {
+
+        # A plan-orchestrated WorkOrder is an authoritative contract. Its full
+        # serialized text contains both in-scope work and explicit non-scope /
+        # preservation constraints. Letting repo keyword analysis reinterpret
+        # words such as "authentication", "security", "schema" or "API" from
+        # those boundaries as intended changes can spuriously raise routing
+        # risk/profile. Protected-change booleans therefore come from explicit
+        # WorkOrder risk flags for orchestrated jobs. Legacy free-text jobs do
+        # not use these hints and retain analyzer inference.
+        protected_flags = (
+            "schema_change",
+            "security_sensitive",
+            "authentication_change",
+            "authorization_change",
+            "external_api",
+            "production_write",
+            "destructive_migration",
+        )
+
+        hints = {
             "estimated_files": min(30, int(work_order.get("budget", {}).get("max_changed_files", 14))),
             "affected_components": min(10, max(1, len(work_order.get("source_references") or []))),
             "dependency_depth": min(10, len(work_order.get("dependencies") or [])),
             "tests_available": True,
             "existing_pattern": True,
-            "security_sensitive": "security_sensitive" in flags,
-            "production_write": False,
-            "destructive_migration": False,
             "likely_change_types": sorted(flags)[:20],
         }
+        hints.update({name: name in flags for name in protected_flags})
+        return hints
