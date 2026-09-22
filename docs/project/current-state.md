@@ -11,6 +11,27 @@ Last updated: 2026-09-22
 3. Read this continuity document.
 4. Inspect current GitHub `main`, active issue/PR and local service versions. The former `chonhac` DEC-025C orchestration is retired and must not be resumed.
 
+## Chợ Nhạc ProjectBaseline design revision
+
+Human Owner-approved Chợ Nhạc design governance has advanced beyond the old
+DEC-025B-era baseline. Issue #258 updates the active immutable ProjectBaseline
+for new `chonhac` work to:
+
+- revision: `mvp-v1-2026-09-22-design`;
+- source commit: `afc0901a6c073f763c440df4d492778c12fec11a`;
+- scope: same approved MVP/product/security frame, plus the approved DEC-027 /
+  DEC-028 and DF-1 through DF-4 design contracts needed for bounded frontend
+  execution.
+
+The prior `mvp-v1-2026-09-13` revision remains approved and explicitly
+resolvable for audit/history. This amendment does not reopen DEC-025 for PCP:
+DEC-025C–F remain Human Owner/operator-managed.
+
+The Runtime mounts `config/` read-only but caches ProjectBaseline YAML in
+process. After #258 merges, local Runtime must be restarted/reloaded under the
+zero-active-job gate before a new PM plan is ingested; otherwise it can keep the
+old cached revision even though the host file changed.
+
 ## Platform baseline
 
 - Efficiency initiative #146 source phases A-F are implemented; calibration and evidence-driven follow-ups remain.
@@ -161,7 +182,10 @@ reason to roll those fixes back.
 
 ## Immediate next safe actions
 
-1. DEC-025 cleanup is complete. Do not recreate or resume a PCP plan/job for DEC-025; future DEC-025 evidence is Human Owner-managed in `chonhac`.
-2. Keep the cancelled durable job/plan/WorkOrder rows as audit history and do not hand-edit Runtime database state.
-3. No n8n recovery is required: the direct health probe returned HTTP 200 with `{"status":"ok"}`; retain awareness that aggregate `platform-status` can transiently false-negative this service.
-4. Keep #146 open for calibration evidence already learned from the retired long-running DEC execution.
+1. Complete #258 exact-head CI and merge the new `chonhac` ProjectBaseline revision.
+2. With zero active engineering jobs, sync local PCP main and restart/reload Runtime so its cached ProjectBaseline resolves `mvp-v1-2026-09-22-design` at `afc0901a6c073f763c440df4d492778c12fec11a`.
+3. Only after that activation, ingest the bounded Chợ Nhạc UI-CL-1 responsive-test WorkOrder; do not ingest UI-CL-2/3 concurrently.
+4. DEC-025 cleanup remains complete. Do not recreate or resume a PCP plan/job for DEC-025; future DEC-025 evidence is Human Owner-managed in `chonhac`.
+5. Keep the cancelled durable DEC job/plan/WorkOrder rows as audit history and do not hand-edit Runtime database state.
+6. No n8n recovery is required: the direct health probe returned HTTP 200 with `{"status":"ok"}`; retain awareness that aggregate `platform-status` can transiently false-negative this service.
+7. Keep #146 open for calibration evidence already learned from the retired long-running DEC execution.
