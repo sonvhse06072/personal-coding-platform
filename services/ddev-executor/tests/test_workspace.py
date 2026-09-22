@@ -229,3 +229,93 @@ def test_phase_reconciles_legacy_workspace_ddev_override(tmp_path, monkeypatch):
         "name: demo\ntype: drupal11\n"
     )
 
+def test_workspace_ddev_override_can_pin_project_node_version(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure(
+        monkeypatch, tmp_path, allow_push=False
+    )
+    ddev = source / ".ddev"
+    ddev.mkdir()
+    (ddev / "config.yaml").write_text(
+        "name: demo\ntype: drupal11\nnodejs_version: \"22\"\n"
+    )
+    run("git", "add", ".ddev/config.yaml", cwd=source)
+    run("git", "commit", "-m", "add ddev node config", cwd=source)
+    run("git", "push", "origin", "main", cwd=source)
+
+    projects_file = tmp_path / "projects.yml"
+    data = yaml.safe_load(projects_file.read_text())
+    data["projects"]["demo"]["ddev"] = {
+        "enabled": True,
+        "workspace_nodejs_version": "24",
+    }
+    projects_file.write_text(yaml.safe_dump(data))
+
+    result = create_workspace(
+        WorkspaceRequest(job_id="jobnode24123", project_id="demo")
+    )
+    workspace = Path(result["workspace"])
+    override = yaml.safe_load(
+        (workspace / ".ddev" / "config.coding-platform.yaml").read_text()
+    )
+
+    assert override == {
+        "override_config": True,
+        "name": "cp-jobnode241",
+        "nodejs_version": "24",
+    }
+    assert "nodejs_version: \"22\"" in (
+        workspace / ".ddev" / "config.yaml"
+    ).read_text()
+
+
+def test_phase_refreshes_node_pin_for_preserved_workspace(tmp_path, monkeypatch):
+    _source, _remote, workspaces = configure(
+        monkeypatch, tmp_path, allow_push=False
+    )
+    projects_file = tmp_path / "projects.yml"
+    data = yaml.safe_load(projects_file.read_text())
+    data["projects"]["demo"]["ddev"] = {
+        "enabled": True,
+        "workspace_nodejs_version": "24",
+        "frontend_quality": ["ddev exec node --version"],
+    }
+    projects_file.write_text(yaml.safe_dump(data))
+
+    job_id = "jobnodelegacy"
+    workspace = workspaces / job_id
+    ddev = workspace / ".ddev"
+    ddev.mkdir(parents=True)
+    (ddev / "config.yaml").write_text(
+        "name: demo\ntype: drupal11\n"
+    )
+    override_path = ddev / "config.coding-platform.yaml"
+    override_path.write_text(
+        "override_config: true\nname: cp-jobnodeleg\n"
+    )
+
+    observed = {}
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        observed["override"] = yaml.safe_load(
+            override_path.read_text()
+        )
+        return 0, "v24.0.0\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+
+    response = phase(
+        PhaseRequest(
+            job_id=job_id,
+            project_id="demo",
+            workspace=str(workspace),
+            phase="frontend_quality",
+        )
+    )
+
+    assert response.passed is True
+    assert observed["override"] == {
+        "override_config": True,
+        "name": "cp-jobnodeleg",
+        "nodejs_version": "24",
+    }
+
