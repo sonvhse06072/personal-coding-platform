@@ -420,6 +420,7 @@ class RuntimeEngine(RuntimeEngineCore):
                             verification=verification,
                             work_order=checkpoint.get("work_order"),
                             baseline=checkpoint.get("project_baseline"),
+                            developer_report=run.output if run.returncode == 0 else None,
                         ),
                         mode="evaluate",
                         timeout=self._remaining_seconds(strategy, started, 1200),

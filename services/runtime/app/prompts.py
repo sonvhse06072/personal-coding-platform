@@ -177,6 +177,8 @@ def evaluator_prompt(
         [
             "Review the current workspace changes read-only. Do not edit files.",
             "AUTHORITATIVE WORKORDER / TASK CONTRACT: preserve the canonical contract embedded in REVIEW_EVIDENCE_PACK; it overrides advisory context.",
+            "Treat developer_report as advisory repair/rebuttal evidence: reconsider prior findings against it, but do not accept a developer claim automatically.",
+            "The authoritative WorkOrder and deterministic repository evidence remain decisive when they conflict with developer_report.",
             "The compact REVIEW_EVIDENCE_PACK is the default context. Do not request or reconstruct full agent/model transcripts.",
             "If the pack is insufficient for one concrete finding, use the permitted read-only repository access just in time and retrieve only the smallest relevant context.",
             "PASS only when the authoritative Task Contract/WorkOrder, scope, deterministic evidence, correctness, security, regressions and required tests are satisfactory.",
