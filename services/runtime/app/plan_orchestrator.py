@@ -488,6 +488,11 @@ class PlanOrchestrator:
                     )
                     continue
                 if job_status == "completed":
+                    resource_quiesce = await self._quiesce_job_workspace(
+                        plan,
+                        tracked,
+                        job,
+                    )
                     result = dict(job.get("result") or {})
                     delivery = dict(result.get("delivery") or {})
                     pr = dict(delivery.get("pull_request") or {})
@@ -498,18 +503,36 @@ class PlanOrchestrator:
                             state="awaiting_merge",
                             pr_number=int(pr["number"]),
                             pr_url=pr.get("url"),
-                            detail={"job_id": job_id, "delivery_state": delivery.get("state")},
+                            detail={
+                                "job_id": job_id,
+                                "delivery_state": delivery.get("state"),
+                                "resource_quiesce": resource_quiesce,
+                            },
                         )
                     else:
                         self.store.update_work_order(
                             plan_id,
                             work_order_id,
                             state="completed",
-                            detail={"job_id": job_id, "delivery_state": delivery.get("state")},
+                            detail={
+                                "job_id": job_id,
+                                "delivery_state": delivery.get("state"),
+                                "resource_quiesce": resource_quiesce,
+                            },
                         )
                     continue
                 if job_status in _TERMINAL_JOB_STATUSES:
-                    self._block_job(plan, tracked, job)
+                    resource_quiesce = await self._quiesce_job_workspace(
+                        plan,
+                        tracked,
+                        job,
+                    )
+                    self._block_job(
+                        plan,
+                        tracked,
+                        job,
+                        resource_quiesce=resource_quiesce,
+                    )
                     continue
 
             if state == "awaiting_merge":
@@ -626,7 +649,46 @@ class PlanOrchestrator:
                 return {"plan_id": str(plan["plan_id"]), "work_order_id": str(row["work_order_id"]), "job_id": created_job_id}
         return None
 
-    def _block_job(self, plan: dict[str, Any], tracked: dict[str, Any], job: dict[str, Any]) -> None:
+    async def _quiesce_job_workspace(
+        self,
+        plan: dict[str, Any],
+        tracked: dict[str, Any],
+        job: dict[str, Any],
+    ) -> dict[str, Any]:
+        workspace = str(job.get("workspace") or "").strip()
+        if not workspace:
+            return {"quiesced": False, "reason": "no_workspace"}
+        try:
+            result = await self.engine.ddev.quiesce_workspace(
+                job_id=str(job["id"]),
+                project_id=str(job["project_id"]),
+                workspace=workspace,
+            )
+        except Exception as exc:
+            message = str(exc)[-2000:]
+            self._notify(
+                plan,
+                work_order_id=str(tracked["work_order_id"]),
+                event_type="workspace_quiesce_failed",
+                severity="warning",
+                summary=f"Workspace DDEV quiesce failed: {message}",
+                suffix=f"workspace-quiesce:{job.get('id')}",
+                payload={"job_id": job.get("id"), "error": message},
+            )
+            return {"quiesced": False, "error": message}
+        return {
+            "quiesced": bool(result.get("quiesced", False)),
+            "data_removed": bool(result.get("data_removed", False)),
+        }
+
+    def _block_job(
+        self,
+        plan: dict[str, Any],
+        tracked: dict[str, Any],
+        job: dict[str, Any],
+        *,
+        resource_quiesce: dict[str, Any] | None = None,
+    ) -> None:
         plan_id = str(plan["plan_id"])
         work_order_id = str(tracked["work_order_id"])
         result = dict(job.get("result") or {})
@@ -643,7 +705,11 @@ class PlanOrchestrator:
             plan_id,
             work_order_id,
             state="blocked",
-            detail={"reason": reason, "job_id": job.get("id")},
+            detail={
+                "reason": reason,
+                "job_id": job.get("id"),
+                "resource_quiesce": resource_quiesce or {},
+            },
         )
         self.store.update_plan(plan_id, status="blocked")
         if quota_failure and "without_fallback" in reason:

@@ -64,6 +64,12 @@ class CancelRequest(BaseModel):
     job_id: str = Field(min_length=8, max_length=100)
 
 
+class QuiesceWorkspaceRequest(BaseModel):
+    job_id: str = Field(min_length=8, max_length=100)
+    project_id: str = Field(min_length=1, max_length=200)
+    workspace: str = Field(min_length=1, max_length=2000)
+
+
 class CommandOutput(BaseModel):
     command: str
     returncode: int
@@ -76,6 +82,7 @@ class PhaseResponse(BaseModel):
     passed: bool
     phase: Phase
     commands: list[CommandOutput]
+    infrastructure: list[CommandOutput] = Field(default_factory=list)
 
 
 _ACTIVE: dict[str, subprocess.Popen] = {}
@@ -273,6 +280,12 @@ def cancel_active(job_id: str) -> bool:
     return True
 
 
+def _job_has_active_process(job_id: str) -> bool:
+    with _ACTIVE_LOCK:
+        proc = _ACTIVE.get(job_id)
+        return proc is not None and proc.poll() is None
+
+
 def run_tracked(
     job_id: str,
     argv: list[str],
@@ -303,7 +316,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.16")
+app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.17")
 app.include_router(pm_bridge_github_router)
 
 
@@ -318,7 +331,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok" if ok else "degraded",
         "service": "ddev-executor",
-        "version": "1.0.16",
+        "version": "1.0.17",
         "ddev": (result.stdout or result.stderr).strip(),
         "docker": (docker.stdout or docker.stderr).strip(),
         "buildx": (buildx.stdout or buildx.stderr).strip(),
@@ -330,6 +343,45 @@ def health() -> dict[str, Any]:
 @app.post("/v1/cancel", dependencies=[Depends(auth)])
 def cancel(payload: CancelRequest) -> dict[str, Any]:
     return {"job_id": payload.job_id, "cancelled": cancel_active(payload.job_id)}
+
+
+@app.post("/v1/workspaces/quiesce", dependencies=[Depends(auth)])
+def quiesce_workspace(payload: QuiesceWorkspaceRequest) -> dict[str, Any]:
+    cfg = project(payload.project_id)
+    workspace = _validate_workspace(payload.job_id, payload.workspace)
+
+    if _job_has_active_process(payload.job_id):
+        raise HTTPException(
+            409,
+            "Workspace cannot be quiesced while an executor command is active",
+        )
+
+    _reconcile_workspace_ddev_identity(
+        workspace,
+        payload.job_id,
+        nodejs_version=cfg.get("ddev", {}).get("workspace_nodejs_version"),
+    )
+
+    returncode, stdout, stderr, timed_out = run_tracked(
+        payload.job_id,
+        ["ddev", "stop", "--unlist", "--omit-snapshot"],
+        cwd=workspace,
+        timeout=300,
+        env={**os.environ, "DDEV_NO_TUI": "true"},
+    )
+    if returncode != 0:
+        detail = (stderr or stdout or "ddev stop failed")[-12000:]
+        raise HTTPException(504 if timed_out else 502, detail)
+
+    return {
+        "job_id": payload.job_id,
+        "project_id": payload.project_id,
+        "workspace": str(workspace),
+        "quiesced": True,
+        "data_removed": False,
+        "stdout": stdout[-12000:],
+        "stderr": stderr[-12000:],
+    }
 
 
 @app.post("/v1/workspaces", dependencies=[Depends(auth)])
@@ -519,11 +571,38 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
         raise HTTPException(500, f"Configured phase {payload.phase!r} must be a list of command strings")
 
     outputs: list[CommandOutput] = []
+    infrastructure: list[CommandOutput] = []
     passed = True
     timeout = min(
         int(os.getenv("DDEV_COMMAND_TIMEOUT_SECONDS", "1800")),
         payload.timeout_seconds or 1800,
     )
+
+    if payload.phase != "cleanup":
+        returncode, stdout, stderr, timed_out = run_tracked(
+            payload.job_id,
+            ["ddev", "start", "-y"],
+            cwd=workspace,
+            timeout=min(timeout, 600),
+            env={**os.environ, "DDEV_NO_TUI": "true"},
+        )
+        infrastructure.append(
+            CommandOutput(
+                command="ddev start -y",
+                returncode=returncode,
+                stdout=stdout[-12000:],
+                stderr=stderr[-12000:],
+                timed_out=timed_out,
+            )
+        )
+        if returncode != 0:
+            return PhaseResponse(
+                passed=False,
+                phase=payload.phase,
+                commands=[],
+                infrastructure=infrastructure,
+            )
+
     for command in commands:
         returncode, stdout, stderr, timed_out = run_tracked(
             payload.job_id,
@@ -545,4 +624,9 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
             passed = False
             break
 
-    return PhaseResponse(passed=passed, phase=payload.phase, commands=outputs)
+    return PhaseResponse(
+        passed=passed,
+        phase=payload.phase,
+        commands=outputs,
+        infrastructure=infrastructure,
+    )

@@ -70,9 +70,18 @@ class FakeStorage:
 class FakeDdev:
     def __init__(self):
         self.prs = {}
+        self.quiesced = []
 
     async def github_pull_request(self, *, project_id, pr_number):
         return deepcopy(self.prs[pr_number])
+
+    async def quiesce_workspace(self, *, job_id, project_id, workspace):
+        self.quiesced.append({
+            "job_id": job_id,
+            "project_id": project_id,
+            "workspace": workspace,
+        })
+        return {"quiesced": True, "data_removed": False}
 
 
 class FakeEngine:
@@ -333,4 +342,69 @@ def test_repo_hints_treat_work_order_risk_flags_as_protected_change_authority():
     assert hints["external_api"] is True
     assert hints["production_write"] is True
     assert hints["destructive_migration"] is True
+
+def test_terminal_agent_job_quiesces_workspace_before_blocking_plan():
+    wo = work_order("WO-1")
+    service, storage, engine, store = orchestrator(
+        [wo],
+        [tracked("WO-1", 0, state="running", job_id="job-1")],
+    )
+    storage.jobs["job-1"] = {
+        "id": "job-1",
+        "project_id": "demo",
+        "workspace": "/tmp/workspaces/job-1",
+        "status": "blocked",
+        "result": {"reason": "provider_failure_without_fallback"},
+        "progress": {},
+    }
+
+    asyncio.run(service.tick())
+
+    assert engine.ddev.quiesced == [{
+        "job_id": "job-1",
+        "project_id": "demo",
+        "workspace": "/tmp/workspaces/job-1",
+    }]
+    assert store.tracked[0]["state"] == "blocked"
+    assert store.tracked[0]["detail"]["resource_quiesce"] == {
+        "quiesced": True,
+        "data_removed": False,
+    }
+
+
+def test_completed_agent_job_quiesces_workspace_before_awaiting_merge():
+    wo = work_order("WO-1")
+    service, storage, engine, store = orchestrator(
+        [wo],
+        [tracked("WO-1", 0, state="running", job_id="job-1")],
+    )
+    storage.jobs["job-1"] = {
+        "id": "job-1",
+        "project_id": "demo",
+        "workspace": "/tmp/workspaces/job-1",
+        "status": "completed",
+        "result": {
+            "delivery": {
+                "state": "ci_success",
+                "pull_request": {
+                    "number": 7,
+                    "url": "https://github.com/example/repo/pull/7",
+                },
+            }
+        },
+        "progress": {},
+    }
+
+    asyncio.run(service.tick())
+
+    assert engine.ddev.quiesced == [{
+        "job_id": "job-1",
+        "project_id": "demo",
+        "workspace": "/tmp/workspaces/job-1",
+    }]
+    assert store.tracked[0]["state"] == "awaiting_merge"
+    assert store.tracked[0]["detail"]["resource_quiesce"] == {
+        "quiesced": True,
+        "data_removed": False,
+    }
 
