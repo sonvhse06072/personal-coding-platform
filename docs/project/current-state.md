@@ -2,7 +2,7 @@
 
 Status: mutable continuity document. Repository docs and executable evidence are authoritative over chat history. Durable architecture/product/policy decisions remain in their topical source-of-truth documents.
 
-Last updated: 2026-09-22
+Last updated: 2026-09-23
 
 ## Resume order
 
@@ -275,11 +275,45 @@ the same R2 job rather than creating R3. Live evidence now proves:
   `frontend/tests/browser/verification.spec.ts`;
 - R2 was resumed on the same job/workspace with durable counters preserved;
 - the fresh route remains `standard` and currently selected `codex_terra`;
-- orchestration is again `executing` with the R2 WorkOrder `running`;
+- orchestration resumed on the same job after those fixes;
 - Antigravity bridge and n8n direct health are healthy.
+
+R2 is now durably `blocked` with `reassessment_stopped`; it is not executing.
+Its exact job/workspace/DDEV data and blocked audit evidence must remain
+untouched. A 2026-09-23 read-only gate reported Runtime counts `blocked=12`,
+`cancelled=1`, `completed=10`, `failed=2`, no active Runtime state, and
+`ddev-executor active_jobs=0`.
 
 Issues #15 and #16 remain pending so only one Design Closure engineering task is
 active at a time.
+
+## Dedicated PCP BuildKit isolation #281
+
+Issue #281 implementation is active on branch
+`ai/issue-281-pcp-builder-gc`. The source change introduces:
+
+- one deterministic `pcp-builder` using the `docker-container` driver without
+  changing the user's globally selected builder;
+- a host pre-start image helper that explicitly builds and `--load`s fixed
+  Router/Runtime/ddev-executor image tags while preserving all existing build
+  args;
+- Compose consumption of those explicit tags, leaving n8n unchanged;
+- executor-only `BUILDX_BUILDER=pcp-builder` selection plus a narrowly mounted
+  PCP Buildx metadata directory rather than the host's complete `~/.docker`;
+- read-only attribution separating PCP builder cache, shared/default cache,
+  platform images, exact PCP DDEV built images, volumes and container
+  references;
+- explicit report/execute GC with Runtime and executor-idle gates, conservative
+  age retention, exact `--builder pcp-builder` cache pruning, and optional
+  exact-label terminal image cleanup for completed/cancelled jobs only.
+
+Source-level verification currently passes: structure `89`, Router `92`,
+Runtime `388`, ddev-executor `57`, script `bash -n`, Compose render, and scoped
+ShellCheck. Live activation has not yet occurred. The pre-activation inventory
+records `pcp-builder` absent and the existing shared/default cache unchanged;
+that old shared cache is intentionally retained until isolation is proven.
+No platform restart/rebuild or GC may occur until the source/CI gate and a fresh
+zero-active-work gate pass.
 
 ## Relevant completed follow-ups
 
@@ -310,22 +344,25 @@ active at a time.
 
 ## Immediate next safe actions
 
-1. Let R2 job `812aabd7ab0a5adbb18a7a5edc8d7009` continue autonomously on
-   the recovered DDEV identity; do not manually /run, reroute, restart platform
-   services, or create a replacement while it is making progress.
-2. Observe branch `ai/812aabd7ab0a`, the resulting Chợ Nhạc PR and exact-head
-   CI. Review the exact test-only diff before merge.
-3. Treat any future deterministic verification failure as project evidence only
+1. Complete issue #281 source review/CI. Keep the retained shared/default
+   BuildKit cache unchanged.
+2. After CI is green, rerun the Runtime and ddev-executor zero-active-work gate,
+   record inventory, and only then perform the single bounded #281 activation
+   restart and builder/cache attribution proof.
+3. Keep R2 job `812aabd7ab0a5adbb18a7a5edc8d7009` durably blocked; do not
+   resume, reroute, clean, or use its workspace/resources as the #281 rollout
+   fixture.
+4. Treat any future deterministic verification failure as project evidence only
    after confirming the command actually reached PHPUnit/PHPCS/Playwright;
    infrastructure-start failures must not be sent back to the developer as code
    repairs.
-4. If R2 reports a genuine responsive product defect requiring production-code
+5. If R2 reports a genuine responsive product defect requiring production-code
    change, keep UI-CL-1 test-only and open a separate bounded defect issue
    rather than broadening the current WorkOrder.
-5. Keep Chợ Nhạc #15 and #16 pending until #14 R2 is reviewed and merged.
-6. Keep the original blocked UI-CL-1 job/plan as platform-defect audit history;
+6. Keep Chợ Nhạc #15 and #16 pending until #14 R2 is reviewed and merged.
+7. Keep the original blocked UI-CL-1 job/plan as platform-defect audit history;
    do not resume/reroute it or hand-edit durable Runtime state.
-7. DEC-025 cleanup remains complete. Do not recreate or resume a PCP plan/job
+8. DEC-025 cleanup remains complete. Do not recreate or resume a PCP plan/job
    for DEC-025; future DEC-025 evidence is Human Owner-managed in `chonhac`.
-8. Keep #146 open for calibration evidence already learned from the retired
+9. Keep #146 open for calibration evidence already learned from the retired
    long-running DEC execution.

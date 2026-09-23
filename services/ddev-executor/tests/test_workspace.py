@@ -423,7 +423,7 @@ def test_phase_starts_quiesced_ddev_before_configured_commands(tmp_path, monkeyp
     calls = []
 
     def fake_run_tracked(job, argv, *, cwd, timeout, env):
-        calls.append(list(argv))
+        calls.append((list(argv), dict(env)))
         return 0, "ok\n", "", False
 
     monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
@@ -438,8 +438,12 @@ def test_phase_starts_quiesced_ddev_before_configured_commands(tmp_path, monkeyp
     )
 
     assert response.passed is True
-    assert calls[0] == ["ddev", "start", "-y"]
-    assert calls[1] == ["bash", "-lc", "ddev exec echo check"]
+    assert calls[0][0] == ["ddev", "start", "-y"]
+    assert calls[1][0] == ["bash", "-lc", "ddev exec echo check"]
+    for _argv, env in calls:
+        assert env["BUILDX_BUILDER"] == "pcp-builder"
+        assert env["BUILDX_CONFIG"] == "/home/coder/.pcp-buildx"
+        assert env["DDEV_NO_TUI"] == "true"
     assert len(response.infrastructure) == 1
     assert response.infrastructure[0].command == "ddev start -y"
     assert response.infrastructure[0].returncode == 0
@@ -497,4 +501,3 @@ def test_quiesce_workspace_can_release_only_validated_project_data(tmp_path, mon
     assert result["quiesced"] is True
     assert result["data_removed"] is True
     assert workspace.exists()
-

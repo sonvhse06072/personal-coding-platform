@@ -13,6 +13,8 @@ def test_required_platform_files_exist():
         "config/models.yml", "config/routing-policy.yml", "config/projects.yml",
         "services/router/app/main.py", "services/runtime/app/main.py", "services/ddev-executor/app/main.py",
         "services/ddev-executor/app/github_delivery.py",
+        "scripts/pcp-build-images.sh", "scripts/pcp-resource-inventory.sh",
+        "scripts/pcp-resource-gc.sh",
     ]
     for item in required:
         assert (ROOT / item).exists(), item
@@ -42,12 +44,37 @@ def test_service_homes_are_prepared_for_ddev_uid():
     runtime = (ROOT / "services/runtime/Dockerfile").read_text()
     executor = (ROOT / "services/ddev-executor/Dockerfile").read_text()
 
-    assert "DDEV_UID: ${DDEV_UID}" in compose
-    assert "DDEV_GID: ${DDEV_GID}" in compose
+    build_helper = (ROOT / "scripts/pcp-build-images.sh").read_text()
+    assert 'DDEV_UID="${DDEV_UID:-$(id -u)}"' in build_helper
+    assert 'DDEV_GID="${DDEV_GID:-$(id -g)}"' in build_helper
     for dockerfile in (runtime, executor):
         assert "ARG DDEV_UID=1000" in dockerfile
         assert "/home/coder/.cache" in dockerfile
         assert "chown -R ${DDEV_UID}:${DDEV_GID} /home/coder" in dockerfile
+
+
+def test_pcp_custom_images_use_explicit_isolated_builder_path():
+    compose = yaml.safe_load((ROOT / ".ddev/docker-compose.platform.yaml").read_text())
+    services = compose["services"]
+    expected = {
+        "router": "personal-coding-platform-router:local",
+        "coding-runtime": "personal-coding-platform-coding-runtime:local",
+        "ddev-executor": "personal-coding-platform-ddev-executor:local",
+    }
+    for service, image in expected.items():
+        assert services[service]["image"] == image
+        assert "build" not in services[service]
+    assert services["n8n"]["image"] == "${N8N_IMAGE:-n8nio/n8n:2.38.6}"
+
+    hooks = yaml.safe_load((ROOT / ".ddev/config.yaml").read_text())["hooks"]["pre-start"]
+    assert hooks[0]["exec-host"] == "bash ./scripts/pcp-build-images.sh"
+    assert "antigravity-bridge.sh start" in hooks[1]["exec-host"]
+
+    executor = services["ddev-executor"]
+    assert executor["environment"]["PCP_BUILDX_BUILDER"] == "pcp-builder"
+    assert executor["environment"]["PCP_BUILDX_CONFIG"] == "/home/coder/.pcp-buildx"
+    assert "${HOST_HOME}/.coding-platform/buildx:/home/coder/.pcp-buildx" in executor["volumes"]
+    assert all("/.docker" not in volume for volume in executor["volumes"])
 
 
 def test_github_delivery_token_is_scoped_to_privileged_executor():
@@ -144,4 +171,3 @@ def test_chonhac_frontend_quality_installs_playwright_browser_for_runtime_user()
         "playwright install --with-deps chromium" not in command
         for command in commands
     )
-

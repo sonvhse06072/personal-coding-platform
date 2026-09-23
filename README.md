@@ -247,6 +247,63 @@ ddev logs -s ddev-executor
 ddev logs -s n8n
 ```
 
+## PCP BuildKit isolation and resource GC
+
+The DDEV `pre-start` hook runs `scripts/pcp-build-images.sh` before the existing
+Antigravity bridge hook. The helper idempotently creates and bootstraps the
+`pcp-builder` Buildx builder with the `docker-container` driver, then explicitly
+builds and `--load`s fixed local image tags for `router`, `coding-runtime`, and
+`ddev-executor`. Their Compose entries consume those tags and contain no
+implicit `build:` section. The helper never runs `docker buildx use`, so the
+user's globally selected builder is unchanged.
+
+Host and executor access to the builder use only PCP-owned Buildx instance
+metadata under `$HOST_HOME/.coding-platform/buildx`. `ddev-executor` mounts that
+directory at `/home/coder/.pcp-buildx` and injects
+`BUILDX_BUILDER=pcp-builder` plus that `BUILDX_CONFIG` only into its bounded
+DDEV subprocesses. The host's complete `~/.docker` directory and registry
+credentials are not mounted.
+
+Read-only attribution is safe while jobs exist. Run it through the host-secret
+wrapper when Runtime job-state correlation is wanted:
+
+```bash
+bash ./scripts/with-host-secrets.sh ./scripts/pcp-resource-inventory.sh
+```
+
+The report separates the dedicated PCP builder and shared/default builder,
+platform images, exact `cp-*` DDEV built images, containers, volumes, and their
+container references.
+
+Resource GC is report-only by default and fails closed unless Runtime is
+queryable, every Runtime job is in a stable `blocked`, `failed`, `completed`, or
+`cancelled` state, and `ddev-executor` reports `active_jobs=0`:
+
+```bash
+# Report cache/image candidates; mutate nothing.
+bash ./scripts/with-host-secrets.sh ./scripts/pcp-resource-gc.sh --dry-run
+
+# Prune only pcp-builder cache older than seven days.
+bash ./scripts/with-host-secrets.sh ./scripts/pcp-resource-gc.sh \
+  --execute --until 168h
+
+# Also remove exact unreferenced PCP DDEV built-image tags for only
+# completed/cancelled Runtime jobs whose DDEV ownership labels match.
+bash ./scripts/with-host-secrets.sh ./scripts/pcp-resource-gc.sh \
+  --execute --until 168h --terminal-images
+```
+
+The GC script never removes containers, named volumes, databases, or Git
+workspaces. It preserves blocked/failed job images, refuses image removal when
+any container still references the image, and invokes cache cleanup only as
+`docker buildx prune --builder pcp-builder ...`. It does not prune the retained
+shared/default cache.
+
+DDEV's own base web/database image acquisition can still have behavior outside
+the executor-owned workspace build path. The integration proves PCP custom
+service builds and executor-owned workspace DDEV subprocesses select
+`pcp-builder`; it does not claim that every DDEV build on the machine does so.
+
 ## Operator shell safety
 
 Treat the interactive Ubuntu/WSL terminal as persistent operator state. A pasted validation block must not be able to close the parent shell just because a gate intentionally returns a non-zero exit code.
