@@ -80,6 +80,55 @@ class RuntimeEngineCore:
     async def enqueue(self, job_id: str) -> None:
         await self.queue.put(job_id)
 
+    async def _quiesce_stable_manual_job(self, job_id: str) -> None:
+        """Best-effort DDEV cleanup for non-orchestrated stable jobs.
+
+        Orchestrated WorkOrders are quiesced by PlanOrchestrator so its durable
+        detail/notifications can record the resource action. Manual jobs still
+        need the same resource discipline, otherwise their per-job DDEV project
+        can remain running forever.
+        """
+        row = self.storage.get(job_id)
+        if not row or row.get("work_order_id"):
+            return
+        status = str(row.get("status") or "")
+        if status not in STABLE:
+            return
+        workspace = str(row.get("workspace") or "").strip()
+        if not workspace:
+            return
+        project = project_config(str(row["project_id"]))
+        if not project.get("ddev", {}).get("enabled", False):
+            return
+
+        remove_data = status in {"completed", "cancelled"}
+        try:
+            result = await self.ddev.quiesce_workspace(
+                job_id=job_id,
+                project_id=str(row["project_id"]),
+                workspace=workspace,
+                remove_data=remove_data,
+            )
+            detail = {
+                "quiesced": bool(result.get("quiesced", False)),
+                "data_removed": bool(result.get("data_removed", False)),
+                "status": status,
+            }
+        except Exception as exc:
+            detail = {
+                "quiesced": False,
+                "data_removed": False,
+                "status": status,
+                "error": str(exc)[-2000:],
+            }
+
+        latest = self.storage.get(job_id)
+        if not latest:
+            return
+        checkpoint = checkpoint_from_row(latest)
+        checkpoint["resource_quiesce"] = detail
+        self.storage.update(job_id, checkpoint=checkpoint)
+
     async def _worker_loop(self) -> None:
         while True:
             job_id = await self.queue.get()
@@ -101,6 +150,8 @@ class RuntimeEngineCore:
                 if row and row["status"] != "cancelled":
                     self.storage.update(job_id, status="failed", error=f"{type(exc).__name__}: {exc}")
             finally:
+                if not self._stopping:
+                    await self._quiesce_stable_manual_job(job_id)
                 self.active_jobs.pop(job_id, None)
                 self.queue.task_done()
 
@@ -154,6 +205,7 @@ class RuntimeEngineCore:
         if active and not active.done():
             active.cancel()
             await asyncio.gather(active, return_exceptions=True)
+        await self._quiesce_stable_manual_job(job_id)
         updated = self.storage.get(job_id)
         assert updated is not None
         return updated
