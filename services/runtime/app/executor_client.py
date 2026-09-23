@@ -196,6 +196,7 @@ class DdevExecutorClient:
         job_id: str,
         project_id: str,
         workspace: str,
+        remove_data: bool = False,
     ) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=330) as client:
             response = await client.post(
@@ -204,6 +205,7 @@ class DdevExecutorClient:
                     "job_id": job_id,
                     "project_id": project_id,
                     "workspace": workspace,
+                    "remove_data": bool(remove_data),
                 },
                 headers=self.headers,
             )
