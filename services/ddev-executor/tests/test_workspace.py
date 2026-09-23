@@ -444,3 +444,57 @@ def test_phase_starts_quiesced_ddev_before_configured_commands(tmp_path, monkeyp
     assert response.infrastructure[0].command == "ddev start -y"
     assert response.infrastructure[0].returncode == 0
 
+def test_quiesce_workspace_can_release_only_validated_project_data(tmp_path, monkeypatch):
+    _source, _remote, workspaces = configure(
+        monkeypatch, tmp_path, allow_push=False
+    )
+    projects_file = tmp_path / "projects.yml"
+    data = yaml.safe_load(projects_file.read_text())
+    data["projects"]["demo"]["ddev"] = {"enabled": True}
+    projects_file.write_text(yaml.safe_dump(data))
+
+    job_id = "jobrelease123"
+    workspace = workspaces / job_id
+    ddev = workspace / ".ddev"
+    ddev.mkdir(parents=True)
+    run("git", "init", "-b", "ai/test", cwd=workspace)
+    (workspace / "README.md").write_text("workspace\n")
+    run("git", "add", "README.md", cwd=workspace)
+    run(
+        "git",
+        "-c", "user.email=test@example.com",
+        "-c", "user.name=Test",
+        "commit", "-m", "init",
+        cwd=workspace,
+    )
+    (ddev / "config.yaml").write_text("name: demo\ntype: drupal11\n")
+
+    observed = {}
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        observed["argv"] = argv
+        return 0, "Stopped and removed data\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+    monkeypatch.setattr("app.main._job_has_active_process", lambda value: False)
+
+    result = quiesce_workspace(
+        QuiesceWorkspaceRequest(
+            job_id=job_id,
+            project_id="demo",
+            workspace=str(workspace),
+            remove_data=True,
+        )
+    )
+
+    assert observed["argv"] == [
+        "ddev",
+        "stop",
+        "--unlist",
+        "--omit-snapshot",
+        "--remove-data",
+    ]
+    assert result["quiesced"] is True
+    assert result["data_removed"] is True
+    assert workspace.exists()
+
