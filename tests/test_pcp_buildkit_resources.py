@@ -75,7 +75,7 @@ fi
         assert expected in joined
 
 
-def test_gc_refuses_active_runtime_work_before_docker_mutation(tmp_path: Path) -> None:
+def test_gc_refuses_active_work_hidden_behind_500_newer_terminal_jobs(tmp_path: Path) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     docker_log = tmp_path / "docker.log"
@@ -84,11 +84,17 @@ def test_gc_refuses_active_runtime_work_before_docker_mutation(tmp_path: Path) -
         """#!/usr/bin/env bash
 set -eu
 out=''
+url=''
 while [[ $# -gt 0 ]]; do
   if [[ "$1" == "-o" ]]; then out="$2"; shift; fi
+  if [[ "$1" == http* ]]; then url="$1"; fi
   shift
 done
-printf '%s' "$RUNTIME_JSON" > "$out"
+if [[ "$url" == */v1/jobs/active-count ]]; then
+  printf '%s' "$ACTIVE_COUNT_JSON" > "$out"
+else
+  printf '%s' "$RUNTIME_JSON" > "$out"
+fi
 """,
     )
     write_executable(
@@ -97,18 +103,35 @@ printf '%s' "$RUNTIME_JSON" > "$out"
 printf '%s\\n' "$*" >> "$DOCKER_LOG"
 """,
     )
-    active_jobs = {
-        "jobs": [{
-            "id": "a" * 32,
-            "status": "executing",
-            "workspace": "/tmp/workspaces/" + "a" * 32,
-        }]
+    newer_terminal_jobs = [
+        {
+            "id": f"{index:010x}" + "0" * 22,
+            "status": "completed",
+            "workspace": f"/tmp/workspaces/{index:010x}" + "0" * 22,
+        }
+        for index in range(1, 501)
+    ]
+    older_active_job = {
+        "id": "f" * 32,
+        "status": "executing",
+        "workspace": "/tmp/workspaces/" + "f" * 32,
     }
+    full_history = [*newer_terminal_jobs, older_active_job]
+    authoritative_active_count = sum(
+        job["status"] not in {"blocked", "cancelled", "completed", "failed"}
+        for job in full_history
+    )
+    assert len(newer_terminal_jobs) == 500
+    assert older_active_job not in newer_terminal_jobs
+    assert authoritative_active_count == 1
     env = {
         **os.environ,
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
         "RUNTIME_API_TOKEN": "test-token",
-        "RUNTIME_JSON": json.dumps(active_jobs),
+        "RUNTIME_JSON": json.dumps({"jobs": newer_terminal_jobs}),
+        "ACTIVE_COUNT_JSON": json.dumps(
+            {"active_engineering_jobs": authoritative_active_count}
+        ),
         "DOCKER_LOG": str(docker_log),
         "PCP_BUILDX_CONFIG": str(tmp_path / "buildx"),
     }
@@ -120,7 +143,8 @@ printf '%s\\n' "$*" >> "$DOCKER_LOG"
         capture_output=True,
     )
     assert result.returncode == 20
-    assert "GATE=BLOCKED" in result.stderr
+    assert "authoritative Runtime active-work count is not exactly zero" in result.stderr
+    assert "AUTHORITATIVE_ACTIVE_ENGINEERING_JOBS=1" in result.stdout
     assert not docker_log.exists()
 
 
@@ -133,11 +157,17 @@ def test_gc_execute_targets_only_pcp_builder(tmp_path: Path) -> None:
         """#!/usr/bin/env bash
 set -eu
 out=''
+url=''
 while [[ $# -gt 0 ]]; do
   if [[ "$1" == "-o" ]]; then out="$2"; shift; fi
+  if [[ "$1" == http* ]]; then url="$1"; fi
   shift
 done
-printf '%s' "$RUNTIME_JSON" > "$out"
+if [[ "$url" == */v1/jobs/active-count ]]; then
+  printf '%s' "$ACTIVE_COUNT_JSON" > "$out"
+else
+  printf '%s' "$RUNTIME_JSON" > "$out"
+fi
 """,
     )
     write_executable(
@@ -180,6 +210,7 @@ fi
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
         "RUNTIME_API_TOKEN": "test-token",
         "RUNTIME_JSON": json.dumps(stable_jobs),
+        "ACTIVE_COUNT_JSON": json.dumps({"active_engineering_jobs": 0}),
         "DOCKER_LOG": str(docker_log),
         "PCP_BUILDX_CONFIG": str(buildx_dir),
     }
@@ -216,11 +247,17 @@ def test_gc_terminal_images_preserve_blocked_and_remove_exact_completed(tmp_path
         """#!/usr/bin/env bash
 set -eu
 out=''
+url=''
 while [[ $# -gt 0 ]]; do
   if [[ "$1" == "-o" ]]; then out="$2"; shift; fi
+  if [[ "$1" == http* ]]; then url="$1"; fi
   shift
 done
-printf '%s' "$RUNTIME_JSON" > "$out"
+if [[ "$url" == */v1/jobs/active-count ]]; then
+  printf '%s' "$ACTIVE_COUNT_JSON" > "$out"
+else
+  printf '%s' "$RUNTIME_JSON" > "$out"
+fi
 """,
     )
     write_executable(
@@ -269,6 +306,7 @@ fi
         "PATH": f"{bin_dir}:{os.environ['PATH']}",
         "RUNTIME_API_TOKEN": "test-token",
         "RUNTIME_JSON": json.dumps(jobs),
+        "ACTIVE_COUNT_JSON": json.dumps({"active_engineering_jobs": 0}),
         "DOCKER_LOG": str(docker_log),
         "COMPLETED_WORKSPACE": completed_workspace,
         "BLOCKED_WORKSPACE": blocked_workspace,

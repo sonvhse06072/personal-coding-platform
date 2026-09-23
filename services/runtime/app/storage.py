@@ -69,6 +69,7 @@ CREATE INDEX IF NOT EXISTS cp_execution_plans_status_idx
 """
 
 _ACTIVITY_STATUSES = {"routing", "planning", "executing", "verifying", "evaluating", "delivering"}
+_INACTIVE_ENGINEERING_STATUSES = ("blocked", "cancelled", "completed", "failed")
 
 
 def now() -> datetime:
@@ -137,6 +138,19 @@ class Storage:
     def list(self, limit: int = 50) -> list[dict[str, Any]]:
         with self.connect() as conn:
             return list(conn.execute("SELECT * FROM cp_jobs ORDER BY created_at DESC LIMIT %s", (limit,)).fetchall())
+
+    def count_active_engineering_jobs(self) -> int:
+        """Count all jobs that make destructive operator maintenance unsafe."""
+        with self.connect() as conn:
+            row = conn.execute(
+                """SELECT COUNT(*) AS active_engineering_jobs
+                FROM cp_jobs
+                WHERE status IS NULL OR status NOT IN (%s, %s, %s, %s)""",
+                _INACTIVE_ENGINEERING_STATUSES,
+            ).fetchone()
+        if row is None:
+            raise RuntimeError("Active engineering job count query returned no result")
+        return int(row["active_engineering_jobs"])
 
     def append_event(self, job_id: str, event: dict[str, Any]) -> None:
         """Append one already-sanitized observability event for a durable job."""

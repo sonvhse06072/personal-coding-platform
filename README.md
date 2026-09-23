@@ -276,8 +276,9 @@ platform images, exact `cp-*` DDEV built images, containers, volumes, and their
 container references.
 
 Resource GC is report-only by default and fails closed unless Runtime is
-queryable, every Runtime job is in a stable `blocked`, `failed`, `completed`, or
-`cancelled` state, and `ddev-executor` reports `active_jobs=0`:
+queryable, an exhaustive server-side count across the complete Runtime job
+table reports exactly zero jobs outside stable `blocked`, `failed`, `completed`,
+or `cancelled` state, and `ddev-executor` reports `active_jobs=0`:
 
 ```bash
 # Report cache/image candidates; mutate nothing.
@@ -297,7 +298,9 @@ The GC script never removes containers, named volumes, databases, or Git
 workspaces. It preserves blocked/failed job images, refuses image removal when
 any container still references the image, and invokes cache cleanup only as
 `docker buildx prune --builder pcp-builder ...`. It does not prune the retained
-shared/default cache.
+shared/default cache. The separate newest-500 Runtime inventory is used only to
+attribute exact terminal images; images it cannot map remain preserved and that
+bounded inventory never authorizes GC.
 
 DDEV's own base web/database image acquisition can still have behavior outside
 the executor-owned workspace build path. The integration proves PCP custom

@@ -307,10 +307,23 @@ Issue #281 implementation is in PR #283 on branch
   age retention, exact `--builder pcp-builder` cache pruning, and optional
   exact-label terminal image cleanup for completed/cancelled jobs only.
 
-Source-level verification passes: structure `89`, Router `92`, Runtime `388`,
-ddev-executor `57`, script `bash -n`, Compose render, and scoped ShellCheck.
-PR CI run `35856810259` passed all four required jobs on implementation head
-`761606dcbb58741efc3534e2bffc08f26be198a6`.
+PR review identified that the original zero-work gate used the newest-500
+Runtime job inventory and therefore was not exhaustive once job history exceeded
+that bound. The merge blocker is corrected in source: Runtime now exposes an
+authenticated server-side active-work count over the complete `cp_jobs` table,
+and GC fails closed unless that authoritative count is exactly zero. The capped
+inventory remains attribution-only, so unmapped older images stay preserved.
+Regression coverage models 500 newer terminal jobs hiding one older active job
+and proves GC refuses before any Docker mutation. No additional live restart,
+validation fixture, or GC was performed; the prior isolation rollout evidence
+below remains valid. Updated source verification passes structure `89`, Router
+`92`, Runtime `391`, ddev-executor `57`, `bash -n`, and ShellCheck. Exact-head CI
+for the corrected PR head is pending.
+
+Original implementation source verification passed structure `89`, Router
+`92`, Runtime `388`, ddev-executor `57`, script `bash -n`, Compose render, and
+scoped ShellCheck. PR CI run `35856810259` passed all four required jobs on
+implementation head `761606dcbb58741efc3534e2bffc08f26be198a6`.
 
 Local activation is complete under the required rollout gate:
 

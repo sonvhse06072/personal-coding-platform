@@ -23,12 +23,15 @@ class _Connection:
         self.recent_rows = []
         self.queries = []
         self.commits = 0
+        self.active_engineering_jobs = 0
 
     def execute(self, query, params=None):
         compact = " ".join(query.split())
         self.queries.append((compact, params))
         if compact.startswith("SELECT status, route, workspace FROM cp_jobs"):
             return _Result(row=self.current)
+        if compact.startswith("SELECT COUNT(*) AS active_engineering_jobs FROM cp_jobs"):
+            return _Result(row={"active_engineering_jobs": self.active_engineering_jobs})
         if compact.startswith("INSERT INTO cp_job_events"):
             self.events.append(params)
         if "ROW_NUMBER() OVER (PARTITION BY job_id" in compact:
@@ -54,6 +57,20 @@ def test_job_event_schema_is_durable_and_indexed_per_job():
     assert "CREATE TABLE IF NOT EXISTS cp_job_events" in DDL
     assert "REFERENCES cp_jobs(id) ON DELETE CASCADE" in DDL
     assert "cp_job_events_job_id_idx" in DDL
+
+
+def test_active_engineering_count_queries_the_complete_job_table():
+    connection = _Connection()
+    connection.active_engineering_jobs = 1
+    storage = _storage(connection)
+
+    assert storage.count_active_engineering_jobs() == 1
+
+    query, params = connection.queries[-1]
+    assert "COUNT(*) AS active_engineering_jobs FROM cp_jobs" in query
+    assert "status IS NULL OR status NOT IN (%s, %s, %s, %s)" in query
+    assert "LIMIT" not in query
+    assert params == ("blocked", "cancelled", "completed", "failed")
 
 
 def test_create_persists_the_initial_registration_event():

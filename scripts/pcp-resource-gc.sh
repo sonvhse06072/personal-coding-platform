@@ -64,6 +64,7 @@ tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 jobs_json="$tmpdir/jobs.json"
 jobs_map="$tmpdir/jobs.map"
+active_count_json="$tmpdir/active-count.json"
 executor_json="$tmpdir/executor.json"
 images_list="$tmpdir/images.list"
 
@@ -73,6 +74,37 @@ pcp_buildx() {
 
 shared_buildx() {
   env -u BUILDX_CONFIG -u BUILDX_BUILDER docker buildx "$@"
+}
+
+fetch_runtime_active_count() {
+  if ! curl -fsS --max-time 15 \
+    -H "Authorization: Bearer $RUNTIME_API_TOKEN" \
+    "$RUNTIME_URL/v1/jobs/active-count" \
+    -o "$active_count_json"; then
+    echo "GATE=BLOCKED: authoritative Runtime active-work count is unavailable." >&2
+    exit 20
+  fi
+
+  if ! python3 - "$active_count_json" <<'PY'
+import json
+import sys
+
+try:
+    payload = json.load(open(sys.argv[1], encoding="utf-8"))
+    count = payload["active_engineering_jobs"]
+except (KeyError, TypeError, ValueError, OSError) as exc:
+    raise SystemExit(f"invalid Runtime active-work count response: {exc}")
+
+if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+    raise SystemExit(f"invalid Runtime active-work count: {count!r}")
+print(f"AUTHORITATIVE_ACTIVE_ENGINEERING_JOBS={count}")
+if count != 0:
+    raise SystemExit(20)
+PY
+  then
+    echo "GATE=BLOCKED: authoritative Runtime active-work count is not exactly zero." >&2
+    exit 20
+  fi
 }
 
 fetch_runtime_jobs() {
@@ -96,15 +128,10 @@ try:
 except (KeyError, TypeError, ValueError, OSError) as exc:
     raise SystemExit(f"invalid Runtime job response: {exc}")
 
-stable = {"blocked", "cancelled", "completed", "failed"}
-active = [job for job in jobs if job.get("status") not in stable]
 counts = collections.Counter(str(job.get("status")) for job in jobs)
 print("RUNTIME_STATUS_COUNTS=" + ",".join(
     f"{key}:{counts[key]}" for key in sorted(counts)
 ))
-if active:
-    print("ACTIVE_JOB_IDS=" + ",".join(str(job.get("id")) for job in active))
-    raise SystemExit(20)
 
 seen = {}
 rows = []
@@ -125,7 +152,7 @@ with open(target, "w", encoding="utf-8") as handle:
         handle.write("|".join(row) + "\n")
 PY
   then
-    echo "GATE=BLOCKED: Runtime reports active/unknown work or invalid ownership data." >&2
+    echo "GATE=BLOCKED: Runtime job inventory has invalid ownership data." >&2
     exit 20
   fi
 }
@@ -245,6 +272,7 @@ process_terminal_images() {
 }
 
 fetch_runtime_jobs
+fetch_runtime_active_count
 check_executor_idle
 check_builder
 echo "ZERO_ACTIVE_ENGINEERING_WORK=PASS"
@@ -264,6 +292,7 @@ fi
 # stale report cannot authorize GC after engineering work begins.
 fetch_runtime_jobs
 check_executor_idle
+fetch_runtime_active_count
 
 echo
 echo "== Prune PCP builder cache older than $UNTIL =="
@@ -275,6 +304,7 @@ pcp_buildx prune \
 if [[ "$TERMINAL_IMAGES" == "true" ]]; then
   fetch_runtime_jobs
   check_executor_idle
+  fetch_runtime_active_count
   process_terminal_images true
 fi
 
