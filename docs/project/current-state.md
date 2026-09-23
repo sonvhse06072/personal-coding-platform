@@ -307,13 +307,49 @@ Issue #281 implementation is in PR #283 on branch
   age retention, exact `--builder pcp-builder` cache pruning, and optional
   exact-label terminal image cleanup for completed/cancelled jobs only.
 
-Source-level verification currently passes: structure `89`, Router `92`,
-Runtime `388`, ddev-executor `57`, script `bash -n`, Compose render, and scoped
-ShellCheck. Live activation has not yet occurred. The pre-activation inventory
-records `pcp-builder` absent and the existing shared/default cache unchanged;
-that old shared cache is intentionally retained until isolation is proven.
-No platform restart/rebuild or GC may occur until the source/CI gate and a fresh
-zero-active-work gate pass.
+Source-level verification passes: structure `89`, Router `92`, Runtime `388`,
+ddev-executor `57`, script `bash -n`, Compose render, and scoped ShellCheck.
+PR CI run `35856810259` passed all four required jobs on implementation head
+`761606dcbb58741efc3534e2bffc08f26be198a6`.
+
+Local activation is complete under the required rollout gate:
+
+- pre-activation Runtime counts were `blocked=12`, `cancelled=1`,
+  `completed=10`, `failed=2`; R2 was `blocked`; ddev-executor reported
+  `active_jobs=0`; Antigravity reported `active_runs=0`;
+- the global selected builder was and remains `default` with driver `docker`;
+  its pre-activation usage was `24.36GB` total/reclaimable (`18.1GB` private,
+  `6.263GB` shared);
+- exactly one normal DDEV restart ran after source/CI green; the pre-start hook
+  created one `pcp-builder` with driver `docker-container`, built/loaded all
+  three deterministic PCP tags, then preserved the existing Antigravity hook;
+- the running Router, Runtime and ddev-executor containers reference those
+  exact local tags and ddev-executor reports version `1.0.19`;
+- after the first platform build, `pcp-builder` held `3.421GB` while the
+  shared/default builder stayed exactly `24.36GB`;
+- a no-source-change repeat build reused 20 cached steps, retained one named
+  builder and kept both cache totals unchanged;
+- a disposable `pcp-validation-fixture` workspace build through the live
+  executor grew only PCP cache from `3.421GB` to `6.322GB`; shared/default
+  remained exactly `24.36GB`, proving no silent fallback for the
+  executor-owned build path;
+- the exact fixture DDEV data/images and Git workspace were then removed; no
+  fixture container, volume, image or workspace remains;
+- inventory distinguishes both builders, all three platform images, exact
+  Runtime-correlated DDEV built images, PCP volumes and container references;
+- GC dry-run preserved every remaining blocked/failed image; cache-only GC with
+  `until=168h` passed both zero-work gates and retained `6.322GB` PCP cache
+  because it was newly accessed;
+- before/after GC shared/default usage remained exactly `24.36GB`, and the old
+  shared cache was intentionally not pruned;
+- post-activation live tests passed Router `92`, Runtime `388` and
+  ddev-executor `57`; direct n8n/Antigravity health and strict credential
+  boundaries passed; R2 remained blocked and untouched.
+
+DDEV's platform/base web and database image machinery still ran independently
+after the PCP custom-image hook. This implementation proves isolation for the
+three PCP custom services and executor-owned workspace DDEV builds; it does not
+claim every DDEV build on the machine uses `pcp-builder`.
 
 ## Relevant completed follow-ups
 
@@ -344,11 +380,10 @@ zero-active-work gate pass.
 
 ## Immediate next safe actions
 
-1. Complete issue #281 source review/CI. Keep the retained shared/default
-   BuildKit cache unchanged.
-2. After CI is green, rerun the Runtime and ddev-executor zero-active-work gate,
-   record inventory, and only then perform the single bounded #281 activation
-   restart and builder/cache attribution proof.
+1. Review PR #283 exact-head CI and rollout evidence; do not merge from the
+   implementation-engineer role.
+2. Keep the retained shared/default BuildKit cache unchanged. Any later cleanup
+   decision must remain separate from #281's proof of isolation.
 3. Keep R2 job `812aabd7ab0a5adbb18a7a5edc8d7009` durably blocked; do not
    resume, reroute, clean, or use its workspace/resources as the #281 rollout
    fixture.
