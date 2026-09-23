@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections import Counter
-
 from .engine import RouterEngine as BaseRouterEngine
 from .schemas import HumanDecision, ReassessRequest, ReassessResponse, RoutingRequest
 

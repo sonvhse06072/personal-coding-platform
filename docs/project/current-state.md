@@ -289,9 +289,8 @@ active at a time.
 
 ## Reviewer repair/rebuttal re-check #284
 
-Issue #284 implementation is in PR #285 on branch
-`ai/issue-284-reviewer-recheck`, based on latest `main` merge
-`f858d4b1323a5803e818c1e2b1ae61254458e145`.
+Issue #284 / PR #285 is merged on `main` at
+`836af29f3ee308e1ea5aab8a47194b2ada682331`.
 
 The bounded fix forwards only the current successful developer turn output to
 `evaluator_prompt(..., developer_report=...)`. The existing reviewer evidence
@@ -318,6 +317,38 @@ structure jobs on head `00c7851ab63e6ce7441bb96f52e1f71d4f988a19`.
 The following continuity-only commit records that result without changing
 executable behavior. No Router source changed. The blocked Chợ Nhạc R2 job and
 live PCP services were not queried, resumed, rerouted, rebuilt or restarted.
+
+## Repeated-failure current-tail correction #286
+
+Issue #286 is implemented on branch
+`ai/issue-286-repeated-failure-tail`, based on latest `main`
+`836af29f3ee308e1ea5aab8a47194b2ada682331`.
+
+The Router repeated-failure circuit breaker now reverse-scans only the
+consecutive suffix matching the most recent durable failure fingerprint. The
+complete `failure_fingerprints` history remains unchanged for audit and
+telemetry, and the existing strict `count > limit` threshold is preserved.
+Focused reassessment regressions prove:
+
+- `A,A,A` triggers `repeated_failure:A`;
+- historical `A,A,A` followed by one or two `B` failures does not report a
+  repeated failure;
+- a later `B,B,B` current tail triggers `repeated_failure:B`;
+- alternating fingerprints do not trigger repetition;
+- reassessment preserves the complete durable input history;
+- satisfied definition-of-done still completes before circuit-break analysis;
+- the live resumed-job shape with historical reviewer fingerprint
+  `36cc7091c604759ae89c94f4` followed by one new deterministic failure remains
+  runnable without reporting the stale reviewer fingerprint.
+
+Local source verification passes the targeted reassessment file (`23 passed`),
+the full Router suite (`99 passed`, one existing dependency deprecation
+warning), and structure tests (`89 passed`). No Runtime contract/import or
+ddev-executor source changed, so those conditional suites were not required.
+R2 job `812aabd7ab0a5adbb18a7a5edc8d7009`, its workspace/durable history and Chợ
+Nhạc were not queried or mutated. Live PCP services were not restarted, rebuilt
+or modified, and cache/GC was not run.
+PR publication and exact-head CI evidence are pending.
 
 ## Dedicated PCP BuildKit isolation #281
 
@@ -427,8 +458,8 @@ claim every DDEV build on the machine uses `pcp-builder`.
 
 ## Immediate next safe actions
 
-1. Review PR #285 at its final exact head after the continuity-only CI run is
-   green; do not merge, activate the Runtime change or resume R2 from the
+1. Review issue #286's PR at its final exact head after all required CI jobs are
+   green; do not merge, activate/rebuild Router or resume R2 from the
    implementation-engineer role.
 2. Keep the retained shared/default BuildKit cache unchanged. Any later cleanup
    decision must remain separate from #281's proof of isolation.

@@ -47,6 +47,93 @@ def green_progress(**updates) -> ExecutionProgress:
     return ExecutionProgress(**values)
 
 
+def reassess_failure_history(
+    failure_fingerprints: list[str],
+    **progress_updates,
+):
+    engine = make_engine()
+    route = engine.route(base_request())
+    route.strategy.anti_loop["same_failure_fingerprint_limit"] = 2
+    progress = ExecutionProgress(
+        failure_fingerprints=failure_fingerprints,
+        **progress_updates,
+    )
+    return progress, engine.reassess(ReassessRequest(route=route, progress=progress))
+
+
+def test_current_consecutive_failure_tail_triggers_circuit_breaker():
+    _, result = reassess_failure_history(["A", "A", "A"])
+
+    assert result.action == "stop"
+    assert "repeated_failure:A" in result.signals
+
+
+def test_stale_historical_repetition_does_not_trigger_current_failure():
+    for history in (["A", "A", "A", "B"], ["A", "A", "A", "B", "B"]):
+        _, result = reassess_failure_history(history)
+
+        assert result.action == "continue"
+        assert "repeated_failure:A" not in result.signals
+        assert "repeated_failure:B" not in result.signals
+
+
+def test_new_current_consecutive_failure_tail_can_later_trigger():
+    _, result = reassess_failure_history(["A", "A", "A", "B", "B", "B"])
+
+    assert result.action == "stop"
+    assert "repeated_failure:B" in result.signals
+    assert "repeated_failure:A" not in result.signals
+
+
+def test_alternating_historical_failures_do_not_trigger_repetition():
+    _, result = reassess_failure_history(["A", "B", "A", "B", "A"])
+
+    assert result.action == "continue"
+    assert not any(signal.startswith("repeated_failure:") for signal in result.signals)
+
+
+def test_reassessment_preserves_complete_durable_failure_history():
+    history = ["A", "A", "A", "B"]
+    progress, _ = reassess_failure_history(history)
+
+    assert history == ["A", "A", "A", "B"]
+    assert progress.failure_fingerprints == history
+
+
+def test_definition_of_done_completion_precedes_historical_repetition():
+    _, result = reassess_failure_history(
+        ["A", "A", "A"],
+        tests_passed=True,
+        required_checks_passed=True,
+        agent_succeeded=True,
+    )
+
+    assert result.action == "complete"
+    assert result.signals == ["done"]
+
+
+def test_resumed_job_with_old_repetition_and_one_new_failure_remains_runnable():
+    old_reviewer_failure = "36cc7091c604759ae89c94f4"
+    current_deterministic_failure = "playwright-contact-public-dto"
+    history = [
+        old_reviewer_failure,
+        old_reviewer_failure,
+        old_reviewer_failure,
+        current_deterministic_failure,
+    ]
+
+    progress, result = reassess_failure_history(
+        history,
+        agent_succeeded=False,
+        last_agent_failure_kind="deterministic_failure",
+    )
+
+    assert result.action in {"continue", "escalate"}
+    assert f"repeated_failure:{old_reviewer_failure}" not in result.signals
+    assert f"repeated_failure:{current_deterministic_failure}" not in result.signals
+    assert progress.failure_fingerprints == history
+
+
 def test_success_on_final_model_call_is_accepted():
     engine = make_engine()
     route = engine.route(base_request())
@@ -313,4 +400,3 @@ def test_legacy_hard_total_wall_time_remains_strict():
     assert result.action == "stop"
     assert result.reason == "wall-time budget exhausted"
     assert "hard_budget_guard" in result.signals
-
