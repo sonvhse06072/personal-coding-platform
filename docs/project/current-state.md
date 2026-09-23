@@ -358,8 +358,8 @@ or otherwise mutated as part of that merge.
 
 Issue #288 is implemented in PR #289 on branch
 `ai/issue-288-ci-infrastructure-classification`, based on latest `main`
-`3075a4f588074a2206909360b56b20029003e335`. The implementation head is
-being corrected from pre-follow-up head
+`3075a4f588074a2206909360b56b20029003e335`. Follow-up implementation head
+`95a6c2326f881d3ba24689f5b82525983a37f2cd` corrects pre-follow-up head
 `1334c0a96669726fe9ba40b99f274bd7dad2aef1` after PM blocking review comment
 `5803004566` identified one legacy live-recovery gap.
 
@@ -447,6 +447,13 @@ failure. PR #289 is therefore not merge-ready; after the external GitHub billing
 condition is repaired, re-run CI on its exact current head and require all four
 jobs to pass. Do not send this failure through source repair or activate/restart
 PCP merely to retry it.
+
+Follow-up implementation run `35923484857` on exact source head
+`95a6c2326f881d3ba24689f5b82525983a37f2cd` has the same external failure. Its
+four required jobs each reported `runner_id=0`, empty `runner_name` and
+`steps=[]`; GitHub annotated every job as not started because of failed account
+payments or a spending-limit condition. No repository command ran. This remains
+delivery infrastructure evidence and is not a reason for another source change.
 
 ## Dedicated PCP BuildKit isolation #281
 
