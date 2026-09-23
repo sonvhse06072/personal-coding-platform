@@ -769,7 +769,12 @@ class RuntimeEngine(RuntimeEngineCore):
             "failure_text": "\n".join(failures)[-30000:],
         }
 
-    async def cleanup(self, job_id: str, remove_workspace: bool = False) -> dict[str, Any]:
+    async def cleanup(
+        self,
+        job_id: str,
+        remove_workspace: bool = False,
+        release_ddev_data: bool = False,
+    ) -> dict[str, Any]:
         job = self.storage.get(job_id)
         if not job:
             raise RuntimeError("Unknown job")
@@ -779,11 +784,11 @@ class RuntimeEngine(RuntimeEngineCore):
         project = project_config(job["project_id"])
         cleanup_result = None
         if project.get("ddev", {}).get("enabled", False):
-            cleanup_result = await self.ddev.phase(
+            cleanup_result = await self.ddev.quiesce_workspace(
                 job_id=job_id,
                 project_id=job["project_id"],
                 workspace=workspace,
-                phase="cleanup",
+                remove_data=bool(release_ddev_data or remove_workspace),
             )
         remove_result = None
         if remove_workspace:
@@ -793,6 +798,9 @@ class RuntimeEngine(RuntimeEngineCore):
         return {
             "cleaned": True,
             "ddev": cleanup_result,
+            "ddev_data_released": bool(
+                cleanup_result and cleanup_result.get("data_removed", False)
+            ),
             "workspace_removed": remove_workspace,
             "workspace_result": remove_result,
         }
