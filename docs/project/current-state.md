@@ -313,8 +313,11 @@ Engine-level regression coverage proves the complete dialogue edge:
 
 Local source verification currently passes the targeted reviewer/evidence
 tests (`14 passed`), full Runtime tests (`393 passed`) and structure tests
-(`89 passed`). No Router source changed. The blocked Chợ Nhạc R2 job and live
-PCP services were not queried, resumed, rerouted, rebuilt or restarted.
+(`89 passed`). PR CI run `35901028807` passed Runtime, Router, ddev-executor and
+structure jobs on head `00c7851ab63e6ce7441bb96f52e1f71d4f988a19`.
+The following continuity-only commit records that result without changing
+executable behavior. No Router source changed. The blocked Chợ Nhạc R2 job and
+live PCP services were not queried, resumed, rerouted, rebuilt or restarted.
 
 ## Dedicated PCP BuildKit isolation #281
 
@@ -424,8 +427,9 @@ claim every DDEV build on the machine uses `pcp-builder`.
 
 ## Immediate next safe actions
 
-1. Review PR #285 at its exact head after CI is green; do not merge, activate
-   the Runtime change or resume R2 from the implementation-engineer role.
+1. Review PR #285 at its final exact head after the continuity-only CI run is
+   green; do not merge, activate the Runtime change or resume R2 from the
+   implementation-engineer role.
 2. Keep the retained shared/default BuildKit cache unchanged. Any later cleanup
    decision must remain separate from #281's proof of isolation.
 3. Keep R2 job `812aabd7ab0a5adbb18a7a5edc8d7009` durably blocked; do not
