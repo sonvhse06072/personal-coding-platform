@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import Counter
 from copy import deepcopy
 from typing import Any
 
@@ -509,8 +508,12 @@ class RouterEngine:
     def _repeated_failure(progress: ExecutionProgress, limit: int) -> tuple[bool, str | None]:
         if not progress.failure_fingerprints:
             return False, None
-        counts = Counter(progress.failure_fingerprints)
-        fingerprint, count = counts.most_common(1)[0]
+        fingerprint = progress.failure_fingerprints[-1]
+        count = 0
+        for candidate in reversed(progress.failure_fingerprints):
+            if candidate != fingerprint:
+                break
+            count += 1
         return count > limit, fingerprint if count > limit else None
 
     @staticmethod
