@@ -287,6 +287,19 @@ def _job_has_active_process(job_id: str) -> bool:
         return proc is not None and proc.poll() is None
 
 
+def _ddev_subprocess_env() -> dict[str, str]:
+    """Select PCP's isolated builder only for executor-owned DDEV commands."""
+    return {
+        **os.environ,
+        "DDEV_NO_TUI": "true",
+        "BUILDX_BUILDER": os.getenv("PCP_BUILDX_BUILDER", "pcp-builder"),
+        "BUILDX_CONFIG": os.getenv(
+            "PCP_BUILDX_CONFIG",
+            "/home/coder/.pcp-buildx",
+        ),
+    }
+
+
 def run_tracked(
     job_id: str,
     argv: list[str],
@@ -317,7 +330,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.18")
+app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.19")
 app.include_router(pm_bridge_github_router)
 
 
@@ -332,7 +345,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok" if ok else "degraded",
         "service": "ddev-executor",
-        "version": "1.0.18",
+        "version": "1.0.19",
         "ddev": (result.stdout or result.stderr).strip(),
         "docker": (docker.stdout or docker.stderr).strip(),
         "buildx": (buildx.stdout or buildx.stderr).strip(),
@@ -372,7 +385,7 @@ def quiesce_workspace(payload: QuiesceWorkspaceRequest) -> dict[str, Any]:
         argv,
         cwd=workspace,
         timeout=300,
-        env={**os.environ, "DDEV_NO_TUI": "true"},
+        env=_ddev_subprocess_env(),
     )
     if returncode != 0:
         detail = (stderr or stdout or "ddev stop failed")[-12000:]
@@ -589,7 +602,7 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
             ["ddev", "start", "-y"],
             cwd=workspace,
             timeout=min(timeout, 600),
-            env={**os.environ, "DDEV_NO_TUI": "true"},
+            env=_ddev_subprocess_env(),
         )
         infrastructure.append(
             CommandOutput(
@@ -614,7 +627,7 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
             ["bash", "-lc", command],
             cwd=workspace,
             timeout=timeout,
-            env={**os.environ, "DDEV_NO_TUI": "true"},
+            env=_ddev_subprocess_env(),
         )
         outputs.append(
             CommandOutput(

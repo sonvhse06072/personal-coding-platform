@@ -13,6 +13,7 @@ web_environment:
 
 hooks:
   pre-start:
+    - exec-host: "bash ./scripts/pcp-build-images.sh"
     - exec-host: "bash ./scripts/with-host-secrets.sh ./scripts/antigravity-bridge.sh start"
   post-stop:
     - exec-host: "bash ./scripts/with-host-secrets.sh ./scripts/antigravity-bridge.sh stop"

@@ -111,6 +111,10 @@ class JobList(BaseModel):
     jobs: list[JobView]
 
 
+class ActiveEngineeringWorkCount(BaseModel):
+    active_engineering_jobs: int = Field(ge=0)
+
+
 class RuntimeHealth(BaseModel):
     status: str
     service: str

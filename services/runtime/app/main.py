@@ -28,6 +28,7 @@ from .pm_planning import (
 )
 from .quota_runtime import quota_coordinator
 from .schemas import (
+    ActiveEngineeringWorkCount,
     HumanDecisionRequest,
     JobCreateRequest,
     JobList,
@@ -315,6 +316,17 @@ async def create_job(payload: JobCreateRequest) -> JobView:
 @app.get("/v1/jobs", response_model=JobList, dependencies=[Depends(auth)])
 def list_jobs(limit: int = Query(50, ge=1, le=500)) -> JobList:
     return JobList(jobs=[view(row) for row in storage.list(limit)])
+
+
+@app.get(
+    "/v1/jobs/active-count",
+    response_model=ActiveEngineeringWorkCount,
+    dependencies=[Depends(auth)],
+)
+def active_engineering_work_count() -> ActiveEngineeringWorkCount:
+    return ActiveEngineeringWorkCount(
+        active_engineering_jobs=storage.count_active_engineering_jobs()
+    )
 
 
 @app.get("/v1/jobs/{job_id}", response_model=JobView, dependencies=[Depends(auth)])

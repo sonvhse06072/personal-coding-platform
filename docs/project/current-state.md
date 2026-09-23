@@ -2,7 +2,7 @@
 
 Status: mutable continuity document. Repository docs and executable evidence are authoritative over chat history. Durable architecture/product/policy decisions remain in their topical source-of-truth documents.
 
-Last updated: 2026-09-22
+Last updated: 2026-09-23
 
 ## Resume order
 
@@ -275,11 +275,96 @@ the same R2 job rather than creating R3. Live evidence now proves:
   `frontend/tests/browser/verification.spec.ts`;
 - R2 was resumed on the same job/workspace with durable counters preserved;
 - the fresh route remains `standard` and currently selected `codex_terra`;
-- orchestration is again `executing` with the R2 WorkOrder `running`;
+- orchestration resumed on the same job after those fixes;
 - Antigravity bridge and n8n direct health are healthy.
+
+R2 is now durably `blocked` with `reassessment_stopped`; it is not executing.
+Its exact job/workspace/DDEV data and blocked audit evidence must remain
+untouched. A 2026-09-23 read-only gate reported Runtime counts `blocked=12`,
+`cancelled=1`, `completed=10`, `failed=2`, no active Runtime state, and
+`ddev-executor active_jobs=0`.
 
 Issues #15 and #16 remain pending so only one Design Closure engineering task is
 active at a time.
+
+## Dedicated PCP BuildKit isolation #281
+
+Issue #281 implementation is in PR #283 on branch
+`ai/issue-281-pcp-builder-gc`. The source change introduces:
+
+- one deterministic `pcp-builder` using the `docker-container` driver without
+  changing the user's globally selected builder;
+- a host pre-start image helper that explicitly builds and `--load`s fixed
+  Router/Runtime/ddev-executor image tags while preserving all existing build
+  args;
+- Compose consumption of those explicit tags, leaving n8n unchanged;
+- executor-only `BUILDX_BUILDER=pcp-builder` selection plus a narrowly mounted
+  PCP Buildx metadata directory rather than the host's complete `~/.docker`;
+- read-only attribution separating PCP builder cache, shared/default cache,
+  platform images, exact PCP DDEV built images, volumes and container
+  references;
+- explicit report/execute GC with Runtime and executor-idle gates, conservative
+  age retention, exact `--builder pcp-builder` cache pruning, and optional
+  exact-label terminal image cleanup for completed/cancelled jobs only.
+
+PR review identified that the original zero-work gate used the newest-500
+Runtime job inventory and therefore was not exhaustive once job history exceeded
+that bound. The merge blocker is corrected in source: Runtime now exposes an
+authenticated server-side active-work count over the complete `cp_jobs` table,
+and GC fails closed unless that authoritative count is exactly zero. The capped
+inventory remains attribution-only, so unmapped older images stay preserved.
+Regression coverage models 500 newer terminal jobs hiding one older active job
+and proves GC refuses before any Docker mutation. No additional live restart,
+validation fixture, or GC was performed; the prior isolation rollout evidence
+below remains valid. Updated source verification passes structure `89`, Router
+`92`, Runtime `391`, ddev-executor `57`, `bash -n`, and ShellCheck. CI run
+`35890188011` passed all four required jobs on corrected source head
+`9d2df810df9f7cacdde2f47182a0687ca1f62171`; the following continuity-only
+commit does not change executable behavior.
+
+Original implementation source verification passed structure `89`, Router
+`92`, Runtime `388`, ddev-executor `57`, script `bash -n`, Compose render, and
+scoped ShellCheck. PR CI run `35856810259` passed all four required jobs on
+implementation head `761606dcbb58741efc3534e2bffc08f26be198a6`.
+
+Local activation is complete under the required rollout gate:
+
+- pre-activation Runtime counts were `blocked=12`, `cancelled=1`,
+  `completed=10`, `failed=2`; R2 was `blocked`; ddev-executor reported
+  `active_jobs=0`; Antigravity reported `active_runs=0`;
+- the global selected builder was and remains `default` with driver `docker`;
+  its pre-activation usage was `24.36GB` total/reclaimable (`18.1GB` private,
+  `6.263GB` shared);
+- exactly one normal DDEV restart ran after source/CI green; the pre-start hook
+  created one `pcp-builder` with driver `docker-container`, built/loaded all
+  three deterministic PCP tags, then preserved the existing Antigravity hook;
+- the running Router, Runtime and ddev-executor containers reference those
+  exact local tags and ddev-executor reports version `1.0.19`;
+- after the first platform build, `pcp-builder` held `3.421GB` while the
+  shared/default builder stayed exactly `24.36GB`;
+- a no-source-change repeat build reused 20 cached steps, retained one named
+  builder and kept both cache totals unchanged;
+- a disposable `pcp-validation-fixture` workspace build through the live
+  executor grew only PCP cache from `3.421GB` to `6.322GB`; shared/default
+  remained exactly `24.36GB`, proving no silent fallback for the
+  executor-owned build path;
+- the exact fixture DDEV data/images and Git workspace were then removed; no
+  fixture container, volume, image or workspace remains;
+- inventory distinguishes both builders, all three platform images, exact
+  Runtime-correlated DDEV built images, PCP volumes and container references;
+- GC dry-run preserved every remaining blocked/failed image; cache-only GC with
+  `until=168h` passed both zero-work gates and retained `6.322GB` PCP cache
+  because it was newly accessed;
+- before/after GC shared/default usage remained exactly `24.36GB`, and the old
+  shared cache was intentionally not pruned;
+- post-activation live tests passed Router `92`, Runtime `388` and
+  ddev-executor `57`; direct n8n/Antigravity health and strict credential
+  boundaries passed; R2 remained blocked and untouched.
+
+DDEV's platform/base web and database image machinery still ran independently
+after the PCP custom-image hook. This implementation proves isolation for the
+three PCP custom services and executor-owned workspace DDEV builds; it does not
+claim every DDEV build on the machine uses `pcp-builder`.
 
 ## Relevant completed follow-ups
 
@@ -310,22 +395,24 @@ active at a time.
 
 ## Immediate next safe actions
 
-1. Let R2 job `812aabd7ab0a5adbb18a7a5edc8d7009` continue autonomously on
-   the recovered DDEV identity; do not manually /run, reroute, restart platform
-   services, or create a replacement while it is making progress.
-2. Observe branch `ai/812aabd7ab0a`, the resulting Chợ Nhạc PR and exact-head
-   CI. Review the exact test-only diff before merge.
-3. Treat any future deterministic verification failure as project evidence only
+1. Review PR #283 exact-head CI and rollout evidence; do not merge from the
+   implementation-engineer role.
+2. Keep the retained shared/default BuildKit cache unchanged. Any later cleanup
+   decision must remain separate from #281's proof of isolation.
+3. Keep R2 job `812aabd7ab0a5adbb18a7a5edc8d7009` durably blocked; do not
+   resume, reroute, clean, or use its workspace/resources as the #281 rollout
+   fixture.
+4. Treat any future deterministic verification failure as project evidence only
    after confirming the command actually reached PHPUnit/PHPCS/Playwright;
    infrastructure-start failures must not be sent back to the developer as code
    repairs.
-4. If R2 reports a genuine responsive product defect requiring production-code
+5. If R2 reports a genuine responsive product defect requiring production-code
    change, keep UI-CL-1 test-only and open a separate bounded defect issue
    rather than broadening the current WorkOrder.
-5. Keep Chợ Nhạc #15 and #16 pending until #14 R2 is reviewed and merged.
-6. Keep the original blocked UI-CL-1 job/plan as platform-defect audit history;
+6. Keep Chợ Nhạc #15 and #16 pending until #14 R2 is reviewed and merged.
+7. Keep the original blocked UI-CL-1 job/plan as platform-defect audit history;
    do not resume/reroute it or hand-edit durable Runtime state.
-7. DEC-025 cleanup remains complete. Do not recreate or resume a PCP plan/job
+8. DEC-025 cleanup remains complete. Do not recreate or resume a PCP plan/job
    for DEC-025; future DEC-025 evidence is Human Owner-managed in `chonhac`.
-8. Keep #146 open for calibration evidence already learned from the retired
+9. Keep #146 open for calibration evidence already learned from the retired
    long-running DEC execution.

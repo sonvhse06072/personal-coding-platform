@@ -1,8 +1,7 @@
 services:
   router:
     container_name: ddev-${DDEV_SITENAME}-router
-    build:
-      context: ${DDEV_APPROOT}/services/router
+    image: personal-coding-platform-router:local
     restart: "no"
     environment:
       ROUTER_MODELS_FILE: /config/models.yml
@@ -24,13 +23,7 @@ services:
 
   coding-runtime:
     container_name: ddev-${DDEV_SITENAME}-coding-runtime
-    build:
-      context: ${DDEV_APPROOT}/services/runtime
-      args:
-        CODEX_VERSION: ${CODEX_VERSION:-latest}
-        OPENCODE_VERSION: ${OPENCODE_VERSION:-latest}
-        DDEV_UID: ${DDEV_UID}
-        DDEV_GID: ${DDEV_GID}
+    image: personal-coding-platform-coding-runtime:local
     restart: "no"
     user: "${DDEV_UID}:${DDEV_GID}"
     environment:
@@ -76,13 +69,7 @@ services:
     user: "${DDEV_UID}:${DDEV_GID}"
     group_add:
       - "${DOCKER_GID}"
-    build:
-      context: ${DDEV_APPROOT}/services/ddev-executor
-      args:
-        DDEV_VERSION: ${DDEV_EXECUTOR_VERSION:-v1.25.4}
-        BUILDX_VERSION: ${DDEV_EXECUTOR_BUILDX_VERSION:-v0.37.0}
-        DDEV_UID: ${DDEV_UID}
-        DDEV_GID: ${DDEV_GID}
+    image: personal-coding-platform-ddev-executor:local
     restart: "no"
     environment:
       PROJECTS_FILE: /config/projects.yml
@@ -91,6 +78,8 @@ services:
       DDEV_COMMAND_TIMEOUT_SECONDS: 1800
       CONTINUITY_GITHUB_REPOSITORY: ${CONTINUITY_GITHUB_REPOSITORY:-sonvhse06072/personal-coding-platform}
       CONTINUITY_BASE_BRANCH: ${CONTINUITY_BASE_BRANCH:-main}
+      PCP_BUILDX_BUILDER: pcp-builder
+      PCP_BUILDX_CONFIG: /home/coder/.pcp-buildx
       HOME: /home/coder
     expose:
       - "8790"
@@ -101,6 +90,9 @@ services:
       - ${CODING_PROJECTS_ROOT}:${CODING_PROJECTS_ROOT}
       - ${CODING_WORKSPACES_ROOT}:${CODING_WORKSPACES_ROOT}
       - ${HOST_HOME}/.ddev:/home/coder/.ddev
+      # Persist only PCP Buildx instance metadata. Do not expose ~/.docker or
+      # host registry credentials to the executor container.
+      - ${HOST_HOME}/.coding-platform/buildx:/home/coder/.pcp-buildx
       - ${HOST_HOME}/.gitconfig:/home/coder/.gitconfig:ro
       - ${DDEV_APPROOT}/config:/config:ro
     x-ddev:
