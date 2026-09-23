@@ -8,6 +8,10 @@ from copy import deepcopy
 from datetime import timedelta
 from typing import Any
 
+from .legacy_delivery_recovery import (
+    LEGACY_RECOVERY_BLOCK_REASON,
+    recover_legacy_accepted_result,
+)
 from .orchestrator_resume import prepare_orchestrated_job_resume, reopen_orchestrated_job
 from .state import checkpoint_from_row
 from .storage import now
@@ -217,6 +221,8 @@ class ControlActionService:
             ],
         }
 
+        legacy_recovery = recover_legacy_accepted_result(job)
+
         dimension = _BUDGET_FAILURE_MAP.get(last_failure)
         if (
             self._adaptive_work_shape_nonblocking(job)
@@ -289,6 +295,29 @@ class ControlActionService:
                     {"action_type": "details", "label": "📋 Chi tiết", "payload": {}},
                     {"action_type": "keep_blocked", "label": "⛔ Giữ blocked", "payload": {}},
                 ]
+
+        elif legacy_recovery["candidate"]:
+            advisory["phase"] = "delivery"
+            if legacy_recovery["accepted_result"] is not None:
+                advisory["summary"] = "Legacy Runtime lost the accepted result after GitHub delivery had already begun."
+                advisory["cause"] = "Authoritative delivery, verification, review, route, branch and commit evidence still match."
+                advisory["recommended"] = "Retry delivery or recheck CI using the exact preserved accepted commit."
+                advisory["action_specs"] = [
+                    {"action_type": "retry_delivery", "label": "🔁 Retry delivery", "payload": {}},
+                    {"action_type": "recheck_ci", "label": "🔄 Recheck CI", "payload": {}},
+                    {"action_type": "details", "label": "📋 Chi tiết", "payload": {}},
+                    {"action_type": "keep_blocked", "label": "⛔ Giữ blocked", "payload": {}},
+                ]
+            else:
+                advisory["summary"] = "Legacy Runtime lost the accepted result after delivery, but the remaining evidence is incomplete."
+                advisory["cause"] = "Runtime will not reconstruct acceptance or return to coding without every required authoritative binding."
+                advisory["recommended"] = "Keep the job blocked and inspect the missing durable acceptance evidence outside Telegram."
+
+        elif reason == LEGACY_RECOVERY_BLOCK_REASON:
+            advisory["phase"] = "delivery"
+            advisory["summary"] = "Legacy delivery acceptance evidence is incomplete."
+            advisory["cause"] = "Runtime stopped before coding because it cannot safely reconstruct the prior accepted result."
+            advisory["recommended"] = "Keep the same job blocked and repair or verify acceptance only through an authoritative operator mechanism."
 
         elif reason == "material_change_missing_without_model_fallback":
             advisory["summary"] = "The coding agent completed without the required material repository change."

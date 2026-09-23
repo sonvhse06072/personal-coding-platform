@@ -279,6 +279,14 @@ class ControlActionService(BaseControlActionService):
             else:
                 advisory["cause"] = "Provider/model thất bại với loại lỗi chưa có recovery tự động an toàn."
                 advisory["recommended"] = "Chỉ định tuyến lại khi policy tìm được provider hợp lệ; nếu không hãy giữ trạng thái chặn."
+        elif reason == "material_change_missing_without_model_fallback" and "reroute_retry" not in action_types:
+            advisory["summary"] = "Runtime cũ đã làm mất accepted result sau khi GitHub delivery bắt đầu."
+            advisory["cause"] = "Recovery chỉ dùng bằng chứng Runtime bền vững; job không quay lại coding hoặc reroute."
+            advisory["recommended"] = "Dùng delivery retry/recheck nếu đủ bằng chứng; nếu không, giữ blocked để kiểm tra evidence có thẩm quyền."
+        elif reason == "legacy_delivery_acceptance_evidence_incomplete":
+            advisory["summary"] = "Bằng chứng accepted result của legacy delivery không đầy đủ."
+            advisory["cause"] = "Runtime đã dừng trước coding vì không thể khôi phục acceptance một cách an toàn."
+            advisory["recommended"] = "Giữ nguyên job ở trạng thái blocked và chỉ xác minh acceptance qua cơ chế operator có thẩm quyền."
         elif reason == "material_change_missing_without_model_fallback":
             advisory["summary"] = "Coding agent hoàn tất nhưng chưa tạo material repository change bắt buộc."
             advisory["cause"] = "Runtime không tìm được model fallback hợp lệ sau một lần chạy không tạo thay đổi cần thiết."

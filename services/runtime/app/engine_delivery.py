@@ -7,6 +7,10 @@ from typing import Any
 from .delivery import DeliveryError, deliver_verified_work, pull_request_body
 from .engine_verification import RuntimeEngine as ExecutionRuntimeEngine
 from .fingerprint import failure_fingerprint
+from .legacy_delivery_recovery import (
+    LEGACY_RECOVERY_BLOCK_REASON,
+    recover_legacy_accepted_result,
+)
 
 
 class DeliveryAwareStorage:
@@ -77,6 +81,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         if (
             delivery.get("state") == "ci_failure"
             and cls._ci_failure_class(delivery) != "infrastructure"
+            and not bool((result.get("legacy_delivery_recovery") or {}).get("authorized"))
         ):
             return False
         route = result.get("route") or row.get("route") or {}
@@ -126,7 +131,37 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         # spending another model call on already-verified work.
         before = self.storage.get(job_id)
         accepted = self._accepted_result_for_delivery(before) if before else None
-        if (
+        recovery = (
+            recover_legacy_accepted_result(before)
+            if before and before.get("status") == "queued" and accepted is None
+            else {"candidate": False, "accepted_result": None, "missing_evidence": []}
+        )
+        if recovery["candidate"] and recovery["accepted_result"] is None:
+            checkpoint = deepcopy(before.get("checkpoint") or {})
+            progress = deepcopy(before.get("progress") or {})
+            self._block(
+                job_id=job_id,
+                progress=progress,
+                checkpoint=checkpoint,
+                reason=LEGACY_RECOVERY_BLOCK_REASON,
+                last_failure=(
+                    "Legacy delivery acceptance cannot be reconstructed from the "
+                    "remaining authoritative durable evidence."
+                ),
+                delivery=deepcopy(checkpoint.get("delivery") or {}),
+                legacy_delivery_recovery={
+                    "candidate": True,
+                    "missing_evidence": recovery["missing_evidence"],
+                    "commit": recovery.get("commit"),
+                    "branch": recovery.get("branch"),
+                    "prior_block": deepcopy(before.get("result") or {}),
+                },
+            )
+            return
+        if recovery["accepted_result"] is not None:
+            accepted = recovery["accepted_result"]
+            self.storage.update(job_id, status="delivering", result=accepted, error=None)
+        elif (
             before
             and before.get("status") == "queued"
             and accepted
@@ -200,6 +235,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 commit=commit,
                 verification=verification,
                 evaluator=evaluator,
+                review=result.get("review"),
             )
 
             delivery_started = time.monotonic()

@@ -20,6 +20,7 @@ def pull_request_body(
     commit: str,
     verification: dict[str, Any],
     evaluator: str | None,
+    review: dict[str, Any] | None = None,
 ) -> str:
     phases = [
         str(item.get("phase"))
@@ -27,7 +28,11 @@ def pull_request_body(
         if isinstance(item, dict) and item.get("phase")
     ]
     checks = ", ".join(phases) if phases else "local verification"
-    evaluator_line = "pass" if evaluator else "not required"
+    evaluator_line = (
+        "pass"
+        if evaluator or (isinstance(review, dict) and review.get("verdict") == "pass")
+        else "not required"
+    )
     return (
         "Automated coding-platform delivery.\n\n"
         f"- Job: `{job_id}`\n"

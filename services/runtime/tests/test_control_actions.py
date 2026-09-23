@@ -160,6 +160,92 @@ def test_ci_infrastructure_block_offers_only_preserved_delivery_recovery():
     assert "reroute_retry" not in action_types(advisory)
 
 
+def test_legacy_misclassified_delivery_offers_delivery_recovery_not_reroute():
+    job = base_job(
+        reason="material_change_missing_without_model_fallback",
+        last_failure="no new material diff after obsolete CI repair",
+    )
+    commit = "b" * 40
+    source = "a" * 40
+    branch = "ai/job-1"
+    repository = "acme/demo"
+    job.update({"branch": branch, "source_commit": source})
+    job["route"]["strategy"].update({
+        "evaluator": {"id": "reviewer", "provider": "provider"},
+        "permissions": {"commit": True, "push_ai_branch": True, "create_pr": True},
+        "review_policy": {"required": True, "independent": True, "independence_satisfied": True},
+    })
+    job["progress"].update({
+        "tests_passed": True,
+        "required_checks_passed": True,
+        "unexpected_scope": False,
+        "review_history": [{
+            "verdict": "pass",
+            "protocol_valid": True,
+            "model": "reviewer",
+            "provider": "provider",
+        }],
+    })
+    job["checkpoint"].update({
+        "last_review_report": {
+            "verdict": "pass",
+            "protocol_valid": True,
+            "finding_count": 0,
+        },
+        "delivery": {
+            "enabled": True,
+            "state": "ci_failure",
+            "branch": branch,
+            "commit": commit,
+            "publish": {
+                "published": True,
+                "branch": branch,
+                "commit": commit,
+                "source_commit": source,
+                "repository": repository,
+            },
+            "pull_request": {
+                "job_id": "job-1",
+                "number": 289,
+                "state": "open",
+                "head": commit,
+                "head_ref": branch,
+                "base_ref": "main",
+                "repository": repository,
+            },
+            "ci": {"state": "failure", "commit": commit},
+        },
+    })
+    controls, _ = service(job)
+
+    advisory = controls.blocked_advisory(row(), job)
+
+    assert advisory["phase"] == "delivery"
+    assert action_types(advisory) == ["retry_delivery", "recheck_ci", "details", "keep_blocked"]
+    assert "reroute_retry" not in action_types(advisory)
+
+
+def test_ordinary_material_change_missing_still_offers_bounded_reroute():
+    job = base_job(reason="material_change_missing_without_model_fallback")
+    controls, _ = service(job)
+
+    advisory = controls.blocked_advisory(row(), job)
+
+    assert action_types(advisory)[0] == "reroute_retry"
+
+
+def test_legacy_misclassified_delivery_with_incomplete_evidence_has_no_retry_or_reroute():
+    job = base_job(reason="material_change_missing_without_model_fallback")
+    job["checkpoint"]["delivery"] = {"enabled": True, "state": "ci_failure"}
+    controls, _ = service(job)
+
+    advisory = controls.blocked_advisory(row(), job)
+
+    assert advisory["phase"] == "delivery"
+    assert action_types(advisory) == ["details", "keep_blocked"]
+    assert "reroute_retry" not in action_types(advisory)
+
+
 def test_budget_extension_is_additive_audited_and_preserves_work_order_and_progress():
     controls, storage = service()
     before = storage.get("job-1")
