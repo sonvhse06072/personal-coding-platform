@@ -320,9 +320,10 @@ live PCP services were not queried, resumed, rerouted, rebuilt or restarted.
 
 ## Repeated-failure current-tail correction #286
 
-Issue #286 is implemented on branch
+Issue #286 is implemented in PR #287 on branch
 `ai/issue-286-repeated-failure-tail`, based on latest `main`
-`836af29f3ee308e1ea5aab8a47194b2ada682331`.
+`836af29f3ee308e1ea5aab8a47194b2ada682331`. The implementation head is
+`6725b3afa171c0b824cde28e54051678525380f7`.
 
 The Router repeated-failure circuit breaker now reverse-scans only the
 consecutive suffix matching the most recent durable failure fingerprint. The
@@ -348,7 +349,11 @@ ddev-executor source changed, so those conditional suites were not required.
 R2 job `812aabd7ab0a5adbb18a7a5edc8d7009`, its workspace/durable history and Chợ
 Nhạc were not queried or mutated. Live PCP services were not restarted, rebuilt
 or modified, and cache/GC was not run.
-PR publication and exact-head CI evidence are pending.
+GitHub Actions run `35910395359` passed Runtime, Router, ddev-executor and
+structure jobs on the implementation head. The following continuity-only commit
+records that result without changing executable behavior. PR #287 remains open
+and must not be merged from the implementation-engineer role; its final
+continuity-only head requires a fresh all-green CI run before review.
 
 ## Dedicated PCP BuildKit isolation #281
 
