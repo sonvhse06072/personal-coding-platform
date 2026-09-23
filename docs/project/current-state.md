@@ -391,6 +391,18 @@ or modified, and cache/GC was not run. PR #289 remains open and must not be
 merged from the implementation-engineer role; its final continuity head requires
 all required GitHub Actions jobs to pass before review.
 
+GitHub Actions run `35920237209` on implementation/continuity head
+`5e62b8e7d44d0ee9a142ffc022357c48a0375ffa` failed before repository execution
+on both the initial attempt and one bounded direct rerun. All four required jobs
+reported `runner_id=0`, empty `runner_name` and `steps=[]`, completing in about
+two seconds. Attempt 2 exposed GitHub's annotation that the jobs were not
+started because recent account payments failed or the spending limit must be
+increased. This is delivery infrastructure evidence, not an engineering test
+failure. PR #289 is therefore not merge-ready; after the external GitHub billing
+condition is repaired, re-run CI on its exact current head and require all four
+jobs to pass. Do not send this failure through source repair or activate/restart
+PCP merely to retry it.
+
 ## Dedicated PCP BuildKit isolation #281
 
 Issue #281 / PR #283 is merged on `main` at
@@ -499,9 +511,10 @@ claim every DDEV build on the machine uses `pcp-builder`.
 
 ## Immediate next safe actions
 
-1. Review issue #288's implementation PR at its final exact head after all
-   required CI jobs are green; do not merge, activate/rebuild PCP services or
-   resume R2 from the implementation-engineer role.
+1. Repair the external GitHub Actions billing/spending-limit condition, then
+   re-run PR #289 CI on its exact final head. Review only after all required jobs
+   execute repository steps and pass; do not merge, activate/rebuild PCP services
+   or resume R2 from the implementation-engineer role.
 2. Keep the retained shared/default BuildKit cache unchanged. Any later cleanup
    decision must remain separate from #281's proof of isolation.
 3. Keep R2 job `812aabd7ab0a5adbb18a7a5edc8d7009` durably blocked; do not
