@@ -289,7 +289,7 @@ active at a time.
 
 ## Dedicated PCP BuildKit isolation #281
 
-Issue #281 implementation is active on branch
+Issue #281 implementation is in PR #283 on branch
 `ai/issue-281-pcp-builder-gc`. The source change introduces:
 
 - one deterministic `pcp-builder` using the `docker-container` driver without
