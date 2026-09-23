@@ -356,9 +356,10 @@ or otherwise mutated as part of that merge.
 
 ## GitHub Actions pre-run failure classification #288
 
-Issue #288 is implemented on branch
+Issue #288 is implemented in PR #289 on branch
 `ai/issue-288-ci-infrastructure-classification`, based on latest `main`
-`3075a4f588074a2206909360b56b20029003e335`.
+`3075a4f588074a2206909360b56b20029003e335`. The implementation head is
+`9a8c4e652b18ed9315890f1d208939e91c93e74f`.
 
 The bounded delivery fix preserves the existing top-level CI state contract and
 adds explicit failure evidence/classification:
@@ -386,7 +387,9 @@ ddev-executor suite (`60 passed`), full Runtime suite (`398 passed`) and
 structure suite (`89 passed`). No Router source or contract changed, so the
 Router suite is not required. The blocked Chợ Nhạc R2 job, its workspace and PR
 #18 were not queried or mutated; live PCP services were not restarted, rebuilt
-or modified, and cache/GC was not run.
+or modified, and cache/GC was not run. PR #289 remains open and must not be
+merged from the implementation-engineer role; its final continuity head requires
+all required GitHub Actions jobs to pass before review.
 
 ## Dedicated PCP BuildKit isolation #281
 
