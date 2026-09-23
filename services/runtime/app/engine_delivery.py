@@ -74,11 +74,22 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         if not result:
             return False
         delivery = result.get("delivery") or {}
-        if delivery.get("state") == "ci_failure":
+        if (
+            delivery.get("state") == "ci_failure"
+            and cls._ci_failure_class(delivery) != "infrastructure"
+        ):
             return False
         route = result.get("route") or row.get("route") or {}
         permissions = (route.get("strategy") or {}).get("permissions") or {}
         return bool(permissions.get("push_ai_branch", False)) and bool(result.get("commit"))
+
+    @staticmethod
+    def _ci_failure_class(delivery: dict[str, Any]) -> str:
+        """Return the bounded CI failure class, defaulting ambiguity to repair."""
+        ci = delivery.get("ci") or {}
+        if str(ci.get("failure_class") or "") == "infrastructure":
+            return "infrastructure"
+        return "engineering"
 
     @classmethod
     def _delivery_wait_seconds(
@@ -164,6 +175,19 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                     status="delivery_retry",
                     output={"attempt": progress["delivery_attempts"]},
                 )
+                prior_result = (before or {}).get("result") or {}
+                if prior_result.get("reason") == "github_ci_infrastructure_failure":
+                    progress["infrastructure_retry_attempts"] = int(
+                        progress.get("infrastructure_retry_attempts", 0)
+                    ) + 1
+                    self._runtime_event(
+                        job_id,
+                        kind="infrastructure_retry",
+                        message="Retrying GitHub CI after a pre-run infrastructure/startup failure",
+                        phase="delivery",
+                        status="infrastructure_retry",
+                        output={"attempt": progress["infrastructure_retry_attempts"]},
+                    )
             self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
 
             verification = result.get("verification") or {}
@@ -216,6 +240,20 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 ci = delivery.get("ci") or {}
                 failure_text = str(ci.get("failure_text") or "GitHub CI failed")[-30000:]
                 last_failure = f"GitHub CI failed for verified commit {commit}:\n{failure_text}"[-30000:]
+                if self._ci_failure_class(delivery) == "infrastructure":
+                    checkpoint["last_failure"] = last_failure
+                    checkpoint["delivery"] = delivery
+                    result["delivery_finalized"] = False
+                    self._block(
+                        job_id=job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                        reason="github_ci_infrastructure_failure",
+                        last_failure=last_failure,
+                        delivery=delivery,
+                        accepted_result=result,
+                    )
+                    return
                 progress["ci_failures"] = int(progress.get("ci_failures", 0)) + 1
                 # A real CI failure requires engineering repair; delivery/API
                 # observation retries are counted separately above and do not

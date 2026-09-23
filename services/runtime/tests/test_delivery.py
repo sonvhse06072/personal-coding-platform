@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 
+import app.engine_delivery as engine_delivery_module
 from app.delivery import DeliveryError, deliver_verified_work, pull_request_body
 from app.engine_delivery import DeliveryAwareStorage, RuntimeEngine
 
@@ -21,23 +22,35 @@ class FakeDdev:
 
     async def github_ci(self, **kwargs):
         self.calls.append(("ci", kwargs))
-        state = self.ci_states.pop(0) if self.ci_states else "none"
-        return {
+        evidence = self.ci_states.pop(0) if self.ci_states else "none"
+        if isinstance(evidence, dict):
+            state = evidence.get("state", "none")
+            extra = evidence
+        else:
+            state = evidence
+            extra = {}
+        result = {
+            **extra,
             "state": state,
             "commit": kwargs["commit"],
-            "failure_text": "unit test failed" if state == "failure" else "",
         }
+        result.setdefault("failure_text", "unit test failed" if state == "failure" else "")
+        return result
 
 
 class MemoryStorage:
     def __init__(self, row=None):
         self.row = dict(row or {"id": "job12345"})
+        self.events = []
 
     def update(self, _job_id, **fields):
         self.row.update(fields)
 
     def get(self, _job_id):
         return dict(self.row)
+
+    def append_event(self, _job_id, event):
+        self.events.append(event)
 
 
 async def no_sleep(_seconds):
@@ -167,7 +180,7 @@ def test_delivery_storage_holds_verified_result_in_delivering_state():
     assert backend.row["status"] == "completed"
 
 
-def test_verified_delivery_resume_requires_commit_and_does_not_resume_ci_failure():
+def test_verified_delivery_resume_requires_commit_and_only_resumes_infrastructure_ci_failure():
     base = {
         "status": "queued",
         "route": {"strategy": {"permissions": {"push_ai_branch": True}}},
@@ -175,9 +188,19 @@ def test_verified_delivery_resume_requires_commit_and_does_not_resume_ci_failure
     }
     assert RuntimeEngine._verified_result_needs_delivery(base) is True
 
-    failed = dict(base)
-    failed["result"] = {**base["result"], "delivery": {"state": "ci_failure"}}
-    assert RuntimeEngine._verified_result_needs_delivery(failed) is False
+    engineering = dict(base)
+    engineering["result"] = {
+        **base["result"],
+        "delivery": {"state": "ci_failure", "ci": {"failure_class": "engineering"}},
+    }
+    assert RuntimeEngine._verified_result_needs_delivery(engineering) is False
+
+    infrastructure = dict(base)
+    infrastructure["result"] = {
+        **base["result"],
+        "delivery": {"state": "ci_failure", "ci": {"failure_class": "infrastructure"}},
+    }
+    assert RuntimeEngine._verified_result_needs_delivery(infrastructure) is True
 
 
 def test_blocked_delivery_exposes_nested_verified_result_for_resume():
@@ -227,6 +250,217 @@ def test_blocked_delivery_resume_reuses_verified_commit_without_execution_loop()
     asyncio.run(scenario())
 
 
+def test_infrastructure_ci_failure_blocks_without_engineering_repair(monkeypatch):
+    async def scenario():
+        verified = accepted_result()
+        row = {
+            "id": "job12345",
+            "project_id": "demo",
+            "status": "queued",
+            "workspace": "/workspaces/job12345",
+            "branch": "ai/job12345",
+            "source_commit": "a" * 40,
+            "task": {"title": "test"},
+            "progress": {
+                "elapsed_minutes": 0.0,
+                "repair_iterations": 4,
+                "ci_failures": 2,
+                "failure_fingerprints": ["existing"],
+                "model_calls": 7,
+            },
+            "provider_state": {"model-a": {"healthy": True}},
+            "checkpoint": {},
+            "result": verified,
+        }
+        backend = MemoryStorage(row)
+        engine = RuntimeEngine(backend)
+        engine.ddev = FakeDdev(
+            [
+                {
+                    "state": "failure",
+                    "failure_class": "infrastructure",
+                    "failure_text": "quality: runner_id=0, steps=[]",
+                }
+            ]
+        )
+
+        async def unexpected_engineering_run(_self, _job_id):
+            raise AssertionError("implementation engine must not run")
+
+        monkeypatch.setattr(
+            engine_delivery_module.ExecutionRuntimeEngine,
+            "run_job",
+            unexpected_engineering_run,
+        )
+
+        await engine.run_job("job12345")
+
+        assert backend.row["status"] == "blocked"
+        assert backend.row["result"]["reason"] == "github_ci_infrastructure_failure"
+        accepted = backend.row["result"]["accepted_result"]
+        assert accepted["status"] == "accepted"
+        assert accepted["commit"] == "b" * 40
+        assert accepted["delivery"]["ci"]["failure_class"] == "infrastructure"
+        assert backend.row["progress"]["repair_iterations"] == 4
+        assert backend.row["progress"]["ci_failures"] == 2
+        assert backend.row["progress"]["failure_fingerprints"] == ["existing"]
+        assert backend.row["progress"]["model_calls"] == 7
+        assert backend.row["provider_state"] == {"model-a": {"healthy": True}}
+
+    asyncio.run(scenario())
+
+
+def test_infrastructure_recheck_reuses_commit_and_can_complete(monkeypatch):
+    async def scenario():
+        row = {
+            "id": "job12345",
+            "project_id": "demo",
+            "status": "queued",
+            "workspace": "/workspaces/job12345",
+            "branch": "ai/job12345",
+            "source_commit": "a" * 40,
+            "task": {"title": "test"},
+            "progress": {"elapsed_minutes": 0.0, "repair_iterations": 0},
+            "checkpoint": {},
+            "result": accepted_result(),
+        }
+        backend = MemoryStorage(row)
+        engine = RuntimeEngine(backend)
+        engine.ddev = FakeDdev(
+            [
+                {"state": "failure", "failure_class": "infrastructure"},
+                {"state": "success"},
+            ]
+        )
+
+        async def unexpected_engineering_run(_self, _job_id):
+            raise AssertionError("implementation engine must not run")
+
+        monkeypatch.setattr(
+            engine_delivery_module.ExecutionRuntimeEngine,
+            "run_job",
+            unexpected_engineering_run,
+        )
+
+        await engine.run_job("job12345")
+        assert backend.row["status"] == "blocked"
+        preserved = backend.row["result"]["accepted_result"]
+        assert preserved["commit"] == "b" * 40
+
+        # retry_delivery/recheck_ci queues the same durable job without changing
+        # its accepted payload, commit, branch, PR, workspace, or counters.
+        backend.update("job12345", status="queued", error=None)
+        await engine.run_job("job12345")
+
+        assert backend.row["status"] == "completed"
+        assert backend.row["result"]["commit"] == "b" * 40
+        assert backend.row["result"]["delivery"]["state"] == "ci_success"
+        assert backend.row["result"]["delivery_finalized"] is True
+        assert backend.row["progress"]["repair_iterations"] == 0
+        assert backend.row["progress"].get("model_calls", 0) == 0
+        assert backend.row["progress"]["delivery_attempts"] == 2
+        assert backend.row["progress"]["delivery_retry_attempts"] == 1
+        assert backend.row["progress"]["infrastructure_retry_attempts"] == 1
+        publish_calls = [kwargs for kind, kwargs in engine.ddev.calls if kind == "publish"]
+        assert [call["expected_commit"] for call in publish_calls] == ["b" * 40, "b" * 40]
+
+    asyncio.run(scenario())
+
+
+def test_infrastructure_recheck_exhaustion_blocks_fail_closed(monkeypatch):
+    async def scenario():
+        row = {
+            "id": "job12345",
+            "project_id": "demo",
+            "status": "queued",
+            "workspace": "/workspaces/job12345",
+            "branch": "ai/job12345",
+            "source_commit": "a" * 40,
+            "task": {"title": "test"},
+            "progress": {"elapsed_minutes": 0.0, "repair_iterations": 0},
+            "checkpoint": {},
+            "result": accepted_result(),
+        }
+        backend = MemoryStorage(row)
+        engine = RuntimeEngine(backend)
+        engine.ddev = FakeDdev(
+            [
+                {"state": "failure", "failure_class": "infrastructure"},
+                {"state": "failure", "failure_class": "infrastructure"},
+            ]
+        )
+
+        async def unexpected_engineering_run(_self, _job_id):
+            raise AssertionError("implementation engine must not run")
+
+        monkeypatch.setattr(
+            engine_delivery_module.ExecutionRuntimeEngine,
+            "run_job",
+            unexpected_engineering_run,
+        )
+
+        await engine.run_job("job12345")
+        backend.update("job12345", status="queued", error=None)
+        await engine.run_job("job12345")
+
+        assert backend.row["status"] == "blocked"
+        assert backend.row["result"]["reason"] == "github_ci_infrastructure_failure"
+        assert backend.row["result"]["accepted_result"]["commit"] == "b" * 40
+        assert backend.row["progress"]["delivery_attempts"] == 2
+        assert backend.row["progress"]["infrastructure_retry_attempts"] == 1
+        assert backend.row["progress"]["repair_iterations"] == 0
+        assert backend.row["progress"].get("failure_fingerprints", []) == []
+
+    asyncio.run(scenario())
+
+
+def test_engineering_ci_failure_still_enters_repair_flow(monkeypatch):
+    async def scenario():
+        row = {
+            "id": "job12345",
+            "project_id": "demo",
+            "status": "queued",
+            "workspace": "/workspaces/job12345",
+            "branch": "ai/job12345",
+            "source_commit": "a" * 40,
+            "task": {"title": "test"},
+            "progress": {"elapsed_minutes": 0.0, "repair_iterations": 0},
+            "checkpoint": {},
+            "result": accepted_result(),
+        }
+        backend = MemoryStorage(row)
+        engine = RuntimeEngine(backend)
+        engine.ddev = FakeDdev(
+            [
+                {
+                    "state": "failure",
+                    "failure_class": "engineering",
+                    "failure_text": "Run PHPUnit: assertion failed",
+                }
+            ]
+        )
+        parent_calls = []
+
+        async def record_engineering_run(_self, job_id):
+            parent_calls.append(job_id)
+
+        monkeypatch.setattr(
+            engine_delivery_module.ExecutionRuntimeEngine,
+            "run_job",
+            record_engineering_run,
+        )
+
+        await engine.run_job("job12345")
+
+        assert parent_calls == ["job12345"]
+        assert backend.row["status"] == "queued"
+        assert backend.row["progress"]["ci_failures"] == 1
+        assert backend.row["progress"]["repair_iterations"] == 1
+        assert len(backend.row["progress"]["failure_fingerprints"]) == 1
+
+    asyncio.run(scenario())
+
+
 def test_pull_request_body_never_claims_auto_merge():
     body = pull_request_body(
         job_id="job12345",
@@ -261,4 +495,3 @@ def test_legacy_delivery_still_blocks_after_total_wall_threshold():
             strategy,
             {"elapsed_minutes": 10.1},
         )
-

@@ -320,10 +320,10 @@ live PCP services were not queried, resumed, rerouted, rebuilt or restarted.
 
 ## Repeated-failure current-tail correction #286
 
-Issue #286 is implemented in PR #287 on branch
-`ai/issue-286-repeated-failure-tail`, based on latest `main`
-`836af29f3ee308e1ea5aab8a47194b2ada682331`. The implementation head is
-`6725b3afa171c0b824cde28e54051678525380f7`.
+Issue #286 / PR #287 is merged on `main` at
+`3075a4f588074a2206909360b56b20029003e335`. The implementation head was
+`6725b3afa171c0b824cde28e54051678525380f7` and the final continuity head was
+`ebcca7e56257c8c3d4a65db7c30c207e1f073704`.
 
 The Router repeated-failure circuit breaker now reverse-scans only the
 consecutive suffix matching the most recent durable failure fingerprint. The
@@ -350,10 +350,43 @@ R2 job `812aabd7ab0a5adbb18a7a5edc8d7009`, its workspace/durable history and Ch�
 Nhạc were not queried or mutated. Live PCP services were not restarted, rebuilt
 or modified, and cache/GC was not run.
 GitHub Actions run `35910395359` passed Runtime, Router, ddev-executor and
-structure jobs on the implementation head. The following continuity-only commit
-records that result without changing executable behavior. PR #287 remains open
-and must not be merged from the implementation-engineer role; its final
-continuity-only head requires a fresh all-green CI run before review.
+structure jobs on the implementation head. Final exact-head run `35910569565`
+passed all four jobs before PR #287 merged. The blocked R2 job was not resumed
+or otherwise mutated as part of that merge.
+
+## GitHub Actions pre-run failure classification #288
+
+Issue #288 is implemented on branch
+`ai/issue-288-ci-infrastructure-classification`, based on latest `main`
+`3075a4f588074a2206909360b56b20029003e335`.
+
+The bounded delivery fix preserves the existing top-level CI state contract and
+adds explicit failure evidence/classification:
+
+- failed Actions jobs retain runner identity, steps, timestamps, whether any
+  repository execution started, and available log excerpts;
+- `startup_failure` and the exact runnerless `runner_id=0` / `steps=[]` shape
+  classify as delivery infrastructure;
+- assigned-runner/executed-step failures, legacy commit-status failures and
+  ambiguous/missing evidence remain engineering failures fail-closed;
+- Runtime blocks pre-run failures as `github_ci_infrastructure_failure` while
+  preserving the accepted result, verified commit, branch and pull request;
+- this path does not increment `ci_failures` or `repair_iterations`, append an
+  engineering failure fingerprint, invoke the implementation engine, or require
+  another material repository change;
+- `retry_delivery` / `recheck_ci` reuse the accepted commit. Each delivery
+  attempt remains bounded and a repeated pre-run failure blocks again with the
+  infrastructure-specific reason rather than entering an automatic loop;
+- a later CI success for the exact accepted commit finalizes the same durable
+  job normally.
+
+Current source verification passes the focused ddev-executor GitHub-delivery
+tests (`12 passed`), focused Runtime delivery tests (`16 passed`), full
+ddev-executor suite (`60 passed`), full Runtime suite (`398 passed`) and
+structure suite (`89 passed`). No Router source or contract changed, so the
+Router suite is not required. The blocked Chợ Nhạc R2 job, its workspace and PR
+#18 were not queried or mutated; live PCP services were not restarted, rebuilt
+or modified, and cache/GC was not run.
 
 ## Dedicated PCP BuildKit isolation #281
 
@@ -463,9 +496,9 @@ claim every DDEV build on the machine uses `pcp-builder`.
 
 ## Immediate next safe actions
 
-1. Review issue #286's PR at its final exact head after all required CI jobs are
-   green; do not merge, activate/rebuild Router or resume R2 from the
-   implementation-engineer role.
+1. Review issue #288's implementation PR at its final exact head after all
+   required CI jobs are green; do not merge, activate/rebuild PCP services or
+   resume R2 from the implementation-engineer role.
 2. Keep the retained shared/default BuildKit cache unchanged. Any later cleanup
    decision must remain separate from #281's proof of isolation.
 3. Keep R2 job `812aabd7ab0a5adbb18a7a5edc8d7009` durably blocked; do not

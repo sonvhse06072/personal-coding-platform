@@ -287,9 +287,16 @@ class ControlActionService(BaseControlActionService):
             advisory["summary"] = "Deterministic preflight verification thất bại."
             advisory["cause"] = "Một preflight check đã thất bại; raw command output cố ý không được gửi qua Telegram."
             advisory["recommended"] = "Kiểm tra lỗi verification bên ngoài Telegram trước khi thử lại."
-        elif reason in {"github_delivery_failed", "github_ci_timeout"}:
+        elif reason in {
+            "github_delivery_failed",
+            "github_ci_timeout",
+            "github_ci_infrastructure_failure",
+        }:
             advisory["summary"] = "Kết quả đã verify local đang bị chặn ở bước GitHub delivery/CI."
-            advisory["cause"] = "Kết quả local đã được giữ nguyên; Runtime không cần code lại trước khi retry delivery."
+            if reason == "github_ci_infrastructure_failure":
+                advisory["cause"] = "GitHub CI thất bại trước khi chạy repository; commit và PR đã được chấp nhận vẫn được giữ nguyên."
+            else:
+                advisory["cause"] = "Kết quả local đã được giữ nguyên; Runtime không cần code lại trước khi retry delivery."
             advisory["recommended"] = "Thử lại delivery hoặc kiểm tra lại CI mà không thay đổi kết quả đã được chấp nhận."
         elif reason == "github_delivery_budget_exhausted":
             advisory["summary"] = "GitHub delivery đã hết ngân sách wall-time của Runtime."

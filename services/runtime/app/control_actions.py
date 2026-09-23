@@ -306,9 +306,16 @@ class ControlActionService:
             advisory["cause"] = "The current Definition-of-Done/reassessment state did not authorize automatic completion."
             advisory["recommended"] = "Review the WorkOrder and existing decision boundary. There is intentionally no force-complete action."
 
-        elif reason in {"github_delivery_failed", "github_ci_timeout"}:
+        elif reason in {
+            "github_delivery_failed",
+            "github_ci_timeout",
+            "github_ci_infrastructure_failure",
+        }:
             advisory["summary"] = "Locally verified work is blocked in GitHub delivery/CI observation."
-            advisory["cause"] = "The accepted local result is preserved; Runtime does not need to recode it before a delivery retry."
+            if reason == "github_ci_infrastructure_failure":
+                advisory["cause"] = "GitHub CI failed before repository execution began; the accepted commit and PR are preserved."
+            else:
+                advisory["cause"] = "The accepted local result is preserved; Runtime does not need to recode it before a delivery retry."
             advisory["recommended"] = "Retry delivery or recheck CI while preserving the accepted result."
             advisory["action_specs"] = [
                 {"action_type": "retry_delivery", "label": "🔁 Retry delivery", "payload": {}},

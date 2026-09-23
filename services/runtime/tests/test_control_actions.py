@@ -136,6 +136,30 @@ def test_unknown_block_reason_fails_closed_without_mutating_recovery_action():
     assert "force_complete" not in action_types(advisory)
 
 
+def test_ci_infrastructure_block_offers_only_preserved_delivery_recovery():
+    job = base_job(
+        reason="github_ci_infrastructure_failure",
+        last_failure="quality failed before runner assignment",
+    )
+    job["result"]["accepted_result"] = {
+        "status": "accepted",
+        "commit": "b" * 40,
+        "delivery": {"pull_request": {"number": 18}},
+    }
+    controls, _ = service(job)
+
+    advisory = controls.blocked_advisory(row(), job)
+
+    assert "before repository execution" in advisory["cause"]
+    assert action_types(advisory) == [
+        "retry_delivery",
+        "recheck_ci",
+        "details",
+        "keep_blocked",
+    ]
+    assert "reroute_retry" not in action_types(advisory)
+
+
 def test_budget_extension_is_additive_audited_and_preserves_work_order_and_progress():
     controls, storage = service()
     before = storage.get("job-1")
