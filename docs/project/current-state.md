@@ -2,7 +2,7 @@
 
 Status: mutable continuity document. Repository docs and executable evidence are authoritative over chat history. Durable architecture/product/policy decisions remain in their topical source-of-truth documents.
 
-Last updated: 2026-09-23
+Last updated: 2026-09-24
 
 ## Resume order
 
@@ -287,10 +287,42 @@ untouched. A 2026-09-23 read-only gate reported Runtime counts `blocked=12`,
 Issues #15 and #16 remain pending so only one Design Closure engineering task is
 active at a time.
 
+## Reviewer repair/rebuttal re-check #284
+
+Issue #284 implementation is in PR #285 on branch
+`ai/issue-284-reviewer-recheck`, based on latest `main` merge
+`f858d4b1323a5803e818c1e2b1ae61254458e145`.
+
+The bounded fix forwards only the current successful developer turn output to
+`evaluator_prompt(..., developer_report=...)`. The existing reviewer evidence
+pack remains the compaction boundary, including its 3,000-character developer
+report limit. Reviewer instructions classify the report as advisory
+repair/rebuttal evidence: the WorkOrder and deterministic repository evidence
+remain authoritative, claims are not accepted automatically, and existing
+read-only just-in-time repository retrieval remains available.
+
+Engine-level regression coverage proves the complete dialogue edge:
+
+- an initial reviewer failure becomes compact `PCP_REVIEW_FINDINGS` for the
+  next developer turn;
+- the next successful developer response reaches evaluator re-review;
+- the current response is clipped while earlier developer stdout/stderr and
+  unbounded tail content do not enter the re-review prompt;
+- a reviewer that still finds the same issue unresolved preserves identical
+  failure fingerprints and reaches the repeated-failure circuit breaker.
+
+Local source verification currently passes the targeted reviewer/evidence
+tests (`14 passed`), full Runtime tests (`393 passed`) and structure tests
+(`89 passed`). PR CI run `35901028807` passed Runtime, Router, ddev-executor and
+structure jobs on head `00c7851ab63e6ce7441bb96f52e1f71d4f988a19`.
+The following continuity-only commit records that result without changing
+executable behavior. No Router source changed. The blocked Chợ Nhạc R2 job and
+live PCP services were not queried, resumed, rerouted, rebuilt or restarted.
+
 ## Dedicated PCP BuildKit isolation #281
 
-Issue #281 implementation is in PR #283 on branch
-`ai/issue-281-pcp-builder-gc`. The source change introduces:
+Issue #281 / PR #283 is merged on `main` at
+`f858d4b1323a5803e818c1e2b1ae61254458e145`. The source change introduces:
 
 - one deterministic `pcp-builder` using the `docker-container` driver without
   changing the user's globally selected builder;
@@ -395,7 +427,8 @@ claim every DDEV build on the machine uses `pcp-builder`.
 
 ## Immediate next safe actions
 
-1. Review PR #283 exact-head CI and rollout evidence; do not merge from the
+1. Review PR #285 at its final exact head after the continuity-only CI run is
+   green; do not merge, activate the Runtime change or resume R2 from the
    implementation-engineer role.
 2. Keep the retained shared/default BuildKit cache unchanged. Any later cleanup
    decision must remain separate from #281's proof of isolation.
