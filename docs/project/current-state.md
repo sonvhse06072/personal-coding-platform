@@ -317,8 +317,10 @@ Regression coverage models 500 newer terminal jobs hiding one older active job
 and proves GC refuses before any Docker mutation. No additional live restart,
 validation fixture, or GC was performed; the prior isolation rollout evidence
 below remains valid. Updated source verification passes structure `89`, Router
-`92`, Runtime `391`, ddev-executor `57`, `bash -n`, and ShellCheck. Exact-head CI
-for the corrected PR head is pending.
+`92`, Runtime `391`, ddev-executor `57`, `bash -n`, and ShellCheck. CI run
+`35890188011` passed all four required jobs on corrected source head
+`9d2df810df9f7cacdde2f47182a0687ca1f62171`; the following continuity-only
+commit does not change executable behavior.
 
 Original implementation source verification passed structure `89`, Router
 `92`, Runtime `388`, ddev-executor `57`, script `bash -n`, Compose render, and
