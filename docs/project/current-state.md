@@ -289,7 +289,7 @@ active at a time.
 
 ## Reviewer repair/rebuttal re-check #284
 
-Issue #284 implementation is in progress on branch
+Issue #284 implementation is in PR #285 on branch
 `ai/issue-284-reviewer-recheck`, based on latest `main` merge
 `f858d4b1323a5803e818c1e2b1ae61254458e145`.
 
@@ -424,8 +424,8 @@ claim every DDEV build on the machine uses `pcp-builder`.
 
 ## Immediate next safe actions
 
-1. Complete issue #284 through one unmerged PR with exact-head CI green; do not
-   activate the Runtime change or resume R2 as part of that implementation PR.
+1. Review PR #285 at its exact head after CI is green; do not merge, activate
+   the Runtime change or resume R2 from the implementation-engineer role.
 2. Keep the retained shared/default BuildKit cache unchanged. Any later cleanup
    decision must remain separate from #281's proof of isolation.
 3. Keep R2 job `812aabd7ab0a5adbb18a7a5edc8d7009` durably blocked; do not
