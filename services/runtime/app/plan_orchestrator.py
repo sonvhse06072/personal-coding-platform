@@ -492,6 +492,7 @@ class PlanOrchestrator:
                         plan,
                         tracked,
                         job,
+                        remove_data=True,
                     )
                     result = dict(job.get("result") or {})
                     delivery = dict(result.get("delivery") or {})
@@ -526,6 +527,7 @@ class PlanOrchestrator:
                         plan,
                         tracked,
                         job,
+                        remove_data=job_status == "cancelled",
                     )
                     self._block_job(
                         plan,
@@ -654,6 +656,8 @@ class PlanOrchestrator:
         plan: dict[str, Any],
         tracked: dict[str, Any],
         job: dict[str, Any],
+        *,
+        remove_data: bool = False,
     ) -> dict[str, Any]:
         workspace = str(job.get("workspace") or "").strip()
         if not workspace:
@@ -663,6 +667,7 @@ class PlanOrchestrator:
                 job_id=str(job["id"]),
                 project_id=str(job["project_id"]),
                 workspace=workspace,
+                remove_data=remove_data,
             )
         except Exception as exc:
             message = str(exc)[-2000:]
