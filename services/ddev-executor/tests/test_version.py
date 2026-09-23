@@ -4,7 +4,7 @@ from app import main
 
 
 def test_ddev_executor_version_is_1_0_17():
-    assert main.app.version == "1.0.17"
+    assert main.app.version == "1.0.18"
 
 
 def test_ddev_executor_health_reports_1_0_17(monkeypatch):
@@ -14,4 +14,4 @@ def test_ddev_executor_health_reports_1_0_17(monkeypatch):
         lambda *args, **kwargs: SimpleNamespace(returncode=0, stdout="ok", stderr=""),
     )
 
-    assert main.health()["version"] == "1.0.17"
+    assert main.health()["version"] == "1.0.18"
