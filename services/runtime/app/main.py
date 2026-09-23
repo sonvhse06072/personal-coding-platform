@@ -443,8 +443,16 @@ async def resolve_decision(job_id: str, payload: HumanDecisionRequest) -> JobVie
 
 
 @app.post("/v1/jobs/{job_id}/cleanup", dependencies=[Depends(auth)])
-async def cleanup_job(job_id: str, remove_workspace: bool = False) -> dict[str, Any]:
+async def cleanup_job(
+    job_id: str,
+    remove_workspace: bool = False,
+    release_ddev_data: bool = False,
+) -> dict[str, Any]:
     try:
-        return await engine.cleanup(job_id, remove_workspace=remove_workspace)
+        return await engine.cleanup(
+            job_id,
+            remove_workspace=remove_workspace,
+            release_ddev_data=release_ddev_data,
+        )
     except RuntimeError as exc:
         raise HTTPException(404, str(exc)) from exc

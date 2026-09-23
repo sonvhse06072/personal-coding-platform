@@ -75,13 +75,24 @@ class FakeDdev:
     async def github_pull_request(self, *, project_id, pr_number):
         return deepcopy(self.prs[pr_number])
 
-    async def quiesce_workspace(self, *, job_id, project_id, workspace):
+    async def quiesce_workspace(
+        self,
+        *,
+        job_id,
+        project_id,
+        workspace,
+        remove_data=False,
+    ):
         self.quiesced.append({
             "job_id": job_id,
             "project_id": project_id,
             "workspace": workspace,
+            "remove_data": remove_data,
         })
-        return {"quiesced": True, "data_removed": False}
+        return {
+            "quiesced": True,
+            "data_removed": bool(remove_data),
+        }
 
 
 class FakeEngine:
@@ -364,6 +375,7 @@ def test_terminal_agent_job_quiesces_workspace_before_blocking_plan():
         "job_id": "job-1",
         "project_id": "demo",
         "workspace": "/tmp/workspaces/job-1",
+        "remove_data": False,
     }]
     assert store.tracked[0]["state"] == "blocked"
     assert store.tracked[0]["detail"]["resource_quiesce"] == {
@@ -401,10 +413,40 @@ def test_completed_agent_job_quiesces_workspace_before_awaiting_merge():
         "job_id": "job-1",
         "project_id": "demo",
         "workspace": "/tmp/workspaces/job-1",
+        "remove_data": True,
     }]
     assert store.tracked[0]["state"] == "awaiting_merge"
     assert store.tracked[0]["detail"]["resource_quiesce"] == {
         "quiesced": True,
-        "data_removed": False,
+        "data_removed": True,
+    }
+
+def test_cancelled_agent_job_releases_ddev_data_before_blocking_plan():
+    wo = work_order("WO-1")
+    service, storage, engine, store = orchestrator(
+        [wo],
+        [tracked("WO-1", 0, state="running", job_id="job-1")],
+    )
+    storage.jobs["job-1"] = {
+        "id": "job-1",
+        "project_id": "demo",
+        "workspace": "/tmp/workspaces/job-1",
+        "status": "cancelled",
+        "result": {},
+        "progress": {},
+    }
+
+    asyncio.run(service.tick())
+
+    assert engine.ddev.quiesced == [{
+        "job_id": "job-1",
+        "project_id": "demo",
+        "workspace": "/tmp/workspaces/job-1",
+        "remove_data": True,
+    }]
+    assert store.tracked[0]["state"] == "blocked"
+    assert store.tracked[0]["detail"]["resource_quiesce"] == {
+        "quiesced": True,
+        "data_removed": True,
     }
 
