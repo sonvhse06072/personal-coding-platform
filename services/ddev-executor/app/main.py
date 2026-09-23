@@ -68,6 +68,7 @@ class QuiesceWorkspaceRequest(BaseModel):
     job_id: str = Field(min_length=8, max_length=100)
     project_id: str = Field(min_length=1, max_length=200)
     workspace: str = Field(min_length=1, max_length=2000)
+    remove_data: bool = False
 
 
 class CommandOutput(BaseModel):
@@ -316,7 +317,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.17")
+app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.18")
 app.include_router(pm_bridge_github_router)
 
 
@@ -331,7 +332,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok" if ok else "degraded",
         "service": "ddev-executor",
-        "version": "1.0.17",
+        "version": "1.0.18",
         "ddev": (result.stdout or result.stderr).strip(),
         "docker": (docker.stdout or docker.stderr).strip(),
         "buildx": (buildx.stdout or buildx.stderr).strip(),
@@ -362,9 +363,13 @@ def quiesce_workspace(payload: QuiesceWorkspaceRequest) -> dict[str, Any]:
         nodejs_version=cfg.get("ddev", {}).get("workspace_nodejs_version"),
     )
 
+    argv = ["ddev", "stop", "--unlist", "--omit-snapshot"]
+    if payload.remove_data:
+        argv.append("--remove-data")
+
     returncode, stdout, stderr, timed_out = run_tracked(
         payload.job_id,
-        ["ddev", "stop", "--unlist", "--omit-snapshot"],
+        argv,
         cwd=workspace,
         timeout=300,
         env={**os.environ, "DDEV_NO_TUI": "true"},
@@ -378,7 +383,7 @@ def quiesce_workspace(payload: QuiesceWorkspaceRequest) -> dict[str, Any]:
         "project_id": payload.project_id,
         "workspace": str(workspace),
         "quiesced": True,
-        "data_removed": False,
+        "data_removed": bool(payload.remove_data),
         "stdout": stdout[-12000:],
         "stderr": stderr[-12000:],
     }
