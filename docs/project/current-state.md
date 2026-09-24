@@ -541,6 +541,45 @@ tests (`21 passed`), the full Runtime suite (`407 passed`) and structure tests
 R2, its workspace/durable state and PR #18 were not queried or mutated; R3 was
 not created; PCP was not restarted or rebuilt.
 
+## Owner-attention generation and supersession #293
+
+Issue #293 is implemented on branch
+`ai/issue-293-stale-notification-supersession` as PR #294. The executable
+implementation head is `f33eb15148b9668227d5e73256e5deac55da7acb`; this continuity update follows on
+the same branch and exact-head CI remains required before review or merge.
+
+The bounded Runtime correction keeps transport and merge policy unchanged:
+
+- no-op `update_plan()` and `update_work_order()` calls no longer advance
+  `updated_at`; real status, state, detail, job or PR changes still do;
+- strict timestamp-bound mutation validation remains intact, while separate
+  semantic attention generations exclude polling timestamps and opaque action
+  IDs;
+- repeated stable `awaiting_merge`, `blocked` and `waiting_human` ticks reuse
+  the existing control/notification generation;
+- pending or delivering notification rows from an obsolete attention state or
+  generation become `superseded`; sent rows remain unchanged and no audit row
+  is deleted;
+- pending old-generation controls become `cancelled`; executed control history
+  is unchanged;
+- a historical `recheck_orchestration` callback against a completed WorkOrder
+  returns benign `already_resolved`, while conflicting/non-terminal controls
+  retain strict stale/fail-closed behavior;
+- Runtime source version advances to `1.0.50`.
+
+The live-shaped regression uses plan `pm-gh-5772402026`, WorkOrder
+`UI-CL-1-responsive-regression-matrix-r2` and job
+`812aabd7ab0a5adbb18a7a5edc8d7009`, but only as in-memory test identity. Local
+source verification passes focused Runtime store/orchestration/control tests
+(`38 passed`), the full Runtime suite (`418 passed`), structure tests (`89
+passed`), top-level Telegram/n8n transport tests (`11 passed`), Python
+compilation and `git diff --check`.
+
+No live PCP service was restarted/rebuilt/activated. Chợ Nhạc, the completed R2
+WorkOrder, its workspace/durable state and Telegram were not queried or
+mutated. The n8n workflow JSON and existing send/ACK/release transport contract
+are unchanged.
+
 ## Dedicated PCP BuildKit isolation #281
 
 Issue #281 / PR #283 is merged on `main` at
@@ -649,11 +688,9 @@ claim every DDEV build on the machine uses `pcp-builder`.
 
 ## Immediate next safe actions
 
-1. Review the #288 legacy-recovery correction on PR #289, then repair the
-   external GitHub Actions billing/spending-limit condition and re-run CI on its
-   exact final head. Review only after all required jobs execute repository
-   steps and pass; do not merge, activate/rebuild PCP services or resume R2 from
-   the implementation-engineer role.
+1. Require all four GitHub Actions jobs to execute repository steps and pass on
+   PR #294's exact final head before PM review. Do not merge or activate/rebuild
+   PCP services from the implementation-engineer role.
 2. Keep the retained shared/default BuildKit cache unchanged. Any later cleanup
    decision must remain separate from #281's proof of isolation.
 3. Keep R2 job `812aabd7ab0a5adbb18a7a5edc8d7009` durably blocked; do not
