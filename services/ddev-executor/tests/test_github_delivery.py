@@ -22,6 +22,8 @@ def ci_status_result(
     *,
     runs=None,
     statuses=None,
+    status_history=None,
+    status_history_status=200,
     payload_sha=EXACT_SHA,
     commit=EXACT_SHA,
 ):
@@ -30,14 +32,23 @@ def ci_status_result(
         {key: value for key, value in run.items() if key != "test_jobs"}
         for run in raw_runs
     ]
-    commit_statuses = list(statuses or [])
+    source_statuses = list(statuses or [])
+    commit_statuses = [
+        {key: value for key, value in status.items() if key != "creator"}
+        for status in source_statuses
+    ]
+    historical_statuses = list(
+        source_statuses if status_history is None else status_history
+    )
     jobs_by_run = {
         int(run["id"]): list(run.get("test_jobs", []))
         for run in raw_runs
         if run.get("id") is not None
     }
+    status_history_requests = 0
 
     def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal status_history_requests
         path = request.url.path
         if path == "/repos/acme/demo/actions/runs":
             return httpx.Response(200, json={"workflow_runs": workflow_runs})
@@ -60,6 +71,10 @@ def ci_status_result(
                     "statuses": commit_statuses,
                 },
             )
+        if path == f"/repos/acme/demo/commits/{commit}/statuses":
+            status_history_requests += 1
+            assert request.url.params["per_page"] == "100"
+            return httpx.Response(status_history_status, json=historical_statuses)
         jobs_match = re.fullmatch(
             r"/repos/acme/demo/actions/runs/([0-9]+)/jobs", path
         )
@@ -79,7 +94,12 @@ def ci_status_result(
         "_client",
         lambda: httpx.Client(transport=transport, headers=delivery.headers),
     )
-    return delivery.ci_status(repository="acme/demo", commit=commit)
+    result = delivery.ci_status(repository="acme/demo", commit=commit)
+    expected_history_requests = int(any(
+        status.get("context") == TRUSTED_CONTEXT for status in source_statuses
+    ))
+    assert status_history_requests == expected_history_requests
+    return result
 
 
 def failed_run(run_id, *, updated_at, infrastructure=True):
@@ -472,7 +492,39 @@ def test_newer_trusted_exact_sha_success_supersedes_only_historical_infrastructu
     assert trusted["context"] == TRUSTED_CONTEXT
     assert trusted["target_sha"] == EXACT_SHA
     assert trusted["validation_run_id"] == 201
+    assert trusted["creator"] == "github-actions[bot]"
+    assert trusted["creator_type"] == "Bot"
+    assert trusted["creator_status_id"] == 201
+    assert trusted["creator_source"] == "list_commit_statuses"
     assert trusted["valid"] is True
+    assert result["statuses"][0]["creator"] == ""
+
+
+def test_trusted_status_id_missing_from_history_fails_closed(monkeypatch):
+    result = ci_status_result(
+        monkeypatch,
+        statuses=[trusted_status(212)],
+        status_history=[],
+    )
+
+    assert result["state"] == "failure"
+    assert result["failure_class"] == "infrastructure"
+    evidence = result["trusted_exact_sha_evidence"][0]
+    assert evidence["valid"] is False
+    assert evidence["validation_errors"] == ["trusted_status_id_not_found"]
+
+
+def test_matching_trusted_context_with_different_status_id_fails_closed(monkeypatch):
+    result = ci_status_result(
+        monkeypatch,
+        statuses=[trusted_status(213)],
+        status_history=[trusted_status(214)],
+    )
+
+    assert result["state"] == "failure"
+    evidence = result["trusted_exact_sha_evidence"][0]
+    assert evidence["valid"] is False
+    assert evidence["validation_errors"] == ["trusted_status_id_not_found"]
 
 
 def test_generic_or_wrong_context_success_does_not_override_infrastructure_failure(monkeypatch):
@@ -536,6 +588,60 @@ def test_trusted_context_from_non_workflow_creator_does_not_override(monkeypatch
     evidence = result["trusted_exact_sha_evidence"][0]
     assert evidence["valid"] is False
     assert evidence["validation_errors"] == ["untrusted_status_creator"]
+
+
+def test_trusted_context_with_missing_creator_does_not_override(monkeypatch):
+    trusted = trusted_status(215)
+    history = dict(trusted)
+    history.pop("creator")
+    result = ci_status_result(
+        monkeypatch,
+        runs=[failed_run(115, updated_at="2026-09-24T01:00:00Z")],
+        statuses=[trusted],
+        status_history=[history],
+    )
+
+    assert result["state"] == "failure"
+    evidence = result["trusted_exact_sha_evidence"][0]
+    assert evidence["valid"] is False
+    assert evidence["validation_errors"] == ["untrusted_status_creator"]
+
+
+def test_different_bot_status_cannot_lend_creator_identity(monkeypatch):
+    trusted = trusted_status(216)
+    other = trusted_status(217)
+    other["context"] = "ci/other"
+    result = ci_status_result(
+        monkeypatch,
+        statuses=[trusted],
+        status_history=[other],
+    )
+
+    assert result["state"] == "failure"
+    evidence = result["trusted_exact_sha_evidence"][0]
+    assert evidence["creator"] == ""
+    assert evidence["valid"] is False
+    assert evidence["validation_errors"] == ["trusted_status_id_not_found"]
+
+
+def test_trusted_status_history_api_failure_fails_closed(monkeypatch):
+    result = ci_status_result(
+        monkeypatch,
+        statuses=[trusted_status(218)],
+        status_history_status=503,
+    )
+
+    assert result["combined_status"] == "success"
+    assert result["state"] == "failure"
+    assert result["failure_class"] == "infrastructure"
+    assert result["trusted_contract_errors"] == [
+        "trusted_status_metadata_http_503"
+    ]
+    evidence = result["trusted_exact_sha_evidence"][0]
+    assert evidence["valid"] is False
+    assert evidence["validation_errors"] == [
+        "trusted_status_metadata_http_503"
+    ]
 
 
 def test_trusted_success_older_than_infrastructure_failure_does_not_override(monkeypatch):
@@ -604,22 +710,48 @@ def test_ambiguously_ordered_engineering_failure_remains_fail_closed(monkeypatch
 
 
 def test_newer_trusted_exact_sha_failure_wins_over_prior_success(monkeypatch):
+    prior_success = trusted_status(208, created_at="2026-09-24T02:00:00Z")
+    latest_failure = trusted_status(
+        209,
+        state="failure",
+        created_at="2026-09-24T03:00:00Z",
+    )
     result = ci_status_result(
         monkeypatch,
-        statuses=[
-            trusted_status(208, created_at="2026-09-24T02:00:00Z"),
-            trusted_status(
-                209,
-                state="failure",
-                created_at="2026-09-24T03:00:00Z",
-            ),
-        ],
+        statuses=[latest_failure],
+        status_history=[latest_failure, prior_success],
     )
 
     assert result["state"] == "failure"
     assert result["failure_class"] == "engineering"
     assert result["latest_trusted_exact_sha_evidence"]["state"] == "failure"
     assert result["effective_failures"][0]["context"] == TRUSTED_CONTEXT
+    assert len(result["statuses"]) == 1
+    assert len(result["trusted_exact_sha_evidence"]) == 1
+
+
+def test_historical_trusted_statuses_do_not_become_ordinary_ci_signals(monkeypatch):
+    latest_success = trusted_status(219, created_at="2026-09-24T03:00:00Z")
+    historical_failure = trusted_status(
+        220,
+        state="failure",
+        created_at="2026-09-24T02:00:00Z",
+    )
+    result = ci_status_result(
+        monkeypatch,
+        statuses=[latest_success],
+        status_history=[latest_success, historical_failure],
+    )
+
+    assert result["combined_status"] == "success"
+    assert result["state"] == "success"
+    assert result["failure_class"] is None
+    assert result["failures"] == []
+    assert len(result["statuses"]) == 1
+    assert result["statuses"][0]["id"] == 219
+    assert len(result["checks"]) == 1
+    assert len(result["trusted_exact_sha_evidence"]) == 1
+    assert result["latest_trusted_exact_sha_evidence"]["id"] == 219
 
 
 def test_ordinary_current_workflow_success_remains_success(monkeypatch):

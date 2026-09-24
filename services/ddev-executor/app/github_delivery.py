@@ -107,6 +107,28 @@ def _commit_status_creator(raw: dict[str, Any]) -> tuple[str, str]:
     return str(creator.get("login") or ""), str(creator.get("type") or "")
 
 
+def trusted_status_metadata_by_id(
+    combined_status: dict[str, Any],
+    historical_statuses: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Bind creator-bearing history to one combined status by exact ID only."""
+    status_id = combined_status.get("id")
+    if not isinstance(status_id, int) or isinstance(status_id, bool) or status_id <= 0:
+        return None, "invalid_trusted_status_id"
+    matches = [
+        item
+        for item in historical_statuses
+        if isinstance(item, dict)
+        and type(item.get("id")) is type(status_id)
+        and item.get("id") == status_id
+    ]
+    if not matches:
+        return None, "trusted_status_id_not_found"
+    if len(matches) != 1:
+        return None, "trusted_status_id_ambiguous"
+    return matches[0], None
+
+
 def commit_status_signal(raw: dict[str, Any]) -> dict[str, Any]:
     """Normalize one legacy commit status into the existing CI signal shape."""
     state = str(raw.get("state") or "")
@@ -176,13 +198,16 @@ def trusted_exact_sha_status(
     repository: str,
     commit: str,
     status_payload_sha: Any,
+    metadata_status: dict[str, Any] | None,
+    metadata_error: str | None = None,
 ) -> dict[str, Any] | None:
     """Validate the narrow repository-owned exact-SHA commit-status contract.
 
     Legacy commit statuses expose less execution metadata than Actions jobs.
     Trust therefore requires every binding they do expose: the exact context,
-    exact 40-character endpoint/result SHA, terminal state, creation time, and
-    an exact-repository GitHub Actions run URL.
+    exact 40-character endpoint/result SHA, terminal state, creation time, an
+    exact-repository GitHub Actions run URL, and creator metadata hydrated only
+    from the list-status object with the exact same GitHub status ID.
     """
     if str(raw.get("context") or "") != _TRUSTED_EXACT_SHA_CONTEXT:
         return None
@@ -192,7 +217,7 @@ def trusted_exact_sha_status(
     created_at = raw.get("created_at")
     parsed_timestamp = parse_github_timestamp(created_at)
     run_id = _validation_run_id(raw.get("target_url"), repository)
-    creator_login, creator_type = _commit_status_creator(raw)
+    creator_login, creator_type = _commit_status_creator(metadata_status or {})
     errors: list[str] = []
     if not _EXACT_SHA_RE.fullmatch(commit) or target_sha.lower() != commit.lower():
         errors.append("target_sha_mismatch")
@@ -202,7 +227,9 @@ def trusted_exact_sha_status(
         errors.append("invalid_created_at")
     if run_id is None:
         errors.append("invalid_validation_run_url")
-    if creator_login != "github-actions[bot]" or creator_type != "Bot":
+    if metadata_error:
+        errors.append(metadata_error)
+    elif creator_login != "github-actions[bot]" or creator_type != "Bot":
         errors.append("untrusted_status_creator")
 
     return {
@@ -218,6 +245,8 @@ def trusted_exact_sha_status(
         "validation_run_id": run_id,
         "creator": creator_login,
         "creator_type": creator_type,
+        "creator_status_id": metadata_status.get("id") if metadata_status else None,
+        "creator_source": "list_commit_statuses" if metadata_status else None,
         "terminal": state in {"success", "failure", "error"},
         "valid": not errors,
         "validation_errors": errors,
@@ -283,6 +312,26 @@ def effective_ci_state(
         else:
             effective_failures.append(item)
 
+    trusted_contract_errors = sorted({
+        str(error)
+        for item in trusted_evidence
+        if not item.get("valid")
+        for error in item.get("validation_errors") or []
+        if error
+    })
+    if trusted_contract_invalid:
+        contract_failure = {
+            "source": "trusted_status_authentication",
+            "name": _TRUSTED_EXACT_SHA_CONTEXT,
+            "conclusion": "error",
+            "description": ", ".join(trusted_contract_errors),
+            "failure_class": _INFRASTRUCTURE_FAILURE,
+            "effective": True,
+            "superseded_by_trusted_exact_sha": False,
+        }
+        audit_failures.append(contract_failure)
+        effective_failures.append(contract_failure)
+
     has_pending = combined_status == "pending"
     has_signal = combined_status in {"success", "failure", "error", "pending"}
     for signal in signals:
@@ -329,6 +378,7 @@ def effective_ci_state(
         "superseded_failures": superseded_failures,
         "infrastructure_failures_superseded": bool(superseded_failures),
         "trusted_contract_invalid": trusted_contract_invalid,
+        "trusted_contract_errors": trusted_contract_errors,
         "trusted_order_ambiguous": ambiguous_trusted_order,
         "latest_trusted": latest_trusted,
     }
@@ -523,6 +573,37 @@ class GitHubDelivery:
             raw_statuses = list(status_payload.get("statuses") or [])
             combined_status = combined_status_signal(status_payload)
 
+            trusted_combined_statuses = [
+                raw
+                for raw in raw_statuses
+                if isinstance(raw, dict)
+                and str(raw.get("context") or "") == _TRUSTED_EXACT_SHA_CONTEXT
+            ]
+            trusted_status_history: list[dict[str, Any]] = []
+            trusted_metadata_request_error: str | None = None
+            if trusted_combined_statuses:
+                metadata_response = client.get(
+                    f"{self.base}/repos/{repository}/commits/{commit}/statuses",
+                    params={"per_page": 100},
+                )
+                if not metadata_response.is_success:
+                    trusted_metadata_request_error = (
+                        f"trusted_status_metadata_http_{metadata_response.status_code}"
+                    )
+                else:
+                    try:
+                        metadata_payload = metadata_response.json()
+                    except ValueError:
+                        metadata_payload = None
+                    if not isinstance(metadata_payload, list):
+                        trusted_metadata_request_error = (
+                            "trusted_status_metadata_invalid_payload"
+                        )
+                    else:
+                        trusted_status_history = [
+                            item for item in metadata_payload if isinstance(item, dict)
+                        ]
+
             signals = [action_run_signal(raw) for raw in workflow_runs]
             signals.extend(commit_status_signal(raw) for raw in raw_statuses)
             _, checks = summarize_ci(signals, combined_status)
@@ -613,19 +694,25 @@ class GitHubDelivery:
                     "failure_class": _ENGINEERING_FAILURE,
                 })
 
-            trusted_evidence = [
-                evidence
-                for raw in raw_statuses
-                if (
-                    evidence := trusted_exact_sha_status(
+            trusted_evidence: list[dict[str, Any]] = []
+            for raw in trusted_combined_statuses:
+                metadata_status = None
+                metadata_error = trusted_metadata_request_error
+                if metadata_error is None:
+                    metadata_status, metadata_error = trusted_status_metadata_by_id(
                         raw,
-                        repository=repository,
-                        commit=commit,
-                        status_payload_sha=status_payload.get("sha"),
+                        trusted_status_history,
                     )
+                evidence = trusted_exact_sha_status(
+                    raw,
+                    repository=repository,
+                    commit=commit,
+                    status_payload_sha=status_payload.get("sha"),
+                    metadata_status=metadata_status,
+                    metadata_error=metadata_error,
                 )
-                is not None
-            ]
+                if evidence is not None:
+                    trusted_evidence.append(evidence)
             effective = effective_ci_state(
                 signals,
                 combined_status,
@@ -650,6 +737,7 @@ class GitHubDelivery:
                 "trusted_exact_sha_evidence": public_trusted,
                 "latest_trusted_exact_sha_evidence": public_latest,
                 "trusted_contract_invalid": effective["trusted_contract_invalid"],
+                "trusted_contract_errors": effective["trusted_contract_errors"],
                 "trusted_order_ambiguous": effective["trusted_order_ambiguous"],
                 "failures": effective["failures"],
                 "effective_failures": effective["effective_failures"],

@@ -459,13 +459,14 @@ delivery infrastructure evidence and is not a reason for another source change.
 
 Issue #291 is implemented on branch
 `ai/issue-291-exact-sha-ci-revalidation` from merged #288/#289 main
-`2174a1efd595aa79f6a750fc3d5cba150e7db737` and is open as PR #292. Source
-implementation and local verification are complete. GitHub Actions run
-`35967040790` passed Runtime, Router, ddev-executor and structure jobs on head
-`ca4ecb8570c9caf40a52f88409c213ef408e0289`; every job used runner `SonVH`
-(`runner_id=21`) with `[self-hosted, linux, x64]` and executed non-empty
-repository steps. This continuity-only update changes no executable behavior.
-PM review remains required, and the implementation agent must not merge the PR.
+`2174a1efd595aa79f6a750fc3d5cba150e7db737` and is open as PR #292. PM review
+identified that reviewed head `5745d7dbdea6b83c7c3d1f4cc113022c1b920ed6`
+incorrectly expected creator metadata in GitHub's combined-status entries. The
+source correction now authenticates creator metadata through an exact-ID-bound
+list-status read while preserving combined-status ordinary semantics. Local
+implementation and verification are complete; exact-head GitHub CI for the
+correction remains required before PM re-review. The implementation agent must
+not merge the PR.
 
 The ddev-executor now recognizes one narrow recovery status context:
 `pcp/exact-sha-ci`. A status is trusted only when all available legacy-status
@@ -477,7 +478,23 @@ bindings agree:
   `success`, `failure`, or `error`;
 - `created_at` is a valid timezone-aware GitHub timestamp;
 - `target_url` is an HTTPS GitHub Actions run URL for the exact same repository;
-- the publisher is GitHub Actions' `github-actions[bot]` bot identity.
+- the combined status has a positive integer GitHub status ID, and the bounded
+  `GET /commits/{sha}/statuses?per_page=100` response contains exactly one
+  object with that exact ID;
+- that exact list-status object identifies the publisher as
+  `github-actions[bot]` with type `Bot`.
+
+The combined-status endpoint remains authoritative for the combined state and
+latest-per-context ordinary commit-status semantics. Historical list-status
+entries are used only to hydrate creator metadata for a combined trusted status
+with the exact same status ID; context, timestamp, state, target URL or array
+position can never substitute for the ID. Historical entries do not become
+ordinary CI signals. A missing ID match, ambiguous duplicate ID, missing/wrong
+creator, non-success list-status response or malformed list payload invalidates
+trusted recovery and produces an explicit infrastructure-classified effective
+failure. Transport errors continue through the existing GitHub-delivery API
+error path. Both behaviors fail closed and cannot turn unauthenticated trusted
+evidence into CI success.
 
 A valid trusted success supersedes only Actions failures already positively
 classified as infrastructure/startup failures whose run `updated_at` is
@@ -513,8 +530,8 @@ to that SHA under `pcp/exact-sha-ci` using only workflow-scoped
 repository check must publish failure, never success. Adding that workflow is
 not part of this PCP PR.
 
-Local verification passes focused ddev-executor GitHub-delivery tests (`24
-passed`), the full ddev-executor suite (`72 passed`), focused Runtime delivery
+Local verification passes focused ddev-executor GitHub-delivery tests (`30
+passed`), the full ddev-executor suite (`78 passed`), focused Runtime delivery
 tests (`21 passed`), the full Runtime suite (`407 passed`) and structure tests
 (`89 passed`). Static Python compilation and `git diff --check` pass. Chợ Nhạc,
 R2, its workspace/durable state and PR #18 were not queried or mutated; R3 was
