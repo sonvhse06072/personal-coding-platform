@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -14,6 +16,8 @@ _GITHUB_SSH_RE = re.compile(r"^ssh://(?:[^@]+@)?github\.com/([^/]+)/([^/]+?)(?:\
 _FAILED_CONCLUSIONS = {"failure", "cancelled", "timed_out", "action_required", "stale", "startup_failure"}
 _ENGINEERING_FAILURE = "engineering"
 _INFRASTRUCTURE_FAILURE = "infrastructure"
+_TRUSTED_EXACT_SHA_CONTEXT = "pcp/exact-sha-ci"
+_EXACT_SHA_RE = re.compile(r"^[0-9a-fA-F]{40}$")
 
 
 def github_repository_from_origin(origin: str) -> str | None:
@@ -89,12 +93,46 @@ def action_run_signal(raw: dict[str, Any]) -> dict[str, Any]:
         "status": str(raw.get("status") or ""),
         "conclusion": str(raw.get("conclusion")) if raw.get("conclusion") is not None else None,
         "details_url": raw.get("html_url"),
+        "head_sha": raw.get("head_sha"),
+        "created_at": raw.get("created_at"),
+        "updated_at": raw.get("updated_at"),
+        "run_started_at": raw.get("run_started_at"),
     }
+
+
+def _commit_status_creator(raw: dict[str, Any]) -> tuple[str, str]:
+    creator = raw.get("creator")
+    if not isinstance(creator, dict):
+        return "", ""
+    return str(creator.get("login") or ""), str(creator.get("type") or "")
+
+
+def trusted_status_metadata_by_id(
+    combined_status: dict[str, Any],
+    historical_statuses: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, str | None]:
+    """Bind creator-bearing history to one combined status by exact ID only."""
+    status_id = combined_status.get("id")
+    if not isinstance(status_id, int) or isinstance(status_id, bool) or status_id <= 0:
+        return None, "invalid_trusted_status_id"
+    matches = [
+        item
+        for item in historical_statuses
+        if isinstance(item, dict)
+        and type(item.get("id")) is type(status_id)
+        and item.get("id") == status_id
+    ]
+    if not matches:
+        return None, "trusted_status_id_not_found"
+    if len(matches) != 1:
+        return None, "trusted_status_id_ambiguous"
+    return matches[0], None
 
 
 def commit_status_signal(raw: dict[str, Any]) -> dict[str, Any]:
     """Normalize one legacy commit status into the existing CI signal shape."""
     state = str(raw.get("state") or "")
+    creator_login, creator_type = _commit_status_creator(raw)
     return {
         "id": raw.get("id"),
         "source": "commit_status",
@@ -103,7 +141,273 @@ def commit_status_signal(raw: dict[str, Any]) -> dict[str, Any]:
         "conclusion": state if state and state != "pending" else None,
         "details_url": raw.get("target_url"),
         "description": raw.get("description"),
+        "context": raw.get("context"),
+        "created_at": raw.get("created_at"),
+        "updated_at": raw.get("updated_at"),
+        "creator": creator_login,
+        "creator_type": creator_type,
     }
+
+
+def parse_github_timestamp(value: Any) -> datetime | None:
+    """Parse an ordered GitHub timestamp, rejecting missing/naive values."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text = value.strip()
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def _validation_run_id(target_url: Any, repository: str) -> int | None:
+    """Return the run id only for an exact repository-owned Actions run URL."""
+    if not isinstance(target_url, str) or not target_url.strip():
+        return None
+    parsed = urlparse(target_url.strip())
+    try:
+        port = parsed.port
+    except ValueError:
+        return None
+    if (
+        parsed.scheme != "https"
+        or (parsed.hostname or "").lower() != "github.com"
+        or parsed.username is not None
+        or port is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        return None
+    match = re.fullmatch(r"/([^/]+)/([^/]+)/actions/runs/([1-9][0-9]*)/?", parsed.path)
+    if not match:
+        return None
+    url_repository = f"{match.group(1)}/{match.group(2)}"
+    if url_repository.casefold() != repository.casefold():
+        return None
+    return int(match.group(3))
+
+
+def trusted_exact_sha_status(
+    raw: dict[str, Any],
+    *,
+    repository: str,
+    commit: str,
+    status_payload_sha: Any,
+    metadata_status: dict[str, Any] | None,
+    metadata_error: str | None = None,
+) -> dict[str, Any] | None:
+    """Validate the narrow repository-owned exact-SHA commit-status contract.
+
+    Legacy commit statuses expose less execution metadata than Actions jobs.
+    Trust therefore requires every binding they do expose: the exact context,
+    exact 40-character endpoint/result SHA, terminal state, creation time, an
+    exact-repository GitHub Actions run URL, and creator metadata hydrated only
+    from the list-status object with the exact same GitHub status ID.
+    """
+    if str(raw.get("context") or "") != _TRUSTED_EXACT_SHA_CONTEXT:
+        return None
+
+    state = str(raw.get("state") or "")
+    target_sha = str(status_payload_sha or "")
+    created_at = raw.get("created_at")
+    parsed_timestamp = parse_github_timestamp(created_at)
+    run_id = _validation_run_id(raw.get("target_url"), repository)
+    creator_login, creator_type = _commit_status_creator(metadata_status or {})
+    errors: list[str] = []
+    if not _EXACT_SHA_RE.fullmatch(commit) or target_sha.lower() != commit.lower():
+        errors.append("target_sha_mismatch")
+    if state not in {"success", "failure", "error"}:
+        errors.append("non_terminal_state")
+    if parsed_timestamp is None:
+        errors.append("invalid_created_at")
+    if run_id is None:
+        errors.append("invalid_validation_run_url")
+    if metadata_error:
+        errors.append(metadata_error)
+    elif creator_login != "github-actions[bot]" or creator_type != "Bot":
+        errors.append("untrusted_status_creator")
+
+    return {
+        "id": raw.get("id"),
+        "source": "commit_status",
+        "context": _TRUSTED_EXACT_SHA_CONTEXT,
+        "state": state,
+        "repository": repository,
+        "target_sha": target_sha,
+        "created_at": created_at,
+        "updated_at": raw.get("updated_at"),
+        "validation_run_url": raw.get("target_url"),
+        "validation_run_id": run_id,
+        "creator": creator_login,
+        "creator_type": creator_type,
+        "creator_status_id": metadata_status.get("id") if metadata_status else None,
+        "creator_source": "list_commit_statuses" if metadata_status else None,
+        "terminal": state in {"success", "failure", "error"},
+        "valid": not errors,
+        "validation_errors": errors,
+        # This private value is removed from returned audit evidence.
+        "_timestamp": parsed_timestamp,
+    }
+
+
+def latest_trusted_exact_sha_evidence(
+    evidence: list[dict[str, Any]],
+) -> tuple[dict[str, Any] | None, bool]:
+    """Return the latest valid evidence and whether its order is ambiguous."""
+    valid = [item for item in evidence if item.get("valid") and item.get("_timestamp")]
+    if not valid:
+        return None, False
+    latest_time = max(item["_timestamp"] for item in valid)
+    latest = [item for item in valid if item["_timestamp"] == latest_time]
+    if len({str(item.get("state") or "") for item in latest}) != 1:
+        return None, True
+    return latest[0], False
+
+
+def _failure_order_timestamp(failure: dict[str, Any]) -> datetime | None:
+    if failure.get("source") == "github_actions":
+        return parse_github_timestamp(failure.get("updated_at"))
+    return parse_github_timestamp(failure.get("created_at"))
+
+
+def effective_ci_state(
+    signals: list[dict[str, Any]],
+    combined_status: str,
+    failures: list[dict[str, Any]],
+    trusted_evidence: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Apply narrow exact-SHA precedence without discarding audit failures."""
+    trusted_contract_invalid = any(not item.get("valid") for item in trusted_evidence)
+    latest_trusted, ambiguous_trusted_order = (None, False)
+    if not trusted_contract_invalid:
+        latest_trusted, ambiguous_trusted_order = latest_trusted_exact_sha_evidence(
+            trusted_evidence
+        )
+    trusted_success_time = None
+    if latest_trusted and latest_trusted.get("state") == "success":
+        trusted_success_time = latest_trusted.get("_timestamp")
+
+    audit_failures: list[dict[str, Any]] = []
+    effective_failures: list[dict[str, Any]] = []
+    superseded_failures: list[dict[str, Any]] = []
+    for raw in failures:
+        item = dict(raw)
+        superseded = False
+        if (
+            trusted_success_time is not None
+            and item.get("failure_class") == _INFRASTRUCTURE_FAILURE
+        ):
+            failed_at = _failure_order_timestamp(item)
+            superseded = failed_at is not None and failed_at < trusted_success_time
+        item["effective"] = not superseded
+        item["superseded_by_trusted_exact_sha"] = superseded
+        audit_failures.append(item)
+        if superseded:
+            superseded_failures.append(item)
+        else:
+            effective_failures.append(item)
+
+    trusted_contract_errors = sorted({
+        str(error)
+        for item in trusted_evidence
+        if not item.get("valid")
+        for error in item.get("validation_errors") or []
+        if error
+    })
+    if trusted_contract_invalid:
+        contract_failure = {
+            "source": "trusted_status_authentication",
+            "name": _TRUSTED_EXACT_SHA_CONTEXT,
+            "conclusion": "error",
+            "description": ", ".join(trusted_contract_errors),
+            "failure_class": _INFRASTRUCTURE_FAILURE,
+            "effective": True,
+            "superseded_by_trusted_exact_sha": False,
+        }
+        audit_failures.append(contract_failure)
+        effective_failures.append(contract_failure)
+
+    has_pending = combined_status == "pending"
+    has_signal = combined_status in {"success", "failure", "error", "pending"}
+    for signal in signals:
+        has_signal = True
+        if str(signal.get("status") or "") != "completed":
+            has_pending = True
+
+    raw_status_failure = any(
+        signal.get("source") == "commit_status"
+        and str(signal.get("conclusion") or "") in {"failure", "error"}
+        for signal in signals
+    )
+    unexplained_combined_failure = (
+        combined_status in {"failure", "error"} and not raw_status_failure
+    )
+    if effective_failures or unexplained_combined_failure or ambiguous_trusted_order:
+        state = "failure"
+    elif has_pending:
+        state = "pending"
+    elif has_signal:
+        state = "success"
+    else:
+        state = "none"
+
+    failure_class = None
+    if state == "failure":
+        failure_class = (
+            _INFRASTRUCTURE_FAILURE
+            if effective_failures
+            and not unexplained_combined_failure
+            and not ambiguous_trusted_order
+            and all(
+                str(item.get("failure_class") or "") == _INFRASTRUCTURE_FAILURE
+                for item in effective_failures
+            )
+            else _ENGINEERING_FAILURE
+        )
+
+    return {
+        "state": state,
+        "failure_class": failure_class,
+        "failures": audit_failures,
+        "effective_failures": effective_failures,
+        "superseded_failures": superseded_failures,
+        "infrastructure_failures_superseded": bool(superseded_failures),
+        "trusted_contract_invalid": trusted_contract_invalid,
+        "trusted_contract_errors": trusted_contract_errors,
+        "trusted_order_ambiguous": ambiguous_trusted_order,
+        "latest_trusted": latest_trusted,
+    }
+
+
+def _failure_text(failures: list[dict[str, Any]]) -> str:
+    lines: list[str] = []
+    for item in failures:
+        conclusion = str(item.get("conclusion") or "failure")
+        if item.get("source") == "github_actions":
+            lines.append(f"Workflow failed: {item.get('name')} ({conclusion})")
+            for job in item.get("jobs") or []:
+                lines.append(
+                    f"Job failed: {job.get('name')} ({job.get('conclusion') or 'failure'})"
+                )
+                if job.get("log_excerpt"):
+                    lines.append(str(job["log_excerpt"]))
+            continue
+        detail = f": {item['description']}" if item.get("description") else ""
+        lines.append(
+            f"Commit status failed: {item.get('name')} ({conclusion}){detail}"
+        )
+    return "\n".join(lines)[-30000:]
+
+
+def _public_trusted_evidence(item: dict[str, Any] | None) -> dict[str, Any] | None:
+    if item is None:
+        return None
+    return {key: value for key, value in item.items() if key != "_timestamp"}
 
 
 def actions_job_failure_class(raw: dict[str, Any]) -> str:
@@ -260,129 +564,187 @@ class GitHubDelivery:
             actions_response.raise_for_status()
             workflow_runs = list(actions_response.json().get("workflow_runs") or [])
 
-            status_response = client.get(f"{self.base}/repos/{repository}/commits/{commit}/status")
+            status_response = client.get(
+                f"{self.base}/repos/{repository}/commits/{commit}/status",
+                params={"per_page": 100},
+            )
             status_response.raise_for_status()
             status_payload = status_response.json()
             raw_statuses = list(status_payload.get("statuses") or [])
             combined_status = combined_status_signal(status_payload)
 
+            trusted_combined_statuses = [
+                raw
+                for raw in raw_statuses
+                if isinstance(raw, dict)
+                and str(raw.get("context") or "") == _TRUSTED_EXACT_SHA_CONTEXT
+            ]
+            trusted_status_history: list[dict[str, Any]] = []
+            trusted_metadata_request_error: str | None = None
+            if trusted_combined_statuses:
+                metadata_response = client.get(
+                    f"{self.base}/repos/{repository}/commits/{commit}/statuses",
+                    params={"per_page": 100},
+                )
+                if not metadata_response.is_success:
+                    trusted_metadata_request_error = (
+                        f"trusted_status_metadata_http_{metadata_response.status_code}"
+                    )
+                else:
+                    try:
+                        metadata_payload = metadata_response.json()
+                    except ValueError:
+                        metadata_payload = None
+                    if not isinstance(metadata_payload, list):
+                        trusted_metadata_request_error = (
+                            "trusted_status_metadata_invalid_payload"
+                        )
+                    else:
+                        trusted_status_history = [
+                            item for item in metadata_payload if isinstance(item, dict)
+                        ]
+
             signals = [action_run_signal(raw) for raw in workflow_runs]
             signals.extend(commit_status_signal(raw) for raw in raw_statuses)
-            state, checks = summarize_ci(signals, combined_status)
+            _, checks = summarize_ci(signals, combined_status)
 
             failures: list[dict[str, Any]] = []
-            failure_lines: list[str] = []
-            if state == "failure":
-                for raw in workflow_runs:
-                    conclusion = str(raw.get("conclusion") or "")
-                    if conclusion not in _FAILED_CONCLUSIONS:
-                        continue
-                    run_id = raw.get("id")
-                    run_item: dict[str, Any] = {
-                        "source": "github_actions",
-                        "run_id": run_id,
-                        "name": raw.get("name") or raw.get("display_title") or "GitHub Actions",
-                        "conclusion": conclusion,
-                        "details_url": raw.get("html_url"),
-                        "status": raw.get("status"),
-                        "created_at": raw.get("created_at"),
-                        "updated_at": raw.get("updated_at"),
-                        "run_started_at": raw.get("run_started_at"),
-                        "jobs": [],
-                    }
-                    failure_lines.append(f"Workflow failed: {run_item['name']} ({conclusion})")
-                    if run_id:
-                        jobs_response = client.get(
-                            f"{self.base}/repos/{repository}/actions/runs/{run_id}/jobs",
-                            params={"filter": "latest", "per_page": 100},
-                        )
-                        if jobs_response.is_success:
-                            for job in list(jobs_response.json().get("jobs") or []):
-                                job_conclusion = str(job.get("conclusion") or "")
-                                if job_conclusion not in _FAILED_CONCLUSIONS:
-                                    continue
-                                job_id = job.get("id")
-                                raw_steps = job.get("steps")
-                                job_steps = list(raw_steps) if isinstance(raw_steps, list) else []
-                                job_item: dict[str, Any] = {
-                                    "id": job_id,
-                                    "name": job.get("name"),
-                                    "status": job.get("status"),
-                                    "conclusion": job_conclusion,
-                                    "details_url": job.get("html_url"),
-                                    "runner_id": job.get("runner_id"),
-                                    "runner_name": job.get("runner_name"),
-                                    "started_at": job.get("started_at"),
-                                    "completed_at": job.get("completed_at"),
-                                    "steps": job_steps,
-                                    "repository_execution_started": (
-                                        bool(job_steps) if isinstance(raw_steps, list) else None
-                                    ),
-                                    "failure_class": actions_job_failure_class(job),
-                                    "logs_available": False,
-                                    "log_excerpt": "",
-                                }
-                                if job_id:
-                                    logs_response = client.get(
-                                        f"{self.base}/repos/{repository}/actions/jobs/{job_id}/logs"
-                                    )
-                                    if logs_response.is_success:
-                                        job_item["logs_available"] = True
-                                        job_item["log_excerpt"] = logs_response.text[-12000:]
-                                run_item["jobs"].append(job_item)
-                                failure_lines.append(
-                                    f"Job failed: {job_item['name']} ({job_conclusion})"
+            for raw in workflow_runs:
+                conclusion = str(raw.get("conclusion") or "")
+                if conclusion not in _FAILED_CONCLUSIONS:
+                    continue
+                run_id = raw.get("id")
+                run_item: dict[str, Any] = {
+                    "source": "github_actions",
+                    "run_id": run_id,
+                    "name": raw.get("name") or raw.get("display_title") or "GitHub Actions",
+                    "conclusion": conclusion,
+                    "details_url": raw.get("html_url"),
+                    "status": raw.get("status"),
+                    "created_at": raw.get("created_at"),
+                    "updated_at": raw.get("updated_at"),
+                    "run_started_at": raw.get("run_started_at"),
+                    "jobs": [],
+                }
+                if run_id:
+                    jobs_response = client.get(
+                        f"{self.base}/repos/{repository}/actions/runs/{run_id}/jobs",
+                        params={"filter": "latest", "per_page": 100},
+                    )
+                    if jobs_response.is_success:
+                        for job in list(jobs_response.json().get("jobs") or []):
+                            job_conclusion = str(job.get("conclusion") or "")
+                            if job_conclusion not in _FAILED_CONCLUSIONS:
+                                continue
+                            job_id = job.get("id")
+                            raw_steps = job.get("steps")
+                            job_steps = list(raw_steps) if isinstance(raw_steps, list) else []
+                            job_item: dict[str, Any] = {
+                                "id": job_id,
+                                "name": job.get("name"),
+                                "status": job.get("status"),
+                                "conclusion": job_conclusion,
+                                "details_url": job.get("html_url"),
+                                "runner_id": job.get("runner_id"),
+                                "runner_name": job.get("runner_name"),
+                                "started_at": job.get("started_at"),
+                                "completed_at": job.get("completed_at"),
+                                "steps": job_steps,
+                                "repository_execution_started": (
+                                    bool(job_steps) if isinstance(raw_steps, list) else None
+                                ),
+                                "failure_class": actions_job_failure_class(job),
+                                "logs_available": False,
+                                "log_excerpt": "",
+                            }
+                            if job_id:
+                                logs_response = client.get(
+                                    f"{self.base}/repos/{repository}/actions/jobs/{job_id}/logs"
                                 )
-                                if job_item["log_excerpt"]:
-                                    failure_lines.append(job_item["log_excerpt"])
-                    run_item["failure_class"] = actions_run_failure_class(
-                        raw,
-                        run_item["jobs"],
-                    )
-                    failures.append(run_item)
-
-                for raw in raw_statuses:
-                    status_state = str(raw.get("state") or "")
-                    if status_state not in {"failure", "error"}:
-                        continue
-                    item = {
-                        "source": "commit_status",
-                        "id": raw.get("id"),
-                        "name": raw.get("context") or "commit status",
-                        "conclusion": status_state,
-                        "details_url": raw.get("target_url"),
-                        "description": raw.get("description"),
-                        # Commit statuses do not expose runner/step evidence.
-                        # Preserve the historical engineering classification.
-                        "failure_class": _ENGINEERING_FAILURE,
-                    }
-                    failures.append(item)
-                    detail = f": {item['description']}" if item.get("description") else ""
-                    failure_lines.append(
-                        f"Commit status failed: {item['name']} ({status_state}){detail}"
-                    )
-
-            failure_class = None
-            if state == "failure":
-                failure_class = (
-                    _INFRASTRUCTURE_FAILURE
-                    if failures
-                    and all(
-                        str(item.get("failure_class") or "") == _INFRASTRUCTURE_FAILURE
-                        for item in failures
-                    )
-                    else _ENGINEERING_FAILURE
+                                if logs_response.is_success:
+                                    job_item["logs_available"] = True
+                                    job_item["log_excerpt"] = logs_response.text[-12000:]
+                            run_item["jobs"].append(job_item)
+                run_item["failure_class"] = actions_run_failure_class(
+                    raw,
+                    run_item["jobs"],
                 )
+                failures.append(run_item)
+
+            for raw in raw_statuses:
+                status_state = str(raw.get("state") or "")
+                if status_state not in {"failure", "error"}:
+                    continue
+                creator_login, creator_type = _commit_status_creator(raw)
+                failures.append({
+                    "source": "commit_status",
+                    "id": raw.get("id"),
+                    "name": raw.get("context") or "commit status",
+                    "context": raw.get("context"),
+                    "conclusion": status_state,
+                    "details_url": raw.get("target_url"),
+                    "description": raw.get("description"),
+                    "created_at": raw.get("created_at"),
+                    "updated_at": raw.get("updated_at"),
+                    "creator": creator_login,
+                    "creator_type": creator_type,
+                    "target_sha": status_payload.get("sha"),
+                    # Commit statuses do not expose runner/step evidence.
+                    # Preserve the historical engineering classification.
+                    "failure_class": _ENGINEERING_FAILURE,
+                })
+
+            trusted_evidence: list[dict[str, Any]] = []
+            for raw in trusted_combined_statuses:
+                metadata_status = None
+                metadata_error = trusted_metadata_request_error
+                if metadata_error is None:
+                    metadata_status, metadata_error = trusted_status_metadata_by_id(
+                        raw,
+                        trusted_status_history,
+                    )
+                evidence = trusted_exact_sha_status(
+                    raw,
+                    repository=repository,
+                    commit=commit,
+                    status_payload_sha=status_payload.get("sha"),
+                    metadata_status=metadata_status,
+                    metadata_error=metadata_error,
+                )
+                if evidence is not None:
+                    trusted_evidence.append(evidence)
+            effective = effective_ci_state(
+                signals,
+                combined_status,
+                failures,
+                trusted_evidence,
+            )
+            public_trusted = [
+                _public_trusted_evidence(item) for item in trusted_evidence
+            ]
+            public_latest = _public_trusted_evidence(effective["latest_trusted"])
 
             return {
-                "state": state,
-                "failure_class": failure_class,
+                "state": effective["state"],
+                "effective_state": effective["state"],
+                "failure_class": effective["failure_class"],
                 "repository": repository,
                 "commit": commit,
                 "combined_status": combined_status or "none",
                 "checks": checks,
                 "actions_runs": [action_run_signal(raw) for raw in workflow_runs],
                 "statuses": [commit_status_signal(raw) for raw in raw_statuses],
-                "failures": failures,
-                "failure_text": "\n".join(failure_lines)[-30000:],
+                "trusted_exact_sha_evidence": public_trusted,
+                "latest_trusted_exact_sha_evidence": public_latest,
+                "trusted_contract_invalid": effective["trusted_contract_invalid"],
+                "trusted_contract_errors": effective["trusted_contract_errors"],
+                "trusted_order_ambiguous": effective["trusted_order_ambiguous"],
+                "failures": effective["failures"],
+                "effective_failures": effective["effective_failures"],
+                "superseded_failures": effective["superseded_failures"],
+                "infrastructure_failures_superseded": effective[
+                    "infrastructure_failures_superseded"
+                ],
+                "failure_text": _failure_text(effective["effective_failures"]),
+                "audit_failure_text": _failure_text(effective["failures"]),
             }

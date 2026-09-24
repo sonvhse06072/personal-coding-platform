@@ -8,9 +8,14 @@ from app.engine_delivery import DeliveryAwareStorage, RuntimeEngine
 
 
 class FakeDdev:
-    def __init__(self, ci_states=None):
+    def __init__(self, ci_states=None, pr_result=None):
         self.calls = []
         self.ci_states = list(ci_states or [])
+        self.pr_result = pr_result or {
+            "created": True,
+            "number": 42,
+            "url": "https://example.test/pr/42",
+        }
 
     async def publish_branch(self, **kwargs):
         self.calls.append(("publish", kwargs))
@@ -18,7 +23,7 @@ class FakeDdev:
 
     async def upsert_pull_request(self, **kwargs):
         self.calls.append(("pr", kwargs))
-        return {"created": True, "number": 42, "url": "https://example.test/pr/42"}
+        return dict(self.pr_result)
 
     async def github_ci(self, **kwargs):
         self.calls.append(("ci", kwargs))
@@ -641,6 +646,152 @@ def test_engineering_ci_failure_still_enters_repair_flow(monkeypatch):
 
         assert parent_calls == ["job12345"]
         assert backend.row["status"] == "queued"
+        assert backend.row["progress"]["ci_failures"] == 1
+        assert backend.row["progress"]["repair_iterations"] == 1
+        assert len(backend.row["progress"]["failure_fingerprints"]) == 1
+
+    asyncio.run(scenario())
+
+
+def test_trusted_exact_sha_success_finalizes_same_accepted_commit_without_implementation(monkeypatch):
+    async def scenario():
+        commit = "0a9f0f09660d8d61cd99fa1e341c2c4debc6a25e"
+        verified = accepted_result()
+        verified["commit"] = commit
+        verified["branch"] = "ai/812aabd7ab0a"
+        verified["delivery"] = {
+            "state": "ci_failure",
+            "pull_request": {
+                "number": 18,
+                "head": commit,
+                "head_ref": "ai/812aabd7ab0a",
+            },
+            "ci": {"state": "failure", "failure_class": "infrastructure"},
+        }
+        row = {
+            "id": "812aabd7ab0a5adbb18a7a5edc8d7009",
+            "project_id": "demo",
+            "status": "queued",
+            "workspace": "/workspaces/812aabd7ab0a5adbb18a7a5edc8d7009",
+            "branch": "ai/812aabd7ab0a",
+            "source_commit": "a" * 40,
+            "task": {"title": "test"},
+            "progress": {
+                "elapsed_minutes": 0.0,
+                "model_calls": 11,
+                "repair_iterations": 4,
+                "ci_failures": 2,
+                "failure_fingerprints": ["preserved-engineering-history"],
+            },
+            "checkpoint": {},
+            "result": verified,
+        }
+        original_progress = dict(row["progress"])
+        backend = MemoryStorage(row)
+        engine = RuntimeEngine(backend)
+        engine.ddev = FakeDdev(
+            [{
+                "state": "success",
+                "effective_state": "success",
+                "infrastructure_failures_superseded": True,
+                "failures": [
+                    {
+                        "source": "github_actions",
+                        "run_id": 35964005524,
+                        "failure_class": "infrastructure",
+                        "effective": False,
+                        "superseded_by_trusted_exact_sha": True,
+                    }
+                ],
+                "effective_failures": [],
+                "latest_trusted_exact_sha_evidence": {
+                    "context": "pcp/exact-sha-ci",
+                    "state": "success",
+                    "target_sha": commit,
+                    "valid": True,
+                },
+            }],
+            pr_result={
+                "created": False,
+                "number": 18,
+                "url": "https://github.com/acme/demo/pull/18",
+                "head": commit,
+                "head_ref": "ai/812aabd7ab0a",
+            },
+        )
+
+        async def unexpected_engineering_run(_self, _job_id):
+            raise AssertionError("trusted exact-SHA success must not run implementation")
+
+        monkeypatch.setattr(
+            engine_delivery_module.ExecutionRuntimeEngine,
+            "run_job",
+            unexpected_engineering_run,
+        )
+
+        await engine.run_job(row["id"])
+
+        assert backend.row["status"] == "completed"
+        assert backend.row["workspace"] == row["workspace"]
+        assert backend.row["branch"] == "ai/812aabd7ab0a"
+        assert backend.row["result"]["commit"] == commit
+        assert backend.row["result"]["delivery"]["state"] == "ci_success"
+        assert backend.row["result"]["delivery"]["pull_request"]["number"] == 18
+        assert backend.row["result"]["delivery"]["ci"][
+            "infrastructure_failures_superseded"
+        ] is True
+        for key in (
+            "model_calls",
+            "repair_iterations",
+            "ci_failures",
+            "failure_fingerprints",
+        ):
+            assert backend.row["progress"][key] == original_progress[key]
+
+    asyncio.run(scenario())
+
+
+def test_trusted_exact_sha_failure_enters_existing_engineering_repair_path(monkeypatch):
+    async def scenario():
+        row = {
+            "id": "job12345",
+            "project_id": "demo",
+            "status": "queued",
+            "workspace": "/workspaces/job12345",
+            "branch": "ai/job12345",
+            "source_commit": "a" * 40,
+            "task": {"title": "test"},
+            "progress": {"elapsed_minutes": 0.0, "repair_iterations": 0},
+            "checkpoint": {},
+            "result": accepted_result(),
+        }
+        backend = MemoryStorage(row)
+        engine = RuntimeEngine(backend)
+        engine.ddev = FakeDdev([{
+            "state": "failure",
+            "failure_class": "engineering",
+            "failure_text": "Exact-SHA validation: repository tests failed",
+            "latest_trusted_exact_sha_evidence": {
+                "context": "pcp/exact-sha-ci",
+                "state": "failure",
+                "target_sha": "b" * 40,
+                "valid": True,
+            },
+        }])
+        parent_calls = []
+
+        async def record_engineering_run(_self, job_id):
+            parent_calls.append(job_id)
+
+        monkeypatch.setattr(
+            engine_delivery_module.ExecutionRuntimeEngine,
+            "run_job",
+            record_engineering_run,
+        )
+
+        await engine.run_job("job12345")
+
+        assert parent_calls == ["job12345"]
         assert backend.row["progress"]["ci_failures"] == 1
         assert backend.row["progress"]["repair_iterations"] == 1
         assert len(backend.row["progress"]["failure_fingerprints"]) == 1
