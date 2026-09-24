@@ -581,9 +581,11 @@ are unchanged.
 
 ## Explicit superseded orchestration lifecycle #295
 
-Issue #295 is implemented locally on branch
-`ai/issue-295-superseded-orchestration-lifecycle`; PR creation and exact-head
-CI remain pending.
+Issue #295 is implemented on branch
+`ai/issue-295-superseded-orchestration-lifecycle` as PR #296. The bounded
+implementation/local-verification commit is
+`c777e7cc5fab37c016136e51630e00d06f1da899`; exact-final-head CI and PM review
+remain pending.
 
 The bounded Runtime change separates execution truth from orchestration
 eligibility:
@@ -726,10 +728,9 @@ claim every DDEV build on the machine uses `pcp-builder`.
 
 ## Immediate next safe actions
 
-1. Open one PR for issue #295 after final local verification, require all four
-   GitHub Actions jobs to execute repository steps and pass on the exact final
-   head when runner infrastructure is available, and do not merge or activate
-   PCP services from the implementation-engineer role.
+1. Require all four GitHub Actions jobs to execute repository steps and pass on
+   PR #296's exact final head when runner infrastructure is available. Do not
+   merge or activate PCP services from the implementation-engineer role.
 2. Keep the retained shared/default BuildKit cache unchanged. Any later cleanup
    decision must remain separate from #281's proof of isolation.
 3. Keep completed R2 WorkOrder
