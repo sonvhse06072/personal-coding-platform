@@ -356,8 +356,9 @@ or otherwise mutated as part of that merge.
 
 ## GitHub Actions pre-run failure classification #288
 
-Issue #288 is implemented in PR #289 on branch
-`ai/issue-288-ci-infrastructure-classification`, based on latest `main`
+Issue #288 / PR #289 is merged on `main` at
+`2174a1efd595aa79f6a750fc3d5cba150e7db737`. Its implementation branch was
+`ai/issue-288-ci-infrastructure-classification`, based on then-current `main`
 `3075a4f588074a2206909360b56b20029003e335`. Follow-up implementation head
 `95a6c2326f881d3ba24689f5b82525983a37f2cd` corrects pre-follow-up head
 `1334c0a96669726fe9ba40b99f274bd7dad2aef1` after PM blocking review comment
@@ -431,10 +432,9 @@ ddev-executor suite (`60 passed`) and the structure suite (`89 passed`). Router
 contracts were not changed by the follow-up, so its suite is not required. The
 blocked Chợ Nhạc R2 job, its workspace and
 PR #18 were not queried or mutated; live PCP services were not restarted,
-rebuilt or modified, and cache/GC was not run. PR #289 remains open and must not
-be merged from the implementation-engineer role; its exact final head requires
-all required GitHub Actions jobs to receive runners, execute repository steps
-and pass before review.
+rebuilt or modified, and cache/GC was not run. Later repository-level
+self-hosted CI supplied the required executing/green merge evidence; the
+implementation-engineer did not merge the PR.
 
 GitHub Actions run `35920237209` on implementation/continuity head
 `5e62b8e7d44d0ee9a142ffc022357c48a0375ffa` failed before repository execution
@@ -454,6 +454,67 @@ four required jobs each reported `runner_id=0`, empty `runner_name` and
 `steps=[]`; GitHub annotated every job as not started because of failed account
 payments or a spending-limit condition. No repository command ran. This remains
 delivery infrastructure evidence and is not a reason for another source change.
+
+## Trusted exact-SHA CI revalidation #291
+
+Issue #291 is implemented on branch
+`ai/issue-291-exact-sha-ci-revalidation` from merged #288/#289 main
+`2174a1efd595aa79f6a750fc3d5cba150e7db737`. Source implementation and local
+verification are complete; PR creation and exact-head GitHub CI are the next
+delivery gates.
+
+The ddev-executor now recognizes one narrow recovery status context:
+`pcp/exact-sha-ci`. A status is trusted only when all available legacy-status
+bindings agree:
+
+- the combined-status response SHA and requested target are the same exact
+  40-character SHA;
+- the context is exactly `pcp/exact-sha-ci` and the state is terminal
+  `success`, `failure`, or `error`;
+- `created_at` is a valid timezone-aware GitHub timestamp;
+- `target_url` is an HTTPS GitHub Actions run URL for the exact same repository;
+- the publisher is GitHub Actions' `github-actions[bot]` bot identity.
+
+A valid trusted success supersedes only Actions failures already positively
+classified as infrastructure/startup failures whose run `updated_at` is
+strictly earlier than the status `created_at`. Equal, missing, malformed or
+otherwise ambiguous ordering never supersedes a failure. Engineering failures
+remain effective regardless of age; a newer engineering failure or trusted
+failure remains engineering CI failure; generic or wrong-context successes,
+wrong-SHA/repository evidence and malformed trusted evidence have no recovery
+authority. Ordinary Actions and commit-status behavior is otherwise unchanged.
+
+All historical failures remain in `failures`, `checks`, `actions_runs` and
+`audit_failure_text`. The response separately exposes trusted evidence,
+`effective_state`, `effective_failures`, `superseded_failures` and whether older
+infrastructure failures were superseded. Runtime source did not need to change:
+the existing #288 delivery contract consumes effective `state=success` as
+`delivery.state=ci_success`, preserving the exact accepted commit, workspace,
+branch and PR without model/repair/engineering-failure increments or an
+implementation-engine invocation. A trusted validation failure remains
+`failure_class=engineering` and enters the existing repair path.
+
+PCP remains consumption-only. The existing delivery token boundary uses
+`Actions: read` and `Commit statuses: read`; workflow dispatch would require
+`Actions: write` and publishing would require `Commit statuses: write`. No PCP
+token permission was expanded and #291 adds neither operation.
+
+Chợ Nhạc still requires a separate repository-owned workflow before live
+revalidation. That workflow contract is: run from the current default-branch
+definition on repository self-hosted infrastructure; accept and validate an
+exact 40-character `target_sha`; check out exactly that immutable SHA; run the
+repository's currently approved CI commands; always publish the terminal result
+to that SHA under `pcp/exact-sha-ci` using only workflow-scoped
+`statuses: write`; and set `target_url` to its own GitHub Actions run. A failed
+repository check must publish failure, never success. Adding that workflow is
+not part of this PCP PR.
+
+Local verification passes focused ddev-executor GitHub-delivery tests (`24
+passed`), the full ddev-executor suite (`72 passed`), focused Runtime delivery
+tests (`21 passed`), the full Runtime suite (`407 passed`) and structure tests
+(`89 passed`). Static Python compilation and `git diff --check` pass. Chợ Nhạc,
+R2, its workspace/durable state and PR #18 were not queried or mutated; R3 was
+not created; PCP was not restarted or rebuilt.
 
 ## Dedicated PCP BuildKit isolation #281
 
