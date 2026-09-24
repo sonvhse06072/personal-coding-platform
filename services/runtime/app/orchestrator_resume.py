@@ -24,6 +24,8 @@ def prepare_orchestrated_job_resume(store: Any, job_id: str) -> dict[str, Any] |
         return None
 
     tracked = dict(tracked)
+    if str(tracked.get("lifecycle") or "active") != "active":
+        raise RuntimeError("Superseded orchestrated WorkOrders cannot be resumed")
     if str(tracked.get("execution_mode") or "") != "agent":
         raise RuntimeError("Operator-only WorkOrders cannot be resumed as coding jobs")
 
@@ -36,6 +38,8 @@ def prepare_orchestrated_job_resume(store: Any, job_id: str) -> dict[str, Any] |
     if plan is None:
         raise RuntimeError("Orchestrated resume is missing its plan")
     plan_status = str(plan.get("status") or "")
+    if str(plan.get("lifecycle") or "active") != "active":
+        raise RuntimeError("Superseded orchestration plans cannot be resumed")
 
     reopen = state == "blocked"
     if reopen and plan_status != "blocked":

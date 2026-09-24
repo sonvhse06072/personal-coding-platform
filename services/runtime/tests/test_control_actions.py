@@ -503,11 +503,14 @@ class ActionConnection:
             return ActionResult(self.storage.actions.get(params[0]))
         if "SET status='cancelled'" in normalized and "FROM cp_plan_work_orders" in normalized:
             changed = 0
-            if self.storage.store.work_order["state"] not in {
+            if (
+                self.storage.store.work_order.get("lifecycle", "active") != "active"
+                or self.storage.store.work_order["state"] not in {
                 "awaiting_merge",
                 "blocked",
                 "waiting_human",
-            }:
+                }
+            ):
                 for action in self.storage.actions.values():
                     if action["status"] == "pending":
                         action["status"] = "cancelled"
@@ -528,12 +531,13 @@ class ActionConnection:
 
 
 class ActionStore:
-    def __init__(self, state):
+    def __init__(self, state, *, lifecycle="active"):
         self.work_order = {
             "plan_id": "plan-1",
             "work_order_id": "WO-1",
             "execution_mode": "agent",
             "state": state,
+            "lifecycle": lifecycle,
             "job_id": None,
             "detail": {},
             "updated_at": "w-current",
@@ -546,6 +550,7 @@ class ActionStore:
         return {
             "plan_id": plan_id,
             "status": "completed" if self.work_order["state"] == "completed" else "blocked",
+            "lifecycle": self.work_order.get("lifecycle", "active"),
             "updated_at": "p-current",
         }
 
@@ -610,6 +615,39 @@ def test_completed_recheck_is_benign_after_pending_action_is_superseded(monkeypa
     assert result["status"] == "already_resolved"
     assert "no action is required" in result["message"]
     assert storage.actions["recheck-old"]["status"] == "cancelled"
+
+
+def test_superseded_historical_callback_is_benign_without_recovery(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_OWNER_USER_ID", "owner")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "chat")
+    store = ActionStore("blocked", lifecycle="superseded")
+    store.work_order.update(
+        superseded_by_plan_id="replacement-plan",
+        superseded_by_work_order_id="WO-1-r2",
+    )
+    storage = ActionStorage(
+        [control_action("resume-old", "reroute_retry", status="cancelled")],
+        store,
+    )
+    controls = ControlActionService(storage, FakeEngine(), store)
+
+    result = asyncio.run(
+        controls.execute(
+            "resume-old",
+            telegram_user_id="owner",
+            telegram_chat_id="chat",
+        )
+    )
+
+    assert result == {
+        "status": "superseded",
+        "action_id": "resume-old",
+        "action_type": "reroute_retry",
+        "message": "This WorkOrder was explicitly replaced; no recovery action is required.",
+        "superseded_by_plan_id": "replacement-plan",
+        "superseded_by_work_order_id": "WO-1-r2",
+    }
+    assert storage.actions["resume-old"]["status"] == "cancelled"
 
 
 def test_conflicting_old_mutation_action_remains_stale_and_fail_closed(monkeypatch):

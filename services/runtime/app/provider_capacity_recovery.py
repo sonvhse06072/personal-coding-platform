@@ -52,7 +52,7 @@ class ProviderCapacityRecovery:
                 plans = list(
                     conn.execute(
                         """SELECT plan_id FROM cp_plan_orchestrations
-                        WHERE status='blocked'
+                        WHERE lifecycle='active' AND status='blocked'
                         ORDER BY updated_at, plan_id"""
                     ).fetchall()
                 )
@@ -61,6 +61,8 @@ class ProviderCapacityRecovery:
                 plan_id = str(item["plan_id"])
                 for tracked_raw in self.store.work_orders(plan_id):
                     tracked = dict(tracked_raw)
+                    if str(tracked.get("lifecycle") or "active") != "active":
+                        continue
                     if str(tracked.get("state") or "") != "blocked":
                         continue
                     if str(tracked.get("execution_mode") or "") != "agent":

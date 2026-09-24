@@ -225,6 +225,27 @@ GitHub Actions / commit-status monitoring
 
 Every workspace receives a temporary `.ddev/config.coding-platform.yaml` with a unique DDEV project name, so parallel jobs do not collide with the source project's normal DDEV environment.
 
+### Explicit orchestration supersession
+
+Runtime keeps engineering execution state separate from orchestration
+lifecycle. An exact tracked WorkOrder that has been intentionally replaced can
+be retired through:
+
+```text
+POST /v1/plans/<plan_id>/work-orders/<work_order_id>/supersede
+```
+
+The authenticated request supplies a non-empty `reason` and may supply both
+`superseded_by_plan_id` and `superseded_by_work_order_id`. Supplying only one
+replacement identity, an unknown/mismatched identity, an in-flight/completed
+source, or conflicting metadata fails closed. An exact retry is idempotent.
+
+This operation does not run, resume, cancel or complete the coding job. It
+preserves job/result/progress/workspace history, excludes the retired
+WorkOrder from scheduling and automatic recovery, supersedes only unsent owner
+attention, cancels only pending controls, and leaves sent notifications and
+executed controls as audit history.
+
 Every workspace is a **self-contained `git clone --no-local` pinned to the source commit**, not a traditional Git worktree. That is deliberate: a worktree's `.git` file points back to the original repository, which would force the agent container to mount the source-repository root. The isolated clone costs a little more disk but keeps the original repo outside the agent trust boundary.
 
 ## Anti-loop behavior

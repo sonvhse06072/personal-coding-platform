@@ -108,7 +108,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
             plans = list(
                 conn.execute(
                     """SELECT plan_id FROM cp_plan_orchestrations
-                    WHERE status <> 'completed'
+                    WHERE lifecycle='active' AND status <> 'completed'
                     ORDER BY created_at, plan_id"""
                 ).fetchall()
             )
@@ -117,6 +117,8 @@ class PlanOrchestrator(CorePlanOrchestrator):
             plan = self._plan_context(plan_id)
             for row in self.store.work_orders(plan_id):
                 current = dict(row)
+                if str(current.get("lifecycle") or "active") != "active":
+                    continue
                 state = str(current.get("state") or "")
                 if state not in {"blocked", "waiting_human", "awaiting_merge"}:
                     continue
@@ -126,6 +128,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
         tracked = {
             str(row["work_order_id"]): dict(row)
             for row in self.store.work_orders(str(plan["plan_id"]))
+            if str(row.get("lifecycle") or "active") == "active"
         }
         # Provider quota exhaustion while the job is still active is informative;
         # no mutation button is emitted because automatic failover may still work.
@@ -263,6 +266,8 @@ class PlanOrchestrator(CorePlanOrchestrator):
         row = rows.get(work_order_id)
         if row is None:
             raise RuntimeError("Unknown orchestrated WorkOrder")
+        if str(row.get("lifecycle") or "active") != "active":
+            raise RuntimeError("Superseded WorkOrders do not require operator recovery")
         if row["execution_mode"] != "operator" or row["state"] != "waiting_human":
             raise RuntimeError("WorkOrder is not waiting for an operator")
 

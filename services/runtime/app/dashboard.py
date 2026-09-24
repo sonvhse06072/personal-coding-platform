@@ -79,6 +79,7 @@ def _job_snapshot(job: dict[str, Any] | None) -> dict[str, Any] | None:
     strategy = dict(route.get("strategy") or {})
     checkpoint = dict(job.get("checkpoint") or {})
     progress = dict(job.get("progress") or {})
+    result = dict(job.get("result") or {})
     budget = dict(strategy.get("budget") or {})
 
     planner = _choice(checkpoint.get("planner_choice") or strategy.get("planner"))
@@ -107,6 +108,7 @@ def _job_snapshot(job: dict[str, Any] | None) -> dict[str, Any] | None:
     return {
         "id": job.get("id"),
         "status": status,
+        "result_reason": result.get("reason"),
         "branch": job.get("branch"),
         "source_commit": job.get("source_commit"),
         "created_at": _iso(job.get("created_at")),
@@ -197,6 +199,7 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
     waiting_merge = 0
     waiting_human = 0
     blocked_plans = 0
+    superseded_plans = 0
     job_views_by_id: dict[str, list[dict[str, Any]]] = {}
 
     for plan_row in plan_rows:
@@ -204,37 +207,55 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
         work_orders: list[dict[str, Any]] = []
         totals = {"input_budget_tokens": 0, "output_tokens": 0}
         for wo in orchestrator_store.work_orders(plan_id):
+            lifecycle = str(wo.get("lifecycle") or "active")
             job = storage.get(str(wo["job_id"])) if wo.get("job_id") else None
             job_view = _job_snapshot(job)
             if job_view:
                 job_views_by_id.setdefault(str(job_view["id"]), []).append(job_view)
-            if job_view and job_view["status"] in _ACTIVE_JOB_STATES:
+            if lifecycle == "active" and job_view and job_view["status"] in _ACTIVE_JOB_STATES:
                 active_jobs += 1
             if job_view:
                 totals["input_budget_tokens"] += int(job_view["tokens"].get("input_budget_tokens", 0) or 0)
                 totals["output_tokens"] += int(job_view["tokens"].get("output_tokens", 0) or 0)
-            if wo.get("state") == "awaiting_merge":
+            if lifecycle == "active" and wo.get("state") == "awaiting_merge":
                 waiting_merge += 1
-            if wo.get("state") == "waiting_human":
+            if lifecycle == "active" and wo.get("state") == "waiting_human":
                 waiting_human += 1
             work_orders.append({
                 "id": wo.get("work_order_id"),
                 "sequence_no": wo.get("sequence_no"),
                 "execution_mode": wo.get("execution_mode"),
                 "state": wo.get("state"),
+                "lifecycle": lifecycle,
+                "superseded_by_plan_id": wo.get("superseded_by_plan_id"),
+                "superseded_by_work_order_id": wo.get("superseded_by_work_order_id"),
+                "superseded_at": _iso(wo.get("superseded_at")),
+                "supersession_reason": wo.get("supersession_reason"),
                 "pr_number": wo.get("pr_number"),
                 "pr_url": wo.get("pr_url"),
                 "updated_at": _iso(wo.get("updated_at")),
                 "job": job_view,
             })
         status = str(plan_row.get("status") or "")
-        if status == "blocked":
+        lifecycle = str(plan_row.get("lifecycle") or "active")
+        if lifecycle == "active" and status == "blocked":
             blocked_plans += 1
-        current_wo = next((wo for wo in work_orders if wo["state"] in {"running", "awaiting_merge", "waiting_human"}), None)
+        if lifecycle == "superseded":
+            superseded_plans += 1
+        current_wo = next(
+            (
+                wo for wo in work_orders
+                if wo["lifecycle"] == "active"
+                and wo["state"] in {"running", "awaiting_merge", "waiting_human"}
+            ),
+            None,
+        )
         plans.append({
             "id": plan_id,
             "project_id": plan_row.get("project_id"),
             "status": status,
+            "lifecycle": lifecycle,
+            "superseded_at": _iso(plan_row.get("superseded_at")),
             "ticket_id": plan_row.get("ticket_id"),
             "ticket_title": plan_row.get("ticket_title"),
             "github_url": plan_row.get("github_url"),
@@ -261,8 +282,17 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
         for job_view in views:
             job_view["recent_events"] = recent_events
 
-    current_plan = next((p for p in plans if p["status"] in _ACTIVE_PLAN_STATES), plans[0] if plans else None)
-    active_plans = sum(1 for p in plans if p["status"] in _ACTIVE_PLAN_STATES)
+    current_plan = next(
+        (
+            p for p in plans
+            if p["lifecycle"] == "active" and p["status"] in _ACTIVE_PLAN_STATES
+        ),
+        next((p for p in plans if p["lifecycle"] == "active"), plans[0] if plans else None),
+    )
+    active_plans = sum(
+        1 for p in plans
+        if p["lifecycle"] == "active" and p["status"] in _ACTIVE_PLAN_STATES
+    )
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "summary": {
@@ -271,6 +301,7 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
             "waiting_merge": waiting_merge,
             "waiting_human": waiting_human,
             "blocked_plans": blocked_plans,
+            "superseded_plans": superseded_plans,
             "pending_notifications": int((pending_notifications or {}).get("count", 0) or 0),
         },
         "current_plan_id": current_plan["id"] if current_plan else None,

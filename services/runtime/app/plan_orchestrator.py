@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS cp_plan_orchestrations (
   ticket_id TEXT,
   ticket_title TEXT,
   github_url TEXT,
+  lifecycle TEXT NOT NULL DEFAULT 'active',
+  superseded_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
@@ -40,6 +42,11 @@ CREATE TABLE IF NOT EXISTS cp_plan_work_orders (
   pr_number INTEGER,
   pr_url TEXT,
   detail JSONB,
+  lifecycle TEXT NOT NULL DEFAULT 'active',
+  superseded_by_plan_id TEXT,
+  superseded_by_work_order_id TEXT,
+  superseded_at TIMESTAMPTZ,
+  supersession_reason TEXT,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL,
   PRIMARY KEY (plan_id, work_order_id)
@@ -72,6 +79,21 @@ CREATE TABLE IF NOT EXISTS cp_notification_outbox (
 );
 CREATE INDEX IF NOT EXISTS cp_notification_outbox_delivery_idx
   ON cp_notification_outbox(status, available_at, id);
+
+ALTER TABLE cp_plan_orchestrations
+  ADD COLUMN IF NOT EXISTS lifecycle TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE cp_plan_orchestrations
+  ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ;
+ALTER TABLE cp_plan_work_orders
+  ADD COLUMN IF NOT EXISTS lifecycle TEXT NOT NULL DEFAULT 'active';
+ALTER TABLE cp_plan_work_orders
+  ADD COLUMN IF NOT EXISTS superseded_by_plan_id TEXT;
+ALTER TABLE cp_plan_work_orders
+  ADD COLUMN IF NOT EXISTS superseded_by_work_order_id TEXT;
+ALTER TABLE cp_plan_work_orders
+  ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ;
+ALTER TABLE cp_plan_work_orders
+  ADD COLUMN IF NOT EXISTS supersession_reason TEXT;
 """
 
 _ACTIVE_JOB_STATUSES = {
@@ -86,6 +108,14 @@ _ACTIVE_JOB_STATUSES = {
 _TERMINAL_JOB_STATUSES = {"blocked", "failed", "interrupted", "cancelled"}
 _BUSY_WORK_ORDER_STATES = {"running", "awaiting_merge", "waiting_human"}
 _ATTENTION_WORK_ORDER_STATES = {"awaiting_merge", "blocked", "waiting_human"}
+_SUPERSEDEABLE_WORK_ORDER_STATES = {"awaiting_merge", "blocked", "pending", "waiting_human"}
+_OWNER_ATTENTION_EVENT_TYPES = {
+    "ci_failed_after_repairs",
+    "human_decision_required",
+    "operator_action_required",
+    "provider_quota_exhausted",
+    "work_order_blocked",
+}
 
 
 class PlanOrchestratorStore:
@@ -182,7 +212,8 @@ class PlanOrchestratorStore:
                               p.ticket, p.plan, p.staffing
                     FROM cp_plan_orchestrations o
                     JOIN cp_execution_plans p ON p.id=o.plan_id
-                    WHERE o.status NOT IN ('completed', 'blocked')
+                    WHERE o.lifecycle='active'
+                      AND o.status NOT IN ('completed', 'blocked')
                     ORDER BY o.created_at, o.plan_id"""
                 ).fetchall()
             )
@@ -273,6 +304,176 @@ class PlanOrchestratorStore:
             conn.commit()
             return True
 
+    def supersede_work_order(
+        self,
+        *,
+        plan_id: str,
+        work_order_id: str,
+        reason: str,
+        superseded_by_plan_id: str | None = None,
+        superseded_by_work_order_id: str | None = None,
+    ) -> dict[str, Any]:
+        """Retire one exact tracked WorkOrder without changing execution truth.
+
+        The operation changes orchestration eligibility only. It never updates the
+        tracked state, Runtime job, result, progress, workspace, or counters.
+        """
+        self.ensure()
+        reason = reason.strip()[:2000]
+        replacement_plan_id = superseded_by_plan_id or None
+        replacement_work_order_id = superseded_by_work_order_id or None
+        identities = [plan_id, work_order_id]
+        identities.extend(
+            value
+            for value in (replacement_plan_id, replacement_work_order_id)
+            if value is not None
+        )
+        if any(not value or value != value.strip() for value in identities) or not reason:
+            raise RuntimeError("Supersession requires exact plan, WorkOrder, and reason")
+        if bool(replacement_plan_id) != bool(replacement_work_order_id):
+            raise RuntimeError("Replacement plan and WorkOrder identities must be supplied together")
+        if (replacement_plan_id, replacement_work_order_id) == (plan_id, work_order_id):
+            raise RuntimeError("A WorkOrder cannot supersede itself")
+
+        timestamp = now()
+        with self.storage.connect() as conn:
+            plan = conn.execute(
+                "SELECT * FROM cp_plan_orchestrations WHERE plan_id=%s FOR UPDATE",
+                (plan_id,),
+            ).fetchone()
+            if plan is None:
+                raise RuntimeError("Unknown orchestration plan")
+            tracked = conn.execute(
+                """SELECT * FROM cp_plan_work_orders
+                WHERE plan_id=%s AND work_order_id=%s FOR UPDATE""",
+                (plan_id, work_order_id),
+            ).fetchone()
+            if tracked is None:
+                raise RuntimeError("Unknown orchestrated WorkOrder")
+
+            current = dict(tracked)
+            if str(current.get("lifecycle") or "active") == "superseded":
+                existing = (
+                    current.get("superseded_by_plan_id"),
+                    current.get("superseded_by_work_order_id"),
+                    current.get("supersession_reason"),
+                )
+                requested = (replacement_plan_id, replacement_work_order_id, reason)
+                if existing != requested:
+                    raise RuntimeError("WorkOrder is already superseded with different metadata")
+                conn.commit()
+                return {"changed": False, "plan": dict(plan), "work_order": current}
+            if str(plan.get("lifecycle") or "active") != "active":
+                raise RuntimeError("Orchestration plan is not active")
+            source_state = str(current.get("state") or "")
+            if source_state not in _SUPERSEDEABLE_WORK_ORDER_STATES:
+                raise RuntimeError(
+                    f"WorkOrder cannot be superseded from state={source_state}"
+                )
+            source_job_id = str(current.get("job_id") or "")
+            if source_job_id:
+                source_job = conn.execute(
+                    "SELECT status FROM cp_jobs WHERE id=%s",
+                    (source_job_id,),
+                ).fetchone()
+                if source_job is None:
+                    raise RuntimeError("Supersession target is missing its Runtime job")
+                if str(source_job.get("status") or "") in _ACTIVE_JOB_STATUSES:
+                    raise RuntimeError("An in-flight Runtime job cannot be superseded")
+
+            if replacement_plan_id and replacement_work_order_id:
+                replacement_plan = conn.execute(
+                    "SELECT * FROM cp_plan_orchestrations WHERE plan_id=%s",
+                    (replacement_plan_id,),
+                ).fetchone()
+                if replacement_plan is None:
+                    raise RuntimeError("Unknown replacement orchestration plan")
+                if replacement_plan.get("project_id") != plan.get("project_id"):
+                    raise RuntimeError("Replacement orchestration project does not match")
+                replacement = conn.execute(
+                    """SELECT * FROM cp_plan_work_orders
+                    WHERE plan_id=%s AND work_order_id=%s""",
+                    (replacement_plan_id, replacement_work_order_id),
+                ).fetchone()
+                if replacement is None:
+                    raise RuntimeError("Unknown replacement orchestrated WorkOrder")
+                if str(replacement.get("lifecycle") or "active") != "active":
+                    raise RuntimeError("Replacement WorkOrder is not active orchestration history")
+
+            conn.execute(
+                """UPDATE cp_plan_work_orders
+                SET lifecycle='superseded', superseded_by_plan_id=%s,
+                    superseded_by_work_order_id=%s, superseded_at=%s,
+                    supersession_reason=%s, updated_at=%s
+                WHERE plan_id=%s AND work_order_id=%s AND lifecycle='active'""",
+                (
+                    replacement_plan_id,
+                    replacement_work_order_id,
+                    timestamp,
+                    reason,
+                    timestamp,
+                    plan_id,
+                    work_order_id,
+                ),
+            )
+            self._supersede_all_attention_rows(
+                conn,
+                plan_id=plan_id,
+                work_order_id=work_order_id,
+            )
+            conn.execute(
+                """UPDATE cp_control_actions SET status='cancelled', updated_at=%s
+                WHERE status='pending' AND plan_id=%s AND work_order_id=%s""",
+                (timestamp, plan_id, work_order_id),
+            )
+            remaining = list(conn.execute(
+                """SELECT state FROM cp_plan_work_orders
+                WHERE plan_id=%s AND lifecycle='active'
+                ORDER BY sequence_no, work_order_id""",
+                (plan_id,),
+            ).fetchall())
+            if not remaining:
+                conn.execute(
+                    """UPDATE cp_plan_orchestrations
+                    SET lifecycle='superseded', superseded_at=%s, updated_at=%s
+                    WHERE plan_id=%s AND lifecycle='active'""",
+                    (timestamp, timestamp, plan_id),
+                )
+            else:
+                states = [str(row.get("state") or "") for row in remaining]
+                if any(state == "blocked" for state in states):
+                    plan_status = "blocked"
+                elif any(state == "waiting_human" for state in states):
+                    plan_status = "waiting_human"
+                elif any(state == "awaiting_merge" for state in states):
+                    plan_status = "waiting_merge"
+                elif any(state == "running" for state in states):
+                    plan_status = "executing"
+                elif states and all(state == "completed" for state in states):
+                    plan_status = "completed"
+                else:
+                    plan_status = "active"
+                conn.execute(
+                    """UPDATE cp_plan_orchestrations SET status=%s, updated_at=%s
+                    WHERE plan_id=%s AND status IS DISTINCT FROM %s""",
+                    (plan_status, timestamp, plan_id, plan_status),
+                )
+            work_order = conn.execute(
+                """SELECT * FROM cp_plan_work_orders
+                WHERE plan_id=%s AND work_order_id=%s""",
+                (plan_id, work_order_id),
+            ).fetchone()
+            updated_plan = conn.execute(
+                "SELECT * FROM cp_plan_orchestrations WHERE plan_id=%s",
+                (plan_id,),
+            ).fetchone()
+            conn.commit()
+            return {
+                "changed": True,
+                "plan": dict(updated_plan or plan),
+                "work_order": dict(work_order or current),
+            }
+
     @staticmethod
     def _legacy_attention_state_sql() -> str:
         return """CASE
@@ -309,6 +510,24 @@ class PlanOrchestratorStore:
         )
         return int(result.rowcount or 0)
 
+    def _supersede_all_attention_rows(
+        self,
+        conn: Any,
+        *,
+        plan_id: str,
+        work_order_id: str,
+    ) -> int:
+        result = conn.execute(
+            f"""UPDATE cp_notification_outbox
+            SET status='superseded', lease_until=NULL, updated_at=%s
+            WHERE status IN ('pending','delivering')
+              AND plan_id=%s AND work_order_id=%s
+              AND (({self._legacy_attention_state_sql()}) IS NOT NULL
+                OR event_type = ANY(%s))""",
+            (now(), plan_id, work_order_id, list(_OWNER_ATTENTION_EVENT_TYPES)),
+        )
+        return int(result.rowcount or 0)
+
     def supersede_obsolete_notifications(self) -> int:
         """Retire current or legacy attention rows that no longer match durable state."""
         self.ensure()
@@ -322,7 +541,8 @@ class PlanOrchestratorStore:
                   AND notification.plan_id=work_order.plan_id
                   AND notification.work_order_id=work_order.work_order_id
                   AND ({attention_state}) IS NOT NULL
-                  AND ({attention_state}) IS DISTINCT FROM work_order.state""",
+                  AND (work_order.lifecycle <> 'active'
+                    OR ({attention_state}) IS DISTINCT FROM work_order.state)""",
                 (now(),),
             )
             conn.commit()
@@ -331,8 +551,10 @@ class PlanOrchestratorStore:
     def any_busy_work_order(self) -> bool:
         with self.storage.connect() as conn:
             row = conn.execute(
-                """SELECT 1 FROM cp_plan_work_orders
-                WHERE state = ANY(%s) LIMIT 1""",
+                """SELECT 1 FROM cp_plan_work_orders work_order
+                JOIN cp_plan_orchestrations plan ON plan.plan_id=work_order.plan_id
+                WHERE work_order.lifecycle='active' AND plan.lifecycle='active'
+                  AND work_order.state = ANY(%s) LIMIT 1""",
                 (list(_BUSY_WORK_ORDER_STATES),),
             ).fetchone()
             return row is not None
@@ -351,6 +573,14 @@ class PlanOrchestratorStore:
             row = conn.execute(
                 """SELECT * FROM cp_notification_outbox
                 WHERE status='pending' AND available_at <= %s
+                  AND (
+                    work_order_id IS NULL OR NOT EXISTS (
+                      SELECT 1 FROM cp_plan_work_orders work_order
+                      WHERE work_order.plan_id=cp_notification_outbox.plan_id
+                        AND work_order.work_order_id=cp_notification_outbox.work_order_id
+                        AND work_order.lifecycle <> 'active'
+                    )
+                  )
                 ORDER BY id
                 FOR UPDATE SKIP LOCKED
                 LIMIT 1""",
@@ -417,6 +647,18 @@ class PlanOrchestratorStore:
             materialized_payload["attention_state"] = attention_state
             materialized_payload["attention_generation"] = attention_generation
         with self.storage.connect() as conn:
+            if plan_id and work_order_id:
+                eligible = conn.execute(
+                    """SELECT 1 FROM cp_plan_work_orders work_order
+                    JOIN cp_plan_orchestrations plan ON plan.plan_id=work_order.plan_id
+                    WHERE work_order.plan_id=%s AND work_order.work_order_id=%s
+                      AND work_order.lifecycle='active' AND plan.lifecycle='active'
+                    FOR SHARE OF work_order, plan""",
+                    (plan_id, work_order_id),
+                ).fetchone()
+                if eligible is None:
+                    conn.commit()
+                    return False
             if attention_state and attention_generation and plan_id and work_order_id:
                 self._supersede_notification_rows(
                     conn,
@@ -522,6 +764,8 @@ class PlanOrchestrator:
         row = rows.get(work_order_id)
         if row is None:
             raise RuntimeError("Unknown orchestrated WorkOrder")
+        if str(row.get("lifecycle") or "active") != "active":
+            raise RuntimeError("Superseded WorkOrders do not require operator recovery")
         if row["execution_mode"] != "operator" or row["state"] != "waiting_human":
             raise RuntimeError("WorkOrder is not waiting for an operator")
         detail = dict(row.get("detail") or {})
@@ -552,7 +796,10 @@ class PlanOrchestrator:
         plan_id = str(plan["plan_id"])
         plan_doc = dict(plan.get("plan") or {})
         definitions = {item["id"]: item for item in plan_doc.get("work_orders") or []}
-        rows = self.store.work_orders(plan_id)
+        rows = [
+            row for row in self.store.work_orders(plan_id)
+            if str(row.get("lifecycle") or "active") == "active"
+        ]
 
         if plan_doc.get("decision_boundaries"):
             self.store.update_plan(plan_id, status="waiting_human")
@@ -668,7 +915,10 @@ class PlanOrchestrator:
                 elif str(pr.get("state") or "") == "closed":
                     self._block_tracked(plan, tracked, "pull_request_closed_without_merge")
 
-        rows = self.store.work_orders(plan_id)
+        rows = [
+            row for row in self.store.work_orders(plan_id)
+            if str(row.get("lifecycle") or "active") == "active"
+        ]
         states = [str(row["state"]) for row in rows]
         if rows and all(state == "completed" for state in states):
             self.store.update_plan(plan_id, status="completed")
@@ -697,7 +947,10 @@ class PlanOrchestrator:
                 continue
             plan_doc = dict(plan.get("plan") or {})
             definitions = {item["id"]: item for item in plan_doc.get("work_orders") or []}
-            tracked = self.store.work_orders(str(plan["plan_id"]))
+            tracked = [
+                row for row in self.store.work_orders(str(plan["plan_id"]))
+                if str(row.get("lifecycle") or "active") == "active"
+            ]
             states = {row["work_order_id"]: row["state"] for row in tracked}
             for row in tracked:
                 if row["state"] != "pending":

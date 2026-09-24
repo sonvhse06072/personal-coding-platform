@@ -95,6 +95,8 @@ class PlanOrchestrator(CorePlanOrchestrator):
         # WorkOrder. Recovery is read-only: never replay the mutation.
         for tracked_raw in self.store.work_orders(plan_id):
             tracked = dict(tracked_raw)
+            if str(tracked.get("lifecycle") or "active") != "active":
+                continue
             if str(tracked.get("state") or "") != "awaiting_merge":
                 continue
             job_id = str(tracked.get("job_id") or "")
@@ -135,6 +137,8 @@ class PlanOrchestrator(CorePlanOrchestrator):
         continuity_apps: list[dict[str, Any]] = []
         for tracked_raw in self.store.work_orders(plan_id):
             tracked = dict(tracked_raw)
+            if str(tracked.get("lifecycle") or "active") != "active":
+                continue
             if str(tracked.get("state") or "") != "awaiting_merge":
                 continue
             detail = dict(tracked.get("detail") or {})

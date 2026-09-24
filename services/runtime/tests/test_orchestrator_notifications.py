@@ -26,7 +26,8 @@ class FakeConnection:
 
     def execute(self, sql, params=None):
         if "SELECT plan_id FROM cp_plan_orchestrations" in sql:
-            return FakeQueryResult([{"plan_id": self.storage.plan_id}])
+            rows = [] if self.storage.plan_lifecycle == "superseded" else [{"plan_id": self.storage.plan_id}]
+            return FakeQueryResult(rows)
         raise AssertionError(f"unexpected fake SQL: {sql}")
 
 
@@ -34,6 +35,7 @@ class FakeStorage:
     def __init__(self, jobs=None, *, plan_id="pm-gh-200"):
         self.jobs = jobs or {}
         self.plan_id = plan_id
+        self.plan_lifecycle = "active"
 
     def get(self, job_id):
         return self.jobs.get(job_id)
@@ -205,6 +207,7 @@ class FakeStore:
         self.rows = [dict(row) for row in rows]
         self.plan_id = plan_id
         self.plan_status = "active"
+        self.plan_lifecycle = "active"
         self.plan_updated_at = "p0"
         self.update_counter = 0
         self.notifications = []
@@ -216,12 +219,16 @@ class FakeStore:
         return []
 
     def active_plans(self):
-        if self.plan_status in {"blocked", "completed", "waiting_human"}:
+        if self.plan_lifecycle != "active" or self.plan_status in {"blocked", "completed", "waiting_human"}:
             return []
         return [plan(plan_id=self.plan_id)]
 
     def any_busy_work_order(self):
-        return any(item["state"] in {"running", "awaiting_merge", "waiting_human"} for item in self.rows)
+        return any(
+            item.get("lifecycle", "active") == "active"
+            and item["state"] in {"running", "awaiting_merge", "waiting_human"}
+            for item in self.rows
+        )
 
     def work_orders(self, plan_id):
         return [deepcopy(row) for row in self.rows]
@@ -248,6 +255,7 @@ class FakeStore:
             "plan_id": plan_id,
             "project_id": "demo",
             "status": self.plan_status,
+            "lifecycle": self.plan_lifecycle,
             "ticket_id": "GH-5",
             "github_url": "https://github.com/example/repo/issues/5",
             "updated_at": self.plan_updated_at,
@@ -283,7 +291,17 @@ class FakeStore:
             if (
                 item["status"] in {"pending", "delivering"}
                 and item.get("attention_state")
-                and states.get(item.get("work_order_id")) != item["attention_state"]
+                and (
+                    next(
+                        (
+                            row.get("lifecycle", "active")
+                            for row in self.rows
+                            if row["work_order_id"] == item.get("work_order_id")
+                        ),
+                        "active",
+                    ) != "active"
+                    or states.get(item.get("work_order_id")) != item["attention_state"]
+                )
             ):
                 item["status"] = "superseded"
                 changed += 1
@@ -317,6 +335,7 @@ def row(
         "sequence_no": 0,
         "execution_mode": execution_mode,
         "state": state,
+        "lifecycle": "active",
         "job_id": job_id,
         "pr_number": None,
         "pr_url": None,
@@ -619,6 +638,48 @@ def test_blocked_and_waiting_human_dedupe_are_stable_across_ticks():
     asyncio.run(waiting.tick())
     asyncio.run(waiting.tick())
     assert len(waiting_store.notifications) == 1
+
+
+def test_superseded_blocked_work_never_rematerializes_attention_on_ticks():
+    storage = FakeStorage(
+        {
+            "4283bb02a28a5c96b71f7bb1bc5e3676": {
+                "id": "4283bb02a28a5c96b71f7bb1bc5e3676",
+                "status": "blocked",
+                "result": {"reason": "work_order_policy_rejected"},
+                "progress": {"model_calls": 0},
+            }
+        },
+        plan_id="pm-gh-original",
+    )
+    old = row(
+        state="blocked",
+        job_id="4283bb02a28a5c96b71f7bb1bc5e3676",
+        plan_id="pm-gh-original",
+        work_order_id="UI-CL-1-responsive-regression-matrix",
+    )
+    old.update(
+        lifecycle="superseded",
+        superseded_by_plan_id="pm-gh-5772402026",
+        superseded_by_work_order_id="UI-CL-1-responsive-regression-matrix-r2",
+        supersession_reason="replaced_after_router_false_positive_fix",
+    )
+    store = FakeStore([old], plan_id="pm-gh-original")
+    store.plan_status = "blocked"
+    store.plan_lifecycle = "superseded"
+    storage.plan_lifecycle = "superseded"
+    controls = FakeControls()
+    orchestrator = service(storage, store, controls=controls)
+
+    asyncio.run(orchestrator.tick())
+    asyncio.run(orchestrator.tick())
+
+    assert store.notifications == []
+    assert controls.actions == {}
+    assert store.rows[0]["state"] == "blocked"
+    assert storage.jobs["4283bb02a28a5c96b71f7bb1bc5e3676"]["result"] == {
+        "reason": "work_order_policy_rejected"
+    }
 
 
 def test_owner_relevant_detail_change_emits_new_generation_and_supersedes_pending_old():
