@@ -320,10 +320,10 @@ live PCP services were not queried, resumed, rerouted, rebuilt or restarted.
 
 ## Repeated-failure current-tail correction #286
 
-Issue #286 is implemented in PR #287 on branch
-`ai/issue-286-repeated-failure-tail`, based on latest `main`
-`836af29f3ee308e1ea5aab8a47194b2ada682331`. The implementation head is
-`6725b3afa171c0b824cde28e54051678525380f7`.
+Issue #286 / PR #287 is merged on `main` at
+`3075a4f588074a2206909360b56b20029003e335`. The implementation head was
+`6725b3afa171c0b824cde28e54051678525380f7` and the final continuity head was
+`ebcca7e56257c8c3d4a65db7c30c207e1f073704`.
 
 The Router repeated-failure circuit breaker now reverse-scans only the
 consecutive suffix matching the most recent durable failure fingerprint. The
@@ -350,10 +350,110 @@ R2 job `812aabd7ab0a5adbb18a7a5edc8d7009`, its workspace/durable history and Ch�
 Nhạc were not queried or mutated. Live PCP services were not restarted, rebuilt
 or modified, and cache/GC was not run.
 GitHub Actions run `35910395359` passed Runtime, Router, ddev-executor and
-structure jobs on the implementation head. The following continuity-only commit
-records that result without changing executable behavior. PR #287 remains open
-and must not be merged from the implementation-engineer role; its final
-continuity-only head requires a fresh all-green CI run before review.
+structure jobs on the implementation head. Final exact-head run `35910569565`
+passed all four jobs before PR #287 merged. The blocked R2 job was not resumed
+or otherwise mutated as part of that merge.
+
+## GitHub Actions pre-run failure classification #288
+
+Issue #288 is implemented in PR #289 on branch
+`ai/issue-288-ci-infrastructure-classification`, based on latest `main`
+`3075a4f588074a2206909360b56b20029003e335`. Follow-up implementation head
+`95a6c2326f881d3ba24689f5b82525983a37f2cd` corrects pre-follow-up head
+`1334c0a96669726fe9ba40b99f274bd7dad2aef1` after PM blocking review comment
+`5803004566` identified one legacy live-recovery gap.
+
+The bounded delivery fix preserves the existing top-level CI state contract and
+adds explicit failure evidence/classification:
+
+- failed Actions jobs retain runner identity, steps, timestamps, whether any
+  repository execution started, and available log excerpts;
+- `startup_failure` and the exact runnerless `runner_id=0` / `steps=[]` shape
+  classify as delivery infrastructure;
+- assigned-runner/executed-step failures, legacy commit-status failures and
+  ambiguous/missing evidence remain engineering failures fail-closed;
+- Runtime blocks pre-run failures as `github_ci_infrastructure_failure` while
+  preserving the accepted result, verified commit, branch and pull request;
+- this path does not increment `ci_failures` or `repair_iterations`, append an
+  engineering failure fingerprint, invoke the implementation engine, or require
+  another material repository change;
+- `retry_delivery` / `recheck_ci` reuse the accepted commit. Each delivery
+  attempt remains bounded and a repeated pre-run failure blocks again with the
+  infrastructure-specific reason rather than entering an automatic loop;
+- a later CI success for the exact accepted commit finalizes the same durable
+  job normally.
+
+The PM blocker concerned jobs already damaged by the old classification before
+#288 is activated. `ExecutionRuntimeEngine._block()` replaced the previously
+accepted `result` when the obsolete engineering-repair turn later produced
+`material_change_missing_without_model_fallback`; therefore checking only
+`result.status=accepted` or `result.accepted_result` could still send an
+already-delivered job back to coding.
+
+The selected recovery is design A, using only authoritative PCP-owned durable
+evidence. Runtime recognizes the legacy shape only when its own
+`checkpoint.delivery` records that CI delivery had begun and failed. It
+reconstructs the accepted delivery result only when all of these bindings agree:
+
+- same Runtime job through pull-request delivery metadata;
+- exact 40-character verified commit, source commit and AI branch across the
+  delivery, publish, PR and CI records;
+- published/open PR repository and base/head identities;
+- deterministic test and required-check progress already passed with no
+  unexpected scope;
+- required independent review policy, satisfied independence, passing
+  protocol-valid review summary/history, reviewer model/provider identity and
+  no pending findings;
+- original route permissions for commit, AI-branch push and PR creation.
+
+Workspace cleanliness, branch ancestry, commit existence and PR existence are
+never used as acceptance proof. A complete match returns directly to bounded
+delivery/CI observation on the exact accepted commit without invoking the
+implementation engine, requiring a new diff, or changing engineering counters.
+If any authoritative binding is missing or inconsistent, Runtime blocks as
+`legacy_delivery_acceptance_evidence_incomplete`; control actions offer neither
+coding reroute nor delivery retry in that incomplete state. Ordinary
+implementation-only `material_change_missing_without_model_fallback` jobs keep
+their existing bounded reroute behavior.
+
+Code-path analysis shows the legacy R2 lineage is automatically recoverable if
+the delivery checkpoint fields written by the old Runtime remain intact. The
+follow-up deliberately did not query R2 to confirm its live row. If any required
+field is absent, the same job/workspace/branch/PR/history instead remains
+fail-closed for authoritative operator evidence and never falls through to
+coding. A focused live-shape regression proves legacy result loss followed by a
+runnerless infrastructure failure and later exact-SHA CI success with zero new
+model calls and zero engineering repair increments.
+
+Follow-up local verification passes focused Runtime delivery and control-action
+tests (`37 passed`), the full Runtime suite (`405 passed`), the full
+ddev-executor suite (`60 passed`) and the structure suite (`89 passed`). Router
+contracts were not changed by the follow-up, so its suite is not required. The
+blocked Chợ Nhạc R2 job, its workspace and
+PR #18 were not queried or mutated; live PCP services were not restarted,
+rebuilt or modified, and cache/GC was not run. PR #289 remains open and must not
+be merged from the implementation-engineer role; its exact final head requires
+all required GitHub Actions jobs to receive runners, execute repository steps
+and pass before review.
+
+GitHub Actions run `35920237209` on implementation/continuity head
+`5e62b8e7d44d0ee9a142ffc022357c48a0375ffa` failed before repository execution
+on both the initial attempt and one bounded direct rerun. All four required jobs
+reported `runner_id=0`, empty `runner_name` and `steps=[]`, completing in about
+two seconds. Attempt 2 exposed GitHub's annotation that the jobs were not
+started because recent account payments failed or the spending limit must be
+increased. This is delivery infrastructure evidence, not an engineering test
+failure. PR #289 is therefore not merge-ready; after the external GitHub billing
+condition is repaired, re-run CI on its exact current head and require all four
+jobs to pass. Do not send this failure through source repair or activate/restart
+PCP merely to retry it.
+
+Follow-up implementation run `35923484857` on exact source head
+`95a6c2326f881d3ba24689f5b82525983a37f2cd` has the same external failure. Its
+four required jobs each reported `runner_id=0`, empty `runner_name` and
+`steps=[]`; GitHub annotated every job as not started because of failed account
+payments or a spending-limit condition. No repository command ran. This remains
+delivery infrastructure evidence and is not a reason for another source change.
 
 ## Dedicated PCP BuildKit isolation #281
 
@@ -463,9 +563,11 @@ claim every DDEV build on the machine uses `pcp-builder`.
 
 ## Immediate next safe actions
 
-1. Review issue #286's PR at its final exact head after all required CI jobs are
-   green; do not merge, activate/rebuild Router or resume R2 from the
-   implementation-engineer role.
+1. Review the #288 legacy-recovery correction on PR #289, then repair the
+   external GitHub Actions billing/spending-limit condition and re-run CI on its
+   exact final head. Review only after all required jobs execute repository
+   steps and pass; do not merge, activate/rebuild PCP services or resume R2 from
+   the implementation-engineer role.
 2. Keep the retained shared/default BuildKit cache unchanged. Any later cleanup
    decision must remain separate from #281's proof of isolation.
 3. Keep R2 job `812aabd7ab0a5adbb18a7a5edc8d7009` durably blocked; do not

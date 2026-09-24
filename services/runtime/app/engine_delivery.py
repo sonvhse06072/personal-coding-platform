@@ -7,6 +7,10 @@ from typing import Any
 from .delivery import DeliveryError, deliver_verified_work, pull_request_body
 from .engine_verification import RuntimeEngine as ExecutionRuntimeEngine
 from .fingerprint import failure_fingerprint
+from .legacy_delivery_recovery import (
+    LEGACY_RECOVERY_BLOCK_REASON,
+    recover_legacy_accepted_result,
+)
 
 
 class DeliveryAwareStorage:
@@ -74,11 +78,23 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         if not result:
             return False
         delivery = result.get("delivery") or {}
-        if delivery.get("state") == "ci_failure":
+        if (
+            delivery.get("state") == "ci_failure"
+            and cls._ci_failure_class(delivery) != "infrastructure"
+            and not bool((result.get("legacy_delivery_recovery") or {}).get("authorized"))
+        ):
             return False
         route = result.get("route") or row.get("route") or {}
         permissions = (route.get("strategy") or {}).get("permissions") or {}
         return bool(permissions.get("push_ai_branch", False)) and bool(result.get("commit"))
+
+    @staticmethod
+    def _ci_failure_class(delivery: dict[str, Any]) -> str:
+        """Return the bounded CI failure class, defaulting ambiguity to repair."""
+        ci = delivery.get("ci") or {}
+        if str(ci.get("failure_class") or "") == "infrastructure":
+            return "infrastructure"
+        return "engineering"
 
     @classmethod
     def _delivery_wait_seconds(
@@ -115,7 +131,37 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         # spending another model call on already-verified work.
         before = self.storage.get(job_id)
         accepted = self._accepted_result_for_delivery(before) if before else None
-        if (
+        recovery = (
+            recover_legacy_accepted_result(before)
+            if before and before.get("status") == "queued" and accepted is None
+            else {"candidate": False, "accepted_result": None, "missing_evidence": []}
+        )
+        if recovery["candidate"] and recovery["accepted_result"] is None:
+            checkpoint = deepcopy(before.get("checkpoint") or {})
+            progress = deepcopy(before.get("progress") or {})
+            self._block(
+                job_id=job_id,
+                progress=progress,
+                checkpoint=checkpoint,
+                reason=LEGACY_RECOVERY_BLOCK_REASON,
+                last_failure=(
+                    "Legacy delivery acceptance cannot be reconstructed from the "
+                    "remaining authoritative durable evidence."
+                ),
+                delivery=deepcopy(checkpoint.get("delivery") or {}),
+                legacy_delivery_recovery={
+                    "candidate": True,
+                    "missing_evidence": recovery["missing_evidence"],
+                    "commit": recovery.get("commit"),
+                    "branch": recovery.get("branch"),
+                    "prior_block": deepcopy(before.get("result") or {}),
+                },
+            )
+            return
+        if recovery["accepted_result"] is not None:
+            accepted = recovery["accepted_result"]
+            self.storage.update(job_id, status="delivering", result=accepted, error=None)
+        elif (
             before
             and before.get("status") == "queued"
             and accepted
@@ -164,6 +210,19 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                     status="delivery_retry",
                     output={"attempt": progress["delivery_attempts"]},
                 )
+                prior_result = (before or {}).get("result") or {}
+                if prior_result.get("reason") == "github_ci_infrastructure_failure":
+                    progress["infrastructure_retry_attempts"] = int(
+                        progress.get("infrastructure_retry_attempts", 0)
+                    ) + 1
+                    self._runtime_event(
+                        job_id,
+                        kind="infrastructure_retry",
+                        message="Retrying GitHub CI after a pre-run infrastructure/startup failure",
+                        phase="delivery",
+                        status="infrastructure_retry",
+                        output={"attempt": progress["infrastructure_retry_attempts"]},
+                    )
             self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
 
             verification = result.get("verification") or {}
@@ -176,6 +235,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 commit=commit,
                 verification=verification,
                 evaluator=evaluator,
+                review=result.get("review"),
             )
 
             delivery_started = time.monotonic()
@@ -216,6 +276,20 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 ci = delivery.get("ci") or {}
                 failure_text = str(ci.get("failure_text") or "GitHub CI failed")[-30000:]
                 last_failure = f"GitHub CI failed for verified commit {commit}:\n{failure_text}"[-30000:]
+                if self._ci_failure_class(delivery) == "infrastructure":
+                    checkpoint["last_failure"] = last_failure
+                    checkpoint["delivery"] = delivery
+                    result["delivery_finalized"] = False
+                    self._block(
+                        job_id=job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                        reason="github_ci_infrastructure_failure",
+                        last_failure=last_failure,
+                        delivery=delivery,
+                        accepted_result=result,
+                    )
+                    return
                 progress["ci_failures"] = int(progress.get("ci_failures", 0)) + 1
                 # A real CI failure requires engineering repair; delivery/API
                 # observation retries are counted separately above and do not

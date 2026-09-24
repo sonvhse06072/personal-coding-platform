@@ -182,3 +182,17 @@ def test_owner_attention_advisories_and_action_labels_are_vietnamese():
     assert merge["title"] == "CẦN MERGE THỦ CÔNG"
     assert merge["action_specs"][0]["label"] == "🔗 Mở PR"
     assert "merge thủ công" in merge["recommended"]
+
+
+def test_legacy_delivery_candidate_never_offers_coding_reroute():
+    job = c1_reassessment_job()
+    job["result"] = {"reason": "material_change_missing_without_model_fallback"}
+    job["checkpoint"]["delivery"] = {"enabled": True, "state": "ci_failure"}
+    controls, _ = service(job)
+
+    advisory = controls.blocked_advisory(work_order(), job)
+    action_types = [item["action_type"] for item in advisory["action_specs"]]
+
+    assert advisory["phase"] == "delivery"
+    assert action_types == ["details", "keep_blocked"]
+    assert "reroute_retry" not in action_types

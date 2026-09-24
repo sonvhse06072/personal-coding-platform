@@ -355,7 +355,7 @@ The n8n service is intentionally lower privilege: it receives the Runtime API to
 ## Current v1 boundaries
 
 - Runtime supports bounded successful commits, non-force `ai/*` branch publishing, PR create/update and GitHub CI monitoring when project policy grants those capabilities.
-- GitHub CI failures can feed bounded diagnostics back into the Runtime repair loop and update the same branch/PR. Auto-merge remains off for the current real-project policy and production deployment remains forbidden.
+- GitHub CI failures with repository-execution evidence can feed bounded diagnostics back into the Runtime repair loop and update the same branch/PR. Pre-run Actions infrastructure/startup failures instead preserve the accepted commit/PR for bounded delivery retry or CI recheck without spending an engineering repair turn. Auto-merge remains off for the current real-project policy and production deployment remains forbidden.
 - n8n is intentionally thin: current responsibilities are job ingress, job status and human-decision forwarding. External notifications, scheduled intake and third-party event connectors are future control-plane extensions, not Runtime logic.
 - Per-job token/cost enforcement is active. Cross-job/monthly provider quota telemetry is the next layer; it is not yet inferred automatically from subscription dashboards.
 

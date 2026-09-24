@@ -117,8 +117,20 @@ def test_actions_failure_collects_failed_job_logs_for_repair(monkeypatch):
                         {
                             "id": 22,
                             "name": "phpunit",
+                            "status": "completed",
                             "conclusion": "failure",
                             "html_url": "https://github.com/acme/demo/actions/runs/11/job/22",
+                            "runner_id": 101,
+                            "runner_name": "GitHub Actions 101",
+                            "started_at": "2026-09-24T01:00:00Z",
+                            "completed_at": "2026-09-24T01:01:00Z",
+                            "steps": [
+                                {
+                                    "name": "Run PHPUnit",
+                                    "status": "completed",
+                                    "conclusion": "failure",
+                                }
+                            ],
                         }
                     ]
                 },
@@ -138,9 +150,154 @@ def test_actions_failure_collects_failed_job_logs_for_repair(monkeypatch):
     result = delivery.ci_status(repository="acme/demo", commit="abc1234")
 
     assert result["state"] == "failure"
+    assert result["failure_class"] == "engineering"
     assert result["failures"][0]["source"] == "github_actions"
-    assert result["failures"][0]["jobs"][0]["name"] == "phpunit"
+    job = result["failures"][0]["jobs"][0]
+    assert job["name"] == "phpunit"
+    assert job["runner_id"] == 101
+    assert job["repository_execution_started"] is True
+    assert job["failure_class"] == "engineering"
+    assert job["logs_available"] is True
     assert "Assertion failed in ExampleTest" in result["failure_text"]
+
+
+def test_runnerless_zero_step_failure_is_infrastructure(monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/repos/acme/demo/actions/runs":
+            return httpx.Response(
+                200,
+                json={
+                    "workflow_runs": [
+                        {
+                            "id": 35916265858,
+                            "name": "CI",
+                            "status": "completed",
+                            "conclusion": "failure",
+                        }
+                    ]
+                },
+            )
+        if path == "/repos/acme/demo/commits/abc1234/status":
+            return httpx.Response(200, json={"state": "pending", "statuses": []})
+        if path == "/repos/acme/demo/actions/runs/35916265858/jobs":
+            return httpx.Response(
+                200,
+                json={
+                    "jobs": [
+                        {
+                            "id": 22,
+                            "name": "quality",
+                            "status": "completed",
+                            "conclusion": "failure",
+                            "runner_id": 0,
+                            "runner_name": "",
+                            "steps": [],
+                            "started_at": "2026-09-23T20:36:41Z",
+                            "completed_at": "2026-09-23T20:36:43Z",
+                        }
+                    ]
+                },
+            )
+        if path == "/repos/acme/demo/actions/jobs/22/logs":
+            return httpx.Response(404)
+        raise AssertionError(f"unexpected GitHub request: {request.url}")
+
+    delivery = GitHubDelivery("token")
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(
+        delivery,
+        "_client",
+        lambda: httpx.Client(transport=transport, headers=delivery.headers),
+    )
+
+    result = delivery.ci_status(repository="acme/demo", commit="abc1234")
+
+    assert result["state"] == "failure"
+    assert result["failure_class"] == "infrastructure"
+    job = result["failures"][0]["jobs"][0]
+    assert job["runner_id"] == 0
+    assert job["runner_name"] == ""
+    assert job["steps"] == []
+    assert job["repository_execution_started"] is False
+    assert job["logs_available"] is False
+    assert job["failure_class"] == "infrastructure"
+
+
+def test_explicit_startup_failure_is_infrastructure(monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/repos/acme/demo/actions/runs":
+            return httpx.Response(
+                200,
+                json={
+                    "workflow_runs": [
+                        {
+                            "id": 11,
+                            "name": "CI",
+                            "status": "completed",
+                            "conclusion": "startup_failure",
+                        }
+                    ]
+                },
+            )
+        if path == "/repos/acme/demo/commits/abc1234/status":
+            return httpx.Response(200, json={"state": "pending", "statuses": []})
+        if path == "/repos/acme/demo/actions/runs/11/jobs":
+            return httpx.Response(200, json={"jobs": []})
+        raise AssertionError(f"unexpected GitHub request: {request.url}")
+
+    delivery = GitHubDelivery("token")
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(
+        delivery,
+        "_client",
+        lambda: httpx.Client(transport=transport, headers=delivery.headers),
+    )
+
+    result = delivery.ci_status(repository="acme/demo", commit="abc1234")
+
+    assert result["state"] == "failure"
+    assert result["failure_class"] == "infrastructure"
+    assert result["failures"][0]["failure_class"] == "infrastructure"
+
+
+def test_ambiguous_actions_failure_remains_engineering(monkeypatch):
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/repos/acme/demo/actions/runs":
+            return httpx.Response(
+                200,
+                json={
+                    "workflow_runs": [
+                        {
+                            "id": 11,
+                            "name": "CI",
+                            "status": "completed",
+                            "conclusion": "failure",
+                        }
+                    ]
+                },
+            )
+        if path == "/repos/acme/demo/commits/abc1234/status":
+            return httpx.Response(200, json={"state": "pending", "statuses": []})
+        if path == "/repos/acme/demo/actions/runs/11/jobs":
+            return httpx.Response(503)
+        raise AssertionError(f"unexpected GitHub request: {request.url}")
+
+    delivery = GitHubDelivery("token")
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(
+        delivery,
+        "_client",
+        lambda: httpx.Client(transport=transport, headers=delivery.headers),
+    )
+
+    result = delivery.ci_status(repository="acme/demo", commit="abc1234")
+
+    assert result["state"] == "failure"
+    assert result["failure_class"] == "engineering"
+    assert result["failures"][0]["jobs"] == []
 
 
 def test_commit_status_failure_is_self_repair_context(monkeypatch):
@@ -178,6 +335,7 @@ def test_commit_status_failure_is_self_repair_context(monkeypatch):
     result = delivery.ci_status(repository="acme/demo", commit="abc1234")
 
     assert result["state"] == "failure"
+    assert result["failure_class"] == "engineering"
     assert result["failures"][0]["source"] == "commit_status"
     assert "external-ci" in result["failure_text"]
     assert "lint failed" in result["failure_text"]

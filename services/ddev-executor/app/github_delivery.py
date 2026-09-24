@@ -12,6 +12,8 @@ _GITHUB_HTTPS_RE = re.compile(r"^https?://(?:[^/@]+@)?github\.com/([^/]+)/([^/]+
 _GITHUB_SCP_RE = re.compile(r"^(?:[^@]+@)?github\.com:([^/]+)/([^/]+?)(?:\.git)?$")
 _GITHUB_SSH_RE = re.compile(r"^ssh://(?:[^@]+@)?github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$")
 _FAILED_CONCLUSIONS = {"failure", "cancelled", "timed_out", "action_required", "stale", "startup_failure"}
+_ENGINEERING_FAILURE = "engineering"
+_INFRASTRUCTURE_FAILURE = "infrastructure"
 
 
 def github_repository_from_origin(origin: str) -> str | None:
@@ -102,6 +104,40 @@ def commit_status_signal(raw: dict[str, Any]) -> dict[str, Any]:
         "details_url": raw.get("target_url"),
         "description": raw.get("description"),
     }
+
+
+def actions_job_failure_class(raw: dict[str, Any]) -> str:
+    """Classify one failed Actions job, defaulting ambiguity to engineering.
+
+    GitHub can report a terminal failure before assigning a runner. The strict
+    runnerless/zero-step shape is positive evidence that repository execution
+    never began. Missing fields or unavailable logs are not equivalent evidence
+    and therefore retain the existing engineering-repair behavior.
+    """
+    conclusion = str(raw.get("conclusion") or "")
+    if conclusion == "startup_failure":
+        return _INFRASTRUCTURE_FAILURE
+
+    steps = raw.get("steps")
+    runner_id = raw.get("runner_id")
+    if (runner_id == 0 or runner_id == "0") and isinstance(steps, list) and not steps:
+        return _INFRASTRUCTURE_FAILURE
+    return _ENGINEERING_FAILURE
+
+
+def actions_run_failure_class(
+    raw: dict[str, Any],
+    failed_jobs: list[dict[str, Any]],
+) -> str:
+    """Classify one failed workflow run without guessing from absent evidence."""
+    if str(raw.get("conclusion") or "") == "startup_failure":
+        return _INFRASTRUCTURE_FAILURE
+    if failed_jobs and all(
+        str(job.get("failure_class") or "") == _INFRASTRUCTURE_FAILURE
+        for job in failed_jobs
+    ):
+        return _INFRASTRUCTURE_FAILURE
+    return _ENGINEERING_FAILURE
 
 
 def summarize_ci(signals: list[dict[str, Any]], combined_status: str) -> tuple[str, list[dict[str, Any]]]:
@@ -248,6 +284,10 @@ class GitHubDelivery:
                         "name": raw.get("name") or raw.get("display_title") or "GitHub Actions",
                         "conclusion": conclusion,
                         "details_url": raw.get("html_url"),
+                        "status": raw.get("status"),
+                        "created_at": raw.get("created_at"),
+                        "updated_at": raw.get("updated_at"),
+                        "run_started_at": raw.get("run_started_at"),
                         "jobs": [],
                     }
                     failure_lines.append(f"Workflow failed: {run_item['name']} ({conclusion})")
@@ -262,11 +302,24 @@ class GitHubDelivery:
                                 if job_conclusion not in _FAILED_CONCLUSIONS:
                                     continue
                                 job_id = job.get("id")
+                                raw_steps = job.get("steps")
+                                job_steps = list(raw_steps) if isinstance(raw_steps, list) else []
                                 job_item: dict[str, Any] = {
                                     "id": job_id,
                                     "name": job.get("name"),
+                                    "status": job.get("status"),
                                     "conclusion": job_conclusion,
                                     "details_url": job.get("html_url"),
+                                    "runner_id": job.get("runner_id"),
+                                    "runner_name": job.get("runner_name"),
+                                    "started_at": job.get("started_at"),
+                                    "completed_at": job.get("completed_at"),
+                                    "steps": job_steps,
+                                    "repository_execution_started": (
+                                        bool(job_steps) if isinstance(raw_steps, list) else None
+                                    ),
+                                    "failure_class": actions_job_failure_class(job),
+                                    "logs_available": False,
                                     "log_excerpt": "",
                                 }
                                 if job_id:
@@ -274,6 +327,7 @@ class GitHubDelivery:
                                         f"{self.base}/repos/{repository}/actions/jobs/{job_id}/logs"
                                     )
                                     if logs_response.is_success:
+                                        job_item["logs_available"] = True
                                         job_item["log_excerpt"] = logs_response.text[-12000:]
                                 run_item["jobs"].append(job_item)
                                 failure_lines.append(
@@ -281,6 +335,10 @@ class GitHubDelivery:
                                 )
                                 if job_item["log_excerpt"]:
                                     failure_lines.append(job_item["log_excerpt"])
+                    run_item["failure_class"] = actions_run_failure_class(
+                        raw,
+                        run_item["jobs"],
+                    )
                     failures.append(run_item)
 
                 for raw in raw_statuses:
@@ -294,6 +352,9 @@ class GitHubDelivery:
                         "conclusion": status_state,
                         "details_url": raw.get("target_url"),
                         "description": raw.get("description"),
+                        # Commit statuses do not expose runner/step evidence.
+                        # Preserve the historical engineering classification.
+                        "failure_class": _ENGINEERING_FAILURE,
                     }
                     failures.append(item)
                     detail = f": {item['description']}" if item.get("description") else ""
@@ -301,8 +362,21 @@ class GitHubDelivery:
                         f"Commit status failed: {item['name']} ({status_state}){detail}"
                     )
 
+            failure_class = None
+            if state == "failure":
+                failure_class = (
+                    _INFRASTRUCTURE_FAILURE
+                    if failures
+                    and all(
+                        str(item.get("failure_class") or "") == _INFRASTRUCTURE_FAILURE
+                        for item in failures
+                    )
+                    else _ENGINEERING_FAILURE
+                )
+
             return {
                 "state": state,
+                "failure_class": failure_class,
                 "repository": repository,
                 "commit": commit,
                 "combined_status": combined_status or "none",

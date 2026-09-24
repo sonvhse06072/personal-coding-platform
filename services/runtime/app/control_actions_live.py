@@ -279,6 +279,14 @@ class ControlActionService(BaseControlActionService):
             else:
                 advisory["cause"] = "Provider/model thất bại với loại lỗi chưa có recovery tự động an toàn."
                 advisory["recommended"] = "Chỉ định tuyến lại khi policy tìm được provider hợp lệ; nếu không hãy giữ trạng thái chặn."
+        elif reason == "material_change_missing_without_model_fallback" and "reroute_retry" not in action_types:
+            advisory["summary"] = "Runtime cũ đã làm mất accepted result sau khi GitHub delivery bắt đầu."
+            advisory["cause"] = "Recovery chỉ dùng bằng chứng Runtime bền vững; job không quay lại coding hoặc reroute."
+            advisory["recommended"] = "Dùng delivery retry/recheck nếu đủ bằng chứng; nếu không, giữ blocked để kiểm tra evidence có thẩm quyền."
+        elif reason == "legacy_delivery_acceptance_evidence_incomplete":
+            advisory["summary"] = "Bằng chứng accepted result của legacy delivery không đầy đủ."
+            advisory["cause"] = "Runtime đã dừng trước coding vì không thể khôi phục acceptance một cách an toàn."
+            advisory["recommended"] = "Giữ nguyên job ở trạng thái blocked và chỉ xác minh acceptance qua cơ chế operator có thẩm quyền."
         elif reason == "material_change_missing_without_model_fallback":
             advisory["summary"] = "Coding agent hoàn tất nhưng chưa tạo material repository change bắt buộc."
             advisory["cause"] = "Runtime không tìm được model fallback hợp lệ sau một lần chạy không tạo thay đổi cần thiết."
@@ -287,9 +295,16 @@ class ControlActionService(BaseControlActionService):
             advisory["summary"] = "Deterministic preflight verification thất bại."
             advisory["cause"] = "Một preflight check đã thất bại; raw command output cố ý không được gửi qua Telegram."
             advisory["recommended"] = "Kiểm tra lỗi verification bên ngoài Telegram trước khi thử lại."
-        elif reason in {"github_delivery_failed", "github_ci_timeout"}:
+        elif reason in {
+            "github_delivery_failed",
+            "github_ci_timeout",
+            "github_ci_infrastructure_failure",
+        }:
             advisory["summary"] = "Kết quả đã verify local đang bị chặn ở bước GitHub delivery/CI."
-            advisory["cause"] = "Kết quả local đã được giữ nguyên; Runtime không cần code lại trước khi retry delivery."
+            if reason == "github_ci_infrastructure_failure":
+                advisory["cause"] = "GitHub CI thất bại trước khi chạy repository; commit và PR đã được chấp nhận vẫn được giữ nguyên."
+            else:
+                advisory["cause"] = "Kết quả local đã được giữ nguyên; Runtime không cần code lại trước khi retry delivery."
             advisory["recommended"] = "Thử lại delivery hoặc kiểm tra lại CI mà không thay đổi kết quả đã được chấp nhận."
         elif reason == "github_delivery_budget_exhausted":
             advisory["summary"] = "GitHub delivery đã hết ngân sách wall-time của Runtime."
