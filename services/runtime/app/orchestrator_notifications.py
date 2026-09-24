@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 from typing import Any
 
 from .control_actions_attention import ControlActionService
@@ -47,6 +48,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
     async def start(self) -> None:
         self.store.ensure()
         self.controls.ensure()
+        self._supersede_obsolete_attention()
         # Core start calls self.tick(), and this subclass materializes all stable
         # attention states after that tick. Existing blocked/waiting/merge gates
         # therefore receive controls after an upgrade without being resumed unless
@@ -80,10 +82,26 @@ class PlanOrchestrator(CorePlanOrchestrator):
             if legacy_recovered is not None:
                 result = {**result, "legacy_adaptive_recovery": legacy_recovered}
 
+            # Retire obsolete durable attention before the transport can claim
+            # another row. Sent/executed audit history is never rewritten.
+            self._supersede_obsolete_attention()
+
             # Read-only observation after every core transition/launch. Dedupe keys
             # are tied to durable state generation and the rendered action set.
             self._notify_existing_attention_states()
             return result
+
+    def _supersede_obsolete_attention(self) -> None:
+        supersede_notifications = getattr(
+            self.store,
+            "supersede_obsolete_notifications",
+            None,
+        )
+        if callable(supersede_notifications):
+            supersede_notifications()
+        supersede_actions = getattr(self.controls, "supersede_obsolete_actions", None)
+        if callable(supersede_actions):
+            supersede_actions()
 
     def _notify_existing_attention_states(self) -> None:
         with self.storage.connect() as conn:
@@ -124,11 +142,16 @@ class PlanOrchestrator(CorePlanOrchestrator):
         job_id = str(current.get("job_id") or "")
         job = self.storage.get(job_id) if job_id else None
         job = dict(job) if job else None
-        stamp = current.get("updated_at") or "unknown"
 
         if state == "awaiting_merge":
             pr_url = str(current.get("pr_url") or "") or None
             advisory = self.controls.manual_merge_advisory(pr_url)
+            generation = self._attention_generation_fingerprint(
+                plan,
+                current,
+                job,
+                advisory,
+            )
             actions = self.controls.create_actions(
                 plan=plan,
                 work_order=current,
@@ -142,8 +165,10 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 event_type="human_decision_required",
                 severity="warning",
                 summary=advisory["summary"],
-                suffix=f"attention:manual-merge:{current.get('pr_number')}:{stamp}:{action_fingerprint}",
+                suffix=f"attention:manual-merge:{generation}:{action_fingerprint}",
                 github_url=pr_url,
+                attention_state=state,
+                attention_generation=f"{generation}:{action_fingerprint}",
                 payload={
                     "pr_number": current.get("pr_number"),
                     "advisory": self._public_advisory(advisory),
@@ -154,6 +179,12 @@ class PlanOrchestrator(CorePlanOrchestrator):
 
         if state == "waiting_human":
             advisory = self.controls.waiting_human_advisory(current, job)
+            generation = self._attention_generation_fingerprint(
+                plan,
+                current,
+                job,
+                advisory,
+            )
             actions = self.controls.create_actions(
                 plan=plan,
                 work_order=current,
@@ -167,7 +198,9 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 event_type="human_decision_required",
                 severity="warning",
                 summary=advisory["summary"],
-                suffix=f"attention:waiting-human:{job_id or 'operator'}:{stamp}:{action_fingerprint}",
+                suffix=f"attention:waiting-human:{generation}:{action_fingerprint}",
+                attention_state=state,
+                attention_generation=f"{generation}:{action_fingerprint}",
                 payload={
                     "job_id": job_id or None,
                     "advisory": self._public_advisory(advisory),
@@ -177,6 +210,12 @@ class PlanOrchestrator(CorePlanOrchestrator):
             return
 
         advisory = self.controls.blocked_advisory(current, job)
+        generation = self._attention_generation_fingerprint(
+            plan,
+            current,
+            job,
+            advisory,
+        )
         actions = self.controls.create_actions(
             plan=plan,
             work_order=current,
@@ -191,7 +230,9 @@ class PlanOrchestrator(CorePlanOrchestrator):
             event_type="work_order_blocked",
             severity="error",
             summary=advisory["summary"],
-            suffix=f"attention:blocked:{job_id or 'operator'}:{reason}:{stamp}:{action_fingerprint}",
+            suffix=f"attention:blocked:{reason}:{generation}:{action_fingerprint}",
+            attention_state=state,
+            attention_generation=f"{generation}:{action_fingerprint}",
             payload={
                 "job_id": job_id or None,
                 "advisory": self._public_advisory(advisory),
@@ -302,14 +343,41 @@ class PlanOrchestrator(CorePlanOrchestrator):
         normalized = [
             (
                 str(action.get("label") or ""),
-                str(action.get("action_id") or ""),
-                str(action.get("callback_data") or ""),
+                str(
+                    action.get("action_type")
+                    or ("callback" if action.get("callback_data") else "")
+                ),
                 str(action.get("url") or ""),
             )
             for action in actions
             if isinstance(action, dict)
         ]
         return hashlib.sha256(repr(normalized).encode("utf-8")).hexdigest()[:16]
+
+    @staticmethod
+    def _attention_generation_fingerprint(
+        plan: dict[str, Any],
+        work_order: dict[str, Any],
+        job: dict[str, Any] | None,
+        advisory: dict[str, Any],
+    ) -> str:
+        snapshot = {
+            "plan_id": plan.get("plan_id") or plan.get("id"),
+            "plan_status": plan.get("status"),
+            "work_order_id": work_order.get("work_order_id"),
+            "work_order_state": work_order.get("state"),
+            "execution_mode": work_order.get("execution_mode"),
+            "job_id": (job or {}).get("id"),
+            "job_status": (job or {}).get("status"),
+            "pr_number": work_order.get("pr_number"),
+            "pr_url": work_order.get("pr_url"),
+            "detail": work_order.get("detail") or {},
+            "job_result": (job or {}).get("result") or {},
+            "advisory_reason": advisory.get("reason"),
+            "action_specs": advisory.get("action_specs") or [],
+        }
+        encoded = json.dumps(snapshot, sort_keys=True, separators=(",", ":"), default=str)
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:24]
 
     def _notify(
         self,
@@ -348,6 +416,8 @@ class PlanOrchestrator(CorePlanOrchestrator):
         suffix: str,
         github_url: str | None = None,
         payload: dict[str, Any] | None = None,
+        attention_state: str | None = None,
+        attention_generation: str | None = None,
     ) -> None:
         plan_id = str(plan.get("plan_id") or plan.get("id") or "")
         if not plan_id:
@@ -367,4 +437,6 @@ class PlanOrchestrator(CorePlanOrchestrator):
             summary=summary,
             github_url=github_url or str(plan.get("github_url") or "") or None,
             payload=payload,
+            attention_state=attention_state,
+            attention_generation=attention_generation,
         )

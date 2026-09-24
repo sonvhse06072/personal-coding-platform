@@ -85,6 +85,7 @@ _ACTIVE_JOB_STATUSES = {
 }
 _TERMINAL_JOB_STATUSES = {"blocked", "failed", "interrupted", "cancelled"}
 _BUSY_WORK_ORDER_STATES = {"running", "awaiting_merge", "waiting_human"}
+_ATTENTION_WORK_ORDER_STATES = {"awaiting_merge", "blocked", "waiting_human"}
 
 
 class PlanOrchestratorStore:
@@ -205,37 +206,127 @@ class PlanOrchestratorStore:
                 ).fetchall()
             )
 
-    def update_plan(self, plan_id: str, *, status: str) -> None:
+    def update_plan(self, plan_id: str, *, status: str) -> bool:
         with self.storage.connect() as conn:
-            conn.execute(
-                "UPDATE cp_plan_orchestrations SET status=%s, updated_at=%s WHERE plan_id=%s",
-                (status, now(), plan_id),
+            result = conn.execute(
+                """UPDATE cp_plan_orchestrations SET status=%s, updated_at=%s
+                WHERE plan_id=%s AND status IS DISTINCT FROM %s""",
+                (status, now(), plan_id, status),
             )
             conn.commit()
+            return bool(result.rowcount)
 
-    def update_work_order(self, plan_id: str, work_order_id: str, **fields: Any) -> None:
+    def update_work_order(self, plan_id: str, work_order_id: str, **fields: Any) -> bool:
         allowed = {"state", "job_id", "pr_number", "pr_url", "detail"}
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"Unsupported plan work-order fields: {sorted(unknown)}")
-        sets: list[str] = []
-        values: list[Any] = []
-        for key, value in fields.items():
-            if key == "detail":
-                sets.append("detail=%s::jsonb")
-                values.append(json.dumps(value or {}))
-            else:
-                sets.append(f"{key}=%s")
-                values.append(value)
-        sets.append("updated_at=%s")
-        values.append(now())
-        values.extend([plan_id, work_order_id])
+        if not fields:
+            return False
+
+        normalized = {
+            key: (dict(value or {}) if key == "detail" else value)
+            for key, value in fields.items()
+        }
         with self.storage.connect() as conn:
+            current = conn.execute(
+                """SELECT * FROM cp_plan_work_orders
+                WHERE plan_id=%s AND work_order_id=%s FOR UPDATE""",
+                (plan_id, work_order_id),
+            ).fetchone()
+            if current is None:
+                conn.commit()
+                return False
+            if all(current.get(key) == value for key, value in normalized.items()):
+                conn.commit()
+                return False
+
+            previous_state = str(current.get("state") or "")
+            sets: list[str] = []
+            values: list[Any] = []
+            for key, value in normalized.items():
+                if key == "detail":
+                    sets.append("detail=%s::jsonb")
+                    values.append(json.dumps(value))
+                else:
+                    sets.append(f"{key}=%s")
+                    values.append(value)
+            sets.append("updated_at=%s")
+            values.append(now())
+            values.extend([plan_id, work_order_id])
             conn.execute(
                 f"UPDATE cp_plan_work_orders SET {', '.join(sets)} WHERE plan_id=%s AND work_order_id=%s",
                 values,
             )
+            if previous_state in _ATTENTION_WORK_ORDER_STATES:
+                self._supersede_notification_rows(
+                    conn,
+                    plan_id=plan_id,
+                    work_order_id=work_order_id,
+                    attention_state=previous_state,
+                )
+                conn.execute(
+                    """UPDATE cp_control_actions SET status='cancelled', updated_at=%s
+                    WHERE status='pending' AND plan_id=%s AND work_order_id=%s""",
+                    (now(), plan_id, work_order_id),
+                )
             conn.commit()
+            return True
+
+    @staticmethod
+    def _legacy_attention_state_sql() -> str:
+        return """CASE
+          WHEN payload->>'attention_state' <> '' THEN payload->>'attention_state'
+          WHEN payload#>>'{advisory,reason}' = 'awaiting_merge' THEN 'awaiting_merge'
+          WHEN payload#>>'{advisory,reason}' IN ('human_decision_required','operator_waiting_human')
+            THEN 'waiting_human'
+          WHEN event_type = 'work_order_blocked' THEN 'blocked'
+          ELSE NULL
+        END"""
+
+    def _supersede_notification_rows(
+        self,
+        conn: Any,
+        *,
+        plan_id: str,
+        work_order_id: str,
+        attention_state: str,
+        except_generation: str | None = None,
+    ) -> int:
+        generation_filter = ""
+        values: list[Any] = [now(), plan_id, work_order_id, attention_state]
+        if except_generation is not None:
+            generation_filter = " AND COALESCE(payload->>'attention_generation','') <> %s"
+            values.append(except_generation)
+        result = conn.execute(
+            f"""UPDATE cp_notification_outbox
+            SET status='superseded', lease_until=NULL, updated_at=%s
+            WHERE status IN ('pending','delivering')
+              AND plan_id=%s AND work_order_id=%s
+              AND ({self._legacy_attention_state_sql()})=%s
+              {generation_filter}""",
+            values,
+        )
+        return int(result.rowcount or 0)
+
+    def supersede_obsolete_notifications(self) -> int:
+        """Retire current or legacy attention rows that no longer match durable state."""
+        self.ensure()
+        attention_state = self._legacy_attention_state_sql()
+        with self.storage.connect() as conn:
+            result = conn.execute(
+                f"""UPDATE cp_notification_outbox notification
+                SET status='superseded', lease_until=NULL, updated_at=%s
+                FROM cp_plan_work_orders work_order
+                WHERE notification.status IN ('pending','delivering')
+                  AND notification.plan_id=work_order.plan_id
+                  AND notification.work_order_id=work_order.work_order_id
+                  AND ({attention_state}) IS NOT NULL
+                  AND ({attention_state}) IS DISTINCT FROM work_order.state""",
+                (now(),),
+            )
+            conn.commit()
+            return int(result.rowcount or 0)
 
     def any_busy_work_order(self) -> bool:
         with self.storage.connect() as conn:
@@ -317,9 +408,23 @@ class PlanOrchestratorStore:
         summary: str,
         github_url: str | None,
         payload: dict[str, Any] | None = None,
+        attention_state: str | None = None,
+        attention_generation: str | None = None,
     ) -> bool:
         timestamp = now()
+        materialized_payload = dict(payload or {})
+        if attention_state and attention_generation:
+            materialized_payload["attention_state"] = attention_state
+            materialized_payload["attention_generation"] = attention_generation
         with self.storage.connect() as conn:
+            if attention_state and attention_generation and plan_id and work_order_id:
+                self._supersede_notification_rows(
+                    conn,
+                    plan_id=plan_id,
+                    work_order_id=work_order_id,
+                    attention_state=attention_state,
+                    except_generation=attention_generation,
+                )
             result = conn.execute(
                 """INSERT INTO cp_notification_outbox
                 (dedupe_key, event_type, severity, project_id, ticket_id, plan_id,
@@ -337,7 +442,7 @@ class PlanOrchestratorStore:
                     work_order_id,
                     summary.strip()[:2000],
                     github_url,
-                    json.dumps(payload or {}),
+                    json.dumps(materialized_payload),
                     timestamp,
                     timestamp,
                     timestamp,

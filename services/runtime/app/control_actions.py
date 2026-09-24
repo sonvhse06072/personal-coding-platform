@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS cp_control_actions (
   work_order_id TEXT NOT NULL,
   job_id TEXT,
   state_fingerprint TEXT NOT NULL,
+  generation_fingerprint TEXT,
   payload JSONB NOT NULL DEFAULT '{}'::jsonb,
   status TEXT NOT NULL DEFAULT 'pending',
   result JSONB,
@@ -35,6 +36,13 @@ CREATE TABLE IF NOT EXISTS cp_control_actions (
 );
 CREATE INDEX IF NOT EXISTS cp_control_actions_lookup_idx
   ON cp_control_actions(status, plan_id, work_order_id, created_at DESC);
+ALTER TABLE cp_control_actions
+  ADD COLUMN IF NOT EXISTS generation_fingerprint TEXT;
+UPDATE cp_control_actions
+  SET generation_fingerprint=state_fingerprint
+  WHERE generation_fingerprint IS NULL;
+ALTER TABLE cp_control_actions
+  ALTER COLUMN generation_fingerprint SET NOT NULL;
 """
 
 _ACTIVE_JOB_STATUSES = {
@@ -137,6 +145,72 @@ class ControlActionService:
         }
         encoded = json.dumps(snapshot, sort_keys=True, separators=(",", ":"), default=str)
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+    def attention_generation_fingerprint(
+        self,
+        plan: dict[str, Any],
+        work_order: dict[str, Any],
+        job: dict[str, Any] | None,
+        advisory: dict[str, Any],
+    ) -> str:
+        """Identify owner-relevant meaning without polling timestamps or opaque ids."""
+        snapshot = {
+            "plan_id": plan.get("plan_id") or plan.get("id"),
+            "plan_status": plan.get("status"),
+            "work_order_id": work_order.get("work_order_id"),
+            "work_order_state": work_order.get("state"),
+            "execution_mode": work_order.get("execution_mode"),
+            "job_id": (job or {}).get("id"),
+            "job_status": (job or {}).get("status"),
+            "pr_number": work_order.get("pr_number"),
+            "pr_url": work_order.get("pr_url"),
+            "detail": work_order.get("detail") or {},
+            "job_result": (job or {}).get("result") or {},
+            "advisory_reason": advisory.get("reason"),
+            "action_specs": advisory.get("action_specs") or [],
+        }
+        encoded = json.dumps(snapshot, sort_keys=True, separators=(",", ":"), default=str)
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+    def supersede_pending_actions(
+        self,
+        *,
+        plan_id: str,
+        work_order_id: str,
+        except_generation: str | None = None,
+    ) -> int:
+        self.ensure()
+        generation_filter = ""
+        values: list[Any] = [now(), plan_id, work_order_id]
+        if except_generation is not None:
+            generation_filter = " AND generation_fingerprint IS DISTINCT FROM %s"
+            values.append(except_generation)
+        with self.storage.connect() as conn:
+            result = conn.execute(
+                f"""UPDATE cp_control_actions SET status='cancelled', updated_at=%s
+                WHERE status='pending' AND plan_id=%s AND work_order_id=%s
+                {generation_filter}""",
+                values,
+            )
+            conn.commit()
+            return int(result.rowcount or 0)
+
+    def supersede_obsolete_actions(self) -> int:
+        """Cancel unexecuted controls whose WorkOrder left owner-attention state."""
+        self.ensure()
+        with self.storage.connect() as conn:
+            result = conn.execute(
+                """UPDATE cp_control_actions action
+                SET status='cancelled', updated_at=%s
+                FROM cp_plan_work_orders work_order
+                WHERE action.status='pending'
+                  AND action.plan_id=work_order.plan_id
+                  AND action.work_order_id=work_order.work_order_id
+                  AND work_order.state NOT IN ('awaiting_merge','blocked','waiting_human')""",
+                (now(),),
+            )
+            conn.commit()
+            return int(result.rowcount or 0)
 
     def _current_context(self, action: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
         plan_id = str(action["plan_id"])
@@ -471,6 +545,14 @@ class ControlActionService:
     ) -> list[dict[str, Any]]:
         self.ensure()
         fingerprint = self.state_fingerprint(plan, work_order, job)
+        generation_fingerprint = self.attention_generation_fingerprint(
+            plan,
+            work_order,
+            job,
+            advisory,
+        )
+        plan_id = str(plan.get("plan_id") or plan.get("id") or "")
+        work_order_id = str(work_order.get("work_order_id") or "")
         rendered: list[dict[str, Any]] = []
         for spec in advisory.get("action_specs") or []:
             action_type = str(spec.get("action_type") or "")
@@ -485,18 +567,25 @@ class ControlActionService:
                 payload["advisory"] = {key: deepcopy(value) for key, value in advisory.items() if key != "action_specs"}
             action = self.create_action(
                 action_type=action_type,
-                plan_id=str(plan.get("plan_id") or plan.get("id") or ""),
-                work_order_id=str(work_order.get("work_order_id") or ""),
+                plan_id=plan_id,
+                work_order_id=work_order_id,
                 job_id=str((job or {}).get("id") or "") or None,
                 state_fingerprint=fingerprint,
+                generation_fingerprint=generation_fingerprint,
                 payload=payload,
                 ttl_hours=ttl_hours,
             )
             rendered.append({
                 "label": label,
+                "action_type": action_type,
                 "action_id": action["action_id"],
                 "callback_data": f"act:{action['action_id']}",
             })
+        self.supersede_pending_actions(
+            plan_id=plan_id,
+            work_order_id=work_order_id,
+            except_generation=generation_fingerprint,
+        )
         return rendered
 
     def create_action(
@@ -507,6 +596,7 @@ class ControlActionService:
         work_order_id: str,
         job_id: str | None,
         state_fingerprint: str,
+        generation_fingerprint: str,
         payload: dict[str, Any],
         ttl_hours: int,
     ) -> dict[str, Any]:
@@ -520,7 +610,7 @@ class ControlActionService:
                 "plan_id": plan_id,
                 "work_order_id": work_order_id,
                 "job_id": job_id,
-                "state_fingerprint": state_fingerprint,
+                "generation_fingerprint": generation_fingerprint,
                 "payload": payload,
             },
             sort_keys=True,
@@ -532,13 +622,15 @@ class ControlActionService:
             row = conn.execute(
                 """INSERT INTO cp_control_actions
                 (action_id, dedupe_key, action_type, plan_id, work_order_id, job_id,
-                 state_fingerprint, payload, status, result, expires_at, created_at, updated_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s::jsonb,'pending',NULL,%s,%s,%s)
+                 state_fingerprint, generation_fingerprint, payload, status, result,
+                 expires_at, created_at, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,'pending',NULL,%s,%s,%s)
                 ON CONFLICT (dedupe_key) DO UPDATE SET dedupe_key=EXCLUDED.dedupe_key
                 RETURNING *""",
                 (
                     action_id, dedupe_key, action_type, plan_id, work_order_id, job_id,
-                    state_fingerprint, json.dumps(payload), expires_at, timestamp, timestamp,
+                    state_fingerprint, generation_fingerprint, json.dumps(payload),
+                    expires_at, timestamp, timestamp,
                 ),
             ).fetchone()
             conn.commit()
@@ -566,6 +658,15 @@ class ControlActionService:
         if not secrets.compare_digest(str(telegram_chat_id), expected_chat):
             raise RuntimeError("Telegram chat identity mismatch")
 
+    @staticmethod
+    def _already_resolved_result(action: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "status": "already_resolved",
+            "action_id": action["action_id"],
+            "action_type": action["action_type"],
+            "message": "The merge gate is already resolved and the WorkOrder is completed; no action is required.",
+        }
+
     async def execute(
         self,
         action_id: str,
@@ -589,6 +690,19 @@ class ControlActionService:
             action = dict(action)
             if action["status"] == "executed":
                 return dict(action.get("result") or {})
+            if action["action_type"] == "recheck_orchestration":
+                _, work_order, _ = self._current_context(action)
+                if str(work_order.get("state") or "") == "completed":
+                    result = self._already_resolved_result(action)
+                    if action["status"] == "pending":
+                        conn.execute(
+                            """UPDATE cp_control_actions
+                            SET status='executed', result=%s::jsonb, updated_at=%s
+                            WHERE action_id=%s AND status='pending'""",
+                            (json.dumps(result), timestamp, action_id),
+                        )
+                        conn.commit()
+                    return result
             if action["status"] != "pending":
                 raise RuntimeError(f"Control action is not pending (status={action['status']})")
             if action["expires_at"] <= timestamp:
