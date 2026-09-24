@@ -460,9 +460,12 @@ delivery infrastructure evidence and is not a reason for another source change.
 Issue #291 is implemented on branch
 `ai/issue-291-exact-sha-ci-revalidation` from merged #288/#289 main
 `2174a1efd595aa79f6a750fc3d5cba150e7db737` and is open as PR #292. Source
-implementation and local verification are complete; exact-head GitHub CI and
-PM review are the remaining delivery gates. The implementation agent must not
-merge the PR.
+implementation and local verification are complete. GitHub Actions run
+`35967040790` passed Runtime, Router, ddev-executor and structure jobs on head
+`ca4ecb8570c9caf40a52f88409c213ef408e0289`; every job used runner `SonVH`
+(`runner_id=21`) with `[self-hosted, linux, x64]` and executed non-empty
+repository steps. This continuity-only update changes no executable behavior.
+PM review remains required, and the implementation agent must not merge the PR.
 
 The ddev-executor now recognizes one narrow recovery status context:
 `pcp/exact-sha-ci`. A status is trusted only when all available legacy-status
