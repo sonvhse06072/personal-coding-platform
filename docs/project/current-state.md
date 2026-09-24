@@ -464,9 +464,13 @@ identified that reviewed head `5745d7dbdea6b83c7c3d1f4cc113022c1b920ed6`
 incorrectly expected creator metadata in GitHub's combined-status entries. The
 source correction now authenticates creator metadata through an exact-ID-bound
 list-status read while preserving combined-status ordinary semantics. Local
-implementation and verification are complete; exact-head GitHub CI for the
-correction remains required before PM re-review. The implementation agent must
-not merge the PR.
+implementation and verification are complete. GitHub Actions run `35970427013`
+passed Runtime, Router, ddev-executor and structure jobs on corrected source
+head `1e6c1f995cdb3525320ac83fe319be5aa9081477`; every job used runner `SonVH`
+(`runner_id=21`) with `[self-hosted, linux, x64]` and executed non-empty
+repository steps. This continuity-only update changes no executable behavior;
+its own exact-head CI remains required before PM re-review. The implementation
+agent must not merge the PR.
 
 The ddev-executor now recognizes one narrow recovery status context:
 `pcp/exact-sha-ci`. A status is trusted only when all available legacy-status
