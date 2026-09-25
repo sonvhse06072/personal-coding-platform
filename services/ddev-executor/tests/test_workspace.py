@@ -916,8 +916,8 @@ def test_preview_health_retries_whole_ddev_exec_after_transient_failure(tmp_path
         nonlocal health_attempts
         command = list(argv)
         if (
-            command[:3] == ["ddev", "exec", "bash"]
-            and "curl -fsS http://127.0.0.1:3100/" in command[-1]
+            command[:5] == ["ddev", "exec", "--raw", "--", "curl"]
+            and command[-1] == "http://127.0.0.1:3100/"
         ):
             health_attempts += 1
             if health_attempts == 1:
@@ -940,6 +940,54 @@ def test_preview_health_retries_whole_ddev_exec_after_transient_failure(tmp_path
     assert health_attempts == 2
 
 
+def test_preview_health_uses_raw_ddev_exec_without_nested_shell(tmp_path, monkeypatch):
+    _source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewraw", project_id="demo")
+    )
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append(list(argv))
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+
+    result = start_preview(
+        PreviewRequest(
+            job_id="jobpreviewraw",
+            project_id="demo",
+            workspace=created["workspace"],
+            target="frontend",
+        )
+    )
+
+    assert result["status"] == "ready"
+    health_calls = [
+        call for call in calls
+        if call[:5] == ["ddev", "exec", "--raw", "--", "curl"]
+    ]
+    assert health_calls == [[
+        "ddev",
+        "exec",
+        "--raw",
+        "--",
+        "curl",
+        "--noproxy",
+        "*",
+        "-fsS",
+        "--max-time",
+        "3",
+        "-o",
+        "/dev/null",
+        "http://127.0.0.1:3100/",
+    ]]
+    assert not any(
+        call[:4] == ["ddev", "exec", "bash", "-lc"]
+        for call in calls
+    )
+
+
 def test_failed_frontend_health_reconciles_removed_preview_topology(tmp_path, monkeypatch):
     source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
     created = create_workspace(
@@ -951,8 +999,8 @@ def test_failed_frontend_health_reconciles_removed_preview_topology(tmp_path, mo
         command = list(argv)
         calls.append(command)
         if (
-            command[:3] == ["ddev", "exec", "bash"]
-            and "curl -fsS http://127.0.0.1:3100/" in command[-1]
+            command[:5] == ["ddev", "exec", "--raw", "--", "curl"]
+            and command[-1] == "http://127.0.0.1:3100/"
         ):
             return 1, "", "health unavailable", False
         return 0, "ok\n", "", False
