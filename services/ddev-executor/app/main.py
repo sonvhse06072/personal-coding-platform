@@ -243,6 +243,21 @@ def _validate_workspace(
 _PREVIEW_OVERRIDE_REL = Path(".ddev/config.pcp-preview.local.yaml")
 _PREVIEW_MARKER = "# PCP-managed direct live preview; do not commit."
 _PREVIEW_EXCLUDE = ".ddev/config.pcp-preview.local.yaml"
+_DIRECT_NODE_OVERRIDE_REL = Path(".ddev/config.pcp-node.local.yaml")
+_DIRECT_NODE_MARKER = "# PCP-managed direct Node runtime; do not commit."
+_DIRECT_NODE_EXCLUDE = ".ddev/config.pcp-node.local.yaml"
+
+
+def _direct_nodejs_version(cfg: dict[str, Any]) -> str:
+    value = str((cfg.get("ddev") or {}).get("workspace_nodejs_version") or "").strip()
+    if not value:
+        raise HTTPException(
+            500,
+            "Direct frontend preview/verification requires ddev.workspace_nodejs_version",
+        )
+    if not re.fullmatch(r"\d{1,2}(?:\.\d{1,2})?", value):
+        raise HTTPException(500, "Invalid configured workspace_nodejs_version")
+    return value
 
 
 def _preview_contract(cfg: dict[str, Any], target: str) -> dict[str, Any]:
@@ -258,6 +273,7 @@ def _preview_contract(cfg: dict[str, Any], target: str) -> dict[str, Any]:
     if target in {"backend", "both"} and not _safe_preview_url(backend.get("url")):
         raise HTTPException(500, "Backend preview requires a local DDEV URL")
     if target in {"frontend", "both"}:
+        _direct_nodejs_version(cfg)
         if not bool(isinstance(frontend, dict) and frontend.get("enabled", False)):
             raise HTTPException(409, "Frontend preview is not enabled for this project")
         daemon = frontend.get("daemon") or {}
@@ -316,7 +332,7 @@ def _preview_override_path(workspace: Path) -> Path:
     return (workspace / _PREVIEW_OVERRIDE_REL).resolve()
 
 
-def _ensure_preview_git_exclude(workspace: Path) -> None:
+def _ensure_local_git_exclude(workspace: Path, entry: str) -> None:
     git_dir_text = git(workspace, "rev-parse", "--git-dir")
     git_dir = Path(git_dir_text)
     if not git_dir.is_absolute():
@@ -329,12 +345,41 @@ def _ensure_preview_git_exclude(workspace: Path) -> None:
     exclude = info / "exclude"
     current = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
     lines = current.splitlines()
-    if _PREVIEW_EXCLUDE not in lines:
+    if entry not in lines:
         suffix = "" if not current or current.endswith("\n") else "\n"
         exclude.write_text(
-            current + suffix + _PREVIEW_EXCLUDE + "\n",
+            current + suffix + entry + "\n",
             encoding="utf-8",
         )
+
+
+def _direct_node_override_path(workspace: Path) -> Path:
+    return (workspace / _DIRECT_NODE_OVERRIDE_REL).resolve()
+
+
+def _write_direct_node_override(workspace: Path, nodejs_version: str) -> Path:
+    path = _direct_node_override_path(workspace)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_local_git_exclude(workspace, _DIRECT_NODE_EXCLUDE)
+    content = (
+        _DIRECT_NODE_MARKER
+        + "\n"
+        + f'nodejs_version: "{nodejs_version}"\n'
+    )
+    if not path.exists() or path.read_text(encoding="utf-8") != content:
+        path.write_text(content, encoding="utf-8")
+    return path
+
+
+def _remove_managed_direct_node_override(workspace: Path) -> bool:
+    path = _direct_node_override_path(workspace)
+    if not path.exists():
+        return False
+    content = path.read_text(encoding="utf-8")
+    if not content.startswith(_DIRECT_NODE_MARKER + "\n"):
+        raise HTTPException(409, "Existing direct Node override is not PCP-owned")
+    path.unlink()
+    return True
 
 
 def _remove_managed_preview_override(workspace: Path) -> bool:
@@ -353,6 +398,7 @@ def _write_preview_override(
     *,
     frontend: dict[str, Any],
     target: str,
+    nodejs_version: str,
 ) -> Path:
     daemon = dict(frontend.get("daemon") or {})
     command = str(daemon["command"]).strip()
@@ -362,6 +408,7 @@ def _write_preview_override(
             command = f"NEXT_PUBLIC_DRUPAL_API_ORIGIN={api_origin} {command}"
 
     payload = {
+        "nodejs_version": nodejs_version,
         "web_extra_daemons": [
             {
                 "name": str(daemon["name"]),
@@ -380,7 +427,7 @@ def _write_preview_override(
     }
     path = _preview_override_path(workspace)
     path.parent.mkdir(parents=True, exist_ok=True)
-    _ensure_preview_git_exclude(workspace)
+    _ensure_local_git_exclude(workspace, _PREVIEW_EXCLUDE)
     path.write_text(
         _PREVIEW_MARKER + "\n" + yaml.safe_dump(payload, sort_keys=False),
         encoding="utf-8",
@@ -727,6 +774,7 @@ def start_preview(payload: PreviewRequest) -> dict[str, Any]:
             workspace,
             frontend=frontend,
             target=payload.target,
+            nodejs_version=_direct_nodejs_version(cfg),
         )
         restarted = _preview_run(
             payload.job_id,
@@ -1204,6 +1252,10 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
                     commands=[],
                     infrastructure=infrastructure,
                 )
+        _write_direct_node_override(
+            workspace,
+            _direct_nodejs_version(cfg),
+        )
     timeout = min(
         int(os.getenv("DDEV_COMMAND_TIMEOUT_SECONDS", "1800")),
         payload.timeout_seconds or 1800,
@@ -1226,6 +1278,15 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
                 timed_out=timed_out,
             )
         )
+        if (
+            _workspace_instance_mode(
+                cfg,
+                job_id=payload.job_id,
+                path=workspace,
+            ) == "direct"
+            and payload.phase == "frontend_quality"
+        ):
+            _remove_managed_direct_node_override(workspace)
         if returncode != 0:
             return PhaseResponse(
                 passed=False,
