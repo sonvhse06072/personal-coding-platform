@@ -282,6 +282,25 @@ class Storage:
             conn.commit()
             return True
 
+    def terminal_active_project_leases(self) -> list[dict[str, Any]]:
+        """Return active leases whose durable owner job is terminal.
+
+        Runtime uses this before lease reconciliation so executor-owned preview
+        resources can be retired before ownership is released after a restart.
+        """
+        with self.connect() as conn:
+            return list(
+                conn.execute(
+                    """SELECT lease.*, job.status AS owner_status
+                    FROM cp_project_leases lease
+                    JOIN cp_jobs job ON job.id=lease.owner_job_id
+                    WHERE lease.state='active'
+                      AND job.status = ANY(%s)
+                    ORDER BY lease.project_id""",
+                    (list(_PROJECT_LEASE_TERMINAL_STATUSES),),
+                ).fetchall()
+            )
+
     def reconcile_terminal_project_leases(self) -> int:
         """Release leases only when durable owner-job state proves terminal."""
         timestamp = now()
