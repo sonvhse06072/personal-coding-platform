@@ -1337,7 +1337,10 @@ def test_unhealthy_frontend_preview_removes_only_managed_override(
 
     def fake_run_tracked(job, argv, *, cwd, timeout, env):
         calls.append(list(argv))
-        if argv[:4] == ["ddev", "exec", "bash", "-lc"] and "curl -fsS" in argv[-1]:
+        if (
+            list(argv)[:5] == ["ddev", "exec", "--raw", "--", "curl"]
+            and list(argv)[-1] == "http://127.0.0.1:3100/"
+        ):
             return 1, "", "health failed", False
         return 0, "ok\n", "", False
 
