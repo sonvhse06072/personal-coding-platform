@@ -748,6 +748,11 @@ def start_preview(payload: PreviewRequest) -> dict[str, Any]:
                     (stopped.stderr or stopped.stdout or "preview reset failed")[-12000:],
                 )
 
+    frontend_target = payload.target in {"frontend", "both"}
+    nodejs_version = _direct_nodejs_version(cfg) if frontend_target else None
+    if frontend_target and nodejs_version:
+        _write_direct_node_override(workspace, nodejs_version)
+
     started = _preview_run(
         payload.job_id,
         ["ddev", "start", "-y"],
@@ -756,9 +761,11 @@ def start_preview(payload: PreviewRequest) -> dict[str, Any]:
     )
     infrastructure.append(started)
     if started.returncode != 0:
+        if frontend_target:
+            _remove_managed_direct_node_override(workspace)
         raise HTTPException(502, (started.stderr or started.stdout or "ddev start failed")[-12000:])
 
-    if payload.target in {"frontend", "both"}:
+    if frontend_target:
         for command in frontend.get("prepare") or []:
             result = _preview_run(
                 payload.job_id,
@@ -768,14 +775,16 @@ def start_preview(payload: PreviewRequest) -> dict[str, Any]:
             )
             infrastructure.append(result)
             if result.returncode != 0:
+                _remove_managed_direct_node_override(workspace)
                 raise HTTPException(502, (result.stderr or result.stdout or "preview prepare failed")[-12000:])
 
         _write_preview_override(
             workspace,
             frontend=frontend,
             target=payload.target,
-            nodejs_version=_direct_nodejs_version(cfg),
+            nodejs_version=nodejs_version,
         )
+        _remove_managed_direct_node_override(workspace)
         restarted = _preview_run(
             payload.job_id,
             ["ddev", "restart", "-y"],
@@ -785,6 +794,7 @@ def start_preview(payload: PreviewRequest) -> dict[str, Any]:
         infrastructure.append(restarted)
         if restarted.returncode != 0:
             _remove_managed_preview_override(workspace)
+            _remove_managed_direct_node_override(workspace)
             raise HTTPException(502, (restarted.stderr or restarted.stdout or "preview restart failed")[-12000:])
 
         daemon = dict(frontend.get("daemon") or {})
