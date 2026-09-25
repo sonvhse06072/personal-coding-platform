@@ -913,6 +913,7 @@ def stop_preview(payload: PreviewRequest) -> dict[str, Any]:
                 502,
                 (stopped.stderr or stopped.stdout or "preview stop failed")[-12000:],
             )
+    _remove_managed_direct_node_override(workspace)
     return {
         "job_id": payload.job_id,
         "project_id": payload.project_id,
