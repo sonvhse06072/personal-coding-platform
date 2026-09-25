@@ -261,8 +261,14 @@ def _preview_contract(cfg: dict[str, Any], target: str) -> dict[str, Any]:
         if not isinstance(daemon, dict):
             raise HTTPException(500, "Frontend preview daemon config is invalid")
         required = ("name", "command", "directory", "container_port", "http_port", "https_port")
-        if any(daemon.get(key) in {None, ""} for key in required):
+        if any(daemon.get(key) is None or daemon.get(key) == "" for key in required):
             raise HTTPException(500, "Frontend preview daemon config is incomplete")
+        daemon_name = str(daemon.get("name") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", daemon_name):
+            raise HTTPException(500, "Frontend preview daemon name is invalid")
+        directory = str(daemon.get("directory") or "").strip()
+        if not directory.startswith("/var/www/html"):
+            raise HTTPException(500, "Frontend preview daemon directory must stay under /var/www/html")
         for key in ("container_port", "http_port", "https_port"):
             value = daemon.get(key)
             if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= 65535:
@@ -411,19 +417,37 @@ def _frontend_preview_present(workspace: Path) -> bool:
         return False
 
 
+def _stop_frontend_preview_process(
+    job_id: str,
+    workspace: Path,
+    frontend: dict[str, Any],
+) -> CommandOutput:
+    daemon = dict(frontend.get("daemon") or {})
+    name = str(daemon.get("name") or "").strip()
+    result = _preview_run(
+        job_id,
+        ["ddev", "exec", "supervisorctl", "stop", f"webextradaemons:{name}"],
+        workspace=workspace,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        detail = f"{result.stdout}\n{result.stderr}".lower()
+        if "not running" in detail or "no such process" in detail:
+            return result.model_copy(update={"returncode": 0, "timed_out": False})
+    return result
+
+
 def _pause_frontend_preview(
     job_id: str,
     workspace: Path,
+    frontend: dict[str, Any],
 ) -> CommandOutput | None:
     if not _frontend_preview_present(workspace):
         return None
-    _remove_managed_preview_override(workspace)
-    return _preview_run(
-        job_id,
-        ["ddev", "restart", "-y"],
-        workspace=workspace,
-        timeout=600,
-    )
+    stopped = _stop_frontend_preview_process(job_id, workspace, frontend)
+    if stopped.returncode == 0:
+        _remove_managed_preview_override(workspace)
+    return stopped
 
 
 def _reconcile_workspace_ddev_identity(
@@ -638,19 +662,22 @@ def start_preview(payload: PreviewRequest) -> dict[str, Any]:
     contract = _preview_contract(cfg, payload.target)
     backend = contract["backend"]
     frontend = contract["frontend"]
-    previous_frontend = _remove_managed_preview_override(workspace)
+    previous_frontend = _frontend_preview_present(workspace)
 
     infrastructure: list[CommandOutput] = []
     if previous_frontend:
-        stopped = _preview_run(
+        stopped = _pause_frontend_preview(
             payload.job_id,
-            ["ddev", "restart", "-y"],
-            workspace=workspace,
-            timeout=600,
+            workspace,
+            frontend,
         )
-        infrastructure.append(stopped)
-        if stopped.returncode != 0:
-            raise HTTPException(502, (stopped.stderr or stopped.stdout or "preview reset failed")[-12000:])
+        if stopped is not None:
+            infrastructure.append(stopped)
+            if stopped.returncode != 0:
+                raise HTTPException(
+                    502,
+                    (stopped.stderr or stopped.stdout or "preview reset failed")[-12000:],
+                )
 
     started = _preview_run(
         payload.job_id,
@@ -792,16 +819,19 @@ def stop_preview(payload: PreviewRequest) -> dict[str, Any]:
     if _job_has_active_process(payload.job_id):
         raise HTTPException(409, "Preview cannot stop while an executor command is active")
 
-    removed = _remove_managed_preview_override(workspace)
-    if removed:
-        restarted = _preview_run(
+    contract = _preview_contract(cfg, payload.target)
+    frontend = contract["frontend"]
+    if _frontend_preview_present(workspace):
+        stopped = _pause_frontend_preview(
             payload.job_id,
-            ["ddev", "restart", "-y"],
-            workspace=workspace,
-            timeout=600,
+            workspace,
+            frontend,
         )
-        if restarted.returncode != 0:
-            raise HTTPException(502, (restarted.stderr or restarted.stdout or "preview stop restart failed")[-12000:])
+        if stopped is not None and stopped.returncode != 0:
+            raise HTTPException(
+                502,
+                (stopped.stderr or stopped.stdout or "preview stop failed")[-12000:],
+            )
     return {
         "job_id": payload.job_id,
         "project_id": payload.project_id,
@@ -1114,10 +1144,24 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
     passed = True
 
     if (
-        _workspace_mode(cfg) == "direct"
+        _workspace_instance_mode(
+            cfg,
+            job_id=payload.job_id,
+            path=workspace,
+        ) == "direct"
         and payload.phase == "frontend_quality"
     ):
-        paused = _pause_frontend_preview(payload.job_id, workspace)
+        preview = cfg.get("preview") or {}
+        frontend = (
+            dict(preview.get("frontend") or {})
+            if isinstance(preview, dict)
+            else {}
+        )
+        paused = _pause_frontend_preview(
+            payload.job_id,
+            workspace,
+            frontend,
+        )
         if paused is not None:
             infrastructure.append(paused)
             if paused.returncode != 0:
