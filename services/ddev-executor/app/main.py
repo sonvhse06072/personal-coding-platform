@@ -74,6 +74,15 @@ class QuiesceWorkspaceRequest(BaseModel):
     remove_data: bool = False
 
 
+class ReturnDirectWorkspaceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str = Field(min_length=8, max_length=100)
+    project_id: str = Field(min_length=1, max_length=200)
+    workspace: str = Field(min_length=1, max_length=2000)
+    branch: str = Field(min_length=1, max_length=200)
+
+
 class PreviewRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -768,7 +777,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.22")
+app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.23")
 app.include_router(pm_bridge_github_router)
 
 
@@ -783,7 +792,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok" if ok else "degraded",
         "service": "ddev-executor",
-        "version": "1.0.22",
+        "version": "1.0.23",
         "ddev": (result.stdout or result.stderr).strip(),
         "docker": (docker.stdout or docker.stderr).strip(),
         "buildx": (buildx.stdout or buildx.stderr).strip(),
@@ -1290,6 +1299,93 @@ def github_ci(
         return delivery.ci_status(repository=repository, commit=commit)
     except (httpx.HTTPError, RuntimeError, ValueError) as exc:
         raise _github_error(exc) from exc
+
+
+@app.post("/v1/workspaces/return-to-base", dependencies=[Depends(auth)])
+def return_direct_workspace_to_base(payload: ReturnDirectWorkspaceRequest) -> dict[str, Any]:
+    """Return only a clean, exact direct AI workspace to its configured base branch.
+
+    This never resets, cleans, stashes, deletes the AI branch, or updates the base
+    branch from a remote. A mismatch or dirty tree fails closed.
+    """
+    cfg = project(payload.project_id)
+    workspace = _validate_workspace(
+        payload.job_id,
+        payload.project_id,
+        payload.workspace,
+    )
+    if _workspace_instance_mode(
+        cfg,
+        job_id=payload.job_id,
+        path=workspace,
+    ) != "direct":
+        raise HTTPException(409, "Return-to-base is supported only for the configured direct workspace")
+
+    _validate_ai_branch(cfg, payload.branch)
+    base_branch = str(cfg.get("base_branch", "main")).strip()
+    if not base_branch:
+        raise HTTPException(500, "Direct project base branch is not configured")
+
+    status = git(workspace, "status", "--porcelain", check=False)
+    if status:
+        raise HTTPException(
+            409,
+            "Direct workspace repository is dirty; PCP will not reset, clean or stash Human Owner changes",
+        )
+
+    current_branch = git(workspace, "branch", "--show-current", check=False)
+    if current_branch == base_branch:
+        return {
+            "job_id": payload.job_id,
+            "project_id": payload.project_id,
+            "workspace": str(workspace),
+            "branch": base_branch,
+            "head": git(workspace, "rev-parse", "HEAD"),
+            "returned": True,
+            "reused": True,
+        }
+    if current_branch != payload.branch:
+        raise HTTPException(
+            409,
+            "Direct workspace branch changed outside the owning job; refusing base restoration",
+        )
+
+    base_exists = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(workspace),
+            "show-ref",
+            "--verify",
+            "--quiet",
+            f"refs/heads/{base_branch}",
+        ],
+        text=True,
+        capture_output=True,
+    ).returncode == 0
+    if not base_exists:
+        raise HTTPException(
+            409,
+            "Configured direct base branch does not exist locally; refusing implicit branch creation",
+        )
+
+    git(workspace, "checkout", base_branch)
+    final_status = git(workspace, "status", "--porcelain", check=False)
+    if final_status:
+        raise HTTPException(
+            409,
+            "Direct workspace became dirty while returning to base; lease must remain held",
+        )
+
+    return {
+        "job_id": payload.job_id,
+        "project_id": payload.project_id,
+        "workspace": str(workspace),
+        "branch": base_branch,
+        "head": git(workspace, "rev-parse", "HEAD"),
+        "returned": True,
+        "reused": False,
+    }
 
 
 @app.delete("/v1/workspaces", dependencies=[Depends(auth)])
