@@ -751,9 +751,23 @@ def test_direct_frontend_preview_is_config_driven_and_git_clean(tmp_path, monkey
         WorkspaceRequest(job_id="jobpreview123", project_id="demo")
     )
     calls = []
+    node_override_observations = []
 
     def fake_run_tracked(job, argv, *, cwd, timeout, env):
         calls.append(list(argv))
+        node_override = source / ".ddev" / "config.pcp-node.local.yaml"
+        if list(argv) == ["ddev", "start", "-y"] or (
+            list(argv)[:2] == ["bash", "-lc"]
+            and "npm ci" in str(argv[-1])
+        ):
+            node_override_observations.append(
+                (
+                    list(argv),
+                    node_override.read_text(encoding="utf-8")
+                    if node_override.exists()
+                    else "",
+                )
+            )
         return 0, "ok\n", "", False
 
     monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
@@ -775,6 +789,12 @@ def test_direct_frontend_preview_is_config_driven_and_git_clean(tmp_path, monkey
     assert raw.startswith("# PCP-managed direct live preview; do not commit.\n")
     payload = yaml.safe_load("\n".join(raw.splitlines()[1:]))
     assert payload["nodejs_version"] == "24"
+    assert node_override_observations
+    assert all(
+        'nodejs_version: "24"' in observed
+        for _argv, observed in node_override_observations
+    )
+    assert not (source / ".ddev" / "config.pcp-node.local.yaml").exists()
     assert payload["web_extra_daemons"][0]["name"] == "pcp-next-dev"
     assert payload["web_extra_daemons"][0]["directory"] == "/var/www/html/frontend"
     assert payload["web_extra_exposed_ports"][0] == {
