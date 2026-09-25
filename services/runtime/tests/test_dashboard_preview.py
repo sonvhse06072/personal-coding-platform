@@ -86,11 +86,14 @@ def test_read_session_can_observe_preview_but_cannot_mutate(monkeypatch):
         "/v1/dashboard/jobs/job-preview/preview",
         json={"target": "frontend"},
     )
+    blocked_delete = http.delete("/v1/dashboard/jobs/job-preview/preview")
 
     assert observed.status_code == 200
     assert observed.json()["frontend_url"] == "https://chonhac.ddev.site:3100"
     assert blocked.status_code == 401
+    assert blocked_delete.status_code == 401
     assert preview.started == []
+    assert preview.stopped == []
 
 
 def test_control_session_unlocks_only_bounded_preview_mutations(monkeypatch):
@@ -128,6 +131,7 @@ def test_preview_request_rejects_browser_command_path_port_and_env(monkeypatch):
             "target": "frontend",
             "command": "rm -rf /",
             "workspace": "/tmp/elsewhere",
+            "path": "/tmp/elsewhere",
             "port": 9999,
             "hostname": "0.0.0.0",
             "env": {"TOKEN": "leak"},
@@ -158,6 +162,8 @@ def test_dashboard_logout_clears_control_authority_too(monkeypatch):
     ).status_code == 200
 
     assert http.delete("/v1/dashboard/session").status_code == 200
+    assert "pcp_dashboard_session" not in http.cookies
+    assert "pcp_dashboard_control_session" not in http.cookies
 
     response = http.post(
         "/v1/dashboard/jobs/job-preview/preview",
@@ -167,6 +173,19 @@ def test_dashboard_logout_clears_control_authority_too(monkeypatch):
     assert response.status_code == 401
     assert preview.started == []
 
+
+
+def test_missing_control_token_config_returns_503(monkeypatch):
+    http, _preview = client(monkeypatch)
+    unlock_read(http)
+    monkeypatch.delenv("DASHBOARD_CONTROL_TOKEN", raising=False)
+
+    response = http.post(
+        "/v1/dashboard/control-session",
+        json={"token": "control-secret"},
+    )
+
+    assert response.status_code == 503
 
 
 def test_wrong_control_token_never_unlocks_preview_mutations(monkeypatch):
