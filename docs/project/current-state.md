@@ -754,3 +754,29 @@ claim every DDEV build on the machine uses `pcp-builder`.
    for DEC-025; future DEC-025 evidence is Human Owner-managed in `chonhac`.
 7. Keep #146 open for calibration evidence already learned from the retired
    long-running DEC execution.
+
+
+## Direct workspace + live preview initiative #297
+
+Human Owner approved a new local-development workflow on 2026-09-25: selected
+projects may let PCP work directly in the registered local repository so the
+Human Owner and developer agents can inspect the same running frontend/backend.
+
+The initiative is intentionally split:
+
+- #298 / PR #300: core direct-workspace execution with a durable exclusive
+  per-project lease, exact direct-repository mount, clean-repo/branch guards,
+  isolated-clone backward compatibility, and safe executor/Antigravity access;
+- #299: Dashboard live-preview controls for direct workspaces after #298 is
+  merged.
+
+Chợ Nhạc is the first acceptance project and its registered path is
+`/home/sonvh/chonhac`. Direct mode is **not activated yet**. The currently
+running Chợ Nhạc engineering job continues under the existing isolated
+workspace contract. Source merge of #298 does not authorize a PCP restart or a
+mid-job workspace migration.
+
+Activation later requires a safe engineering boundary, adding the exact
+`CODING_DIRECT_PROJECT_ROOT=/home/sonvh/chonhac` local setting, enabling the
+reviewed project runtime mode, and rebuilding/restarting PCP under the normal
+guarded activation process.
