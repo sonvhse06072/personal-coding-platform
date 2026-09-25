@@ -758,45 +758,77 @@ claim every DDEV build on the machine uses `pcp-builder`.
 
 ## Direct workspace + live preview initiative #297
 
-Human Owner approved a new local-development workflow on 2026-09-25: selected
-projects may let PCP work directly in the registered local repository so the
-Human Owner and developer agents can inspect the same running frontend/backend.
+The Chợ Nhạc-first direct-workspace + Dashboard live-preview rollout is now
+complete and locally accepted.
 
-The initiative is intentionally split:
+Source implementation was delivered in two primary changes:
 
 - #298 / PR #300: core direct-workspace execution with a durable exclusive
   per-project lease, exact direct-repository mount, clean-repo/branch guards,
   isolated-clone backward compatibility, and safe executor/Antigravity access.
-  This source work is merged at `557ba0f258a34be9fc33597aa1552d75482027d5`
-  after exact-head CI run `36128795782` passed Runtime 448,
-  ddev-executor 84, Router 99 and structure 91 on `SonVH`;
+  This source work merged at
+  `557ba0f258a34be9fc33597aa1552d75482027d5` after exact-head CI passed;
 - #299 / PR #301: Dashboard live-preview controls, separate control
   authorization, config-driven Frontend/Backend/Both operations, preview
   lifecycle persistence, Node-24 local DDEV overrides, deterministic
   frontend-verification coordination and terminal preview retirement. This
-  source work is merged at `827fe5c2cc6e35e66e43f7682b65b72083445100`
-  after exact-head CI run #603 passed Router, Runtime, ddev-executor and
-  structure jobs.
+  source work merged at
+  `827fe5c2cc6e35e66e43f7682b65b72083445100` after exact-head CI #603
+  passed Router, Runtime, ddev-executor and structure jobs.
 
-Chợ Nhạc is the first acceptance project and its registered path is
-`/home/sonvh/chonhac`. Source implementation is complete, but direct mode is
-**not activated on the running PCP instance yet**. Operator rollout is tracked
-in #302. The activation-preparation config now declares
-`runtime.workspace_mode: direct` with
-`exclusive_project_lease: true` for `chonhac`; this must not be treated as
-live until the local PCP checkout is synced to the reviewed commit and the
-zero-active-work activation gate is satisfied.
+Activation preparation and rollout then required three bounded corrections:
 
-The reviewed preview URLs are local-only:
-`https://chonhac.ddev.site` for backend and
-`https://chonhac.ddev.site:3100` for frontend. Dashboard mutation requires
-the Runtime-only `DASHBOARD_CONTROL_TOKEN`; the existing read token remains
-read-only. Preview failures do not mutate coding status/counters, and a
-terminal direct lease is not released until any managed preview is retired.
+- PR #304 corrected the committed Chợ Nhạc project config so Runtime actually
+  reads `workspace_mode: direct` with `exclusive_project_lease: true`.
+  Exact-head CI #607 passed and the fix merged before local activation
+  continued;
+- #305 / PR #306 made Dashboard preview mutations reconcile durable preview
+  state after DDEV-router transport resets and reconciled live DDEV topology
+  after managed preview cleanup. Exact-head CI #609 passed; Runtime advanced to
+  `1.0.53` and ddev-executor to `1.0.21`;
+- PR #307 fixed the remaining Frontend health false-negative. Exact
+  production-boundary reproduction proved that nested
+  `ddev exec bash -lc <script>` command reconstruction corrupted the health
+  command before curl ran, while the same Next 16.3.4 application independently
+  bound port 3100 and returned HTTP 200. The executor health path now uses raw
+  DDEV argv execution with Python-owned retries. Exact-head CI #612 passed and
+  the fix merged at `56e5abe52c6129b5c198c661bfef95242c7dd8c4`;
+  ddev-executor is now `1.0.22`.
 
-Activation later requires a safe engineering boundary, an exact
-`CODING_DIRECT_PROJECT_ROOT=/home/sonvh/chonhac` local setting, the reviewed
-Chợ Nhạc direct-mode project config change, generated scoped Dashboard control
-credential, and one controlled PCP rebuild/restart. Activation must then verify
-Runtime `1.0.52`, ddev-executor `1.0.20`, credential boundary, direct lease
-behavior and Dashboard preview before a new Chợ Nhạc WorkOrder is launched.
+The controlled local rollout under #302 is complete:
+
+- PCP uses `CODING_DIRECT_PROJECT_ROOT=/home/sonvh/chonhac`;
+- Runtime reports `1.0.53`, ddev-executor reports `1.0.22`, and strict
+  credential/service health gates pass;
+- Runtime project-config read-back reports `workspace_mode: direct`,
+  `exclusive_project_lease: true` and `branch_prefix: ai`;
+- the Chợ Nhạc direct workspace is the registered repository
+  `/home/sonvh/chonhac`, starting from clean `main` at
+  `56e0b74c324704783dbf67732eaaf61303d4a1ab`;
+- a bounded acceptance probe reached the intentional `waiting_human` gate
+  before planner/agent implementation, proving direct workspace preparation
+  without product-code mutation;
+- an independent contention probe failed with the exact active-owner lease
+  error, proving one-owner-only direct lease enforcement;
+- Dashboard read sessions remained read-only, the separate control session was
+  required for mutation, and arbitrary command/path/port fields were rejected;
+- Backend preview reached
+  `https://chonhac.ddev.site`;
+- Frontend preview reached
+  `https://chonhac.ddev.site:3100` and returned HTTP 200;
+- Both preview, rebuild/generation advancement, coding-state isolation,
+  Stop/repeated Stop idempotency, managed-topology cleanup and terminal preview
+  retirement were all accepted live;
+- terminal preview retirement was durably observed before direct lease release;
+- final acceptance returned Chợ Nhạc to clean `main` with zero active
+  engineering jobs, zero active Chợ Nhạc leases and executor
+  `active_jobs=0`.
+
+Historical blocked/superseded jobs were not resumed or rerouted. Human Owner
+changes were never reset, stashed, cleaned or discarded. No public tunnel,
+broad Docker cleanup, database reset/import or production deployment was part
+of this rollout.
+
+The local direct-workspace + Dashboard preview capability is therefore enabled
+for Chợ Nhạc and eligible for normal future PCP work under the existing
+issue/branch/CI/PR governance and safety gates.
