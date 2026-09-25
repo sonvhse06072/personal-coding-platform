@@ -75,3 +75,50 @@ DASHBOARD_HTML = DASHBOARD_HTML.replace(
 # intentional UI rename as a functional regression. Visible labels above are the
 # provider-neutral names.
 DASHBOARD_HTML += "\n<!-- legacy labels: Live Developer Console; Developer transcript -->\n"
+
+
+# Direct-workspace live preview stays an opt-in control surface layered onto the
+# otherwise read-only activity dashboard.
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    "</style>",
+    ".preview-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.preview-actions button{border:1px solid var(--border);border-radius:9px;padding:8px 11px;background:#101a28;color:var(--text);font-weight:680;cursor:pointer}.preview-actions button:hover{border-color:#466489}.preview-actions button:disabled{opacity:.45;cursor:not-allowed}.preview-links{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}.preview-note{margin-top:8px;font-size:11px;color:var(--muted)}.s-ready{color:#86efac;border-color:#256548;background:#0e2b20}.s-stopped,.s-not_built,.s-unsupported{color:#a5b4c7;border-color:#3b4758;background:#111923}.s-starting{color:#93c5fd;border-color:#31598d;background:#102139}</style>",
+    1,
+)
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    '<section class="card section"><div class="section-title">Model assignment</div>',
+    '<section class="card section" id="previewCard" style="display:none"><div class="section-head"><div><div class="section-title">Local preview</div><div class="small">Direct workspace only · separate control unlock required for mutations</div></div><div id="previewStatus"></div></div><div class="preview-actions"><select id="previewTarget" class="select"><option value="frontend">Frontend</option><option value="backend">Backend</option><option value="both">Both</option></select><button id="previewStart">Start Preview</button><button id="previewStop">Stop</button><button id="previewUnlock">Unlock controls</button></div><div id="previewLinks" class="preview-links"></div><div id="previewNote" class="preview-note"></div></section><section class="card section"><div class="section-title">Model assignment</div>',
+    1,
+)
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    "let snapshot=null,quotaSnapshot=null,selected=null,source=null,streamJob=null,lastSeq=0,consoleEvents=[];",
+    "let snapshot=null,quotaSnapshot=null,selected=null,source=null,streamJob=null,lastSeq=0,consoleEvents=[],previewJob=null,previewState=null,previewBusy=false,previewRefreshBusy=false;",
+    1,
+)
+
+_PREVIEW_FUNCTIONS = r'''function previewStatusBadge(v){return status(v||'not_built')}
+function renderPreviewState(j,p){const card=$('#previewCard');if(!j||j.workspace_mode!=='direct'){card.style.display='none';previewJob=null;previewState=null;return}card.style.display='';previewJob=j.id;previewState=p||{status:'not_built',supported:true,generation:0};$('#previewStatus').innerHTML=previewStatusBadge(previewState.status);const target=$('#previewTarget');if(previewState.target&&['frontend','backend','both'].includes(previewState.target)&&!previewBusy)target.value=previewState.target;const ready=previewState.status==='ready';$('#previewStart').textContent=ready?'Rebuild':'Start Preview';$('#previewStart').disabled=previewBusy||previewState.supported===false;$('#previewStop').disabled=previewBusy||!['ready','starting','failed'].includes(previewState.status);const links=[];if(previewState.frontend_url)links.push('<a href="'+esc(previewState.frontend_url)+'" target="_blank" rel="noopener noreferrer">Open Frontend ↗</a>');if(previewState.backend_url)links.push('<a href="'+esc(previewState.backend_url)+'" target="_blank" rel="noopener noreferrer">Open Backend ↗</a>');$('#previewLinks').innerHTML=links.join('');const details=[];if(previewState.generation)details.push('generation '+previewState.generation);if(previewState.integration_note)details.push(previewState.integration_note);if(previewState.error)details.push(previewState.error);$('#previewNote').textContent=details.join(' · ')}
+async function refreshPreview(j){if(!j||j.workspace_mode!=='direct'){renderPreviewState(j,null);return}if(previewRefreshBusy||previewBusy)return;previewRefreshBusy=true;try{const r=await fetch('/v1/dashboard/jobs/'+encodeURIComponent(j.id)+'/preview',{cache:'no-store'});if(r.status===401)return;if(!r.ok){renderPreviewState(j,{status:'failed',supported:true,error:'Preview status HTTP '+r.status});return}renderPreviewState(j,await r.json())}catch(e){renderPreviewState(j,{status:'failed',supported:true,error:String(e)})}finally{previewRefreshBusy=false}}
+async function unlockPreviewControls(){const token=window.prompt('Enter DASHBOARD_CONTROL_TOKEN');if(!token)return false;const r=await fetch('/v1/dashboard/control-session',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token:token})});if(!r.ok){window.alert(r.status===503?'Dashboard control token is not configured.':'Preview control unlock failed.');return false}return true}
+async function previewMutation(method,body){if(!previewJob||previewBusy)return;previewBusy=true;renderPreviewState({id:previewJob,workspace_mode:'direct'},previewState);const invoke=()=>fetch('/v1/dashboard/jobs/'+encodeURIComponent(previewJob)+'/preview',{method:method,headers:body?{'content-type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined});try{let r=await invoke();if(r.status===401){const unlocked=await unlockPreviewControls();if(!unlocked)return;r=await invoke()}const payload=await r.json().catch(()=>({}));if(!r.ok){renderPreviewState({id:previewJob,workspace_mode:'direct'},Object.assign({},previewState,{status:'failed',error:payload.detail||('HTTP '+r.status)}));return}renderPreviewState({id:previewJob,workspace_mode:'direct'},payload)}catch(e){renderPreviewState({id:previewJob,workspace_mode:'direct'},Object.assign({},previewState,{status:'failed',error:String(e)}))}finally{previewBusy=false}}
+$('#previewStart').onclick=()=>previewMutation('POST',{target:$('#previewTarget').value});
+$('#previewStop').onclick=()=>previewMutation('DELETE',null);
+$('#previewUnlock').onclick=unlockPreviewControls;
+'''
+if "function renderTimeline(w){" not in DASHBOARD_HTML:
+    raise RuntimeError("Dashboard timeline target changed; review preview UI integration")
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    "function renderTimeline(w){",
+    _PREVIEW_FUNCTIONS + "\nfunction renderTimeline(w){",
+    1,
+)
+if "connectStream(j.id)}}" not in DASHBOARD_HTML:
+    raise RuntimeError("Dashboard job render target changed; review preview UI integration")
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    "connectStream(j.id)}}",
+    "connectStream(j.id)}refreshPreview(j)}",
+    1,
+)
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    "Read-only observability. Dashboard disconnects never control, pause, resume, or otherwise affect a coding job.",
+    "Read-only observability by default. Local preview mutations require a separate control unlock and never pause, resume, repair, or complete a coding job.",
+)
