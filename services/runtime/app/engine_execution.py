@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 import time
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,8 @@ class RuntimeEngine(RuntimeEngineCore):
             return
 
         project = project_config(job["project_id"])
+        runtime_cfg = project.get("runtime", {}) or {}
+        workspace_mode = str(runtime_cfg.get("workspace_mode") or "isolated_clone")
         task = dict(job["task"])
         checkpoint = checkpoint_from_row(job)
         progress = merge_progress(self._new_progress(), job.get("progress"))
@@ -39,21 +42,66 @@ class RuntimeEngine(RuntimeEngineCore):
         hints = dict(checkpoint.get("hints") or {})
         provider_state = dict(checkpoint.get("provider_state") or {})
 
+        if workspace_mode == "direct":
+            if job.get("workspace"):
+                lease = self.storage.project_lease(str(job["project_id"]))
+                if (
+                    not lease
+                    or str(lease.get("state") or "") != "active"
+                    or str(lease.get("owner_job_id") or "") != job_id
+                ):
+                    raise RuntimeError("Persisted direct workspace is missing its exact active project lease")
+            else:
+                lease = self.storage.acquire_project_lease(str(job["project_id"]), job_id)
+            checkpoint["workspace_mode"] = "direct"
+            checkpoint["project_lease_generation"] = int(lease.get("generation") or 0)
+        else:
+            checkpoint["workspace_mode"] = "isolated_clone"
+            checkpoint.pop("project_lease_generation", None)
+
         if job.get("workspace"):
-            workspace = validate_workspace(self.workspace_root, job_id, job["workspace"])
+            workspace = validate_workspace(
+                self.workspace_root,
+                job_id,
+                job["workspace"],
+                workspace_mode=workspace_mode,
+                project_path=project["path"],
+            )
             branch = str(job.get("branch") or "")
             source_commit = str(job.get("source_commit") or "")
             if not branch or not source_commit:
                 raise RuntimeError("Persisted workspace is missing branch/source commit metadata")
+            if workspace_mode == "direct":
+                current_branch = subprocess.run(
+                    ["git", "-C", str(workspace), "branch", "--show-current"],
+                    text=True,
+                    capture_output=True,
+                )
+                if current_branch.returncode != 0 or current_branch.stdout.strip() != branch:
+                    raise RuntimeError("Direct workspace branch changed outside the owning job")
         else:
-            ws = await self.ddev.create_workspace(
-                job_id=job_id, project_id=job["project_id"], ref=job.get("source_commit")
-            )
+            acquired_direct_lease = workspace_mode == "direct"
+            try:
+                ws = await self.ddev.create_workspace(
+                    job_id=job_id, project_id=job["project_id"], ref=job.get("source_commit")
+                )
+            except Exception:
+                if acquired_direct_lease:
+                    self.storage.release_project_lease(str(job["project_id"]), job_id)
+                raise
             workspace = Path(ws["workspace"]).resolve()
             branch = ws["branch"]
             source_commit = ws["source_commit"]
+            if str(ws.get("workspace_mode") or "").startswith("direct") != (workspace_mode == "direct"):
+                if acquired_direct_lease:
+                    self.storage.release_project_lease(str(job["project_id"]), job_id)
+                raise RuntimeError("Executor workspace mode does not match project configuration")
             self.storage.update(
-                job_id, workspace=str(workspace), branch=branch, source_commit=source_commit
+                job_id,
+                workspace=str(workspace),
+                branch=branch,
+                source_commit=source_commit,
+                checkpoint=checkpoint,
             )
 
         repo_analysis = existing_repo_analysis(job)
@@ -96,8 +144,11 @@ class RuntimeEngine(RuntimeEngineCore):
             )
             return
 
-        runtime_cfg = project.get("runtime", {})
-        if project.get("ddev", {}).get("enabled", False) and (workspace / ".ddev").exists():
+        if (
+            workspace_mode == "isolated_clone"
+            and project.get("ddev", {}).get("enabled", False)
+            and (workspace / ".ddev").exists()
+        ):
             safe_name = re.sub(r"[^a-z0-9-]", "-", f"cp-{job_id[:10]}")
             (workspace / ".ddev" / "config.coding-platform.yaml").write_text(
                 f"name: {safe_name}\n", encoding="utf-8"
