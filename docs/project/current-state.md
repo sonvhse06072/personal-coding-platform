@@ -766,17 +766,32 @@ The initiative is intentionally split:
 
 - #298 / PR #300: core direct-workspace execution with a durable exclusive
   per-project lease, exact direct-repository mount, clean-repo/branch guards,
-  isolated-clone backward compatibility, and safe executor/Antigravity access;
-- #299: Dashboard live-preview controls for direct workspaces after #298 is
-  merged.
+  isolated-clone backward compatibility, and safe executor/Antigravity access.
+  This source work is merged at `557ba0f258a34be9fc33597aa1552d75482027d5`
+  after exact-head CI run `36128795782` passed Runtime 448,
+  ddev-executor 84, Router 99 and structure 91 on `SonVH`;
+- #299 / PR #301: Dashboard live-preview controls, separate control
+  authorization, config-driven Frontend/Backend/Both operations, preview
+  lifecycle persistence, Node-24 local DDEV overrides, deterministic
+  frontend-verification coordination and terminal preview retirement.
 
 Chợ Nhạc is the first acceptance project and its registered path is
-`/home/sonvh/chonhac`. Direct mode is **not activated yet**. The currently
-running Chợ Nhạc engineering job continues under the existing isolated
-workspace contract. Source merge of #298 does not authorize a PCP restart or a
-mid-job workspace migration.
+`/home/sonvh/chonhac`. Direct mode is **not activated yet**. In particular,
+`config/projects.yml` does not switch Chợ Nhạc to
+`runtime.workspace_mode: direct` in #299, because project configuration is
+read dynamically and source merge must not silently migrate a currently
+running engineering job.
 
-Activation later requires a safe engineering boundary, adding the exact
-`CODING_DIRECT_PROJECT_ROOT=/home/sonvh/chonhac` local setting, enabling the
-reviewed project runtime mode, and rebuilding/restarting PCP under the normal
-guarded activation process.
+The reviewed preview URLs are local-only:
+`https://chonhac.ddev.site` for backend and
+`https://chonhac.ddev.site:3100` for frontend. Dashboard mutation requires
+the Runtime-only `DASHBOARD_CONTROL_TOKEN`; the existing read token remains
+read-only. Preview failures do not mutate coding status/counters, and a
+terminal direct lease is not released until any managed preview is retired.
+
+Activation later requires a safe engineering boundary, an exact
+`CODING_DIRECT_PROJECT_ROOT=/home/sonvh/chonhac` local setting, the reviewed
+Chợ Nhạc direct-mode project config change, generated scoped Dashboard control
+credential, and one controlled PCP rebuild/restart. Activation must then verify
+Runtime `1.0.52`, ddev-executor `1.0.20`, credential boundary, direct lease
+behavior and Dashboard preview before a new Chợ Nhạc WorkOrder is launched.
