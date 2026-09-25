@@ -82,13 +82,21 @@ class CleanupStorage:
 
 
 class CleanupDdev:
-    def __init__(self, actions=None, *, fail_preview_stop=False):
+    def __init__(
+        self,
+        actions=None,
+        *,
+        fail_preview_stop=False,
+        fail_base_restore=False,
+    ):
         self.quiesce_calls = []
         self.remove_calls = []
         self.preview_stop_calls = []
+        self.base_restore_calls = []
         self.cancel_calls = []
         self.actions = actions if actions is not None else []
         self.fail_preview_stop = fail_preview_stop
+        self.fail_base_restore = fail_base_restore
 
     async def cancel(self, **payload):
         self.cancel_calls.append(dict(payload))
@@ -101,6 +109,18 @@ class CleanupDdev:
         if self.fail_preview_stop:
             raise RuntimeError("executor stop failed")
         return {"status": "stopped"}
+
+    async def return_direct_workspace_to_base(self, **payload):
+        self.base_restore_calls.append(dict(payload))
+        self.actions.append(("restore_base", payload["job_id"]))
+        if self.fail_base_restore:
+            raise RuntimeError("base restore failed")
+        return {
+            "returned": True,
+            "branch": "main",
+            "head": "base-head",
+            "reused": False,
+        }
 
     async def quiesce_workspace(self, **payload):
         self.quiesce_calls.append(dict(payload))
@@ -199,6 +219,7 @@ def test_cancel_retires_direct_preview_before_releasing_project_lease():
         "id": "job-direct-cancel",
         "project_id": "chonhac",
         "workspace": "/home/sonvh/chonhac",
+        "branch": "ai/job-direct-cancel",
         "work_order_id": "WO-DIRECT",
         "status": "executing",
         "checkpoint": {"workspace_mode": "direct"},
@@ -224,9 +245,11 @@ def test_cancel_retires_direct_preview_before_releasing_project_lease():
     assert result["status"] == "cancelled"
     assert len(ddev.preview_stop_calls) == 1
     preview_index = storage.actions.index(("preview_stop", row["id"]))
+    restore_index = storage.actions.index(("restore_base", row["id"]))
     release_index = storage.actions.index(("release_lease", row["id"]))
-    assert preview_index < release_index
+    assert preview_index < restore_index < release_index
     assert storage.preview["status"] == "stopped"
+    assert storage.row["checkpoint"]["direct_base_restore"]["restored"] is True
 
 
 def test_runtime_start_retires_terminal_preview_before_lease_reconciliation(monkeypatch):
@@ -235,6 +258,7 @@ def test_runtime_start_retires_terminal_preview_before_lease_reconciliation(monk
             "id": "job-direct-restart",
             "project_id": "chonhac",
             "workspace": "/home/sonvh/chonhac",
+            "branch": "ai/job-direct-restart",
             "work_order_id": "WO-DIRECT",
             "status": "completed",
             "checkpoint": {"workspace_mode": "direct"},
@@ -265,8 +289,10 @@ def test_runtime_start_retires_terminal_preview_before_lease_reconciliation(monk
         try:
             assert len(ddev.preview_stop_calls) == 1
             preview_index = storage.actions.index(("preview_stop", row["id"]))
-            reconcile_index = storage.actions.index(("reconcile_leases", row["id"]))
-            assert preview_index < reconcile_index
+            restore_index = storage.actions.index(("restore_base", row["id"]))
+            release_index = storage.actions.index(("release_lease", row["id"]))
+            assert preview_index < restore_index < release_index
+            assert ("reconcile_leases", row["id"]) not in storage.actions
             assert storage.preview["status"] == "stopped"
         finally:
             if engine.worker_task:
@@ -285,6 +311,7 @@ def test_cancel_keeps_direct_lease_when_preview_retirement_fails():
         "id": "job-direct-cancel-failed-preview",
         "project_id": "chonhac",
         "workspace": "/home/sonvh/chonhac",
+        "branch": "ai/job-direct-cancel-failed-preview",
         "work_order_id": "WO-DIRECT",
         "status": "executing",
         "checkpoint": {"workspace_mode": "direct"},
@@ -461,3 +488,30 @@ def test_direct_job_handoff_failure_releases_new_lease_before_workspace_mutation
         ("release", storage.job["id"]),
     ]
     assert engine.ddev.create_calls == []
+
+
+def test_cancel_keeps_direct_lease_when_base_restoration_fails():
+    row = {
+        "id": "job-direct-cancel-failed-restore",
+        "project_id": "chonhac",
+        "workspace": "/home/sonvh/chonhac",
+        "branch": "ai/job-direct-cancel-failed-restore",
+        "work_order_id": "WO-DIRECT",
+        "status": "executing",
+        "checkpoint": {"workspace_mode": "direct"},
+    }
+    storage = CleanupStorage(row)
+    ddev = CleanupDdev(storage.actions, fail_base_restore=True)
+    engine = object.__new__(RuntimeEngineCore)
+    engine.storage = storage
+    engine.ddev = ddev
+    engine.active_jobs = {}
+
+    result = asyncio.run(engine.cancel(row["id"]))
+
+    assert result["status"] == "cancelled"
+    assert len(ddev.base_restore_calls) == 1
+    assert storage.released == []
+    assert ("release_lease", row["id"]) not in storage.actions
+    assert storage.row["checkpoint"]["direct_base_restore"]["restored"] is False
+    assert "base restore failed" in storage.row["checkpoint"]["direct_base_restore"]["error"]
