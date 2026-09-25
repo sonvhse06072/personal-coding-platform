@@ -180,7 +180,13 @@ def remote_origin(repo: Path) -> str | None:
     return value if proc.returncode == 0 and value else None
 
 
-def _validate_workspace(job_id: str, project_id: str, workspace: str) -> Path:
+def _validate_workspace(
+    job_id: str,
+    project_id: str,
+    workspace: str,
+    *,
+    require_git: bool = True,
+) -> Path:
     cfg = project(project_id)
     path = Path(workspace).resolve()
     if _workspace_mode(cfg) == "direct":
@@ -192,8 +198,10 @@ def _validate_workspace(job_id: str, project_id: str, workspace: str) -> Path:
     root = Path(os.environ["CODING_WORKSPACES_ROOT"]).resolve()
     if not allowed_workspace(path) or path.name != job_id or path.parent != root:
         raise HTTPException(403, "Workspace is outside configured root or does not match job")
-    if not path.exists() or not is_git_repo(path):
-        raise HTTPException(404, "Workspace does not exist or is not a git repository")
+    if not path.exists():
+        raise HTTPException(404, "Workspace does not exist")
+    if require_git and not is_git_repo(path):
+        raise HTTPException(404, "Workspace is not a git repository")
     return path
 
 
@@ -659,7 +667,12 @@ def remove_workspace(job_id: str, project_id: str, workspace: str = Query(...)) 
 @app.post("/v1/phase", response_model=PhaseResponse, dependencies=[Depends(auth)])
 def phase(payload: PhaseRequest) -> PhaseResponse:
     cfg = project(payload.project_id)
-    workspace = _validate_workspace(payload.job_id, payload.project_id, payload.workspace)
+    workspace = _validate_workspace(
+        payload.job_id,
+        payload.project_id,
+        payload.workspace,
+        require_git=False,
+    )
 
     if _workspace_mode(cfg) == "isolated_clone":
         _reconcile_workspace_ddev_identity(
