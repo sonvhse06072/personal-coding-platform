@@ -582,10 +582,10 @@ are unchanged.
 ## Explicit superseded orchestration lifecycle #295
 
 Issue #295 is implemented on branch
-`ai/issue-295-superseded-orchestration-lifecycle` as PR #296. The bounded
-implementation/local-verification commit is
-`c777e7cc5fab37c016136e51630e00d06f1da899`; exact-final-head CI and PM review
-remain pending.
+`ai/issue-295-superseded-orchestration-lifecycle` as PR #296. PM review of head
+`04e9b8036af008c36c2c253fd7cbf0eca40eebd9` accepted the lifecycle design and
+identified one plan-level outbox blocker. The branch now includes the bounded
+correction described below; exact-final-head CI and PM re-review remain pending.
 
 The bounded Runtime change separates execution truth from orchestration
 eligibility:
@@ -602,6 +602,12 @@ eligibility:
 - startup/tick notification materialization and control creation exclude them;
   pending/delivering owner attention becomes `superseded`, pending controls
   become `cancelled`, and sent/executed audit history remains unchanged;
+- plan lifecycle is authoritative for outbox eligibility: notification claim
+  and emission reject any supplied non-active plan, including plan-level rows
+  with no WorkOrder identity; when the final active WorkOrder is superseded,
+  pending/delivering owner attention for the whole plan is superseded with its
+  lease cleared, while sent and unrelated non-owner audit rows remain stored
+  unchanged;
 - historical callbacks return benign `status=superseded`; active WorkOrders
   retain strict state-fingerprint validation;
 - dashboard/read state exposes both historical execution status/reason and the
@@ -611,7 +617,7 @@ Local synthetic PostgreSQL proof created a pre-#295 schema/row set, applied
 `ensure()` twice, and verified additive/defaulted columns, old-row validity,
 idempotent supersession and persistence across store instances. The synthetic
 database was then removed. Current local verification passes focused Runtime
-orchestration/control/dashboard tests (`68 passed`), full Runtime (`430
+orchestration/outbox/control/dashboard tests (`62 passed`), full Runtime (`431
 passed`), Router (`99 passed`), ddev-executor (`78 passed`), structure (`10
 passed`) and Telegram/n8n transport (`11 passed`). Python compilation and
 `git diff --check` pass.

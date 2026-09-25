@@ -70,6 +70,10 @@ class Connection:
         if normalized.startswith("SELECT status FROM cp_jobs WHERE id="):
             job = self.storage.jobs.get(values[0])
             return Result({"status": job["status"]} if job else None)
+        if normalized.startswith("SELECT 1 FROM cp_plan_orchestrations"):
+            plan = self.storage.plans.get(values[0])
+            eligible = bool(plan and plan.get("lifecycle", "active") == "active")
+            return Result({"?column?": 1} if eligible else None)
         if normalized.startswith("SELECT 1 FROM cp_plan_work_orders work_order JOIN cp_plan_orchestrations"):
             plan_id, work_order_id = values
             work_order = self.storage.work_orders.get((plan_id, work_order_id))
@@ -96,17 +100,20 @@ class Connection:
             )
             return Result(rowcount=1)
         if normalized.startswith("UPDATE cp_notification_outbox SET status='superseded'"):
-            _, plan_id, work_order_id, *_ = values
+            plan_id = values[1]
+            work_order_id = values[2] if len(values) == 4 else None
             changed = 0
             for row in self.storage.notifications:
                 if (
                     row["status"] in {"pending", "delivering"}
                     and row["plan_id"] == plan_id
-                    and row["work_order_id"] == work_order_id
+                    and (len(values) == 3 or row["work_order_id"] == work_order_id)
                     and row["event_type"] in {
+                        "ci_failed_after_repairs",
                         "work_order_blocked",
                         "human_decision_required",
                         "operator_action_required",
+                        "provider_quota_exhausted",
                     }
                 ):
                     row.update(status="superseded", lease_until=None)
@@ -158,7 +165,25 @@ class Connection:
             available = [
                 row
                 for row in self.storage.notifications
-                if row["status"] == "pending" and row["available_at"] <= values[0]
+                if (
+                    row["status"] == "pending"
+                    and row["available_at"] <= values[0]
+                    and (
+                        row["plan_id"] is None
+                        or (
+                            row["plan_id"] in self.storage.plans
+                            and self.storage.plans[row["plan_id"]].get("lifecycle", "active")
+                            == "active"
+                        )
+                    )
+                    and (
+                        row["work_order_id"] is None
+                        or self.storage.work_orders.get(
+                            (row["plan_id"], row["work_order_id"]), {}
+                        ).get("lifecycle", "active")
+                        == "active"
+                    )
+                )
             ]
             return Result(min(available, key=lambda row: row["id"]) if available else None)
         if normalized.startswith("UPDATE cp_notification_outbox SET status='delivering'"):
@@ -166,6 +191,33 @@ class Connection:
             row = next(row for row in self.storage.notifications if row["id"] == event_id)
             row.update(status="delivering", lease_until=lease_until, updated_at=updated_at)
             return Result(row, rowcount=1)
+        if normalized.startswith("INSERT INTO cp_notification_outbox"):
+            dedupe_key = values[0]
+            if any(row.get("dedupe_key") == dedupe_key for row in self.storage.notifications):
+                return Result(rowcount=0)
+            event_id = max((row["id"] for row in self.storage.notifications), default=0) + 1
+            self.storage.notifications.append(
+                {
+                    "id": event_id,
+                    "dedupe_key": dedupe_key,
+                    "event_type": values[1],
+                    "severity": values[2],
+                    "project_id": values[3],
+                    "ticket_id": values[4],
+                    "plan_id": values[5],
+                    "work_order_id": values[6],
+                    "summary": values[7],
+                    "github_url": values[8],
+                    "payload": values[9],
+                    "status": "pending",
+                    "attempts": 0,
+                    "available_at": values[10],
+                    "lease_until": None,
+                    "created_at": values[11],
+                    "updated_at": values[12],
+                }
+            )
+            return Result(rowcount=1)
         raise AssertionError(f"Unexpected SQL: {normalized}")
 
 
@@ -233,6 +285,10 @@ class Storage:
             self._notification(1, "pending"),
             self._notification(2, "delivering"),
             self._notification(3, "sent"),
+            self._notification(4, "pending", plan_level=True),
+            self._notification(5, "delivering", plan_level=True),
+            self._notification(6, "sent", plan_level=True),
+            self._notification(7, "pending", plan_level=True, event_type="audit_record"),
         ]
         self.controls = [
             self._control("pending-control", "pending"),
@@ -240,13 +296,16 @@ class Storage:
         ]
 
     @staticmethod
-    def _notification(event_id, status):
+    def _notification(event_id, status, *, plan_level=False, event_type=None):
         stamp = datetime(2026, 9, 24, 8, 0, tzinfo=timezone.utc)
         return {
             "id": event_id,
+            "dedupe_key": f"event-{event_id}",
             "plan_id": ORIGINAL_PLAN,
-            "work_order_id": ORIGINAL_WORK_ORDER,
-            "event_type": "work_order_blocked",
+            "work_order_id": None if plan_level else ORIGINAL_WORK_ORDER,
+            "event_type": event_type or (
+                "human_decision_required" if plan_level else "work_order_blocked"
+            ),
             "status": status,
             "available_at": stamp - timedelta(minutes=1),
             "lease_until": stamp + timedelta(minutes=5) if status == "delivering" else None,
@@ -299,7 +358,16 @@ def test_live_shaped_supersession_preserves_execution_truth_and_retires_attentio
     assert storage.jobs[ORIGINAL_JOB] == original_job
     assert storage.jobs[ORIGINAL_JOB]["result"]["reason"] == "work_order_policy_rejected"
     assert storage.work_orders[(REPLACEMENT_PLAN, REPLACEMENT_WORK_ORDER)] == replacement
-    assert [row["status"] for row in storage.notifications] == ["superseded", "superseded", "sent"]
+    assert [row["status"] for row in storage.notifications] == [
+        "superseded",
+        "superseded",
+        "sent",
+        "superseded",
+        "superseded",
+        "sent",
+        "pending",
+    ]
+    assert storage.notifications[4]["lease_until"] is None
     assert len(storage.notifications) == notification_count
     assert [row["status"] for row in storage.controls] == ["cancelled", "executed"]
     assert store.claim_notification() is None
@@ -316,7 +384,43 @@ def test_live_shaped_supersession_preserves_execution_truth_and_retires_attentio
         attention_state="blocked",
         attention_generation="stale-generation",
     ) is False
+    assert store.emit_notification(
+        dedupe_key="must-not-reappear-at-plan-level",
+        event_type="human_decision_required",
+        severity="warning",
+        project_id="chonhac",
+        ticket_id="GH-14",
+        plan_id=ORIGINAL_PLAN,
+        work_order_id=None,
+        summary="stale plan decision boundary",
+        github_url=None,
+    ) is False
     assert len(storage.notifications) == notification_count
+
+
+def test_active_plan_retains_plan_level_human_decision_delivery():
+    storage = Storage()
+    storage.notifications = []
+    store = PlanOrchestratorStore(storage)
+
+    assert store.emit_notification(
+        dedupe_key="active-plan-decision-boundary",
+        event_type="human_decision_required",
+        severity="warning",
+        project_id="chonhac",
+        ticket_id="GH-14",
+        plan_id=ORIGINAL_PLAN,
+        work_order_id=None,
+        summary="Current plan decision boundary",
+        github_url=None,
+    ) is True
+
+    claimed = store.claim_notification()
+    assert claimed is not None
+    assert claimed["event_type"] == "human_decision_required"
+    assert claimed["plan_id"] == ORIGINAL_PLAN
+    assert claimed["work_order_id"] is None
+    assert claimed["status"] == "delivering"
 
 
 def test_explicit_supersession_is_idempotent_and_persists_across_store_instances():

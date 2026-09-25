@@ -439,6 +439,7 @@ class PlanOrchestratorStore:
                     WHERE plan_id=%s AND lifecycle='active'""",
                     (timestamp, timestamp, plan_id),
                 )
+                self._supersede_plan_attention_rows(conn, plan_id=plan_id)
             else:
                 states = [str(row.get("state") or "") for row in remaining]
                 if any(state == "blocked" for state in states):
@@ -528,6 +529,18 @@ class PlanOrchestratorStore:
         )
         return int(result.rowcount or 0)
 
+    def _supersede_plan_attention_rows(self, conn: Any, *, plan_id: str) -> int:
+        result = conn.execute(
+            f"""UPDATE cp_notification_outbox
+            SET status='superseded', lease_until=NULL, updated_at=%s
+            WHERE status IN ('pending','delivering')
+              AND plan_id=%s
+              AND (({self._legacy_attention_state_sql()}) IS NOT NULL
+                OR event_type = ANY(%s))""",
+            (now(), plan_id, list(_OWNER_ATTENTION_EVENT_TYPES)),
+        )
+        return int(result.rowcount or 0)
+
     def supersede_obsolete_notifications(self) -> int:
         """Retire current or legacy attention rows that no longer match durable state."""
         self.ensure()
@@ -573,6 +586,13 @@ class PlanOrchestratorStore:
             row = conn.execute(
                 """SELECT * FROM cp_notification_outbox
                 WHERE status='pending' AND available_at <= %s
+                  AND (
+                    plan_id IS NULL OR EXISTS (
+                      SELECT 1 FROM cp_plan_orchestrations plan
+                      WHERE plan.plan_id=cp_notification_outbox.plan_id
+                        AND plan.lifecycle='active'
+                    )
+                  )
                   AND (
                     work_order_id IS NULL OR NOT EXISTS (
                       SELECT 1 FROM cp_plan_work_orders work_order
@@ -647,6 +667,15 @@ class PlanOrchestratorStore:
             materialized_payload["attention_state"] = attention_state
             materialized_payload["attention_generation"] = attention_generation
         with self.storage.connect() as conn:
+            if plan_id:
+                eligible_plan = conn.execute(
+                    """SELECT 1 FROM cp_plan_orchestrations
+                    WHERE plan_id=%s AND lifecycle='active' FOR SHARE""",
+                    (plan_id,),
+                ).fetchone()
+                if eligible_plan is None:
+                    conn.commit()
+                    return False
             if plan_id and work_order_id:
                 eligible = conn.execute(
                     """SELECT 1 FROM cp_plan_work_orders work_order
