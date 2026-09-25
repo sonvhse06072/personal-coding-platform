@@ -207,9 +207,18 @@ def settings_status(path: Path) -> tuple[bool, dict]:
 
 
 class Bridge:
-    def __init__(self, *, token: str, workspaces: Path, agy_bin: str, settings: Path):
+    def __init__(
+        self,
+        *,
+        token: str,
+        workspaces: Path,
+        agy_bin: str,
+        settings: Path,
+        direct_workspace: Path | None = None,
+    ):
         self.token = token
         self.workspaces = workspaces.resolve()
+        self.direct_workspace = direct_workspace.resolve() if direct_workspace else None
         self.agy_bin = agy_bin
         self.settings = settings.resolve()
         self._runs: dict[str, subprocess.Popen] = {}
@@ -218,6 +227,12 @@ class Bridge:
         # Antigravity uses one global settings.json. Serialize Antigravity runs so
         # each job can receive exact absolute file grants without cross-job races.
         self._agy_lock = threading.Lock()
+
+    def workspace_allowed(self, workspace: Path) -> bool:
+        resolved = workspace.resolve()
+        if contained(resolved, self.workspaces):
+            return True
+        return self.direct_workspace is not None and resolved == self.direct_workspace
 
     def register_run(self, run_id: str, proc: subprocess.Popen) -> None:
         with self._runs_lock:
@@ -330,7 +345,7 @@ class Bridge:
                         })
 
                     workspace = Path(str(payload["workspace"])).resolve()
-                    if not workspace.is_dir() or not contained(workspace, bridge.workspaces):
+                    if not workspace.is_dir() or not bridge.workspace_allowed(workspace):
                         return self.send_json(403, {"error": "workspace_not_allowed"})
                     prompt = str(payload.get("prompt") or "").strip()
                     if not prompt:
@@ -436,6 +451,7 @@ def main():
     parser.add_argument("--port", type=int, default=8792)
     parser.add_argument("--token", required=True)
     parser.add_argument("--workspaces", required=True)
+    parser.add_argument("--direct-workspace", default="")
     parser.add_argument("--agy-bin", default="")
     parser.add_argument("--settings", required=True)
     args = parser.parse_args()
@@ -449,7 +465,18 @@ def main():
     safe, safety = settings_status(settings)
     if not safe:
         raise SystemExit(f"Unsafe Antigravity settings: {json.dumps(safety, sort_keys=True)}")
-    bridge = Bridge(token=args.token, workspaces=workspaces, agy_bin=agy_bin, settings=settings)
+    direct_workspace = (
+        Path(args.direct_workspace).expanduser().resolve()
+        if str(args.direct_workspace).strip()
+        else None
+    )
+    bridge = Bridge(
+        token=args.token,
+        workspaces=workspaces,
+        agy_bin=agy_bin,
+        settings=settings,
+        direct_workspace=direct_workspace,
+    )
     server = ThreadingHTTPServer((args.host, args.port), bridge.handler())
     print(
         f"Antigravity host bridge listening on {args.host}:{args.port}; workspaces={workspaces}; safe_settings=true",
