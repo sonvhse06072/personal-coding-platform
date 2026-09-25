@@ -161,6 +161,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=8792)
     parser.add_argument("--token", required=True)
     parser.add_argument("--workspaces", required=True)
+    parser.add_argument("--direct-workspace", default="")
     parser.add_argument("--agy-bin", default="")
     parser.add_argument("--settings", required=True)
     args = parser.parse_args()
@@ -174,11 +175,17 @@ def main() -> None:
     safe, safety = quota19.quota18.live.legacy.settings_status(settings)
     if not safe:
         raise SystemExit(f"Unsafe Antigravity settings: {json.dumps(safety, sort_keys=True)}")
+    direct_workspace = (
+        Path(args.direct_workspace).expanduser().resolve()
+        if str(args.direct_workspace).strip()
+        else None
+    )
     bridge = SafeQuotaRefreshBridge(
         token=args.token,
         workspaces=workspaces,
         agy_bin=agy_bin,
         settings=settings,
+        direct_workspace=direct_workspace,
     )
     server = ThreadingHTTPServer((args.host, args.port), bridge.handler())
     print(
