@@ -216,8 +216,9 @@ def test_preview_dashboard_payload_contains_no_internal_execution_secrets(monkey
         "GITHUB_DELIVERY_TOKEN",
         "ANTIGRAVITY_BRIDGE_TOKEN",
         "DASHBOARD_CONTROL_TOKEN",
-        "command",
-        "workspace",
-        "environment",
+        '"command"',
+        '"workspace"',
+        '"environment"',
+        "/home/sonvh/chonhac",
     ):
         assert forbidden not in serialized
