@@ -1289,16 +1289,16 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
                 timed_out=timed_out,
             )
         )
-        if (
-            _workspace_instance_mode(
-                cfg,
-                job_id=payload.job_id,
-                path=workspace,
-            ) == "direct"
-            and payload.phase == "frontend_quality"
-        ):
-            _remove_managed_direct_node_override(workspace)
         if returncode != 0:
+            if (
+                _workspace_instance_mode(
+                    cfg,
+                    job_id=payload.job_id,
+                    path=workspace,
+                ) == "direct"
+                and payload.phase == "frontend_quality"
+            ):
+                _remove_managed_direct_node_override(workspace)
             return PhaseResponse(
                 passed=False,
                 phase=payload.phase,
@@ -1326,6 +1326,16 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
         if returncode != 0:
             passed = False
             break
+
+    if (
+        _workspace_instance_mode(
+            cfg,
+            job_id=payload.job_id,
+            path=workspace,
+        ) == "direct"
+        and payload.phase == "frontend_quality"
+    ):
+        _remove_managed_direct_node_override(workspace)
 
     return PhaseResponse(
         passed=passed,
