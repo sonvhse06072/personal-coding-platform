@@ -234,6 +234,17 @@ class Storage:
                         raise RuntimeError(
                             f"Project {project_id} is leased by active job {owner_job_id}"
                         )
+                    preview = conn.execute(
+                        "SELECT status FROM cp_job_previews WHERE job_id=%s",
+                        (owner_job_id,),
+                    ).fetchone()
+                    if preview is not None and str(preview.get("status") or "") not in {
+                        "stopped",
+                        "not_built",
+                    }:
+                        raise RuntimeError(
+                            f"Project {project_id} terminal owner still has preview cleanup pending"
+                        )
                 generation = int(lease.get("generation") or 0) + 1
                 conn.execute(
                     """UPDATE cp_project_leases
@@ -311,7 +322,13 @@ class Storage:
                 FROM cp_jobs job
                 WHERE lease.owner_job_id=job.id
                   AND lease.state='active'
-                  AND job.status = ANY(%s)""",
+                  AND job.status = ANY(%s)
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM cp_job_previews preview
+                    WHERE preview.job_id=lease.owner_job_id
+                      AND preview.status NOT IN ('stopped','not_built')
+                  )""",
                 (timestamp, list(_PROJECT_LEASE_TERMINAL_STATUSES)),
             )
             conn.commit()
