@@ -497,3 +497,47 @@ def test_cancelled_agent_job_releases_ddev_data_before_blocking_plan():
         "quiesced": True,
         "data_removed": True,
     }
+
+
+
+def test_direct_project_lease_defers_launch_until_repo_is_available(monkeypatch):
+    first = work_order("WO-DIRECT")
+    service, storage, engine, store = orchestrator(
+        [first],
+        [tracked("WO-DIRECT", 0)],
+    )
+    candidate = service._deterministic_job_id("pm-gh-200", "WO-DIRECT")
+
+    monkeypatch.setattr(
+        "app.plan_orchestrator.project_config",
+        lambda project_id: {
+            "runtime": {
+                "workspace_mode": "direct",
+                "exclusive_project_lease": True,
+            }
+        },
+    )
+    storage.project_lease = lambda project_id: {
+        "project_id": project_id,
+        "owner_job_id": "another-job",
+        "state": "active",
+    }
+
+    deferred = asyncio.run(service.tick())
+
+    assert deferred["launched"] is None
+    assert engine.created == []
+    assert engine.enqueued == []
+    assert store.tracked[0]["state"] == "pending"
+
+    storage.project_lease = lambda project_id: {
+        "project_id": project_id,
+        "owner_job_id": candidate,
+        "state": "active",
+    }
+
+    launched = asyncio.run(service.tick())
+
+    assert launched["launched"]["job_id"] == candidate
+    assert len(engine.created) == 1
+    assert engine.enqueued == [candidate]
