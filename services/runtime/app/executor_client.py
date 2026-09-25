@@ -290,6 +290,28 @@ class DdevExecutorClient:
             _raise_for_status_with_detail(response)
             return response.json()
 
+    async def return_direct_workspace_to_base(
+        self,
+        *,
+        job_id: str,
+        project_id: str,
+        workspace: str,
+        branch: str,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=90) as client:
+            response = await client.post(
+                f"{self.base}/v1/workspaces/return-to-base",
+                json={
+                    "job_id": job_id,
+                    "project_id": project_id,
+                    "workspace": workspace,
+                    "branch": branch,
+                },
+                headers=self.headers,
+            )
+            _raise_for_status_with_detail(response)
+            return response.json()
+
     async def remove_workspace(self, *, job_id: str, project_id: str, workspace: str) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.delete(

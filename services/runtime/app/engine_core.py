@@ -63,11 +63,17 @@ class RuntimeEngineCore:
             if callable(terminal_lease_lookup)
             else []
         )
-        for lease in terminal_lease_rows:
-            await self._retire_terminal_direct_preview(
-                str(lease.get("owner_job_id") or "")
-            )
-        self.storage.reconcile_terminal_project_leases()
+        if callable(terminal_lease_lookup):
+            for lease in terminal_lease_rows:
+                owner_job_id = str(lease.get("owner_job_id") or "")
+                preview_retired = await self._retire_terminal_direct_preview(owner_job_id)
+                workspace_restored = await self._restore_terminal_direct_workspace(
+                    owner_job_id
+                )
+                if preview_retired and workspace_restored:
+                    self._release_terminal_direct_lease(owner_job_id)
+        else:
+            self.storage.reconcile_terminal_project_leases()
         self.worker_task = asyncio.create_task(self._worker_loop())
 
     async def stop(self) -> None:
@@ -168,6 +174,52 @@ class RuntimeEngineCore:
             return False
         return str(result.get("status") or "") in {"stopped", "not_built"}
 
+    async def _restore_terminal_direct_workspace(self, job_id: str) -> bool:
+        if not job_id:
+            return True
+        row = self.storage.get(job_id)
+        if not row or str(row.get("status") or "") not in FINAL:
+            return True
+        checkpoint = checkpoint_from_row(row)
+        if str(checkpoint.get("workspace_mode") or "isolated_clone") != "direct":
+            return True
+
+        workspace = str(row.get("workspace") or "").strip()
+        branch = str(row.get("branch") or "").strip()
+        if not workspace or not branch:
+            return False
+
+        try:
+            result = await self.ddev.return_direct_workspace_to_base(
+                job_id=job_id,
+                project_id=str(row["project_id"]),
+                workspace=workspace,
+                branch=branch,
+            )
+        except Exception as exc:
+            latest = self.storage.get(job_id)
+            if latest:
+                latest_checkpoint = checkpoint_from_row(latest)
+                latest_checkpoint["direct_base_restore"] = {
+                    "restored": False,
+                    "error": str(exc)[-2000:],
+                }
+                self.storage.update(job_id, checkpoint=latest_checkpoint)
+            return False
+
+        restored = bool(result.get("returned", False))
+        latest = self.storage.get(job_id)
+        if latest:
+            latest_checkpoint = checkpoint_from_row(latest)
+            latest_checkpoint["direct_base_restore"] = {
+                "restored": restored,
+                "branch": result.get("branch"),
+                "head": result.get("head"),
+                "reused": bool(result.get("reused", False)),
+            }
+            self.storage.update(job_id, checkpoint=latest_checkpoint)
+        return restored
+
     def _release_terminal_direct_lease(self, job_id: str) -> bool:
         row = self.storage.get(job_id)
         if not row or str(row.get("status") or "") not in FINAL:
@@ -201,7 +253,8 @@ class RuntimeEngineCore:
                 if not self._stopping:
                     preview_retired = await self._retire_terminal_direct_preview(job_id)
                     await self._quiesce_stable_manual_job(job_id)
-                    if preview_retired:
+                    workspace_restored = await self._restore_terminal_direct_workspace(job_id)
+                    if preview_retired and workspace_restored:
                         self._release_terminal_direct_lease(job_id)
                 self.active_jobs.pop(job_id, None)
                 self.queue.task_done()
@@ -258,7 +311,8 @@ class RuntimeEngineCore:
             await asyncio.gather(active, return_exceptions=True)
         preview_retired = await self._retire_terminal_direct_preview(job_id)
         await self._quiesce_stable_manual_job(job_id)
-        if preview_retired:
+        workspace_restored = await self._restore_terminal_direct_workspace(job_id)
+        if preview_retired and workspace_restored:
             self._release_terminal_direct_lease(job_id)
         updated = self.storage.get(job_id)
         assert updated is not None
