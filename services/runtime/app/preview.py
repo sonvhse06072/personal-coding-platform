@@ -1,11 +1,32 @@
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
 from .config import project_config
 
 
 PreviewTarget = Literal["frontend", "backend", "both"]
+
+
+def _public_preview_error(exc: Exception) -> str:
+    """Return a bounded browser-safe failure summary, never raw executor stderr."""
+    text = str(exc)
+    lower = text.lower()
+    if "timed out" in lower or "timeout" in lower:
+        return "Preview operation timed out."
+    if "active process" in lower or "busy" in lower:
+        return "Preview is temporarily busy with another executor operation."
+    if "lease" in lower:
+        return "Preview is unavailable because the direct project lease is not active."
+    if "not enabled" in lower or "unsupported" in lower:
+        return "The requested preview target is not enabled for this project."
+    if "did not become healthy" in lower or "health" in lower:
+        return "Preview started but did not become healthy."
+    match = re.search(r"DDEV executor HTTP\s+(\d{3})", text)
+    if match:
+        return f"Preview infrastructure operation failed (executor HTTP {match.group(1)})."
+    return "Preview operation failed."
 
 
 def _iso(value: Any) -> str | None:
@@ -152,7 +173,7 @@ class PreviewManager:
                 target=target,
                 status="failed",
                 generation=generation,
-                error=str(exc)[-2000:],
+                error=_public_preview_error(exc),
             )
             return self._public(
                 dict(failed),
@@ -280,7 +301,7 @@ class PreviewManager:
                         target=target,
                         status="failed",
                         generation=int(current.get("generation") or 1),
-                        error=str(exc)[-2000:],
+                        error=_public_preview_error(exc),
                     )
                 )
 
@@ -322,7 +343,7 @@ class PreviewManager:
                     target=target,
                     status="failed",
                     generation=int(current.get("generation") or 1),
-                    error=str(exc)[-2000:],
+                    error=_public_preview_error(exc),
                 )
                 return self._public(
                     dict(failed),
