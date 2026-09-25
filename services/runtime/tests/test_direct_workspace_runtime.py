@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 
+import pytest
+
 from app.engine_execution import RuntimeEngine as ExecutionRuntimeEngine
 from app.engine_core import RuntimeEngineCore
 
