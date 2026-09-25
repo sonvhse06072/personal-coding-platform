@@ -111,6 +111,7 @@ def _job_snapshot(job: dict[str, Any] | None) -> dict[str, Any] | None:
         "result_reason": result.get("reason"),
         "branch": job.get("branch"),
         "source_commit": job.get("source_commit"),
+        "workspace_mode": str(checkpoint.get("workspace_mode") or "isolated_clone"),
         "created_at": _iso(job.get("created_at")),
         "updated_at": _iso(job.get("updated_at")),
         "complexity_score": route.get("complexity_score"),
