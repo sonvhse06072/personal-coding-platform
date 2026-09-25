@@ -1003,3 +1003,135 @@ def test_preview_contract_rejects_invalid_checked_in_frontend_config(
     assert exc.value.status_code == 500
     assert expected in str(exc.value.detail)
     assert source.exists()
+
+
+
+def test_direct_backend_only_preview_uses_shared_ddev_without_frontend_override(
+    tmp_path,
+    monkeypatch,
+):
+    source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewback", project_id="demo")
+    )
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append(list(argv))
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+    request = PreviewRequest(
+        job_id="jobpreviewback",
+        project_id="demo",
+        workspace=created["workspace"],
+        target="backend",
+    )
+
+    started = start_preview(request)
+    stopped = stop_preview(request)
+
+    assert started["status"] == "ready"
+    assert started["backend_url"] == "https://demo.ddev.site"
+    assert started["frontend_url"] is None
+    assert stopped["status"] == "stopped"
+    assert not (source / ".ddev" / "config.pcp-preview.local.yaml").exists()
+    assert calls == [["ddev", "start", "-y"]]
+    assert source.exists()
+
+
+@pytest.mark.parametrize(
+    ("target", "field_path", "bad_value", "expected"),
+    [
+        (
+            "backend",
+            ("backend", "url"),
+            "https://example.com",
+            "local HTTPS DDEV URL",
+        ),
+        (
+            "frontend",
+            ("frontend", "url"),
+            "http://demo.ddev.site:3100",
+            "local HTTPS DDEV URL",
+        ),
+        (
+            "both",
+            ("frontend", "api_origin_on_both"),
+            "https://example.com",
+            "local HTTPS DDEV URL",
+        ),
+    ],
+)
+def test_preview_contract_rejects_nonlocal_or_unsafe_urls(
+    tmp_path,
+    monkeypatch,
+    target,
+    field_path,
+    bad_value,
+    expected,
+):
+    _source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    projects_file = tmp_path / "projects.yml"
+    data = yaml.safe_load(projects_file.read_text())
+    section, key = field_path
+    data["projects"]["demo"]["preview"][section][key] = bad_value
+    projects_file.write_text(yaml.safe_dump(data))
+
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewurl", project_id="demo")
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        start_preview(
+            PreviewRequest(
+                job_id="jobpreviewurl",
+                project_id="demo",
+                workspace=created["workspace"],
+                target=target,
+            )
+        )
+
+    assert exc.value.status_code == 500
+    assert expected in str(exc.value.detail)
+
+
+def test_unhealthy_frontend_preview_removes_only_managed_override(
+    tmp_path,
+    monkeypatch,
+):
+    source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewbadhealth", project_id="demo")
+    )
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append(list(argv))
+        if argv[:4] == ["ddev", "exec", "bash", "-lc"] and "curl -fsS" in argv[-1]:
+            return 1, "", "health failed", False
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+
+    with pytest.raises(HTTPException) as exc:
+        start_preview(
+            PreviewRequest(
+                job_id="jobpreviewbadhealth",
+                project_id="demo",
+                workspace=created["workspace"],
+                target="frontend",
+            )
+        )
+
+    assert exc.value.status_code == 502
+    assert exc.value.detail == "Frontend preview did not become healthy"
+    assert not (source / ".ddev" / "config.pcp-preview.local.yaml").exists()
+    assert [
+        "ddev",
+        "exec",
+        "supervisorctl",
+        "stop",
+        "webextradaemons:pcp-next-dev",
+    ] in calls
+    assert source.exists()
