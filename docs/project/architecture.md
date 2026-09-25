@@ -82,8 +82,18 @@ Current Runtime responsibilities:
 - deterministic DDEV verification;
 - commit creation after acceptance;
 - bounded branch/PR/CI delivery and CI-failure repair loops.
+- a separate durable orchestration lifecycle for explicitly superseded
+  WorkOrders, preserving the underlying engineering job/result while removing
+  only scheduling, automatic recovery and owner-attention eligibility.
 
 Runtime is an engineering-operations orchestrator. It does not own project/product direction.
+
+Supersession is never inferred from ticket identity, WorkOrder naming, source
+commit, timestamps, later PR success or PM prose. Runtime accepts it only
+through the exact-identity supersession operation. A superseded WorkOrder and
+its job remain queryable and retain their historical state, result, counters
+and workspace references; pending owner attention becomes non-actionable while
+sent/executed audit history remains unchanged.
 
 The current implementation may still contain manual-merge orchestration behavior from the previous governance policy. That behavior is transitional implementation state, not the approved target authority model after issue #96. Runtime/ddev-executor changes that automate the PM merge gate must preserve all existing trust boundaries and be delivered separately through normal PR/CI review.
 

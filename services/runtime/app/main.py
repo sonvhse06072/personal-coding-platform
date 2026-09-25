@@ -47,6 +47,14 @@ class OperatorResolutionRequest(BaseModel):
     note: str = Field(default="", max_length=2000)
 
 
+class WorkOrderSupersessionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: str = Field(min_length=1, max_length=2000)
+    superseded_by_plan_id: str | None = Field(default=None, min_length=1, max_length=200)
+    superseded_by_work_order_id: str | None = Field(default=None, min_length=1, max_length=200)
+
+
 class NotificationReleaseRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -130,7 +138,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.50", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.51", lifespan=lifespan)
 app.include_router(pm_bridge_router)
 app.include_router(create_dashboard_router(storage, plan_orchestrator.store))
 
@@ -142,7 +150,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.50",
+        version="1.0.51",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={
@@ -245,6 +253,25 @@ async def resolve_operator_work_order(
             work_order_id=work_order_id,
             action=payload.action,
             note=payload.note,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.post("/v1/plans/{plan_id}/work-orders/{work_order_id}/supersede", dependencies=[Depends(auth)])
+def supersede_orchestrated_work_order(
+    plan_id: str,
+    work_order_id: str,
+    payload: WorkOrderSupersessionRequest,
+) -> dict[str, Any]:
+    """Explicitly retire exact orchestration identity without touching its job."""
+    try:
+        return plan_orchestrator.store.supersede_work_order(
+            plan_id=plan_id,
+            work_order_id=work_order_id,
+            reason=payload.reason,
+            superseded_by_plan_id=payload.superseded_by_plan_id,
+            superseded_by_work_order_id=payload.superseded_by_work_order_id,
         )
     except RuntimeError as exc:
         raise HTTPException(409, str(exc)) from exc

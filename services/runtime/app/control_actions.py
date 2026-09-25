@@ -134,9 +134,11 @@ class ControlActionService:
         snapshot = {
             "plan_id": plan.get("plan_id") or plan.get("id"),
             "plan_status": plan.get("status"),
+            "plan_lifecycle": plan.get("lifecycle") or "active",
             "plan_updated_at": self._iso(plan.get("updated_at")),
             "work_order_id": work_order.get("work_order_id"),
             "work_order_state": work_order.get("state"),
+            "work_order_lifecycle": work_order.get("lifecycle") or "active",
             "work_order_updated_at": self._iso(work_order.get("updated_at")),
             "job_id": (job or {}).get("id"),
             "job_status": (job or {}).get("status"),
@@ -157,8 +159,10 @@ class ControlActionService:
         snapshot = {
             "plan_id": plan.get("plan_id") or plan.get("id"),
             "plan_status": plan.get("status"),
+            "plan_lifecycle": plan.get("lifecycle") or "active",
             "work_order_id": work_order.get("work_order_id"),
             "work_order_state": work_order.get("state"),
+            "work_order_lifecycle": work_order.get("lifecycle") or "active",
             "execution_mode": work_order.get("execution_mode"),
             "job_id": (job or {}).get("id"),
             "job_status": (job or {}).get("status"),
@@ -206,7 +210,8 @@ class ControlActionService:
                 WHERE action.status='pending'
                   AND action.plan_id=work_order.plan_id
                   AND action.work_order_id=work_order.work_order_id
-                  AND work_order.state NOT IN ('awaiting_merge','blocked','waiting_human')""",
+                  AND (work_order.lifecycle <> 'active'
+                    OR work_order.state NOT IN ('awaiting_merge','blocked','waiting_human'))""",
                 (now(),),
             )
             conn.commit()
@@ -544,6 +549,11 @@ class ControlActionService:
         ttl_hours: int = 48,
     ) -> list[dict[str, Any]]:
         self.ensure()
+        if (
+            str(plan.get("lifecycle") or "active") != "active"
+            or str(work_order.get("lifecycle") or "active") != "active"
+        ):
+            return []
         fingerprint = self.state_fingerprint(plan, work_order, job)
         generation_fingerprint = self.attention_generation_fingerprint(
             plan,
@@ -667,6 +677,17 @@ class ControlActionService:
             "message": "The merge gate is already resolved and the WorkOrder is completed; no action is required.",
         }
 
+    @staticmethod
+    def _superseded_result(action: dict[str, Any], work_order: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "status": "superseded",
+            "action_id": action["action_id"],
+            "action_type": action["action_type"],
+            "message": "This WorkOrder was explicitly replaced; no recovery action is required.",
+            "superseded_by_plan_id": work_order.get("superseded_by_plan_id"),
+            "superseded_by_work_order_id": work_order.get("superseded_by_work_order_id"),
+        }
+
     async def execute(
         self,
         action_id: str,
@@ -690,8 +711,11 @@ class ControlActionService:
             action = dict(action)
             if action["status"] == "executed":
                 return dict(action.get("result") or {})
+            _, current_work_order, _ = self._current_context(action)
+            if str(current_work_order.get("lifecycle") or "active") == "superseded":
+                return self._superseded_result(action, current_work_order)
             if action["action_type"] == "recheck_orchestration":
-                _, work_order, _ = self._current_context(action)
+                work_order = current_work_order
                 if str(work_order.get("state") or "") == "completed":
                     result = self._already_resolved_result(action)
                     if action["status"] == "pending":

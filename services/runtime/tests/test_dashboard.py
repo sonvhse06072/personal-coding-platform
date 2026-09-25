@@ -287,6 +287,70 @@ def test_snapshot_orders_activity_newest_first_and_limits_alerts():
     assert "MALICIOUS LEVEL" not in encoded
 
 
+class _SupersededConnection(_Connection):
+    def execute(self, query, params=None):
+        if "FROM cp_plan_orchestrations" in query:
+            return _Result(rows=[{
+                "plan_id": "pm-gh-original",
+                "project_id": "chonhac",
+                "status": "blocked",
+                "lifecycle": "superseded",
+                "superseded_at": NOW,
+                "ticket_id": "GH-14",
+                "ticket_title": "Responsive regression matrix",
+                "github_url": "https://example.invalid/issues/14",
+                "baseline_revision": "mvp-v1",
+                "baseline_source_commit": "afc0901",
+                "created_at": NOW,
+                "updated_at": NOW,
+            }])
+        if "COUNT(*)" in query:
+            return _Result(row={"count": 0})
+        return super().execute(query, params)
+
+
+class _SupersededStorage(_Storage):
+    @contextmanager
+    def connect(self):
+        yield _SupersededConnection()
+
+
+class _SupersededStore(_Store):
+    def work_orders(self, plan_id):
+        row = super().work_orders(plan_id)[0]
+        row.update(
+            work_order_id="UI-CL-1-responsive-regression-matrix",
+            state="blocked",
+            lifecycle="superseded",
+            job_id="job-1",
+            superseded_by_plan_id="pm-gh-5772402026",
+            superseded_by_work_order_id="UI-CL-1-responsive-regression-matrix-r2",
+            superseded_at=NOW,
+            supersession_reason="replaced_after_router_false_positive_fix",
+        )
+        return [row]
+
+
+def test_dashboard_keeps_superseded_history_visible_but_not_actionable():
+    snapshot = build_dashboard_snapshot(_SupersededStorage(), _SupersededStore())
+
+    assert snapshot["summary"]["active_plans"] == 0
+    assert snapshot["summary"]["active_jobs"] == 0
+    assert snapshot["summary"]["blocked_plans"] == 0
+    assert snapshot["summary"]["superseded_plans"] == 1
+    plan = snapshot["plans"][0]
+    work_order = plan["work_orders"][0]
+    assert plan["status"] == "blocked"
+    assert plan["lifecycle"] == "superseded"
+    assert work_order["state"] == "blocked"
+    assert work_order["lifecycle"] == "superseded"
+    assert work_order["superseded_by_work_order_id"] == (
+        "UI-CL-1-responsive-regression-matrix-r2"
+    )
+    assert work_order["job"] is not None
+    assert work_order["job"]["status"] == "executing"
+
+
 def test_dashboard_ui_prioritizes_live_developer_console_and_keeps_audit_timeline():
     assert "Live Developer Console" in DASHBOARD_HTML
     assert "Developer transcript" in DASHBOARD_HTML

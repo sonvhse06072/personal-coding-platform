@@ -543,10 +543,9 @@ not created; PCP was not restarted or rebuilt.
 
 ## Owner-attention generation and supersession #293
 
-Issue #293 is implemented on branch
-`ai/issue-293-stale-notification-supersession` as PR #294. The executable
-implementation head is `f33eb15148b9668227d5e73256e5deac55da7acb`; this continuity update follows on
-the same branch and exact-head CI remains required before review or merge.
+Issue #293 / PR #294 is merged on `main` at
+`a08e2bd58e2ea2f00b1ee8701031f9fb74d55d6a`. The executable implementation
+head was `f33eb15148b9668227d5e73256e5deac55da7acb`.
 
 The bounded Runtime correction keeps transport and merge policy unchanged:
 
@@ -579,6 +578,54 @@ No live PCP service was restarted/rebuilt/activated. Chợ Nhạc, the completed
 WorkOrder, its workspace/durable state and Telegram were not queried or
 mutated. The n8n workflow JSON and existing send/ACK/release transport contract
 are unchanged.
+
+## Explicit superseded orchestration lifecycle #295
+
+Issue #295 is implemented on branch
+`ai/issue-295-superseded-orchestration-lifecycle` as PR #296. PM review through
+head `45027a05d18c56586e7c4bc56e67e4248eac8e20` accepted the lifecycle design
+and plan-level attention retirement, then identified that lifecycle filtering
+must remain scoped to owner attention. The branch now includes that bounded
+correction; exact-final-head CI and PM re-review remain pending.
+
+The bounded Runtime change separates execution truth from orchestration
+eligibility:
+
+- `cp_plan_work_orders.lifecycle` defaults to `active` and may become
+  `superseded` only through the exact authenticated Runtime operation;
+- exact optional replacement plan/WorkOrder identity, timestamp and reason are
+  durable on the retired WorkOrder; a plan becomes lifecycle `superseded` only
+  when no active tracked WorkOrder remains;
+- original WorkOrder state, job status/result/progress/counters/workspace and
+  replacement state are not changed;
+- scheduler, busy-work, reconciliation, automatic provider/adaptive recovery,
+  merge and explicit resume paths exclude superseded lifecycle rows;
+- startup/tick notification materialization and control creation exclude them;
+  pending/delivering owner attention becomes `superseded`, pending controls
+  become `cancelled`, and sent/executed audit history remains unchanged;
+- plan/WorkOrder lifecycle is authoritative specifically for owner-attention
+  eligibility: owner-attention claim and emission reject non-active lifecycle,
+  including plan-level rows with no WorkOrder identity; when the final active
+  WorkOrder is superseded, pending/delivering owner attention for the whole plan
+  is superseded with its lease cleared, while sent history stays sent and
+  unrelated non-owner/audit events retain normal outbox emission and delivery;
+- historical callbacks return benign `status=superseded`; active WorkOrders
+  retain strict state-fingerprint validation;
+- dashboard/read state exposes both historical execution status/reason and the
+  supersession relationship without presenting the record as completed.
+
+Local synthetic PostgreSQL proof created a pre-#295 schema/row set, applied
+`ensure()` twice, and verified additive/defaulted columns, old-row validity,
+idempotent supersession and persistence across store instances. The synthetic
+database was then removed. Current local verification passes focused Runtime
+orchestration/outbox/control/dashboard tests (`63 passed`), full Runtime (`432
+passed`), Router (`99 passed`), ddev-executor (`78 passed`), structure (`10
+passed`) and Telegram/n8n transport (`11 passed`). Python compilation and
+`git diff --check` pass.
+
+The real Chợ Nhạc original job/plan, completed R2 WorkOrder/PR #18, Telegram,
+n8n and live PCP durable state were not queried or mutated. No service was
+restarted/rebuilt, and no live supersession was performed.
 
 ## Dedicated PCP BuildKit isolation #281
 
@@ -689,24 +736,21 @@ claim every DDEV build on the machine uses `pcp-builder`.
 ## Immediate next safe actions
 
 1. Require all four GitHub Actions jobs to execute repository steps and pass on
-   PR #294's exact final head before PM review. Do not merge or activate/rebuild
-   PCP services from the implementation-engineer role.
+   PR #296's exact final head when runner infrastructure is available. Do not
+   merge or activate PCP services from the implementation-engineer role.
 2. Keep the retained shared/default BuildKit cache unchanged. Any later cleanup
    decision must remain separate from #281's proof of isolation.
-3. Keep R2 job `812aabd7ab0a5adbb18a7a5edc8d7009` durably blocked; do not
-   resume, reroute, clean, or use its workspace/resources as the #281 rollout
-   fixture.
+3. Keep completed R2 WorkOrder
+   `UI-CL-1-responsive-regression-matrix-r2` and merged PR #18 unchanged.
 4. Treat any future deterministic verification failure as project evidence only
    after confirming the command actually reached PHPUnit/PHPCS/Playwright;
    infrastructure-start failures must not be sent back to the developer as code
    repairs.
-5. If R2 reports a genuine responsive product defect requiring production-code
-   change, keep UI-CL-1 test-only and open a separate bounded defect issue
-   rather than broadening the current WorkOrder.
-6. Keep Chợ Nhạc #15 and #16 pending until #14 R2 is reviewed and merged.
-7. Keep the original blocked UI-CL-1 job/plan as platform-defect audit history;
-   do not resume/reroute it or hand-edit durable Runtime state.
-8. DEC-025 cleanup remains complete. Do not recreate or resume a PCP plan/job
+5. Keep the original blocked UI-CL-1 job/plan as platform-defect audit history;
+   do not resume/reroute it or hand-edit durable Runtime state. Any eventual
+   live supersession requires post-merge controlled activation and an explicit
+   Human Owner operation against only that exact identity.
+6. DEC-025 cleanup remains complete. Do not recreate or resume a PCP plan/job
    for DEC-025; future DEC-025 evidence is Human Owner-managed in `chonhac`.
-9. Keep #146 open for calibration evidence already learned from the retired
+7. Keep #146 open for calibration evidence already learned from the retired
    long-running DEC execution.

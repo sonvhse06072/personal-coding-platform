@@ -127,6 +127,7 @@ class FakeStore:
         self.plan = plan
         self.tracked = [dict(item) for item in tracked]
         self.plan_status = "active"
+        self.plan_lifecycle = "active"
         self.notifications = []
         self.registered = []
 
@@ -139,14 +140,19 @@ class FakeStore:
         return result
 
     def active_plans(self):
-        if self.plan_status in {"completed", "blocked"}:
+        if self.plan_lifecycle != "active" or self.plan_status in {"completed", "blocked"}:
             return []
         value = deepcopy(self.plan)
         value["status"] = self.plan_status
         return [value]
 
     def orchestration(self, plan_id):
-        return {"plan_id": plan_id, "project_id": self.plan["project_id"], "status": self.plan_status}
+        return {
+            "plan_id": plan_id,
+            "project_id": self.plan["project_id"],
+            "status": self.plan_status,
+            "lifecycle": self.plan_lifecycle,
+        }
 
     def work_orders(self, plan_id):
         return [deepcopy(item) for item in sorted(self.tracked, key=lambda row: row["sequence_no"])]
@@ -159,7 +165,11 @@ class FakeStore:
         row.update(deepcopy(fields))
 
     def any_busy_work_order(self):
-        return any(row["state"] in {"running", "awaiting_merge", "waiting_human"} for row in self.tracked)
+        return any(
+            row.get("lifecycle", "active") == "active"
+            and row["state"] in {"running", "awaiting_merge", "waiting_human"}
+            for row in self.tracked
+        )
 
     def emit_notification(self, **payload):
         if not any(item["dedupe_key"] == payload["dedupe_key"] for item in self.notifications):
@@ -175,6 +185,7 @@ def tracked(work_order_id, sequence_no, *, execution_mode="agent", state="pendin
         "sequence_no": sequence_no,
         "execution_mode": execution_mode,
         "state": state,
+        "lifecycle": "active",
         "job_id": None,
         "pr_number": None,
         "pr_url": None,
@@ -210,6 +221,43 @@ def test_tick_launches_only_first_dependency_ready_work_order_and_is_idempotent(
     asyncio.run(service.tick())
     assert len(engine.created) == 1
     assert len(engine.enqueued) == 1
+
+
+def test_superseded_blocked_work_is_not_busy_and_does_not_block_eligible_work():
+    original = work_order("UI-CL-1-responsive-regression-matrix")
+    unrelated = work_order("UNRELATED-ELIGIBLE")
+    service, storage, engine, store = orchestrator(
+        [original, unrelated],
+        [
+            tracked(
+                original["id"],
+                0,
+                state="blocked",
+                lifecycle="superseded",
+                job_id="4283bb02a28a5c96b71f7bb1bc5e3676",
+                superseded_by_plan_id="pm-gh-r2",
+                superseded_by_work_order_id="UI-CL-1-responsive-regression-matrix-r2",
+            ),
+            tracked(unrelated["id"], 1),
+        ],
+    )
+    storage.jobs["4283bb02a28a5c96b71f7bb1bc5e3676"] = {
+        "id": "4283bb02a28a5c96b71f7bb1bc5e3676",
+        "status": "blocked",
+        "result": {"reason": "work_order_policy_rejected"},
+        "progress": {"model_calls": 0},
+    }
+
+    result = asyncio.run(service.tick())
+
+    assert result["launched"]["work_order_id"] == "UNRELATED-ELIGIBLE"
+    assert engine.created[0]["work_order"]["id"] == "UNRELATED-ELIGIBLE"
+    assert store.tracked[0]["state"] == "blocked"
+    assert store.tracked[0]["job_id"] == "4283bb02a28a5c96b71f7bb1bc5e3676"
+    assert storage.jobs["4283bb02a28a5c96b71f7bb1bc5e3676"]["result"]["reason"] == (
+        "work_order_policy_rejected"
+    )
+    assert store.tracked[1]["state"] == "running"
 
 
 def test_completed_ci_job_waits_for_manual_merge_then_unlocks_dependency():
@@ -449,4 +497,3 @@ def test_cancelled_agent_job_releases_ddev_data_before_blocking_plan():
         "quiesced": True,
         "data_removed": True,
     }
-
