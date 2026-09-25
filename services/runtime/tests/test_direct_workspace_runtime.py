@@ -310,3 +310,152 @@ def test_cancel_keeps_direct_lease_when_preview_retirement_fails():
     assert storage.preview["status"] == "failed"
     assert storage.released == []
     assert ("release_lease", row["id"]) not in storage.actions
+
+
+class HandoffStorage:
+    def __init__(self, workspace: Path):
+        self.workspace = workspace
+        self.actions = []
+        self.job = {
+            "id": "job-direct-handoff",
+            "project_id": "chonhac",
+            "status": "queued",
+            "source_commit": None,
+            "workspace": None,
+            "branch": None,
+            "task": {"title": "handoff", "description": "bounded"},
+            "repo_analysis": None,
+            "progress": {},
+            "checkpoint": {},
+            "result": None,
+            "error": None,
+        }
+
+    def get(self, job_id):
+        return dict(self.job) if job_id == self.job["id"] else None
+
+    def update(self, job_id, **fields):
+        assert job_id == self.job["id"]
+        self.job.update(fields)
+        self.actions.append(("update", tuple(sorted(fields))))
+
+    def acquire_project_lease(self, project_id, job_id):
+        self.actions.append(("acquire", job_id))
+        return {
+            "project_id": project_id,
+            "owner_job_id": job_id,
+            "state": "active",
+            "generation": 1,
+        }
+
+    def release_project_lease(self, project_id, job_id):
+        self.actions.append(("release", job_id))
+        return True
+
+
+class HandoffDdev:
+    def __init__(self, storage: HandoffStorage):
+        self.storage = storage
+        self.create_calls = []
+
+    async def create_workspace(self, **payload):
+        self.storage.actions.append(("create_workspace", payload["job_id"]))
+        self.create_calls.append(dict(payload))
+        return {
+            "workspace": str(self.storage.workspace),
+            "branch": "ai/job-direct-h",
+            "source_commit": "abcdef1234567890",
+            "workspace_mode": "direct",
+        }
+
+
+def _handoff_project_config(workspace: Path):
+    return {
+        "path": str(workspace),
+        "base_branch": "main",
+        "runtime": {
+            "workspace_mode": "direct",
+            "exclusive_project_lease": True,
+        },
+        "preview": {
+            "backend": {"enabled": True},
+            "frontend": {"enabled": True},
+        },
+    }
+
+
+def test_direct_job_retires_idle_preview_after_lease_before_workspace_mutation(
+    monkeypatch,
+    tmp_path,
+):
+    workspace = tmp_path / "chonhac"
+    workspace.mkdir()
+    storage = HandoffStorage(workspace)
+    engine = ExecutionRuntimeEngine(storage)
+    engine.ddev = HandoffDdev(storage)
+
+    class HandoffPreview:
+        def __init__(self, _storage, _ddev):
+            pass
+
+        async def handoff_to_job(self, project_id, job_id):
+            storage.actions.append(("handoff", job_id))
+
+    monkeypatch.setenv("CODING_DIRECT_PROJECT_ROOT", str(workspace))
+    monkeypatch.setattr(
+        "app.engine_execution.project_config",
+        lambda project_id: _handoff_project_config(workspace),
+    )
+    monkeypatch.setattr("app.engine_execution.ProjectPreviewManager", HandoffPreview)
+
+    def stop_after_workspace(*_args, **_kwargs):
+        raise RuntimeError("stop after workspace proof")
+
+    monkeypatch.setattr("app.engine_execution.analyze_repo", stop_after_workspace)
+
+    with pytest.raises(RuntimeError, match="stop after workspace proof"):
+        asyncio.run(engine.run_job(storage.job["id"]))
+
+    acquire = storage.actions.index(("acquire", storage.job["id"]))
+    handoff = storage.actions.index(("handoff", storage.job["id"]))
+    create = storage.actions.index(("create_workspace", storage.job["id"]))
+    assert acquire < handoff < create
+
+
+def test_direct_job_handoff_failure_releases_new_lease_before_workspace_mutation(
+    monkeypatch,
+    tmp_path,
+):
+    workspace = tmp_path / "chonhac"
+    workspace.mkdir()
+    storage = HandoffStorage(workspace)
+    engine = ExecutionRuntimeEngine(storage)
+    engine.ddev = HandoffDdev(storage)
+
+    class FailedHandoffPreview:
+        def __init__(self, _storage, _ddev):
+            pass
+
+        async def handoff_to_job(self, project_id, job_id):
+            storage.actions.append(("handoff", job_id))
+            raise RuntimeError("idle preview retirement failed")
+
+    monkeypatch.setenv("CODING_DIRECT_PROJECT_ROOT", str(workspace))
+    monkeypatch.setattr(
+        "app.engine_execution.project_config",
+        lambda project_id: _handoff_project_config(workspace),
+    )
+    monkeypatch.setattr(
+        "app.engine_execution.ProjectPreviewManager",
+        FailedHandoffPreview,
+    )
+
+    with pytest.raises(RuntimeError, match="idle preview retirement failed"):
+        asyncio.run(engine.run_job(storage.job["id"]))
+
+    assert storage.actions[:3] == [
+        ("acquire", storage.job["id"]),
+        ("handoff", storage.job["id"]),
+        ("release", storage.job["id"]),
+    ]
+    assert engine.ddev.create_calls == []
