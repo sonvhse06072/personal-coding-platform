@@ -85,8 +85,9 @@ class FakeStorage:
 
 
 class FakeDdev:
-    def __init__(self, *, fail_start=False):
+    def __init__(self, *, fail_start=False, failure_message="preview build failed safely"):
         self.fail_start = fail_start
+        self.failure_message = failure_message
         self.starts = []
         self.statuses = []
         self.stops = []
@@ -95,7 +96,7 @@ class FakeDdev:
     async def preview_start(self, **payload):
         self.starts.append(deepcopy(payload))
         if self.fail_start:
-            raise RuntimeError("preview build failed safely")
+            raise RuntimeError(self.failure_message)
         target = payload["target"]
         return {
             "status": "ready",
@@ -206,9 +207,34 @@ def test_preview_failure_stays_in_preview_state(monkeypatch):
     result = asyncio.run(manager.start(storage.job["id"], "frontend"))
 
     assert result["status"] == "failed"
-    assert "preview build failed safely" in result["error"]
+    assert result["error"] == "Preview operation failed."
     assert storage.job == original_job
     assert storage.job_updates == []
+
+
+
+
+def test_preview_failure_summary_never_exposes_executor_paths_tokens_or_commands(monkeypatch):
+    configure_project(monkeypatch)
+    storage = FakeStorage()
+    ddev = FakeDdev(
+        fail_start=True,
+        failure_message=(
+            "DDEV executor HTTP 502: command='bash -lc env' "
+            "workspace=/home/sonvh/chonhac "
+            "RUNTIME_API_TOKEN=super-secret"
+        ),
+    )
+    manager = PreviewManager(storage, ddev)
+
+    result = asyncio.run(manager.start(storage.job["id"], "frontend"))
+
+    assert result["status"] == "failed"
+    assert result["error"] == "Preview infrastructure operation failed (executor HTTP 502)."
+    serialized = repr(result)
+    assert "/home/sonvh/chonhac" not in serialized
+    assert "super-secret" not in serialized
+    assert "bash -lc env" not in serialized
 
 
 def test_status_retires_preview_after_lease_loss(monkeypatch):
