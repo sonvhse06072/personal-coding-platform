@@ -747,6 +747,17 @@ def start_preview(payload: PreviewRequest) -> dict[str, Any]:
         )
         infrastructure.append(health)
         if health.returncode != 0:
+            # A failed preview must not leave a managed daemon/config behind.
+            # Cleanup is exact and best-effort; the coding project's normal DDEV
+            # runtime remains running.
+            try:
+                _pause_frontend_preview(
+                    payload.job_id,
+                    workspace,
+                    frontend,
+                )
+            except Exception:
+                pass
             raise HTTPException(502, "Frontend preview did not become healthy")
 
     return {
