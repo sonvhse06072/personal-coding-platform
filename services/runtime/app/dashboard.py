@@ -6,7 +6,7 @@ import hmac
 import json
 import os
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Cookie, HTTPException, Query, Request, Response
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -20,6 +20,7 @@ _ACTIVE_PLAN_STATES = {"active", "executing", "waiting_merge", "waiting_human"}
 _ACTIVE_JOB_STATES = {"queued", "routing", "planning", "executing", "verifying", "evaluating", "delivering"}
 _PLACEHOLDERS = {"", "CHANGE_ME", "change-me"}
 _COOKIE = "pcp_dashboard_session"
+_CONTROL_COOKIE = "pcp_dashboard_control_session"
 
 
 class DashboardLogin(BaseModel):
@@ -27,12 +28,29 @@ class DashboardLogin(BaseModel):
     token: str = Field(min_length=1, max_length=512)
 
 
+class DashboardPreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    target: Literal["frontend", "backend", "both"]
+
+
 def _dashboard_secret() -> str:
     return os.getenv("DASHBOARD_READ_TOKEN", "").strip()
 
 
+def _dashboard_control_secret() -> str:
+    return os.getenv("DASHBOARD_CONTROL_TOKEN", "").strip()
+
+
 def _session_value(secret: str) -> str:
     return hmac.new(secret.encode("utf-8"), b"pcp-dashboard-session-v1", hashlib.sha256).hexdigest()
+
+
+def _control_session_value(secret: str) -> str:
+    return hmac.new(
+        secret.encode("utf-8"),
+        b"pcp-dashboard-control-session-v1",
+        hashlib.sha256,
+    ).hexdigest()
 
 
 def _require_session(session: str | None) -> None:
@@ -41,6 +59,22 @@ def _require_session(session: str | None) -> None:
         raise HTTPException(503, "Dashboard read token is not configured")
     if not session or not hmac.compare_digest(session, _session_value(secret)):
         raise HTTPException(401, "Dashboard authentication required")
+
+
+def _require_control_session(session: str | None) -> None:
+    secret = _dashboard_control_secret()
+    if secret in _PLACEHOLDERS:
+        raise HTTPException(503, "Dashboard control token is not configured")
+    if not session or not hmac.compare_digest(
+        session,
+        _control_session_value(secret),
+    ):
+        raise HTTPException(401, "Dashboard preview controls are locked")
+
+
+def _preview_error(exc: RuntimeError) -> HTTPException:
+    message = str(exc)
+    return HTTPException(404 if message == "Unknown job" else 409, message)
 
 
 def _iso(value: Any) -> str | None:
@@ -328,7 +362,11 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
     }
 
 
-def create_dashboard_router(storage: Any, orchestrator_store: Any) -> APIRouter:
+def create_dashboard_router(
+    storage: Any,
+    orchestrator_store: Any,
+    preview_manager: Any | None = None,
+) -> APIRouter:
     router = APIRouter()
 
     @router.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
@@ -356,7 +394,84 @@ def create_dashboard_router(storage: Any, orchestrator_store: Any) -> APIRouter:
     @router.delete("/v1/dashboard/session", include_in_schema=False)
     def dashboard_logout(response: Response) -> dict[str, str]:
         response.delete_cookie(_COOKIE, path="/")
+        response.delete_cookie(_CONTROL_COOKIE, path="/")
         return {"status": "ok"}
+
+    @router.post("/v1/dashboard/control-session", include_in_schema=False)
+    def dashboard_control_login(
+        payload: DashboardLogin,
+        response: Response,
+        pcp_dashboard_session: str | None = Cookie(default=None),
+    ) -> dict[str, str]:
+        _require_session(pcp_dashboard_session)
+        secret = _dashboard_control_secret()
+        if secret in _PLACEHOLDERS:
+            raise HTTPException(503, "Dashboard control token is not configured")
+        if not hmac.compare_digest(payload.token, secret):
+            raise HTTPException(401, "Invalid dashboard control token")
+        response.set_cookie(
+            _CONTROL_COOKIE,
+            _control_session_value(secret),
+            httponly=True,
+            secure=True,
+            samesite="strict",
+            max_age=60 * 60,
+            path="/",
+        )
+        return {"status": "ok"}
+
+    @router.delete("/v1/dashboard/control-session", include_in_schema=False)
+    def dashboard_control_logout(
+        response: Response,
+        pcp_dashboard_session: str | None = Cookie(default=None),
+    ) -> dict[str, str]:
+        _require_session(pcp_dashboard_session)
+        response.delete_cookie(_CONTROL_COOKIE, path="/")
+        return {"status": "ok"}
+
+    @router.get("/v1/dashboard/jobs/{job_id}/preview", include_in_schema=False)
+    async def dashboard_preview_status(
+        job_id: str,
+        pcp_dashboard_session: str | None = Cookie(default=None),
+    ) -> dict[str, Any]:
+        _require_session(pcp_dashboard_session)
+        if preview_manager is None:
+            raise HTTPException(503, "Preview manager is unavailable")
+        try:
+            return await preview_manager.status(job_id)
+        except RuntimeError as exc:
+            raise _preview_error(exc) from exc
+
+    @router.post("/v1/dashboard/jobs/{job_id}/preview", include_in_schema=False)
+    async def dashboard_preview_start(
+        job_id: str,
+        payload: DashboardPreviewRequest,
+        pcp_dashboard_session: str | None = Cookie(default=None),
+        pcp_dashboard_control_session: str | None = Cookie(default=None),
+    ) -> dict[str, Any]:
+        _require_session(pcp_dashboard_session)
+        _require_control_session(pcp_dashboard_control_session)
+        if preview_manager is None:
+            raise HTTPException(503, "Preview manager is unavailable")
+        try:
+            return await preview_manager.start(job_id, payload.target)
+        except RuntimeError as exc:
+            raise _preview_error(exc) from exc
+
+    @router.delete("/v1/dashboard/jobs/{job_id}/preview", include_in_schema=False)
+    async def dashboard_preview_stop(
+        job_id: str,
+        pcp_dashboard_session: str | None = Cookie(default=None),
+        pcp_dashboard_control_session: str | None = Cookie(default=None),
+    ) -> dict[str, Any]:
+        _require_session(pcp_dashboard_session)
+        _require_control_session(pcp_dashboard_control_session)
+        if preview_manager is None:
+            raise HTTPException(503, "Preview manager is unavailable")
+        try:
+            return await preview_manager.stop(job_id)
+        except RuntimeError as exc:
+            raise _preview_error(exc) from exc
 
     @router.get("/v1/dashboard/snapshot", include_in_schema=False)
     def dashboard_snapshot(pcp_dashboard_session: str | None = Cookie(default=None)) -> dict[str, Any]:
