@@ -904,6 +904,73 @@ def test_preview_stop_removes_only_pcp_override_and_preserves_source(tmp_path, m
     assert run("git", "branch", "--show-current", cwd=source) == "ai/jobpreviewst"
 
 
+def test_preview_rebuild_replaces_only_the_owned_frontend_daemon(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewrebuild", project_id="demo")
+    )
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append(list(argv))
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+    request = PreviewRequest(
+        job_id="jobpreviewrebuild",
+        project_id="demo",
+        workspace=created["workspace"],
+        target="frontend",
+    )
+
+    assert start_preview(request)["status"] == "ready"
+    calls.clear()
+
+    rebuilt = start_preview(request)
+
+    assert rebuilt["status"] == "ready"
+    assert calls[0] == [
+        "ddev",
+        "exec",
+        "supervisorctl",
+        "stop",
+        "webextradaemons:pcp-next-dev",
+    ]
+    assert ["ddev", "start", "-y"] in calls
+    assert ["ddev", "restart", "-y"] in calls
+    assert source.exists()
+
+
+def test_preview_stop_is_idempotent_after_owned_frontend_is_removed(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewstop2", project_id="demo")
+    )
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append(list(argv))
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+    request = PreviewRequest(
+        job_id="jobpreviewstop2",
+        project_id="demo",
+        workspace=created["workspace"],
+        target="frontend",
+    )
+    start_preview(request)
+
+    assert stop_preview(request)["status"] == "stopped"
+    calls.clear()
+    stopped_again = stop_preview(request)
+
+    assert stopped_again["status"] == "stopped"
+    assert calls == []
+    assert not (source / ".ddev" / "config.pcp-preview.local.yaml").exists()
+    assert source.exists()
+
+
 def test_frontend_quality_pauses_direct_preview_before_build(tmp_path, monkeypatch):
     source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
     created = create_workspace(
