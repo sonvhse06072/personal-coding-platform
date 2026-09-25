@@ -1,0 +1,167 @@
+from __future__ import annotations
+
+from copy import deepcopy
+
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from app.dashboard import create_dashboard_router
+
+
+class FakeStorage:
+    pass
+
+
+class FakeStore:
+    pass
+
+
+class FakePreviewManager:
+    def __init__(self):
+        self.started = []
+        self.stopped = []
+
+    async def status(self, job_id):
+        return {
+            "job_id": job_id,
+            "workspace_mode": "direct",
+            "supported": True,
+            "target": "frontend",
+            "status": "ready",
+            "generation": 1,
+            "frontend_url": "https://chonhac.ddev.site:3100",
+            "backend_url": None,
+            "integration_note": None,
+            "error": None,
+            "updated_at": None,
+            "stopped_at": None,
+        }
+
+    async def start(self, job_id, target):
+        self.started.append((job_id, target))
+        result = await self.status(job_id)
+        result["target"] = target
+        return result
+
+    async def stop(self, job_id):
+        self.stopped.append(job_id)
+        result = await self.status(job_id)
+        result.update(
+            status="stopped",
+            frontend_url=None,
+            backend_url=None,
+        )
+        return result
+
+
+def client(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_READ_TOKEN", "read-secret")
+    monkeypatch.setenv("DASHBOARD_CONTROL_TOKEN", "control-secret")
+    preview = FakePreviewManager()
+    app = FastAPI()
+    app.include_router(
+        create_dashboard_router(
+            FakeStorage(),
+            FakeStore(),
+            preview_manager=preview,
+        )
+    )
+    return TestClient(app, base_url="https://testserver"), preview
+
+
+def unlock_read(client):
+    response = client.post(
+        "/v1/dashboard/session",
+        json={"token": "read-secret"},
+    )
+    assert response.status_code == 200
+
+
+def test_read_session_can_observe_preview_but_cannot_mutate(monkeypatch):
+    http, preview = client(monkeypatch)
+    unlock_read(http)
+
+    observed = http.get("/v1/dashboard/jobs/job-preview/preview")
+    blocked = http.post(
+        "/v1/dashboard/jobs/job-preview/preview",
+        json={"target": "frontend"},
+    )
+
+    assert observed.status_code == 200
+    assert observed.json()["frontend_url"] == "https://chonhac.ddev.site:3100"
+    assert blocked.status_code == 401
+    assert preview.started == []
+
+
+def test_control_session_unlocks_only_bounded_preview_mutations(monkeypatch):
+    http, preview = client(monkeypatch)
+    unlock_read(http)
+
+    unlocked = http.post(
+        "/v1/dashboard/control-session",
+        json={"token": "control-secret"},
+    )
+    started = http.post(
+        "/v1/dashboard/jobs/job-preview/preview",
+        json={"target": "both"},
+    )
+    stopped = http.delete("/v1/dashboard/jobs/job-preview/preview")
+
+    assert unlocked.status_code == 200
+    assert started.status_code == 200
+    assert preview.started == [("job-preview", "both")]
+    assert stopped.status_code == 200
+    assert preview.stopped == ["job-preview"]
+
+
+def test_preview_request_rejects_browser_command_path_port_and_env(monkeypatch):
+    http, preview = client(monkeypatch)
+    unlock_read(http)
+    assert http.post(
+        "/v1/dashboard/control-session",
+        json={"token": "control-secret"},
+    ).status_code == 200
+
+    response = http.post(
+        "/v1/dashboard/jobs/job-preview/preview",
+        json={
+            "target": "frontend",
+            "command": "rm -rf /",
+            "workspace": "/tmp/elsewhere",
+            "port": 9999,
+            "env": {"TOKEN": "leak"},
+        },
+    )
+
+    assert response.status_code == 422
+    assert preview.started == []
+
+
+def test_control_unlock_requires_existing_read_session(monkeypatch):
+    http, _preview = client(monkeypatch)
+
+    response = http.post(
+        "/v1/dashboard/control-session",
+        json={"token": "control-secret"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_dashboard_logout_clears_control_authority_too(monkeypatch):
+    http, preview = client(monkeypatch)
+    unlock_read(http)
+    assert http.post(
+        "/v1/dashboard/control-session",
+        json={"token": "control-secret"},
+    ).status_code == 200
+
+    assert http.delete("/v1/dashboard/session").status_code == 200
+
+    response = http.post(
+        "/v1/dashboard/jobs/job-preview/preview",
+        json={"target": "frontend"},
+    )
+
+    assert response.status_code == 401
+    assert preview.started == []
