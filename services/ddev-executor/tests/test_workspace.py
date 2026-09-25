@@ -849,10 +849,13 @@ def test_preview_stop_removes_only_pcp_override_and_preserves_source(tmp_path, m
     created = create_workspace(
         WorkspaceRequest(job_id="jobpreviewstop", project_id="demo")
     )
-    monkeypatch.setattr(
-        "app.main.run_tracked",
-        lambda job, argv, *, cwd, timeout, env: (0, "ok\n", "", False),
-    )
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append(list(argv))
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
     request = PreviewRequest(
         job_id="jobpreviewstop",
         project_id="demo",
@@ -860,10 +863,20 @@ def test_preview_stop_removes_only_pcp_override_and_preserves_source(tmp_path, m
         target="frontend",
     )
     start_preview(request)
+    calls.clear()
 
     stopped = stop_preview(request)
 
     assert stopped["status"] == "stopped"
+    assert calls == [
+        [
+            "ddev",
+            "exec",
+            "supervisorctl",
+            "stop",
+            "webextradaemons:pcp-next-dev",
+        ]
+    ]
     assert not (source / ".ddev" / "config.pcp-preview.local.yaml").exists()
     assert source.exists()
     assert run("git", "branch", "--show-current", cwd=source) == "ai/jobpreviewst"
@@ -901,7 +914,14 @@ def test_frontend_quality_pauses_direct_preview_before_build(tmp_path, monkeypat
 
     assert result.passed is True
     assert not (source / ".ddev" / "config.pcp-preview.local.yaml").exists()
-    assert calls[0] == ["ddev", "restart", "-y"]
+    assert calls[0] == [
+        "ddev",
+        "exec",
+        "supervisorctl",
+        "stop",
+        "webextradaemons:pcp-next-dev",
+    ]
+    assert ["ddev", "restart", "-y"] not in calls
     assert ["ddev", "start", "-y"] in calls
     assert ["bash", "-lc", "ddev exec echo frontend-quality"] in calls
 
@@ -927,3 +947,59 @@ def test_preview_status_detects_stopped_frontend(tmp_path, monkeypatch):
 
     assert state["status"] == "stopped"
     assert state["frontend_url"] is None
+
+
+
+@pytest.mark.parametrize(
+    ("mutator", "expected"),
+    [
+        (
+            lambda data: data["projects"]["demo"]["preview"]["frontend"]["daemon"].update(
+                {"name": "bad name;rm"}
+            ),
+            "daemon name is invalid",
+        ),
+        (
+            lambda data: data["projects"]["demo"]["preview"]["frontend"]["daemon"].update(
+                {"directory": "/tmp/frontend"}
+            ),
+            "directory must stay under /var/www/html",
+        ),
+        (
+            lambda data: data["projects"]["demo"]["preview"]["frontend"]["daemon"].update(
+                {"https_port": 70000}
+            ),
+            "https_port must be a valid port",
+        ),
+    ],
+)
+def test_preview_contract_rejects_invalid_checked_in_frontend_config(
+    tmp_path,
+    monkeypatch,
+    mutator,
+    expected,
+):
+    _source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    projects_file = tmp_path / "projects.yml"
+    data = yaml.safe_load(projects_file.read_text())
+    mutator(data)
+    projects_file.write_text(yaml.safe_dump(data))
+
+    source = Path(data["projects"]["demo"]["path"]).resolve()
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewbad", project_id="demo")
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        start_preview(
+            PreviewRequest(
+                job_id="jobpreviewbad",
+                project_id="demo",
+                workspace=created["workspace"],
+                target="frontend",
+            )
+        )
+
+    assert exc.value.status_code == 500
+    assert expected in str(exc.value.detail)
+    assert source.exists()
