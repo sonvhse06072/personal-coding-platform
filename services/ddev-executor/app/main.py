@@ -40,6 +40,7 @@ class WorkspaceRequest(BaseModel):
     job_id: str = Field(min_length=8, max_length=100)
     project_id: str = Field(min_length=1, max_length=200)
     ref: str | None = Field(default=None, max_length=200)
+    workspace_mode: Literal["project_default", "isolated_clone"] = "project_default"
 
 
 class PublishBranchRequest(BaseModel):
@@ -462,7 +463,12 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
     """Prepare either the configured direct repo or one isolated clone."""
     cfg = project(payload.project_id)
     repo = _configured_project_path(cfg)
-    mode = _workspace_mode(cfg)
+    configured_mode = _workspace_mode(cfg)
+    mode = (
+        "isolated_clone"
+        if payload.workspace_mode == "isolated_clone"
+        else configured_mode
+    )
     ref = payload.ref or str(cfg.get("base_branch", "main"))
     source_commit = git(repo, "rev-parse", ref)
     prefix = str(cfg.get("runtime", {}).get("branch_prefix", "ai"))
