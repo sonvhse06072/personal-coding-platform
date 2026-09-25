@@ -8,7 +8,7 @@ if ! command -v ddev >/dev/null 2>&1; then
   exit 1
 fi
 
-mkdir -p "$HOME/projects" "$HOME/.coding-platform/workspaces" "$HOME/.codex" "$HOME/.config/opencode" "$HOME/.local/share/opencode"
+mkdir -p "$HOME/projects" "$HOME/.coding-platform/workspaces" "$HOME/.coding-platform/direct-disabled" "$HOME/.codex" "$HOME/.config/opencode" "$HOME/.local/share/opencode"
 touch "$HOME/.gitconfig"
 
 DOCKER_GID="$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo 999)"
