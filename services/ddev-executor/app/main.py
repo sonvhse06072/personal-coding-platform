@@ -9,6 +9,7 @@ import subprocess
 import threading
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import httpx
 import yaml
@@ -254,6 +255,8 @@ def _preview_contract(cfg: dict[str, Any], target: str) -> dict[str, Any]:
         isinstance(backend, dict) and backend.get("enabled", False)
     ):
         raise HTTPException(409, "Backend preview is not enabled for this project")
+    if target in {"backend", "both"} and not _safe_preview_url(backend.get("url")):
+        raise HTTPException(500, "Backend preview requires a local DDEV URL")
     if target in {"frontend", "both"}:
         if not bool(isinstance(frontend, dict) and frontend.get("enabled", False)):
             raise HTTPException(409, "Frontend preview is not enabled for this project")
@@ -267,15 +270,25 @@ def _preview_contract(cfg: dict[str, Any], target: str) -> dict[str, Any]:
         if not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", daemon_name):
             raise HTTPException(500, "Frontend preview daemon name is invalid")
         directory = str(daemon.get("directory") or "").strip()
-        if not directory.startswith("/var/www/html"):
+        if not (
+            directory == "/var/www/html"
+            or directory.startswith("/var/www/html/")
+        ):
             raise HTTPException(500, "Frontend preview daemon directory must stay under /var/www/html")
         for key in ("container_port", "http_port", "https_port"):
             value = daemon.get(key)
             if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= 65535:
                 raise HTTPException(500, f"Frontend preview {key} must be a valid port")
         prepare = frontend.get("prepare") or []
-        if not isinstance(prepare, list) or any(not isinstance(item, str) for item in prepare):
+        if (
+            not isinstance(prepare, list)
+            or any(not isinstance(item, str) or not item.strip() for item in prepare)
+        ):
             raise HTTPException(500, "Frontend preview prepare must be a list of configured commands")
+        if not _safe_preview_url(frontend.get("url")):
+            raise HTTPException(500, "Frontend preview requires a local DDEV URL")
+        if target == "both" and not _safe_preview_url(frontend.get("api_origin_on_both")):
+            raise HTTPException(500, "Both preview requires a local DDEV API origin")
     return {"backend": dict(backend), "frontend": dict(frontend)}
 
 
@@ -283,8 +296,19 @@ def _safe_preview_url(value: Any) -> str | None:
     text = str(value or "").strip()
     if not text:
         return None
-    if len(text) > 500 or not text.startswith("https://"):
-        raise HTTPException(500, "Preview URL must be a bounded HTTPS URL")
+    if len(text) > 500:
+        raise HTTPException(500, "Preview URL must be bounded")
+    parsed = urlsplit(text)
+    hostname = str(parsed.hostname or "").lower()
+    if (
+        parsed.scheme != "https"
+        or not hostname.endswith(".ddev.site")
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise HTTPException(500, "Preview URL must be a local HTTPS DDEV URL")
     return text
 
 
@@ -333,10 +357,8 @@ def _write_preview_override(
     daemon = dict(frontend.get("daemon") or {})
     command = str(daemon["command"]).strip()
     if target == "both":
-        api_origin = str(frontend.get("api_origin_on_both") or "").strip()
+        api_origin = _safe_preview_url(frontend.get("api_origin_on_both"))
         if api_origin:
-            if len(api_origin) > 500 or not api_origin.startswith("https://"):
-                raise HTTPException(500, "Preview API origin must be a bounded HTTPS URL")
             command = f"NEXT_PUBLIC_DRUPAL_API_ORIGIN={api_origin} {command}"
 
     payload = {
