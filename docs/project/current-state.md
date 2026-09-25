@@ -773,14 +773,19 @@ The initiative is intentionally split:
 - #299 / PR #301: Dashboard live-preview controls, separate control
   authorization, config-driven Frontend/Backend/Both operations, preview
   lifecycle persistence, Node-24 local DDEV overrides, deterministic
-  frontend-verification coordination and terminal preview retirement.
+  frontend-verification coordination and terminal preview retirement. This
+  source work is merged at `827fe5c2cc6e35e66e43f7682b65b72083445100`
+  after exact-head CI run #603 passed Router, Runtime, ddev-executor and
+  structure jobs.
 
 Chợ Nhạc is the first acceptance project and its registered path is
-`/home/sonvh/chonhac`. Direct mode is **not activated yet**. In particular,
-`config/projects.yml` does not switch Chợ Nhạc to
-`runtime.workspace_mode: direct` in #299, because project configuration is
-read dynamically and source merge must not silently migrate a currently
-running engineering job.
+`/home/sonvh/chonhac`. Source implementation is complete, but direct mode is
+**not activated on the running PCP instance yet**. Operator rollout is tracked
+in #302. The activation-preparation config now declares
+`runtime.workspace_mode: direct` with
+`exclusive_project_lease: true` for `chonhac`; this must not be treated as
+live until the local PCP checkout is synced to the reviewed commit and the
+zero-active-work activation gate is satisfied.
 
 The reviewed preview URLs are local-only:
 `https://chonhac.ddev.site` for backend and
