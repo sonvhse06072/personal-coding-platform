@@ -486,6 +486,25 @@ class PlanOrchestratorStore:
           ELSE NULL
         END"""
 
+    @staticmethod
+    def _is_owner_attention(*, event_type: str, payload: dict[str, Any] | None) -> bool:
+        materialized_payload = dict(payload or {})
+        attention_state = str(materialized_payload.get("attention_state") or "").strip()
+        raw_advisory = materialized_payload.get("advisory")
+        advisory = raw_advisory if isinstance(raw_advisory, dict) else {}
+        advisory_reason = str(advisory.get("reason") or "").strip()
+        return bool(
+            event_type in _OWNER_ATTENTION_EVENT_TYPES
+            or attention_state
+            or advisory_reason
+            in {"awaiting_merge", "human_decision_required", "operator_waiting_human"}
+        )
+
+    @classmethod
+    def _owner_attention_sql(cls) -> str:
+        return f"""(({cls._legacy_attention_state_sql()}) IS NOT NULL
+          OR event_type = ANY(%s))"""
+
     def _supersede_notification_rows(
         self,
         conn: Any,
@@ -523,8 +542,7 @@ class PlanOrchestratorStore:
             SET status='superseded', lease_until=NULL, updated_at=%s
             WHERE status IN ('pending','delivering')
               AND plan_id=%s AND work_order_id=%s
-              AND (({self._legacy_attention_state_sql()}) IS NOT NULL
-                OR event_type = ANY(%s))""",
+              AND {self._owner_attention_sql()}""",
             (now(), plan_id, work_order_id, list(_OWNER_ATTENTION_EVENT_TYPES)),
         )
         return int(result.rowcount or 0)
@@ -535,8 +553,7 @@ class PlanOrchestratorStore:
             SET status='superseded', lease_until=NULL, updated_at=%s
             WHERE status IN ('pending','delivering')
               AND plan_id=%s
-              AND (({self._legacy_attention_state_sql()}) IS NOT NULL
-                OR event_type = ANY(%s))""",
+              AND {self._owner_attention_sql()}""",
             (now(), plan_id, list(_OWNER_ATTENTION_EVENT_TYPES)),
         )
         return int(result.rowcount or 0)
@@ -576,6 +593,7 @@ class PlanOrchestratorStore:
         self.ensure()
         timestamp = now()
         lease_until = timestamp + timedelta(seconds=max(30, min(1800, lease_seconds)))
+        owner_attention_sql = self._owner_attention_sql()
         with self.storage.connect() as conn:
             conn.execute(
                 """UPDATE cp_notification_outbox
@@ -584,27 +602,28 @@ class PlanOrchestratorStore:
                 (timestamp, timestamp),
             )
             row = conn.execute(
-                """SELECT * FROM cp_notification_outbox
+                f"""SELECT * FROM cp_notification_outbox
                 WHERE status='pending' AND available_at <= %s
                   AND (
-                    plan_id IS NULL OR EXISTS (
-                      SELECT 1 FROM cp_plan_orchestrations plan
-                      WHERE plan.plan_id=cp_notification_outbox.plan_id
-                        AND plan.lifecycle='active'
-                    )
-                  )
-                  AND (
-                    work_order_id IS NULL OR NOT EXISTS (
-                      SELECT 1 FROM cp_plan_work_orders work_order
-                      WHERE work_order.plan_id=cp_notification_outbox.plan_id
-                        AND work_order.work_order_id=cp_notification_outbox.work_order_id
-                        AND work_order.lifecycle <> 'active'
+                    NOT {owner_attention_sql}
+                    OR (
+                      (plan_id IS NULL OR EXISTS (
+                        SELECT 1 FROM cp_plan_orchestrations plan
+                        WHERE plan.plan_id=cp_notification_outbox.plan_id
+                          AND plan.lifecycle='active'
+                      ))
+                      AND (work_order_id IS NULL OR NOT EXISTS (
+                        SELECT 1 FROM cp_plan_work_orders work_order
+                        WHERE work_order.plan_id=cp_notification_outbox.plan_id
+                          AND work_order.work_order_id=cp_notification_outbox.work_order_id
+                          AND work_order.lifecycle <> 'active'
+                      ))
                     )
                   )
                 ORDER BY id
                 FOR UPDATE SKIP LOCKED
                 LIMIT 1""",
-                (timestamp,),
+                (timestamp, list(_OWNER_ATTENTION_EVENT_TYPES)),
             ).fetchone()
             if row is None:
                 conn.commit()
@@ -666,8 +685,12 @@ class PlanOrchestratorStore:
         if attention_state and attention_generation:
             materialized_payload["attention_state"] = attention_state
             materialized_payload["attention_generation"] = attention_generation
+        owner_attention = self._is_owner_attention(
+            event_type=event_type,
+            payload=materialized_payload,
+        )
         with self.storage.connect() as conn:
-            if plan_id:
+            if owner_attention and plan_id:
                 eligible_plan = conn.execute(
                     """SELECT 1 FROM cp_plan_orchestrations
                     WHERE plan_id=%s AND lifecycle='active' FOR SHARE""",
@@ -676,7 +699,10 @@ class PlanOrchestratorStore:
                 if eligible_plan is None:
                     conn.commit()
                     return False
-            if plan_id and work_order_id:
+            if owner_attention and work_order_id and not plan_id:
+                conn.commit()
+                return False
+            if owner_attention and plan_id and work_order_id:
                 eligible = conn.execute(
                     """SELECT 1 FROM cp_plan_work_orders work_order
                     JOIN cp_plan_orchestrations plan ON plan.plan_id=work_order.plan_id

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 
@@ -108,13 +109,10 @@ class Connection:
                     row["status"] in {"pending", "delivering"}
                     and row["plan_id"] == plan_id
                     and (len(values) == 3 or row["work_order_id"] == work_order_id)
-                    and row["event_type"] in {
-                        "ci_failed_after_repairs",
-                        "work_order_blocked",
-                        "human_decision_required",
-                        "operator_action_required",
-                        "provider_quota_exhausted",
-                    }
+                    and PlanOrchestratorStore._is_owner_attention(
+                        event_type=row["event_type"],
+                        payload=row.get("payload"),
+                    )
                 ):
                     row.update(status="superseded", lease_until=None)
                     changed += 1
@@ -169,19 +167,29 @@ class Connection:
                     row["status"] == "pending"
                     and row["available_at"] <= values[0]
                     and (
-                        row["plan_id"] is None
-                        or (
-                            row["plan_id"] in self.storage.plans
-                            and self.storage.plans[row["plan_id"]].get("lifecycle", "active")
-                            == "active"
+                        not PlanOrchestratorStore._is_owner_attention(
+                            event_type=row["event_type"],
+                            payload=row.get("payload"),
                         )
-                    )
-                    and (
-                        row["work_order_id"] is None
-                        or self.storage.work_orders.get(
-                            (row["plan_id"], row["work_order_id"]), {}
-                        ).get("lifecycle", "active")
-                        == "active"
+                        or (
+                            (
+                                row["plan_id"] is None
+                                or (
+                                    row["plan_id"] in self.storage.plans
+                                    and self.storage.plans[row["plan_id"]].get(
+                                        "lifecycle", "active"
+                                    )
+                                    == "active"
+                                )
+                            )
+                            and (
+                                row["work_order_id"] is None
+                                or self.storage.work_orders.get(
+                                    (row["plan_id"], row["work_order_id"]), {}
+                                ).get("lifecycle", "active")
+                                == "active"
+                            )
+                        )
                     )
                 )
             ]
@@ -208,7 +216,7 @@ class Connection:
                     "work_order_id": values[6],
                     "summary": values[7],
                     "github_url": values[8],
-                    "payload": values[9],
+                    "payload": json.loads(values[9]),
                     "status": "pending",
                     "attempts": 0,
                     "available_at": values[10],
@@ -370,7 +378,11 @@ def test_live_shaped_supersession_preserves_execution_truth_and_retires_attentio
     assert storage.notifications[4]["lease_until"] is None
     assert len(storage.notifications) == notification_count
     assert [row["status"] for row in storage.controls] == ["cancelled", "executed"]
-    assert store.claim_notification() is None
+    claimed = store.claim_notification()
+    assert claimed is not None
+    assert claimed["id"] == 7
+    assert claimed["event_type"] == "audit_record"
+    assert claimed["status"] == "delivering"
     assert store.emit_notification(
         dedupe_key="must-not-reappear",
         event_type="work_order_blocked",
@@ -395,7 +407,35 @@ def test_live_shaped_supersession_preserves_execution_truth_and_retires_attentio
         summary="stale plan decision boundary",
         github_url=None,
     ) is False
-    assert len(storage.notifications) == notification_count
+    assert store.emit_notification(
+        dedupe_key="superseded-plan-audit",
+        event_type="audit_record",
+        severity="info",
+        project_id="chonhac",
+        ticket_id="GH-14",
+        plan_id=ORIGINAL_PLAN,
+        work_order_id=None,
+        summary="Historical orchestration audit",
+        github_url=None,
+    ) is True
+    audit = next(
+        row for row in storage.notifications
+        if row["dedupe_key"] == "superseded-plan-audit"
+    )
+    assert audit["status"] == "pending"
+    assert store.emit_notification(
+        dedupe_key="legacy-attention-must-not-reappear",
+        event_type="legacy_notification",
+        severity="warning",
+        project_id="chonhac",
+        ticket_id="GH-14",
+        plan_id=ORIGINAL_PLAN,
+        work_order_id=None,
+        summary="Legacy plan attention",
+        github_url=None,
+        payload={"advisory": {"reason": "human_decision_required"}},
+    ) is False
+    assert len(storage.notifications) == notification_count + 1
 
 
 def test_active_plan_retains_plan_level_human_decision_delivery():
@@ -421,6 +461,22 @@ def test_active_plan_retains_plan_level_human_decision_delivery():
     assert claimed["plan_id"] == ORIGINAL_PLAN
     assert claimed["work_order_id"] is None
     assert claimed["status"] == "delivering"
+
+
+def test_non_owner_notifications_keep_pending_order_for_active_plan():
+    storage = Storage()
+    storage.notifications = [
+        storage._notification(10, "pending", plan_level=True, event_type="audit_record"),
+        storage._notification(11, "pending", plan_level=True, event_type="audit_record"),
+    ]
+    store = PlanOrchestratorStore(storage)
+
+    claimed = store.claim_notification()
+
+    assert claimed is not None
+    assert claimed["id"] == 10
+    assert claimed["status"] == "delivering"
+    assert storage.notifications[1]["status"] == "pending"
 
 
 def test_explicit_supersession_is_idempotent_and_persists_across_store_instances():
