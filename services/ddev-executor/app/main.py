@@ -834,9 +834,14 @@ def start_preview(payload: PreviewRequest) -> dict[str, Any]:
             else None
         ),
         "integration_note": (
+            "Backend preview uses the shared direct-workspace DDEV runtime; Stop Preview does not stop DDEV or remove its data. "
             "Frontend is pointed at the local backend; credentialed browser flows still depend on the project's existing CORS/auth policy."
             if payload.target == "both"
-            else None
+            else (
+                "Backend preview uses the shared direct-workspace DDEV runtime; Stop Preview does not stop DDEV or remove its data."
+                if payload.target == "backend"
+                else None
+            )
         ),
     }
 
