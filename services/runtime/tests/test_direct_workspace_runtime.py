@@ -80,12 +80,13 @@ class CleanupStorage:
 
 
 class CleanupDdev:
-    def __init__(self, actions=None):
+    def __init__(self, actions=None, *, fail_preview_stop=False):
         self.quiesce_calls = []
         self.remove_calls = []
         self.preview_stop_calls = []
         self.cancel_calls = []
         self.actions = actions if actions is not None else []
+        self.fail_preview_stop = fail_preview_stop
 
     async def cancel(self, **payload):
         self.cancel_calls.append(dict(payload))
@@ -95,6 +96,8 @@ class CleanupDdev:
     async def preview_stop(self, **payload):
         self.preview_stop_calls.append(dict(payload))
         self.actions.append(("preview_stop", payload["job_id"]))
+        if self.fail_preview_stop:
+            raise RuntimeError("executor stop failed")
         return {"status": "stopped"}
 
     async def quiesce_workspace(self, **payload):
@@ -272,3 +275,38 @@ def test_runtime_start_retires_terminal_preview_before_lease_reconciliation(monk
                     pass
 
     asyncio.run(scenario())
+
+
+
+def test_cancel_keeps_direct_lease_when_preview_retirement_fails():
+    row = {
+        "id": "job-direct-cancel-failed-preview",
+        "project_id": "chonhac",
+        "workspace": "/home/sonvh/chonhac",
+        "work_order_id": "WO-DIRECT",
+        "status": "executing",
+        "checkpoint": {"workspace_mode": "direct"},
+    }
+    storage = CleanupStorage(
+        row,
+        preview={
+            "job_id": row["id"],
+            "project_id": "chonhac",
+            "target": "frontend",
+            "status": "ready",
+            "generation": 1,
+        },
+    )
+    ddev = CleanupDdev(storage.actions, fail_preview_stop=True)
+    engine = object.__new__(RuntimeEngineCore)
+    engine.storage = storage
+    engine.ddev = ddev
+    engine.active_jobs = {}
+
+    result = asyncio.run(engine.cancel(row["id"]))
+
+    assert result["status"] == "cancelled"
+    assert len(ddev.preview_stop_calls) == 1
+    assert storage.preview["status"] == "failed"
+    assert storage.released == []
+    assert ("release_lease", row["id"]) not in storage.actions
