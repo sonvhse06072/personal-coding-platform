@@ -832,3 +832,65 @@ of this rollout.
 The local direct-workspace + Dashboard preview capability is therefore enabled
 for Chợ Nhạc and eligible for normal future PCP work under the existing
 issue/branch/CI/PR governance and safety gates.
+
+## Project-level Current site preview follow-up #309
+
+The direct-workspace preview capability now also supports a project-level
+**Current site** view when no WorkOrder/job is active. Chợ Nhạc is the first
+accepted project.
+
+Source delivery was completed in two changes:
+
+- #309 / PR #310 added project-level idle preview policy, Dashboard APIs and the
+  persistent Current site card. Idle preview reuses the constrained executor
+  preview contract with a synthetic operation owner rather than a fake
+  engineering job, does not acquire the engineering project lease, preserves
+  the separate Dashboard read/control boundary, refuses dirty direct
+  repositories and disables project-level mutation while a direct job owns the
+  project. Exact-head CI #617 passed all four required jobs and PR #310 merged
+  at `66f4483d8e19c0edfe4c836e4b948b79dc91231d`; Runtime advanced to
+  `1.0.54`;
+- corrective PR #311 completed the shared-repository terminal lifecycle before
+  live handoff acceptance. Terminal direct-job cleanup now follows the
+  fail-closed order: job preview retirement -> resource quiesce -> safe return
+  of the exact clean job-owned `ai/...` branch to the configured existing
+  local base branch -> engineering lease release. Dirty or branch-mismatched
+  repositories keep the lease held for explicit operator recovery. The
+  executor never resets, cleans, stashes, deletes the AI branch, creates a base
+  branch implicitly, fetches, merges or updates the base from a remote.
+  Exact-head CI #619 passed all four required jobs and PR #311 merged at
+  `add228f7258887390651686aa711529eaf6c0d3b`; Runtime is now `1.0.55`
+  and ddev-executor is `1.0.23`.
+
+Controlled local activation and final live acceptance are complete:
+
+- with zero engineering jobs and zero Chợ Nhạc leases, the Dashboard Current
+  site surface observes clean `main` and allows bounded Frontend, Backend or
+  Both preview operations after the existing control unlock;
+- read-only Dashboard sessions cannot mutate Current site, and arbitrary
+  command/path/port/environment request fields are rejected;
+- idle Frontend reached `https://chonhac.ddev.site:3100` and returned HTTP
+  200; Backend and Both preview also reached Ready;
+- rebuild advanced the project-preview generation;
+- Stop removed PCP-owned frontend topology and repeated Stop was idempotent;
+- idle project preview created no synthetic `cp_jobs` engineering row and
+  held no engineering project lease;
+- with idle Frontend Ready, a bounded direct acceptance probe acquired the
+  normal exclusive Chợ Nhạc lease, retired the idle preview before the direct
+  job branch became usable, and caused project-level Current site mutation to
+  be rejected while the job owned the project;
+- cancelling that bounded probe restored the shared direct repository to clean
+  `main` before releasing the engineering lease, with durable
+  `direct_base_restore` evidence recording `restored=true` and branch
+  `main`;
+- after terminal cleanup, Current site returned to idle ownership and Frontend
+  was successfully reactivated;
+- final state was zero active engineering jobs, zero active Chợ Nhạc leases,
+  executor idle, Chợ Nhạc clean on `main`, and Current site Frontend Ready.
+
+The project-level Current site capability is therefore available independently
+of active WorkOrders while preserving the direct-job exclusive-ownership,
+source-safety and credential boundaries established by #297. No production
+deployment, public tunnel/LAN exposure, database reset/import or broad Docker
+cleanup was part of this follow-up.
+
