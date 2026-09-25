@@ -897,11 +897,89 @@ def test_preview_stop_removes_only_pcp_override_and_preserves_source(tmp_path, m
             "supervisorctl",
             "stop",
             "webextradaemons:pcp-next-dev",
-        ]
+        ],
+        ["ddev", "start", "-y"],
     ]
     assert not (source / ".ddev" / "config.pcp-preview.local.yaml").exists()
     assert source.exists()
     assert run("git", "branch", "--show-current", cwd=source) == "ai/jobpreviewst"
+
+
+def test_preview_health_retries_whole_ddev_exec_after_transient_failure(tmp_path, monkeypatch):
+    _source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewretry", project_id="demo")
+    )
+    health_attempts = 0
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        nonlocal health_attempts
+        command = list(argv)
+        if (
+            command[:3] == ["ddev", "exec", "bash"]
+            and "curl -fsS http://127.0.0.1:3100/" in command[-1]
+        ):
+            health_attempts += 1
+            if health_attempts == 1:
+                return 1, "", "transient ddev exec failure", False
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+    monkeypatch.setattr("app.main.time.sleep", lambda _seconds: None)
+
+    result = start_preview(
+        PreviewRequest(
+            job_id="jobpreviewretry",
+            project_id="demo",
+            workspace=created["workspace"],
+            target="frontend",
+        )
+    )
+
+    assert result["status"] == "ready"
+    assert health_attempts == 2
+
+
+def test_failed_frontend_health_reconciles_removed_preview_topology(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewhealthfail", project_id="demo")
+    )
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        command = list(argv)
+        calls.append(command)
+        if (
+            command[:3] == ["ddev", "exec", "bash"]
+            and "curl -fsS http://127.0.0.1:3100/" in command[-1]
+        ):
+            return 1, "", "health unavailable", False
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+    monkeypatch.setattr("app.main.time.sleep", lambda _seconds: None)
+
+    with pytest.raises(HTTPException) as exc:
+        start_preview(
+            PreviewRequest(
+                job_id="jobpreviewhealthfail",
+                project_id="demo",
+                workspace=created["workspace"],
+                target="frontend",
+            )
+        )
+
+    assert exc.value.status_code == 502
+    assert not (source / ".ddev" / "config.pcp-preview.local.yaml").exists()
+    assert calls[-2] == [
+        "ddev",
+        "exec",
+        "supervisorctl",
+        "stop",
+        "webextradaemons:pcp-next-dev",
+    ]
+    assert calls[-1] == ["ddev", "start", "-y"]
 
 
 def test_preview_rebuild_replaces_only_the_owned_frontend_daemon(tmp_path, monkeypatch):
