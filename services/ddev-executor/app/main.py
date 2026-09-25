@@ -116,6 +116,23 @@ def project(project_id: str) -> dict[str, Any]:
     return projects[project_id]
 
 
+def _workspace_mode(cfg: dict[str, Any]) -> str:
+    runtime = cfg.get("runtime", {}) or {}
+    mode = str(runtime.get("workspace_mode") or "isolated_clone").strip()
+    if mode not in {"isolated_clone", "direct"}:
+        raise HTTPException(500, f"Unsupported configured workspace_mode: {mode!r}")
+    if mode == "direct" and not bool(runtime.get("exclusive_project_lease", False)):
+        raise HTTPException(500, "Direct workspace mode requires exclusive_project_lease=true")
+    return mode
+
+
+def _configured_project_path(cfg: dict[str, Any]) -> Path:
+    path = expand(str(cfg.get("path", "")))
+    if not is_git_repo(path):
+        raise HTTPException(422, f"Configured path is not a git repository: {path}")
+    return path
+
+
 def allowed_workspace(path: Path) -> bool:
     root = Path(os.environ["CODING_WORKSPACES_ROOT"]).resolve()
     try:
@@ -153,8 +170,15 @@ def remote_origin(repo: Path) -> str | None:
     return value if proc.returncode == 0 and value else None
 
 
-def _validate_workspace(job_id: str, workspace: str) -> Path:
+def _validate_workspace(job_id: str, project_id: str, workspace: str) -> Path:
+    cfg = project(project_id)
     path = Path(workspace).resolve()
+    if _workspace_mode(cfg) == "direct":
+        configured = _configured_project_path(cfg)
+        if path != configured:
+            raise HTTPException(403, "Direct workspace must match the configured project path")
+        return configured
+
     root = Path(os.environ["CODING_WORKSPACES_ROOT"]).resolve()
     if not allowed_workspace(path) or path.name != job_id or path.parent != root:
         raise HTTPException(403, "Workspace is outside configured root or does not match job")
@@ -362,7 +386,20 @@ def cancel(payload: CancelRequest) -> dict[str, Any]:
 @app.post("/v1/workspaces/quiesce", dependencies=[Depends(auth)])
 def quiesce_workspace(payload: QuiesceWorkspaceRequest) -> dict[str, Any]:
     cfg = project(payload.project_id)
-    workspace = _validate_workspace(payload.job_id, payload.workspace)
+    workspace = _validate_workspace(payload.job_id, payload.project_id, payload.workspace)
+
+    if _workspace_mode(cfg) == "direct":
+        return {
+            "job_id": payload.job_id,
+            "project_id": payload.project_id,
+            "workspace": str(workspace),
+            "quiesced": False,
+            "data_removed": False,
+            "preserved": True,
+            "reason": "direct_workspace_preserved",
+            "stdout": "",
+            "stderr": "",
+        }
 
     if _job_has_active_process(payload.job_id):
         raise HTTPException(
@@ -404,14 +441,53 @@ def quiesce_workspace(payload: QuiesceWorkspaceRequest) -> dict[str, Any]:
 
 @app.post("/v1/workspaces", dependencies=[Depends(auth)])
 def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
-    """Create a self-contained clone for one job without exposing source remotes."""
+    """Prepare either the configured direct repo or one isolated clone."""
     cfg = project(payload.project_id)
-    repo = expand(str(cfg.get("path", "")))
-    if not is_git_repo(repo):
-        raise HTTPException(422, f"Configured path is not a git repository: {repo}")
-
+    repo = _configured_project_path(cfg)
+    mode = _workspace_mode(cfg)
     ref = payload.ref or str(cfg.get("base_branch", "main"))
     source_commit = git(repo, "rev-parse", ref)
+    prefix = str(cfg.get("runtime", {}).get("branch_prefix", "ai"))
+    branch = f"{prefix}/{payload.job_id[:12]}"
+    _validate_ai_branch(cfg, branch)
+
+    if mode == "direct":
+        status = git(repo, "status", "--porcelain", check=False)
+        current_branch = git(repo, "branch", "--show-current", check=False)
+        current_head = git(repo, "rev-parse", "HEAD", check=False)
+        existing_branch = subprocess.run(
+            ["git", "-C", str(repo), "show-ref", "--verify", "--quiet", f"refs/heads/{branch}"],
+            text=True,
+            capture_output=True,
+        ).returncode == 0
+
+        if current_branch == branch:
+            if status or current_head != source_commit:
+                raise HTTPException(
+                    409,
+                    "Direct workspace retry requires the prepared AI branch to remain clean at the pinned source commit",
+                )
+            return {
+                "workspace": str(repo),
+                "branch": branch,
+                "source_commit": source_commit,
+                "workspace_mode": "direct",
+            }
+
+        if status:
+            raise HTTPException(
+                409,
+                "Direct workspace repository is dirty; PCP will not reset, clean or stash Human Owner changes",
+            )
+        if existing_branch:
+            raise HTTPException(409, "Direct workspace AI branch already exists")
+        git(repo, "checkout", "-b", branch, source_commit)
+        return {
+            "workspace": str(repo),
+            "branch": branch,
+            "source_commit": source_commit,
+            "workspace_mode": "direct",
+        }
 
     root = Path(os.environ["CODING_WORKSPACES_ROOT"]).resolve()
     root.mkdir(parents=True, exist_ok=True)
@@ -433,10 +509,7 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
     try:
         if remote_origin(workspace):
             git(workspace, "remote", "remove", "origin")
-        prefix = str(cfg.get("runtime", {}).get("branch_prefix", "ai"))
-        branch = f"{prefix}/{payload.job_id[:12]}"
         git(workspace, "checkout", "-b", branch, source_commit)
-
         _reconcile_workspace_ddev_identity(
             workspace,
             payload.job_id,
@@ -462,7 +535,8 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
     if not bool(autonomy.get("allow_push_ai_branch", False)):
         raise HTTPException(403, "Project policy does not allow AI branch publishing")
 
-    workspace = _validate_workspace(payload.job_id, payload.workspace)
+    workspace = _validate_workspace(payload.job_id, payload.project_id, payload.workspace)
+    mode = _workspace_mode(cfg)
     _validate_ai_branch(cfg, payload.branch)
 
     current_branch = git(workspace, "branch", "--show-current")
@@ -473,8 +547,8 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
     source_commit = git(workspace, "rev-parse", payload.source_commit)
     if head != expected:
         raise HTTPException(409, "Workspace HEAD does not match expected commit")
-    if git(workspace, "remote", check=False).strip():
-        raise HTTPException(409, "Workspace must not contain git remotes during publish")
+    if mode == "isolated_clone" and git(workspace, "remote", check=False).strip():
+        raise HTTPException(409, "Isolated workspace must not contain git remotes during publish")
 
     ancestry = subprocess.run(
         ["git", "-C", str(workspace), "merge-base", "--is-ancestor", source_commit, expected],
@@ -558,11 +632,15 @@ def github_ci(
 
 @app.delete("/v1/workspaces", dependencies=[Depends(auth)])
 def remove_workspace(job_id: str, project_id: str, workspace: str = Query(...)) -> dict[str, Any]:
-    project(project_id)
-    path = Path(workspace).resolve()
-    root = Path(os.environ["CODING_WORKSPACES_ROOT"]).resolve()
-    if not allowed_workspace(path) or path.name != job_id or path.parent != root:
-        raise HTTPException(403, "Workspace mismatch")
+    cfg = project(project_id)
+    path = _validate_workspace(job_id, project_id, workspace)
+    if _workspace_mode(cfg) == "direct":
+        return {
+            "removed": False,
+            "preserved": True,
+            "workspace": str(path),
+            "reason": "direct_workspace_source_preserved",
+        }
     if path.exists():
         shutil.rmtree(path)
     return {"removed": True, "workspace": str(path)}
@@ -571,18 +649,14 @@ def remove_workspace(job_id: str, project_id: str, workspace: str = Query(...)) 
 @app.post("/v1/phase", response_model=PhaseResponse, dependencies=[Depends(auth)])
 def phase(payload: PhaseRequest) -> PhaseResponse:
     cfg = project(payload.project_id)
-    workspace = Path(payload.workspace).resolve()
-    root = Path(os.environ["CODING_WORKSPACES_ROOT"]).resolve()
-    if not allowed_workspace(workspace) or workspace.name != payload.job_id or workspace.parent != root:
-        raise HTTPException(403, "Workspace is outside configured root or does not match job")
-    if not workspace.exists():
-        raise HTTPException(404, "Workspace does not exist")
+    workspace = _validate_workspace(payload.job_id, payload.project_id, payload.workspace)
 
-    _reconcile_workspace_ddev_identity(
-        workspace,
-        payload.job_id,
-        nodejs_version=cfg.get("ddev", {}).get("workspace_nodejs_version"),
-    )
+    if _workspace_mode(cfg) == "isolated_clone":
+        _reconcile_workspace_ddev_identity(
+            workspace,
+            payload.job_id,
+            nodejs_version=cfg.get("ddev", {}).get("workspace_nodejs_version"),
+        )
 
     commands = cfg.get("ddev", {}).get(payload.phase, []) or []
     if not isinstance(commands, list) or any(not isinstance(command, str) for command in commands):
