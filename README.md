@@ -16,7 +16,7 @@ The checked-in source of truth is authoritative over chat history or remembered 
 
 DDEV supports custom Docker Compose services through `.ddev/docker-compose.*.yaml`, so the platform can remain one Git repository while keeping Router, Coding Runtime, n8n and the privileged DDEV executor isolated as separate services.
 
-The Coding Runtime **does not** receive `/var/run/docker.sock` or the source-repository root. Only `ddev-executor` has Docker and source-repository access and it accepts a project ID + named phase (`preflight`, `targeted_tests`, `static_analysis`, `full_tests`, `cleanup`). The actual shell commands come only from checked-in `config/projects.yml`.
+The Coding Runtime **never** receives `/var/run/docker.sock`. Isolated-clone projects keep their source repositories outside the agent trust boundary. A project explicitly configured for `runtime.workspace_mode: direct` may expose exactly one separately approved repository through `CODING_DIRECT_PROJECT_ROOT`; Runtime and the Antigravity bridge fail closed unless the configured project path matches that exact mount. `ddev-executor` remains the only service with Docker access and accepts only registered project IDs + bounded operations/phases.
 
 ## Components
 
@@ -84,6 +84,21 @@ projects:
 
 By default `CODING_PROJECTS_ROOT=$HOME/projects`. Change it once in `.ddev/.env` if your repositories are elsewhere.
 
+### Optional direct workspace mode
+
+The default workspace strategy remains an isolated self-contained clone. For one explicitly approved local project, PCP may instead operate on the registered repository itself:
+
+```yaml
+runtime:
+  workspace_mode: direct
+  exclusive_project_lease: true
+  branch_prefix: ai
+```
+
+Direct mode also requires `CODING_DIRECT_PROJECT_ROOT` in `.ddev/.env` to resolve to exactly the same repository path. PCP does not accept a parent directory or arbitrary API-supplied path. One durable project lease serializes direct-mode jobs; a dirty repository, unexpected branch/HEAD drift, or conflicting lease fails closed. PCP never resets, cleans or stashes pre-existing Human Owner edits.
+
+This mode is intended for interactive local development/live preview. It does not change staging/production authority.
+
 ## Authenticate coding agents once
 
 Antigravity Individual authentication is intentionally kept on the WSL host because `agy` stores account sessions in the Linux Secret Service/D-Bus keyring. The coding container does **not** receive your host keyring.
@@ -97,7 +112,7 @@ agy
 agy -p "Reply with exactly ANTIGRAVITY_OK" --output-format json
 ```
 
-`ddev start` automatically starts a local bearer-token-protected host bridge. Runtime calls that bridge only for workspaces under `$CODING_WORKSPACES_ROOT`; the bridge runs `agy` with Antigravity's native sandbox and non-interactive permissions.
+`ddev start` automatically starts a local bearer-token-protected host bridge. Runtime calls that bridge only for isolated workspaces under `$CODING_WORKSPACES_ROOT` or the one exact direct repository configured by `CODING_DIRECT_PROJECT_ROOT`; the bridge runs `agy` with Antigravity's native sandbox and non-interactive permissions.
 
 Codex/OpenCode remain container adapters. Authenticate them as needed:
 
@@ -207,7 +222,9 @@ deterministic repo analysis
       ↓
 Router /route
       ↓
-isolated Git workspace + AI branch
+project workspace + AI branch
+      ├─ default: isolated self-contained clone
+      └─ optional: exact direct repo + exclusive lease
       ↓
 optional planner
       ↓
@@ -223,7 +240,7 @@ GitHub Actions / commit-status monitoring
       └─ infrastructure failure → durable delivery checkpoint / resume
 ```
 
-Every workspace receives a temporary `.ddev/config.coding-platform.yaml` with a unique DDEV project name, so parallel jobs do not collide with the source project's normal DDEV environment.
+Every **isolated-clone** workspace receives a temporary `.ddev/config.coding-platform.yaml` with a unique DDEV project name, so parallel jobs do not collide with the source project's normal DDEV environment. Direct workspaces preserve the project's normal DDEV identity and are serialized by an exclusive project lease.
 
 ### Explicit orchestration supersession
 
@@ -246,7 +263,7 @@ WorkOrder from scheduling and automatic recovery, supersedes only unsent owner
 attention, cancels only pending controls, and leaves sent notifications and
 executed controls as audit history.
 
-Every workspace is a **self-contained `git clone --no-local` pinned to the source commit**, not a traditional Git worktree. That is deliberate: a worktree's `.git` file points back to the original repository, which would force the agent container to mount the source-repository root. The isolated clone costs a little more disk but keeps the original repo outside the agent trust boundary.
+By default every workspace is a **self-contained `git clone --no-local` pinned to the source commit**, not a traditional Git worktree. That remains the isolation-first strategy. The optional direct mode is an explicit exception for one exact locally mounted project: it uses the registered repository itself, requires a durable exclusive lease, preserves its normal Git origin/DDEV identity, and never deletes the source repository during cleanup.
 
 ## Anti-loop behavior
 
