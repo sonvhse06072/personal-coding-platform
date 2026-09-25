@@ -516,6 +516,7 @@ def configure_direct(monkeypatch, tmp_path: Path, *, allow_push: bool = True):
         "exclusive_project_lease": True,
     }
     projects_file.write_text(yaml.safe_dump(data))
+    monkeypatch.setenv("CODING_DIRECT_PROJECT_ROOT", str(source))
     return source, remote, workspaces
 
 
