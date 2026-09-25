@@ -129,6 +129,7 @@ def test_preview_request_rejects_browser_command_path_port_and_env(monkeypatch):
             "command": "rm -rf /",
             "workspace": "/tmp/elsewhere",
             "port": 9999,
+            "hostname": "0.0.0.0",
             "env": {"TOKEN": "leak"},
         },
     )
@@ -165,3 +166,58 @@ def test_dashboard_logout_clears_control_authority_too(monkeypatch):
 
     assert response.status_code == 401
     assert preview.started == []
+
+
+
+def test_wrong_control_token_never_unlocks_preview_mutations(monkeypatch):
+    http, preview = client(monkeypatch)
+    unlock_read(http)
+
+    rejected = http.post(
+        "/v1/dashboard/control-session",
+        json={"token": "wrong-secret"},
+    )
+    assert rejected.status_code == 401
+
+    mutation = http.post(
+        "/v1/dashboard/jobs/job-preview/preview",
+        json={"target": "frontend"},
+    )
+    assert mutation.status_code == 401
+    assert preview.started == []
+
+
+def test_preview_dashboard_payload_contains_no_internal_execution_secrets(monkeypatch):
+    http, _preview = client(monkeypatch)
+    unlock_read(http)
+
+    response = http.get("/v1/dashboard/jobs/job-preview/preview")
+    assert response.status_code == 200
+    body = response.json()
+
+    assert set(body) == {
+        "job_id",
+        "workspace_mode",
+        "supported",
+        "target",
+        "status",
+        "generation",
+        "frontend_url",
+        "backend_url",
+        "integration_note",
+        "error",
+        "updated_at",
+        "stopped_at",
+    }
+    serialized = response.text
+    for forbidden in (
+        "RUNTIME_API_TOKEN",
+        "PLATFORM_INTERNAL_TOKEN",
+        "GITHUB_DELIVERY_TOKEN",
+        "ANTIGRAVITY_BRIDGE_TOKEN",
+        "DASHBOARD_CONTROL_TOKEN",
+        "command",
+        "workspace",
+        "environment",
+    ):
+        assert forbidden not in serialized
