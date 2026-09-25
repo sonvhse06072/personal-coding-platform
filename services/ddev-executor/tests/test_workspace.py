@@ -773,6 +773,7 @@ def test_direct_frontend_preview_is_config_driven_and_git_clean(tmp_path, monkey
     raw = override.read_text(encoding="utf-8")
     assert raw.startswith("# PCP-managed direct live preview; do not commit.\n")
     payload = yaml.safe_load("\n".join(raw.splitlines()[1:]))
+    assert payload["nodejs_version"] == "24"
     assert payload["web_extra_daemons"][0]["name"] == "pcp-next-dev"
     assert payload["web_extra_daemons"][0]["directory"] == "/var/www/html/frontend"
     assert payload["web_extra_exposed_ports"][0] == {
@@ -889,8 +890,17 @@ def test_frontend_quality_pauses_direct_preview_before_build(tmp_path, monkeypat
     )
     calls = []
 
+    node_override_seen = []
+
     def fake_run_tracked(job, argv, *, cwd, timeout, env):
         calls.append(list(argv))
+        if list(argv) == ["ddev", "start", "-y"]:
+            node_override = source / ".ddev" / "config.pcp-node.local.yaml"
+            node_override_seen.append(
+                node_override.read_text(encoding="utf-8")
+                if node_override.exists()
+                else ""
+            )
         return 0, "ok\n", "", False
 
     monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
@@ -914,6 +924,9 @@ def test_frontend_quality_pauses_direct_preview_before_build(tmp_path, monkeypat
 
     assert result.passed is True
     assert not (source / ".ddev" / "config.pcp-preview.local.yaml").exists()
+    assert not (source / ".ddev" / "config.pcp-node.local.yaml").exists()
+    assert node_override_seen
+    assert 'nodejs_version: "24"' in node_override_seen[-1]
     assert calls[0] == [
         "ddev",
         "exec",
@@ -1135,3 +1148,28 @@ def test_unhealthy_frontend_preview_removes_only_managed_override(
         "webextradaemons:pcp-next-dev",
     ] in calls
     assert source.exists()
+
+
+
+def test_direct_frontend_preview_requires_configured_node_runtime(tmp_path, monkeypatch):
+    _source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    projects_file = tmp_path / "projects.yml"
+    data = yaml.safe_load(projects_file.read_text())
+    data["projects"]["demo"]["ddev"].pop("workspace_nodejs_version", None)
+    projects_file.write_text(yaml.safe_dump(data))
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewnode", project_id="demo")
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        start_preview(
+            PreviewRequest(
+                job_id="jobpreviewnode",
+                project_id="demo",
+                workspace=created["workspace"],
+                target="frontend",
+            )
+        )
+
+    assert exc.value.status_code == 500
+    assert "requires ddev.workspace_nodejs_version" in str(exc.value.detail)
