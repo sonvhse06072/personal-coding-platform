@@ -501,3 +501,167 @@ def test_quiesce_workspace_can_release_only_validated_project_data(tmp_path, mon
     assert result["quiesced"] is True
     assert result["data_removed"] is True
     assert workspace.exists()
+
+
+
+def configure_direct(monkeypatch, tmp_path: Path, *, allow_push: bool = True):
+    source, remote, workspaces = configure(
+        monkeypatch, tmp_path, allow_push=allow_push
+    )
+    projects_file = tmp_path / "projects.yml"
+    data = yaml.safe_load(projects_file.read_text())
+    data["projects"]["demo"]["runtime"] = {
+        "branch_prefix": "ai",
+        "workspace_mode": "direct",
+        "exclusive_project_lease": True,
+    }
+    projects_file.write_text(yaml.safe_dump(data))
+    return source, remote, workspaces
+
+
+def test_direct_workspace_uses_registered_repo_and_preserves_origin(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct(monkeypatch, tmp_path)
+    source_commit = run("git", "rev-parse", "main", cwd=source)
+
+    result = create_workspace(
+        WorkspaceRequest(job_id="jobdirect123", project_id="demo")
+    )
+
+    assert Path(result["workspace"]) == source.resolve()
+    assert result["workspace_mode"] == "direct"
+    assert result["source_commit"] == source_commit
+    assert result["branch"] == "ai/jobdirect123"
+    assert run("git", "branch", "--show-current", cwd=source) == "ai/jobdirect123"
+    assert run("git", "remote", cwd=source) == "origin"
+
+    removed = remove_workspace(
+        job_id="jobdirect123",
+        project_id="demo",
+        workspace=str(source),
+    )
+    assert removed["removed"] is False
+    assert removed["preserved"] is True
+    assert source.exists()
+    assert (source / ".git").exists()
+
+
+def test_direct_workspace_refuses_dirty_repo_without_branch_mutation(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct(monkeypatch, tmp_path)
+    (source / "README.md").write_text("human owner edit\n")
+    original_branch = run("git", "branch", "--show-current", cwd=source)
+
+    with pytest.raises(HTTPException) as exc:
+        create_workspace(
+            WorkspaceRequest(job_id="jobdirty1234", project_id="demo")
+        )
+
+    assert exc.value.status_code == 409
+    assert "will not reset, clean or stash" in str(exc.value.detail)
+    assert run("git", "branch", "--show-current", cwd=source) == original_branch
+    assert run("git", "status", "--porcelain", cwd=source)
+
+
+def test_direct_workspace_publish_keeps_real_origin_and_pushes_exact_head(tmp_path, monkeypatch):
+    source, remote, _workspaces = configure_direct(monkeypatch, tmp_path)
+    source_commit = run("git", "rev-parse", "main", cwd=source)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobdirectpub", project_id="demo")
+    )
+
+    (source / "DIRECT.txt").write_text("direct\n")
+    run("git", "add", "DIRECT.txt", cwd=source)
+    run("git", "commit", "-m", "direct publish", cwd=source)
+    head = run("git", "rev-parse", "HEAD", cwd=source)
+
+    result = publish_branch(
+        PublishBranchRequest(
+            job_id="jobdirectpub",
+            project_id="demo",
+            workspace=created["workspace"],
+            branch=created["branch"],
+            source_commit=source_commit,
+            expected_commit=head,
+        )
+    )
+
+    assert result["published"] is True
+    assert result["commit"] == head
+    assert run("git", "remote", cwd=source) == "origin"
+    assert (
+        run(
+            "git",
+            "--git-dir",
+            str(remote),
+            "rev-parse",
+            "refs/heads/ai/jobdirectpub",
+        )
+        == head
+    )
+
+
+def test_direct_quiesce_preserves_normal_project_ddev_and_data(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobdirectqui", project_id="demo")
+    )
+
+    result = quiesce_workspace(
+        QuiesceWorkspaceRequest(
+            job_id="jobdirectqui",
+            project_id="demo",
+            workspace=created["workspace"],
+            remove_data=True,
+        )
+    )
+
+    assert result["quiesced"] is False
+    assert result["data_removed"] is False
+    assert result["preserved"] is True
+    assert result["reason"] == "direct_workspace_preserved"
+    assert source.exists()
+
+
+def test_direct_phase_uses_normal_ddev_identity_without_pcp_override(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct(
+        monkeypatch, tmp_path, allow_push=False
+    )
+    ddev = source / ".ddev"
+    ddev.mkdir()
+    (ddev / "config.yaml").write_text("name: demo\ntype: drupal11\n")
+    run("git", "add", ".ddev/config.yaml", cwd=source)
+    run("git", "commit", "-m", "add ddev", cwd=source)
+    run("git", "push", "origin", "main", cwd=source)
+
+    projects_file = tmp_path / "projects.yml"
+    data = yaml.safe_load(projects_file.read_text())
+    data["projects"]["demo"]["ddev"] = {
+        "enabled": True,
+        "targeted_tests": ["ddev exec echo ok"],
+    }
+    projects_file.write_text(yaml.safe_dump(data))
+
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobdirectddev", project_id="demo")
+    )
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append((list(argv), cwd))
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+
+    response = phase(
+        PhaseRequest(
+            job_id="jobdirectddev",
+            project_id="demo",
+            workspace=created["workspace"],
+            phase="targeted_tests",
+        )
+    )
+
+    assert response.passed is True
+    assert calls[0][0] == ["ddev", "start", "-y"]
+    assert calls[0][1] == source.resolve()
+    assert calls[1][0] == ["bash", "-lc", "ddev exec echo ok"]
+    assert not (ddev / "config.coding-platform.yaml").exists()
