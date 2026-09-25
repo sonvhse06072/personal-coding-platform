@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import subprocess
 import time
@@ -35,6 +36,15 @@ class RuntimeEngine(RuntimeEngineCore):
         project = project_config(job["project_id"])
         runtime_cfg = project.get("runtime", {}) or {}
         workspace_mode = str(runtime_cfg.get("workspace_mode") or "isolated_clone")
+        if workspace_mode == "direct":
+            approved_direct_root = os.getenv("CODING_DIRECT_PROJECT_ROOT", "").strip()
+            if not approved_direct_root:
+                raise RuntimeError("CODING_DIRECT_PROJECT_ROOT is not configured")
+            if Path(project["path"]).resolve() != Path(approved_direct_root).resolve():
+                raise RuntimeError(
+                    "Direct project path does not match the exact mounted CODING_DIRECT_PROJECT_ROOT"
+                )
+
         task = dict(job["task"])
         checkpoint = checkpoint_from_row(job)
         progress = merge_progress(self._new_progress(), job.get("progress"))
