@@ -121,8 +121,18 @@ def _workspace_mode(cfg: dict[str, Any]) -> str:
     mode = str(runtime.get("workspace_mode") or "isolated_clone").strip()
     if mode not in {"isolated_clone", "direct"}:
         raise HTTPException(500, f"Unsupported configured workspace_mode: {mode!r}")
-    if mode == "direct" and not bool(runtime.get("exclusive_project_lease", False)):
-        raise HTTPException(500, "Direct workspace mode requires exclusive_project_lease=true")
+    if mode == "direct":
+        if not bool(runtime.get("exclusive_project_lease", False)):
+            raise HTTPException(500, "Direct workspace mode requires exclusive_project_lease=true")
+        approved = os.getenv("CODING_DIRECT_PROJECT_ROOT", "").strip()
+        if not approved:
+            raise HTTPException(500, "CODING_DIRECT_PROJECT_ROOT is not configured")
+        configured = expand(str(cfg.get("path", "")))
+        if configured != expand(approved):
+            raise HTTPException(
+                500,
+                "Direct workspace path must match CODING_DIRECT_PROJECT_ROOT exactly",
+            )
     return mode
 
 
