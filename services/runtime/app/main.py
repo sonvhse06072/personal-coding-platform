@@ -20,6 +20,7 @@ from .engine_telemetry import RuntimeEngine
 from .orchestrator_notifications import PlanOrchestrator
 from .orchestrator_resume import prepare_orchestrated_job_resume, reopen_orchestrated_job
 from .pm_bridge import router as pm_bridge_router
+from .preview import PreviewManager
 from .pm_planning import (
     ExecutionPlanView,
     PMPlanCreateRequest,
@@ -83,6 +84,7 @@ engine = RuntimeEngine(storage)
 pm_planner = PMPlanner(storage)
 collaboration_manager = engine.collaboration
 plan_orchestrator = PlanOrchestrator(storage, engine)
+preview_manager = PreviewManager(storage, engine.ddev)
 
 
 def auth(authorization: str | None = Header(default=None)) -> None:
@@ -138,9 +140,15 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-app = FastAPI(title="Personal Coding Runtime", version="1.0.51", lifespan=lifespan)
+app = FastAPI(title="Personal Coding Runtime", version="1.0.52", lifespan=lifespan)
 app.include_router(pm_bridge_router)
-app.include_router(create_dashboard_router(storage, plan_orchestrator.store))
+app.include_router(
+    create_dashboard_router(
+        storage,
+        plan_orchestrator.store,
+        preview_manager=preview_manager,
+    )
+)
 
 
 @app.get("/health", response_model=RuntimeHealth)
@@ -150,7 +158,7 @@ async def health() -> RuntimeHealth:
     return RuntimeHealth(
         status="ok" if router_ok and executor_ok else "degraded",
         service="coding-runtime",
-        version="1.0.51",
+        version="1.0.52",
         router="ok" if router_ok else "down",
         executor="ok" if executor_ok else "down",
         adapters={

@@ -126,6 +126,26 @@ projects:
       keep_workspace_on_success: true
       keep_workspace_on_failure: true
 
+    preview:
+      backend:
+        enabled: true
+        url: https://chonhac.ddev.site
+      frontend:
+        enabled: true
+        directory: frontend
+        prepare:
+          - >-
+            ddev exec bash -lc 'cd frontend && node --version && npm ci --no-audit --no-fund'
+        daemon:
+          name: pcp-next-dev
+          command: ./node_modules/.bin/next dev --hostname 0.0.0.0 --port 3100
+          directory: /var/www/html/frontend
+          container_port: 3100
+          http_port: 3099
+          https_port: 3100
+        url: https://chonhac.ddev.site:3100
+        api_origin_on_both: https://chonhac.ddev.site
+
     ddev:
       enabled: true
       workspace_nodejs_version: "24"

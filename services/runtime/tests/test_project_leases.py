@@ -9,12 +9,16 @@ from app.storage import DDL, Storage
 
 
 class Result:
-    def __init__(self, row=None, *, rowcount=0):
+    def __init__(self, row=None, *, rows=None, rowcount=0):
         self.row = deepcopy(row)
+        self.rows = deepcopy(rows or [])
         self.rowcount = rowcount
 
     def fetchone(self):
         return deepcopy(self.row)
+
+    def fetchall(self):
+        return deepcopy(self.rows)
 
 
 class Connection:
@@ -24,6 +28,7 @@ class Connection:
             "job-two": {"id": "job-two", "project_id": "demo", "status": "queued"},
         }
         self.lease = None
+        self.previews = {}
         self.commits = 0
 
     def execute(self, query, params=None):
@@ -37,6 +42,9 @@ class Connection:
         if compact.startswith("SELECT status FROM cp_jobs WHERE id="):
             job = self.jobs.get(values[0])
             return Result({"status": job["status"]} if job else None)
+        if compact.startswith("SELECT status FROM cp_job_previews WHERE job_id="):
+            preview = self.previews.get(values[0])
+            return Result({"status": preview["status"]} if preview else None)
         if compact.startswith("INSERT INTO cp_project_leases"):
             project_id, owner_job_id, acquired_at, updated_at = values
             self.lease = {
@@ -73,8 +81,14 @@ class Connection:
             updated_at, terminal = values
             terminal_set = set(terminal)
             if self.lease and self.lease["state"] == "active":
-                owner = self.jobs.get(self.lease["owner_job_id"])
-                if owner and owner["status"] in terminal_set:
+                owner_id = self.lease["owner_job_id"]
+                owner = self.jobs.get(owner_id)
+                preview = self.previews.get(owner_id)
+                preview_safe = (
+                    preview is None
+                    or preview.get("status") in {"stopped", "not_built"}
+                )
+                if owner and owner["status"] in terminal_set and preview_safe:
                     self.lease.update(state="released", updated_at=updated_at)
                     return Result(rowcount=1)
             return Result(rowcount=0)
@@ -164,6 +178,51 @@ def test_reconcile_releases_only_terminal_owner():
     assert connection.lease["state"] == "active"
 
     connection.jobs["job-one"]["status"] = "failed"
+
+    assert store.reconcile_terminal_project_leases() == 1
+    assert connection.lease["state"] == "released"
+
+
+
+def test_terminal_owner_with_unretired_preview_cannot_be_replaced():
+    connection = Connection()
+    store = storage(connection)
+    store.acquire_project_lease("demo", "job-one")
+    connection.jobs["job-one"]["status"] = "completed"
+    connection.previews["job-one"] = {"status": "ready"}
+
+    with pytest.raises(RuntimeError, match="preview cleanup pending"):
+        store.acquire_project_lease("demo", "job-two")
+
+    assert connection.lease["owner_job_id"] == "job-one"
+    assert connection.lease["state"] == "active"
+
+
+def test_terminal_owner_with_stopped_preview_can_be_replaced():
+    connection = Connection()
+    store = storage(connection)
+    store.acquire_project_lease("demo", "job-one")
+    connection.jobs["job-one"]["status"] = "completed"
+    connection.previews["job-one"] = {"status": "stopped"}
+
+    acquired = store.acquire_project_lease("demo", "job-two")
+
+    assert acquired["owner_job_id"] == "job-two"
+    assert acquired["generation"] == 2
+    assert acquired["state"] == "active"
+
+
+def test_reconcile_keeps_terminal_lease_while_preview_cleanup_is_pending():
+    connection = Connection()
+    store = storage(connection)
+    store.acquire_project_lease("demo", "job-one")
+    connection.jobs["job-one"]["status"] = "failed"
+    connection.previews["job-one"] = {"status": "failed"}
+
+    assert store.reconcile_terminal_project_leases() == 0
+    assert connection.lease["state"] == "active"
+
+    connection.previews["job-one"]["status"] = "stopped"
 
     assert store.reconcile_terminal_project_leases() == 1
     assert connection.lease["state"] == "released"

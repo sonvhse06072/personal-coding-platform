@@ -265,6 +265,53 @@ executed controls as audit history.
 
 By default every workspace is a **self-contained `git clone --no-local` pinned to the source commit**, not a traditional Git worktree. That remains the isolation-first strategy. The optional direct mode is an explicit exception for one exact locally mounted project: it uses the registered repository itself, requires a durable exclusive lease, preserves its normal Git origin/DDEV identity, and never deletes the source repository during cleanup.
 
+## Direct-workspace local preview
+
+For a project explicitly activated with `runtime.workspace_mode: direct`, the
+Dashboard can expose an opt-in **Local preview** panel for the job that owns the
+exclusive project lease.
+
+Preview mutations use a separate `DASHBOARD_CONTROL_TOKEN`. The normal
+`DASHBOARD_READ_TOKEN` remains read-only. After the read-only Dashboard is
+open, choose **Unlock controls** once, then select:
+
+- **Frontend** — start the configured local frontend daemon and expose its
+  DDEV-router URL;
+- **Backend** — ensure the project's normal DDEV backend is running and expose
+  its normal local DDEV URL;
+- **Both** — start both from the same direct source tree and apply only the
+  checked-in local API-origin override, if configured.
+
+For Chợ Nhạc the reviewed preview contract uses:
+
+- backend: `https://chonhac.ddev.site`;
+- frontend: `https://chonhac.ddev.site:3100`;
+- Node 24 from PCP-managed local DDEV overrides;
+- Next development mode for hot reload;
+- the existing `NEXT_PUBLIC_DRUPAL_API_ORIGIN` hook for **Both**.
+
+PCP writes only ownership-marked `config.*.local.yaml` files and excludes
+them through the repository's local Git exclude file. It never requires those
+preview files to be committed. Deterministic `frontend_quality` stops the
+exact PCP-managed frontend daemon, applies a temporary Node-runtime override,
+runs the production verification sequence, and leaves preview stopped until
+the Human Owner explicitly starts/rebuilds it again.
+
+**Stop Preview** stops/removes only the PCP-managed frontend preview resources.
+The backend DDEV project is shared with the direct coding workspace and remains
+running; Stop Preview does not destroy its database, files, containers, or
+source repository.
+
+Preview state is independent from coding-job status, progress, budgets and
+repair counters. A preview failure cannot fail or repair the coding job. A
+terminal direct job must retire its preview before PCP releases the exclusive
+project lease; if cleanup fails, the lease remains held so another direct job
+cannot take over the repository.
+
+A Ready preview URL may be included as sanitized advisory context for developer
+or evaluator agents. URL availability is not evidence that an agent performed a
+visual/browser review.
+
 ## Anti-loop behavior
 
 Budget belongs to the job, never the model. Escalation does not reset iteration/model-call/token/time/cost counters. Router v1 enforces failure-fingerprint, no-progress, diff-oscillation, scope and hard-budget gates. Runtime records agent-reported token usage; paid OpenCode agents also accumulate per-job USD cost from the model registry (DeepSeek uses conservative peak pricing when the provider does not report cost directly).

@@ -152,6 +152,8 @@ main() {
   resolve_shared_secret PLATFORM_INTERNAL_TOKEN "$RUNTIME_ENV" "$EXECUTOR_ENV"
   resolve_shared_secret ANTIGRAVITY_BRIDGE_TOKEN "$RUNTIME_ENV" "$HOST_ENV"
 
+  resolve_shared_secret DASHBOARD_CONTROL_TOKEN "$RUNTIME_ENV"
+
   # Provider credentials are Runtime-only. Empty values are removed from the
   # global DDEV environment as well, so future configuration cannot leak them.
   move_optional_secret DEEPSEEK_API_KEY "$RUNTIME_ENV"

@@ -7,12 +7,16 @@ from fastapi import HTTPException
 
 from app.main import (
     PhaseRequest,
+    PreviewRequest,
     PublishBranchRequest,
     QuiesceWorkspaceRequest,
     WorkspaceRequest,
     create_workspace,
     phase,
+    preview_status,
     publish_branch,
+    start_preview,
+    stop_preview,
     quiesce_workspace,
     remove_workspace,
 )
@@ -700,3 +704,562 @@ def test_direct_project_can_request_disposable_isolated_planning_workspace(tmp_p
     )
     assert removed["removed"] is True
     assert source.exists()
+
+
+
+def configure_direct_preview(monkeypatch, tmp_path: Path):
+    source, remote, workspaces = configure_direct(
+        monkeypatch,
+        tmp_path,
+        allow_push=False,
+    )
+    projects_file = tmp_path / "projects.yml"
+    data = yaml.safe_load(projects_file.read_text())
+    data["projects"]["demo"]["preview"] = {
+        "backend": {
+            "enabled": True,
+            "url": "https://demo.ddev.site",
+        },
+        "frontend": {
+            "enabled": True,
+            "directory": "frontend",
+            "prepare": ["ddev exec bash -lc 'cd frontend && npm ci'"],
+            "daemon": {
+                "name": "pcp-next-dev",
+                "command": "./node_modules/.bin/next dev --hostname 0.0.0.0 --port 3100",
+                "directory": "/var/www/html/frontend",
+                "container_port": 3100,
+                "http_port": 3099,
+                "https_port": 3100,
+            },
+            "url": "https://demo.ddev.site:3100",
+            "api_origin_on_both": "https://demo.ddev.site",
+        },
+    }
+    data["projects"]["demo"]["ddev"] = {
+        "enabled": True,
+        "workspace_nodejs_version": "24",
+        "frontend_quality": ["ddev exec echo frontend-quality"],
+    }
+    projects_file.write_text(yaml.safe_dump(data))
+    return source, remote, workspaces
+
+
+def test_direct_frontend_preview_is_config_driven_and_git_clean(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreview123", project_id="demo")
+    )
+    calls = []
+    node_override_observations = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append(list(argv))
+        node_override = source / ".ddev" / "config.pcp-node.local.yaml"
+        if list(argv) == ["ddev", "start", "-y"] or (
+            list(argv)[:2] == ["bash", "-lc"]
+            and "npm ci" in str(argv[-1])
+        ):
+            node_override_observations.append(
+                (
+                    list(argv),
+                    node_override.read_text(encoding="utf-8")
+                    if node_override.exists()
+                    else "",
+                )
+            )
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+
+    result = start_preview(
+        PreviewRequest(
+            job_id="jobpreview123",
+            project_id="demo",
+            workspace=created["workspace"],
+            target="frontend",
+        )
+    )
+
+    assert result["status"] == "ready"
+    assert result["frontend_url"] == "https://demo.ddev.site:3100"
+    assert result["backend_url"] is None
+    override = source / ".ddev" / "config.pcp-preview.local.yaml"
+    raw = override.read_text(encoding="utf-8")
+    assert raw.startswith("# PCP-managed direct live preview; do not commit.\n")
+    payload = yaml.safe_load("\n".join(raw.splitlines()[1:]))
+    assert payload["nodejs_version"] == "24"
+    assert node_override_observations
+    assert all(
+        'nodejs_version: "24"' in observed
+        for _argv, observed in node_override_observations
+    )
+    assert not (source / ".ddev" / "config.pcp-node.local.yaml").exists()
+    assert payload["web_extra_daemons"][0]["name"] == "pcp-next-dev"
+    assert payload["web_extra_daemons"][0]["directory"] == "/var/www/html/frontend"
+    assert payload["web_extra_exposed_ports"][0] == {
+        "name": "pcp-next-dev",
+        "container_port": 3100,
+        "http_port": 3099,
+        "https_port": 3100,
+    }
+    assert "NEXT_PUBLIC_DRUPAL_API_ORIGIN" not in payload["web_extra_daemons"][0]["command"]
+    assert ".ddev/config.pcp-preview.local.yaml" not in run(
+        "git", "status", "--porcelain", cwd=source
+    )
+    assert calls[0] == ["ddev", "start", "-y"]
+    assert ["bash", "-lc", "ddev exec bash -lc 'cd frontend && npm ci'"] in calls
+    assert ["ddev", "restart", "-y"] in calls
+
+
+def test_direct_both_preview_uses_configured_local_api_origin(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewboth", project_id="demo")
+    )
+
+    monkeypatch.setattr(
+        "app.main.run_tracked",
+        lambda job, argv, *, cwd, timeout, env: (0, "ok\n", "", False),
+    )
+
+    result = start_preview(
+        PreviewRequest(
+            job_id="jobpreviewboth",
+            project_id="demo",
+            workspace=created["workspace"],
+            target="both",
+        )
+    )
+
+    assert result["frontend_url"] == "https://demo.ddev.site:3100"
+    assert result["backend_url"] == "https://demo.ddev.site"
+    assert "CORS/auth policy" in result["integration_note"]
+    raw = (source / ".ddev" / "config.pcp-preview.local.yaml").read_text()
+    payload = yaml.safe_load("\n".join(raw.splitlines()[1:]))
+    assert (
+        payload["web_extra_daemons"][0]["command"]
+        .startswith("NEXT_PUBLIC_DRUPAL_API_ORIGIN=https://demo.ddev.site ")
+    )
+
+
+def test_preview_is_rejected_for_isolated_workspace(tmp_path, monkeypatch):
+    _source, _remote, _workspaces = configure(
+        monkeypatch,
+        tmp_path,
+        allow_push=False,
+    )
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobisolpreview", project_id="demo")
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        start_preview(
+            PreviewRequest(
+                job_id="jobisolpreview",
+                project_id="demo",
+                workspace=created["workspace"],
+                target="frontend",
+            )
+        )
+
+    assert exc.value.status_code == 409
+
+
+def test_preview_stop_removes_only_pcp_override_and_preserves_source(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewstop", project_id="demo")
+    )
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append(list(argv))
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+    request = PreviewRequest(
+        job_id="jobpreviewstop",
+        project_id="demo",
+        workspace=created["workspace"],
+        target="frontend",
+    )
+    start_preview(request)
+    calls.clear()
+
+    stopped = stop_preview(request)
+
+    assert stopped["status"] == "stopped"
+    assert calls == [
+        [
+            "ddev",
+            "exec",
+            "supervisorctl",
+            "stop",
+            "webextradaemons:pcp-next-dev",
+        ]
+    ]
+    assert not (source / ".ddev" / "config.pcp-preview.local.yaml").exists()
+    assert source.exists()
+    assert run("git", "branch", "--show-current", cwd=source) == "ai/jobpreviewst"
+
+
+def test_preview_rebuild_replaces_only_the_owned_frontend_daemon(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewrebuild", project_id="demo")
+    )
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append(list(argv))
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+    request = PreviewRequest(
+        job_id="jobpreviewrebuild",
+        project_id="demo",
+        workspace=created["workspace"],
+        target="frontend",
+    )
+
+    assert start_preview(request)["status"] == "ready"
+    calls.clear()
+
+    rebuilt = start_preview(request)
+
+    assert rebuilt["status"] == "ready"
+    assert calls[0] == [
+        "ddev",
+        "exec",
+        "supervisorctl",
+        "stop",
+        "webextradaemons:pcp-next-dev",
+    ]
+    assert ["ddev", "start", "-y"] in calls
+    assert ["ddev", "restart", "-y"] in calls
+    assert source.exists()
+
+
+def test_preview_stop_is_idempotent_after_owned_frontend_is_removed(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewstop2", project_id="demo")
+    )
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append(list(argv))
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+    request = PreviewRequest(
+        job_id="jobpreviewstop2",
+        project_id="demo",
+        workspace=created["workspace"],
+        target="frontend",
+    )
+    start_preview(request)
+
+    assert stop_preview(request)["status"] == "stopped"
+    calls.clear()
+    stopped_again = stop_preview(request)
+
+    assert stopped_again["status"] == "stopped"
+    assert calls == []
+    assert not (source / ".ddev" / "config.pcp-preview.local.yaml").exists()
+    assert source.exists()
+
+
+def test_frontend_quality_pauses_direct_preview_before_build(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewqual", project_id="demo")
+    )
+    calls = []
+
+    node_override_seen = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append(list(argv))
+        if list(argv) == ["ddev", "start", "-y"]:
+            node_override = source / ".ddev" / "config.pcp-node.local.yaml"
+            node_override_seen.append(
+                node_override.read_text(encoding="utf-8")
+                if node_override.exists()
+                else ""
+            )
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+    request = PreviewRequest(
+        job_id="jobpreviewqual",
+        project_id="demo",
+        workspace=created["workspace"],
+        target="frontend",
+    )
+    start_preview(request)
+    calls.clear()
+
+    result = phase(
+        PhaseRequest(
+            job_id="jobpreviewqual",
+            project_id="demo",
+            workspace=created["workspace"],
+            phase="frontend_quality",
+        )
+    )
+
+    assert result.passed is True
+    assert not (source / ".ddev" / "config.pcp-preview.local.yaml").exists()
+    assert not (source / ".ddev" / "config.pcp-node.local.yaml").exists()
+    assert node_override_seen
+    assert 'nodejs_version: "24"' in node_override_seen[-1]
+    assert calls[0] == [
+        "ddev",
+        "exec",
+        "supervisorctl",
+        "stop",
+        "webextradaemons:pcp-next-dev",
+    ]
+    assert ["ddev", "restart", "-y"] not in calls
+    assert ["ddev", "start", "-y"] in calls
+    assert ["bash", "-lc", "ddev exec echo frontend-quality"] in calls
+
+
+def test_preview_status_detects_stopped_frontend(tmp_path, monkeypatch):
+    _source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewstat", project_id="demo")
+    )
+    monkeypatch.setattr(
+        "app.main.run_tracked",
+        lambda job, argv, *, cwd, timeout, env: (0, "ok\n", "", False),
+    )
+
+    state = preview_status(
+        PreviewRequest(
+            job_id="jobpreviewstat",
+            project_id="demo",
+            workspace=created["workspace"],
+            target="frontend",
+        )
+    )
+
+    assert state["status"] == "stopped"
+    assert state["frontend_url"] is None
+
+
+
+@pytest.mark.parametrize(
+    ("mutator", "expected"),
+    [
+        (
+            lambda data: data["projects"]["demo"]["preview"]["frontend"]["daemon"].update(
+                {"name": "bad name;rm"}
+            ),
+            "daemon name is invalid",
+        ),
+        (
+            lambda data: data["projects"]["demo"]["preview"]["frontend"]["daemon"].update(
+                {"directory": "/tmp/frontend"}
+            ),
+            "directory must stay under /var/www/html",
+        ),
+        (
+            lambda data: data["projects"]["demo"]["preview"]["frontend"]["daemon"].update(
+                {"https_port": 70000}
+            ),
+            "https_port must be a valid port",
+        ),
+    ],
+)
+def test_preview_contract_rejects_invalid_checked_in_frontend_config(
+    tmp_path,
+    monkeypatch,
+    mutator,
+    expected,
+):
+    _source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    projects_file = tmp_path / "projects.yml"
+    data = yaml.safe_load(projects_file.read_text())
+    mutator(data)
+    projects_file.write_text(yaml.safe_dump(data))
+
+    source = Path(data["projects"]["demo"]["path"]).resolve()
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewbad", project_id="demo")
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        start_preview(
+            PreviewRequest(
+                job_id="jobpreviewbad",
+                project_id="demo",
+                workspace=created["workspace"],
+                target="frontend",
+            )
+        )
+
+    assert exc.value.status_code == 500
+    assert expected in str(exc.value.detail)
+    assert source.exists()
+
+
+
+def test_direct_backend_only_preview_uses_shared_ddev_without_frontend_override(
+    tmp_path,
+    monkeypatch,
+):
+    source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewback", project_id="demo")
+    )
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append(list(argv))
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+    request = PreviewRequest(
+        job_id="jobpreviewback",
+        project_id="demo",
+        workspace=created["workspace"],
+        target="backend",
+    )
+
+    started = start_preview(request)
+    stopped = stop_preview(request)
+
+    assert started["status"] == "ready"
+    assert started["backend_url"] == "https://demo.ddev.site"
+    assert started["frontend_url"] is None
+    assert "shared direct-workspace DDEV runtime" in started["integration_note"]
+    assert "does not stop DDEV or remove its data" in started["integration_note"]
+    assert stopped["status"] == "stopped"
+    assert not (source / ".ddev" / "config.pcp-preview.local.yaml").exists()
+    assert calls == [["ddev", "start", "-y"]]
+    assert source.exists()
+
+
+@pytest.mark.parametrize(
+    ("target", "field_path", "bad_value", "expected"),
+    [
+        (
+            "backend",
+            ("backend", "url"),
+            "https://example.com",
+            "local HTTPS DDEV URL",
+        ),
+        (
+            "frontend",
+            ("frontend", "url"),
+            "http://demo.ddev.site:3100",
+            "local HTTPS DDEV URL",
+        ),
+        (
+            "both",
+            ("frontend", "api_origin_on_both"),
+            "https://example.com",
+            "local HTTPS DDEV URL",
+        ),
+    ],
+)
+def test_preview_contract_rejects_nonlocal_or_unsafe_urls(
+    tmp_path,
+    monkeypatch,
+    target,
+    field_path,
+    bad_value,
+    expected,
+):
+    _source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    projects_file = tmp_path / "projects.yml"
+    data = yaml.safe_load(projects_file.read_text())
+    section, key = field_path
+    data["projects"]["demo"]["preview"][section][key] = bad_value
+    projects_file.write_text(yaml.safe_dump(data))
+
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewurl", project_id="demo")
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        start_preview(
+            PreviewRequest(
+                job_id="jobpreviewurl",
+                project_id="demo",
+                workspace=created["workspace"],
+                target=target,
+            )
+        )
+
+    assert exc.value.status_code == 500
+    assert expected in str(exc.value.detail)
+
+
+def test_unhealthy_frontend_preview_removes_only_managed_override(
+    tmp_path,
+    monkeypatch,
+):
+    source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewbadhealth", project_id="demo")
+    )
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append(list(argv))
+        if argv[:4] == ["ddev", "exec", "bash", "-lc"] and "curl -fsS" in argv[-1]:
+            return 1, "", "health failed", False
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+
+    with pytest.raises(HTTPException) as exc:
+        start_preview(
+            PreviewRequest(
+                job_id="jobpreviewbadhealth",
+                project_id="demo",
+                workspace=created["workspace"],
+                target="frontend",
+            )
+        )
+
+    assert exc.value.status_code == 502
+    assert exc.value.detail == "Frontend preview did not become healthy"
+    assert not (source / ".ddev" / "config.pcp-preview.local.yaml").exists()
+    assert [
+        "ddev",
+        "exec",
+        "supervisorctl",
+        "stop",
+        "webextradaemons:pcp-next-dev",
+    ] in calls
+    assert source.exists()
+
+
+
+def test_direct_frontend_preview_requires_configured_node_runtime(tmp_path, monkeypatch):
+    _source, _remote, _workspaces = configure_direct_preview(monkeypatch, tmp_path)
+    projects_file = tmp_path / "projects.yml"
+    data = yaml.safe_load(projects_file.read_text())
+    data["projects"]["demo"]["ddev"].pop("workspace_nodejs_version", None)
+    projects_file.write_text(yaml.safe_dump(data))
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobpreviewnode", project_id="demo")
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        start_preview(
+            PreviewRequest(
+                job_id="jobpreviewnode",
+                project_id="demo",
+                workspace=created["workspace"],
+                target="frontend",
+            )
+        )
+
+    assert exc.value.status_code == 500
+    assert "requires ddev.workspace_nodejs_version" in str(exc.value.detail)

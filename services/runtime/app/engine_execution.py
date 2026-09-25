@@ -13,6 +13,7 @@ from .config import project_config
 from .engine_core import RuntimeEngineCore
 from .evidence_packs import developer_repair_evidence_pack, pm_evidence_pack
 from .fingerprint import failure_fingerprint
+from .preview import ready_preview_context
 from .prompts import evaluator_prompt, execution_prompt, planning_prompt
 from .repo import analyze_repo, commit_changes, diff_state
 from .review import (
@@ -320,6 +321,11 @@ class RuntimeEngine(RuntimeEngineCore):
             adapter = build_adapter(
                 executor_choice["adapter"], executor_choice["model"], executor_choice.get("reasoning_effort")
             )
+            preview_context = await ready_preview_context(
+                self.storage,
+                self.ddev,
+                job_id,
+            )
             run = await adapter.run(
                 workspace=workspace,
                 prompt=execution_prompt(
@@ -331,6 +337,7 @@ class RuntimeEngine(RuntimeEngineCore):
                     work_order=checkpoint.get("work_order"),
                     baseline=checkpoint.get("project_baseline"),
                     collaboration_context=checkpoint.get("collaboration_context"),
+                    preview_context=preview_context,
                 ),
                 mode="execute",
                 timeout=self._remaining_seconds(strategy, started, 2400),
@@ -471,6 +478,11 @@ class RuntimeEngine(RuntimeEngineCore):
                     progress["model_calls"] += 1
                     checkpoint["evaluator_choice"] = choice
                     self.storage.update(job_id, status="evaluating", progress=progress, checkpoint=checkpoint)
+                    evaluator_preview_context = await ready_preview_context(
+                        self.storage,
+                        self.ddev,
+                        job_id,
+                    )
                     evaluation = await build_adapter(
                         choice["adapter"], choice["model"], choice.get("reasoning_effort")
                     ).run(
@@ -482,6 +494,7 @@ class RuntimeEngine(RuntimeEngineCore):
                             work_order=checkpoint.get("work_order"),
                             baseline=checkpoint.get("project_baseline"),
                             developer_report=run.output if run.returncode == 0 else None,
+                            preview_context=evaluator_preview_context,
                         ),
                         mode="evaluate",
                         timeout=self._remaining_seconds(strategy, started, 1200),

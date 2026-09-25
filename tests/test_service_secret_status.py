@@ -14,6 +14,9 @@ def test_service_secret_status_script_is_shell_valid_and_non_secret() -> None:
     assert "PLATFORM_INTERNAL_TOKEN" in script
     assert "GITHUB_DELIVERY_TOKEN" in script
     assert "RUNTIME_API_TOKEN" in script
+    assert "DASHBOARD_CONTROL_TOKEN" in script
+    assert '"dashboard_control_present":%s' in script
+    assert '"dashboard_control_absent":%s' in script
     assert '"ok":%s' in script
     assert '"platform_internal_present":%s' in script
     assert '"github_delivery_present":%s' in script

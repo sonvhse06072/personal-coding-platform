@@ -46,6 +46,23 @@ CREATE TABLE IF NOT EXISTS cp_project_leases (
 CREATE INDEX IF NOT EXISTS cp_project_leases_owner_idx
   ON cp_project_leases(owner_job_id, state);
 
+CREATE TABLE IF NOT EXISTS cp_job_previews (
+  job_id TEXT PRIMARY KEY REFERENCES cp_jobs(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL,
+  target TEXT NOT NULL,
+  status TEXT NOT NULL,
+  generation INTEGER NOT NULL DEFAULT 1,
+  frontend_url TEXT,
+  backend_url TEXT,
+  integration_note TEXT,
+  error TEXT,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  stopped_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS cp_job_previews_status_idx
+  ON cp_job_previews(status, updated_at);
+
 CREATE TABLE IF NOT EXISTS cp_job_events (
   id BIGSERIAL PRIMARY KEY,
   job_id TEXT NOT NULL REFERENCES cp_jobs(id) ON DELETE CASCADE,
@@ -217,6 +234,17 @@ class Storage:
                         raise RuntimeError(
                             f"Project {project_id} is leased by active job {owner_job_id}"
                         )
+                    preview = conn.execute(
+                        "SELECT status FROM cp_job_previews WHERE job_id=%s",
+                        (owner_job_id,),
+                    ).fetchone()
+                    if preview is not None and str(preview.get("status") or "") not in {
+                        "stopped",
+                        "not_built",
+                    }:
+                        raise RuntimeError(
+                            f"Project {project_id} terminal owner still has preview cleanup pending"
+                        )
                 generation = int(lease.get("generation") or 0) + 1
                 conn.execute(
                     """UPDATE cp_project_leases
@@ -265,6 +293,25 @@ class Storage:
             conn.commit()
             return True
 
+    def terminal_active_project_leases(self) -> list[dict[str, Any]]:
+        """Return active leases whose durable owner job is terminal.
+
+        Runtime uses this before lease reconciliation so executor-owned preview
+        resources can be retired before ownership is released after a restart.
+        """
+        with self.connect() as conn:
+            return list(
+                conn.execute(
+                    """SELECT lease.*, job.status AS owner_status
+                    FROM cp_project_leases lease
+                    JOIN cp_jobs job ON job.id=lease.owner_job_id
+                    WHERE lease.state='active'
+                      AND job.status = ANY(%s)
+                    ORDER BY lease.project_id""",
+                    (list(_PROJECT_LEASE_TERMINAL_STATUSES),),
+                ).fetchall()
+            )
+
     def reconcile_terminal_project_leases(self) -> int:
         """Release leases only when durable owner-job state proves terminal."""
         timestamp = now()
@@ -275,11 +322,80 @@ class Storage:
                 FROM cp_jobs job
                 WHERE lease.owner_job_id=job.id
                   AND lease.state='active'
-                  AND job.status = ANY(%s)""",
+                  AND job.status = ANY(%s)
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM cp_job_previews preview
+                    WHERE preview.job_id=lease.owner_job_id
+                      AND preview.status NOT IN ('stopped','not_built')
+                  )""",
                 (timestamp, list(_PROJECT_LEASE_TERMINAL_STATUSES)),
             )
             conn.commit()
             return int(result.rowcount or 0)
+
+    def preview_state(self, job_id: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            return conn.execute(
+                "SELECT * FROM cp_job_previews WHERE job_id=%s",
+                (job_id,),
+            ).fetchone()
+
+    def upsert_preview_state(
+        self,
+        *,
+        job_id: str,
+        project_id: str,
+        target: str,
+        status: str,
+        generation: int,
+        frontend_url: str | None = None,
+        backend_url: str | None = None,
+        integration_note: str | None = None,
+        error: str | None = None,
+        stopped: bool = False,
+    ) -> dict[str, Any]:
+        timestamp = now()
+        with self.connect() as conn:
+            conn.execute(
+                """INSERT INTO cp_job_previews
+                (job_id, project_id, target, status, generation,
+                 frontend_url, backend_url, integration_note, error,
+                 created_at, updated_at, stopped_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (job_id) DO UPDATE SET
+                  project_id=EXCLUDED.project_id,
+                  target=EXCLUDED.target,
+                  status=EXCLUDED.status,
+                  generation=EXCLUDED.generation,
+                  frontend_url=EXCLUDED.frontend_url,
+                  backend_url=EXCLUDED.backend_url,
+                  integration_note=EXCLUDED.integration_note,
+                  error=EXCLUDED.error,
+                  updated_at=EXCLUDED.updated_at,
+                  stopped_at=EXCLUDED.stopped_at""",
+                (
+                    job_id,
+                    project_id,
+                    target,
+                    status,
+                    max(1, int(generation)),
+                    frontend_url,
+                    backend_url,
+                    integration_note,
+                    error[-2000:] if error else None,
+                    timestamp,
+                    timestamp,
+                    timestamp if stopped else None,
+                ),
+            )
+            row = conn.execute(
+                "SELECT * FROM cp_job_previews WHERE job_id=%s",
+                (job_id,),
+            ).fetchone()
+            conn.commit()
+            assert row is not None
+            return row
 
     def append_event(self, job_id: str, event: dict[str, Any]) -> None:
         """Append one already-sanitized observability event for a durable job."""

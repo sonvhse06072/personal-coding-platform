@@ -9,11 +9,12 @@ import subprocess
 import threading
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlsplit
 
 import httpx
 import yaml
 from fastapi import Depends, FastAPI, Header, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from .github_delivery import (
     GitHubDelivery,
@@ -70,6 +71,15 @@ class QuiesceWorkspaceRequest(BaseModel):
     project_id: str = Field(min_length=1, max_length=200)
     workspace: str = Field(min_length=1, max_length=2000)
     remove_data: bool = False
+
+
+class PreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str = Field(min_length=8, max_length=100)
+    project_id: str = Field(min_length=1, max_length=200)
+    workspace: str = Field(min_length=1, max_length=2000)
+    target: Literal["frontend", "backend", "both"]
 
 
 class CommandOutput(BaseModel):
@@ -228,6 +238,285 @@ def _validate_workspace(
     if require_git and not is_git_repo(path):
         raise HTTPException(404, "Workspace is not a git repository")
     return path
+
+
+_PREVIEW_OVERRIDE_REL = Path(".ddev/config.pcp-preview.local.yaml")
+_PREVIEW_MARKER = "# PCP-managed direct live preview; do not commit."
+_PREVIEW_EXCLUDE = ".ddev/config.pcp-preview.local.yaml"
+_DIRECT_NODE_OVERRIDE_REL = Path(".ddev/config.pcp-node.local.yaml")
+_DIRECT_NODE_MARKER = "# PCP-managed direct Node runtime; do not commit."
+_DIRECT_NODE_EXCLUDE = ".ddev/config.pcp-node.local.yaml"
+
+
+def _direct_nodejs_version(cfg: dict[str, Any]) -> str:
+    value = str((cfg.get("ddev") or {}).get("workspace_nodejs_version") or "").strip()
+    if not value:
+        raise HTTPException(
+            500,
+            "Direct frontend preview/verification requires ddev.workspace_nodejs_version",
+        )
+    if not re.fullmatch(r"\d{1,2}(?:\.\d{1,2})?", value):
+        raise HTTPException(500, "Invalid configured workspace_nodejs_version")
+    return value
+
+
+def _preview_contract(cfg: dict[str, Any], target: str) -> dict[str, Any]:
+    preview = cfg.get("preview") or {}
+    if not isinstance(preview, dict):
+        raise HTTPException(500, "Configured preview contract must be an object")
+    backend = preview.get("backend") or {}
+    frontend = preview.get("frontend") or {}
+    if target in {"backend", "both"} and not bool(
+        isinstance(backend, dict) and backend.get("enabled", False)
+    ):
+        raise HTTPException(409, "Backend preview is not enabled for this project")
+    if target in {"backend", "both"} and not _safe_preview_url(backend.get("url")):
+        raise HTTPException(500, "Backend preview requires a local DDEV URL")
+    if target in {"frontend", "both"}:
+        _direct_nodejs_version(cfg)
+        if not bool(isinstance(frontend, dict) and frontend.get("enabled", False)):
+            raise HTTPException(409, "Frontend preview is not enabled for this project")
+        daemon = frontend.get("daemon") or {}
+        if not isinstance(daemon, dict):
+            raise HTTPException(500, "Frontend preview daemon config is invalid")
+        required = ("name", "command", "directory", "container_port", "http_port", "https_port")
+        if any(daemon.get(key) is None or daemon.get(key) == "" for key in required):
+            raise HTTPException(500, "Frontend preview daemon config is incomplete")
+        daemon_name = str(daemon.get("name") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_.-]{1,80}", daemon_name):
+            raise HTTPException(500, "Frontend preview daemon name is invalid")
+        directory = str(daemon.get("directory") or "").strip()
+        if not (
+            directory == "/var/www/html"
+            or directory.startswith("/var/www/html/")
+        ):
+            raise HTTPException(500, "Frontend preview daemon directory must stay under /var/www/html")
+        for key in ("container_port", "http_port", "https_port"):
+            value = daemon.get(key)
+            if not isinstance(value, int) or isinstance(value, bool) or not 1 <= value <= 65535:
+                raise HTTPException(500, f"Frontend preview {key} must be a valid port")
+        prepare = frontend.get("prepare") or []
+        if (
+            not isinstance(prepare, list)
+            or any(not isinstance(item, str) or not item.strip() for item in prepare)
+        ):
+            raise HTTPException(500, "Frontend preview prepare must be a list of configured commands")
+        if not _safe_preview_url(frontend.get("url")):
+            raise HTTPException(500, "Frontend preview requires a local DDEV URL")
+        if target == "both" and not _safe_preview_url(frontend.get("api_origin_on_both")):
+            raise HTTPException(500, "Both preview requires a local DDEV API origin")
+    return {"backend": dict(backend), "frontend": dict(frontend)}
+
+
+def _safe_preview_url(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if len(text) > 500:
+        raise HTTPException(500, "Preview URL must be bounded")
+    parsed = urlsplit(text)
+    hostname = str(parsed.hostname or "").lower()
+    if (
+        parsed.scheme != "https"
+        or not hostname.endswith(".ddev.site")
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise HTTPException(500, "Preview URL must be a local HTTPS DDEV URL")
+    return text
+
+
+def _preview_override_path(workspace: Path) -> Path:
+    return (workspace / _PREVIEW_OVERRIDE_REL).resolve()
+
+
+def _ensure_local_git_exclude(workspace: Path, entry: str) -> None:
+    git_dir_text = git(workspace, "rev-parse", "--git-dir")
+    git_dir = Path(git_dir_text)
+    if not git_dir.is_absolute():
+        git_dir = (workspace / git_dir).resolve()
+    expected = (workspace / ".git").resolve()
+    if git_dir.resolve() != expected:
+        raise HTTPException(409, "Direct preview requires the repository's normal .git directory")
+    info = git_dir / "info"
+    info.mkdir(parents=True, exist_ok=True)
+    exclude = info / "exclude"
+    current = exclude.read_text(encoding="utf-8") if exclude.exists() else ""
+    lines = current.splitlines()
+    if entry not in lines:
+        suffix = "" if not current or current.endswith("\n") else "\n"
+        exclude.write_text(
+            current + suffix + entry + "\n",
+            encoding="utf-8",
+        )
+
+
+def _direct_node_override_path(workspace: Path) -> Path:
+    return (workspace / _DIRECT_NODE_OVERRIDE_REL).resolve()
+
+
+def _write_direct_node_override(workspace: Path, nodejs_version: str) -> Path:
+    path = _direct_node_override_path(workspace)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_local_git_exclude(workspace, _DIRECT_NODE_EXCLUDE)
+    content = (
+        _DIRECT_NODE_MARKER
+        + "\n"
+        + f'nodejs_version: "{nodejs_version}"\n'
+    )
+    if not path.exists() or path.read_text(encoding="utf-8") != content:
+        path.write_text(content, encoding="utf-8")
+    return path
+
+
+def _remove_managed_direct_node_override(workspace: Path) -> bool:
+    path = _direct_node_override_path(workspace)
+    if not path.exists():
+        return False
+    content = path.read_text(encoding="utf-8")
+    if not content.startswith(_DIRECT_NODE_MARKER + "\n"):
+        raise HTTPException(409, "Existing direct Node override is not PCP-owned")
+    path.unlink()
+    return True
+
+
+def _remove_managed_preview_override(workspace: Path) -> bool:
+    path = _preview_override_path(workspace)
+    if not path.exists():
+        return False
+    content = path.read_text(encoding="utf-8")
+    if not content.startswith(_PREVIEW_MARKER + "\n"):
+        raise HTTPException(409, "Existing preview override is not PCP-owned")
+    path.unlink()
+    return True
+
+
+def _write_preview_override(
+    workspace: Path,
+    *,
+    frontend: dict[str, Any],
+    target: str,
+    nodejs_version: str,
+) -> Path:
+    daemon = dict(frontend.get("daemon") or {})
+    command = str(daemon["command"]).strip()
+    if target == "both":
+        api_origin = _safe_preview_url(frontend.get("api_origin_on_both"))
+        if api_origin:
+            command = f"NEXT_PUBLIC_DRUPAL_API_ORIGIN={api_origin} {command}"
+
+    payload = {
+        "nodejs_version": nodejs_version,
+        "web_extra_daemons": [
+            {
+                "name": str(daemon["name"]),
+                "command": command,
+                "directory": str(daemon["directory"]),
+            }
+        ],
+        "web_extra_exposed_ports": [
+            {
+                "name": str(daemon["name"]),
+                "container_port": int(daemon["container_port"]),
+                "http_port": int(daemon["http_port"]),
+                "https_port": int(daemon["https_port"]),
+            }
+        ],
+    }
+    path = _preview_override_path(workspace)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_local_git_exclude(workspace, _PREVIEW_EXCLUDE)
+    path.write_text(
+        _PREVIEW_MARKER + "\n" + yaml.safe_dump(payload, sort_keys=False),
+        encoding="utf-8",
+    )
+    return path
+
+
+def _preview_run(
+    job_id: str,
+    argv: list[str],
+    *,
+    workspace: Path,
+    timeout: int,
+) -> CommandOutput:
+    returncode, stdout, stderr, timed_out = run_tracked(
+        job_id,
+        argv,
+        cwd=workspace,
+        timeout=timeout,
+        env=_ddev_subprocess_env(),
+    )
+    return CommandOutput(
+        command=" ".join(argv),
+        returncode=returncode,
+        stdout=stdout[-12000:],
+        stderr=stderr[-12000:],
+        timed_out=timed_out,
+    )
+
+
+def _preview_health(
+    job_id: str,
+    workspace: Path,
+    port: int,
+) -> CommandOutput:
+    script = (
+        "for i in $(seq 1 30); do "
+        f"curl -fsS http://127.0.0.1:{port}/ >/dev/null 2>&1 && exit 0; "
+        "sleep 1; done; exit 1"
+    )
+    return _preview_run(
+        job_id,
+        ["ddev", "exec", "bash", "-lc", script],
+        workspace=workspace,
+        timeout=45,
+    )
+
+
+def _frontend_preview_present(workspace: Path) -> bool:
+    path = _preview_override_path(workspace)
+    if not path.exists():
+        return False
+    try:
+        return path.read_text(encoding="utf-8").startswith(_PREVIEW_MARKER + "\n")
+    except OSError:
+        return False
+
+
+def _stop_frontend_preview_process(
+    job_id: str,
+    workspace: Path,
+    frontend: dict[str, Any],
+) -> CommandOutput:
+    daemon = dict(frontend.get("daemon") or {})
+    name = str(daemon.get("name") or "").strip()
+    result = _preview_run(
+        job_id,
+        ["ddev", "exec", "supervisorctl", "stop", f"webextradaemons:{name}"],
+        workspace=workspace,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        detail = f"{result.stdout}\n{result.stderr}".lower()
+        if "not running" in detail or "no such process" in detail:
+            return result.model_copy(update={"returncode": 0, "timed_out": False})
+    return result
+
+
+def _pause_frontend_preview(
+    job_id: str,
+    workspace: Path,
+    frontend: dict[str, Any],
+) -> CommandOutput | None:
+    if not _frontend_preview_present(workspace):
+        return None
+    stopped = _stop_frontend_preview_process(job_id, workspace, frontend)
+    if stopped.returncode == 0:
+        _remove_managed_preview_override(workspace)
+    return stopped
 
 
 def _reconcile_workspace_ddev_identity(
@@ -397,7 +686,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.19")
+app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.20")
 app.include_router(pm_bridge_github_router)
 
 
@@ -412,7 +701,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok" if ok else "degraded",
         "service": "ddev-executor",
-        "version": "1.0.19",
+        "version": "1.0.20",
         "ddev": (result.stdout or result.stderr).strip(),
         "docker": (docker.stdout or docker.stderr).strip(),
         "buildx": (buildx.stdout or buildx.stderr).strip(),
@@ -424,6 +713,230 @@ def health() -> dict[str, Any]:
 @app.post("/v1/cancel", dependencies=[Depends(auth)])
 def cancel(payload: CancelRequest) -> dict[str, Any]:
     return {"job_id": payload.job_id, "cancelled": cancel_active(payload.job_id)}
+
+
+@app.post("/v1/preview/start", dependencies=[Depends(auth)])
+def start_preview(payload: PreviewRequest) -> dict[str, Any]:
+    cfg = project(payload.project_id)
+    if _workspace_mode(cfg) != "direct":
+        raise HTTPException(409, "Live preview MVP requires a direct workspace")
+    workspace = _validate_workspace(
+        payload.job_id,
+        payload.project_id,
+        payload.workspace,
+    )
+    if _job_has_active_process(payload.job_id):
+        raise HTTPException(409, "Preview cannot start while an executor command is active")
+
+    contract = _preview_contract(cfg, payload.target)
+    backend = contract["backend"]
+    frontend = contract["frontend"]
+    previous_frontend = _frontend_preview_present(workspace)
+
+    infrastructure: list[CommandOutput] = []
+    if previous_frontend:
+        stopped = _pause_frontend_preview(
+            payload.job_id,
+            workspace,
+            frontend,
+        )
+        if stopped is not None:
+            infrastructure.append(stopped)
+            if stopped.returncode != 0:
+                raise HTTPException(
+                    502,
+                    (stopped.stderr or stopped.stdout or "preview reset failed")[-12000:],
+                )
+
+    frontend_target = payload.target in {"frontend", "both"}
+    nodejs_version = _direct_nodejs_version(cfg) if frontend_target else None
+    if frontend_target and nodejs_version:
+        _write_direct_node_override(workspace, nodejs_version)
+
+    started = _preview_run(
+        payload.job_id,
+        ["ddev", "start", "-y"],
+        workspace=workspace,
+        timeout=600,
+    )
+    infrastructure.append(started)
+    if started.returncode != 0:
+        if frontend_target:
+            _remove_managed_direct_node_override(workspace)
+        raise HTTPException(502, (started.stderr or started.stdout or "ddev start failed")[-12000:])
+
+    if frontend_target:
+        for command in frontend.get("prepare") or []:
+            result = _preview_run(
+                payload.job_id,
+                ["bash", "-lc", command],
+                workspace=workspace,
+                timeout=1800,
+            )
+            infrastructure.append(result)
+            if result.returncode != 0:
+                _remove_managed_direct_node_override(workspace)
+                raise HTTPException(502, (result.stderr or result.stdout or "preview prepare failed")[-12000:])
+
+        _write_preview_override(
+            workspace,
+            frontend=frontend,
+            target=payload.target,
+            nodejs_version=nodejs_version,
+        )
+        _remove_managed_direct_node_override(workspace)
+        restarted = _preview_run(
+            payload.job_id,
+            ["ddev", "restart", "-y"],
+            workspace=workspace,
+            timeout=600,
+        )
+        infrastructure.append(restarted)
+        if restarted.returncode != 0:
+            _remove_managed_preview_override(workspace)
+            _remove_managed_direct_node_override(workspace)
+            raise HTTPException(502, (restarted.stderr or restarted.stdout or "preview restart failed")[-12000:])
+
+        daemon = dict(frontend.get("daemon") or {})
+        health = _preview_health(
+            payload.job_id,
+            workspace,
+            int(daemon["container_port"]),
+        )
+        infrastructure.append(health)
+        if health.returncode != 0:
+            # A failed preview must not leave a managed daemon/config behind.
+            # Cleanup is exact and best-effort; the coding project's normal DDEV
+            # runtime remains running.
+            try:
+                _pause_frontend_preview(
+                    payload.job_id,
+                    workspace,
+                    frontend,
+                )
+            except Exception:
+                pass
+            raise HTTPException(502, "Frontend preview did not become healthy")
+
+    return {
+        "job_id": payload.job_id,
+        "project_id": payload.project_id,
+        "target": payload.target,
+        "status": "ready",
+        "frontend_url": (
+            _safe_preview_url(frontend.get("url"))
+            if payload.target in {"frontend", "both"}
+            else None
+        ),
+        "backend_url": (
+            _safe_preview_url(backend.get("url"))
+            if payload.target in {"backend", "both"}
+            else None
+        ),
+        "integration_note": (
+            "Backend preview uses the shared direct-workspace DDEV runtime; Stop Preview does not stop DDEV or remove its data. "
+            "Frontend is pointed at the local backend; credentialed browser flows still depend on the project's existing CORS/auth policy."
+            if payload.target == "both"
+            else (
+                "Backend preview uses the shared direct-workspace DDEV runtime; Stop Preview does not stop DDEV or remove its data."
+                if payload.target == "backend"
+                else None
+            )
+        ),
+    }
+
+
+@app.post("/v1/preview/status", dependencies=[Depends(auth)])
+def preview_status(payload: PreviewRequest) -> dict[str, Any]:
+    cfg = project(payload.project_id)
+    if _workspace_mode(cfg) != "direct":
+        raise HTTPException(409, "Live preview MVP requires a direct workspace")
+    workspace = _validate_workspace(
+        payload.job_id,
+        payload.project_id,
+        payload.workspace,
+    )
+    contract = _preview_contract(cfg, payload.target)
+    backend = contract["backend"]
+    frontend = contract["frontend"]
+
+    backend_ready = False
+    frontend_ready = False
+    if payload.target in {"backend", "both"}:
+        backend_probe = _preview_run(
+            payload.job_id,
+            ["ddev", "exec", "true"],
+            workspace=workspace,
+            timeout=30,
+        )
+        backend_ready = backend_probe.returncode == 0
+    if payload.target in {"frontend", "both"} and _frontend_preview_present(workspace):
+        daemon = dict(frontend.get("daemon") or {})
+        frontend_probe = _preview_health(
+            payload.job_id,
+            workspace,
+            int(daemon["container_port"]),
+        )
+        frontend_ready = frontend_probe.returncode == 0
+
+    ready = (
+        frontend_ready if payload.target == "frontend"
+        else backend_ready if payload.target == "backend"
+        else backend_ready and frontend_ready
+    )
+    return {
+        "job_id": payload.job_id,
+        "project_id": payload.project_id,
+        "target": payload.target,
+        "status": "ready" if ready else "stopped",
+        "frontend_url": (
+            _safe_preview_url(frontend.get("url"))
+            if frontend_ready and payload.target in {"frontend", "both"}
+            else None
+        ),
+        "backend_url": (
+            _safe_preview_url(backend.get("url"))
+            if backend_ready and payload.target in {"backend", "both"}
+            else None
+        ),
+    }
+
+
+@app.post("/v1/preview/stop", dependencies=[Depends(auth)])
+def stop_preview(payload: PreviewRequest) -> dict[str, Any]:
+    cfg = project(payload.project_id)
+    if _workspace_mode(cfg) != "direct":
+        raise HTTPException(409, "Live preview MVP requires a direct workspace")
+    workspace = _validate_workspace(
+        payload.job_id,
+        payload.project_id,
+        payload.workspace,
+    )
+    if _job_has_active_process(payload.job_id):
+        raise HTTPException(409, "Preview cannot stop while an executor command is active")
+
+    contract = _preview_contract(cfg, payload.target)
+    frontend = contract["frontend"]
+    if _frontend_preview_present(workspace):
+        stopped = _pause_frontend_preview(
+            payload.job_id,
+            workspace,
+            frontend,
+        )
+        if stopped is not None and stopped.returncode != 0:
+            raise HTTPException(
+                502,
+                (stopped.stderr or stopped.stdout or "preview stop failed")[-12000:],
+            )
+    _remove_managed_direct_node_override(workspace)
+    return {
+        "job_id": payload.job_id,
+        "project_id": payload.project_id,
+        "target": payload.target,
+        "status": "stopped",
+        "frontend_url": None,
+        "backend_url": None,
+    }
 
 
 @app.post("/v1/workspaces/quiesce", dependencies=[Depends(auth)])
@@ -726,6 +1239,39 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
     outputs: list[CommandOutput] = []
     infrastructure: list[CommandOutput] = []
     passed = True
+
+    if (
+        _workspace_instance_mode(
+            cfg,
+            job_id=payload.job_id,
+            path=workspace,
+        ) == "direct"
+        and payload.phase == "frontend_quality"
+    ):
+        preview = cfg.get("preview") or {}
+        frontend = (
+            dict(preview.get("frontend") or {})
+            if isinstance(preview, dict)
+            else {}
+        )
+        paused = _pause_frontend_preview(
+            payload.job_id,
+            workspace,
+            frontend,
+        )
+        if paused is not None:
+            infrastructure.append(paused)
+            if paused.returncode != 0:
+                return PhaseResponse(
+                    passed=False,
+                    phase=payload.phase,
+                    commands=[],
+                    infrastructure=infrastructure,
+                )
+        _write_direct_node_override(
+            workspace,
+            _direct_nodejs_version(cfg),
+        )
     timeout = min(
         int(os.getenv("DDEV_COMMAND_TIMEOUT_SECONDS", "1800")),
         payload.timeout_seconds or 1800,
@@ -749,6 +1295,15 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
             )
         )
         if returncode != 0:
+            if (
+                _workspace_instance_mode(
+                    cfg,
+                    job_id=payload.job_id,
+                    path=workspace,
+                ) == "direct"
+                and payload.phase == "frontend_quality"
+            ):
+                _remove_managed_direct_node_override(workspace)
             return PhaseResponse(
                 passed=False,
                 phase=payload.phase,
@@ -776,6 +1331,16 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
         if returncode != 0:
             passed = False
             break
+
+    if (
+        _workspace_instance_mode(
+            cfg,
+            job_id=payload.job_id,
+            path=workspace,
+        ) == "direct"
+        and payload.phase == "frontend_quality"
+    ):
+        _remove_managed_direct_node_override(workspace)
 
     return PhaseResponse(
         passed=passed,

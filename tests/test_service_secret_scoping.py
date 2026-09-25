@@ -20,6 +20,7 @@ GLOBAL_SECRET_KEYS = {
     "RUNTIME_API_TOKEN",
     "PLATFORM_INTERNAL_TOKEN",
     "ANTIGRAVITY_BRIDGE_TOKEN",
+    "DASHBOARD_CONTROL_TOKEN",
     "DEEPSEEK_API_KEY",
     "ANTHROPIC_API_KEY",
     "OPENAI_API_KEY",
@@ -105,6 +106,11 @@ def test_legacy_global_credentials_are_migrated_to_only_required_consumers(tmp_p
     assert runtime["RUNTIME_API_TOKEN"] == "runtime-token"
     assert runtime["PLATFORM_INTERNAL_TOKEN"] == "internal-token"
     assert runtime["ANTIGRAVITY_BRIDGE_TOKEN"] == "agy-token"
+    assert runtime["DASHBOARD_CONTROL_TOKEN"]
+    assert runtime["DASHBOARD_CONTROL_TOKEN"] not in {
+        "CHANGE_ME",
+        "change-me",
+    }
     assert runtime["DEEPSEEK_API_KEY"] == "deepseek-token"
     assert runtime["OPENAI_API_KEY"] == "openai-token"
     assert executor_values["PLATFORM_INTERNAL_TOKEN"] == "internal-token"
@@ -113,6 +119,10 @@ def test_legacy_global_credentials_are_migrated_to_only_required_consumers(tmp_p
     assert "ROUTER_API_TOKEN" not in n8n
     assert "PLATFORM_INTERNAL_TOKEN" not in n8n
     assert "ANTIGRAVITY_BRIDGE_TOKEN" not in n8n
+    assert "DASHBOARD_CONTROL_TOKEN" not in n8n
+    assert "DASHBOARD_CONTROL_TOKEN" not in router
+    assert "DASHBOARD_CONTROL_TOKEN" not in executor_values
+    assert "DASHBOARD_CONTROL_TOKEN" not in host
     assert host == {
         "RUNTIME_API_TOKEN": "runtime-token",
         "ANTIGRAVITY_BRIDGE_TOKEN": "agy-token",
