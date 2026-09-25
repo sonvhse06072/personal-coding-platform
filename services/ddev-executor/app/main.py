@@ -190,6 +190,36 @@ def remote_origin(repo: Path) -> str | None:
     return value if proc.returncode == 0 and value else None
 
 
+def _workspace_instance_mode(
+    cfg: dict[str, Any],
+    *,
+    job_id: str,
+    path: Path,
+) -> str:
+    """Classify the concrete workspace, not only the project's default mode.
+
+    Direct projects may intentionally request a disposable isolated clone for
+    read-only internal work such as PM planning. Those clones keep the normal
+    job-id/root boundary and must still be removable/quiesceable as isolated
+    workspaces.
+    """
+    configured_mode = _workspace_mode(cfg)
+    if configured_mode == "direct":
+        configured = _configured_project_path(cfg)
+        if path == configured:
+            return "direct"
+
+    root = Path(os.environ["CODING_WORKSPACES_ROOT"]).resolve()
+    if allowed_workspace(path) and path.name == job_id and path.parent == root:
+        return "isolated_clone"
+    if configured_mode == "direct":
+        raise HTTPException(
+            403,
+            "Workspace is neither the configured direct project nor the exact isolated job workspace",
+        )
+    raise HTTPException(403, "Workspace is outside configured root or does not match job")
+
+
 def _validate_workspace(
     job_id: str,
     project_id: str,
@@ -199,15 +229,9 @@ def _validate_workspace(
 ) -> Path:
     cfg = project(project_id)
     path = Path(workspace).resolve()
-    if _workspace_mode(cfg) == "direct":
-        configured = _configured_project_path(cfg)
-        if path != configured:
-            raise HTTPException(403, "Direct workspace must match the configured project path")
-        return configured
-
-    root = Path(os.environ["CODING_WORKSPACES_ROOT"]).resolve()
-    if not allowed_workspace(path) or path.name != job_id or path.parent != root:
-        raise HTTPException(403, "Workspace is outside configured root or does not match job")
+    mode = _workspace_instance_mode(cfg, job_id=job_id, path=path)
+    if mode == "direct":
+        return path
     if not path.exists():
         raise HTTPException(404, "Workspace does not exist")
     if require_git and not is_git_repo(path):
@@ -793,7 +817,7 @@ def quiesce_workspace(payload: QuiesceWorkspaceRequest) -> dict[str, Any]:
     cfg = project(payload.project_id)
     workspace = _validate_workspace(payload.job_id, payload.project_id, payload.workspace)
 
-    if _workspace_mode(cfg) == "direct":
+    if _workspace_instance_mode(cfg, job_id=payload.job_id, path=workspace) == "direct":
         return {
             "job_id": payload.job_id,
             "project_id": payload.project_id,
@@ -946,7 +970,11 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
         raise HTTPException(403, "Project policy does not allow AI branch publishing")
 
     workspace = _validate_workspace(payload.job_id, payload.project_id, payload.workspace)
-    mode = _workspace_mode(cfg)
+    mode = _workspace_instance_mode(
+        cfg,
+        job_id=payload.job_id,
+        path=workspace,
+    )
     _validate_ai_branch(cfg, payload.branch)
 
     current_branch = git(workspace, "branch", "--show-current")
@@ -1044,7 +1072,7 @@ def github_ci(
 def remove_workspace(job_id: str, project_id: str, workspace: str = Query(...)) -> dict[str, Any]:
     cfg = project(project_id)
     path = _validate_workspace(job_id, project_id, workspace)
-    if _workspace_mode(cfg) == "direct":
+    if _workspace_instance_mode(cfg, job_id=job_id, path=path) == "direct":
         return {
             "removed": False,
             "preserved": True,
@@ -1066,7 +1094,11 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
         require_git=False,
     )
 
-    if _workspace_mode(cfg) == "isolated_clone":
+    if _workspace_instance_mode(
+        cfg,
+        job_id=payload.job_id,
+        path=workspace,
+    ) == "isolated_clone":
         _reconcile_workspace_ddev_identity(
             workspace,
             payload.job_id,
