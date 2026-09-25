@@ -11,6 +11,7 @@ from typing import Any
 from .adapters.antigravity import cancel_all_antigravity_runs
 from .config import project_config
 from .executor_client import DdevExecutorClient
+from .preview import PreviewManager
 from .router_client import RouterClient
 from .state import (
     checkpoint_from_row,
@@ -52,6 +53,11 @@ class RuntimeEngineCore:
                     error="Runtime restarted during an in-flight job; explicit resume required.",
                 )
                 await self.ddev.cancel(job_id=job["id"])
+        terminal_lease_rows = self.storage.terminal_active_project_leases()
+        for lease in terminal_lease_rows:
+            await self._retire_terminal_direct_preview(
+                str(lease.get("owner_job_id") or "")
+            )
         self.storage.reconcile_terminal_project_leases()
         self.worker_task = asyncio.create_task(self._worker_loop())
 
@@ -130,6 +136,28 @@ class RuntimeEngineCore:
         checkpoint["resource_quiesce"] = detail
         self.storage.update(job_id, checkpoint=checkpoint)
 
+    async def _retire_terminal_direct_preview(self, job_id: str) -> None:
+        if not job_id:
+            return
+        row = self.storage.get(job_id)
+        if not row or str(row.get("status") or "") not in FINAL:
+            return
+        checkpoint = checkpoint_from_row(row)
+        if str(checkpoint.get("workspace_mode") or "isolated_clone") != "direct":
+            return
+        preview_state = self.storage.preview_state(job_id)
+        if not preview_state:
+            return
+        if str(preview_state.get("status") or "") in {"stopped", "not_built"}:
+            return
+        try:
+            await PreviewManager(self.storage, self.ddev).stop(job_id)
+        except Exception:
+            # Preview cleanup is deliberately independent of engineering result.
+            # Keep the durable preview row for later reconciliation rather than
+            # falsifying the coding job or lease owner.
+            return
+
     def _release_terminal_direct_lease(self, job_id: str) -> bool:
         row = self.storage.get(job_id)
         if not row or str(row.get("status") or "") not in FINAL:
@@ -161,6 +189,7 @@ class RuntimeEngineCore:
                     self.storage.update(job_id, status="failed", error=f"{type(exc).__name__}: {exc}")
             finally:
                 if not self._stopping:
+                    await self._retire_terminal_direct_preview(job_id)
                     await self._quiesce_stable_manual_job(job_id)
                     self._release_terminal_direct_lease(job_id)
                 self.active_jobs.pop(job_id, None)
@@ -216,6 +245,7 @@ class RuntimeEngineCore:
         if active and not active.done():
             active.cancel()
             await asyncio.gather(active, return_exceptions=True)
+        await self._retire_terminal_direct_preview(job_id)
         await self._quiesce_stable_manual_job(job_id)
         self._release_terminal_direct_lease(job_id)
         updated = self.storage.get(job_id)
