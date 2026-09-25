@@ -857,12 +857,19 @@ class RuntimeEngine(RuntimeEngineCore):
             remove_result = await self.ddev.remove_workspace(
                 job_id=job_id, project_id=job["project_id"], workspace=workspace
             )
+        workspace_removed = bool(
+            remove_result and remove_result.get("removed", False)
+        )
+        workspace_preserved = bool(
+            remove_result and remove_result.get("preserved", False)
+        )
         return {
             "cleaned": True,
             "ddev": cleanup_result,
             "ddev_data_released": bool(
                 cleanup_result and cleanup_result.get("data_removed", False)
             ),
-            "workspace_removed": remove_workspace,
+            "workspace_removed": workspace_removed,
+            "workspace_preserved": workspace_preserved,
             "workspace_result": remove_result,
         }
