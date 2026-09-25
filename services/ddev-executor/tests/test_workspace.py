@@ -10,6 +10,7 @@ from app.main import (
     PreviewRequest,
     PublishBranchRequest,
     QuiesceWorkspaceRequest,
+    ReturnDirectWorkspaceRequest,
     WorkspaceRequest,
     create_workspace,
     phase,
@@ -19,6 +20,7 @@ from app.main import (
     stop_preview,
     quiesce_workspace,
     remove_workspace,
+    return_direct_workspace_to_base,
 )
 
 
@@ -1392,3 +1394,74 @@ def test_direct_frontend_preview_requires_configured_node_runtime(tmp_path, monk
 
     assert exc.value.status_code == 500
     assert "requires ddev.workspace_nodejs_version" in str(exc.value.detail)
+
+
+def test_direct_workspace_returns_clean_owned_ai_branch_to_base(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobreturn123", project_id="demo")
+    )
+    ai_branch = created["branch"]
+    ai_head = run("git", "rev-parse", "HEAD", cwd=source)
+
+    result = return_direct_workspace_to_base(
+        ReturnDirectWorkspaceRequest(
+            job_id="jobreturn123",
+            project_id="demo",
+            workspace=created["workspace"],
+            branch=ai_branch,
+        )
+    )
+
+    assert result["returned"] is True
+    assert result["reused"] is False
+    assert result["branch"] == "main"
+    assert run("git", "branch", "--show-current", cwd=source) == "main"
+    assert run("git", "status", "--porcelain", cwd=source) == ""
+    assert run("git", "rev-parse", ai_branch, cwd=source) == ai_head
+
+
+def test_direct_workspace_return_to_base_refuses_dirty_repo(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobreturndirty", project_id="demo")
+    )
+    (source / "HUMAN.txt").write_text("preserve me\n")
+
+    with pytest.raises(HTTPException) as exc:
+        return_direct_workspace_to_base(
+            ReturnDirectWorkspaceRequest(
+                job_id="jobreturndirty",
+                project_id="demo",
+                workspace=created["workspace"],
+                branch=created["branch"],
+            )
+        )
+
+    assert exc.value.status_code == 409
+    assert "will not reset, clean or stash" in str(exc.value.detail)
+    assert run("git", "branch", "--show-current", cwd=source) == created["branch"]
+    assert (source / "HUMAN.txt").read_text() == "preserve me\n"
+
+
+def test_direct_workspace_return_to_base_refuses_branch_mismatch(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobreturnmismatch", project_id="demo")
+    )
+    run("git", "checkout", "main", cwd=source)
+    run("git", "checkout", "-b", "human/manual", cwd=source)
+
+    with pytest.raises(HTTPException) as exc:
+        return_direct_workspace_to_base(
+            ReturnDirectWorkspaceRequest(
+                job_id="jobreturnmismatch",
+                project_id="demo",
+                workspace=created["workspace"],
+                branch=created["branch"],
+            )
+        )
+
+    assert exc.value.status_code == 409
+    assert "branch changed outside the owning job" in str(exc.value.detail)
+    assert run("git", "branch", "--show-current", cwd=source) == "human/manual"
