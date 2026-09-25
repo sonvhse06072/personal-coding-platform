@@ -345,3 +345,34 @@ class PreviewManager:
             workspace_mode=mode,
             supported=True,
         )
+
+
+
+async def ready_preview_context(
+    storage: Any,
+    ddev: Any,
+    job_id: str,
+) -> dict[str, Any] | None:
+    """Return only a currently reconciled, browser-safe Ready preview context."""
+    try:
+        state = await PreviewManager(storage, ddev).status(job_id)
+    except Exception:
+        return None
+    if state.get("status") != "ready" or not state.get("supported"):
+        return None
+    context = {
+        "status": "ready",
+        "target": state.get("target"),
+        "frontend_url": state.get("frontend_url"),
+        "backend_url": state.get("backend_url"),
+        "integration_note": state.get("integration_note"),
+        "usage_note": (
+            "This URL is available for bounded local review where tooling supports it. "
+            "Availability alone is not evidence that visual/browser review occurred."
+        ),
+    }
+    return {
+        key: value
+        for key, value in context.items()
+        if value is not None
+    }
