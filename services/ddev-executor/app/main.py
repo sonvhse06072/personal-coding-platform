@@ -7,6 +7,7 @@ import shutil
 import signal
 import subprocess
 import threading
+import time
 from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlsplit
@@ -463,16 +464,58 @@ def _preview_health(
     workspace: Path,
     port: int,
 ) -> CommandOutput:
+    """Probe the frontend through the web container, tolerating DDEV settle races.
+
+    A project restart can recreate the shared DDEV router and briefly make the
+    first host-side `ddev exec` unavailable even when supervisord has already
+    started the frontend daemon. Retry the whole exec boundary rather than only
+    retrying curl inside one potentially failed exec invocation.
+    """
     script = (
-        "for i in $(seq 1 30); do "
+        "for i in $(seq 1 10); do "
         f"curl -fsS http://127.0.0.1:{port}/ >/dev/null 2>&1 && exit 0; "
-        "sleep 1; done; exit 1"
+        "sleep 1; done; "
+        "supervisorctl status 'webextradaemons:*' >&2 || true; "
+        f"ss -ltnp 2>/dev/null | grep ':{port}' >&2 || true; "
+        "exit 1"
     )
+    attempts: list[CommandOutput] = []
+    for attempt in range(3):
+        result = _preview_run(
+            job_id,
+            ["ddev", "exec", "bash", "-lc", script],
+            workspace=workspace,
+            timeout=20,
+        )
+        attempts.append(result)
+        if result.returncode == 0:
+            return result
+        if result.timed_out:
+            break
+        if attempt < 2:
+            time.sleep(1)
+
+    last = attempts[-1]
+    evidence = "\n\n".join(
+        (
+            f"attempt {index + 1}: rc={item.returncode} timed_out={item.timed_out}\n"
+            f"{item.stderr or item.stdout}"
+        )[-4000:]
+        for index, item in enumerate(attempts)
+    )
+    return last.model_copy(update={"stderr": evidence[-12000:]})
+
+
+def _reconcile_preview_topology(
+    job_id: str,
+    workspace: Path,
+) -> CommandOutput:
+    """Re-apply the host DDEV config after a PCP preview override is removed."""
     return _preview_run(
         job_id,
-        ["ddev", "exec", "bash", "-lc", script],
+        ["ddev", "start", "-y"],
         workspace=workspace,
-        timeout=45,
+        timeout=600,
     )
 
 
@@ -686,7 +729,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.20")
+app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.21")
 app.include_router(pm_bridge_github_router)
 
 
@@ -701,7 +744,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok" if ok else "degraded",
         "service": "ddev-executor",
-        "version": "1.0.20",
+        "version": "1.0.21",
         "ddev": (result.stdout or result.stderr).strip(),
         "docker": (docker.stdout or docker.stderr).strip(),
         "buildx": (buildx.stdout or buildx.stderr).strip(),
@@ -805,15 +848,20 @@ def start_preview(payload: PreviewRequest) -> dict[str, Any]:
         )
         infrastructure.append(health)
         if health.returncode != 0:
-            # A failed preview must not leave a managed daemon/config behind.
-            # Cleanup is exact and best-effort; the coding project's normal DDEV
-            # runtime remains running.
+            # A failed preview must not leave a managed daemon/config or stale
+            # live DDEV port topology behind. Stop only the PCP-owned daemon,
+            # remove only the PCP-owned override, then reconcile the project
+            # against the remaining host config.
             try:
-                _pause_frontend_preview(
+                stopped = _pause_frontend_preview(
                     payload.job_id,
                     workspace,
                     frontend,
                 )
+                if stopped is None or stopped.returncode == 0:
+                    infrastructure.append(
+                        _reconcile_preview_topology(payload.job_id, workspace)
+                    )
             except Exception:
                 pass
             raise HTTPException(502, "Frontend preview did not become healthy")
@@ -927,6 +975,16 @@ def stop_preview(payload: PreviewRequest) -> dict[str, Any]:
             raise HTTPException(
                 502,
                 (stopped.stderr or stopped.stdout or "preview stop failed")[-12000:],
+            )
+        reconciled = _reconcile_preview_topology(payload.job_id, workspace)
+        if reconciled.returncode != 0:
+            raise HTTPException(
+                502,
+                (
+                    reconciled.stderr
+                    or reconciled.stdout
+                    or "preview topology reconciliation failed"
+                )[-12000:],
             )
     _remove_managed_direct_node_override(workspace)
     return {
