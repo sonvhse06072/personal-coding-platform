@@ -46,6 +46,23 @@ CREATE TABLE IF NOT EXISTS cp_project_leases (
 CREATE INDEX IF NOT EXISTS cp_project_leases_owner_idx
   ON cp_project_leases(owner_job_id, state);
 
+CREATE TABLE IF NOT EXISTS cp_job_previews (
+  job_id TEXT PRIMARY KEY REFERENCES cp_jobs(id) ON DELETE CASCADE,
+  project_id TEXT NOT NULL,
+  target TEXT NOT NULL,
+  status TEXT NOT NULL,
+  generation INTEGER NOT NULL DEFAULT 1,
+  frontend_url TEXT,
+  backend_url TEXT,
+  integration_note TEXT,
+  error TEXT,
+  created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
+  stopped_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS cp_job_previews_status_idx
+  ON cp_job_previews(status, updated_at);
+
 CREATE TABLE IF NOT EXISTS cp_job_events (
   id BIGSERIAL PRIMARY KEY,
   job_id TEXT NOT NULL REFERENCES cp_jobs(id) ON DELETE CASCADE,
@@ -280,6 +297,69 @@ class Storage:
             )
             conn.commit()
             return int(result.rowcount or 0)
+
+    def preview_state(self, job_id: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            return conn.execute(
+                "SELECT * FROM cp_job_previews WHERE job_id=%s",
+                (job_id,),
+            ).fetchone()
+
+    def upsert_preview_state(
+        self,
+        *,
+        job_id: str,
+        project_id: str,
+        target: str,
+        status: str,
+        generation: int,
+        frontend_url: str | None = None,
+        backend_url: str | None = None,
+        integration_note: str | None = None,
+        error: str | None = None,
+        stopped: bool = False,
+    ) -> dict[str, Any]:
+        timestamp = now()
+        with self.connect() as conn:
+            conn.execute(
+                """INSERT INTO cp_job_previews
+                (job_id, project_id, target, status, generation,
+                 frontend_url, backend_url, integration_note, error,
+                 created_at, updated_at, stopped_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                ON CONFLICT (job_id) DO UPDATE SET
+                  project_id=EXCLUDED.project_id,
+                  target=EXCLUDED.target,
+                  status=EXCLUDED.status,
+                  generation=EXCLUDED.generation,
+                  frontend_url=EXCLUDED.frontend_url,
+                  backend_url=EXCLUDED.backend_url,
+                  integration_note=EXCLUDED.integration_note,
+                  error=EXCLUDED.error,
+                  updated_at=EXCLUDED.updated_at,
+                  stopped_at=EXCLUDED.stopped_at""",
+                (
+                    job_id,
+                    project_id,
+                    target,
+                    status,
+                    max(1, int(generation)),
+                    frontend_url,
+                    backend_url,
+                    integration_note,
+                    error[-2000:] if error else None,
+                    timestamp,
+                    timestamp,
+                    timestamp if stopped else None,
+                ),
+            )
+            row = conn.execute(
+                "SELECT * FROM cp_job_previews WHERE job_id=%s",
+                (job_id,),
+            ).fetchone()
+            conn.commit()
+            assert row is not None
+            return row
 
     def append_event(self, job_id: str, event: dict[str, Any]) -> None:
         """Append one already-sanitized observability event for a durable job."""
