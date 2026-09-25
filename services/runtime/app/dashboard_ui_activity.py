@@ -124,3 +124,55 @@ DASHBOARD_HTML = DASHBOARD_HTML.replace(
     "Read-only observability. Dashboard disconnects never control, pause, resume, or otherwise affect a coding job.",
     "Read-only observability by default. Local preview mutations require a separate control unlock and never pause, resume, repair, or complete a coding job.",
 )
+
+
+# Project-level Current site preview is independent from a selected WorkOrder.
+# It reuses the existing control-session boundary and never exposes workspace
+# paths or executor commands to the browser.
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    "</style>",
+    ".project-preview-state{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}.s-job_owned{color:#fcd34d;border-color:#735b18;background:#2d250c}.project-preview-meta{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:8px}</style>",
+    1,
+)
+_PROJECT_PREVIEW_CARD = r'''<section class="card section" id="projectPreviewCard" style="display:none"><div class="section-head"><div><div class="section-title">Current site</div><div class="small">Direct project preview · available even when no WorkOrder is active</div></div><div id="projectPreviewStatus"></div></div><div class="preview-actions"><select id="projectPreviewProject" class="select"></select><select id="projectPreviewTarget" class="select"><option value="frontend">Frontend</option><option value="backend">Backend</option><option value="both">Both</option></select><button id="projectPreviewStart">Start Preview</button><button id="projectPreviewStop">Stop Frontend</button><button id="projectPreviewUnlock">Unlock controls</button></div><div id="projectPreviewMeta" class="project-preview-meta small"></div><div id="projectPreviewLinks" class="preview-links"></div><div id="projectPreviewNote" class="preview-note"></div></section>'''
+if '<section class="card section"><div class="section-head"><div><div class="section-title">Execution plan</div>' not in DASHBOARD_HTML:
+    raise RuntimeError("Dashboard execution-plan target changed; review Current site integration")
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    '<section class="card section"><div class="section-head"><div><div class="section-title">Execution plan</div>',
+    _PROJECT_PREVIEW_CARD + '<section class="card section"><div class="section-head"><div><div class="section-title">Execution plan</div>',
+    1,
+)
+if "previewRefreshBusy=false;" not in DASHBOARD_HTML:
+    raise RuntimeError("Dashboard preview state target changed; review Current site integration")
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    "previewRefreshBusy=false;",
+    "previewRefreshBusy=false,projectPreviewProjects=[],projectPreviewProject=null,projectPreviewState=null,projectPreviewBusy=false,projectPreviewRefreshBusy=false,projectPreviewLastRefresh=0;",
+    1,
+)
+
+_PROJECT_PREVIEW_FUNCTIONS = r'''
+function projectPreviewComponent(label,value){return '<span>'+esc(label)+' '+status(value||'stopped')+'</span>'}
+function renderProjectPreviewState(p){const card=$('#projectPreviewCard');if(!projectPreviewProjects.length){card.style.display='none';return}card.style.display='';projectPreviewState=p||projectPreviewState||null;const selector=$('#projectPreviewProject');selector.innerHTML=projectPreviewProjects.map(x=>'<option value="'+esc(x.project_id)+'" '+(x.project_id===projectPreviewProject?'selected':'')+'>'+esc(x.project_id)+'</option>').join('');const state=projectPreviewState||{};$('#projectPreviewStatus').innerHTML=status(state.status||'stopped');const meta=[];meta.push('branch '+esc(state.branch||'unknown'));meta.push(state.clean===true?'clean':state.clean===false?'dirty':'clean state unknown');meta.push(state.ownership==='job'?'owned by active job':'engineering lease free');$('#projectPreviewMeta').innerHTML='<span>'+meta.join(' · ')+'</span>'+projectPreviewComponent('Backend',state.backend_status)+projectPreviewComponent('Frontend',state.frontend_status);const links=[];if(state.frontend_url)links.push('<a href="'+esc(state.frontend_url)+'" target="_blank" rel="noopener noreferrer">Open Frontend ↗</a>');if(state.backend_url)links.push('<a href="'+esc(state.backend_url)+'" target="_blank" rel="noopener noreferrer">Open Backend ↗</a>');$('#projectPreviewLinks').innerHTML=links.join('');const controls=state.controls_enabled===true&&!projectPreviewBusy;$('#projectPreviewStart').disabled=!controls;$('#projectPreviewStop').disabled=!controls||state.frontend_status!=='ready';$('#projectPreviewStart').textContent=state.status==='ready'?'Rebuild Preview':'Start Preview';const note=[];if(state.ownership==='job')note.push('Active direct job owns this project. Use the job Local preview for work-in-progress review.');else if(state.clean===false)note.push('Preview mutation is disabled while the direct repository has uncommitted changes.');if(state.error)note.push(state.error);if(state.backend_status==='ready'&&state.frontend_status!=='ready')note.push('Backend uses the shared DDEV runtime and may stay available while Frontend is stopped.');$('#projectPreviewNote').textContent=note.join(' · ')}
+async function refreshProjectPreviewProjects(){if(projectPreviewProjects.length)return;try{const r=await fetch('/v1/dashboard/project-previews',{cache:'no-store'});if(r.status===401)return;if(!r.ok)throw new Error('project previews HTTP '+r.status);const payload=await r.json();projectPreviewProjects=payload.projects||[];const planProject=currentPlan()?.project_id;if(!projectPreviewProject||!projectPreviewProjects.some(x=>x.project_id===projectPreviewProject)){projectPreviewProject=projectPreviewProjects.some(x=>x.project_id===planProject)?planProject:(projectPreviewProjects[0]?.project_id||null)}renderProjectPreviewState(projectPreviewState)}catch(e){console.error(e)}}
+async function refreshProjectPreview(force=false){if(!projectPreviewProject||projectPreviewBusy||projectPreviewRefreshBusy)return;const now=Date.now();if(!force&&now-projectPreviewLastRefresh<8000)return;projectPreviewRefreshBusy=true;try{const r=await fetch('/v1/dashboard/projects/'+encodeURIComponent(projectPreviewProject)+'/preview',{cache:'no-store'});if(r.status===401)return;if(!r.ok){const payload=await r.json().catch(()=>({}));renderProjectPreviewState(Object.assign({},projectPreviewState,{status:'failed',error:payload.detail||('HTTP '+r.status)}));return}projectPreviewState=await r.json();projectPreviewLastRefresh=Date.now();renderProjectPreviewState(projectPreviewState)}catch(e){renderProjectPreviewState(Object.assign({},projectPreviewState,{status:'failed',error:String(e)}))}finally{projectPreviewRefreshBusy=false}}
+async function reconcileProjectPreviewMutation(method,projectId,priorGeneration,target){const expected=method==='POST'?priorGeneration+1:priorGeneration;for(let attempt=0;attempt<60;attempt++){await previewSleep(1000);try{const r=await fetch('/v1/dashboard/projects/'+encodeURIComponent(projectId)+'/preview',{cache:'no-store'});if(r.status===401)return null;if(!r.ok)continue;const state=await r.json();const generation=Number(state.generation||0);if(method==='DELETE'){if(state.frontend_status==='stopped')return state}else if(generation>=expected&&state.status!=='starting'){return state}}catch(e){}}return null}
+async function projectPreviewMutation(method,body){if(!projectPreviewProject||projectPreviewBusy)return;const projectId=projectPreviewProject,priorGeneration=Number(projectPreviewState?.generation||0),target=body?.target||null;projectPreviewBusy=true;renderProjectPreviewState(projectPreviewState);const invoke=()=>fetch('/v1/dashboard/projects/'+encodeURIComponent(projectId)+'/preview',{method:method,headers:body?{'content-type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined});try{let r=await invoke();if(r.status===401){const unlocked=await unlockPreviewControls();if(!unlocked)return;r=await invoke()}const payload=await r.json().catch(()=>({}));if(!r.ok){renderProjectPreviewState(Object.assign({},projectPreviewState,{status:'failed',error:payload.detail||('HTTP '+r.status)}));return}projectPreviewState=payload;projectPreviewLastRefresh=Date.now();renderProjectPreviewState(payload)}catch(e){const recovered=await reconcileProjectPreviewMutation(method,projectId,priorGeneration,target);if(recovered){projectPreviewState=recovered;projectPreviewLastRefresh=Date.now();renderProjectPreviewState(recovered);return}renderProjectPreviewState(Object.assign({},projectPreviewState,{status:'failed',error:'Current-site preview connection was interrupted and status reconciliation timed out.'}))}finally{projectPreviewBusy=false;renderProjectPreviewState(projectPreviewState)}}
+$('#projectPreviewProject').onchange=async e=>{projectPreviewProject=e.target.value;projectPreviewState=null;projectPreviewLastRefresh=0;await refreshProjectPreview(true)};
+$('#projectPreviewStart').onclick=()=>projectPreviewMutation('POST',{target:$('#projectPreviewTarget').value});
+$('#projectPreviewStop').onclick=()=>projectPreviewMutation('DELETE',null);
+$('#projectPreviewUnlock').onclick=unlockPreviewControls;
+'''
+if "function renderTimeline(w){" not in DASHBOARD_HTML:
+    raise RuntimeError("Dashboard timeline target changed; review Current site functions")
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    "function renderTimeline(w){",
+    _PROJECT_PREVIEW_FUNCTIONS + "\nfunction renderTimeline(w){",
+    1,
+)
+if "snapshot=await r.json();hideLogin();render();await refreshQuota()" not in DASHBOARD_HTML:
+    raise RuntimeError("Dashboard refresh target changed; review Current site refresh integration")
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    "snapshot=await r.json();hideLogin();render();await refreshQuota()",
+    "snapshot=await r.json();hideLogin();render();await refreshQuota();await refreshProjectPreviewProjects();await refreshProjectPreview()",
+    1,
+)

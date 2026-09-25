@@ -43,3 +43,21 @@ def test_dashboard_preview_keeps_existing_activity_quota_and_stream_surfaces():
     assert "/v1/dashboard/quota" in DASHBOARD_HTML
     assert "new EventSource(" in DASHBOARD_HTML
     assert "/stream?after=" in DASHBOARD_HTML
+
+
+def test_dashboard_exposes_project_level_current_site_preview():
+    assert 'id="projectPreviewCard"' in DASHBOARD_HTML
+    assert ">Current site<" in DASHBOARD_HTML
+    assert "available even when no WorkOrder is active" in DASHBOARD_HTML
+    assert 'id="projectPreviewProject"' in DASHBOARD_HTML
+    assert 'id="projectPreviewTarget"' in DASHBOARD_HTML
+    assert "Stop Frontend" in DASHBOARD_HTML
+    assert "/v1/dashboard/project-previews" in DASHBOARD_HTML
+    assert "/v1/dashboard/projects/" in DASHBOARD_HTML
+    assert "refreshProjectPreview" in DASHBOARD_HTML
+    assert "reconcileProjectPreviewMutation" in DASHBOARD_HTML
+    assert "Active direct job owns this project" in DASHBOARD_HTML
+    assert "uncommitted changes" in DASHBOARD_HTML
+    assert "localStorage" not in DASHBOARD_HTML
+    assert "sessionStorage" not in DASHBOARD_HTML
+    assert "/home/sonvh/chonhac" not in DASHBOARD_HTML

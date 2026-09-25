@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import asyncio
+import hashlib
+import os
 import re
+import subprocess
+from pathlib import Path
 from typing import Any, Literal
 
-from .config import project_config
+from .config import project_config, projects_doc
 
 
 PreviewTarget = Literal["frontend", "backend", "both"]
@@ -366,6 +371,338 @@ class PreviewManager:
             workspace_mode=mode,
             supported=True,
         )
+
+
+def _project_preview_owner_id(project_id: str) -> str:
+    digest = hashlib.sha256(project_id.encode("utf-8")).hexdigest()[:24]
+    return f"project-preview-{digest}"
+
+
+class ProjectPreviewManager:
+    """Manage an idle direct-project preview without creating an engineering job."""
+
+    def __init__(self, storage: Any, ddev: Any) -> None:
+        self.storage = storage
+        self.ddev = ddev
+        self._states: dict[str, dict[str, Any]] = {}
+
+    @staticmethod
+    def _target_supported(project: dict[str, Any], target: str) -> bool:
+        return PreviewManager._target_supported(project, target)
+
+    @staticmethod
+    def _eligible(project: dict[str, Any]) -> bool:
+        runtime = dict(project.get("runtime") or {})
+        return (
+            str(runtime.get("workspace_mode") or "isolated_clone") == "direct"
+            and bool(project.get("preview"))
+        )
+
+    def projects(self) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        raw_projects = projects_doc().get("projects", {})
+        if not isinstance(raw_projects, dict):
+            return rows
+        for project_id in sorted(str(value) for value in raw_projects):
+            try:
+                project = project_config(project_id)
+            except Exception:
+                continue
+            if not self._eligible(project):
+                continue
+            preview = dict(project.get("preview") or {})
+            backend = dict(preview.get("backend") or {})
+            frontend = dict(preview.get("frontend") or {})
+            targets: list[str] = []
+            if bool(frontend.get("enabled", False)):
+                targets.append("frontend")
+            if bool(backend.get("enabled", False)):
+                targets.append("backend")
+            if {"frontend", "backend"}.issubset(set(targets)):
+                targets.append("both")
+            rows.append(
+                {
+                    "project_id": project_id,
+                    "workspace_mode": "direct",
+                    "base_branch": str(project.get("base_branch") or "main"),
+                    "targets": targets,
+                }
+            )
+        return rows
+
+    def _context(
+        self,
+        project_id: str,
+    ) -> tuple[dict[str, Any], str, dict[str, Any] | None]:
+        try:
+            project = project_config(project_id)
+        except (KeyError, ValueError) as exc:
+            raise RuntimeError("Unknown or invalid project") from exc
+        if not self._eligible(project):
+            raise RuntimeError("Project-level preview requires a direct project with preview enabled")
+        workspace = str(Path(str(project["path"])).resolve())
+        approved = os.getenv("CODING_DIRECT_PROJECT_ROOT", "").strip()
+        if approved and Path(workspace) != Path(approved).resolve():
+            raise RuntimeError("Project preview path is not mounted as the approved direct project root")
+        lease = self.storage.project_lease(project_id)
+        return project, workspace, dict(lease) if lease else None
+
+    @staticmethod
+    def _repo_state(workspace: str) -> tuple[str | None, bool | None, str | None]:
+        branch = subprocess.run(
+            ["git", "-C", workspace, "branch", "--show-current"],
+            text=True,
+            capture_output=True,
+        )
+        if branch.returncode != 0:
+            return None, None, "Direct project repository is unavailable."
+        status = subprocess.run(
+            ["git", "-C", workspace, "status", "--porcelain"],
+            text=True,
+            capture_output=True,
+        )
+        if status.returncode != 0:
+            return branch.stdout.strip() or None, None, "Direct project repository status is unavailable."
+        return branch.stdout.strip() or None, not bool(status.stdout.strip()), None
+
+    @staticmethod
+    def _component(
+        observed: dict[str, Any] | None,
+        *,
+        kind: str,
+    ) -> tuple[str, str | None]:
+        if not observed:
+            return "stopped", None
+        ready = str(observed.get("status") or "") == "ready"
+        if kind == "frontend":
+            return (
+                "ready" if ready and observed.get("frontend_url") else "stopped",
+                observed.get("frontend_url") if ready else None,
+            )
+        return (
+            "ready" if ready and observed.get("backend_url") else "stopped",
+            observed.get("backend_url") if ready else None,
+        )
+
+    async def status(self, project_id: str) -> dict[str, Any]:
+        project, workspace, lease = self._context(project_id)
+        branch, clean, repo_error = self._repo_state(workspace)
+        lease_active = bool(lease and str(lease.get("state") or "") == "active")
+        state = dict(self._states.get(project_id) or {})
+        generation = int(state.get("generation") or 0)
+        target = state.get("target")
+        error = state.get("error")
+
+        if lease_active:
+            return {
+                "project_id": project_id,
+                "workspace_mode": "direct",
+                "supported": True,
+                "base_branch": str(project.get("base_branch") or "main"),
+                "branch": branch,
+                "clean": clean,
+                "ownership": "job",
+                "active_job_id": lease.get("owner_job_id"),
+                "controls_enabled": False,
+                "target": target,
+                "status": "job_owned",
+                "generation": generation,
+                "frontend_status": "job_owned",
+                "backend_status": "job_owned",
+                "frontend_url": None,
+                "backend_url": None,
+                "error": repo_error,
+            }
+
+        backend_observed: dict[str, Any] | None = None
+        frontend_observed: dict[str, Any] | None = None
+        preview = dict(project.get("preview") or {})
+        try:
+            if self._target_supported(project, "backend"):
+                backend_observed = await self.ddev.preview_status(
+                    job_id=_project_preview_owner_id(project_id),
+                    project_id=project_id,
+                    workspace=workspace,
+                    target="backend",
+                )
+        except Exception:
+            backend_observed = None
+        try:
+            if self._target_supported(project, "frontend"):
+                frontend_observed = await self.ddev.preview_status(
+                    job_id=_project_preview_owner_id(project_id),
+                    project_id=project_id,
+                    workspace=workspace,
+                    target="frontend",
+                )
+        except Exception:
+            frontend_observed = None
+
+        frontend_status, frontend_url = self._component(
+            frontend_observed,
+            kind="frontend",
+        )
+        backend_status, backend_url = self._component(
+            backend_observed,
+            kind="backend",
+        )
+
+        state_status = str(state.get("status") or "")
+        if state_status == "starting":
+            status = "starting"
+        elif state_status == "failed":
+            status = "failed"
+        elif frontend_status == "ready" and backend_status == "ready":
+            status = "ready"
+            target = target or "both"
+            error = None
+        elif frontend_status == "ready":
+            status = "ready"
+            target = target or "frontend"
+            error = None
+        elif backend_status == "ready":
+            status = "ready"
+            target = target or "backend"
+            if state_status != "failed":
+                error = None
+        else:
+            status = "stopped"
+            if state_status not in {"failed"}:
+                error = None
+
+        if state_status == "ready" and status == "stopped":
+            self._states[project_id] = {
+                **state,
+                "status": "stopped",
+                "error": None,
+            }
+
+        return {
+            "project_id": project_id,
+            "workspace_mode": "direct",
+            "supported": True,
+            "base_branch": str(project.get("base_branch") or "main"),
+            "branch": branch,
+            "clean": clean,
+            "ownership": "idle",
+            "active_job_id": None,
+            "controls_enabled": bool(clean is True and repo_error is None),
+            "target": target,
+            "status": status,
+            "generation": generation,
+            "frontend_status": frontend_status,
+            "backend_status": backend_status,
+            "frontend_url": frontend_url,
+            "backend_url": backend_url,
+            "error": repo_error or error,
+        }
+
+    async def start(self, project_id: str, target: PreviewTarget) -> dict[str, Any]:
+        project, workspace, lease = self._context(project_id)
+        if lease and str(lease.get("state") or "") == "active":
+            raise RuntimeError("Project preview is unavailable while a direct engineering job owns the project")
+        if not self._target_supported(project, target):
+            raise RuntimeError(f"Preview target {target!r} is not enabled for this project")
+        branch, clean, repo_error = self._repo_state(workspace)
+        if repo_error or not branch:
+            raise RuntimeError(repo_error or "Direct project repository is unavailable")
+        if clean is not True:
+            raise RuntimeError("Project preview refuses to mutate DDEV while the direct repository is dirty")
+
+        previous = dict(self._states.get(project_id) or {})
+        generation = int(previous.get("generation") or 0) + 1
+        self._states[project_id] = {
+            "target": target,
+            "status": "starting",
+            "generation": generation,
+            "error": None,
+        }
+        try:
+            await self.ddev.preview_start(
+                job_id=_project_preview_owner_id(project_id),
+                project_id=project_id,
+                workspace=workspace,
+                target=target,
+            )
+        except Exception as exc:
+            self._states[project_id] = {
+                "target": target,
+                "status": "failed",
+                "generation": generation,
+                "error": _public_preview_error(exc),
+            }
+            return await self.status(project_id)
+
+        self._states[project_id] = {
+            "target": target,
+            "status": "ready",
+            "generation": generation,
+            "error": None,
+        }
+        return await self.status(project_id)
+
+    async def stop(self, project_id: str) -> dict[str, Any]:
+        _project, workspace, lease = self._context(project_id)
+        if lease and str(lease.get("state") or "") == "active":
+            raise RuntimeError("Project preview is owned by an active direct engineering job")
+        state = dict(self._states.get(project_id) or {})
+        target = str(state.get("target") or "both")
+        try:
+            await self.ddev.preview_stop(
+                job_id=_project_preview_owner_id(project_id),
+                project_id=project_id,
+                workspace=workspace,
+                target=target if target in {"frontend", "backend", "both"} else "both",
+            )
+        except Exception as exc:
+            self._states[project_id] = {
+                **state,
+                "target": target,
+                "status": "failed",
+                "error": _public_preview_error(exc),
+            }
+            return await self.status(project_id)
+        self._states[project_id] = {
+            **state,
+            "target": target,
+            "status": "stopped",
+            "error": None,
+        }
+        return await self.status(project_id)
+
+    async def handoff_to_job(self, project_id: str, job_id: str) -> None:
+        _project, workspace, lease = self._context(project_id)
+        if (
+            not lease
+            or str(lease.get("state") or "") != "active"
+            or str(lease.get("owner_job_id") or "") != job_id
+        ):
+            raise RuntimeError("Idle preview handoff requires the exact active direct project lease")
+
+        last_error: Exception | None = None
+        for attempt in range(60):
+            try:
+                await self.ddev.preview_stop(
+                    job_id=_project_preview_owner_id(project_id),
+                    project_id=project_id,
+                    workspace=workspace,
+                    target="both",
+                )
+                state = dict(self._states.get(project_id) or {})
+                self._states[project_id] = {
+                    **state,
+                    "status": "stopped",
+                    "error": None,
+                }
+                return
+            except Exception as exc:
+                last_error = exc
+                lower = str(exc).lower()
+                if "active process" not in lower and "busy" not in lower:
+                    break
+                if attempt < 59:
+                    await asyncio.sleep(1)
+        raise RuntimeError("Idle project preview could not be retired before direct job handoff") from last_error
 
 
 

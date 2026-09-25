@@ -13,7 +13,7 @@ from .config import project_config
 from .engine_core import RuntimeEngineCore
 from .evidence_packs import developer_repair_evidence_pack, pm_evidence_pack
 from .fingerprint import failure_fingerprint
-from .preview import ready_preview_context
+from .preview import ProjectPreviewManager, ready_preview_context
 from .prompts import evaluator_prompt, execution_prompt, planning_prompt
 from .repo import analyze_repo, commit_changes, diff_state
 from .review import (
@@ -64,6 +64,14 @@ class RuntimeEngine(RuntimeEngineCore):
                     raise RuntimeError("Persisted direct workspace is missing its exact active project lease")
             else:
                 lease = self.storage.acquire_project_lease(str(job["project_id"]), job_id)
+                try:
+                    await ProjectPreviewManager(
+                        self.storage,
+                        self.ddev,
+                    ).handoff_to_job(str(job["project_id"]), job_id)
+                except Exception:
+                    self.storage.release_project_lease(str(job["project_id"]), job_id)
+                    raise
             checkpoint["workspace_mode"] = "direct"
             checkpoint["project_lease_generation"] = int(lease.get("generation") or 0)
         else:

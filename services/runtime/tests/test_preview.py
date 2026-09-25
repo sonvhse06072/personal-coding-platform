@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from app.preview import PreviewManager, ready_preview_context
+from app.preview import PreviewManager, ProjectPreviewManager, ready_preview_context
 from app.prompts import evaluator_prompt, execution_prompt
 
 
@@ -140,7 +140,9 @@ def configure_project(monkeypatch, *, direct=True):
     monkeypatch.setattr(
         "app.preview.project_config",
         lambda project_id: {
-            "runtime": {
+            "path": "/home/sonvh/chonhac",
+        "base_branch": "main",
+        "runtime": {
                 "workspace_mode": "direct" if direct else "isolated_clone",
                 "exclusive_project_lease": direct,
             },
@@ -369,3 +371,134 @@ def test_developer_and_evaluator_prompts_label_preview_as_optional_not_evidence(
     assert "Do not claim visual/browser review unless you actually performed it" in developer
     assert "https://chonhac.ddev.site:3100" in evaluator
     assert "not proof that visual/browser review occurred" in evaluator
+
+
+def test_project_preview_lists_direct_preview_projects_without_paths(monkeypatch):
+    configure_project(monkeypatch)
+    monkeypatch.setattr(
+        "app.preview.projects_doc",
+        lambda: {"projects": {"chonhac": {}, "other": {}}},
+    )
+
+    def project_lookup(project_id):
+        if project_id == "chonhac":
+            return {
+                "path": "/home/sonvh/chonhac",
+                "base_branch": "main",
+                "runtime": {
+                    "workspace_mode": "direct",
+                    "exclusive_project_lease": True,
+                },
+                "preview": {
+                    "backend": {"enabled": True},
+                    "frontend": {"enabled": True},
+                },
+            }
+        return {
+            "path": "/tmp/other",
+            "runtime": {
+                "workspace_mode": "isolated_clone",
+                "exclusive_project_lease": False,
+            },
+        }
+
+    monkeypatch.setattr("app.preview.project_config", project_lookup)
+    manager = ProjectPreviewManager(FakeStorage(lease=False), FakeDdev())
+
+    projects = manager.projects()
+
+    assert projects == [{
+        "project_id": "chonhac",
+        "workspace_mode": "direct",
+        "base_branch": "main",
+        "targets": ["frontend", "backend", "both"],
+    }]
+    assert "/home/sonvh/chonhac" not in repr(projects)
+
+
+def test_project_preview_start_uses_synthetic_owner_without_engineering_lease(monkeypatch):
+    configure_project(monkeypatch)
+    storage = FakeStorage(lease=False)
+    ddev = FakeDdev()
+    manager = ProjectPreviewManager(storage, ddev)
+    monkeypatch.setattr(
+        ProjectPreviewManager,
+        "_repo_state",
+        staticmethod(lambda _workspace: ("main", True, None)),
+    )
+
+    result = asyncio.run(manager.start("chonhac", "both"))
+
+    assert result["status"] == "ready"
+    assert result["ownership"] == "idle"
+    assert result["controls_enabled"] is True
+    assert result["frontend_url"] == "https://chonhac.ddev.site:3100"
+    assert result["backend_url"] == "https://chonhac.ddev.site"
+    assert ddev.starts[0]["job_id"].startswith("project-preview-")
+    assert ddev.starts[0]["job_id"] != storage.job["id"]
+    assert storage.job_updates == []
+
+
+def test_project_preview_start_refuses_active_engineering_lease(monkeypatch):
+    configure_project(monkeypatch)
+    storage = FakeStorage(lease=True)
+    manager = ProjectPreviewManager(storage, FakeDdev())
+    monkeypatch.setattr(
+        ProjectPreviewManager,
+        "_repo_state",
+        staticmethod(lambda _workspace: ("main", True, None)),
+    )
+
+    with pytest.raises(RuntimeError, match="direct engineering job owns"):
+        asyncio.run(manager.start("chonhac", "frontend"))
+
+
+def test_project_preview_start_refuses_dirty_direct_repo(monkeypatch):
+    configure_project(monkeypatch)
+    storage = FakeStorage(lease=False)
+    manager = ProjectPreviewManager(storage, FakeDdev())
+    monkeypatch.setattr(
+        ProjectPreviewManager,
+        "_repo_state",
+        staticmethod(lambda _workspace: ("main", False, None)),
+    )
+
+    with pytest.raises(RuntimeError, match="repository is dirty"):
+        asyncio.run(manager.start("chonhac", "frontend"))
+
+
+def test_project_preview_handoff_requires_exact_job_lease_and_stops_idle_owner(monkeypatch):
+    configure_project(monkeypatch)
+    storage = FakeStorage(lease=True)
+    ddev = FakeDdev()
+    manager = ProjectPreviewManager(storage, ddev)
+
+    asyncio.run(manager.handoff_to_job("chonhac", storage.job["id"]))
+
+    assert len(ddev.stops) == 1
+    assert ddev.stops[0]["job_id"].startswith("project-preview-")
+    assert ddev.stops[0]["job_id"] != storage.job["id"]
+    assert ddev.stops[0]["target"] == "both"
+
+    with pytest.raises(RuntimeError, match="exact active direct project lease"):
+        asyncio.run(manager.handoff_to_job("chonhac", "another-job"))
+
+
+def test_project_preview_status_hides_idle_controls_when_job_owns_lease(monkeypatch):
+    configure_project(monkeypatch)
+    storage = FakeStorage(lease=True)
+    manager = ProjectPreviewManager(storage, FakeDdev())
+    monkeypatch.setattr(
+        ProjectPreviewManager,
+        "_repo_state",
+        staticmethod(lambda _workspace: ("ai/job-preview", True, None)),
+    )
+
+    result = asyncio.run(manager.status("chonhac"))
+
+    assert result["status"] == "job_owned"
+    assert result["ownership"] == "job"
+    assert result["active_job_id"] == storage.job["id"]
+    assert result["controls_enabled"] is False
+    assert result["frontend_url"] is None
+    assert result["backend_url"] is None
