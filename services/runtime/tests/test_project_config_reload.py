@@ -54,3 +54,67 @@ def test_project_config_still_fails_closed_for_unknown_project(tmp_path, monkeyp
 
     with pytest.raises(KeyError, match="Unknown project_id: missing"):
         config.project_config("missing")
+
+
+def test_project_config_defaults_to_isolated_clone(tmp_path, monkeypatch):
+    registry = tmp_path / "projects.yml"
+    project_path = tmp_path / "demo"
+    project_path.mkdir()
+    _write_projects(registry, {"demo": str(project_path)})
+    monkeypatch.setenv("PROJECTS_FILE", str(registry))
+
+    runtime = config.project_config("demo")["runtime"]
+
+    assert runtime["workspace_mode"] == "isolated_clone"
+    assert runtime["exclusive_project_lease"] is False
+
+
+def test_project_config_accepts_direct_only_with_exclusive_lease(tmp_path, monkeypatch):
+    registry = tmp_path / "projects.yml"
+    project_path = tmp_path / "demo"
+    project_path.mkdir()
+    registry.write_text(
+        "version: 1\n"
+        "projects:\n"
+        "  demo:\n"
+        f"    path: {project_path}\n"
+        "    base_branch: main\n"
+        "    runtime:\n"
+        "      workspace_mode: direct\n"
+        "      exclusive_project_lease: true\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PROJECTS_FILE", str(registry))
+
+    runtime = config.project_config("demo")["runtime"]
+
+    assert runtime["workspace_mode"] == "direct"
+    assert runtime["exclusive_project_lease"] is True
+
+
+@pytest.mark.parametrize(
+    "runtime_yaml, expected",
+    [
+        ("      workspace_mode: direct\n", "requires exclusive_project_lease=true"),
+        ("      workspace_mode: magic\n", "unsupported runtime.workspace_mode"),
+    ],
+)
+def test_project_config_rejects_unsafe_workspace_modes(
+    tmp_path, monkeypatch, runtime_yaml, expected
+):
+    registry = tmp_path / "projects.yml"
+    project_path = tmp_path / "demo"
+    project_path.mkdir()
+    registry.write_text(
+        "version: 1\n"
+        "projects:\n"
+        "  demo:\n"
+        f"    path: {project_path}\n"
+        "    runtime:\n"
+        + runtime_yaml,
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PROJECTS_FILE", str(registry))
+
+    with pytest.raises(ValueError, match=expected):
+        config.project_config("demo")

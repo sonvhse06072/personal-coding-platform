@@ -8,6 +8,7 @@ import uuid
 from datetime import timedelta
 from typing import Any
 
+from .config import project_config
 from .storage import Storage, now
 
 
@@ -998,6 +999,22 @@ class PlanOrchestrator:
         else:
             self.store.update_plan(plan_id, status="active")
 
+    def _direct_project_lease_busy(self, project_id: str, candidate_job_id: str) -> bool:
+        try:
+            project = project_config(project_id)
+        except (KeyError, ValueError):
+            return False
+        runtime = project.get("runtime", {}) or {}
+        if str(runtime.get("workspace_mode") or "isolated_clone") != "direct":
+            return False
+        lookup = getattr(self.storage, "project_lease", None)
+        if not callable(lookup):
+            return False
+        lease = lookup(project_id)
+        if not lease or str(lease.get("state") or "") != "active":
+            return False
+        return str(lease.get("owner_job_id") or "") != candidate_job_id
+
     async def _launch_one(self) -> dict[str, str] | None:
         for plan in self.store.active_plans():
             if str(plan.get("status")) in {"blocked", "completed", "waiting_human"}:
@@ -1038,6 +1055,8 @@ class PlanOrchestrator:
                     return None
 
                 job_id = self._deterministic_job_id(str(plan["plan_id"]), str(row["work_order_id"]))
+                if self._direct_project_lease_busy(str(plan["project_id"]), job_id):
+                    continue
                 payload = {
                     "_job_id": job_id,
                     "project_id": plan["project_id"],

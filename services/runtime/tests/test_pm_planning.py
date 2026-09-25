@@ -227,6 +227,7 @@ def test_pm_creates_ready_dependency_aware_plan(monkeypatch, tmp_path):
     assert "docs/scope.md" in adapter.calls[0]["prompt"]
     assert "T-100" in adapter.calls[0]["prompt"]
     assert ddev.create_calls[0]["ref"] == "a" * 40
+    assert ddev.create_calls[0]["workspace_mode"] == "isolated_clone"
     assert len(ddev.remove_calls) == 1
 
 

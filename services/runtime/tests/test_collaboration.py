@@ -336,3 +336,47 @@ def test_malformed_control_artifact_fails_closed(tmp_path):
             )
 
     asyncio.run(scenario())
+
+
+
+def test_direct_collaborator_reuses_owning_workspace_without_branch_clone(tmp_path):
+    async def scenario():
+        workspace = git_workspace(tmp_path)
+        job = row(workspace)
+        job["checkpoint"]["workspace_mode"] = "direct"
+        storage = FakeStorage(job)
+        ddev = FakeDdev(tmp_path / "should-not-be-used")
+        adapter = SequenceAdapter(
+            [{"recommendation": "Direct workspace is safe to review", "unresolved": False}]
+        )
+        manager = CollaborationManager(
+            storage,
+            router=FakeRouter(),
+            ddev=ddev,
+            adapter_builder=lambda *args: adapter,
+        )
+
+        result = await manager.create(
+            storage.row["id"],
+            CollaborationCreateRequest(
+                role="reviewer",
+                topic="review",
+                objective="review current direct workspace without writing",
+                question="Is the current direct diff consistent?",
+                evidence=evidence(),
+            ),
+        )
+
+        assert result.status == "resolved"
+        assert ddev.created == []
+        assert ddev.removed == []
+        assert workspace.exists()
+        assert subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=workspace,
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout.strip() == ""
+
+    asyncio.run(scenario())

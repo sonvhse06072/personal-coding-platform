@@ -643,8 +643,24 @@ class CollaborationManager:
         choice: dict[str, Any] = {}
         usage: dict[str, Any] = {"input_tokens": 0, "output_tokens": 0, "estimated_cost_usd": 0.0}
         try:
-            workspace_info = await self.ddev.create_workspace(job_id=workspace_job_id, project_id=row["project_id"], ref=str(row.get("source_commit") or "") or None)
-            workspace = Path(str(workspace_info["workspace"]))
+            checkpoint = dict(row.get("checkpoint") or {})
+            direct_workspace = str(checkpoint.get("workspace_mode") or "") == "direct"
+            if direct_workspace:
+                persisted_workspace = str(row.get("workspace") or "").strip()
+                if not persisted_workspace:
+                    raise RuntimeError("Direct collaboration requires the owning job workspace")
+                workspace = Path(persisted_workspace).resolve()
+                workspace_info = {
+                    "workspace": str(workspace),
+                    "workspace_mode": "direct_shared_read_only",
+                }
+            else:
+                workspace_info = await self.ddev.create_workspace(
+                    job_id=workspace_job_id,
+                    project_id=row["project_id"],
+                    ref=str(row.get("source_commit") or "") or None,
+                )
+                workspace = Path(str(workspace_info["workspace"]))
             before = await _workspace_state(workspace)
             prompt = self._build_prompt(work_order=work_order, thread=thread, round_number=round_number, developer_response=developer_response, extra_evidence=extra_evidence)
             run = None
@@ -743,9 +759,19 @@ class CollaborationManager:
             raise
         finally:
             self._active_tasks.pop(thread_id, None)
-            if workspace_info and workspace_info.get("workspace"):
+            if (
+                workspace_info
+                and workspace_info.get("workspace")
+                and workspace_info.get("workspace_mode") != "direct_shared_read_only"
+            ):
                 try:
-                    await asyncio.shield(self.ddev.remove_workspace(job_id=workspace_job_id, project_id=row["project_id"] if row else "", workspace=str(workspace_info["workspace"])))
+                    await asyncio.shield(
+                        self.ddev.remove_workspace(
+                            job_id=workspace_job_id,
+                            project_id=row["project_id"] if row else "",
+                            workspace=str(workspace_info["workspace"]),
+                        )
+                    )
                 except Exception:
                     pass
 

@@ -425,6 +425,7 @@ class PMPlanner:
                 job_id=plan_id,
                 project_id=request.project_id,
                 ref=baseline.source_commit,
+                workspace_mode="isolated_clone",
             )
             source_commit = str(workspace_info.get("source_commit") or "").lower()
             if source_commit != baseline.source_commit.lower():

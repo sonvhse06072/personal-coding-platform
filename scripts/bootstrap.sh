@@ -8,7 +8,7 @@ if ! command -v ddev >/dev/null 2>&1; then
   exit 1
 fi
 
-mkdir -p "$HOME/projects" "$HOME/.coding-platform/workspaces" "$HOME/.codex" "$HOME/.config/opencode" "$HOME/.local/share/opencode"
+mkdir -p "$HOME/projects" "$HOME/.coding-platform/workspaces" "$HOME/.coding-platform/direct-disabled" "$HOME/.codex" "$HOME/.config/opencode" "$HOME/.local/share/opencode"
 touch "$HOME/.gitconfig"
 
 DOCKER_GID="$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo 999)"
@@ -26,6 +26,9 @@ fi
 
 if ! grep -q '^ANTIGRAVITY_BRIDGE_PORT=' "$ENV_FILE"; then
   echo "ANTIGRAVITY_BRIDGE_PORT=8792" >> "$ENV_FILE"
+fi
+if ! grep -q '^CODING_DIRECT_PROJECT_ROOT=' "$ENV_FILE"; then
+  echo "CODING_DIRECT_PROJECT_ROOT=$HOME/.coding-platform/direct-disabled" >> "$ENV_FILE"
 fi
 
 # Migrate/generate service credentials before any container starts. This keeps

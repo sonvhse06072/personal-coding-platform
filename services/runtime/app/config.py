@@ -79,6 +79,21 @@ def project_config(project_id: str) -> dict[str, Any]:
     if not path or re.search(r"\$\{[^}]+\}", path):
         raise ValueError(f"Project {project_id} has unresolved path: {raw_path}")
     cfg["path"] = path
+
+    runtime = dict(cfg.get("runtime") or {})
+    workspace_mode = str(runtime.get("workspace_mode") or "isolated_clone").strip()
+    if workspace_mode not in {"isolated_clone", "direct"}:
+        raise ValueError(
+            f"Project {project_id} has unsupported runtime.workspace_mode: {workspace_mode!r}"
+        )
+    exclusive_project_lease = bool(runtime.get("exclusive_project_lease", False))
+    if workspace_mode == "direct" and not exclusive_project_lease:
+        raise ValueError(
+            f"Project {project_id} direct workspace mode requires exclusive_project_lease=true"
+        )
+    runtime["workspace_mode"] = workspace_mode
+    runtime["exclusive_project_lease"] = exclusive_project_lease
+    cfg["runtime"] = runtime
     return cfg
 
 

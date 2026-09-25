@@ -52,6 +52,7 @@ class RuntimeEngineCore:
                     error="Runtime restarted during an in-flight job; explicit resume required.",
                 )
                 await self.ddev.cancel(job_id=job["id"])
+        self.storage.reconcile_terminal_project_leases()
         self.worker_task = asyncio.create_task(self._worker_loop())
 
     async def stop(self) -> None:
@@ -129,6 +130,15 @@ class RuntimeEngineCore:
         checkpoint["resource_quiesce"] = detail
         self.storage.update(job_id, checkpoint=checkpoint)
 
+    def _release_terminal_direct_lease(self, job_id: str) -> bool:
+        row = self.storage.get(job_id)
+        if not row or str(row.get("status") or "") not in FINAL:
+            return False
+        checkpoint = checkpoint_from_row(row)
+        if str(checkpoint.get("workspace_mode") or "isolated_clone") != "direct":
+            return False
+        return self.storage.release_project_lease(str(row["project_id"]), job_id)
+
     async def _worker_loop(self) -> None:
         while True:
             job_id = await self.queue.get()
@@ -152,6 +162,7 @@ class RuntimeEngineCore:
             finally:
                 if not self._stopping:
                     await self._quiesce_stable_manual_job(job_id)
+                    self._release_terminal_direct_lease(job_id)
                 self.active_jobs.pop(job_id, None)
                 self.queue.task_done()
 
@@ -206,6 +217,7 @@ class RuntimeEngineCore:
             active.cancel()
             await asyncio.gather(active, return_exceptions=True)
         await self._quiesce_stable_manual_job(job_id)
+        self._release_terminal_direct_lease(job_id)
         updated = self.storage.get(job_id)
         assert updated is not None
         return updated

@@ -191,9 +191,28 @@ def existing_repo_analysis(row: dict[str, Any]) -> dict[str, Any] | None:
     return deepcopy(value)
 
 
-def validate_workspace(root: Path, job_id: str, workspace: str | Path) -> Path:
-    root = root.resolve()
+def validate_workspace(
+    root: Path,
+    job_id: str,
+    workspace: str | Path,
+    *,
+    workspace_mode: str = "isolated_clone",
+    project_path: str | Path | None = None,
+) -> Path:
     path = Path(workspace).resolve()
+    if workspace_mode == "direct":
+        if project_path is None:
+            raise RuntimeError("Direct workspace validation requires the configured project path")
+        configured = Path(project_path).resolve()
+        if path != configured:
+            raise RuntimeError("Persisted direct workspace does not match the configured project path")
+        if not path.is_dir() or not (path / ".git").exists():
+            raise RuntimeError("Persisted direct workspace is missing or is not a Git repository")
+        return path
+    if workspace_mode != "isolated_clone":
+        raise RuntimeError(f"Unsupported persisted workspace mode: {workspace_mode}")
+
+    root = root.resolve()
     try:
         path.relative_to(root)
     except ValueError as exc:

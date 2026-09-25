@@ -34,6 +34,7 @@ services:
       MODELS_FILE: /config/models.yml
       CODING_PROJECTS_ROOT: ${CODING_PROJECTS_ROOT}
       CODING_WORKSPACES_ROOT: ${CODING_WORKSPACES_ROOT}
+      CODING_DIRECT_PROJECT_ROOT: ${CODING_DIRECT_PROJECT_ROOT:-/tmp/pcp-direct-disabled}
       DATABASE_URL: postgresql://db:db@db:5432/db
       ANTIGRAVITY_BRIDGE_URL: http://host.docker.internal:${ANTIGRAVITY_BRIDGE_PORT:-8792}
       VIRTUAL_HOST: ${DDEV_HOSTNAME}
@@ -47,6 +48,8 @@ services:
       # Mount project/workspace roots at the exact same host absolute paths. This
       # keeps isolated job workspace paths identical on host and in containers.
       - ${CODING_WORKSPACES_ROOT}:${CODING_WORKSPACES_ROOT}
+      # Direct-mode agents receive only the explicitly approved exact repo.
+      - ${CODING_DIRECT_PROJECT_ROOT:-/tmp/pcp-direct-disabled}:${CODING_DIRECT_PROJECT_ROOT:-/tmp/pcp-direct-disabled}
       # Reuse host logins for subscription-backed CLIs.
       - ${HOST_HOME}/.codex:/home/coder/.codex
       - ${HOST_HOME}/.config/opencode:/home/coder/.config/opencode
@@ -75,6 +78,7 @@ services:
       PROJECTS_FILE: /config/projects.yml
       CODING_PROJECTS_ROOT: ${CODING_PROJECTS_ROOT}
       CODING_WORKSPACES_ROOT: ${CODING_WORKSPACES_ROOT}
+      CODING_DIRECT_PROJECT_ROOT: ${CODING_DIRECT_PROJECT_ROOT:-/tmp/pcp-direct-disabled}
       DDEV_COMMAND_TIMEOUT_SECONDS: 1800
       CONTINUITY_GITHUB_REPOSITORY: ${CONTINUITY_GITHUB_REPOSITORY:-sonvhse06072/personal-coding-platform}
       CONTINUITY_BASE_BRANCH: ${CONTINUITY_BASE_BRANCH:-main}
@@ -89,6 +93,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ${CODING_PROJECTS_ROOT}:${CODING_PROJECTS_ROOT}
       - ${CODING_WORKSPACES_ROOT}:${CODING_WORKSPACES_ROOT}
+      - ${CODING_DIRECT_PROJECT_ROOT:-/tmp/pcp-direct-disabled}:${CODING_DIRECT_PROJECT_ROOT:-/tmp/pcp-direct-disabled}
       - ${HOST_HOME}/.ddev:/home/coder/.ddev
       # Persist only PCP Buildx instance metadata. Do not expose ~/.docker or
       # host registry credentials to the executor container.
