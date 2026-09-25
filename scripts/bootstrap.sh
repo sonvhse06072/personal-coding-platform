@@ -27,6 +27,9 @@ fi
 if ! grep -q '^ANTIGRAVITY_BRIDGE_PORT=' "$ENV_FILE"; then
   echo "ANTIGRAVITY_BRIDGE_PORT=8792" >> "$ENV_FILE"
 fi
+if ! grep -q '^CODING_DIRECT_PROJECT_ROOT=' "$ENV_FILE"; then
+  echo "CODING_DIRECT_PROJECT_ROOT=$HOME/.coding-platform/direct-disabled" >> "$ENV_FILE"
+fi
 
 # Migrate/generate service credentials before any container starts. This keeps
 # DDEV's globally injected .env free of bearer tokens and provider API keys.
