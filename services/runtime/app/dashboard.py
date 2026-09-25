@@ -366,6 +366,7 @@ def create_dashboard_router(
     storage: Any,
     orchestrator_store: Any,
     preview_manager: Any | None = None,
+    project_preview_manager: Any | None = None,
 ) -> APIRouter:
     router = APIRouter()
 
@@ -428,6 +429,68 @@ def create_dashboard_router(
         _require_session(pcp_dashboard_session)
         response.delete_cookie(_CONTROL_COOKIE, path="/")
         return {"status": "ok"}
+
+    @router.get("/v1/dashboard/project-previews", include_in_schema=False)
+    def dashboard_project_previews(
+        pcp_dashboard_session: str | None = Cookie(default=None),
+    ) -> dict[str, Any]:
+        _require_session(pcp_dashboard_session)
+        if project_preview_manager is None:
+            raise HTTPException(503, "Project preview manager is unavailable")
+        return {"projects": project_preview_manager.projects()}
+
+    @router.get(
+        "/v1/dashboard/projects/{project_id}/preview",
+        include_in_schema=False,
+    )
+    async def dashboard_project_preview_status(
+        project_id: str,
+        pcp_dashboard_session: str | None = Cookie(default=None),
+    ) -> dict[str, Any]:
+        _require_session(pcp_dashboard_session)
+        if project_preview_manager is None:
+            raise HTTPException(503, "Project preview manager is unavailable")
+        try:
+            return await project_preview_manager.status(project_id)
+        except RuntimeError as exc:
+            raise _preview_error(exc) from exc
+
+    @router.post(
+        "/v1/dashboard/projects/{project_id}/preview",
+        include_in_schema=False,
+    )
+    async def dashboard_project_preview_start(
+        project_id: str,
+        payload: DashboardPreviewRequest,
+        pcp_dashboard_session: str | None = Cookie(default=None),
+        pcp_dashboard_control_session: str | None = Cookie(default=None),
+    ) -> dict[str, Any]:
+        _require_session(pcp_dashboard_session)
+        _require_control_session(pcp_dashboard_control_session)
+        if project_preview_manager is None:
+            raise HTTPException(503, "Project preview manager is unavailable")
+        try:
+            return await project_preview_manager.start(project_id, payload.target)
+        except RuntimeError as exc:
+            raise _preview_error(exc) from exc
+
+    @router.delete(
+        "/v1/dashboard/projects/{project_id}/preview",
+        include_in_schema=False,
+    )
+    async def dashboard_project_preview_stop(
+        project_id: str,
+        pcp_dashboard_session: str | None = Cookie(default=None),
+        pcp_dashboard_control_session: str | None = Cookie(default=None),
+    ) -> dict[str, Any]:
+        _require_session(pcp_dashboard_session)
+        _require_control_session(pcp_dashboard_control_session)
+        if project_preview_manager is None:
+            raise HTTPException(503, "Project preview manager is unavailable")
+        try:
+            return await project_preview_manager.stop(project_id)
+        except RuntimeError as exc:
+            raise _preview_error(exc) from exc
 
     @router.get("/v1/dashboard/jobs/{job_id}/preview", include_in_schema=False)
     async def dashboard_preview_status(
