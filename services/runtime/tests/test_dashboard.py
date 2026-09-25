@@ -82,6 +82,7 @@ def test_job_snapshot_exposes_safe_runtime_telemetry_only():
     snapshot = _job_snapshot(_job())
     assert snapshot["profile"] == "complex"
     assert snapshot["analysis_depth"] == 2
+    assert snapshot["workspace_mode"] == "isolated_clone"
     assert snapshot["models"]["current"]["id"] == "codex_terra"
     assert snapshot["models"]["current"]["reasoning_effort"] == "high"
     assert snapshot["tokens"]["input_budget_tokens"] == 668_037
@@ -360,3 +361,16 @@ def test_dashboard_ui_prioritizes_live_developer_console_and_keeps_audit_timelin
     assert "Provider quota remaining" not in DASHBOARD_HTML
     assert "providerQuotas" not in DASHBOARD_HTML
     assert ".slice(0,3)" in DASHBOARD_HTML
+
+
+def test_job_snapshot_exposes_direct_mode_without_workspace_path():
+    job = _job()
+    job["workspace"] = "/home/sonvh/chonhac"
+    job["checkpoint"]["workspace_mode"] = "direct"
+
+    snapshot = _job_snapshot(job)
+
+    assert snapshot["workspace_mode"] == "direct"
+    encoded = json.dumps(snapshot)
+    assert "/home/sonvh/chonhac" not in encoded
+    assert '"workspace"' not in encoded
