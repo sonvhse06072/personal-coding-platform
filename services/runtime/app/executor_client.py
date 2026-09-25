@@ -202,6 +202,72 @@ class DdevExecutorClient:
             _raise_for_status_with_detail(response)
             return response.json()
 
+    async def preview_start(
+        self,
+        *,
+        job_id: str,
+        project_id: str,
+        workspace: str,
+        target: str,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=None) as client:
+            response = await client.post(
+                f"{self.base}/v1/preview/start",
+                json={
+                    "job_id": job_id,
+                    "project_id": project_id,
+                    "workspace": workspace,
+                    "target": target,
+                },
+                headers=self.headers,
+            )
+            _raise_for_status_with_detail(response)
+            return response.json()
+
+    async def preview_status(
+        self,
+        *,
+        job_id: str,
+        project_id: str,
+        workspace: str,
+        target: str,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=90) as client:
+            response = await client.post(
+                f"{self.base}/v1/preview/status",
+                json={
+                    "job_id": job_id,
+                    "project_id": project_id,
+                    "workspace": workspace,
+                    "target": target,
+                },
+                headers=self.headers,
+            )
+            _raise_for_status_with_detail(response)
+            return response.json()
+
+    async def preview_stop(
+        self,
+        *,
+        job_id: str,
+        project_id: str,
+        workspace: str,
+        target: str,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=None) as client:
+            response = await client.post(
+                f"{self.base}/v1/preview/stop",
+                json={
+                    "job_id": job_id,
+                    "project_id": project_id,
+                    "workspace": workspace,
+                    "target": target,
+                },
+                headers=self.headers,
+            )
+            _raise_for_status_with_detail(response)
+            return response.json()
+
     async def quiesce_workspace(
         self,
         *,
