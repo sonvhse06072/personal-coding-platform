@@ -464,45 +464,84 @@ def _preview_health(
     workspace: Path,
     port: int,
 ) -> CommandOutput:
-    """Probe the frontend through the web container, tolerating DDEV settle races.
+    """Probe the frontend without nesting another shell inside DDEV exec.
 
-    A project restart can recreate the shared DDEV router and briefly make the
-    first host-side `ddev exec` unavailable even when supervisord has already
-    started the frontend daemon. Retry the whole exec boundary rather than only
-    retrying curl inside one potentially failed exec invocation.
+    `ddev exec` performs shell interpretation by default. Passing a complex
+    `bash -lc` script through that boundary caused DDEV to reconstruct the
+    command and corrupt redirections/variables before curl ever ran. Use raw
+    argv execution and keep all retry/control flow in Python.
     """
-    script = (
-        "for i in $(seq 1 10); do "
-        f"curl -fsS http://127.0.0.1:{port}/ >/dev/null 2>&1 && exit 0; "
-        "sleep 1; done; "
-        "supervisorctl status 'webextradaemons:*' >&2 || true; "
-        f"ss -ltnp 2>/dev/null | grep ':{port}' >&2 || true; "
-        "exit 1"
-    )
     attempts: list[CommandOutput] = []
-    for attempt in range(3):
+    url = f"http://127.0.0.1:{port}/"
+    for attempt in range(15):
         result = _preview_run(
             job_id,
-            ["ddev", "exec", "bash", "-lc", script],
+            [
+                "ddev",
+                "exec",
+                "--raw",
+                "--",
+                "curl",
+                "--noproxy",
+                "*",
+                "-fsS",
+                "--max-time",
+                "3",
+                "-o",
+                "/dev/null",
+                url,
+            ],
             workspace=workspace,
-            timeout=20,
+            timeout=8,
         )
         attempts.append(result)
         if result.returncode == 0:
             return result
-        if result.timed_out:
-            break
-        if attempt < 2:
+        if attempt < 14:
             time.sleep(1)
 
+    diagnostics: list[CommandOutput] = []
+    for argv in (
+        [
+            "ddev",
+            "exec",
+            "--raw",
+            "--",
+            "supervisorctl",
+            "status",
+            "webextradaemons:*",
+        ],
+        ["ddev", "exec", "--raw", "--", "ss", "-ltnp"],
+    ):
+        try:
+            diagnostics.append(
+                _preview_run(
+                    job_id,
+                    argv,
+                    workspace=workspace,
+                    timeout=8,
+                )
+            )
+        except Exception:
+            pass
+
     last = attempts[-1]
-    evidence = "\n\n".join(
+    evidence_parts = [
         (
             f"attempt {index + 1}: rc={item.returncode} timed_out={item.timed_out}\n"
             f"{item.stderr or item.stdout}"
+        )[-3000:]
+        for index, item in enumerate(attempts[-3:])
+    ]
+    evidence_parts.extend(
+        (
+            f"diagnostic: {item.command}\n"
+            f"rc={item.returncode} timed_out={item.timed_out}\n"
+            f"{item.stderr or item.stdout}"
         )[-4000:]
-        for index, item in enumerate(attempts)
+        for item in diagnostics
     )
+    evidence = "\n\n".join(evidence_parts)
     return last.model_copy(update={"stderr": evidence[-12000:]})
 
 
@@ -729,7 +768,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.21")
+app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.22")
 app.include_router(pm_bridge_github_router)
 
 
@@ -744,7 +783,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok" if ok else "degraded",
         "service": "ddev-executor",
-        "version": "1.0.21",
+        "version": "1.0.22",
         "ddev": (result.stdout or result.stderr).strip(),
         "docker": (docker.stdout or docker.stderr).strip(),
         "buildx": (buildx.stdout or buildx.stderr).strip(),
