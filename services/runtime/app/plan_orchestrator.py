@@ -489,10 +489,12 @@ class PlanOrchestratorStore:
     @staticmethod
     def _is_owner_attention(*, event_type: str, payload: dict[str, Any] | None) -> bool:
         materialized_payload = dict(payload or {})
-        attention_state = str(materialized_payload.get("attention_state") or "").strip()
+        raw_attention_state = materialized_payload.get("attention_state")
+        attention_state = "" if raw_attention_state is None else str(raw_attention_state)
         raw_advisory = materialized_payload.get("advisory")
         advisory = raw_advisory if isinstance(raw_advisory, dict) else {}
-        advisory_reason = str(advisory.get("reason") or "").strip()
+        raw_advisory_reason = advisory.get("reason")
+        advisory_reason = "" if raw_advisory_reason is None else str(raw_advisory_reason)
         return bool(
             event_type in _OWNER_ATTENTION_EVENT_TYPES
             or attention_state
