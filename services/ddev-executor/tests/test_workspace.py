@@ -738,6 +738,7 @@ def configure_direct_preview(monkeypatch, tmp_path: Path):
     }
     data["projects"]["demo"]["ddev"] = {
         "enabled": True,
+        "workspace_nodejs_version": "24",
         "frontend_quality": ["ddev exec echo frontend-quality"],
     }
     projects_file.write_text(yaml.safe_dump(data))
