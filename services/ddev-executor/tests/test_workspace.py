@@ -666,3 +666,37 @@ def test_direct_phase_uses_normal_ddev_identity_without_pcp_override(tmp_path, m
     assert calls[0][1] == source.resolve()
     assert calls[1][0] == ["bash", "-lc", "ddev exec echo ok"]
     assert not (ddev / "config.coding-platform.yaml").exists()
+
+
+
+def test_direct_project_can_request_disposable_isolated_planning_workspace(tmp_path, monkeypatch):
+    source, _remote, workspaces = configure_direct(
+        monkeypatch, tmp_path, allow_push=False
+    )
+    source_branch = run("git", "branch", "--show-current", cwd=source)
+    source_commit = run("git", "rev-parse", "main", cwd=source)
+
+    result = create_workspace(
+        WorkspaceRequest(
+            job_id="plan-direct-123",
+            project_id="demo",
+            ref=source_commit,
+            workspace_mode="isolated_clone",
+        )
+    )
+    workspace = Path(result["workspace"])
+
+    assert result["workspace_mode"] == "isolated_clone_no_remote"
+    assert workspace == (workspaces / "plan-direct-123").resolve()
+    assert workspace != source.resolve()
+    assert run("git", "branch", "--show-current", cwd=source) == source_branch
+    assert run("git", "branch", "--show-current", cwd=workspace) == "ai/plan-direct-"
+    assert run("git", "remote", cwd=workspace) == ""
+
+    removed = remove_workspace(
+        job_id="plan-direct-123",
+        project_id="demo",
+        workspace=str(workspace),
+    )
+    assert removed["removed"] is True
+    assert source.exists()
