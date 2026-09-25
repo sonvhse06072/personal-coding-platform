@@ -75,7 +75,7 @@ class RuntimeEngine(RuntimeEngineCore):
                 job_id,
                 job["workspace"],
                 workspace_mode=workspace_mode,
-                project_path=project["path"],
+                project_path=project.get("path"),
             )
             branch = str(job.get("branch") or "")
             source_commit = str(job.get("source_commit") or "")
