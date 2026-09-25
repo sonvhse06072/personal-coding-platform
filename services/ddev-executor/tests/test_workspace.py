@@ -1068,6 +1068,8 @@ def test_direct_backend_only_preview_uses_shared_ddev_without_frontend_override(
     assert started["status"] == "ready"
     assert started["backend_url"] == "https://demo.ddev.site"
     assert started["frontend_url"] is None
+    assert "shared direct-workspace DDEV runtime" in started["integration_note"]
+    assert "does not stop DDEV or remove its data" in started["integration_note"]
     assert stopped["status"] == "stopped"
     assert not (source / ".ddev" / "config.pcp-preview.local.yaml").exists()
     assert calls == [["ddev", "start", "-y"]]
