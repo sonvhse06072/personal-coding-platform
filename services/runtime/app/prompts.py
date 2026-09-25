@@ -69,6 +69,7 @@ def execution_prompt(
     work_order: dict[str, Any] | None = None,
     baseline: dict[str, Any] | None = None,
     collaboration_context: dict[str, Any] | None = None,
+    preview_context: dict[str, Any] | None = None,
 ) -> str:
     strategy = route["strategy"]
     lines = [
@@ -105,6 +106,13 @@ def execution_prompt(
             "",
             "LATEST COLLABORATION ARTIFACT (STRUCTURED, ADVISORY; WORKORDER REMAINS AUTHORITATIVE):",
             json.dumps(collaboration_context, ensure_ascii=False, sort_keys=True),
+        ]
+    if preview_context:
+        lines += [
+            "",
+            "LOCAL PREVIEW CONTEXT (SANITIZED, ADVISORY):",
+            json.dumps(preview_context, ensure_ascii=False, sort_keys=True),
+            "Use it only for bounded local application review where your tooling supports browser/network access. Do not claim visual/browser review unless you actually performed it and have observable evidence.",
         ]
     if failure:
         if failure.startswith("PCP_COLLABORATION_CONTEXT:"):
@@ -161,6 +169,7 @@ def evaluator_prompt(
     work_order: dict[str, Any] | None = None,
     baseline: dict[str, Any] | None = None,
     developer_report: str | None = None,
+    preview_context: dict[str, Any] | None = None,
 ) -> str:
     pack = reviewer_evidence_pack(
         task=task,
@@ -186,6 +195,13 @@ def evaluator_prompt(
             "Return exactly two lines: first PASS or FAIL; second REVIEW_JSON: followed by one compact JSON object.",
             'REVIEW_JSON schema: {"verdict":"pass|fail","summary":"...","findings":[{"id":"...","severity":"low|medium|high|critical","category":"correctness|security|regression|scope|tests|other","message":"...","evidence_refs":["path/check/ref"]}],"jit_context_used":false}',
             f"BASELINE_REF: {json.dumps(baseline_summary, ensure_ascii=False, sort_keys=True)}",
+            (
+                "LOCAL_PREVIEW_CONTEXT: "
+                + json.dumps(preview_context, ensure_ascii=False, sort_keys=True)
+                if preview_context
+                else "LOCAL_PREVIEW_CONTEXT: unavailable"
+            ),
+            "A Ready preview is an optional review surface, not proof that visual/browser review occurred. Claim browser evidence only when tooling actually used it.",
             f"REVIEW_EVIDENCE_PACK: {json.dumps(pack, ensure_ascii=False, sort_keys=True)}",
         ]
     )
