@@ -32,6 +32,9 @@ def test_dashboard_exposes_direct_preview_controls_without_internal_runtime_cred
     assert "RUNTIME_API_TOKEN" not in DASHBOARD_HTML
     assert "PLATFORM_INTERNAL_TOKEN" not in DASHBOARD_HTML
     assert "GITHUB_DELIVERY_TOKEN" not in DASHBOARD_HTML
+    assert "reconcilePreviewMutation" in DASHBOARD_HTML
+    assert "Preview connection was interrupted and status reconciliation timed out." in DASHBOARD_HTML
+    assert "expectedGeneration" in DASHBOARD_HTML
 
 
 def test_dashboard_preview_keeps_existing_activity_quota_and_stream_surfaces():
