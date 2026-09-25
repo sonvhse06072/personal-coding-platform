@@ -134,9 +134,8 @@ class RuntimeEngineCore:
         row = self.storage.get(job_id)
         if not row or str(row.get("status") or "") not in FINAL:
             return False
-        project = project_config(str(row["project_id"]))
-        runtime = project.get("runtime", {}) or {}
-        if str(runtime.get("workspace_mode") or "isolated_clone") != "direct":
+        checkpoint = checkpoint_from_row(row)
+        if str(checkpoint.get("workspace_mode") or "isolated_clone") != "direct":
             return False
         return self.storage.release_project_lease(str(row["project_id"]), job_id)
 
