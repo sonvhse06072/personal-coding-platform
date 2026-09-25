@@ -53,7 +53,16 @@ class RuntimeEngineCore:
                     error="Runtime restarted during an in-flight job; explicit resume required.",
                 )
                 await self.ddev.cancel(job_id=job["id"])
-        terminal_lease_rows = self.storage.terminal_active_project_leases()
+        terminal_lease_lookup = getattr(
+            self.storage,
+            "terminal_active_project_leases",
+            None,
+        )
+        terminal_lease_rows = (
+            terminal_lease_lookup()
+            if callable(terminal_lease_lookup)
+            else []
+        )
         for lease in terminal_lease_rows:
             await self._retire_terminal_direct_preview(
                 str(lease.get("owner_job_id") or "")
@@ -145,7 +154,10 @@ class RuntimeEngineCore:
         checkpoint = checkpoint_from_row(row)
         if str(checkpoint.get("workspace_mode") or "isolated_clone") != "direct":
             return
-        preview_state = self.storage.preview_state(job_id)
+        preview_lookup = getattr(self.storage, "preview_state", None)
+        if not callable(preview_lookup):
+            return
+        preview_state = preview_lookup(job_id)
         if not preview_state:
             return
         if str(preview_state.get("status") or "") in {"stopped", "not_built"}:
