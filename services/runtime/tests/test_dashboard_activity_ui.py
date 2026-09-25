@@ -16,15 +16,27 @@ def test_dashboard_uses_provider_neutral_live_activity_labels_and_filters():
 
 def test_dashboard_exposes_direct_preview_controls_without_internal_runtime_credentials():
     assert 'id="previewCard"' in DASHBOARD_HTML
-    assert "Frontend" in DASHBOARD_HTML
-    assert "Backend" in DASHBOARD_HTML
-    assert "Both" in DASHBOARD_HTML
+    assert "j.workspace_mode!=='direct'" in DASHBOARD_HTML
+    assert '<option value="frontend">Frontend</option>' in DASHBOARD_HTML
+    assert '<option value="backend">Backend</option>' in DASHBOARD_HTML
+    assert '<option value="both">Both</option>' in DASHBOARD_HTML
     assert "Start Preview" in DASHBOARD_HTML
     assert "Rebuild" in DASHBOARD_HTML
     assert "Stop" in DASHBOARD_HTML
     assert "Unlock controls" in DASHBOARD_HTML
+    assert 'target="_blank" rel="noopener noreferrer"' in DASHBOARD_HTML
     assert "/v1/dashboard/control-session" in DASHBOARD_HTML
     assert "/v1/dashboard/jobs/" in DASHBOARD_HTML
+    assert "localStorage" not in DASHBOARD_HTML
+    assert "sessionStorage" not in DASHBOARD_HTML
     assert "RUNTIME_API_TOKEN" not in DASHBOARD_HTML
     assert "PLATFORM_INTERNAL_TOKEN" not in DASHBOARD_HTML
     assert "GITHUB_DELIVERY_TOKEN" not in DASHBOARD_HTML
+
+
+def test_dashboard_preview_keeps_existing_activity_quota_and_stream_surfaces():
+    assert ">Live Developer Activity<" in DASHBOARD_HTML
+    assert "quotaSnapshot" in DASHBOARD_HTML
+    assert "/v1/dashboard/quota" in DASHBOARD_HTML
+    assert "new EventSource(" in DASHBOARD_HTML
+    assert "/stream?after=" in DASHBOARD_HTML
