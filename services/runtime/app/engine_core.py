@@ -145,30 +145,28 @@ class RuntimeEngineCore:
         checkpoint["resource_quiesce"] = detail
         self.storage.update(job_id, checkpoint=checkpoint)
 
-    async def _retire_terminal_direct_preview(self, job_id: str) -> None:
+    async def _retire_terminal_direct_preview(self, job_id: str) -> bool:
         if not job_id:
-            return
+            return True
         row = self.storage.get(job_id)
         if not row or str(row.get("status") or "") not in FINAL:
-            return
+            return True
         checkpoint = checkpoint_from_row(row)
         if str(checkpoint.get("workspace_mode") or "isolated_clone") != "direct":
-            return
+            return True
         preview_lookup = getattr(self.storage, "preview_state", None)
         if not callable(preview_lookup):
-            return
+            return True
         preview_state = preview_lookup(job_id)
         if not preview_state:
-            return
+            return True
         if str(preview_state.get("status") or "") in {"stopped", "not_built"}:
-            return
+            return True
         try:
-            await PreviewManager(self.storage, self.ddev).stop(job_id)
+            result = await PreviewManager(self.storage, self.ddev).stop(job_id)
         except Exception:
-            # Preview cleanup is deliberately independent of engineering result.
-            # Keep the durable preview row for later reconciliation rather than
-            # falsifying the coding job or lease owner.
-            return
+            return False
+        return str(result.get("status") or "") in {"stopped", "not_built"}
 
     def _release_terminal_direct_lease(self, job_id: str) -> bool:
         row = self.storage.get(job_id)
@@ -201,9 +199,10 @@ class RuntimeEngineCore:
                     self.storage.update(job_id, status="failed", error=f"{type(exc).__name__}: {exc}")
             finally:
                 if not self._stopping:
-                    await self._retire_terminal_direct_preview(job_id)
+                    preview_retired = await self._retire_terminal_direct_preview(job_id)
                     await self._quiesce_stable_manual_job(job_id)
-                    self._release_terminal_direct_lease(job_id)
+                    if preview_retired:
+                        self._release_terminal_direct_lease(job_id)
                 self.active_jobs.pop(job_id, None)
                 self.queue.task_done()
 
@@ -257,9 +256,10 @@ class RuntimeEngineCore:
         if active and not active.done():
             active.cancel()
             await asyncio.gather(active, return_exceptions=True)
-        await self._retire_terminal_direct_preview(job_id)
+        preview_retired = await self._retire_terminal_direct_preview(job_id)
         await self._quiesce_stable_manual_job(job_id)
-        self._release_terminal_direct_lease(job_id)
+        if preview_retired:
+            self._release_terminal_direct_lease(job_id)
         updated = self.storage.get(job_id)
         assert updated is not None
         return updated
