@@ -189,8 +189,15 @@ def test_context_pack_contains_no_absolute_repository_path():
             "task": {
                 "title": "Review provider recovery policy",
                 "task_type": "policy_review",
+                "description": (
+                    "Do not echo /home/private/worktree or "
+                    "RUNTIME_API_TOKEN=super-secret-value"
+                ),
             },
-            "references": {"issue": "228"},
+            "references": {
+                "issue": "228",
+                "file": "/home/private/worktree/secret.txt",
+            },
             "budget_chars": 24000,
         },
     )
@@ -198,7 +205,9 @@ def test_context_pack_contains_no_absolute_repository_path():
     serialized = json.dumps(pack, ensure_ascii=False)
     assert str(ROOT) not in serialized
     assert "/home/" not in serialized
-    assert "RUNTIME_API_TOKEN" not in serialized
+    assert "super-secret-value" not in serialized
+    assert "/home/private/worktree" not in serialized
+    assert "RUNTIME_API_TOKEN=[secret-redacted]" in serialized
     assert "DASHBOARD_CONTROL_TOKEN" not in serialized
 
 
