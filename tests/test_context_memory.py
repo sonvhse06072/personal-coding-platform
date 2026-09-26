@@ -30,7 +30,7 @@ def identities(pack):
 
 def test_reference_parser_does_not_treat_normal_pr_prefix_words_as_ids():
     assert _exact_reference_strings(
-        {"task": {"title": "Review provider recovery policy"}}
+        {"task": {"title": "Review provider recovery policy and job-owned preview"}}
     ) == set()
 
     refs = _exact_reference_strings(
