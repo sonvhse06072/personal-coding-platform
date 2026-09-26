@@ -12,7 +12,12 @@ SCRIPTS = ROOT / "scripts"
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from context_memory import compose_context, read_all_docs_chars, render_context_text  # noqa: E402
+from context_memory import (  # noqa: E402
+    _exact_reference_strings,
+    compose_context,
+    read_all_docs_chars,
+    render_context_text,
+)
 
 
 def identities(pack):
@@ -20,6 +25,19 @@ def identities(pack):
         item["identity"]
         for item in [*pack["pinned"], *pack["retrieved"]]
     }
+
+
+
+def test_reference_parser_does_not_treat_normal_pr_prefix_words_as_ids():
+    assert _exact_reference_strings(
+        {"task": {"title": "Review provider recovery policy"}}
+    ) == set()
+
+    refs = _exact_reference_strings(
+        {"task": {"title": "Re-check PR #311 and issue #309"}}
+    )
+    assert "#311" in refs
+    assert "#309" in refs
 
 
 def test_context_composer_pins_governance_and_current_state():
