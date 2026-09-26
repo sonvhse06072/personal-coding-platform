@@ -143,7 +143,7 @@ class CleanupDdev:
 
 def test_cleanup_reports_preserved_direct_workspace_truthfully(monkeypatch, tmp_path):
     workspace = tmp_path / "chonhac"
-    workspace.mkdir()
+    (workspace / ".git").mkdir(parents=True)
     storage = CleanupStorage(
         {
             "id": "job-direct-cleanup",
