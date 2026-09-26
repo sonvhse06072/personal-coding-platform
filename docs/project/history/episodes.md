@@ -234,6 +234,36 @@ Last accepted local outcome:
 
 Status: historical rollout; capability remains current.
 
+## 2026-09 — tiered context and memory
+
+### PCP Tiered Context & Memory Architecture — #313 / #314 / #317
+
+Outcome: implemented and accepted without introducing vector infrastructure.
+
+Durable lesson:
+- the main documentation risk was stale/current information mixing, not corpus size alone;
+- T0 governance and T1 current state should be pinned, while T2 semantic knowledge and T3 history are retrieved only when relevant;
+- current state must be replace-in-place rather than an append-only rollout log;
+- deterministic exact-reference/role/heading-aware retrieval is sufficient for the current PCP corpus and should remain the baseline;
+- vector/hybrid RAG is an optional optimization, not an architectural requirement, and must be justified by a measured retrieval gap.
+
+Evidence:
+- issue #313 — umbrella architecture;
+- issue #314 / PR #315 — T1 compaction, T3 index and tier contract;
+- PR #316 — Phase-1 continuity closeout;
+- issue #317 / PR #318 — deterministic Context Composer and evaluation;
+- #318 merge `58ef2e6a714088359dca3b65eaf257ad644390f1`;
+- exact-head CI #637 passed all required jobs.
+
+Accepted evaluation gates:
+- required evidence target recall 1.0;
+- stale historical false-positive rate 0.0 for current-state cases;
+- authority-conflict failure rate 0.0;
+- unsupported-memory abstention accuracy 1.0;
+- mean composed context below 50% of read-all-docs baseline.
+
+Status: historical architecture rollout; deterministic tiered retrieval remains current. Reconsider vector/hybrid RAG only after a future benchmark shows a material gap.
+
 ## Retrieval guidance
 
 Use this file when the current task asks:
