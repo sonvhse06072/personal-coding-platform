@@ -1,6 +1,8 @@
 import json
 from contextlib import contextmanager
 
+import pytest
+
 from app.storage import DDL, Storage
 
 
@@ -24,6 +26,7 @@ class _Connection:
         self.queries = []
         self.commits = 0
         self.active_engineering_jobs = 0
+        self.prefix_rows = []
 
     def execute(self, query, params=None):
         compact = " ".join(query.split())
@@ -32,6 +35,8 @@ class _Connection:
             return _Result(row=self.current)
         if compact.startswith("SELECT COUNT(*) AS active_engineering_jobs FROM cp_jobs"):
             return _Result(row={"active_engineering_jobs": self.active_engineering_jobs})
+        if compact.startswith("SELECT id, project_id, status, workspace FROM cp_jobs WHERE LEFT(id, 10)=%s"):
+            return _Result(rows=self.prefix_rows)
         if compact.startswith("INSERT INTO cp_job_events"):
             self.events.append(params)
         if "ROW_NUMBER() OVER (PARTITION BY job_id" in compact:
@@ -169,3 +174,31 @@ def test_recent_events_uses_per_job_window_and_chronological_order():
     assert "WHERE job_id = ANY(%s)" in query
     assert "ORDER BY job_id, id" in query
     assert params == (["job-1", "job-2"], 100)
+
+
+def test_job_prefix_lookup_is_exact_and_unbounded_by_recent_list_limit():
+    connection = _Connection()
+    connection.prefix_rows = [
+        {
+            "id": "0123456789abcdef0123456789abcdef",
+            "project_id": "demo",
+            "status": "completed",
+            "workspace": "/tmp/workspace",
+        }
+    ]
+    storage = _storage(connection)
+
+    rows = storage.jobs_with_id_prefix("0123456789")
+
+    assert rows == connection.prefix_rows
+    query, params = connection.queries[-1]
+    assert "LEFT(id, 10)=%s" in query
+    assert "LIMIT" not in query
+    assert params == ("0123456789",)
+
+
+def test_job_prefix_lookup_refuses_non_exact_hex_prefix():
+    storage = _storage(_Connection())
+
+    with pytest.raises(ValueError):
+        storage.jobs_with_id_prefix("job-prefix")

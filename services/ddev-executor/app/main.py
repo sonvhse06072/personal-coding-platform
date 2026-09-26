@@ -74,6 +74,15 @@ class QuiesceWorkspaceRequest(BaseModel):
     remove_data: bool = False
 
 
+class OrphanResourcesRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    project_id: str = Field(min_length=1, max_length=200)
+    workspace: str | None = Field(default=None, max_length=2000)
+    execute: bool = False
+
+
 class ReturnDirectWorkspaceRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -109,6 +118,7 @@ class PhaseResponse(BaseModel):
 
 _ACTIVE: dict[str, subprocess.Popen] = {}
 _ACTIVE_LOCK = threading.Lock()
+_ORPHAN_RESOURCE_LOCK = threading.Lock()
 
 
 def auth(authorization: str | None = Header(default=None)) -> None:
@@ -734,6 +744,227 @@ def _job_has_active_process(job_id: str) -> bool:
         return proc is not None and proc.poll() is None
 
 
+def _orphan_site_name(job_id: str) -> str:
+    if not re.fullmatch(r"[0-9a-f]{32}", job_id):
+        raise HTTPException(422, "Orphan cleanup requires the full 32-character Runtime job id")
+    return f"cp-{job_id[:10]}"
+
+
+def _docker_output(argv: list[str], *, timeout: int = 60) -> str:
+    try:
+        result = subprocess.run(
+            ["docker", *argv],
+            text=True,
+            capture_output=True,
+            timeout=timeout,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(504, f"Docker command timed out: {' '.join(argv[:3])}") from exc
+    if result.returncode != 0:
+        raise HTTPException(
+            502,
+            (result.stderr or result.stdout or "Docker command failed")[-12000:],
+        )
+    return result.stdout or ""
+
+
+def _docker_lines(argv: list[str]) -> list[str]:
+    return [line.strip() for line in _docker_output(argv).splitlines() if line.strip()]
+
+
+def _inspect_orphan_resources(
+    *,
+    job_id: str,
+    project_id: str,
+    workspace: str | None,
+) -> dict[str, Any]:
+    cfg = project(project_id)
+    if not bool((cfg.get("ddev") or {}).get("enabled", False)):
+        raise HTTPException(409, "Project does not enable DDEV resource management")
+    if _job_has_active_process(job_id):
+        raise HTTPException(409, "Orphan resources cannot be inspected while an executor command is active")
+
+    site = _orphan_site_name(job_id)
+    expected_workspace = str(Path(workspace).resolve()) if workspace else None
+
+    container_ids = _docker_lines([
+        "ps",
+        "-a",
+        "--filter",
+        f"label=com.ddev.site-name={site}",
+        "--format",
+        "{{.ID}}",
+    ])
+    containers: list[dict[str, Any]] = []
+    for container_id in container_ids:
+        detail = _docker_output([
+            "inspect",
+            "--format",
+            '{{.Id}}|{{.Name}}|{{.State.Running}}|{{ index .Config.Labels "com.ddev.site-name" }}|{{ index .Config.Labels "com.ddev.platform" }}',
+            container_id,
+        ]).strip()
+        parts = detail.split("|", 4)
+        if len(parts) != 5:
+            raise HTTPException(409, "Could not prove exact DDEV container ownership")
+        exact_id, name, running_text, label_site, platform = parts
+        if label_site != site or platform != "ddev":
+            raise HTTPException(409, "Container ownership labels do not match the exact PCP job project")
+        containers.append({
+            "id": exact_id,
+            "name": name.removeprefix("/"),
+            "running": running_text.strip().lower() == "true",
+            "site": label_site,
+        })
+
+    if any(item["running"] for item in containers):
+        raise HTTPException(409, "Exact PCP orphan project still has a running container")
+
+    exact_container_ids = set(container_ids)
+
+    volumes: list[dict[str, Any]] = []
+    for name in _docker_lines(["volume", "ls", "--format", "{{.Name}}"]):
+        if not name.startswith(site + "-"):
+            continue
+        detail = _docker_output([
+            "volume",
+            "inspect",
+            "--format",
+            '{{.Name}}|{{with .Labels}}{{with index . "com.ddev.site-name"}}{{.}}{{end}}{{end}}',
+            name,
+        ]).strip()
+        parts = detail.split("|", 1)
+        if len(parts) != 2 or parts[0] != name:
+            raise HTTPException(409, "Could not prove exact PCP orphan volume identity")
+        label_site = parts[1].strip()
+        if label_site and label_site != site:
+            raise HTTPException(409, "Volume label conflicts with exact PCP orphan project")
+        references = set(_docker_lines([
+            "ps",
+            "-a",
+            "--filter",
+            f"volume={name}",
+            "--format",
+            "{{.ID}}",
+        ]))
+        foreign = sorted(references - exact_container_ids)
+        if foreign:
+            raise HTTPException(409, "Exact PCP orphan volume is referenced by an unrelated container")
+        volumes.append({
+            "name": name,
+            "site_label": label_site or None,
+            "container_references": sorted(references),
+        })
+
+    images: list[dict[str, Any]] = []
+    for line in _docker_lines([
+        "image",
+        "ls",
+        "--no-trunc",
+        "--format",
+        "{{.Repository}}|{{.Tag}}|{{.ID}}",
+    ]):
+        parts = line.split("|", 2)
+        if len(parts) != 3:
+            continue
+        repository, tag, image_id = parts
+        if not tag.endswith(f"-{site}-built"):
+            continue
+        detail = _docker_output([
+            "image",
+            "inspect",
+            "--format",
+            '{{.Id}}|{{ index .Config.Labels "com.ddev.site-name" }}|{{ index .Config.Labels "com.ddev.platform" }}|{{ index .Config.Labels "com.ddev.approot" }}',
+            image_id,
+        ]).strip()
+        image_parts = detail.split("|", 3)
+        if len(image_parts) != 4:
+            raise HTTPException(409, "Could not prove exact DDEV image ownership")
+        exact_id, label_site, platform, approot = image_parts
+        if label_site != site or platform != "ddev":
+            raise HTTPException(409, "Image ownership labels do not match the exact PCP job project")
+        if expected_workspace and approot and str(Path(approot).resolve()) != expected_workspace:
+            raise HTTPException(409, "Image approot does not match the Runtime job workspace identity")
+        references = set(_docker_lines([
+            "ps",
+            "-a",
+            "--filter",
+            f"ancestor={image_id}",
+            "--format",
+            "{{.ID}}",
+        ]))
+        foreign = sorted(references - exact_container_ids)
+        if foreign:
+            raise HTTPException(409, "Exact PCP orphan image is referenced by an unrelated container")
+        images.append({
+            "id": exact_id,
+            "ref": f"{repository}:{tag}",
+            "site": label_site,
+            "approot": approot or None,
+            "container_references": sorted(references),
+        })
+
+    return {
+        "job_id": job_id,
+        "project_id": project_id,
+        "site": site,
+        "workspace": workspace,
+        "containers": containers,
+        "volumes": volumes,
+        "images": images,
+        "resource_count": len(containers) + len(volumes) + len(images),
+    }
+
+
+def _release_orphan_resources(payload: OrphanResourcesRequest) -> dict[str, Any]:
+    before = _inspect_orphan_resources(
+        job_id=payload.job_id,
+        project_id=payload.project_id,
+        workspace=payload.workspace,
+    )
+    if not payload.execute:
+        return {
+            "mode": "inspect",
+            "released": False,
+            "before": before,
+            "after": before,
+        }
+
+    # Revalidate immediately before mutation so a prior inspection never acts
+    # as stale authorization.
+    before = _inspect_orphan_resources(
+        job_id=payload.job_id,
+        project_id=payload.project_id,
+        workspace=payload.workspace,
+    )
+
+    container_ids = [str(item["id"]) for item in before["containers"]]
+    if container_ids:
+        _docker_output(["rm", *container_ids], timeout=120)
+
+    volume_names = [str(item["name"]) for item in before["volumes"]]
+    if volume_names:
+        _docker_output(["volume", "rm", *volume_names], timeout=120)
+
+    image_refs = [str(item["ref"]) for item in before["images"]]
+    if image_refs:
+        _docker_output(["image", "rm", *image_refs], timeout=180)
+
+    after = _inspect_orphan_resources(
+        job_id=payload.job_id,
+        project_id=payload.project_id,
+        workspace=payload.workspace,
+    )
+    if after["resource_count"] != 0:
+        raise HTTPException(409, "Exact PCP orphan resources remain after bounded cleanup")
+
+    return {
+        "mode": "execute",
+        "released": before["resource_count"] > 0,
+        "before": before,
+        "after": after,
+    }
+
+
 def _ddev_subprocess_env() -> dict[str, str]:
     """Select PCP's isolated builder only for executor-owned DDEV commands."""
     return {
@@ -777,7 +1008,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.23")
+app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.24")
 app.include_router(pm_bridge_github_router)
 
 
@@ -792,7 +1023,7 @@ def health() -> dict[str, Any]:
     return {
         "status": "ok" if ok else "degraded",
         "service": "ddev-executor",
-        "version": "1.0.23",
+        "version": "1.0.24",
         "ddev": (result.stdout or result.stderr).strip(),
         "docker": (docker.stdout or docker.stderr).strip(),
         "buildx": (buildx.stdout or buildx.stderr).strip(),
@@ -1043,6 +1274,12 @@ def stop_preview(payload: PreviewRequest) -> dict[str, Any]:
         "frontend_url": None,
         "backend_url": None,
     }
+
+
+@app.post("/v1/workspaces/orphan-resources", dependencies=[Depends(auth)])
+def orphan_resources(payload: OrphanResourcesRequest) -> dict[str, Any]:
+    with _ORPHAN_RESOURCE_LOCK:
+        return _release_orphan_resources(payload)
 
 
 @app.post("/v1/workspaces/quiesce", dependencies=[Depends(auth)])
