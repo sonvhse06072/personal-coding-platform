@@ -8,10 +8,10 @@ from pathlib import Path
 from typing import Any
 
 
-TOKEN_RE = re.compile(r"[#\\w][#\\w./:-]{1,}", re.UNICODE)
-HEADING_RE = re.compile(r"^(#{1,6})\\s+(.+?)\\s*$")
+TOKEN_RE = re.compile(r"[#\w][#\w./:-]{1,}", re.UNICODE)
+HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 IDENTIFIER_RE = re.compile(
-    r"(?i)(?:\\b(?:issue|pr|job|workorder|wo)\\s*#?[-:\\s]*[a-z0-9._-]+|#\\d+|\\b[a-f0-9]{12,40}\\b)"
+    r"(?i)(?:\b(?:issue|pr|job|workorder|wo)\s*#?[-:\s]*[a-z0-9._-]+|#\d+|\b[a-f0-9]{12,40}\b)"
 )
 
 STOPWORDS = {
