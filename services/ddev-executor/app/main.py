@@ -818,7 +818,7 @@ def _inspect_orphan_resources(
     if any(item["running"] for item in containers):
         raise HTTPException(409, "Exact PCP orphan project still has a running container")
 
-    exact_container_ids = {str(item["id"]) for item in containers}
+    exact_container_ids = set(container_ids)
 
     volumes: list[dict[str, Any]] = []
     for name in _docker_lines(["volume", "ls", "--format", "{{.Name}}"]):
@@ -828,7 +828,7 @@ def _inspect_orphan_resources(
             "volume",
             "inspect",
             "--format",
-            '{{.Name}}|{{ index .Labels "com.ddev.site-name" }}',
+            '{{.Name}}|{{if .Labels}}{{ index .Labels "com.ddev.site-name" }}{{end}}',
             name,
         ]).strip()
         parts = detail.split("|", 1)
