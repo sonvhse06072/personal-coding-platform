@@ -926,6 +926,13 @@ class RuntimeEngine(RuntimeEngineCore):
                     "workspace": workspace or None,
                 }
 
+        if not workspace_available and orphan_result is None:
+            return {
+                "cleaned": False,
+                "reason": "workspace unavailable",
+                "workspace": workspace or None,
+            }
+
         remove_result = None
         if remove_workspace and workspace_available:
             remove_result = await self.ddev.remove_workspace(
