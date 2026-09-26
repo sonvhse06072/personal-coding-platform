@@ -14,20 +14,25 @@ These documents are intentionally stored in the repository so ChatGPT, Codex, an
 - `efficiency-model.md` — Human Owner-approved personal-scale efficiency policy: task-specific adaptive budgets, Human-attention minimization, layered verification, bounded inter-agent collaboration, risk-proportionate review, compact evidence packs, telemetry calibration, and continuity automation.
 - `telegram-terminal-operations.md` — approved target design and operator convention for a separate owner-only Telegram terminal operations gateway, including read-only sandbox/broker boundaries and the rule that Telegram-ready diagnostic blocks are emitted only when explicitly requested.
 - `service-secret-upgrades.md` — existing-install upgrade procedure for service-scoped credentials, including the required migrate-before-rebuild order and non-secret deployed boundary checks.
-- `current-state.md` — mutable cross-chat handoff snapshot: active work, branches/issues/PRs/WorkOrders/jobs, blockers, evidence, next safe actions, and operational gates.
-- additional topical policy documents may be added as approved decisions require them; `current-state.md` should point a new session to the relevant ones.
+- `current-state.md` — Tier-1 mutable working-state snapshot: current active work, last accepted local state, blockers, next safe actions and operational gates. It is replace-in-place state, not a chronological log.
+- `context-memory-architecture.md` — Human Owner-approved Tier-0 through Tier-4 context/memory model, authority/freshness rules and future deterministic Context Composer contract.
+- `history/episodes.md` — compact Tier-3 index of completed incidents/rollouts and reusable lessons with issue/PR/commit references; detailed chronology remains in Git/GitHub/Runtime history.
+- additional topical policy documents may be added as approved decisions require them; T1 should point a new session to the relevant T2/T3 sources rather than copying their full contents.
 
 ## Resume workflow for a new chat or agent
 
 When starting without prior conversation context:
 
-1. read repository-root `AGENTS.md`;
-2. read this file;
-3. read `current-state.md`;
-4. read the topical documents referenced by the active work;
-5. inspect the active issue/PR, current branch diff, implementation and tests before making changes.
+1. read repository-root `AGENTS.md` and this index;
+2. read the compact Tier-1 `current-state.md`;
+3. retrieve only the Tier-2 topical documents and Tier-3 episodes relevant to the active task;
+4. inspect live GitHub/Runtime/source state for time-sensitive facts such as current issue/PR, branch/HEAD, job/lease and service health;
+5. inspect implementation/tests/diff before changing code;
+6. fetch Tier-4 raw logs/transcripts/full evidence only when diagnostics or audit require them.
 
-The intended user workflow is that the Human Owner can say "read the project docs and continue" and the repository contains enough durable context to resume safely.
+Do not load every project document merely because it exists. The default context should be T0 governance + compact T1 working state + task-relevant T2/T3 material.
+
+The intended user workflow remains that the Human Owner can say "read the project docs and continue", but the system should recover safe context through bounded tiered retrieval rather than replaying the whole historical corpus.
 
 ## Authority
 
@@ -45,13 +50,15 @@ Agents must not treat an approved target as already implemented. The code and te
 
 Every material decision, implementation-state change, blocker, rollout choice, or handoff must be reflected in repository docs before the work is considered safely complete/handed off, regardless of whether ChatGPT, Codex, or the platform executed the work.
 
-Use two layers:
+Use the memory tiers defined in `context-memory-architecture.md`:
 
-- **durable decision:** update the relevant topical source-of-truth document;
-- **mutable execution state:** update `current-state.md` with the latest status, evidence, blocker, next safe action and owner/operational gates.
+- **durable decision / T0-T2:** update the relevant governed topical source-of-truth document;
+- **mutable execution state / T1:** replace stale values in `current-state.md`;
+- **completed reusable lesson / T3:** add or update a compact episodic reference when the event has future diagnostic/retrieval value;
+- **raw evidence / T4:** leave logs/transcripts/full diagnostic output at their native audit source unless a bounded reference is needed.
 
-Handoff prompts to implementation agents must include documentation updates in the Definition of Done.
+Handoff prompts to implementation agents must include the appropriate documentation/continuity update in the Definition of Done.
 
-Keep `current-state.md` compact: replace stale state rather than appending raw conversation history. Git history provides chronology.
+Keep `current-state.md` compact and current. Completed chronology must leave T1; Git/GitHub/Runtime history provides the detailed audit trail.
 
 Routine execution work may update lower-level plans and reports, but changes to project goals, non-goals, architecture invariants, major dependencies, security boundaries, production policy, or material budget policy require a human-approved ChangeProposal and a reviewed PR.
