@@ -16,8 +16,7 @@
       "required_identity_contains": [
         "docs/project/current-state.md#Current Project State and Handoff"
       ],
-      "require_no_retrieved_t3": true,
-      "expect_supported_memory": false
+      "require_no_retrieved_t3": true
     },
     {
       "id": "authority-developer-merge",
