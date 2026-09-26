@@ -77,17 +77,21 @@ Direction:
 
 ### #314 — Phase 1: compact active state and define PCP memory tiers
 
-Status: active documentation-only delivery for #313.
+Status: completed.
 
-This branch/PR should:
+PR #315 passed exact-head CI #623 (all four required jobs) and merged at
+`75f746284621def6a8c612eb80cc100d85e179a7`.
 
-- replace the old ~52 KB / 897-line append-heavy `current-state.md` with this compact T1 snapshot;
-- add the T3 episodic index;
-- add the tier/context contract;
-- update the resume workflow;
-- change no executable behavior.
+Delivered:
 
-Close #314 after exact-head CI and merge. #313 remains open for later deterministic Context Composer/evaluation phases.
+- T1 `current-state.md` reduced from ~52 KB / 897 lines to ~8.7 KB / 160 lines;
+- completed chronology removed from T1;
+- T3 `history/episodes.md` added;
+- `context-memory-architecture.md` added with T0-T4, authority/freshness/supersession rules and future Context Composer contract;
+- resume workflow changed from read-all-docs to bounded tiered retrieval;
+- no executable behavior changed.
+
+#313 remains open. The next architecture step is a deterministic Context Composer and PCP-specific retrieval evaluation before any vector-store decision.
 
 ### #282 — Release terminal PCP DDEV resources when legacy workspace is missing
 
@@ -151,9 +155,9 @@ Their reusable lessons and primary references are in `history/episodes.md`. Git/
 
 ## Immediate next safe actions
 
-1. Complete #314 through exact-head CI, PM review and merge; then close the Phase-1 child while keeping #313 open.
-2. Unless reprioritized, implement #282 as the next concrete source-maintenance issue using the bounded orphan-resource design already recorded on that issue.
-3. Keep #146 in calibration/watch mode; collect only naturally occurring routine-task evidence.
-4. Under #313 Phase 2, design a deterministic Context Composer that always pins T0/T1 and retrieves bounded T2/T3 context by exact metadata/heading-aware lexical signals before considering embeddings.
-5. Build a PCP-specific memory evaluation set before any vector-store decision. Include current-vs-historical, supersession, authority conflict, temporal reasoning, exact identity and abstention cases.
+1. Unless reprioritized, implement #282 as the next concrete source-maintenance issue using the bounded orphan-resource design already recorded on that issue.
+2. Keep #146 in calibration/watch mode; collect only naturally occurring routine-task evidence.
+3. Under #313 Phase 2, design a deterministic Context Composer that always pins T0/T1 and retrieves bounded T2/T3 context by exact metadata/heading-aware lexical signals before considering embeddings.
+4. Build a PCP-specific memory evaluation set before any vector-store decision. Include current-vs-historical, supersession, authority conflict, temporal reasoning, exact identity and abstention cases.
+5. Add vector/hybrid RAG only if the evaluation demonstrates material benefit over deterministic metadata/lexical retrieval.
 6. Keep shared/default BuildKit cache decisions separate from PCP-owned bounded GC and preserve unrelated Docker/DDEV resources.
