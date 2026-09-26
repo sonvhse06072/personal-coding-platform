@@ -214,8 +214,6 @@ def _query_text(request: dict[str, Any]) -> str:
     task = request.get("task") if isinstance(request.get("task"), dict) else {}
     refs = request.get("references") if isinstance(request.get("references"), dict) else {}
     parts = [
-        request.get("project_id"),
-        request.get("role"),
         task.get("title"),
         task.get("task_type"),
         task.get("description"),
@@ -370,24 +368,31 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
 
     query = _query_text(request)
     query_tokens = _tokens(query)
+    raw_query_tokens = {
+        token.lower()
+        for token in TOKEN_RE.findall(query)
+    }
     exact_refs = _exact_reference_strings(request)
-    current_intent = bool(query_tokens & CURRENT_INTENT_TERMS)
+    current_intent = bool(raw_query_tokens & CURRENT_INTENT_TERMS)
 
     remaining = budget_chars
     pinned: list[dict[str, Any]] = []
     retrieved: list[dict[str, Any]] = []
 
+    t0_budget = min(7000, max(1200, int(budget_chars * 0.30)))
+    t0_remaining = min(t0_budget, remaining)
     for section in _t0_sections(repo_root, role):
-        remaining = _append_budgeted(
+        t0_remaining = _append_budgeted(
             pinned,
             section=section,
             content_limit=1400,
-            remaining=remaining,
+            remaining=t0_remaining,
             reasons=["pinned_governance", f"role:{role}"],
             score=None,
         )
-        if remaining <= 0:
+        if t0_remaining <= 0:
             break
+    remaining -= t0_budget - t0_remaining
 
     current_state = Section(
         "docs/project/current-state.md",
@@ -398,14 +403,17 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
         0,
     )
     if remaining > 0:
-        remaining = _append_budgeted(
+        t1_budget = min(12000, max(800, int(budget_chars * 0.45)))
+        t1_budget = min(t1_budget, remaining)
+        t1_remaining = _append_budgeted(
             pinned,
             section=current_state,
-            content_limit=min(12000, remaining),
-            remaining=remaining,
+            content_limit=t1_budget,
+            remaining=t1_budget,
             reasons=["pinned_current_state", "current_precedence"],
             score=None,
         )
+        remaining -= t1_budget - t1_remaining
 
     scored: list[tuple[int, int, Section, list[str]]] = []
     for section in _candidate_sections(repo_root):
