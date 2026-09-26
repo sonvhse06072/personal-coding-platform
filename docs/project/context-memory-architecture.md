@@ -1,6 +1,6 @@
 # PCP Context and Memory Architecture
 
-Status: Human Owner-approved architecture direction under #313. Phase 1 is documentation/continuity only; no vector database, embedding service, memory daemon or Runtime retrieval API is implied by this document.
+Status: implemented through #314 and #317. PCP uses a Git-backed tiered memory model with a repository-local deterministic Context Composer. Vector/hybrid RAG remains intentionally deferred unless future PCP-specific evaluation shows a material retrieval gap.
 
 ## 1. Objective
 
@@ -161,11 +161,18 @@ sources:
 
 The Markdown index may express this more compactly while preserving the same concepts.
 
-## 6. Future Context Composer contract
+## 6. Context Composer contract
 
-Issue #313 Phase 2 may add a deterministic Context Composer. Its initial design must not require embeddings.
+The deterministic repository-local Context Composer is implemented by:
 
-Proposed input:
+- `scripts/context_memory.py` — reusable composition/retrieval logic;
+- `scripts/pcp-context-compose.py` — operator/development CLI;
+- `scripts/pcp-context-eval.py` — deterministic evaluation runner;
+- `config/context-memory-eval.json` — PCP-specific evaluation corpus.
+
+It does not require embeddings, a vector database, a network retrieval service or a Runtime container mount.
+
+Input shape:
 
 ```yaml
 project_id: chonhac
@@ -176,35 +183,40 @@ task:
 references:
   issue: 123
   work_order: optional
-token_budget: 8000
+budget_chars: 8000
 ```
 
-Proposed output:
+Output shape:
 
 ```yaml
 context_pack_version: 1
 pinned:
   - tier: T0
     source: AGENTS.md
+    heading: ...
+    reasons: [...]
   - tier: T1
     source: docs/project/current-state.md
+    reasons: [pinned_current_state, current_precedence]
 retrieved:
   - tier: T2
     source: docs/project/architecture.md
-    sections: [...]
+    heading: ...
+    score: ...
   - tier: T3
     source: docs/project/history/episodes.md
-    entries: [...]
-evidence_refs:
-  - tier: T4
-    source: ...
+    heading: ...
+    score: ...
+retrieval:
+  policy: deterministic-v1
+  supported_memory_found: true
+  current_intent: false
 provenance:
-  generated_from_main: ...
-  query: ...
-  retrieval_policy: deterministic-v1
+  generated_from_head: ...
+  sources_are_repository_relative: true
 ```
 
-The composer must emit source/provenance references and keep a bounded token budget.
+The composer emits bounded content, source/heading provenance, explicit truncation and an unsupported-memory result when no T2/T3 candidate is justified. Host-local paths and secret assignment values are redacted at the output boundary.
 
 ## 7. Initial retrieval policy
 
@@ -268,28 +280,30 @@ Default:
 
 PCP must not add a vector database merely because RAG is common in agent systems.
 
-Under #313, a later evaluation set should compare:
+#317 established the deterministic baseline and evaluation gate. Exact-head CI #637 accepted:
 
-- read-all-docs baseline;
-- T0/T1 + metadata/lexical retrieval;
-- vector retrieval;
-- hybrid lexical/vector retrieval.
+- required evidence target recall = 1.0 on the current fixture;
+- stale Tier-3 false-positive rate for current-state cases = 0.0;
+- authority-conflict failure rate = 0.0;
+- unsupported-memory abstention accuracy = 1.0;
+- mean composed context remains below 50% of the read-all-docs character baseline;
+- role-specific T0/T1 selection, exact historical references, budget limits, provenance and output redaction are regression-tested.
 
-Measure at least:
+Therefore PCP does **not** currently have evidence that justifies vector/embedding infrastructure.
 
-- answer correctness;
-- current-vs-historical error rate;
-- authority-conflict error rate;
-- retrieval recall for required evidence;
-- abstention when evidence is absent;
-- prompt tokens;
-- latency/model/tool cost.
+Re-open vector/hybrid evaluation only when at least one measurable trigger appears:
 
-Embeddings/vector infrastructure are justified only if they materially improve PCP-specific retrieval after metadata/authority controls are applied.
+- the deterministic evaluation loses required evidence recall;
+- semantically relevant material is repeatedly missed despite correct metadata/heading structure;
+- stale/historical ranking errors recur;
+- corpus growth makes deterministic retrieval materially too large or slow;
+- a new benchmark demonstrates that vector/hybrid retrieval improves PCP-specific correctness/relevance enough to justify its operational cost.
+
+Any future experiment should compare the deterministic baseline against vector and hybrid retrieval while retaining explicit authority, freshness, supersession and provenance controls.
 
 ## 10. Safety and non-goals
 
-Phase 1 does not:
+The implemented architecture does not:
 
 - change Runtime execution semantics;
 - add a vector DB;
