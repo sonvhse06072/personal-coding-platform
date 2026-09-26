@@ -861,34 +861,107 @@ class RuntimeEngine(RuntimeEngineCore):
         job = self.storage.get(job_id)
         if not job:
             raise RuntimeError("Unknown job")
-        workspace = job.get("workspace")
-        if not workspace:
-            return {"cleaned": False, "reason": "no workspace"}
+
+        workspace = str(job.get("workspace") or "").strip()
+        workspace_path = Path(workspace) if workspace else None
+        workspace_available = bool(
+            workspace_path
+            and workspace_path.is_dir()
+            and (workspace_path / ".git").exists()
+        )
+        release_requested = bool(release_ddev_data or remove_workspace)
         project = project_config(job["project_id"])
+
         cleanup_result = None
+        orphan_result = None
+
         if project.get("ddev", {}).get("enabled", False):
-            cleanup_result = await self.ddev.quiesce_workspace(
+            if workspace_available:
+                cleanup_result = await self.ddev.quiesce_workspace(
+                    job_id=job_id,
+                    project_id=job["project_id"],
+                    workspace=workspace,
+                    remove_data=release_requested,
+                )
+            elif release_requested:
+                status = str(job.get("status") or "")
+                if status not in {"completed", "cancelled"}:
+                    raise RuntimeError(
+                        "Missing-workspace orphan cleanup is allowed only for completed/cancelled jobs"
+                    )
+                if not re.fullmatch(r"[0-9a-f]{32}", job_id):
+                    raise RuntimeError(
+                        "Missing-workspace orphan cleanup requires the full Runtime job id"
+                    )
+                matches = self.storage.jobs_with_id_prefix(job_id[:10])
+                if (
+                    len(matches) != 1
+                    or str(matches[0].get("id") or "") != job_id
+                    or str(matches[0].get("project_id") or "") != str(job["project_id"])
+                ):
+                    raise RuntimeError(
+                        "Missing-workspace orphan cleanup requires an unambiguous exact job prefix"
+                    )
+
+                inspection = await self.ddev.orphan_resources(
+                    job_id=job_id,
+                    project_id=job["project_id"],
+                    workspace=workspace or None,
+                    execute=False,
+                )
+                release = await self.ddev.orphan_resources(
+                    job_id=job_id,
+                    project_id=job["project_id"],
+                    workspace=workspace or None,
+                    execute=True,
+                )
+                orphan_result = {
+                    "inspection": inspection,
+                    "release": release,
+                }
+            elif not workspace_available:
+                return {
+                    "cleaned": False,
+                    "reason": "workspace unavailable",
+                    "workspace": workspace or None,
+                }
+
+        remove_result = None
+        if remove_workspace and workspace_available:
+            remove_result = await self.ddev.remove_workspace(
                 job_id=job_id,
                 project_id=job["project_id"],
                 workspace=workspace,
-                remove_data=bool(release_ddev_data or remove_workspace),
             )
-        remove_result = None
-        if remove_workspace:
-            remove_result = await self.ddev.remove_workspace(
-                job_id=job_id, project_id=job["project_id"], workspace=workspace
-            )
+
         workspace_removed = bool(
             remove_result and remove_result.get("removed", False)
         )
         workspace_preserved = bool(
             remove_result and remove_result.get("preserved", False)
         )
+        orphan_release = (
+            orphan_result.get("release")
+            if isinstance(orphan_result, dict)
+            else None
+        )
+        orphan_after = (
+            orphan_release.get("after")
+            if isinstance(orphan_release, dict)
+            else None
+        )
+        orphan_released_cleanly = bool(
+            isinstance(orphan_after, dict)
+            and int(orphan_after.get("resource_count") or 0) == 0
+        )
+
         return {
             "cleaned": True,
             "ddev": cleanup_result,
+            "ddev_orphan": orphan_result,
             "ddev_data_released": bool(
-                cleanup_result and cleanup_result.get("data_removed", False)
+                (cleanup_result and cleanup_result.get("data_removed", False))
+                or orphan_released_cleanly
             ),
             "workspace_removed": workspace_removed,
             "workspace_preserved": workspace_preserved,
