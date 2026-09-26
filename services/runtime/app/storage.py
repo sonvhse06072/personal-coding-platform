@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -167,6 +168,21 @@ class Storage:
     def list(self, limit: int = 50) -> list[dict[str, Any]]:
         with self.connect() as conn:
             return list(conn.execute("SELECT * FROM cp_jobs ORDER BY created_at DESC LIMIT %s", (limit,)).fetchall())
+
+    def jobs_with_id_prefix(self, prefix: str) -> list[dict[str, Any]]:
+        value = str(prefix or "").strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{10}", value):
+            raise ValueError("Job prefix must be exactly 10 lowercase hex characters")
+        with self.connect() as conn:
+            return list(
+                conn.execute(
+                    """SELECT id, project_id, status, workspace
+                    FROM cp_jobs
+                    WHERE LEFT(id, 10)=%s
+                    ORDER BY created_at""",
+                    (value,),
+                ).fetchall()
+            )
 
     def count_active_engineering_jobs(self) -> int:
         """Count all jobs that make destructive operator maintenance unsafe."""
