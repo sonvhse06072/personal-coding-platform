@@ -128,6 +128,11 @@ CURRENT_INTENT_TERMS = {
 HOST_PATH_RE = re.compile(
     r"(?<![A-Za-z0-9:])/(?:home|mnt)/[^\\s\\x60\\\"'<>]+"
 )
+SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?i)\\b(RUNTIME_API_TOKEN|DASHBOARD_READ_TOKEN|DASHBOARD_CONTROL_TOKEN|"
+    r"ROUTER_API_TOKEN|DDEV_EXECUTOR_TOKEN|GITHUB_DELIVERY_TOKEN|"
+    r"PLATFORM_INTERNAL_TOKEN)=([^\\s]+)"
+)
 
 
 @dataclass(frozen=True)
@@ -204,7 +209,26 @@ def _markdown_sections(source: str, tier: str, text: str) -> list[Section]:
 
 
 def _sanitize_content(text: str) -> str:
-    return HOST_PATH_RE.sub("[local-path-redacted]", text)
+    text = HOST_PATH_RE.sub("[local-path-redacted]", text)
+    return SECRET_ASSIGNMENT_RE.sub(
+        lambda match: f"{match.group(1)}=[secret-redacted]",
+        text,
+    )
+
+
+def _sanitize_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {
+            str(key): _sanitize_value(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_sanitize_value(item) for item in value]
+    if isinstance(value, tuple):
+        return [_sanitize_value(item) for item in value]
+    if isinstance(value, str):
+        return _sanitize_content(value)
+    return value
 
 
 def _clip(text: str, limit: int) -> tuple[str, bool]:
@@ -237,11 +261,15 @@ def _exact_reference_strings(request: dict[str, Any]) -> set[str]:
         if value is None or value == "":
             continue
         raw = str(value).strip().lower()
-        values.add(raw)
-        if key in {"issue", "pr"} and raw.isdigit():
-            values.add(f"#{raw}")
-            values.add(f"{key} #{raw}")
-        if key in {"job", "work_order", "workorder"}:
+        if key in {"issue", "pr"}:
+            if raw.isdigit():
+                values.add(f"#{raw}")
+                values.add(f"{key} #{raw}")
+            elif not raw.startswith("/"):
+                values.add(raw)
+        elif key in {"job", "work_order", "workorder"}:
+            values.add(raw)
+        elif key in {"file", "topic"} and not raw.startswith("/"):
             values.add(raw)
     values.update(_identifiers(_query_text(request)))
     return {value for value in values if value}
@@ -459,8 +487,14 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
         "context_pack_version": 1,
         "project_id": str(request.get("project_id") or ""),
         "role": role,
-        "task": request.get("task") if isinstance(request.get("task"), dict) else {},
-        "references": request.get("references") if isinstance(request.get("references"), dict) else {},
+        "task": _sanitize_value(
+            request.get("task") if isinstance(request.get("task"), dict) else {}
+        ),
+        "references": _sanitize_value(
+            request.get("references")
+            if isinstance(request.get("references"), dict)
+            else {}
+        ),
         "budget_chars": budget_chars,
         "selected_chars": selected_chars,
         "remaining_chars": max(budget_chars - selected_chars, 0),
@@ -468,13 +502,16 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
         "retrieved": retrieved,
         "retrieval": {
             "policy": "deterministic-v1",
-            "query": query,
+            "query": _sanitize_content(query),
             "query_sha256": hashlib.sha256(query.encode("utf-8")).hexdigest(),
             "supported_memory_found": bool(retrieved),
             "candidate_count": len(scored),
             "omitted_candidate_count": omitted,
             "current_intent": current_intent,
-            "exact_references": sorted(exact_refs),
+            "exact_references": [
+                _sanitize_content(value)
+                for value in sorted(exact_refs)
+            ],
         },
         "provenance": {
             "generated_from_head": _git_head(repo_root),
