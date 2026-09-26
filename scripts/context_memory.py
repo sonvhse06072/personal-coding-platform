@@ -126,7 +126,7 @@ CURRENT_INTENT_TERMS = {
 }
 
 HOST_PATH_RE = re.compile(
-    r"(?<![A-Za-z0-9:])/(?:home|mnt)/[^\s\x22\x27\x60<>]+"
+    r"/(?:home|mnt)/[^\s\x22\x27\x60<>]+"
 )
 SECRET_ASSIGNMENT_RE = re.compile(
     r"(?i)\b(RUNTIME_API_TOKEN|DASHBOARD_READ_TOKEN|DASHBOARD_CONTROL_TOKEN|"
@@ -160,7 +160,16 @@ def _tokens(value: str) -> set[str]:
 
 
 def _identifiers(value: str) -> set[str]:
-    return {item.lower().strip() for item in IDENTIFIER_RE.findall(value or "")}
+    result: set[str] = set()
+    for item in IDENTIFIER_RE.findall(value or ""):
+        normalized = item.lower().strip()
+        if not normalized:
+            continue
+        result.add(normalized)
+        numeric = re.search(r"#\d+", normalized)
+        if numeric:
+            result.add(numeric.group(0))
+    return result
 
 
 def _git_head(repo_root: Path) -> str | None:
