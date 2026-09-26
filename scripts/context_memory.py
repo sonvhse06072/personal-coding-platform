@@ -125,6 +125,10 @@ CURRENT_INTENT_TERMS = {
     "state", "status", "next",
 }
 
+HOST_PATH_RE = re.compile(
+    r"(?<![A-Za-z0-9:])/(?:home|mnt)/[^\\s\\x60\\\"'<>]+"
+)
+
 
 @dataclass(frozen=True)
 class Section:
@@ -197,6 +201,10 @@ def _markdown_sections(source: str, tier: str, text: str) -> list[Section]:
         if block:
             sections.append(Section(source, tier, heading, level, block, ordinal))
     return sections
+
+
+def _sanitize_content(text: str) -> str:
+    return HOST_PATH_RE.sub("[local-path-redacted]", text)
 
 
 def _clip(text: str, limit: int) -> tuple[str, bool]:
@@ -327,7 +335,8 @@ def _append_budgeted(
     if remaining <= 0:
         return remaining
     allowed = min(content_limit, remaining)
-    content, truncated = _clip(section.content, allowed)
+    safe_content = _sanitize_content(section.content)
+    content, truncated = _clip(safe_content, allowed)
     if not content:
         return remaining
     item: dict[str, Any] = {
