@@ -1,0 +1,149 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "current-state-runtime",
+      "kind": "current",
+      "request": {
+        "project_id": "personal-coding-platform",
+        "role": "product_manager",
+        "task": {
+          "title": "What is the current Runtime version and what PCP work is active now?",
+          "task_type": "status"
+        },
+        "budget_chars": 24000
+      },
+      "required_identity_contains": [
+        "docs/project/current-state.md#Current Project State and Handoff"
+      ],
+      "require_no_retrieved_t3": true
+    },
+    {
+      "id": "authority-developer-merge",
+      "kind": "authority",
+      "request": {
+        "project_id": "personal-coding-platform",
+        "role": "developer",
+        "task": {
+          "title": "May a developer merge a pull request or deploy production?",
+          "task_type": "governance"
+        },
+        "budget_chars": 24000
+      },
+      "required_identity_contains": [
+        "AGENTS.md#Core invariants"
+      ]
+    },
+    {
+      "id": "historical-provider-recovery",
+      "kind": "historical",
+      "request": {
+        "project_id": "personal-coding-platform",
+        "role": "debugger",
+        "task": {
+          "title": "What lesson did PCP learn from autonomous provider recovery?",
+          "task_type": "incident_research"
+        },
+        "references": {
+          "issue": "228"
+        },
+        "budget_chars": 24000
+      },
+      "required_identity_contains": [
+        "docs/project/history/episodes.md#Autonomous provider recovery"
+      ],
+      "expect_supported_memory": true
+    },
+    {
+      "id": "historical-direct-preview",
+      "kind": "historical",
+      "request": {
+        "project_id": "personal-coding-platform",
+        "role": "debugger",
+        "task": {
+          "title": "Why did the direct-workspace frontend preview health check falsely fail and what is the accepted lesson?",
+          "task_type": "incident_research"
+        },
+        "references": {
+          "issue": "297"
+        },
+        "budget_chars": 24000
+      },
+      "required_identity_contains": [
+        "docs/project/history/episodes.md#Chợ Nhạc direct workspace + job-owned live preview"
+      ],
+      "expect_supported_memory": true
+    },
+    {
+      "id": "superseded-lifecycle",
+      "kind": "historical",
+      "request": {
+        "project_id": "personal-coding-platform",
+        "role": "reviewer",
+        "task": {
+          "title": "How must superseded orchestration records behave?",
+          "task_type": "policy_review"
+        },
+        "references": {
+          "issue": "295"
+        },
+        "budget_chars": 24000
+      },
+      "required_identity_contains": [
+        "docs/project/history/episodes.md#Explicit superseded orchestration lifecycle"
+      ],
+      "expect_supported_memory": true
+    },
+    {
+      "id": "buildkit-resource-history",
+      "kind": "historical",
+      "request": {
+        "project_id": "personal-coding-platform",
+        "role": "debugger",
+        "task": {
+          "title": "What was learned from dedicated PCP BuildKit isolation and bounded GC?",
+          "task_type": "incident_research"
+        },
+        "references": {
+          "issue": "281"
+        },
+        "budget_chars": 24000
+      },
+      "required_identity_contains": [
+        "docs/project/history/episodes.md#Dedicated PCP BuildKit isolation"
+      ],
+      "expect_supported_memory": true
+    },
+    {
+      "id": "unsupported-memory",
+      "kind": "unsupported",
+      "request": {
+        "project_id": "personal-coding-platform",
+        "role": "specialist",
+        "task": {
+          "title": "quantum banana orbital jurisprudence",
+          "task_type": "unknown"
+        },
+        "budget_chars": 24000
+      },
+      "expect_supported_memory": false
+    },
+    {
+      "id": "bounded-small-context",
+      "kind": "budget",
+      "request": {
+        "project_id": "personal-coding-platform",
+        "role": "reviewer",
+        "task": {
+          "title": "Review direct workspace lease and preview safety boundaries",
+          "task_type": "code_review"
+        },
+        "references": {
+          "issue": "309"
+        },
+        "budget_chars": 5000
+      },
+      "max_selected_chars": 5000
+    }
+  ]
+}

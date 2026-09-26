@@ -2,7 +2,7 @@
 
 Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and live Runtime/GitHub evidence remain authoritative over chat history. Completed chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-09-26 during #314.
+Last updated: 2026-09-26 during #317.
 
 ## Resume order
 
@@ -17,7 +17,7 @@ Memory-tier rules and the proposed Context Composer contract are in `context-mem
 
 ## Current platform snapshot
 
-- GitHub `main` immediately before the #314 Phase-1 branch: `d2dc61e7d34082bb88925639c3ee8129b8f30056`.
+- GitHub `main` immediately before the #317 Phase-2 branch: `de7fdde6d90df59a02c5f9b93392bfb9121a3b44`.
 - Last locally accepted service identities:
   - Runtime `1.0.55`;
   - ddev-executor `1.0.23`.
@@ -93,6 +93,23 @@ Delivered:
 
 #313 remains open. The next architecture step is a deterministic Context Composer and PCP-specific retrieval evaluation before any vector-store decision.
 
+### #317 — Phase 2: deterministic Context Composer and memory evaluation
+
+Status: active implementation under #313.
+
+Current scope:
+
+- reusable deterministic repository-local Context Composer;
+- bounded T0 governance excerpts plus pinned T1 current state;
+- exact-reference, role-aware and heading-aware lexical retrieval for T2/T3;
+- provenance-bearing, character-budgeted output;
+- explicit unsupported-memory/abstention result;
+- PCP-specific deterministic evaluation corpus;
+- read-all-docs versus tiered-composer context-volume comparison;
+- no embeddings, vector database, network dependency or Runtime container/mount change.
+
+Close #317 only after exact-head CI proves retrieval/evaluation acceptance. Use its metrics as the evidence gate for whether #313 should proceed to vector/hybrid RAG experimentation.
+
 ### #282 — Release terminal PCP DDEV resources when legacy workspace is missing
 
 Status: open; next concrete source-maintenance issue unless Human Owner reprioritizes.
@@ -155,9 +172,8 @@ Their reusable lessons and primary references are in `history/episodes.md`. Git/
 
 ## Immediate next safe actions
 
-1. Unless reprioritized, implement #282 as the next concrete source-maintenance issue using the bounded orphan-resource design already recorded on that issue.
-2. Keep #146 in calibration/watch mode; collect only naturally occurring routine-task evidence.
-3. Under #313 Phase 2, design a deterministic Context Composer that always pins T0/T1 and retrieves bounded T2/T3 context by exact metadata/heading-aware lexical signals before considering embeddings.
-4. Build a PCP-specific memory evaluation set before any vector-store decision. Include current-vs-historical, supersession, authority conflict, temporal reasoning, exact identity and abstention cases.
-5. Add vector/hybrid RAG only if the evaluation demonstrates material benefit over deterministic metadata/lexical retrieval.
-6. Keep shared/default BuildKit cache decisions separate from PCP-owned bounded GC and preserve unrelated Docker/DDEV resources.
+1. Complete #317 through deterministic evaluation, exact-head CI, PM review and merge.
+2. Use #317 evaluation results to decide whether #313 proceeds to vector/hybrid RAG experiments or remains deterministic.
+3. After the memory-composer phase, return to #282 as the next concrete source-maintenance issue unless Human Owner reprioritizes again.
+4. Keep #146 in calibration/watch mode; collect only naturally occurring routine-task evidence.
+5. Keep shared/default BuildKit cache decisions separate from PCP-owned bounded GC and preserve unrelated Docker/DDEV resources.
