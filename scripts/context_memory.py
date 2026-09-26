@@ -126,12 +126,12 @@ CURRENT_INTENT_TERMS = {
 }
 
 HOST_PATH_RE = re.compile(
-    r"(?<![A-Za-z0-9:])/(?:home|mnt)/[^\\s\\x60\\\"'<>]+"
+    r"(?<![A-Za-z0-9:])/(?:home|mnt)/[^\s\x22\x27\x60<>]+"
 )
 SECRET_ASSIGNMENT_RE = re.compile(
-    r"(?i)\\b(RUNTIME_API_TOKEN|DASHBOARD_READ_TOKEN|DASHBOARD_CONTROL_TOKEN|"
+    r"(?i)\b(RUNTIME_API_TOKEN|DASHBOARD_READ_TOKEN|DASHBOARD_CONTROL_TOKEN|"
     r"ROUTER_API_TOKEN|DDEV_EXECUTOR_TOKEN|GITHUB_DELIVERY_TOKEN|"
-    r"PLATFORM_INTERNAL_TOKEN)=([^\\s]+)"
+    r"PLATFORM_INTERNAL_TOKEN)=([^\s]+)"
 )
 
 
