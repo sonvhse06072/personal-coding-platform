@@ -118,6 +118,7 @@ class PhaseResponse(BaseModel):
 
 _ACTIVE: dict[str, subprocess.Popen] = {}
 _ACTIVE_LOCK = threading.Lock()
+_ORPHAN_RESOURCE_LOCK = threading.Lock()
 
 
 def auth(authorization: str | None = Header(default=None)) -> None:
@@ -828,7 +829,7 @@ def _inspect_orphan_resources(
             "volume",
             "inspect",
             "--format",
-            '{{.Name}}|{{if .Labels}}{{ index .Labels "com.ddev.site-name" }}{{end}}',
+            '{{.Name}}|{{with .Labels}}{{with index . "com.ddev.site-name"}}{{.}}{{end}}{{end}}',
             name,
         ]).strip()
         parts = detail.split("|", 1)
@@ -1277,7 +1278,8 @@ def stop_preview(payload: PreviewRequest) -> dict[str, Any]:
 
 @app.post("/v1/workspaces/orphan-resources", dependencies=[Depends(auth)])
 def orphan_resources(payload: OrphanResourcesRequest) -> dict[str, Any]:
-    return _release_orphan_resources(payload)
+    with _ORPHAN_RESOURCE_LOCK:
+        return _release_orphan_resources(payload)
 
 
 @app.post("/v1/workspaces/quiesce", dependencies=[Depends(auth)])
