@@ -72,6 +72,7 @@ class RuntimeEngine(RuntimeEngineCore):
             return
 
         project = project_config(job["project_id"])
+        runtime_cfg = project.get("runtime", {}) or {}
         task = dict(job["task"])
         checkpoint = checkpoint_from_row(job)
         workspace_mode = effective_workspace_mode(job, checkpoint, project)
