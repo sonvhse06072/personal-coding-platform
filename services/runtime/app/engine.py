@@ -17,6 +17,7 @@ from .baseline import resolve_project_baseline
 from .config import project_config
 from .engine_delivery import RuntimeEngine as _RuntimeEngine
 from .repo import diff_state
+from .scope_guard import changed_path_protected_signals
 from .shell import CommandTimeoutError
 from .state import (
     checkpoint_from_row,
@@ -263,6 +264,7 @@ class RuntimeEngine(_RuntimeEngine):
         reset_transient_provider_failures: bool = False,
         reroute: bool = False,
         _allow_failed_orchestrated_resume: bool = False,
+        _require_changed_file_headroom: bool = False,
     ) -> dict[str, Any]:
         """Resume a paused job, optionally replacing only its stale route state.
 
@@ -311,8 +313,55 @@ class RuntimeEngine(_RuntimeEngine):
                 "repo": repo_analysis,
                 "provider_state": provider_state,
             })
+
+            if _require_changed_file_headroom:
+                strategy = dict(fresh_route.get("strategy") or {})
+                if strategy.get("budget_mode") != "adaptive":
+                    raise RuntimeError(
+                        "Changed-file scope recovery requires an effective adaptive route"
+                    )
+                adaptive = dict(strategy.get("adaptive_budget") or {})
+                dimensions = dict(adaptive.get("dimensions") or {})
+                envelope = dict(dimensions.get("max_changed_files") or {})
+                try:
+                    working_target = int(float(envelope["working_target"]))
+                    emergency_limit = int(float(envelope["emergency_limit"]))
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise RuntimeError(
+                        "Fresh adaptive route does not expose changed-file headroom"
+                    ) from exc
+
+                progress = dict(row.get("progress") or {})
+                changed_files = int(progress.get("changed_files") or 0)
+                if changed_files <= working_target:
+                    raise RuntimeError(
+                        "Changed-file scope recovery is stale; the working target is not exceeded"
+                    )
+                if changed_files > emergency_limit:
+                    raise RuntimeError(
+                        "Changed-file scope recovery exceeds the fresh emergency ceiling"
+                    )
+
+                result = dict(row.get("result") or {})
+                diff = dict(result.get("diff") or {})
+                protected = changed_path_protected_signals(
+                    diff.get("changed_files") or [],
+                    checkpoint,
+                )
+                if protected:
+                    raise RuntimeError(
+                        "Changed-file scope recovery found a protected changed-path boundary"
+                    )
+
             route_history = list(checkpoint.get("route_history") or [])
-            route_history.append({"reason": "explicit_resume_reroute", "route": fresh_route})
+            route_history.append({
+                "reason": (
+                    "changed_file_scope_policy_refresh"
+                    if _require_changed_file_headroom
+                    else "explicit_resume_reroute"
+                ),
+                "route": fresh_route,
+            })
             checkpoint["route_history"] = route_history
             checkpoint["provider_state"] = provider_state
             fields["route"] = fresh_route
