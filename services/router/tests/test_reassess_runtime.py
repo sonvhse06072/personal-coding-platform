@@ -400,3 +400,31 @@ def test_legacy_hard_total_wall_time_remains_strict():
     assert result.action == "stop"
     assert result.reason == "wall-time budget exhausted"
     assert "hard_budget_guard" in result.signals
+
+
+def test_adaptive_changed_files_inside_emergency_headroom_are_not_scope_expansion():
+    engine = make_engine()
+    route = engine.route(base_request())
+    route.strategy.budget_mode = "adaptive"
+    adaptive = route.strategy.adaptive_budget
+    assert adaptive is not None
+    envelope = adaptive.dimensions["max_changed_files"]
+    changed = min(
+        int(envelope.emergency_limit),
+        int(envelope.working_target) + 1,
+    )
+
+    result = engine.reassess(ReassessRequest(
+        route=route,
+        progress=ExecutionProgress(
+            changed_files=changed,
+            unexpected_scope=False,
+            agent_succeeded=True,
+            material_change_present=True,
+            tests_passed=False,
+            required_checks_passed=False,
+        ),
+    ))
+
+    assert "scope_expansion" not in result.signals
+    assert result.action in {"continue", "escalate"}
