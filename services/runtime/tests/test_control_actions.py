@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
@@ -9,6 +10,30 @@ import pytest
 
 from app.control_actions import ControlActionService
 from app.engine import _apply_owner_budget_authorizations
+
+
+def _control_dedupe_key(
+    *,
+    action_type: str,
+    plan_id: str,
+    work_order_id: str,
+    job_id: str | None,
+    generation_fingerprint: str,
+    payload: dict,
+) -> str:
+    source = json.dumps(
+        {
+            "action_type": action_type,
+            "plan_id": plan_id,
+            "work_order_id": work_order_id,
+            "job_id": job_id,
+            "generation_fingerprint": generation_fingerprint,
+            "payload": payload,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
 class FakeStorage:
@@ -925,19 +950,14 @@ def test_failed_control_action_is_rearmed_only_for_same_state_generation(monkeyp
     )
     state = controls.state_fingerprint(plan, work_order, job)
 
-    dedupe_source = json.dumps(
-        {
-            "action_type": "pm_scope_reassess",
-            "plan_id": "plan-1",
-            "work_order_id": "WO-1",
-            "job_id": "job-1",
-            "generation_fingerprint": generation,
-            "payload": {},
-        },
-        sort_keys=True,
-        separators=(",", ":"),
+    failed["dedupe_key"] = _control_dedupe_key(
+        action_type="pm_scope_reassess",
+        plan_id="plan-1",
+        work_order_id="WO-1",
+        job_id="job-1",
+        generation_fingerprint=generation,
+        payload={},
     )
-    failed["dedupe_key"] = hashlib.sha256(dedupe_source.encode("utf-8")).hexdigest()
     failed["generation_fingerprint"] = generation
     failed["state_fingerprint"] = state
     storage.actions["scope-failed"] = failed
@@ -956,22 +976,25 @@ def test_failed_control_action_is_rearmed_only_for_same_state_generation(monkeyp
 
 def test_failed_control_action_is_not_rearmed_after_state_drift():
     store = ActionStore("blocked")
-    storage = ActionStorage(
-        [
-            {
-                **control_action(
-                    "scope-failed",
-                    "pm_scope_reassess",
-                    status="failed",
-                    fingerprint="old-state",
-                ),
-                "dedupe_key": "same-key",
-                "generation_fingerprint": "same-generation",
-                "result": {"status": "failed"},
-            }
-        ],
-        store,
+    failed = {
+        **control_action(
+            "scope-failed",
+            "pm_scope_reassess",
+            status="failed",
+            fingerprint="old-state",
+        ),
+        "generation_fingerprint": "same-generation",
+        "result": {"status": "failed"},
+    }
+    failed["dedupe_key"] = _control_dedupe_key(
+        action_type="pm_scope_reassess",
+        plan_id="plan-1",
+        work_order_id="WO-1",
+        job_id="job-1",
+        generation_fingerprint="same-generation",
+        payload={},
     )
+    storage = ActionStorage([failed], store)
     controls = ControlActionService(storage, FakeEngine(), store)
 
     row = controls.create_action(
