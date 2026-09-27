@@ -52,6 +52,7 @@ def test_new_routes_expose_estimate_working_target_and_emergency_ceiling():
         "max_repair_iterations",
         "max_test_runs",
         "max_wall_time_minutes",
+        "max_changed_files",
     ):
         envelope = adaptive.dimensions[dimension]
         assert envelope.estimate <= envelope.working_target <= envelope.emergency_limit
@@ -178,3 +179,28 @@ def test_abnormal_repeated_failure_is_not_hidden_by_budget_headroom():
     ))
     assert result.action in {"escalate", "stop"}
     assert any(signal.startswith("repeated_failure:") for signal in result.signals)
+
+
+def test_changed_files_emit_non_blocking_headroom_signal_on_adaptive_route():
+    engine = make_engine()
+    route = engine.route(request())
+    route.strategy.budget_mode = "adaptive"
+    adaptive = route.strategy.adaptive_budget
+    assert adaptive is not None
+    envelope = adaptive.dimensions["max_changed_files"]
+
+    result = engine.reassess(ReassessRequest(
+        route=route,
+        progress=ExecutionProgress(
+            changed_files=int(envelope.working_target) + 1,
+            unexpected_scope=False,
+            agent_succeeded=True,
+            material_change_present=True,
+            tests_passed=False,
+            required_checks_passed=False,
+        ),
+    ))
+
+    assert result.action in {"continue", "escalate"}
+    assert "scope_expansion" not in result.signals
+    assert "budget_headroom_active:max_changed_files" in result.signals
