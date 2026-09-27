@@ -23,6 +23,7 @@ from .review import (
     review_report_summary,
     should_run_review,
 )
+from .scope_guard import changed_path_protected_signals
 from .state import checkpoint_from_row, existing_repo_analysis, merge_progress, validate_workspace
 
 
@@ -407,6 +408,19 @@ class RuntimeEngine(RuntimeEngineCore):
             progress["changed_files"] = diff["changed_file_count"]
             progress["material_change_present"] = diff["changed_file_count"] > 0
             progress["diff_hashes"].append(diff["diff_hash"])
+
+            # File count is only a work-shape signal on adaptive routes. Actual
+            # sensitive changed paths remain an independent decision boundary.
+            path_signals = changed_path_protected_signals(
+                diff.get("changed_files") or [],
+                checkpoint,
+            )
+            if path_signals:
+                important = list(progress.get("important_decision_flags") or [])
+                for signal in sorted(path_signals):
+                    if signal not in important:
+                        important.append(signal)
+                progress["important_decision_flags"] = important
             mark_actioned_review_findings(
                 checkpoint,
                 progress,
