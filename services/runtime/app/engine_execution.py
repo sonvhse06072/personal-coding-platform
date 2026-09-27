@@ -698,6 +698,17 @@ class RuntimeEngine(RuntimeEngineCore):
                             else None
                         ),
                         developer_report=run.output if run.returncode == 0 else None,
+                        decision_context={
+                            "approved_decisions": list(
+                                checkpoint.get("approved_decisions") or []
+                            )[-20:],
+                            "decision_history": list(
+                                checkpoint.get("decision_history") or []
+                            )[-20:],
+                            "prior_pm_boundary": dict(
+                                checkpoint.get("pending_pm_reassessment") or {}
+                            ),
+                        },
                         max_diff_bytes=max_diff,
                         timeout_seconds=self._remaining_seconds(strategy, started, 600),
                     )
@@ -732,6 +743,7 @@ class RuntimeEngine(RuntimeEngineCore):
                 }
                 pm_action = str(pm_decision.get("action") or "")
                 if pm_action == "approve_continue":
+                    checkpoint.pop("pending_pm_reassessment", None)
                     authorizations = list(
                         checkpoint.get("pm_reassessment_authorizations") or []
                     )
@@ -758,6 +770,7 @@ class RuntimeEngine(RuntimeEngineCore):
                         checkpoint=checkpoint,
                     )
                 elif pm_action in {"request_developer_response", "request_repair"}:
+                    checkpoint.pop("pending_pm_reassessment", None)
                     last_failure = "PCP_PM_REASSESSMENT: " + json.dumps(
                         {
                             "action": pm_action,
@@ -777,6 +790,26 @@ class RuntimeEngine(RuntimeEngineCore):
                         checkpoint=checkpoint,
                     )
                 elif pm_action == "human_decision":
+                    pm_human_decision = {
+                        "required": True,
+                        "triggers": list(pm_decision.get("human_triggers") or []),
+                        "reason": str(pm_decision.get("summary") or ""),
+                    }
+                    if self._decision_approved(checkpoint, pm_human_decision):
+                        self._block(
+                            job_id=job_id,
+                            progress=progress,
+                            checkpoint=checkpoint,
+                            reason="pm_reassessment_unresolved_after_human_approval",
+                            last_failure=(
+                                "Product Manager repeated a Human Owner trigger that "
+                                "is already durably approved; current baseline still "
+                                "does not authorize automatic completion."
+                            ),
+                            pm_reassessment=pm_decision,
+                            diff=diff,
+                        )
+                        return
                     checkpoint["pending_pm_reassessment"] = {
                         "signal": "changed_file_working_target_exceeded",
                         "diff_hash": str(diff.get("diff_hash") or ""),
@@ -788,16 +821,13 @@ class RuntimeEngine(RuntimeEngineCore):
                         job_id=job_id,
                         checkpoint=checkpoint,
                         progress=progress,
-                        decision={
-                            "required": True,
-                            "triggers": list(pm_decision.get("human_triggers") or []),
-                            "reason": str(pm_decision.get("summary") or ""),
-                        },
+                        decision=pm_human_decision,
                         route_history=route_history,
                         source="pm_reassessment",
                     )
                     return
                 else:
+                    checkpoint.pop("pending_pm_reassessment", None)
                     self._block(
                         job_id=job_id,
                         progress=progress,
