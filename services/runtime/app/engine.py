@@ -17,7 +17,6 @@ from .baseline import resolve_project_baseline
 from .config import project_config
 from .engine_delivery import RuntimeEngine as _RuntimeEngine
 from .repo import diff_state
-from .scope_guard import changed_path_protected_signals
 from .shell import CommandTimeoutError
 from .state import (
     checkpoint_from_row,
