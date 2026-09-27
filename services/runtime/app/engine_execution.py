@@ -14,6 +14,11 @@ from .engine_core import RuntimeEngineCore
 from .evidence_packs import developer_repair_evidence_pack, pm_evidence_pack
 from .fingerprint import failure_fingerprint
 from .preview import ProjectPreviewManager, ready_preview_context
+from .pm_reassessment import (
+    changed_file_reassessment_state,
+    has_pm_changed_file_authorization,
+    run_pm_reassessment,
+)
 from .prompts import evaluator_prompt, execution_prompt, planning_prompt
 from .repo import analyze_repo, commit_changes, diff_state
 from .review import (
@@ -624,6 +629,183 @@ class RuntimeEngine(RuntimeEngineCore):
                 self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
 
             progress["required_checks_passed"] = verification["passed"] and evaluator_ok and not progress["unexpected_scope"]
+
+            pm_scope_state = changed_file_reassessment_state(
+                strategy,
+                changed_files=int(progress.get("changed_files") or 0),
+            )
+            pm_scope_needs_review = bool(
+                progress["required_checks_passed"]
+                and pm_scope_state
+                and not progress.get("important_decision_flags")
+                and not has_pm_changed_file_authorization(
+                    checkpoint,
+                    diff_hash=str(diff.get("diff_hash") or ""),
+                    used=int(progress.get("changed_files") or 0),
+                )
+            )
+            if pm_scope_needs_review:
+                budget_reason = self._pre_model_budget_reason(
+                    progress,
+                    strategy,
+                    include_iteration=False,
+                )
+                if budget_reason:
+                    self._block(
+                        job_id=job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                        reason="execution_budget_exhausted",
+                        last_failure=budget_reason,
+                        diff=diff,
+                    )
+                    return
+
+                progress["model_calls"] += 1
+                self.storage.update(
+                    job_id,
+                    status="evaluating",
+                    progress=progress,
+                    checkpoint=checkpoint,
+                )
+                current_review_summary = (
+                    review_report_summary(review_report)
+                    if review_report is not None
+                    else checkpoint.get("last_review_report")
+                )
+                try:
+                    pm_result = await run_pm_reassessment(
+                        router=self.router,
+                        workspace=workspace,
+                        job_id=job_id,
+                        project_id=job["project_id"],
+                        profile=str(strategy.get("profile") or "standard"),
+                        current_executor=executor_choice,
+                        provider_state=provider_state,
+                        work_order=dict(checkpoint.get("work_order") or {}),
+                        baseline=dict(checkpoint.get("project_baseline") or {}),
+                        trigger={
+                            "signal": "changed_file_working_target_exceeded",
+                            **dict(pm_scope_state or {}),
+                        },
+                        diff=diff,
+                        verification=verification,
+                        review_summary=(
+                            current_review_summary
+                            if isinstance(current_review_summary, dict)
+                            else None
+                        ),
+                        developer_report=run.output if run.returncode == 0 else None,
+                        max_diff_bytes=max_diff,
+                        timeout_seconds=self._remaining_seconds(strategy, started, 600),
+                    )
+                except Exception as exc:
+                    self._update_elapsed(progress, started)
+                    self._block(
+                        job_id=job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                        reason="pm_reassessment_failed",
+                        last_failure=str(exc)[-4000:],
+                        diff=diff,
+                    )
+                    return
+
+                self._record_usage(
+                    progress,
+                    str(pm_result.get("model_id") or ""),
+                    pm_result.get("usage"),
+                )
+                progress["pm_reassessments"] = int(
+                    progress.get("pm_reassessments", 0)
+                ) + 1
+                self._update_elapsed(progress, started)
+
+                pm_decision = dict(pm_result.get("decision") or {})
+                checkpoint["last_pm_reassessment"] = {
+                    "diff_hash": diff.get("diff_hash"),
+                    "signal": "changed_file_working_target_exceeded",
+                    "decision": pm_decision,
+                    "staffing": pm_result.get("staffing"),
+                }
+                pm_action = str(pm_decision.get("action") or "")
+                if pm_action == "approve_continue":
+                    authorizations = list(
+                        checkpoint.get("pm_reassessment_authorizations") or []
+                    )
+                    authorizations.append(
+                        {
+                            "signal": "changed_file_working_target_exceeded",
+                            "diff_hash": str(diff.get("diff_hash") or ""),
+                            "used": int((pm_scope_state or {}).get("used") or 0),
+                            "working_target": int(
+                                (pm_scope_state or {}).get("working_target") or 0
+                            ),
+                            "emergency_limit": int(
+                                (pm_scope_state or {}).get("emergency_limit") or 0
+                            ),
+                            "approved_by": str(pm_result.get("model_id") or ""),
+                            "provider": str(pm_result.get("provider") or ""),
+                            "summary": str(pm_decision.get("summary") or "")[:2000],
+                        }
+                    )
+                    checkpoint["pm_reassessment_authorizations"] = authorizations[-20:]
+                    self.storage.update(
+                        job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                    )
+                elif pm_action in {"request_developer_response", "request_repair"}:
+                    last_failure = "PCP_PM_REASSESSMENT: " + json.dumps(
+                        {
+                            "action": pm_action,
+                            "summary": pm_decision.get("summary"),
+                            "developer_message": pm_decision.get("developer_message"),
+                            "unresolved_risks": pm_decision.get("unresolved_risks") or [],
+                            "diff_hash": diff.get("diff_hash"),
+                        },
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    )
+                    progress["required_checks_passed"] = False
+                    checkpoint["last_failure"] = last_failure
+                    self.storage.update(
+                        job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                    )
+                elif pm_action == "human_decision":
+                    checkpoint["pending_pm_reassessment"] = {
+                        "signal": "changed_file_working_target_exceeded",
+                        "diff_hash": str(diff.get("diff_hash") or ""),
+                        **dict(pm_scope_state or {}),
+                        "pm_model_id": str(pm_result.get("model_id") or ""),
+                        "summary": str(pm_decision.get("summary") or "")[:2000],
+                    }
+                    self._pause_for_decision(
+                        job_id=job_id,
+                        checkpoint=checkpoint,
+                        progress=progress,
+                        decision={
+                            "required": True,
+                            "triggers": list(pm_decision.get("human_triggers") or []),
+                            "reason": str(pm_decision.get("summary") or ""),
+                        },
+                        route_history=route_history,
+                        source="pm_reassessment",
+                    )
+                    return
+                else:
+                    self._block(
+                        job_id=job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                        reason="pm_reassessment_blocked",
+                        last_failure=str(pm_decision.get("summary") or "PM blocked reassessment"),
+                        pm_reassessment=pm_decision,
+                        diff=diff,
+                    )
+                    return
 
             if progress["required_checks_passed"]:
                 effective_route = self._effective_route(route, executor_choice)
