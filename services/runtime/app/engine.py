@@ -453,6 +453,63 @@ class RuntimeEngine(_RuntimeEngine):
         if canonical != row.get("task"):
             self.storage.update(job_id, task=canonical)
 
+    async def resolve_human_decision(
+        self,
+        job_id: str,
+        *,
+        action: str,
+        note: str = "",
+    ) -> dict[str, Any]:
+        before = self.storage.get(job_id)
+        pending_pm = {}
+        if before:
+            pending_pm = dict(
+                (before.get("checkpoint") or {}).get("pending_pm_reassessment") or {}
+            )
+
+        updated = await super().resolve_human_decision(
+            job_id,
+            action=action,
+            note=note,
+        )
+
+        if pending_pm:
+            checkpoint = checkpoint_from_row(updated)
+            checkpoint.pop("pending_pm_reassessment", None)
+            if action == "approve":
+                authorizations = list(
+                    checkpoint.get("pm_reassessment_authorizations") or []
+                )
+                authorizations.append(
+                    {
+                        "signal": str(
+                            pending_pm.get("signal")
+                            or "changed_file_working_target_exceeded"
+                        ),
+                        "diff_hash": str(pending_pm.get("diff_hash") or ""),
+                        "used": int(pending_pm.get("used") or 0),
+                        "working_target": int(
+                            pending_pm.get("working_target") or 0
+                        ),
+                        "emergency_limit": int(
+                            pending_pm.get("emergency_limit") or 0
+                        ),
+                        "approved_by": "human_owner",
+                        "provider": "",
+                        "summary": str(
+                            pending_pm.get("summary")
+                            or "Human Owner approved PM reassessment boundary."
+                        )[:2000],
+                    }
+                )
+                checkpoint["pm_reassessment_authorizations"] = authorizations[-20:]
+            self.storage.update(job_id, checkpoint=checkpoint)
+            refreshed = self.storage.get(job_id)
+            if refreshed is not None:
+                updated = refreshed
+
+        return updated
+
     async def run_job(self, job_id: str) -> None:
         self._restore_work_order_task(job_id)
         try:
