@@ -29,7 +29,14 @@ from .review import (
     should_run_review,
 )
 from .scope_guard import changed_path_protected_signals
-from .state import (\n    checkpoint_from_row,\n    clear_failure_context,\n    existing_repo_analysis,\n    merge_progress,\n    set_failure_context,\n    validate_workspace,\n)
+from .state import (
+    checkpoint_from_row,
+    clear_failure_context,
+    existing_repo_analysis,
+    merge_progress,
+    set_failure_context,
+    validate_workspace,
+)
 
 _VALID_WORKSPACE_MODES = {"direct", "isolated_clone"}
 
