@@ -474,12 +474,11 @@ class RuntimeEngine(RuntimeEngineCore):
                 diff.get("changed_files") or [],
                 checkpoint,
             )
-            if path_signals:
-                important = list(progress.get("important_decision_flags") or [])
-                for signal in sorted(path_signals):
-                    if signal not in important:
-                        important.append(signal)
-                progress["important_decision_flags"] = important
+            # important_decision_flags describes the current diff, not
+            # historical diffs. Decision history is persisted separately in
+            # checkpoint; carrying removed path signals forward would create
+            # false Human/PM boundaries after a successful repair.
+            progress["important_decision_flags"] = sorted(path_signals)
             mark_actioned_review_findings(
                 checkpoint,
                 progress,
