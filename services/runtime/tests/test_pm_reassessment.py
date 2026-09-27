@@ -190,6 +190,7 @@ def test_pm_reassessment_uses_different_model_and_keeps_workspace_read_only(tmp_
             "action": "approve_continue",
             "summary": "All changed files remain inside the approved frontend WorkOrder.",
             "developer_message": None,
+            "human_necessity": None,
             "unresolved_risks": [],
             "human_triggers": [],
         }
@@ -255,6 +256,7 @@ def test_pm_reassessment_fails_closed_if_pm_mutates_workspace(tmp_path) -> None:
             "action": "approve_continue",
             "summary": "Looks fine.",
             "developer_message": None,
+            "human_necessity": None,
             "unresolved_risks": [],
             "human_triggers": [],
         },
@@ -314,6 +316,7 @@ def test_pm_mutation_never_changes_developer_workspace(tmp_path) -> None:
             "action": "approve_continue",
             "summary": "Would approve.",
             "developer_message": None,
+            "human_necessity": None,
             "unresolved_risks": [],
             "human_triggers": [],
         },
@@ -381,7 +384,102 @@ def test_pm_human_escalation_is_limited_to_known_owner_boundaries() -> None:
                 "action": "human_decision",
                 "summary": "Ask owner for an ordinary implementation preference.",
                 "developer_message": None,
+                "human_necessity": "The PM claims this preference cannot be resolved inside the current WorkOrder.",
                 "unresolved_risks": [],
                 "human_triggers": ["ordinary_implementation_preference"],
             }
         )
+
+
+def test_human_decision_requires_bounded_necessity() -> None:
+    with pytest.raises(ValueError, match="requires human_necessity"):
+        PMReassessmentDecision.model_validate(
+            {
+                "action": "human_decision",
+                "summary": "Escalate dependency choice.",
+                "developer_message": None,
+                "human_necessity": None,
+                "unresolved_risks": ["Dependency choice remains unresolved."],
+                "human_triggers": ["major_dependency_addition"],
+            }
+        )
+
+
+def test_non_human_action_cannot_carry_human_necessity() -> None:
+    with pytest.raises(ValueError, match="valid only for human_decision"):
+        PMReassessmentDecision.model_validate(
+            {
+                "action": "request_repair",
+                "summary": "Remove out-of-scope dependency.",
+                "developer_message": "Use the existing test stack.",
+                "human_necessity": "Not applicable.",
+                "unresolved_risks": [],
+                "human_triggers": [],
+            }
+        )
+
+
+def test_pm_prompt_prefers_repair_for_removable_scope_violation(tmp_path) -> None:
+    root = workspace(tmp_path)
+    router = FakeRouter()
+    ddev = FakeDdev(root, tmp_path)
+    source_commit = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout.strip()
+    adapter = FakeAdapter(
+        {
+            "action": "request_repair",
+            "summary": "The test dependency is removable and outside the approved WorkOrder.",
+            "developer_message": "Remove the third-party test dependency and use the existing test stack.",
+            "human_necessity": None,
+            "unresolved_risks": [],
+            "human_triggers": [],
+        }
+    )
+
+    asyncio.run(
+        run_pm_reassessment(
+            router=router,
+            ddev=ddev,
+            workspace=root,
+            job_id="job-repair",
+            project_id="demo",
+            source_commit=source_commit,
+            profile="standard",
+            current_executor={"id": "developer-model"},
+            provider_state={},
+            work_order={
+                "id": "WO-1",
+                "out_of_scope": ["Third-party frontend libraries"],
+            },
+            baseline={"revision": "v1"},
+            trigger={
+                "signal": "changed_file_working_target_exceeded",
+                "used": 9,
+                "working_target": 8,
+                "emergency_limit": 16,
+                "protected_decision_flags": ["major_dependency_addition"],
+            },
+            diff={
+                "changed_file_count": 9,
+                "changed_files": ["frontend/package.json"],
+                "diff_stat": "1 file changed",
+                "diff_hash": "repair-diff",
+            },
+            verification={"passed": True},
+            review_summary={"verdict": "fail", "summary": "Third-party frontend libraries are out of scope."},
+            developer_report="Focused tests can use the existing stack.",
+            decision_context={},
+            max_diff_bytes=500000,
+            timeout_seconds=60,
+            adapter_builder=lambda *_args: adapter,
+        )
+    )
+
+    prompt = adapter.calls[0]["prompt"]
+    assert "removable implementation choice" in prompt
+    assert "Prefer request_repair or request_developer_response" in prompt
+    assert "human_necessity" in prompt
