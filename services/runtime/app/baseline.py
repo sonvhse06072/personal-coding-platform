@@ -10,6 +10,12 @@ from .config import project_baselines_doc
 
 
 RevisionStatus = Literal["draft", "approved", "superseded"]
+AuthorityClass = Literal[
+    "human_owner_protected",
+    "delegated_design_owner",
+    "mutable_execution",
+    "evidence_history",
+]
 _REVISION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$")
 _COMMIT_RE = re.compile(r"^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$")
 
@@ -42,6 +48,27 @@ class SourceReference(BaseModel):
         return normalized or None
 
 
+class BaselineAuthorityRule(BaseModel):
+    """Machine-readable authority classification for a repository path."""
+
+    path: str = Field(min_length=1, max_length=1000)
+    authority: AuthorityClass
+    note: str | None = Field(default=None, max_length=1000)
+
+    @field_validator("path")
+    @classmethod
+    def validate_repository_relative_path(cls, value: str) -> str:
+        return SourceReference(path=value).path
+
+    @field_validator("note")
+    @classmethod
+    def normalize_note(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
 class BaselineReferences(BaseModel):
     goals: list[SourceReference] = Field(min_length=1)
     non_goals: list[SourceReference] = Field(min_length=1)
@@ -56,6 +83,7 @@ class BaselineReferences(BaseModel):
 class ProjectRevisionDefinition(BaseModel):
     status: RevisionStatus
     source_commit: str = Field(min_length=40, max_length=64)
+    authority: list[BaselineAuthorityRule] = Field(default_factory=list)
     references: BaselineReferences
 
     @field_validator("source_commit")
@@ -65,6 +93,19 @@ class ProjectRevisionDefinition(BaseModel):
         if not _COMMIT_RE.fullmatch(normalized):
             raise ValueError("ProjectBaseline source_commit must be a full Git commit id")
         return normalized
+
+    @model_validator(mode="after")
+    def validate_authority_rules(self) -> "ProjectRevisionDefinition":
+        seen: dict[str, AuthorityClass] = {}
+        for rule in self.authority:
+            previous = seen.get(rule.path)
+            if previous is not None:
+                raise ValueError(
+                    f"ProjectBaseline authority path {rule.path!r} is duplicated "
+                    f"({previous!r}, {rule.authority!r})"
+                )
+            seen[rule.path] = rule.authority
+        return self
 
 
 class ProjectBaselineConfig(BaseModel):
@@ -110,6 +151,7 @@ class ProjectBaseline(BaseModel):
     revision: str
     status: Literal["approved"] = "approved"
     source_commit: str
+    authority: list[BaselineAuthorityRule] = Field(default_factory=list)
     references: BaselineReferences
 
 
@@ -153,5 +195,6 @@ def resolve_project_baseline(
         revision=revision,
         status="approved",
         source_commit=definition.source_commit,
+        authority=definition.authority,
         references=definition.references,
     )
