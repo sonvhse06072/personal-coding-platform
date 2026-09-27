@@ -585,7 +585,7 @@ class GitHubDelivery:
             if not merged:
                 return None
 
-            job_marker = f"- Job: \`{job_id}\`"
+            job_marker = f"- Job: `{job_id}`"
             candidates = [
                 raw for raw in merged if job_marker in str(raw.get("body") or "")
             ]
