@@ -141,7 +141,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-RUNTIME_VERSION = "1.0.62"
+RUNTIME_VERSION = "1.0.63"
 
 app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan=lifespan)
 app.include_router(pm_bridge_router)
