@@ -177,6 +177,8 @@ def test_role_specific_pinned_context_differs():
         "docs/project/constitution.md#6. Product Manager authority"
         not in developer_ids
     )
+    assert "AGENTS.md#Baseline authority preservation" in pm_ids
+    assert "AGENTS.md#Baseline authority preservation" in developer_ids
     assert pm_ids != developer_ids
 
 

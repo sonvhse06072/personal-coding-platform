@@ -106,8 +106,10 @@ When sources conflict, use the existing authority rules from `constitution.md` a
 4. live Runtime/GitHub state must be checked for time-sensitive execution facts;
 5. T3 is historical evidence and must not override a current T1/live fact;
 6. T4 is supporting evidence and must be interpreted in the state/time context in which it was produced.
+7. for PCP-managed external projects, the pinned approved ProjectBaseline revision/source commit is the authority boundary for project-frame documents; a newer repository HEAD may provide live implementation evidence but does not automatically advance approved authority;
+8. machine-readable baseline authority classes constrain interpretation: `mutable_execution` and `evidence_history` cannot override `human_owner_protected` or valid `delegated_design_owner` authority.
 
-A historical item that is semantically similar to a query is still historical.
+A historical item that is semantically similar to a query is still historical. A newer file revision is likewise not higher authority merely because it is newer.
 
 ## 4. Memory lifecycle
 

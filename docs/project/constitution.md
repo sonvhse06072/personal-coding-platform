@@ -49,6 +49,16 @@ When artifacts conflict, use this order:
 
 A lower-authority artifact may clarify a higher-authority artifact but must not silently redefine it.
 
+### Approved baseline immutability
+
+For a PCP-managed project, the approved ProjectBaseline revision is an immutable authority snapshot identified by an exact source commit. A newer repository `HEAD` does not by itself amend the approved project frame.
+
+Advancing protected project authority requires a reviewed successor baseline revision. An already-approved revision must not be rewritten in place to point at newer source material or to change the authority class of protected documents. The previous revision remains auditable.
+
+ProjectBaseline metadata may classify source paths by authority. Changes classified as `human_owner_protected` require explicit Human Owner approval before PM merge. Delegated authority such as day-to-day design ownership remains valid only inside its approved delegation and does not extend into product scope, business rules, architecture, security, governance, production, destructive-data, or material-budget authority.
+
+Mutable execution state and historical evidence may describe newer repository state, but neither can silently promote that state into approved project-frame authority.
+
 ## 5. Human Owner authority
 
 The human owner has final authority over:

@@ -64,6 +64,7 @@ ROLE_PREFERENCES = {
 T0_HEADINGS = {
     "product_manager": {
         "Authority order",
+        "Baseline authority preservation",
         "Core invariants",
         "Change discipline",
         "Mandatory documentation continuity",
@@ -77,6 +78,7 @@ T0_HEADINGS = {
     },
     "developer": {
         "Authority order",
+        "Baseline authority preservation",
         "Core invariants",
         "Change discipline",
         "Mandatory documentation continuity",
@@ -89,6 +91,7 @@ T0_HEADINGS = {
     },
     "reviewer": {
         "Authority order",
+        "Baseline authority preservation",
         "Core invariants",
         "Change discipline",
         "4. Authority hierarchy",
@@ -100,6 +103,7 @@ T0_HEADINGS = {
     },
     "debugger": {
         "Authority order",
+        "Baseline authority preservation",
         "Core invariants",
         "Change discipline",
         "4. Authority hierarchy",
@@ -110,6 +114,7 @@ T0_HEADINGS = {
     },
     "specialist": {
         "Authority order",
+        "Baseline authority preservation",
         "Core invariants",
         "Change discipline",
         "4. Authority hierarchy",
@@ -118,6 +123,70 @@ T0_HEADINGS = {
         "10. Verification and delivery invariants",
         "12. Change control",
     },
+}
+
+T0_PRIORITY = {
+    "product_manager": (
+        "Authority order",
+        "Baseline authority preservation",
+        "4. Authority hierarchy",
+        "5. Human Owner authority",
+        "6. Product Manager authority",
+        "Core invariants",
+        "Change discipline",
+        "Mandatory documentation continuity",
+        "9. Trust and security invariants",
+        "10. Verification and delivery invariants",
+        "12. Change control",
+        "13. Practicality rule",
+    ),
+    "developer": (
+        "Authority order",
+        "Baseline authority preservation",
+        "4. Authority hierarchy",
+        "5. Human Owner authority",
+        "8. Agent-role principles",
+        "Core invariants",
+        "Change discipline",
+        "Mandatory documentation continuity",
+        "9. Trust and security invariants",
+        "10. Verification and delivery invariants",
+        "12. Change control",
+    ),
+    "reviewer": (
+        "Authority order",
+        "Baseline authority preservation",
+        "4. Authority hierarchy",
+        "5. Human Owner authority",
+        "8. Agent-role principles",
+        "Core invariants",
+        "Change discipline",
+        "9. Trust and security invariants",
+        "10. Verification and delivery invariants",
+        "12. Change control",
+    ),
+    "debugger": (
+        "Authority order",
+        "Baseline authority preservation",
+        "4. Authority hierarchy",
+        "5. Human Owner authority",
+        "Core invariants",
+        "Change discipline",
+        "9. Trust and security invariants",
+        "10. Verification and delivery invariants",
+        "12. Change control",
+    ),
+    "specialist": (
+        "Authority order",
+        "Baseline authority preservation",
+        "4. Authority hierarchy",
+        "5. Human Owner authority",
+        "Core invariants",
+        "Change discipline",
+        "9. Trust and security invariants",
+        "10. Verification and delivery invariants",
+        "12. Change control",
+    ),
 }
 
 CURRENT_INTENT_TERMS = {
@@ -336,11 +405,24 @@ def _score_section(
 
 def _t0_sections(repo_root: Path, role: str) -> list[Section]:
     allowed = T0_HEADINGS.get(role) or T0_HEADINGS["specialist"]
+    priority = T0_PRIORITY.get(role) or T0_PRIORITY["specialist"]
+    priority_rank = {heading: index for index, heading in enumerate(priority)}
     candidates: list[Section] = []
     for source in ("AGENTS.md", "docs/project/constitution.md"):
         for section in _markdown_sections(source, "T0", _read(repo_root, source)):
             if section.heading in allowed:
                 candidates.append(section)
+
+    # T0 is a bounded pinned budget. Role-critical authority must be selected
+    # before lower-priority governance prose so adding documentation cannot
+    # silently evict the authority section that governs the active role.
+    candidates.sort(
+        key=lambda section: (
+            priority_rank.get(section.heading, len(priority_rank)),
+            section.source,
+            section.ordinal,
+        )
+    )
     return candidates
 
 
