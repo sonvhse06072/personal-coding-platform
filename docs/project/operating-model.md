@@ -409,6 +409,7 @@ PM should normally run when:
 A first lint failure, test typo, ordinary bounded retry, healthy mechanical budget headroom, or non-material provider recovery remains Runtime/Developer responsibility. A semantic working-target crossing such as changed-file scope growth should invoke PM with a bounded evidence pack. PM may approve the exact diff, request a developer explanation/repair, or surface a Human Owner decision only when PM authority is insufficient.
 
 A removable implementation choice that violates the approved WorkOrder or an explicit out-of-scope rule is ordinarily resolved by PM through bounded developer dialogue or repair/revert. The existence of a protected-path or dependency signal does not by itself require Human Owner attention. PM should escalate only when evidence shows the protected/material change is genuinely necessary and the objective cannot be met by an in-scope repair. If Human Owner rejects a PM-raised boundary, the same job should return to bounded repair inside the current baseline rather than treating rejection as a terminal project stop.
+Protected execution signals discovered from the current diff must be semantically reviewed by PM before generic Router reassessment may surface a Human decision. If deterministic verification is still failing, ordinary bounded repair gets the first turn and protected flags remain durable for the next successful verification. Router must not use a protected path/dependency flag to bypass the PM repair-first gate.
 
 ## 16. Human Owner diagnostic-block convention
 
