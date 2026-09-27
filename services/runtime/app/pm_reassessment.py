@@ -1,0 +1,271 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from .adapters import build_adapter
+from .repo import diff_state
+
+
+PMReassessmentAction = Literal[
+    "approve_continue",
+    "request_developer_response",
+    "request_repair",
+    "human_decision",
+    "block",
+]
+
+
+class PMReassessmentDecision(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    action: PMReassessmentAction
+    summary: str = Field(min_length=1, max_length=4000)
+    developer_message: str | None = Field(default=None, max_length=4000)
+    unresolved_risks: list[str] = Field(default_factory=list, max_length=12)
+    human_triggers: list[str] = Field(default_factory=list, max_length=12)
+
+    @field_validator("summary")
+    @classmethod
+    def normalize_summary(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("PM reassessment summary must not be blank")
+        return value
+
+    @field_validator("developer_message")
+    @classmethod
+    def normalize_developer_message(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        return value or None
+
+    @field_validator("unresolved_risks", "human_triggers")
+    @classmethod
+    def normalize_lists(cls, values: list[str]) -> list[str]:
+        result: list[str] = []
+        for raw in values:
+            value = str(raw).strip()
+            if value and value not in result:
+                result.append(value)
+        return result
+
+    @model_validator(mode="after")
+    def validate_action_shape(self) -> "PMReassessmentDecision":
+        if self.action in {"request_developer_response", "request_repair"} and not self.developer_message:
+            raise ValueError(f"{self.action} requires developer_message")
+        if self.action == "human_decision" and not self.human_triggers:
+            raise ValueError("human_decision requires at least one human trigger")
+        if self.action != "human_decision" and self.human_triggers:
+            raise ValueError("human_triggers are valid only for human_decision")
+        return self
+
+
+def _compact(value: Any, limit: int) -> str:
+    text = json.dumps(value, ensure_ascii=False, sort_keys=True, default=str)
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 20)] + "...<truncated>"
+
+
+def changed_file_reassessment_state(
+    strategy: dict[str, Any],
+    *,
+    changed_files: int,
+) -> dict[str, int] | None:
+    """Return a PM-reviewable adaptive changed-file working-target overage."""
+
+    if str(strategy.get("budget_mode") or "") != "adaptive":
+        return None
+    adaptive = dict(strategy.get("adaptive_budget") or {})
+    dimensions = dict(adaptive.get("dimensions") or {})
+    envelope = dict(dimensions.get("max_changed_files") or {})
+    try:
+        working_target = int(float(envelope["working_target"]))
+        emergency_limit = int(float(envelope["emergency_limit"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+    if changed_files <= working_target or changed_files > emergency_limit:
+        return None
+    return {
+        "used": int(changed_files),
+        "working_target": working_target,
+        "emergency_limit": emergency_limit,
+    }
+
+
+def has_pm_changed_file_authorization(
+    checkpoint: dict[str, Any],
+    *,
+    diff_hash: str,
+    used: int,
+) -> bool:
+    for raw in reversed(list(checkpoint.get("pm_reassessment_authorizations") or [])):
+        item = dict(raw) if isinstance(raw, dict) else {}
+        if item.get("signal") != "changed_file_working_target_exceeded":
+            continue
+        if str(item.get("diff_hash") or "") != diff_hash:
+            continue
+        try:
+            approved_used = int(item.get("used") or 0)
+            emergency = int(item.get("emergency_limit") or 0)
+        except (TypeError, ValueError):
+            continue
+        return used <= approved_used <= emergency
+    return False
+
+
+def _prompt(
+    *,
+    work_order: dict[str, Any],
+    baseline: dict[str, Any],
+    trigger: dict[str, Any],
+    diff: dict[str, Any],
+    verification: dict[str, Any],
+    review_summary: dict[str, Any] | None,
+    developer_report: str | None,
+) -> str:
+    schema = PMReassessmentDecision.model_json_schema()
+    evidence = {
+        "trigger": trigger,
+        "diff": {
+            "changed_file_count": diff.get("changed_file_count"),
+            "changed_files": list(diff.get("changed_files") or [])[:80],
+            "diff_stat": str(diff.get("diff_stat") or "")[:6000],
+            "diff_hash": diff.get("diff_hash"),
+        },
+        "verification": verification,
+        "review": review_summary or {},
+        "developer_report": (developer_report or "")[-6000:],
+    }
+    return "\n".join(
+        [
+            "You are the Product Manager performing a bounded Runtime reassessment.",
+            "This is an engineering-governance checkpoint, not implementation. Work read-only.",
+            "Do not edit files, run write operations, commit, push, merge, deploy, or amend governance.",
+            "The approved WorkOrder and pinned ProjectBaseline are authoritative.",
+            "The Primary Developer has crossed a semantic working target. File count alone is not proof of scope drift.",
+            "Approve continuation only when the evidence shows the change remains inside the approved WorkOrder and no Human Owner protected/material decision is required.",
+            "If evidence is insufficient, ask the developer one concrete bounded question. If implementation should change, request a bounded repair.",
+            "Escalate to Human Owner only for a decision the PM lacks authority to make: product/scope/non-goal, architecture invariant, major dependency/service, security/auth/trust, destructive data, production, protected governance/baseline authority, or material resource expansion.",
+            "A Human Owner is not a substitute for ordinary engineering judgment.",
+            "Return EXACTLY one JSON object and no Markdown/prose outside it.",
+            f"WORK_ORDER: {_compact(work_order, 12000)}",
+            f"PROJECT_BASELINE: {_compact(baseline, 12000)}",
+            f"EVIDENCE: {_compact(evidence, 18000)}",
+            "OUTPUT_JSON_SCHEMA:",
+            json.dumps(schema, ensure_ascii=False, sort_keys=True),
+        ]
+    )
+
+
+def _parse(output: str) -> PMReassessmentDecision:
+    text = (output or "").strip()
+    if not text:
+        raise ValueError("Product Manager reassessment returned empty output")
+    if text.startswith("```"):
+        lines = text.splitlines()
+        if len(lines) < 3 or not lines[-1].strip().startswith("```"):
+            raise ValueError("Product Manager reassessment returned an unterminated fenced response")
+        text = "\n".join(lines[1:-1]).strip()
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Product Manager reassessment output must be one JSON object") from exc
+    if not isinstance(payload, dict):
+        raise ValueError("Product Manager reassessment output must be a JSON object")
+    return PMReassessmentDecision.model_validate(payload)
+
+
+async def run_pm_reassessment(
+    *,
+    router: Any,
+    workspace: Path,
+    job_id: str,
+    project_id: str,
+    profile: str,
+    current_executor: dict[str, Any],
+    provider_state: dict[str, Any],
+    work_order: dict[str, Any],
+    baseline: dict[str, Any],
+    trigger: dict[str, Any],
+    diff: dict[str, Any],
+    verification: dict[str, Any],
+    review_summary: dict[str, Any] | None,
+    developer_report: str | None,
+    max_diff_bytes: int,
+    timeout_seconds: int,
+    adapter_builder=build_adapter,
+) -> dict[str, Any]:
+    pm_profile = profile if profile in {"complex", "critical"} else "standard"
+    current_model_id = str(current_executor.get("id") or "").strip()
+    staffing = await router.staff(
+        {
+            "request_id": f"{job_id}:pm-reassess",
+            "project_id": project_id,
+            "role": "product_manager",
+            "profile": pm_profile,
+            "semantic": {
+                "ambiguity": 45,
+                "architecture_impact": 35,
+                "verification_difficulty": 35,
+                "risk": 45,
+                "context_requirement": 75,
+                "novelty": 30,
+                "reasoning_requirement": 85,
+            },
+            "provider_state": provider_state,
+            "exclude_model_ids": [current_model_id] if current_model_id else [],
+        }
+    )
+    choice = dict(staffing.get("choice") or {})
+    if not choice.get("id"):
+        raise RuntimeError("PM reassessment staffing returned no model")
+    if current_model_id and choice.get("id") == current_model_id:
+        raise RuntimeError("PM reassessment must use a different model from the Primary Developer")
+
+    before = diff_state(workspace, max_diff_bytes)
+    run = await adapter_builder(
+        str(choice["adapter"]),
+        str(choice["model"]),
+        choice.get("reasoning_effort"),
+    ).run(
+        workspace=workspace,
+        prompt=_prompt(
+            work_order=work_order,
+            baseline=baseline,
+            trigger=trigger,
+            diff=diff,
+            verification=verification,
+            review_summary=review_summary,
+            developer_report=developer_report,
+        ),
+        mode="evaluate",
+        timeout=timeout_seconds,
+    )
+    after = diff_state(workspace, max_diff_bytes)
+    if (
+        before.get("diff_hash") != after.get("diff_hash")
+        or before.get("changed_files") != after.get("changed_files")
+    ):
+        raise RuntimeError("Product Manager reassessment modified the developer workspace")
+    if run.provider_failed:
+        raise RuntimeError(
+            f"Product Manager reassessment provider failure: {run.failure_kind or 'unknown'}"
+        )
+    if run.returncode != 0:
+        raise RuntimeError("Product Manager reassessment model failed")
+
+    decision = _parse(run.output)
+    return {
+        "decision": decision.model_dump(mode="json"),
+        "staffing": staffing,
+        "usage": run.usage,
+        "model_id": str(choice["id"]),
+        "provider": str(choice.get("provider") or ""),
+    }
