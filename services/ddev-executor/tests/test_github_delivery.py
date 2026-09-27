@@ -805,7 +805,16 @@ def test_live_shaped_historical_runnerless_failures_are_audited_after_trusted_su
         assert job["steps"] == []
 
 
-def _merged_delivery_fixture(monkeypatch, *, head, pulls=None, ci_state="success", source_ok=True, head_ok=True):
+def _merged_delivery_fixture(
+    monkeypatch,
+    *,
+    head,
+    pulls=None,
+    ci_state="success",
+    source_ok=True,
+    head_ok=True,
+    source_status=200,
+):
     expected = "b" * 40
     source = "a" * 40
     raw_pulls = pulls if pulls is not None else [{
@@ -828,14 +837,28 @@ def _merged_delivery_fixture(monkeypatch, *, head, pulls=None, ci_state="success
             assert request.url.params["base"] == "main"
             return httpx.Response(200, json=raw_pulls)
         if path == f"/repos/acme/demo/compare/{source}...{expected}":
+            if source_status != 200:
+                return httpx.Response(source_status, json={"message": "Not Found"})
             return httpx.Response(200, json={
                 "status": "ahead" if source_ok else "diverged",
                 "merge_base_commit": {"sha": source if source_ok else "f" * 40},
             })
-        if path == f"/repos/acme/demo/compare/{expected}...{head}":
+        if path.startswith(f"/repos/acme/demo/compare/{expected}..."):
+            compared_head = path.rsplit("...", 1)[1]
+            relation_ok = (
+                head_ok.get(compared_head, True)
+                if isinstance(head_ok, dict)
+                else head_ok
+            )
             return httpx.Response(200, json={
-                "status": "identical" if head == expected and head_ok else ("ahead" if head_ok else "diverged"),
-                "merge_base_commit": {"sha": expected if head_ok else "f" * 40},
+                "status": (
+                    "identical"
+                    if compared_head == expected and relation_ok
+                    else ("ahead" if relation_ok else "diverged")
+                ),
+                "merge_base_commit": {
+                    "sha": expected if relation_ok else "f" * 40
+                },
             })
         raise AssertionError(f"unexpected GitHub request: {request.url}")
 
@@ -896,6 +919,70 @@ def test_reconcile_merged_delivery_accepts_green_descendant_head(monkeypatch):
     assert result is not None
     assert result["head"] == head
     assert result["ancestry"]["accepted_to_head"]["merge_base"] == expected
+
+
+def test_reconcile_merged_delivery_selects_unique_qualifying_candidate_from_history(monkeypatch):
+    old_head = "c" * 40
+    current_head = "d" * 40
+
+    def merged_pull(number, head, merged_at):
+        return {
+            "number": number,
+            "state": "closed",
+            "merged": True,
+            "merged_at": merged_at,
+            "merge_commit_sha": "e" * 40,
+            "html_url": f"https://github.com/acme/demo/pull/{number}",
+            "body": "Automated coding-platform delivery.\n\n- Job: `job12345`",
+            "head": {
+                "sha": head,
+                "ref": "ai/job12345",
+                "repo": {"full_name": "acme/demo"},
+            },
+            "base": {"ref": "main"},
+        }
+
+    delivery, source, expected = _merged_delivery_fixture(
+        monkeypatch,
+        head=current_head,
+        pulls=[
+            merged_pull(27, old_head, "2026-09-27T17:03:22Z"),
+            merged_pull(28, current_head, "2026-09-27T18:00:00Z"),
+        ],
+        head_ok={old_head: False, current_head: True},
+    )
+
+    result = delivery.reconcile_merged_delivery(
+        repository="acme/demo",
+        job_id="job12345",
+        branch="ai/job12345",
+        base_branch="main",
+        source_commit=source,
+        expected_commit=expected,
+    )
+
+    assert result is not None
+    assert result["number"] == 28
+    assert result["head"] == current_head
+    assert result["ancestry"]["accepted_to_head"]["merge_base"] == expected
+
+
+def test_reconcile_merged_delivery_fails_closed_when_accepted_commit_is_not_on_github(monkeypatch):
+    delivery, source, expected = _merged_delivery_fixture(
+        monkeypatch,
+        head="d" * 40,
+        source_status=404,
+    )
+
+    with pytest.raises(RuntimeError, match="not available in the configured GitHub repository"):
+        delivery.reconcile_merged_delivery(
+            repository="acme/demo",
+            job_id="job12345",
+            branch="ai/job12345",
+            base_branch="main",
+            source_commit=source,
+            expected_commit=expected,
+        )
 
 
 def test_reconcile_merged_delivery_returns_none_when_no_merged_candidate(monkeypatch):
@@ -972,7 +1059,7 @@ def test_reconcile_merged_delivery_fails_closed_on_ambiguous_merged_history(monk
         pulls=[raw, {**raw, "number": 28}],
     )
 
-    with pytest.raises(RuntimeError, match="Ambiguous merged pull-request history"):
+    with pytest.raises(RuntimeError, match="Ambiguous qualifying merged pull-request history"):
         delivery.reconcile_merged_delivery(
             repository="acme/demo",
             job_id="job12345",
