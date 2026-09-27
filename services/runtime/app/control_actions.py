@@ -279,7 +279,17 @@ class ControlActionService:
             for item in reassess.get("signals") or []
             if str(item)
         }
-        if signals != {"scope_expansion"}:
+        # Adaptive estimate/headroom signals are informational telemetry. They do
+        # not represent an abnormal execution condition and must not mask an
+        # otherwise recoverable legacy changed-file scope stop. Emergency
+        # threshold signals remain material and therefore fail closed.
+        material_signals = {
+            signal
+            for signal in signals
+            if not signal.startswith("budget_headroom_active:")
+            and not signal.startswith("budget_estimate_exceeded:")
+        }
+        if material_signals != {"scope_expansion"}:
             return False
 
         route = dict(job.get("route") or {})
