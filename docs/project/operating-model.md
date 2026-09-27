@@ -408,6 +408,8 @@ PM should normally run when:
 
 A first lint failure, test typo, ordinary bounded retry, healthy mechanical budget headroom, or non-material provider recovery remains Runtime/Developer responsibility. A semantic working-target crossing such as changed-file scope growth should invoke PM with a bounded evidence pack. PM may approve the exact diff, request a developer explanation/repair, or surface a Human Owner decision only when PM authority is insufficient.
 
+A removable implementation choice that violates the approved WorkOrder or an explicit out-of-scope rule is ordinarily resolved by PM through bounded developer dialogue or repair/revert. The existence of a protected-path or dependency signal does not by itself require Human Owner attention. PM should escalate only when evidence shows the protected/material change is genuinely necessary and the objective cannot be met by an in-scope repair. If Human Owner rejects a PM-raised boundary, the same job should return to bounded repair inside the current baseline rather than treating rejection as a terminal project stop.
+
 ## 16. Human Owner diagnostic-block convention
 
 Normal ChatGPT/operator collaboration continues to use ordinary terminal-safe read-only blocks. The existence of the planned Telegram terminal operations gateway does not change the default response format.
