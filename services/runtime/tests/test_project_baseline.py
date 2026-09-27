@@ -27,10 +27,15 @@ def references() -> dict:
     }
 
 
-def revision(status: str = "approved", commit: str = "a" * 40) -> dict:
+def revision(
+    status: str = "approved",
+    commit: str = "a" * 40,
+    authority: list[dict] | None = None,
+) -> dict:
     return {
         "status": status,
         "source_commit": commit,
+        "authority": authority or [],
         "references": references(),
     }
 
@@ -100,6 +105,89 @@ def test_active_approved_revision_is_resolved_and_pinned(monkeypatch, tmp_path: 
     assert baseline.status == "approved"
     assert baseline.source_commit == "2" * 40
     assert baseline.references.requirements[0].path == "docs/project/requirements.md"
+
+
+def test_baseline_authority_rules_are_resolved_and_persisted(monkeypatch, tmp_path: Path) -> None:
+    authority = [
+        {
+            "path": "docs/project/constitution.md",
+            "authority": "human_owner_protected",
+            "note": "Project frame",
+        },
+        {
+            "path": "docs/design.md",
+            "authority": "delegated_design_owner",
+        },
+    ]
+    configure(
+        monkeypatch,
+        tmp_path,
+        baselines={
+            "version": 1,
+            "projects": {
+                "demo": {
+                    "active_revision": "v1",
+                    "revisions": {
+                        "v1": revision("approved", "d" * 40, authority=authority),
+                    },
+                }
+            },
+        },
+    )
+
+    baseline = resolve_project_baseline("demo")
+    assert baseline is not None
+    assert [rule.model_dump(mode="json") for rule in baseline.authority] == [
+        {
+            "path": "docs/project/constitution.md",
+            "authority": "human_owner_protected",
+            "note": "Project frame",
+        },
+        {
+            "path": "docs/design.md",
+            "authority": "delegated_design_owner",
+            "note": None,
+        },
+    ]
+
+    storage = CaptureStorage()
+    RuntimeEngine(storage).create_job(job_payload())
+    assert storage.created is not None
+    assert storage.created["checkpoint"]["project_baseline"]["authority"][0]["authority"] == (
+        "human_owner_protected"
+    )
+
+
+def test_duplicate_authority_path_is_rejected(monkeypatch, tmp_path: Path) -> None:
+    configure(
+        monkeypatch,
+        tmp_path,
+        baselines={
+            "version": 1,
+            "projects": {
+                "demo": {
+                    "active_revision": "v1",
+                    "revisions": {
+                        "v1": revision(
+                            authority=[
+                                {
+                                    "path": "docs/project/constitution.md",
+                                    "authority": "human_owner_protected",
+                                },
+                                {
+                                    "path": "docs/project/constitution.md",
+                                    "authority": "mutable_execution",
+                                },
+                            ]
+                        ),
+                    },
+                }
+            },
+        },
+    )
+
+    with pytest.raises(ValidationError, match="authority path .* is duplicated"):
+        resolve_project_baseline("demo")
 
 
 def test_explicit_approved_non_active_revision_can_be_resolved(monkeypatch, tmp_path: Path) -> None:
