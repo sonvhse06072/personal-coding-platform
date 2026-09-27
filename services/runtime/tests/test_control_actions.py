@@ -718,6 +718,100 @@ def test_changed_file_scope_reassessment_advisory_exposes_safe_reason_and_recove
     assert changed["limit"] == 8
 
 
+def test_changed_file_scope_reassessment_ignores_adaptive_headroom_telemetry():
+    job = base_job(reason="reassessment_stopped", last_failure="scope target exceeded")
+    job["route"]["strategy"].update({
+        "budget_mode": "adaptive",
+        "budget": {
+            **job["route"]["strategy"]["budget"],
+            "max_changed_files": 8,
+        },
+    })
+    job["progress"].update({
+        "changed_files": 9,
+        "unexpected_scope": True,
+        "important_decision_flags": [],
+    })
+    job["result"].update({
+        "reassess": {
+            "action": "stop",
+            "reason": "Circuit breaker: abnormal execution signal without a valid escalation path",
+            "signals": [
+                "budget_headroom_active:max_test_runs",
+                "budget_headroom_active:max_wall_time_minutes",
+                "scope_expansion",
+            ],
+        }
+    })
+    controls, _ = service(job)
+
+    advisory = controls.blocked_advisory(row(), job)
+
+    assert advisory["action_specs"][0]["action_type"] == "pm_scope_reassess"
+
+
+def test_changed_file_scope_reassessment_ignores_adaptive_estimate_telemetry():
+    job = base_job(reason="reassessment_stopped", last_failure="scope target exceeded")
+    job["route"]["strategy"].update({
+        "budget_mode": "adaptive",
+        "budget": {
+            **job["route"]["strategy"]["budget"],
+            "max_changed_files": 8,
+        },
+    })
+    job["progress"].update({
+        "changed_files": 9,
+        "unexpected_scope": True,
+        "important_decision_flags": [],
+    })
+    job["result"].update({
+        "reassess": {
+            "action": "stop",
+            "reason": "Circuit breaker",
+            "signals": [
+                "budget_estimate_exceeded:max_model_calls",
+                "scope_expansion",
+            ],
+        }
+    })
+    controls, _ = service(job)
+
+    advisory = controls.blocked_advisory(row(), job)
+
+    assert advisory["action_specs"][0]["action_type"] == "pm_scope_reassess"
+
+
+def test_changed_file_scope_reassessment_keeps_emergency_budget_signal_blocking():
+    job = base_job(reason="reassessment_stopped", last_failure="scope target exceeded")
+    job["route"]["strategy"].update({
+        "budget_mode": "adaptive",
+        "budget": {
+            **job["route"]["strategy"]["budget"],
+            "max_changed_files": 8,
+        },
+    })
+    job["progress"].update({
+        "changed_files": 9,
+        "unexpected_scope": True,
+        "important_decision_flags": [],
+    })
+    job["result"].update({
+        "reassess": {
+            "action": "stop",
+            "reason": "Circuit breaker",
+            "signals": [
+                "budget_emergency_threshold_reached:max_wall_time_minutes",
+                "scope_expansion",
+            ],
+        }
+    })
+    controls, _ = service(job)
+
+    advisory = controls.blocked_advisory(row(), job)
+
+    assert "pm_scope_reassess" not in action_types(advisory)
+
+
 def test_changed_file_scope_reassessment_recovery_is_not_offered_for_other_anomalies():
     job = base_job(reason="reassessment_stopped", last_failure="scope plus no progress")
     job["route"]["strategy"].update({
