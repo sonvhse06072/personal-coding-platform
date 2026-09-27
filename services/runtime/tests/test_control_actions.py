@@ -570,6 +570,27 @@ class ActionConnection:
             }
             self.storage.actions[action_id] = row
             return ActionResult(row)
+        if (
+            normalized.startswith("UPDATE cp_control_actions SET status='cancelled'")
+            and "WHERE status='pending' AND plan_id=" in normalized
+            and "FROM cp_plan_work_orders" not in normalized
+        ):
+            updated_at, plan_id, work_order_id, *rest = params
+            except_generation = rest[0] if rest else None
+            changed = 0
+            for action in self.storage.actions.values():
+                if action.get("status") != "pending":
+                    continue
+                if action.get("plan_id") != plan_id or action.get("work_order_id") != work_order_id:
+                    continue
+                if (
+                    except_generation is not None
+                    and action.get("generation_fingerprint") == except_generation
+                ):
+                    continue
+                action.update(status="cancelled", updated_at=updated_at)
+                changed += 1
+            return ActionResult(rowcount=changed)
         if "SET status='cancelled'" in normalized and "FROM cp_plan_work_orders" in normalized:
             changed = 0
             if (
