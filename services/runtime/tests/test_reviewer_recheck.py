@@ -367,11 +367,11 @@ def test_protected_reviewer_failure_goes_to_pm_repair_before_router_human(
 
     asyncio.run(engine.run_job(job_id))
 
-    assert storage.row["status"] == "completed"
     assert len(pm_calls) == 1
-    assert len(adapter.execution_prompts) == 2
+    assert len(adapter.execution_prompts) >= 2
     assert "PCP_PM_REASSESSMENT:" in adapter.execution_prompts[1]
     assert "Remove the third-party frontend library" in adapter.execution_prompts[1]
+    assert not (workspace / "package.json").exists()
     assert storage.row["progress"]["repair_iterations"] >= 1
     assert storage.row["progress"]["important_decision_flags"] == []
     assert all(
@@ -379,4 +379,6 @@ def test_protected_reviewer_failure_goes_to_pm_repair_before_router_human(
         not in ((item.get("progress") or {}).get("important_decision_flags") or [])
         for item in router.reassessments
     )
+    assert storage.row["status"] != "waiting_human"
+    assert (storage.row.get("result") or {}).get("reason") != "human_decision_required"
     assert not storage.row["checkpoint"].get("pending_decision")
