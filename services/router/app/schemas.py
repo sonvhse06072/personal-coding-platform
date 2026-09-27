@@ -83,6 +83,7 @@ class RoutingRequest(BaseModel):
     task: TaskDescriptor
     repo: RepoAnalysis = Field(default_factory=RepoAnalysis)
     provider_state: dict[str, ProviderState] = Field(default_factory=dict)
+    exclude_model_ids: list[str] = Field(default_factory=list, max_length=20)
     privacy: PrivacyPolicy | None = None
     calibration: ObservedCalibration | None = None
 
