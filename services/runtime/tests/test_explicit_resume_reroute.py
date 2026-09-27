@@ -211,3 +211,135 @@ def test_reroute_failure_leaves_blocked_route_and_progress_unchanged() -> None:
     assert current["route"] == original["route"]
     assert current["progress"] == original["progress"]
     assert engine.queue.empty()
+
+
+def changed_file_recovery_route(*, working: int = 8, emergency: int = 16) -> dict:
+    route = fresh_route()
+    route["strategy"].update({
+        "budget_mode": "adaptive",
+        "budget": {"max_changed_files": emergency},
+        "adaptive_budget": {
+            "enabled": True,
+            "effort_pressure": 0.5,
+            "dimensions": {
+                "max_changed_files": {
+                    "estimate": 6,
+                    "working_target": working,
+                    "emergency_limit": emergency,
+                }
+            },
+        },
+    })
+    return route
+
+
+def test_changed_file_scope_recovery_refreshes_route_and_preserves_same_job():
+    original = blocked_row()
+    original["progress"].update({
+        "changed_files": 10,
+        "unexpected_scope": True,
+        "important_decision_flags": [],
+    })
+    original["result"] = {
+        "reason": "reassessment_stopped",
+        "diff": {
+            "changed_file_count": 10,
+            "changed_files": [f"frontend/file-{i}.tsx" for i in range(10)],
+        },
+        "reassess": {
+            "action": "stop",
+            "reason": "Circuit breaker: abnormal execution signal without a valid escalation path",
+            "signals": ["scope_expansion"],
+        },
+    }
+    storage = Storage(original)
+    engine = RuntimeEngine(storage)
+    engine.router = Router(changed_file_recovery_route())
+
+    updated = asyncio.run(
+        engine.resume(
+            "job-resume",
+            reroute=True,
+            _require_changed_file_headroom=True,
+        )
+    )
+
+    assert updated["status"] == "queued"
+    assert updated["progress"] == original["progress"]
+    assert updated["workspace"] == original["workspace"]
+    assert updated["checkpoint"]["work_order"] == original["checkpoint"]["work_order"]
+    assert updated["route"]["strategy"]["budget"]["max_changed_files"] == 16
+    assert updated["checkpoint"]["route_history"][-1]["reason"] == (
+        "changed_file_scope_policy_refresh"
+    )
+    assert engine.queue.get_nowait() == "job-resume"
+
+
+def test_changed_file_scope_recovery_fails_closed_above_fresh_emergency_limit():
+    original = blocked_row()
+    original["progress"].update({
+        "changed_files": 17,
+        "unexpected_scope": True,
+        "important_decision_flags": [],
+    })
+    original["result"] = {
+        "reason": "reassessment_stopped",
+        "diff": {
+            "changed_file_count": 17,
+            "changed_files": [f"frontend/file-{i}.tsx" for i in range(17)],
+        },
+        "reassess": {"action": "stop", "signals": ["scope_expansion"]},
+    }
+    storage = Storage(original)
+    engine = RuntimeEngine(storage)
+    engine.router = Router(changed_file_recovery_route())
+
+    with pytest.raises(RuntimeError, match="fresh emergency ceiling"):
+        asyncio.run(
+            engine.resume(
+                "job-resume",
+                reroute=True,
+                _require_changed_file_headroom=True,
+            )
+        )
+
+    current = storage.get("job-resume")
+    assert current["status"] == "blocked"
+    assert current["route"] == original["route"]
+    assert current["progress"] == original["progress"]
+    assert engine.queue.empty()
+
+
+def test_changed_file_scope_recovery_fails_closed_on_sensitive_changed_path():
+    original = blocked_row()
+    original["progress"].update({
+        "changed_files": 9,
+        "unexpected_scope": True,
+        "important_decision_flags": [],
+    })
+    original["result"] = {
+        "reason": "reassessment_stopped",
+        "diff": {
+            "changed_file_count": 9,
+            "changed_files": [
+                "frontend/component.tsx",
+                "config/routing-policy.yml",
+            ],
+        },
+        "reassess": {"action": "stop", "signals": ["scope_expansion"]},
+    }
+    storage = Storage(original)
+    engine = RuntimeEngine(storage)
+    engine.router = Router(changed_file_recovery_route())
+
+    with pytest.raises(RuntimeError, match="protected changed-path boundary"):
+        asyncio.run(
+            engine.resume(
+                "job-resume",
+                reroute=True,
+                _require_changed_file_headroom=True,
+            )
+        )
+
+    assert storage.get("job-resume")["status"] == "blocked"
+    assert engine.queue.empty()
