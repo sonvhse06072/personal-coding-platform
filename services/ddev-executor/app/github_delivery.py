@@ -551,6 +551,7 @@ class GitHubDelivery:
         self,
         *,
         repository: str,
+        job_id: str,
         branch: str,
         base_branch: str,
         source_commit: str,
@@ -589,6 +590,10 @@ class GitHubDelivery:
                 )
 
             raw = candidates[0]
+            if f"- Job: \`{job_id}\`" not in str(raw.get("body") or ""):
+                raise RuntimeError(
+                    "Merged pull request is not bound to the preserved Runtime job"
+                )
             head = dict(raw.get("head") or {})
             base = dict(raw.get("base") or {})
             head_repo = str(((head.get("repo") or {}).get("full_name")) or "")
