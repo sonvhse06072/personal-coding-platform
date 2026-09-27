@@ -239,3 +239,143 @@ def test_unresolved_reviewer_finding_still_triggers_repeated_failure_circuit_bre
     assert len(fingerprints) == 2
     assert fingerprints[0] == fingerprints[1]
     assert len(router.reassessments) == 2
+
+
+class ProtectedBoundaryRouter(AntiLoopRouter):
+    async def reassess(self, payload: dict) -> dict:
+        self.reassessments.append(deepcopy(payload))
+        progress = payload["progress"]
+        if "major_dependency_addition" in (progress.get("important_decision_flags") or []):
+            return {
+                "action": "human_decision",
+                "reason": "Protected dependency signal",
+                "signals": ["major_dependency_addition"],
+                "human_decision": {
+                    "required": True,
+                    "triggers": ["major_dependency_addition"],
+                    "reason": "Execution discovered an important decision boundary.",
+                },
+            }
+        if progress.get("required_checks_passed"):
+            return {"action": "complete", "reason": "All required checks passed", "signals": []}
+        return {"action": "continue", "reason": "Bounded repair remains available", "signals": []}
+
+
+class ProtectedRepairAdapter:
+    def __init__(self, workspace: Path) -> None:
+        self.workspace = workspace
+        self.execution_prompts: list[str] = []
+        self.evaluator_prompts: list[str] = []
+
+    async def run(self, *, workspace: Path, prompt: str, mode: str, timeout: int) -> AgentRun:
+        del timeout
+        assert Path(workspace) == self.workspace
+        if mode == "execute":
+            self.execution_prompts.append(prompt)
+            (self.workspace / "implementation.txt").write_text(
+                f"bounded change {len(self.execution_prompts)}\n",
+                encoding="utf-8",
+            )
+            package = self.workspace / "package.json"
+            if len(self.execution_prompts) == 1:
+                package.write_text(
+                    '{"dependencies":{"@testing-library/react":"^16.3.3"}}\n',
+                    encoding="utf-8",
+                )
+                output = "Added focused tests with a third-party test helper."
+            else:
+                package.unlink(missing_ok=True)
+                output = "Removed the out-of-scope test helper and used the existing stack."
+            return AgentRun(
+                adapter="fake",
+                model="fake-model",
+                returncode=0,
+                output=output,
+                usage={"input_tokens": 10, "output_tokens": 5, "cost_usd": 0.000001},
+            )
+
+        assert mode == "evaluate"
+        self.evaluator_prompts.append(prompt)
+        if len(self.evaluator_prompts) == 1:
+            output = (
+                'FAIL\nREVIEW_JSON: {"verdict":"fail","summary":"Third-party test library is out of scope",'
+                '"findings":[{"id":"DEP-SCOPE","severity":"medium","category":"scope",'
+                '"message":"Remove the third-party frontend library",'
+                '"evidence_refs":["package.json"]}],"jit_context_used":false}'
+            )
+        else:
+            output = (
+                'PASS\nREVIEW_JSON: {"verdict":"pass","summary":"Out-of-scope dependency removed",'
+                '"findings":[],"jit_context_used":false}'
+            )
+        return AgentRun(
+            adapter="fake",
+            model="fake-model",
+            returncode=0,
+            output=output,
+            usage={"input_tokens": 10, "output_tokens": 5, "cost_usd": 0.000001},
+        )
+
+
+def test_protected_reviewer_failure_goes_to_pm_repair_before_router_human(
+    monkeypatch, tmp_path
+):
+    job_id = "job338protected"
+    root, workspace = _workspace(tmp_path, job_id)
+    row = _row(workspace, job_id)
+    row["checkpoint"]["work_order"]["out_of_scope"] = ["Third-party frontend libraries"]
+    storage = FakeStorage(row)
+    router = ProtectedBoundaryRouter()
+    adapter = ProtectedRepairAdapter(workspace)
+    engine = object.__new__(RuntimeEngine)
+    engine.storage = storage
+    engine.router = router
+    engine.ddev = object()
+    engine.workspace_root = root
+
+    pm_calls = []
+
+    async def fake_pm_reassessment(**payload):
+        pm_calls.append(deepcopy(payload))
+        assert payload["trigger"]["signal"] == "protected_execution_signal"
+        assert payload["trigger"]["protected_decision_flags"] == [
+            "major_dependency_addition"
+        ]
+        assert payload["review_summary"]["verdict"] == "fail"
+        return {
+            "decision": {
+                "action": "request_repair",
+                "summary": "The dependency is removable and outside the WorkOrder.",
+                "developer_message": "Remove the third-party frontend library and use the existing test stack.",
+                "human_necessity": None,
+                "unresolved_risks": [],
+                "human_triggers": [],
+            },
+            "model_id": "pm-other-model",
+            "provider": "other-provider",
+            "usage": {"input_tokens": 5, "output_tokens": 5},
+            "staffing": {"choice": {"id": "pm-other-model"}},
+        }
+
+    monkeypatch.setattr(
+        execution_module,
+        "project_config",
+        lambda project_id: {"runtime": {"max_diff_bytes": 500000}, "ddev": {"enabled": False}},
+    )
+    monkeypatch.setattr(execution_module, "build_adapter", lambda *args: adapter)
+    monkeypatch.setattr(execution_module, "run_pm_reassessment", fake_pm_reassessment)
+
+    asyncio.run(engine.run_job(job_id))
+
+    assert storage.row["status"] == "completed"
+    assert len(pm_calls) == 1
+    assert len(adapter.execution_prompts) == 2
+    assert "PCP_PM_REASSESSMENT:" in adapter.execution_prompts[1]
+    assert "Remove the third-party frontend library" in adapter.execution_prompts[1]
+    assert storage.row["progress"]["repair_iterations"] >= 1
+    assert all(
+        item.get("action") != "human_decision"
+        for item in router.reassessments
+        if isinstance(item, dict)
+    )
+    assert not storage.row["checkpoint"].get("pending_decision")
