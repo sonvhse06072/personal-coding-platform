@@ -345,17 +345,6 @@ class RuntimeEngine(_RuntimeEngine):
                         "Changed-file scope recovery exceeds the fresh emergency ceiling"
                     )
 
-                result = dict(row.get("result") or {})
-                diff = dict(result.get("diff") or {})
-                protected = changed_path_protected_signals(
-                    diff.get("changed_files") or [],
-                    checkpoint,
-                )
-                if protected:
-                    raise RuntimeError(
-                        "Changed-file scope recovery found a protected changed-path boundary"
-                    )
-
             route_history = list(checkpoint.get("route_history") or [])
             route_history.append({
                 "reason": (
