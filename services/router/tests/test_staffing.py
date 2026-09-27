@@ -126,3 +126,22 @@ def test_unconfigured_optional_agents_are_not_staffable() -> None:
     for model_id in {"groq_oss_120b", "deepseek_flash", "frontier_codex"}:
         assert model_id in result.rejected_candidates
         assert any("missing required role" in reason for reason in result.rejected_candidates[model_id])
+
+
+def test_product_manager_staffing_can_exclude_primary_developer_model() -> None:
+    engine = make_engine()
+    first = engine.staff(pm_request())
+
+    second = engine.staff(
+        pm_request(
+            request_id="pm-plan-separated",
+            exclude_model_ids=[first.choice.id],
+        )
+    )
+
+    assert second.choice.id != first.choice.id
+    assert first.choice.id in second.rejected_candidates
+    assert any(
+        "model excluded for role separation" in reason
+        for reason in second.rejected_candidates[first.choice.id]
+    )
