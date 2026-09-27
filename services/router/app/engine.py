@@ -309,12 +309,14 @@ class RouterEngine:
         dimensions: DimensionScores,
         profile: str,
         exclude_providers: set[str] | None = None,
+        exclude_model_ids: set[str] | None = None,
         minimum_tier_index: int | None = None,
     ) -> tuple[ModelChoice, dict[str, list[str]]]:
         privacy = self._privacy(request)
         rejected: dict[str, list[str]] = {}
         candidates: list[tuple[float, str, dict[str, Any], float, list[str]]] = []
         exclude_providers = exclude_providers or set()
+        exclude_model_ids = exclude_model_ids or set()
         tier_order = ["utility", "balanced", "strong", "premium", "frontier"]
 
         for model_id, model in self.models.items():
@@ -326,6 +328,8 @@ class RouterEngine:
                 reasons.append(f"profile {profile!r} is not allowed")
             if not set(role_names) & set(model.get("roles", [])):
                 reasons.append(f"missing required role: {role_names}")
+            if model_id in exclude_model_ids:
+                reasons.append("model excluded for role separation")
             if model.get("provider") in exclude_providers:
                 reasons.append("provider excluded for model-family diversity")
             if minimum_tier_index is not None:
