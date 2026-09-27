@@ -150,6 +150,7 @@ def _prompt(
     verification: dict[str, Any],
     review_summary: dict[str, Any] | None,
     developer_report: str | None,
+    decision_context: dict[str, Any] | None,
 ) -> str:
     schema = PMReassessmentDecision.model_json_schema()
     evidence = {
@@ -163,6 +164,7 @@ def _prompt(
         "verification": verification,
         "review": review_summary or {},
         "developer_report": (developer_report or "")[-6000:],
+        "decision_context": decision_context or {},
     }
     return "\n".join(
         [
@@ -175,6 +177,8 @@ def _prompt(
             "If evidence is insufficient, ask the developer one concrete bounded question. If implementation should change, request a bounded repair.",
             "Escalate to Human Owner only for a decision the PM lacks authority to make: product/scope/non-goal, architecture invariant, major dependency/service, security/auth/trust, destructive data, production, protected governance/baseline authority, or material resource expansion.",
             "A Human Owner is not a substitute for ordinary engineering judgment.",
+            "A prior Human Owner approval does not rewrite the WorkOrder or ProjectBaseline. Reassess within the still-authoritative baseline after considering that decision history.",
+            "Do not repeat an already-resolved Human trigger. If the approved answer still requires a baseline/scope amendment, request repair/block rather than treating the approval as permission to bypass the current contract.",
             "Return EXACTLY one JSON object and no Markdown/prose outside it.",
             f"WORK_ORDER: {_compact(work_order, 12000)}",
             f"PROJECT_BASELINE: {_compact(baseline, 12000)}",
@@ -221,6 +225,7 @@ async def run_pm_reassessment(
     verification: dict[str, Any],
     review_summary: dict[str, Any] | None,
     developer_report: str | None,
+    decision_context: dict[str, Any] | None,
     max_diff_bytes: int,
     timeout_seconds: int,
     adapter_builder=build_adapter,
@@ -326,6 +331,7 @@ async def run_pm_reassessment(
                 verification=verification,
                 review_summary=review_summary,
                 developer_report=developer_report,
+                decision_context=decision_context,
             ),
             mode="evaluate",
             timeout=timeout_seconds,
