@@ -57,6 +57,7 @@ async def deliver_verified_work(
     body: str,
     permissions: dict[str, Any],
     max_wait_seconds: int,
+    reconcile_existing: bool = False,
     sleeper: Callable[[float], Awaitable[None]] = asyncio.sleep,
     poll_seconds: float | None = None,
     discovery_seconds: float | None = None,
@@ -79,6 +80,34 @@ async def deliver_verified_work(
     metadata["enabled"] = True
     metadata["state"] = "publishing"
     try:
+        if reconcile_existing and bool(permissions.get("create_pr", False)):
+            observed = await ddev.github_reconcile_delivery(
+                job_id=job_id,
+                project_id=project_id,
+                branch=branch,
+                source_commit=source_commit,
+                expected_commit=commit,
+            )
+            if bool(observed.get("reconciled")):
+                reconciled = dict(observed.get("delivery") or {})
+                metadata["state"] = "ci_success"
+                metadata["reconciled_external_merge"] = True
+                metadata["pull_request"] = {
+                    "number": reconciled.get("number"),
+                    "url": reconciled.get("url"),
+                    "state": reconciled.get("state"),
+                    "head": reconciled.get("head"),
+                    "head_ref": reconciled.get("head_ref"),
+                    "base_ref": reconciled.get("base_ref"),
+                    "repository": reconciled.get("repository"),
+                    "merged": reconciled.get("merged"),
+                    "merged_at": reconciled.get("merged_at"),
+                    "merge_commit_sha": reconciled.get("merge_commit_sha"),
+                }
+                metadata["ci"] = reconciled.get("ci") or {}
+                metadata["external_merge"] = reconciled
+                return metadata
+
         published = await ddev.publish_branch(
             job_id=job_id,
             project_id=project_id,

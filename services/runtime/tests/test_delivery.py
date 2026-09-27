@@ -8,7 +8,7 @@ from app.engine_delivery import DeliveryAwareStorage, RuntimeEngine
 
 
 class FakeDdev:
-    def __init__(self, ci_states=None, pr_result=None):
+    def __init__(self, ci_states=None, pr_result=None, reconcile_result=None):
         self.calls = []
         self.ci_states = list(ci_states or [])
         self.pr_result = pr_result or {
@@ -16,6 +16,15 @@ class FakeDdev:
             "number": 42,
             "url": "https://example.test/pr/42",
         }
+        self.reconcile_result = (
+            {"reconciled": False, "delivery": None}
+            if reconcile_result is None
+            else reconcile_result
+        )
+
+    async def github_reconcile_delivery(self, **kwargs):
+        self.calls.append(("reconcile", kwargs))
+        return dict(self.reconcile_result)
 
     async def publish_branch(self, **kwargs):
         self.calls.append(("publish", kwargs))
@@ -232,6 +241,52 @@ def test_pr_delivery_waits_for_pending_ci_then_succeeds():
         assert result["state"] == "ci_success"
         assert result["pull_request"]["number"] == 42
         assert [kind for kind, _ in ddev.calls] == ["publish", "pr", "ci", "ci"]
+
+    asyncio.run(scenario())
+
+
+def test_delivery_retry_reconciles_already_merged_pr_before_publish():
+    async def scenario():
+        ddev = FakeDdev(
+            reconcile_result={
+                "reconciled": True,
+                "delivery": {
+                    "repository": "acme/demo",
+                    "number": 27,
+                    "url": "https://github.com/acme/demo/pull/27",
+                    "state": "closed",
+                    "merged": True,
+                    "merged_at": "2026-09-27T17:03:22Z",
+                    "merge_commit_sha": "c" * 40,
+                    "head": "d" * 40,
+                    "head_ref": "ai/job12345",
+                    "base_ref": "main",
+                    "ci": {"state": "success", "commit": "d" * 40},
+                },
+            }
+        )
+        kwargs = common_kwargs(ddev, {"push_ai_branch": True, "create_pr": True})
+        kwargs["reconcile_existing"] = True
+        result = await deliver_verified_work(**kwargs)
+
+        assert result["state"] == "ci_success"
+        assert result["reconciled_external_merge"] is True
+        assert result["pull_request"]["number"] == 27
+        assert result["pull_request"]["head"] == "d" * 40
+        assert [kind for kind, _ in ddev.calls] == ["reconcile"]
+
+    asyncio.run(scenario())
+
+
+def test_delivery_retry_without_merged_candidate_falls_through_to_existing_publish():
+    async def scenario():
+        ddev = FakeDdev(["success"])
+        kwargs = common_kwargs(ddev, {"push_ai_branch": True, "create_pr": True})
+        kwargs["reconcile_existing"] = True
+        result = await deliver_verified_work(**kwargs)
+
+        assert result["state"] == "ci_success"
+        assert [kind for kind, _ in ddev.calls] == ["reconcile", "publish", "pr", "ci"]
 
     asyncio.run(scenario())
 
@@ -467,6 +522,75 @@ def test_infrastructure_recheck_reuses_commit_and_can_complete(monkeypatch):
         assert backend.row["progress"]["infrastructure_retry_attempts"] == 1
         publish_calls = [kwargs for kind, kwargs in engine.ddev.calls if kind == "publish"]
         assert [call["expected_commit"] for call in publish_calls] == ["b" * 40, "b" * 40]
+
+    asyncio.run(scenario())
+
+
+def test_delivery_retry_external_merge_completes_same_job_without_model_or_publish(monkeypatch):
+    async def scenario():
+        verified = accepted_result()
+        verified["delivery"] = {"state": "publishing"}
+        row = {
+            "id": "job12345",
+            "project_id": "demo",
+            "status": "queued",
+            "workspace": "/workspaces/job12345",
+            "branch": "ai/job12345",
+            "source_commit": "a" * 40,
+            "task": {"title": "test"},
+            "progress": {
+                "elapsed_minutes": 0.0,
+                "model_calls": 17,
+                "tool_calls": 78,
+                "test_runs": 66,
+                "repair_iterations": 5,
+                "delivery_attempts": 1,
+            },
+            "checkpoint": {},
+            "result": verified,
+        }
+        backend = MemoryStorage(row)
+        engine = RuntimeEngine(backend)
+        engine.ddev = FakeDdev(
+            reconcile_result={
+                "reconciled": True,
+                "delivery": {
+                    "repository": "acme/demo",
+                    "number": 27,
+                    "url": "https://github.com/acme/demo/pull/27",
+                    "state": "closed",
+                    "merged": True,
+                    "merged_at": "2026-09-27T17:03:22Z",
+                    "merge_commit_sha": "c" * 40,
+                    "head": "d" * 40,
+                    "head_ref": "ai/job12345",
+                    "base_ref": "main",
+                    "ci": {"state": "success", "commit": "d" * 40},
+                },
+            }
+        )
+
+        async def unexpected_engineering_run(_self, _job_id):
+            raise AssertionError("external merge reconciliation must not run implementation")
+
+        monkeypatch.setattr(
+            engine_delivery_module.ExecutionRuntimeEngine,
+            "run_job",
+            unexpected_engineering_run,
+        )
+
+        await engine.run_job("job12345")
+
+        assert backend.row["status"] == "completed"
+        assert backend.row["workspace"] == row["workspace"]
+        assert backend.row["result"]["commit"] == "b" * 40
+        assert backend.row["result"]["delivery"]["reconciled_external_merge"] is True
+        assert backend.row["result"]["delivery_finalized"] is True
+        for key in ("model_calls", "tool_calls", "test_runs", "repair_iterations"):
+            assert backend.row["progress"][key] == row["progress"][key]
+        assert backend.row["progress"]["delivery_attempts"] == 2
+        assert backend.row["progress"]["delivery_retry_attempts"] == 1
+        assert [kind for kind, _ in engine.ddev.calls] == ["reconcile"]
 
     asyncio.run(scenario())
 

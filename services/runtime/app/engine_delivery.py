@@ -252,6 +252,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                     body=body,
                     permissions=permissions,
                     max_wait_seconds=self._delivery_wait_seconds(strategy, progress),
+                    reconcile_existing=previous_delivery_attempts > 0,
                 )
             except DeliveryError as exc:
                 self._charge_delivery_time(progress, delivery_started)
