@@ -78,7 +78,7 @@ Reaching the estimate is **not** a stop condition.
 
 The working envelope provides normal headroom above the estimate. Runtime may consume or extend this headroom autonomously while execution remains healthy and total personal-resource policy allows it.
 
-Crossing an estimate or working target should create telemetry/activity, not Human Owner attention by itself.
+Crossing an estimate or working target should create telemetry/activity, not Human Owner attention by itself. Mechanical counters may continue autonomously; semantic work-shape targets may trigger a bounded PM reassessment before additional headroom is accepted.
 
 ### 4.3 Emergency hard ceiling
 
@@ -93,8 +93,10 @@ Durable counters are never reset when headroom is extended.
 This is a required design and acceptance rule for all Router, Runtime, reassessment, recovery, budget, and Human Attention work:
 
 - A job making meaningful progress must not be blocked solely because it reached a static model-call, token, tool-call, test-run, wall-time, repair, iteration, profile, or similar counter.
-- Changed-file count follows the same principle on effective adaptive WorkOrders: the WorkOrder value is a working target, not proof of scope drift. Bounded headroom may continue while actual changed paths stay outside protected decision families and the emergency scope ceiling is not exceeded. Legacy-hard WorkOrders keep their strict file-count ceiling.
-- Scope authority is path/contract-aware rather than count-only: governance/scope-frame, dependency, security/auth, migration/destructive-data and production-sensitive paths remain independent fail-closed decision signals regardless of changed-file count.
+- Changed-file count is a semantic work-shape signal on effective adaptive WorkOrders: the WorkOrder value is a working target, not proof of scope drift. Crossing that target invokes Product Manager reassessment. PM may approve bounded headroom only for the exact reviewed diff, ask the Primary Developer for a bounded explanation/repair, or escalate a protected/material decision to the Human Owner. Legacy-hard WorkOrders keep their strict file-count ceiling.
+- PM reassessment must use a different model from the Primary Developer. Different provider is preferred for higher-risk work when eligible capacity exists, but exact model separation is the minimum cross-check requirement.
+- Scope authority is path/contract-aware rather than count-only: governance/scope-frame, dependency, security/auth, migration/destructive-data and production-sensitive paths remain independent fail-closed decision signals regardless of changed-file count. PM may request removal/repair of an accidental protected-path change but may not approve the protected change itself.
+- PM approval of adaptive changed-file headroom is bound to the exact diff hash. A subsequent diff change invalidates that approval and requires reassessment again.
 - A hard stop must cite an independent stop justification beyond counter exhaustion: repeated failure/no progress, solution oscillation, unexpected scope growth, runaway or abnormal resource growth, authoritative provider exhaustion without eligible fallback, a protected decision boundary, or a genuinely material expansion of the approved personal/project resource envelope.
 - Healthy continuation inside the approved resource envelope should occur automatically on the same durable job/workspace with non-decreasing counters and auditable headroom changes.
 - A Human Owner `continue`, `+N`, or budget-extension click whose only purpose is to compensate for an underestimated healthy task is an avoidable platform defect, not an acceptable steady-state control flow.
