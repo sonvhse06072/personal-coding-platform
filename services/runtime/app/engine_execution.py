@@ -31,6 +31,37 @@ from .review import (
 from .scope_guard import changed_path_protected_signals
 from .state import checkpoint_from_row, existing_repo_analysis, merge_progress, validate_workspace
 
+_VALID_WORKSPACE_MODES = {"direct", "isolated_clone"}
+
+
+def effective_workspace_mode(
+    job: dict[str, Any],
+    checkpoint: dict[str, Any],
+    project: dict[str, Any],
+) -> str:
+    """Keep an existing workspace on the durable mode that created it.
+
+    Live project configuration governs only workspace acquisition for jobs that
+    do not yet own a workspace. Reinterpreting a persisted workspace after a
+    config change can violate path validation and direct-project lease safety.
+    """
+    live_mode = str(
+        ((project.get("runtime") or {}).get("workspace_mode") or "isolated_clone")
+    )
+    if live_mode not in _VALID_WORKSPACE_MODES:
+        raise RuntimeError(f"Unsupported project workspace mode: {live_mode}")
+
+    if not job.get("workspace"):
+        return live_mode
+
+    persisted_mode = str(checkpoint.get("workspace_mode") or "")
+    if persisted_mode not in _VALID_WORKSPACE_MODES:
+        raise RuntimeError(
+            "Persisted workspace is missing a valid durable workspace mode"
+        )
+    return persisted_mode
+
+
 
 class RuntimeEngine(RuntimeEngineCore):
     async def run_job(self, job_id: str) -> None:
@@ -42,7 +73,9 @@ class RuntimeEngine(RuntimeEngineCore):
 
         project = project_config(job["project_id"])
         runtime_cfg = project.get("runtime", {}) or {}
-        workspace_mode = str(runtime_cfg.get("workspace_mode") or "isolated_clone")
+        task = dict(job["task"])
+        checkpoint = checkpoint_from_row(job)
+        workspace_mode = effective_workspace_mode(job, checkpoint, project)
         if workspace_mode == "direct":
             approved_direct_root = os.getenv("CODING_DIRECT_PROJECT_ROOT", "").strip()
             if not approved_direct_root:
@@ -51,9 +84,6 @@ class RuntimeEngine(RuntimeEngineCore):
                 raise RuntimeError(
                     "Direct project path does not match the exact mounted CODING_DIRECT_PROJECT_ROOT"
                 )
-
-        task = dict(job["task"])
-        checkpoint = checkpoint_from_row(job)
         progress = merge_progress(self._new_progress(), job.get("progress"))
         started = time.monotonic() - float(progress.get("elapsed_minutes", 0.0)) * 60.0
         hints = dict(checkpoint.get("hints") or {})
