@@ -926,6 +926,7 @@ class RuntimeEngine(RuntimeEngineCore):
                         "evaluator": evaluator_output,
                         "review": review_summary,
                         "pm_evidence": pm_pack,
+                        "pm_reassessment": checkpoint.get("last_pm_reassessment"),
                         "route": route,
                         "route_history": route_history,
                         "progress": progress,
