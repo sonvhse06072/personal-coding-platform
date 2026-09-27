@@ -868,7 +868,13 @@ class ControlActionService:
         try:
             result = await self._dispatch(action)
         except Exception as exc:
-            safe = {"status": "failed", "action_id": action_id, "message": f"Control action failed safely: {type(exc).__name__}"}
+            safe = {
+                "status": "failed",
+                "action_id": action_id,
+                "action_type": str(action.get("action_type") or ""),
+                "phase": "dispatch",
+                "message": f"Control action failed safely: {type(exc).__name__}",
+            }
             with self.storage.connect() as conn:
                 conn.execute(
                     """UPDATE cp_control_actions SET status='failed', result=%s::jsonb, updated_at=%s
