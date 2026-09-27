@@ -30,6 +30,7 @@ _PROTECTED_ALIASES = {
     "branch_protection_change": "high_authority_governance",
     "high_authority_governance": "high_authority_governance",
     "governance_amendment": "high_authority_governance",
+    "project_baseline_authority_change": "project_baseline_authority_change",
     "material_budget_expansion": "material_budget_expansion",
 }
 
@@ -138,6 +139,28 @@ def _changed_paths(job: dict[str, Any]) -> list[str]:
     return paths
 
 
+def _baseline_authority_changes(job: dict[str, Any]) -> dict[str, str]:
+    """Return authority classes for changed paths from the pinned baseline snapshot."""
+
+    checkpoint = _dict(job.get("checkpoint"))
+    baseline = _dict(checkpoint.get("project_baseline"))
+    rules = baseline.get("authority") or []
+    authority_by_path: dict[str, str] = {}
+    for raw in rules:
+        rule = _dict(raw)
+        path = str(rule.get("path") or "").strip().replace("\\", "/").lower()
+        authority = str(rule.get("authority") or "").strip()
+        if path and authority:
+            authority_by_path[path] = authority
+
+    changed: dict[str, str] = {}
+    for path in _changed_paths(job):
+        authority = authority_by_path.get(path)
+        if authority:
+            changed[path] = authority
+    return changed
+
+
 def _path_protected_signals(job: dict[str, Any]) -> set[str]:
     """Infer protected decision classes from the actual accepted diff paths.
 
@@ -147,6 +170,10 @@ def _path_protected_signals(job: dict[str, Any]) -> set[str]:
     silently merging an unclassified governance/security/dependency change.
     """
     signals: set[str] = set()
+    baseline_authority = _baseline_authority_changes(job)
+    if "human_owner_protected" in set(baseline_authority.values()):
+        signals.add("project_baseline_authority_change")
+
     for path in _changed_paths(job):
         pure = PurePosixPath(path)
         name = pure.name.lower()
@@ -365,6 +392,7 @@ def evaluate_pm_merge(
         "review_required": bool(review_policy.get("required")),
         "risk_level": risk_level,
         "changed_files": _changed_paths(job),
+        "baseline_authority_changes": _baseline_authority_changes(job),
     }
     return MergeEligibility(
         eligible=eligible,
