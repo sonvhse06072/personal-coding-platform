@@ -65,6 +65,7 @@ class RuntimeEngine(BaseRuntimeEngine):
         reset_transient_provider_failures: bool = False,
         reroute: bool = False,
         _allow_failed_orchestrated_resume: bool = False,
+        _require_changed_file_headroom: bool = False,
     ) -> dict[str, Any]:
         # A preserved pre-fix reroute may still carry a provider-wide marker for
         # a proven quota/rate-limit failure. Narrow only that proven marker before
@@ -86,4 +87,5 @@ class RuntimeEngine(BaseRuntimeEngine):
             reset_transient_provider_failures=reset_transient_provider_failures,
             reroute=reroute,
             _allow_failed_orchestrated_resume=_allow_failed_orchestrated_resume,
+            _require_changed_file_headroom=_require_changed_file_headroom,
         )
