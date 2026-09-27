@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 from typing import Any, Literal
 
@@ -185,9 +186,11 @@ def _parse(output: str) -> PMReassessmentDecision:
 async def run_pm_reassessment(
     *,
     router: Any,
+    ddev: Any,
     workspace: Path,
     job_id: str,
     project_id: str,
+    source_commit: str,
     profile: str,
     current_executor: dict[str, Any],
     provider_state: dict[str, Any],
@@ -229,43 +232,111 @@ async def run_pm_reassessment(
     if current_model_id and choice.get("id") == current_model_id:
         raise RuntimeError("PM reassessment must use a different model from the Primary Developer")
 
-    before = diff_state(workspace, max_diff_bytes)
-    run = await adapter_builder(
-        str(choice["adapter"]),
-        str(choice["model"]),
-        choice.get("reasoning_effort"),
-    ).run(
-        workspace=workspace,
-        prompt=_prompt(
-            work_order=work_order,
-            baseline=baseline,
-            trigger=trigger,
-            diff=diff,
-            verification=verification,
-            review_summary=review_summary,
-            developer_report=developer_report,
-        ),
-        mode="evaluate",
-        timeout=timeout_seconds,
+    # Snapshot the developer diff, then review it in a disposable isolated clone.
+    # The PM never receives write access to the owning developer workspace.
+    original = diff_state(workspace, max_diff_bytes)
+    patch_proc = subprocess.run(
+        ["git", "-C", str(workspace), "diff", "--binary"],
+        text=True,
+        capture_output=True,
     )
-    after = diff_state(workspace, max_diff_bytes)
-    if (
-        before.get("diff_hash") != after.get("diff_hash")
-        or before.get("changed_files") != after.get("changed_files")
-    ):
-        raise RuntimeError("Product Manager reassessment modified the developer workspace")
-    if run.provider_failed:
-        raise RuntimeError(
-            f"Product Manager reassessment provider failure: {run.failure_kind or 'unknown'}"
-        )
-    if run.returncode != 0:
-        raise RuntimeError("Product Manager reassessment model failed")
+    if patch_proc.returncode != 0:
+        raise RuntimeError(patch_proc.stderr.strip() or "Unable to snapshot developer diff")
+    patch = patch_proc.stdout
 
-    decision = _parse(run.output)
-    return {
-        "decision": decision.model_dump(mode="json"),
-        "staffing": staffing,
-        "usage": run.usage,
-        "model_id": str(choice["id"]),
-        "provider": str(choice.get("provider") or ""),
-    }
+    review_job_id = (
+        f"pmr-{job_id[:20]}-{str(original.get('diff_hash') or '')[:10]}"
+    )
+    workspace_info: dict[str, Any] | None = None
+    try:
+        workspace_info = await ddev.create_workspace(
+            job_id=review_job_id,
+            project_id=project_id,
+            ref=source_commit,
+            workspace_mode="isolated_clone",
+        )
+        review_source = str(workspace_info.get("source_commit") or "").lower()
+        if review_source != str(source_commit).lower():
+            raise RuntimeError(
+                "PM reassessment workspace source commit does not match the developer job"
+            )
+        review_workspace = Path(str(workspace_info["workspace"]))
+
+        if patch:
+            applied = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(review_workspace),
+                    "apply",
+                    "--binary",
+                    "--whitespace=nowarn",
+                    "-",
+                ],
+                input=patch,
+                text=True,
+                capture_output=True,
+            )
+            if applied.returncode != 0:
+                raise RuntimeError(
+                    applied.stderr.strip()
+                    or "Unable to materialize developer diff for PM reassessment"
+                )
+
+        before = diff_state(review_workspace, max_diff_bytes)
+        if (
+            before.get("diff_hash") != original.get("diff_hash")
+            or before.get("changed_files") != original.get("changed_files")
+        ):
+            raise RuntimeError(
+                "PM reassessment clone does not match the exact developer diff"
+            )
+
+        run = await adapter_builder(
+            str(choice["adapter"]),
+            str(choice["model"]),
+            choice.get("reasoning_effort"),
+        ).run(
+            workspace=review_workspace,
+            prompt=_prompt(
+                work_order=work_order,
+                baseline=baseline,
+                trigger=trigger,
+                diff=diff,
+                verification=verification,
+                review_summary=review_summary,
+                developer_report=developer_report,
+            ),
+            mode="evaluate",
+            timeout=timeout_seconds,
+        )
+        after = diff_state(review_workspace, max_diff_bytes)
+        if (
+            before.get("diff_hash") != after.get("diff_hash")
+            or before.get("changed_files") != after.get("changed_files")
+        ):
+            raise RuntimeError(
+                "Product Manager reassessment modified its read-only review workspace"
+            )
+        if run.provider_failed:
+            raise RuntimeError(
+                f"Product Manager reassessment provider failure: {run.failure_kind or 'unknown'}"
+            )
+        if run.returncode != 0:
+            raise RuntimeError("Product Manager reassessment model failed")
+
+        decision = _parse(run.output)
+        return {
+            "decision": decision.model_dump(mode="json"),
+            "staffing": staffing,
+            "usage": run.usage,
+            "model_id": str(choice["id"]),
+            "provider": str(choice.get("provider") or ""),
+        }
+    finally:
+        if workspace_info and workspace_info.get("workspace"):
+            await ddev.remove_workspace(
+                job_id=review_job_id,
+                project_id=project_id,
+                workspace=str(workspace_info["workspace"]),
+            )
