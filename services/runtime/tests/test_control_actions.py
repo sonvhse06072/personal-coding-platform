@@ -679,3 +679,68 @@ def test_conflicting_old_mutation_action_remains_stale_and_fail_closed(monkeypat
         )
 
     assert storage.actions["operator-old"]["status"] == "stale"
+
+
+def test_changed_file_scope_reassessment_advisory_exposes_safe_reason_and_recovery():
+    job = base_job(reason="reassessment_stopped", last_failure="scope target exceeded")
+    job["route"]["strategy"].update({
+        "budget_mode": "adaptive",
+        "budget": {
+            **job["route"]["strategy"]["budget"],
+            "max_changed_files": 8,
+        },
+    })
+    job["progress"].update({
+        "changed_files": 10,
+        "unexpected_scope": True,
+        "important_decision_flags": [],
+    })
+    job["result"].update({
+        "reassess": {
+            "action": "stop",
+            "reason": "Circuit breaker: abnormal execution signal without a valid escalation path",
+            "signals": ["scope_expansion"],
+        }
+    })
+    controls, _ = service(job)
+
+    advisory = controls.blocked_advisory(row(), job)
+
+    assert advisory["action_specs"][0]["action_type"] == "scope_reassess"
+    assert "Circuit breaker" in advisory["cause"]
+    assert any(
+        item.get("label") == "Reassessment signals"
+        and "scope_expansion" in item.get("value", "")
+        for item in advisory["metrics"]
+    )
+    changed = next(item for item in advisory["metrics"] if item.get("key") == "max_changed_files")
+    assert changed["used"] == 10
+    assert changed["limit"] == 8
+
+
+def test_changed_file_scope_reassessment_recovery_is_not_offered_for_other_anomalies():
+    job = base_job(reason="reassessment_stopped", last_failure="scope plus no progress")
+    job["route"]["strategy"].update({
+        "budget_mode": "adaptive",
+        "budget": {
+            **job["route"]["strategy"]["budget"],
+            "max_changed_files": 8,
+        },
+    })
+    job["progress"].update({
+        "changed_files": 10,
+        "unexpected_scope": True,
+        "important_decision_flags": [],
+    })
+    job["result"].update({
+        "reassess": {
+            "action": "stop",
+            "reason": "Circuit breaker",
+            "signals": ["scope_expansion", "no_progress"],
+        }
+    })
+    controls, _ = service(job)
+
+    advisory = controls.blocked_advisory(row(), job)
+
+    assert "scope_reassess" not in action_types(advisory)
