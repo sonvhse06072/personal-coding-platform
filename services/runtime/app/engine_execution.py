@@ -688,6 +688,7 @@ class RuntimeEngine(RuntimeEngineCore):
                 strategy,
                 changed_files=int(progress.get("changed_files") or 0),
             )
+            protected_flags = list(progress.get("important_decision_flags") or [])
             pm_scope_needs_review = bool(
                 progress["required_checks_passed"]
                 and pm_scope_state
@@ -697,7 +698,18 @@ class RuntimeEngine(RuntimeEngineCore):
                     used=int(progress.get("changed_files") or 0),
                 )
             )
-            if pm_scope_needs_review:
+            pm_protected_needs_review = bool(
+                verification["passed"] and protected_flags
+            )
+            pm_reassessment_needs_review = bool(
+                pm_scope_needs_review or pm_protected_needs_review
+            )
+            pm_signal = (
+                "protected_execution_signal"
+                if pm_protected_needs_review
+                else "changed_file_working_target_exceeded"
+            )
+            if pm_reassessment_needs_review:
                 budget_reason = self._pre_model_budget_reason(
                     progress,
                     strategy,
@@ -740,11 +752,9 @@ class RuntimeEngine(RuntimeEngineCore):
                         work_order=dict(checkpoint.get("work_order") or {}),
                         baseline=dict(checkpoint.get("project_baseline") or {}),
                         trigger={
-                            "signal": "changed_file_working_target_exceeded",
+                            "signal": pm_signal,
                             **dict(pm_scope_state or {}),
-                            "protected_decision_flags": list(
-                                progress.get("important_decision_flags") or []
-                            ),
+                            "protected_decision_flags": protected_flags,
                         },
                         diff=diff,
                         verification=verification,
@@ -793,7 +803,7 @@ class RuntimeEngine(RuntimeEngineCore):
                 pm_decision = dict(pm_result.get("decision") or {})
                 checkpoint["last_pm_reassessment"] = {
                     "diff_hash": diff.get("diff_hash"),
-                    "signal": "changed_file_working_target_exceeded",
+                    "signal": pm_signal,
                     "decision": pm_decision,
                     "staffing": pm_result.get("staffing"),
                 }
@@ -851,30 +861,36 @@ class RuntimeEngine(RuntimeEngineCore):
                             "developer_message": pm_decision.get("developer_message"),
                             "unresolved_risks": pm_decision.get("unresolved_risks") or [],
                             "diff_hash": diff.get("diff_hash"),
+                            "signal": pm_signal,
+                            "protected_decision_flags": protected_flags,
                         },
                         ensure_ascii=False,
                         sort_keys=True,
                     )
                     progress["required_checks_passed"] = False
                     # PM owns the next bounded engineering step. Suppress the
-                    # current protected-path signal for this one repair/response
-                    # turn so Runtime does not jump directly to Human before the
-                    # developer can remove or explain the flagged change.
-                    pm_handled_flags = set(
-                        progress.get("important_decision_flags") or []
-                    )
-                    if pm_handled_flags:
+                    # current protected-path signal for this repair/response turn
+                    # and return directly to Developer. Generic Router reassess
+                    # must not bypass PM and escalate the same removable boundary
+                    # to Human before Developer can act.
+                    if protected_flags:
                         progress["important_decision_flags"] = [
                             item
                             for item in progress.get("important_decision_flags", [])
-                            if item not in pm_handled_flags
+                            if item not in set(protected_flags)
                         ]
+                    fp = failure_fingerprint(last_failure)
+                    progress["failure_fingerprints"].append(fp)
+                    progress["progress_markers"].append(fp)
+                    progress["repair_iterations"] += 1
                     checkpoint["last_failure"] = last_failure
                     self.storage.update(
                         job_id,
+                        status="executing",
                         progress=progress,
                         checkpoint=checkpoint,
                     )
+                    continue
                 elif pm_action == "human_decision":
                     pm_human_decision = {
                         "required": True,
@@ -897,7 +913,7 @@ class RuntimeEngine(RuntimeEngineCore):
                         )
                         return
                     checkpoint["pending_pm_reassessment"] = {
-                        "signal": "changed_file_working_target_exceeded",
+                        "signal": pm_signal,
                         "diff_hash": str(diff.get("diff_hash") or ""),
                         **dict(pm_scope_state or {}),
                         "pm_model_id": str(pm_result.get("model_id") or ""),
@@ -1058,9 +1074,15 @@ class RuntimeEngine(RuntimeEngineCore):
             self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
 
             effective_route = self._effective_route(route, executor_choice)
+            reassess_progress = progress
+            if not verification["passed"] and progress.get("important_decision_flags"):
+                reassess_progress = {
+                    **progress,
+                    "important_decision_flags": [],
+                }
             reassess = await self.router.reassess({
                 "route": effective_route,
-                "progress": progress,
+                "progress": reassess_progress,
                 "provider_state": provider_state,
             })
             action = reassess["action"]
