@@ -19,6 +19,7 @@ from .state import (
     clear_transient_provider_failures,
     decision_key,
     provider_failure_state_key,
+    set_failure_context,
 )
 from .storage import Storage, now
 from .usage import estimated_cost_usd, normalize_usage
@@ -342,7 +343,7 @@ class RuntimeEngineCore:
                 repair_note = (note or "").strip() or str(
                     decision.get("reason") or pm_boundary.get("summary") or "Human Owner rejected the requested boundary."
                 )
-                checkpoint["last_failure"] = (
+                rejection_failure = (
                     "PCP_HUMAN_DECISION_REJECTED: "
                     + json.dumps(
                         {
@@ -359,6 +360,14 @@ class RuntimeEngineCore:
                         sort_keys=True,
                     )
                 )[-30000:]
+                set_failure_context(
+                    checkpoint,
+                    kind="semantic_repair",
+                    source="human_rejection",
+                    message=rejection_failure,
+                    diff_hash=str(pm_boundary.get("diff_hash") or ""),
+                    decision_key_value=key,
+                )
                 self.storage.update(
                     job_id,
                     status="queued",
