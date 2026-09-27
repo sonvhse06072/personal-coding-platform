@@ -102,6 +102,8 @@ Their reusable lessons and primary references are in `history/episodes.md`. Git/
 - Potentially failing Human Owner shell blocks must run in an isolated function/subshell/process so they do not terminate the parent shell.
 - Broad Docker/system/image/volume prune remains prohibited; cleanup must be bounded to proven PCP-owned resources.
 - Time-sensitive claims such as active jobs, leases, branch/HEAD, PR/CI and service health must be checked live before acting.
+- Approved ProjectBaseline authority stays pinned to its immutable revision/source commit until an explicitly approved successor revision is activated; newer project HEAD alone does not advance project-frame authority.
+- PM merge evaluation treats `human_owner_protected` baseline document changes as a Human Owner decision boundary; delegated design authority remains bounded by its governing decision.
 
 ## Immediate next safe actions
 
