@@ -63,6 +63,14 @@ class PullRequestRequest(BaseModel):
     body: str = Field(default="", max_length=30000)
 
 
+class ReconcileDeliveryRequest(BaseModel):
+    job_id: str = Field(min_length=8, max_length=100)
+    project_id: str = Field(min_length=1, max_length=200)
+    branch: str = Field(min_length=1, max_length=200)
+    source_commit: str = Field(min_length=7, max_length=64)
+    expected_commit: str = Field(min_length=7, max_length=64)
+
+
 class CancelRequest(BaseModel):
     job_id: str = Field(min_length=8, max_length=100)
 
@@ -1008,7 +1016,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.24")
+app = FastAPI(title="Constrained DDEV/Git Executor", version="1.0.25")
 app.include_router(pm_bridge_github_router)
 
 
@@ -1496,6 +1504,34 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
         "commit": expected,
         "source_commit": source_commit,
         "repository": repository,
+    }
+
+
+@app.post("/v1/github/reconcile-delivery", dependencies=[Depends(auth)])
+def reconcile_delivery(payload: ReconcileDeliveryRequest) -> dict[str, Any]:
+    """Observe an already-merged PR before retrying a preserved delivery."""
+    cfg = project(payload.project_id)
+    autonomy = cfg.get("autonomy", {}) or {}
+    if not bool(autonomy.get("allow_push_ai_branch", False)):
+        raise HTTPException(403, "Project policy does not allow AI branch publishing")
+    if not bool(autonomy.get("allow_create_pr", False)):
+        raise HTTPException(403, "Project policy does not allow pull-request delivery")
+    _validate_ai_branch(cfg, payload.branch)
+    delivery, repository = _github_context(cfg)
+    try:
+        observed = delivery.reconcile_merged_delivery(
+            repository=repository,
+            branch=payload.branch,
+            base_branch=str(cfg.get("base_branch", "main")),
+            source_commit=payload.source_commit,
+            expected_commit=payload.expected_commit,
+        )
+    except (httpx.HTTPError, RuntimeError, ValueError) as exc:
+        raise _github_error(exc) from exc
+    return {
+        "job_id": payload.job_id,
+        "reconciled": observed is not None,
+        "delivery": observed,
     }
 
 
