@@ -23,7 +23,7 @@ Memory-tier rules and the proposed Context Composer contract are in `context-mem
   - ddev-executor `1.0.24`.
 - PM-controlled routine merge is implemented and operationally proven. Developer agents never merge.
 - Healthy-progress non-blocking remains mandatory: static task/profile/provider-failover counters alone are not Human Owner stop reasons while meaningful progress continues inside the approved resource envelope.
-- On effective adaptive WorkOrders, `max_changed_files` is a working target with bounded emergency headroom; actual sensitive/protected changed paths remain independent decision boundaries. Legacy-hard WorkOrders retain strict file-count semantics.
+- On effective adaptive WorkOrders, `max_changed_files` is a semantic working target. Crossing it enters a bounded Product Manager reassessment; PM must be staffed with a different model from the Primary Developer and any approval is exact-diff-bound. Emergency overflow and actual sensitive/protected changed paths remain fail-closed boundaries. Legacy-hard WorkOrders retain strict file-count semantics.
 - Routine provider recovery remains Runtime/Router responsibility while eligible capacity exists.
 - Dedicated PCP BuildKit isolation is implemented through `pcp-builder`; the user's globally selected/default builder is not replaced.
 - Direct workspace + Dashboard job-owned live preview for Chợ Nhạc is implemented and accepted.
