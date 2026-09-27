@@ -187,6 +187,30 @@ Evidence:
 
 Status: historical rollout. Legacy terminal cleanup without an existing workspace remains a separate open compatibility issue #282.
 
+### Missing-workspace terminal DDEV cleanup — #282 / PR #320
+
+Outcome: implemented, deployed and live accepted with a disposable `pcp-validation-fixture` Runtime job.
+
+Durable lesson:
+- normal workspace-present cleanup remains the preferred lifecycle path;
+- when a terminal `completed/cancelled` isolated job has already lost its Git workspace, cleanup may derive only the exact deterministic `cp-<10-hex-job-prefix>` identity after proving the 10-hex prefix maps uniquely back to the full durable Runtime job/project;
+- orphan cleanup must inspect first, revalidate immediately before mutation, refuse active/running/foreign-referenced resources, and remove only exact stopped containers, exact project-prefixed volumes and exact PCP-built image refs;
+- repeated cleanup is idempotent;
+- `blocked`, `failed`, `waiting_human` and nonterminal work remain preserved by default;
+- acceptance fixtures must use the configured `CODING_WORKSPACES_ROOT` and supported Runtime lifecycle rather than hard-coded workspace roots or direct durable-state edits.
+
+Evidence:
+- issue #282;
+- PR #320 exact head `a3a29e447fa1ef5efa1feb45081d9e85d5cc7d19`;
+- exact-head CI #641 passed all four required jobs;
+- merge `9a477d15c0a51054779a41f40b24230aa230484d`;
+- deployed Runtime `1.0.56`;
+- deployed ddev-executor `1.0.24`;
+- final live acceptance v2 passed: supported Runtime job creation/cancel, deliberate exact missing workspace, orphan inspect, exact resource release, unrelated-resource preservation, idempotent second cleanup, terminal state preservation and final zero-work invariants.
+
+Status: historical rollout; bounded missing-workspace cleanup remains current capability.
+
+
 ## 2026-09 — direct workspace and preview
 
 ### Chợ Nhạc direct workspace + job-owned live preview — #297
