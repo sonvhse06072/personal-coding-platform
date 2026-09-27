@@ -10,6 +10,7 @@ import pytest
 
 from app.adapters.base import AgentRun
 from app.pm_reassessment import (
+    PMReassessmentDecision,
     changed_file_reassessment_state,
     has_pm_changed_file_authorization,
     run_pm_reassessment,
@@ -355,3 +356,29 @@ def test_pm_mutation_never_changes_developer_workspace(tmp_path) -> None:
     assert (root / "component.tsx").read_text(encoding="utf-8") == developer_before
     assert not (root / "pm-mutation.txt").exists()
     assert len(ddev.removed) == 1
+
+
+def test_pm_approval_cannot_hide_unresolved_risk() -> None:
+    with pytest.raises(ValueError, match="cannot retain unresolved risks"):
+        PMReassessmentDecision.model_validate(
+            {
+                "action": "approve_continue",
+                "summary": "Approve despite unresolved concern.",
+                "developer_message": None,
+                "unresolved_risks": ["Scope evidence is incomplete."],
+                "human_triggers": [],
+            }
+        )
+
+
+def test_pm_human_escalation_is_limited_to_known_owner_boundaries() -> None:
+    with pytest.raises(ValueError, match="unsupported Human Owner triggers"):
+        PMReassessmentDecision.model_validate(
+            {
+                "action": "human_decision",
+                "summary": "Ask owner for an ordinary implementation preference.",
+                "developer_message": None,
+                "unresolved_risks": [],
+                "human_triggers": ["ordinary_implementation_preference"],
+            }
+        )
