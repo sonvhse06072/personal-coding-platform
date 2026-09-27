@@ -14,6 +14,11 @@ from .engine_core import RuntimeEngineCore
 from .evidence_packs import developer_repair_evidence_pack, pm_evidence_pack
 from .fingerprint import failure_fingerprint
 from .preview import ProjectPreviewManager, ready_preview_context
+from .pm_reassessment import (
+    changed_file_reassessment_state,
+    has_pm_changed_file_authorization,
+    run_pm_reassessment,
+)
 from .prompts import evaluator_prompt, execution_prompt, planning_prompt
 from .repo import analyze_repo, commit_changes, diff_state
 from .review import (
@@ -23,6 +28,7 @@ from .review import (
     review_report_summary,
     should_run_review,
 )
+from .scope_guard import changed_path_protected_signals
 from .state import checkpoint_from_row, existing_repo_analysis, merge_progress, validate_workspace
 
 
@@ -407,6 +413,19 @@ class RuntimeEngine(RuntimeEngineCore):
             progress["changed_files"] = diff["changed_file_count"]
             progress["material_change_present"] = diff["changed_file_count"] > 0
             progress["diff_hashes"].append(diff["diff_hash"])
+
+            # File count is only a work-shape signal on adaptive routes. Actual
+            # sensitive changed paths remain an independent decision boundary.
+            path_signals = changed_path_protected_signals(
+                diff.get("changed_files") or [],
+                checkpoint,
+            )
+            if path_signals:
+                important = list(progress.get("important_decision_flags") or [])
+                for signal in sorted(path_signals):
+                    if signal not in important:
+                        important.append(signal)
+                progress["important_decision_flags"] = important
             mark_actioned_review_findings(
                 checkpoint,
                 progress,
@@ -611,6 +630,247 @@ class RuntimeEngine(RuntimeEngineCore):
 
             progress["required_checks_passed"] = verification["passed"] and evaluator_ok and not progress["unexpected_scope"]
 
+            pm_scope_state = changed_file_reassessment_state(
+                strategy,
+                changed_files=int(progress.get("changed_files") or 0),
+            )
+            pm_scope_needs_review = bool(
+                progress["required_checks_passed"]
+                and pm_scope_state
+                and not has_pm_changed_file_authorization(
+                    checkpoint,
+                    diff_hash=str(diff.get("diff_hash") or ""),
+                    used=int(progress.get("changed_files") or 0),
+                )
+            )
+            if pm_scope_needs_review:
+                budget_reason = self._pre_model_budget_reason(
+                    progress,
+                    strategy,
+                    include_iteration=False,
+                )
+                if budget_reason:
+                    self._block(
+                        job_id=job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                        reason="execution_budget_exhausted",
+                        last_failure=budget_reason,
+                        diff=diff,
+                    )
+                    return
+
+                progress["model_calls"] += 1
+                self.storage.update(
+                    job_id,
+                    status="evaluating",
+                    progress=progress,
+                    checkpoint=checkpoint,
+                )
+                current_review_summary = (
+                    review_report_summary(review_report)
+                    if review_report is not None
+                    else checkpoint.get("last_review_report")
+                )
+                try:
+                    pm_result = await run_pm_reassessment(
+                        router=self.router,
+                        ddev=self.ddev,
+                        workspace=workspace,
+                        job_id=job_id,
+                        project_id=job["project_id"],
+                        source_commit=source_commit,
+                        profile=str(strategy.get("profile") or "standard"),
+                        current_executor=executor_choice,
+                        provider_state=provider_state,
+                        work_order=dict(checkpoint.get("work_order") or {}),
+                        baseline=dict(checkpoint.get("project_baseline") or {}),
+                        trigger={
+                            "signal": "changed_file_working_target_exceeded",
+                            **dict(pm_scope_state or {}),
+                            "protected_decision_flags": list(
+                                progress.get("important_decision_flags") or []
+                            ),
+                        },
+                        diff=diff,
+                        verification=verification,
+                        review_summary=(
+                            current_review_summary
+                            if isinstance(current_review_summary, dict)
+                            else None
+                        ),
+                        developer_report=run.output if run.returncode == 0 else None,
+                        decision_context={
+                            "approved_decisions": list(
+                                checkpoint.get("approved_decisions") or []
+                            )[-20:],
+                            "decision_history": list(
+                                checkpoint.get("decision_history") or []
+                            )[-20:],
+                            "prior_pm_boundary": dict(
+                                checkpoint.get("pending_pm_reassessment") or {}
+                            ),
+                        },
+                        max_diff_bytes=max_diff,
+                        timeout_seconds=self._remaining_seconds(strategy, started, 600),
+                    )
+                except Exception as exc:
+                    self._update_elapsed(progress, started)
+                    self._block(
+                        job_id=job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                        reason="pm_reassessment_failed",
+                        last_failure=str(exc)[-4000:],
+                        diff=diff,
+                    )
+                    return
+
+                self._record_usage(
+                    progress,
+                    str(pm_result.get("model_id") or ""),
+                    pm_result.get("usage"),
+                )
+                progress["pm_reassessments"] = int(
+                    progress.get("pm_reassessments", 0)
+                ) + 1
+                self._update_elapsed(progress, started)
+
+                pm_decision = dict(pm_result.get("decision") or {})
+                checkpoint["last_pm_reassessment"] = {
+                    "diff_hash": diff.get("diff_hash"),
+                    "signal": "changed_file_working_target_exceeded",
+                    "decision": pm_decision,
+                    "staffing": pm_result.get("staffing"),
+                }
+                pm_action = str(pm_decision.get("action") or "")
+                if pm_action == "approve_continue":
+                    protected_flags = list(
+                        progress.get("important_decision_flags") or []
+                    )
+                    if protected_flags:
+                        self._block(
+                            job_id=job_id,
+                            progress=progress,
+                            checkpoint=checkpoint,
+                            reason="pm_reassessment_invalid_protected_approval",
+                            last_failure=(
+                                "Product Manager attempted to approve a diff that "
+                                "still contains a Human Owner-protected boundary."
+                            ),
+                            pm_reassessment=pm_decision,
+                            diff=diff,
+                        )
+                        return
+                    checkpoint.pop("pending_pm_reassessment", None)
+                    authorizations = list(
+                        checkpoint.get("pm_reassessment_authorizations") or []
+                    )
+                    authorizations.append(
+                        {
+                            "signal": "changed_file_working_target_exceeded",
+                            "diff_hash": str(diff.get("diff_hash") or ""),
+                            "used": int((pm_scope_state or {}).get("used") or 0),
+                            "working_target": int(
+                                (pm_scope_state or {}).get("working_target") or 0
+                            ),
+                            "emergency_limit": int(
+                                (pm_scope_state or {}).get("emergency_limit") or 0
+                            ),
+                            "approved_by": str(pm_result.get("model_id") or ""),
+                            "provider": str(pm_result.get("provider") or ""),
+                            "summary": str(pm_decision.get("summary") or "")[:2000],
+                        }
+                    )
+                    checkpoint["pm_reassessment_authorizations"] = authorizations[-20:]
+                    self.storage.update(
+                        job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                    )
+                elif pm_action in {"request_developer_response", "request_repair"}:
+                    checkpoint.pop("pending_pm_reassessment", None)
+                    last_failure = "PCP_PM_REASSESSMENT: " + json.dumps(
+                        {
+                            "action": pm_action,
+                            "summary": pm_decision.get("summary"),
+                            "developer_message": pm_decision.get("developer_message"),
+                            "unresolved_risks": pm_decision.get("unresolved_risks") or [],
+                            "diff_hash": diff.get("diff_hash"),
+                        },
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    )
+                    progress["required_checks_passed"] = False
+                    # PM owns the next bounded engineering step. Suppress the
+                    # current protected-path signal for this one repair/response
+                    # turn so Runtime does not jump directly to Human before the
+                    # developer can remove or explain the flagged change.
+                    pm_handled_flags = set(
+                        progress.get("important_decision_flags") or []
+                    )
+                    if pm_handled_flags:
+                        progress["important_decision_flags"] = [
+                            item
+                            for item in progress.get("important_decision_flags", [])
+                            if item not in pm_handled_flags
+                        ]
+                    checkpoint["last_failure"] = last_failure
+                    self.storage.update(
+                        job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                    )
+                elif pm_action == "human_decision":
+                    pm_human_decision = {
+                        "required": True,
+                        "triggers": list(pm_decision.get("human_triggers") or []),
+                        "reason": str(pm_decision.get("summary") or ""),
+                    }
+                    if self._decision_approved(checkpoint, pm_human_decision):
+                        self._block(
+                            job_id=job_id,
+                            progress=progress,
+                            checkpoint=checkpoint,
+                            reason="pm_reassessment_unresolved_after_human_approval",
+                            last_failure=(
+                                "Product Manager repeated a Human Owner trigger that "
+                                "is already durably approved; current baseline still "
+                                "does not authorize automatic completion."
+                            ),
+                            pm_reassessment=pm_decision,
+                            diff=diff,
+                        )
+                        return
+                    checkpoint["pending_pm_reassessment"] = {
+                        "signal": "changed_file_working_target_exceeded",
+                        "diff_hash": str(diff.get("diff_hash") or ""),
+                        **dict(pm_scope_state or {}),
+                        "pm_model_id": str(pm_result.get("model_id") or ""),
+                        "summary": str(pm_decision.get("summary") or "")[:2000],
+                    }
+                    self._pause_for_decision(
+                        job_id=job_id,
+                        checkpoint=checkpoint,
+                        progress=progress,
+                        decision=pm_human_decision,
+                        route_history=route_history,
+                        source="pm_reassessment",
+                    )
+                    return
+                else:
+                    checkpoint.pop("pending_pm_reassessment", None)
+                    self._block(
+                        job_id=job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                        reason="pm_reassessment_blocked",
+                        last_failure=str(pm_decision.get("summary") or "PM blocked reassessment"),
+                        pm_reassessment=pm_decision,
+                        diff=diff,
+                    )
+                    return
+
             if progress["required_checks_passed"]:
                 effective_route = self._effective_route(route, executor_choice)
                 while True:
@@ -666,6 +926,7 @@ class RuntimeEngine(RuntimeEngineCore):
                         "evaluator": evaluator_output,
                         "review": review_summary,
                         "pm_evidence": pm_pack,
+                        "pm_reassessment": checkpoint.get("last_pm_reassessment"),
                         "route": route,
                         "route_history": route_history,
                         "progress": progress,

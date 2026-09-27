@@ -374,7 +374,7 @@ class RuntimeEngineCore:
             "required_checks_passed": False, "material_change_present": False,
             "agent_succeeded": False, "last_agent_failure_kind": None,
             "unexpected_scope": False, "important_decision_flags": [],
-            "provider_failures": [], "agent_attempts": [],
+            "provider_failures": [], "agent_attempts": [], "pm_reassessments": 0,
         }
 
     @classmethod

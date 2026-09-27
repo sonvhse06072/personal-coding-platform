@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from pathlib import PurePosixPath
 from typing import Any
 
+from .scope_guard import (
+    baseline_authority_changes,
+    changed_path_protected_signals,
+    normalize_changed_paths,
+)
 from .state import decision_key
 
 
@@ -34,70 +38,6 @@ _PROTECTED_ALIASES = {
     "material_budget_expansion": "material_budget_expansion",
 }
 
-_HIGH_AUTHORITY_PATHS = {
-    "agents.md",
-    "docs/project/constitution.md",
-    "docs/project/architecture.md",
-    "docs/project/operating-model.md",
-    "docs/project/efficiency-model.md",
-    "config/projects.yml",
-    "config/routing-policy.yml",
-    "config/models.yml",
-}
-_SCOPE_PATHS = {
-    "docs/project/roadmap.md",
-    "docs/project/requirements.md",
-    "docs/project/project-plan.md",
-}
-_DEPENDENCY_MANIFESTS = {
-    "composer.json",
-    "composer.lock",
-    "package.json",
-    "package-lock.json",
-    "pnpm-lock.yaml",
-    "yarn.lock",
-    "pyproject.toml",
-    "poetry.lock",
-    "pipfile",
-    "pipfile.lock",
-    "go.mod",
-    "go.sum",
-    "cargo.toml",
-    "cargo.lock",
-    "gemfile",
-    "gemfile.lock",
-    "dockerfile",
-    "docker-compose.yml",
-    "docker-compose.yaml",
-    "compose.yml",
-    "compose.yaml",
-}
-_SECURITY_PATH_TERMS = {
-    "auth",
-    "authentication",
-    "authorization",
-    "permission",
-    "permissions",
-    "security",
-    "secret",
-    "secrets",
-    "credential",
-    "credentials",
-    "access_control",
-}
-_PRODUCTION_PATH_TERMS = {
-    "deploy",
-    "deployment",
-    "production",
-    "prod",
-    "terraform",
-    "ansible",
-    "helm",
-    "kubernetes",
-    "k8s",
-}
-
-
 @dataclass(frozen=True)
 class MergeEligibility:
     eligible: bool
@@ -123,85 +63,19 @@ def _dict(value: Any) -> dict[str, Any]:
 def _changed_paths(job: dict[str, Any]) -> list[str]:
     result = _dict(job.get("result"))
     diff = _dict(result.get("diff"))
-    paths: list[str] = []
-    for raw in diff.get("changed_files") or []:
-        value = str(raw).strip().replace("\\", "/")
-        if not value:
-            continue
-        candidates = value.split(" -> ") if " -> " in value else [value]
-        for candidate in candidates:
-            normalized = candidate.strip()
-            while normalized.startswith("./"):
-                normalized = normalized[2:]
-            normalized = normalized.lower()
-            if normalized and normalized not in paths:
-                paths.append(normalized)
-    return paths
+    return normalize_changed_paths(diff.get("changed_files") or [])
 
 
 def _baseline_authority_changes(job: dict[str, Any]) -> dict[str, str]:
-    """Return authority classes for changed paths from the pinned baseline snapshot."""
-
     checkpoint = _dict(job.get("checkpoint"))
-    baseline = _dict(checkpoint.get("project_baseline"))
-    rules = baseline.get("authority") or []
-    authority_by_path: dict[str, str] = {}
-    for raw in rules:
-        rule = _dict(raw)
-        path = str(rule.get("path") or "").strip().replace("\\", "/").lower()
-        authority = str(rule.get("authority") or "").strip()
-        if path and authority:
-            authority_by_path[path] = authority
-
-    changed: dict[str, str] = {}
-    for path in _changed_paths(job):
-        authority = authority_by_path.get(path)
-        if authority:
-            changed[path] = authority
-    return changed
+    return baseline_authority_changes(_changed_paths(job), checkpoint)
 
 
 def _path_protected_signals(job: dict[str, Any]) -> set[str]:
-    """Infer protected decision classes from the actual accepted diff paths.
+    """Infer protected decision classes from actual accepted diff paths."""
 
-    WorkOrder/task risk metadata is predictive. The accepted diff is executable
-    evidence, so sensitive path families get a second deterministic fail-closed
-    check before merge. These rules intentionally prefer a manual owner merge over
-    silently merging an unclassified governance/security/dependency change.
-    """
-    signals: set[str] = set()
-    baseline_authority = _baseline_authority_changes(job)
-    if "human_owner_protected" in set(baseline_authority.values()):
-        signals.add("project_baseline_authority_change")
-
-    for path in _changed_paths(job):
-        pure = PurePosixPath(path)
-        name = pure.name.lower()
-        parts = {part.lower() for part in pure.parts}
-        stem_parts = set(name.replace("-", "_").replace(".", "_").split("_"))
-
-        if path in _HIGH_AUTHORITY_PATHS or path.startswith(".github/workflows/"):
-            signals.add("high_authority_governance")
-        if path in _SCOPE_PATHS:
-            signals.add("scope_change")
-
-        if (
-            name in _DEPENDENCY_MANIFESTS
-            or (name.startswith("requirements") and name.endswith(".txt"))
-            or path.startswith(("helm/", "charts/", "k8s/", "kubernetes/"))
-        ):
-            signals.add("major_dependency_addition")
-
-        if _SECURITY_PATH_TERMS & (parts | stem_parts):
-            signals.add("security_boundary_change")
-
-        if "migration" in parts or "migrations" in parts or "schema" in stem_parts:
-            signals.add("destructive_migration")
-
-        if _PRODUCTION_PATH_TERMS & (parts | stem_parts):
-            signals.add("production_write")
-
-    return signals
+    checkpoint = _dict(job.get("checkpoint"))
+    return changed_path_protected_signals(_changed_paths(job), checkpoint)
 
 
 def _protected_signals(job: dict[str, Any]) -> set[str]:

@@ -83,6 +83,11 @@ def route_payload():
                         "working_target": 45,
                         "emergency_limit": 80,
                     },
+                    "max_changed_files": {
+                        "estimate": 10,
+                        "working_target": 14,
+                        "emergency_limit": 90,
+                    },
                 },
             },
         }
@@ -114,15 +119,18 @@ def test_explicit_adaptive_work_order_does_not_turn_estimates_into_hard_stops():
     budget = bounded["strategy"]["budget"]
 
     assert bounded["strategy"]["budget_mode"] == "adaptive"
-    # Adaptive execution keeps Router's bounded emergency envelope while scope
-    # and profile remain WorkOrder hard policy boundaries.
+    # Adaptive execution keeps bounded emergency headroom. The WorkOrder file
+    # value is the changed-file working target, not an immediate hard stop.
     assert budget["max_model_calls"] == 18
     assert budget["max_tool_calls"] == 120
     assert budget["max_iterations"] == 10
     assert budget["max_repair_iterations"] == 6
     assert budget["max_test_runs"] == 12
     assert budget["max_wall_time_minutes"] == 80
-    assert budget["max_changed_files"] == 6
+    assert budget["max_changed_files"] == 12
+    envelope = bounded["strategy"]["adaptive_budget"]["dimensions"]["max_changed_files"]
+    assert envelope["working_target"] == 6.0
+    assert envelope["emergency_limit"] == 12.0
 
 
 def test_adaptive_mode_reconciles_effective_budget_to_advertised_emergency_limits():
@@ -187,7 +195,7 @@ def test_adaptive_mode_reconciles_effective_budget_to_advertised_emergency_limit
     assert budget["max_repair_iterations"] == 11
     assert budget["max_test_runs"] == 29
     assert budget["max_wall_time_minutes"] == 116
-    assert budget["max_changed_files"] == 6
+    assert budget["max_changed_files"] == 12
 
 
 def test_adaptive_mode_fails_closed_if_router_has_no_adaptive_metadata():
@@ -231,3 +239,14 @@ def test_adaptive_mode_rejects_non_monotonic_envelope():
 
     with pytest.raises(WorkOrderPolicyError, match="not monotonic"):
         apply_work_order_budget(route, work_order)
+
+
+def test_adaptive_changed_file_envelope_fails_closed_when_router_metadata_is_old():
+    work_order = WorkOrder.model_validate(work_order_payload(mode="adaptive"))
+    route = route_payload()
+    del route["strategy"]["adaptive_budget"]["dimensions"]["max_changed_files"]
+
+    bounded = apply_work_order_budget(route, work_order)
+
+    assert bounded["strategy"]["budget_mode"] == "adaptive"
+    assert bounded["strategy"]["budget"]["max_changed_files"] == 6

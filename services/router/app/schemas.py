@@ -96,6 +96,7 @@ class StaffingRequest(BaseModel):
     profile: ProfileName = "standard"
     semantic: SemanticSignals = Field(default_factory=SemanticSignals)
     provider_state: dict[str, ProviderState] = Field(default_factory=dict)
+    exclude_model_ids: list[str] = Field(default_factory=list, max_length=20)
 
 
 class DimensionScores(BaseModel):

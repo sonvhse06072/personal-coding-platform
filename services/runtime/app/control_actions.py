@@ -267,6 +267,38 @@ class ControlActionService:
         limit = budget.get(dimension)
         return {"key": dimension, "label": spec["label"], "used": used, "limit": limit}
 
+    @staticmethod
+    def _changed_file_scope_recovery_candidate(job: dict[str, Any]) -> bool:
+        result = dict(job.get("result") or {})
+        if str(result.get("reason") or "") != "reassessment_stopped":
+            return False
+
+        reassess = dict(result.get("reassess") or {})
+        signals = {
+            str(item)
+            for item in reassess.get("signals") or []
+            if str(item)
+        }
+        if signals != {"scope_expansion"}:
+            return False
+
+        route = dict(job.get("route") or {})
+        strategy = dict(route.get("strategy") or {})
+        if strategy.get("budget_mode") != "adaptive":
+            return False
+
+        progress = dict(job.get("progress") or {})
+        if not bool(progress.get("unexpected_scope")):
+            return False
+
+        budget = dict(strategy.get("budget") or {})
+        try:
+            changed_files = int(progress.get("changed_files") or 0)
+            previous_limit = int(budget["max_changed_files"])
+        except (KeyError, TypeError, ValueError):
+            return False
+        return changed_files > previous_limit
+
     def blocked_advisory(self, work_order: dict[str, Any], job: dict[str, Any] | None) -> dict[str, Any]:
         job = job or {}
         result = dict(job.get("result") or {})
@@ -411,8 +443,45 @@ class ControlActionService:
 
         elif reason in {"reassessment_stopped", "unsafe_bare_completion"}:
             advisory["summary"] = "Runtime reassessment refused to continue or complete automatically."
-            advisory["cause"] = "The current Definition-of-Done/reassessment state did not authorize automatic completion."
-            advisory["recommended"] = "Review the WorkOrder and existing decision boundary. There is intentionally no force-complete action."
+            reassess = dict(result.get("reassess") or {})
+            nested_reason = str(reassess.get("reason") or "").strip()[:300]
+            safe_signals = [
+                str(item)[:120]
+                for item in reassess.get("signals") or []
+                if str(item).replace("_", "").replace(":", "").replace("-", "").isalnum()
+            ][:12]
+            advisory["cause"] = (
+                f"Router reassessment: {nested_reason}"
+                if nested_reason
+                else "The current Definition-of-Done/reassessment state did not authorize automatic completion."
+            )
+            if safe_signals:
+                advisory["metrics"].append({
+                    "label": "Reassessment signals",
+                    "value": ", ".join(safe_signals),
+                })
+
+            if self._changed_file_scope_recovery_candidate(job):
+                progress = dict(job.get("progress") or {})
+                strategy = dict((job.get("route") or {}).get("strategy") or {})
+                budget = dict(strategy.get("budget") or {})
+                advisory["metrics"].append({
+                    "label": "Changed files",
+                    "used": int(progress.get("changed_files") or 0),
+                    "limit": int(budget.get("max_changed_files") or 0),
+                    "key": "max_changed_files",
+                })
+                advisory["recommended"] = (
+                    "Refresh the current adaptive scope policy and resume the same job only if "
+                    "fresh changed-file emergency headroom exists and no protected path is present."
+                )
+                advisory["action_specs"].insert(0, {
+                    "action_type": "pm_scope_reassess",
+                    "label": "🧭 PM review file scope",
+                    "payload": {},
+                })
+            else:
+                advisory["recommended"] = "Review the WorkOrder and existing decision boundary. There is intentionally no force-complete action."
 
         elif reason in {
             "github_delivery_failed",
@@ -793,6 +862,7 @@ class ControlActionService:
         *,
         reset_transient_provider_failures: bool,
         reroute: bool,
+        require_changed_file_headroom: bool = False,
     ) -> dict[str, Any]:
         context = prepare_orchestrated_job_resume(self.store, job_id)
         row = await self.engine.resume(
@@ -800,6 +870,7 @@ class ControlActionService:
             reset_transient_provider_failures=reset_transient_provider_failures,
             reroute=reroute,
             _allow_failed_orchestrated_resume=bool(context and context.get("reopen")),
+            _require_changed_file_headroom=require_changed_file_headroom,
         )
         reopen_orchestrated_job(self.store, context, job_id)
         return dict(row)
@@ -881,6 +952,21 @@ class ControlActionService:
         if action_type in {"reroute_provider", "reroute_retry", "resume_reroute"}:
             row = await self._resume(job_id, reset_transient_provider_failures=True, reroute=True)
             return self._resume_result(action, row, "The same job was resumed through a fresh eligible route.")
+        if action_type == "pm_scope_reassess":
+            current = self.storage.get(job_id) or {}
+            if not self._changed_file_scope_recovery_candidate(current):
+                raise RuntimeError("Changed-file scope recovery is no longer valid")
+            row = await self._resume(
+                job_id,
+                reset_transient_provider_failures=False,
+                reroute=True,
+                require_changed_file_headroom=True,
+            )
+            return self._resume_result(
+                action,
+                row,
+                "Current adaptive scope policy was revalidated; the same job resumed into the PM reassessment gate without resetting its workspace, diff or counters.",
+            )
         if action_type == "resume_same":
             row = await self._resume(job_id, reset_transient_provider_failures=False, reroute=False)
             return self._resume_result(action, row, "The same interrupted job was resumed without replacing its route.")

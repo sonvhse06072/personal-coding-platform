@@ -164,7 +164,7 @@ Responsibilities:
 - coordinate bounded GitHub delivery and CI repair;
 - support the PM-controlled merge gate without giving developer agents merge authority.
 
-Runtime should handle routine test/lint/repair mechanics, healthy continuation, static-counter headroom, and non-material resource growth without invoking PM or Human Owner for every iteration. A routine owner `continue`/budget-extension action whose only reason is an underestimated but healthy task is a platform defect, not the target operating model.
+Runtime should handle routine test/lint/repair mechanics, healthy continuation, mechanical static-counter headroom, and non-material resource growth without invoking PM or Human Owner for every iteration. Semantic working-envelope crossings that can indicate a change in implementation shape—such as changed-file scope growth—are PM reassessment checkpoints, not automatic Human Owner gates. A routine owner `continue`/budget-extension action whose only reason is an underestimated but healthy task remains a platform defect, not the target operating model.
 
 ## 6. Developer / Specialist role
 
@@ -400,12 +400,13 @@ PM should normally run when:
 - a new ticket arrives;
 - an initial plan/decomposition is needed;
 - a developer completes meaningful work;
+- a semantic working envelope is exceeded in a way that may reflect implementation/scope shape rather than mere resource consumption;
 - review fails after bounded routine repair/dialogue;
 - a decision boundary or scope conflict is discovered;
 - a task completes and the next action must be selected;
 - a PR has passed its required gates and is ready for PM merge review.
 
-A first lint failure, test typo, ordinary bounded retry, healthy automatic budget headroom, static-counter crossing during healthy progress, or non-material provider recovery remains Runtime/Developer responsibility.
+A first lint failure, test typo, ordinary bounded retry, healthy mechanical budget headroom, or non-material provider recovery remains Runtime/Developer responsibility. A semantic working-target crossing such as changed-file scope growth should invoke PM with a bounded evidence pack. PM may approve the exact diff, request a developer explanation/repair, or surface a Human Owner decision only when PM authority is insufficient.
 
 ## 16. Human Owner diagnostic-block convention
 

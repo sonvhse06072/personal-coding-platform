@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import re
 from copy import deepcopy
 from typing import Any, Literal
@@ -357,12 +358,74 @@ def _reconcile_adaptive_emergency_budget(
     return reconciled
 
 
+def _apply_adaptive_changed_file_envelope(
+    *,
+    strategy: dict[str, Any],
+    budget: dict[str, Any],
+    adaptive: dict[str, Any],
+    working_target: int,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Convert the WorkOrder file count into an adaptive working target.
+
+    The Router advertises the platform hard cap. The WorkOrder target remains
+    the expected scope shape, while anti_loop.scope_growth_ratio provides
+    bounded healthy headroom. Missing metadata fails closed to the historical
+    hard target rather than silently widening scope.
+    """
+
+    dimensions = dict(adaptive.get("dimensions") or {})
+    envelope = dimensions.get("max_changed_files")
+    if not isinstance(envelope, dict):
+        budget["max_changed_files"] = min(
+            int(budget["max_changed_files"]),
+            int(working_target),
+        )
+        return budget, adaptive
+
+    try:
+        router_estimate = float(envelope["estimate"])
+        router_emergency = int(float(envelope["emergency_limit"]))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise WorkOrderPolicyError(
+            "Adaptive Router changed-file envelope is malformed"
+        ) from exc
+
+    growth_ratio = float(
+        (strategy.get("anti_loop") or {}).get("scope_growth_ratio", 2.0)
+    )
+    growth_ratio = max(1.0, growth_ratio)
+    emergency_limit = min(
+        router_emergency,
+        max(int(working_target), int(math.ceil(working_target * growth_ratio))),
+    )
+    estimate = min(router_estimate, float(working_target))
+    if not (0 <= estimate <= float(working_target) <= float(emergency_limit)):
+        raise WorkOrderPolicyError(
+            "Adaptive changed-file envelope is not monotonic"
+        )
+
+    updated_envelope = dict(envelope)
+    updated_envelope.update(
+        {
+            "estimate": estimate,
+            "working_target": float(working_target),
+            "emergency_limit": float(emergency_limit),
+        }
+    )
+    dimensions["max_changed_files"] = updated_envelope
+    updated_adaptive = dict(adaptive)
+    updated_adaptive["dimensions"] = dimensions
+    budget["max_changed_files"] = emergency_limit
+    return budget, updated_adaptive
+
+
 def apply_work_order_budget(route: dict[str, Any], work_order: WorkOrder) -> dict[str, Any]:
     """Apply WorkOrder policy without turning adaptive estimates into hard stops.
 
     ``legacy_hard`` preserves the historical behavior exactly for old/pinned
-    WorkOrders. ``adaptive`` still hard-bounds profile and changed-file scope,
-    while Router/Runtime own the task-specific estimate/working/emergency
+    WorkOrders. For ``adaptive``, the WorkOrder changed-file value is a working
+    target with bounded emergency headroom while Router/Runtime own the
+    task-specific estimate/working/emergency
     envelope. If adaptive metadata is absent, fail closed by falling back to the
     legacy clamps rather than silently widening an old Router contract.
     """
@@ -381,10 +444,6 @@ def apply_work_order_budget(route: dict[str, Any], work_order: WorkOrder) -> dic
     budget = dict(strategy.get("budget") or {})
     if "max_changed_files" not in budget:
         raise WorkOrderPolicyError("Router strategy is missing required budget field 'max_changed_files'")
-    budget["max_changed_files"] = min(
-        int(budget["max_changed_files"]),
-        work_order.budget.max_changed_files,
-    )
 
     adaptive = strategy.get("adaptive_budget")
     adaptive_enabled = (
@@ -395,8 +454,19 @@ def apply_work_order_budget(route: dict[str, Any], work_order: WorkOrder) -> dic
 
     if adaptive_enabled:
         budget = _reconcile_adaptive_emergency_budget(budget, adaptive)
+        budget, adaptive = _apply_adaptive_changed_file_envelope(
+            strategy=strategy,
+            budget=budget,
+            adaptive=adaptive,
+            working_target=work_order.budget.max_changed_files,
+        )
+        strategy["adaptive_budget"] = adaptive
         strategy["budget_mode"] = "adaptive"
     else:
+        budget["max_changed_files"] = min(
+            int(budget["max_changed_files"]),
+            work_order.budget.max_changed_files,
+        )
         ceilings = {
             "max_model_calls": work_order.budget.max_model_calls,
             "max_repair_iterations": work_order.budget.max_repair_iterations,
