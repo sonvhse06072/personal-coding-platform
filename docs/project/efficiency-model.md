@@ -93,6 +93,8 @@ Durable counters are never reset when headroom is extended.
 This is a required design and acceptance rule for all Router, Runtime, reassessment, recovery, budget, and Human Attention work:
 
 - A job making meaningful progress must not be blocked solely because it reached a static model-call, token, tool-call, test-run, wall-time, repair, iteration, profile, or similar counter.
+- Changed-file count follows the same principle on effective adaptive WorkOrders: the WorkOrder value is a working target, not proof of scope drift. Bounded headroom may continue while actual changed paths stay outside protected decision families and the emergency scope ceiling is not exceeded. Legacy-hard WorkOrders keep their strict file-count ceiling.
+- Scope authority is path/contract-aware rather than count-only: governance/scope-frame, dependency, security/auth, migration/destructive-data and production-sensitive paths remain independent fail-closed decision signals regardless of changed-file count.
 - A hard stop must cite an independent stop justification beyond counter exhaustion: repeated failure/no progress, solution oscillation, unexpected scope growth, runaway or abnormal resource growth, authoritative provider exhaustion without eligible fallback, a protected decision boundary, or a genuinely material expansion of the approved personal/project resource envelope.
 - Healthy continuation inside the approved resource envelope should occur automatically on the same durable job/workspace with non-decreasing counters and auditable headroom changes.
 - A Human Owner `continue`, `+N`, or budget-extension click whose only purpose is to compensate for an underestimated healthy task is an avoidable platform defect, not an acceptable steady-state control flow.
