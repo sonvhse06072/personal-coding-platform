@@ -153,3 +153,52 @@ def test_human_pm_decision_returns_to_pm_without_authorizing_diff():
         assert queued == ["job12345"]
 
     asyncio.run(scenario())
+
+
+def test_rejected_pm_human_decision_queues_same_job_for_bounded_repair():
+    async def scenario():
+        row = base_row("waiting_human")
+        original_progress = dict(row["progress"])
+        row["checkpoint"]["pending_decision"] = {
+            "key": "major_dependency_addition",
+            "decision": {
+                "required": True,
+                "triggers": ["major_dependency_addition"],
+                "reason": "PM requested approval for an out-of-scope test dependency.",
+            },
+            "source": "pm_reassessment",
+        }
+        row["checkpoint"]["pending_pm_reassessment"] = {
+            "signal": "changed_file_working_target_exceeded",
+            "diff_hash": "diff-test-deps",
+            "used": 9,
+            "working_target": 8,
+            "emergency_limit": 16,
+            "pm_model_id": "pm-model",
+            "summary": "Third-party test dependency is outside the WorkOrder.",
+        }
+        storage = FakeStorage(row)
+        engine = RuntimeEngine(storage)
+        queued = []
+
+        async def enqueue(job_id):
+            queued.append(job_id)
+
+        engine.enqueue = enqueue
+        result = await engine.resolve_human_decision(
+            "job12345",
+            action="reject",
+            note="Do not expand scope. Remove third-party frontend test libraries and use the existing test stack.",
+        )
+
+        assert result["status"] == "queued"
+        assert result["progress"] == original_progress
+        assert not result["checkpoint"].get("approved_decisions")
+        assert result["checkpoint"]["pending_pm_reassessment"]["diff_hash"] == "diff-test-deps"
+        assert "PCP_HUMAN_DECISION_REJECTED:" in result["checkpoint"]["last_failure"]
+        assert "Remove third-party frontend test libraries" in result["checkpoint"]["last_failure"]
+        assert result["checkpoint"]["decision_history"][-1]["action"] == "reject"
+        assert result["result"]["reason"] == "human_decision_rejected_repair"
+        assert queued == ["job12345"]
+
+    asyncio.run(scenario())
