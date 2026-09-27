@@ -1521,6 +1521,7 @@ def reconcile_delivery(payload: ReconcileDeliveryRequest) -> dict[str, Any]:
     try:
         observed = delivery.reconcile_merged_delivery(
             repository=repository,
+            job_id=payload.job_id,
             branch=payload.branch,
             base_branch=str(cfg.get("base_branch", "main")),
             source_commit=payload.source_commit,
