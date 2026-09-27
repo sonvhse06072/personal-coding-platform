@@ -17,10 +17,10 @@ Memory-tier rules and the proposed Context Composer contract are in `context-mem
 
 ## Current platform snapshot
 
-- GitHub `main` after the deterministic Context Composer merge: `58ef2e6a714088359dca3b65eaf257ad644390f1`.
+- GitHub `main` after the missing-workspace cleanup merge: `9a477d15c0a51054779a41f40b24230aa230484d`.
 - Last locally accepted service identities:
-  - Runtime `1.0.55`;
-  - ddev-executor `1.0.23`.
+  - Runtime `1.0.56`;
+  - ddev-executor `1.0.24`.
 - PM-controlled routine merge is implemented and operationally proven. Developer agents never merge.
 - Healthy-progress non-blocking remains mandatory: static task/profile/provider-failover counters alone are not Human Owner stop reasons while meaningful progress continues inside the approved resource envelope.
 - Routine provider recovery remains Runtime/Router responsibility while eligible capacity exists.
@@ -30,6 +30,7 @@ Memory-tier rules and the proposed Context Composer contract are in `context-mem
 - Tiered Context & Memory Architecture is implemented through deterministic T0/T1 pinning plus bounded T2/T3 retrieval; vector/hybrid RAG is deferred because the current PCP benchmark passes without it.
 - Current-site idle preview does not create an engineering job or hold the engineering project lease.
 - Direct-job terminal cleanup must retire preview and safely return the exact clean job-owned branch to the configured existing local base branch before releasing the project lease.
+- Terminal `completed/cancelled` jobs whose isolated Git workspace is already missing can now release exact orphaned PCP DDEV resources through a bounded inspect/revalidate/execute path; blocked/failed/nonterminal work remains ineligible.
 
 For executable details, inspect code/tests on current `main`; historical rollout evidence is in `history/episodes.md`.
 
@@ -61,27 +62,6 @@ Historical DEC-025 PCP orchestration is retired. Do not recreate, reroute or res
 
 ## Active PCP work
 
-### #282 — Release terminal PCP DDEV resources when legacy workspace is missing
-
-Status: open; next concrete source-maintenance issue unless Human Owner reprioritizes.
-
-Current gap:
-
-- normal Runtime cleanup remains workspace-oriented;
-- a terminal/audit-released legacy job whose Git workspace is already absent does not yet have a reusable bounded orphan-resource release API;
-- the historical `eec59b1365` orphan was manually released with exact ownership gates, but that manual proof is not the implementation.
-
-Planned direction:
-
-1. bounded inspect/release operation that derives exact `cp-<job-prefix>` identity without requiring the Git workspace;
-2. Runtime terminal/audit-release authorization;
-3. exact ownership/reference/activity checks;
-4. dry-run before mutation;
-5. preserve blocked/failed/resumable/nonterminal work by default;
-6. idempotent regression coverage and disposable local acceptance fixture.
-
-Do not use global Docker/image prune or recreate a missing workspace to perform cleanup.
-
 ### #146 — Efficiency initiative
 
 Status: open for calibration/watch only.
@@ -103,7 +83,8 @@ The following are complete and no longer belong in active-state chronology:
 - #277/#281 DDEV/BuildKit resource-hygiene initiative;
 - #297 direct workspace + job-owned live preview;
 - #309 project-level Current site preview;
-- #313/#314/#317 tiered context/memory architecture, T1 compaction and deterministic Context Composer/evaluation.
+- #313/#314/#317 tiered context/memory architecture, T1 compaction and deterministic Context Composer/evaluation;
+- #282 bounded missing-workspace terminal DDEV resource release.
 
 Their reusable lessons and primary references are in `history/episodes.md`. Git/issue/PR/Runtime history remains the detailed audit source.
 
@@ -124,8 +105,8 @@ Their reusable lessons and primary references are in `history/episodes.md`. Git/
 
 ## Immediate next safe actions
 
-1. Implement #282 as the next concrete source-maintenance issue unless Human Owner reprioritizes.
-2. Keep #146 in calibration/watch mode and collect only naturally occurring routine-task evidence.
-3. Keep the deterministic context-memory evaluation in CI; treat a future recall/stale-authority regression or sustained corpus growth as evidence to reopen vector/hybrid retrieval evaluation.
-4. Do not add a vector database or embedding provider without a new measured retrieval gap.
-5. Keep shared/default BuildKit cache decisions separate from PCP-owned bounded GC and preserve unrelated Docker/DDEV resources.
+1. Keep #146 in calibration/watch mode and collect only naturally occurring routine-task evidence.
+2. Keep the deterministic context-memory evaluation in CI; treat a future recall/stale-authority regression or sustained corpus growth as evidence to reopen vector/hybrid retrieval evaluation.
+3. Do not add a vector database or embedding provider without a new measured retrieval gap.
+4. Keep shared/default BuildKit cache decisions separate from PCP-owned bounded GC and preserve unrelated Docker/DDEV resources.
+5. For future terminal-resource cleanup, use the bounded Runtime/executor cleanup path; never use broad Docker/DDEV prune as a substitute.
