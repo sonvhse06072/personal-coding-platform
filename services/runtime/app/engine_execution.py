@@ -29,7 +29,7 @@ from .review import (
     should_run_review,
 )
 from .scope_guard import changed_path_protected_signals
-from .state import checkpoint_from_row, existing_repo_analysis, merge_progress, validate_workspace
+from .state import (\n    checkpoint_from_row,\n    clear_failure_context,\n    existing_repo_analysis,\n    merge_progress,\n    set_failure_context,\n    validate_workspace,\n)
 
 _VALID_WORKSPACE_MODES = {"direct", "isolated_clone"}
 
@@ -1049,6 +1049,13 @@ class RuntimeEngine(RuntimeEngineCore):
                     repair_pack,
                     ensure_ascii=False,
                     sort_keys=True,
+                )
+                set_failure_context(
+                    checkpoint,
+                    kind="semantic_repair",
+                    source="reviewer",
+                    message=last_failure,
+                    diff_hash=str(diff.get("diff_hash") or ""),
                 )
             elif progress["unexpected_scope"]:
                 last_failure = "Evaluator completed but the diff exceeded the approved changed-file scope."
