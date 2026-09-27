@@ -575,7 +575,7 @@ def test_existing_workspace_without_durable_mode_fails_closed():
     job = {
         "id": "job-unknown-existing",
         "project_id": "chonhac",
-        "workspace": "/home/sonvh/.coding-platform/workspaces/job-unknown-existing",
+        "workspace": "/tmp/job-unknown-existing",
     }
     project = {
         "runtime": {"workspace_mode": "direct"},
