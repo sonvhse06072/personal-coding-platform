@@ -373,6 +373,7 @@ def test_protected_reviewer_failure_goes_to_pm_repair_before_router_human(
     assert "PCP_PM_REASSESSMENT:" in adapter.execution_prompts[1]
     assert "Remove the third-party frontend library" in adapter.execution_prompts[1]
     assert storage.row["progress"]["repair_iterations"] >= 1
+    assert storage.row["progress"]["important_decision_flags"] == []
     assert all(
         "major_dependency_addition"
         not in ((item.get("progress") or {}).get("important_decision_flags") or [])
