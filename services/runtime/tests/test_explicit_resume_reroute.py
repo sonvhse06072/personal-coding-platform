@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 from copy import deepcopy
 
 import pytest
 
 from app.engine import RuntimeEngine
+from app.engine_telemetry import RuntimeEngine as ProductionRuntimeEngine
 
 
 class Storage:
@@ -346,3 +348,9 @@ def test_changed_file_scope_recovery_preserves_sensitive_path_for_pm_review():
         "changed_file_scope_policy_refresh"
     )
     assert engine.queue.get_nowait() == "job-resume"
+
+
+def test_production_runtime_resume_exposes_pm_scope_recovery_contract():
+    signature = inspect.signature(ProductionRuntimeEngine.resume)
+
+    assert "_require_changed_file_headroom" in signature.parameters
