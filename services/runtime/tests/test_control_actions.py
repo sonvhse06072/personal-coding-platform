@@ -706,7 +706,7 @@ def test_changed_file_scope_reassessment_advisory_exposes_safe_reason_and_recove
 
     advisory = controls.blocked_advisory(row(), job)
 
-    assert advisory["action_specs"][0]["action_type"] == "scope_reassess"
+    assert advisory["action_specs"][0]["action_type"] == "pm_scope_reassess"
     assert "Circuit breaker" in advisory["cause"]
     assert any(
         item.get("label") == "Reassessment signals"
@@ -743,4 +743,4 @@ def test_changed_file_scope_reassessment_recovery_is_not_offered_for_other_anoma
 
     advisory = controls.blocked_advisory(row(), job)
 
-    assert "scope_reassess" not in action_types(advisory)
+    assert "pm_scope_reassess" not in action_types(advisory)
