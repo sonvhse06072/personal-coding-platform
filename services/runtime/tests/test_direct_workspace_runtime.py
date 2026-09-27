@@ -532,7 +532,9 @@ def test_existing_isolated_workspace_ignores_later_direct_project_config():
         "path": "/home/sonvh/chonhac",
     }
 
-    assert effective_workspace_mode(job, checkpoint, project) == "isolated_clone"
+    assert effective_workspace_mode(
+        job, checkpoint, project, Path("/home/sonvh/.coding-platform/workspaces")
+    ) == "isolated_clone"
 
 
 def test_existing_direct_workspace_ignores_later_isolated_project_config():
@@ -547,7 +549,9 @@ def test_existing_direct_workspace_ignores_later_isolated_project_config():
         "path": "/home/sonvh/chonhac",
     }
 
-    assert effective_workspace_mode(job, checkpoint, project) == "direct"
+    assert effective_workspace_mode(
+        job, checkpoint, project, Path("/home/sonvh/.coding-platform/workspaces")
+    ) == "direct"
 
 
 def test_new_job_uses_current_project_workspace_mode():
@@ -562,7 +566,9 @@ def test_new_job_uses_current_project_workspace_mode():
         "path": "/home/sonvh/chonhac",
     }
 
-    assert effective_workspace_mode(job, checkpoint, project) == "direct"
+    assert effective_workspace_mode(
+        job, checkpoint, project, Path("/home/sonvh/.coding-platform/workspaces")
+    ) == "direct"
 
 
 def test_existing_workspace_without_durable_mode_fails_closed():
@@ -578,6 +584,58 @@ def test_existing_workspace_without_durable_mode_fails_closed():
 
     with pytest.raises(
         RuntimeError,
-        match="Persisted workspace is missing a valid durable workspace mode",
+        match="cannot be safely classified",
     ):
-        effective_workspace_mode(job, {}, project)
+        effective_workspace_mode(
+            job,
+            {},
+            project,
+            Path("/home/sonvh/.coding-platform/workspaces"),
+        )
+
+
+def test_legacy_canonical_isolated_workspace_is_inferred_despite_live_direct_config():
+    job_id = "job-legacy-isolated"
+    root = Path("/home/sonvh/.coding-platform/workspaces")
+    job = {
+        "id": job_id,
+        "project_id": "chonhac",
+        "workspace": str(root / job_id),
+    }
+    project = {
+        "runtime": {"workspace_mode": "direct"},
+        "path": "/home/sonvh/chonhac",
+    }
+
+    assert effective_workspace_mode(job, {}, project, root) == "isolated_clone"
+
+
+def test_legacy_canonical_direct_workspace_is_inferred_despite_live_isolated_config():
+    root = Path("/home/sonvh/.coding-platform/workspaces")
+    job = {
+        "id": "job-legacy-direct",
+        "project_id": "chonhac",
+        "workspace": "/home/sonvh/chonhac",
+    }
+    project = {
+        "runtime": {"workspace_mode": "isolated_clone"},
+        "path": "/home/sonvh/chonhac",
+    }
+
+    assert effective_workspace_mode(job, {}, project, root) == "direct"
+
+
+def test_legacy_foreign_workspace_path_still_fails_closed():
+    root = Path("/home/sonvh/.coding-platform/workspaces")
+    job = {
+        "id": "job-legacy-foreign",
+        "project_id": "chonhac",
+        "workspace": "/tmp/copied-workspace",
+    }
+    project = {
+        "runtime": {"workspace_mode": "direct"},
+        "path": "/home/sonvh/chonhac",
+    }
+
+    with pytest.raises(RuntimeError, match="cannot be safely classified"):
+        effective_workspace_mode(job, {}, project, root)
