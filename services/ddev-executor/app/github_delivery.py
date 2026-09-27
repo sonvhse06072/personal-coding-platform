@@ -560,9 +560,9 @@ class GitHubDelivery:
         """Observe an already-merged PR for a preserved accepted delivery.
 
         This path is read-only. It is used only by Runtime delivery recovery before
-        republishing the preserved accepted commit. A merged descendant head is
-        accepted only when GitHub proves both source -> accepted and accepted ->
-        merged-head ancestry and CI for the merged head is successful.
+        republishing the preserved accepted commit. Historical merged PRs on the
+        same deterministic job branch are filtered by accepted-commit ancestry
+        before ambiguity is decided.
         """
         owner = repository.split("/", 1)[0]
         with self._client() as client:
@@ -576,46 +576,31 @@ class GitHubDelivery:
                 },
             )
             lookup.raise_for_status()
-            candidates = [
+            merged = [
                 dict(raw)
                 for raw in list(lookup.json() or [])
                 if bool(raw.get("merged")) or raw.get("merged_at")
             ]
 
-            if not candidates:
+            if not merged:
                 return None
-            if len(candidates) != 1:
-                raise RuntimeError(
-                    "Ambiguous merged pull-request history for the preserved AI branch"
-                )
 
-            raw = candidates[0]
-            if f"- Job: `{job_id}`" not in str(raw.get("body") or ""):
+            job_marker = f"- Job: `{job_id}`"
+            candidates = [
+                raw for raw in merged if job_marker in str(raw.get("body") or "")
+            ]
+            if not candidates:
                 raise RuntimeError(
-                    "Merged pull request is not bound to the preserved Runtime job"
+                    "Merged pull-request history is not bound to the preserved Runtime job"
                 )
-            head = dict(raw.get("head") or {})
-            base = dict(raw.get("base") or {})
-            head_repo = str(((head.get("repo") or {}).get("full_name")) or "")
-            head_sha = str(head.get("sha") or "")
-            if head_repo.lower() != repository.lower():
-                raise RuntimeError(
-                    "Merged pull request head repository does not match configured project repository"
-                )
-            if str(head.get("ref") or "") != branch:
-                raise RuntimeError(
-                    "Merged pull request head branch does not match the preserved AI branch"
-                )
-            if str(base.get("ref") or "") != base_branch:
-                raise RuntimeError(
-                    "Merged pull request base branch does not match project policy"
-                )
-            if not head_sha:
-                raise RuntimeError("Merged pull request is missing a head SHA")
 
             source_compare = client.get(
                 f"{self.base}/repos/{repository}/compare/{source_commit}...{expected_commit}"
             )
+            if source_compare.status_code == 404:
+                raise RuntimeError(
+                    "Preserved accepted commit is not available in the configured GitHub repository"
+                )
             source_compare.raise_for_status()
             source_relation = dict(source_compare.json() or {})
             if (
@@ -627,19 +612,57 @@ class GitHubDelivery:
                     "Preserved accepted commit is not descended from the pinned job source commit"
                 )
 
-            head_compare = client.get(
-                f"{self.base}/repos/{repository}/compare/{expected_commit}...{head_sha}"
-            )
-            head_compare.raise_for_status()
-            head_relation = dict(head_compare.json() or {})
-            if (
-                str((head_relation.get("merge_base_commit") or {}).get("sha") or "")
-                != expected_commit
-                or str(head_relation.get("status") or "") not in {"ahead", "identical"}
-            ):
-                raise RuntimeError(
-                    "Merged pull request head does not contain the preserved accepted commit"
+            qualifying: list[
+                tuple[dict[str, Any], dict[str, Any], dict[str, Any], str, dict[str, Any]]
+            ] = []
+            for raw in candidates:
+                head = dict(raw.get("head") or {})
+                base = dict(raw.get("base") or {})
+                head_repo = str(((head.get("repo") or {}).get("full_name")) or "")
+                head_sha = str(head.get("sha") or "")
+                if head_repo.lower() != repository.lower():
+                    raise RuntimeError(
+                        "Merged pull request head repository does not match configured project repository"
+                    )
+                if str(head.get("ref") or "") != branch:
+                    raise RuntimeError(
+                        "Merged pull request head branch does not match the preserved AI branch"
+                    )
+                if str(base.get("ref") or "") != base_branch:
+                    raise RuntimeError(
+                        "Merged pull request base branch does not match project policy"
+                    )
+                if not head_sha:
+                    raise RuntimeError("Merged pull request is missing a head SHA")
+
+                head_compare = client.get(
+                    f"{self.base}/repos/{repository}/compare/{expected_commit}...{head_sha}"
                 )
+                head_compare.raise_for_status()
+                head_relation = dict(head_compare.json() or {})
+                contains_accepted = (
+                    str((head_relation.get("merge_base_commit") or {}).get("sha") or "")
+                    == expected_commit
+                    and str(head_relation.get("status") or "") in {"ahead", "identical"}
+                )
+                if not contains_accepted:
+                    continue
+                qualifying.append((raw, head, base, head_sha, head_relation))
+
+            if not qualifying:
+                if len(candidates) == 1:
+                    raise RuntimeError(
+                        "Merged pull request head does not contain the preserved accepted commit"
+                    )
+                raise RuntimeError(
+                    "No merged pull request head contains the preserved accepted commit"
+                )
+            if len(qualifying) != 1:
+                raise RuntimeError(
+                    "Ambiguous qualifying merged pull-request history for the preserved AI branch"
+                )
+
+            raw, head, base, head_sha, head_relation = qualifying[0]
 
         ci = self.ci_status(repository=repository, commit=head_sha)
         if str(ci.get("state") or "") != "success":
