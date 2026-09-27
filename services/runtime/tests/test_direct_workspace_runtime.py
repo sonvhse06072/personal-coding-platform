@@ -5,7 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from app.engine_execution import RuntimeEngine as ExecutionRuntimeEngine
+from app.engine_execution import (
+    RuntimeEngine as ExecutionRuntimeEngine,
+    effective_workspace_mode,
+)
 from app.engine_core import RuntimeEngineCore
 
 
@@ -515,3 +518,66 @@ def test_cancel_keeps_direct_lease_when_base_restoration_fails():
     assert ("release_lease", row["id"]) not in storage.actions
     assert storage.row["checkpoint"]["direct_base_restore"]["restored"] is False
     assert "base restore failed" in storage.row["checkpoint"]["direct_base_restore"]["error"]
+
+
+def test_existing_isolated_workspace_ignores_later_direct_project_config():
+    job = {
+        "id": "job-isolated-existing",
+        "project_id": "chonhac",
+        "workspace": "/home/sonvh/.coding-platform/workspaces/job-isolated-existing",
+    }
+    checkpoint = {"workspace_mode": "isolated_clone"}
+    project = {
+        "runtime": {"workspace_mode": "direct"},
+        "path": "/home/sonvh/chonhac",
+    }
+
+    assert effective_workspace_mode(job, checkpoint, project) == "isolated_clone"
+
+
+def test_existing_direct_workspace_ignores_later_isolated_project_config():
+    job = {
+        "id": "job-direct-existing",
+        "project_id": "chonhac",
+        "workspace": "/home/sonvh/chonhac",
+    }
+    checkpoint = {"workspace_mode": "direct"}
+    project = {
+        "runtime": {"workspace_mode": "isolated_clone"},
+        "path": "/home/sonvh/chonhac",
+    }
+
+    assert effective_workspace_mode(job, checkpoint, project) == "direct"
+
+
+def test_new_job_uses_current_project_workspace_mode():
+    job = {
+        "id": "job-new",
+        "project_id": "chonhac",
+        "workspace": None,
+    }
+    checkpoint = {"workspace_mode": "isolated_clone"}
+    project = {
+        "runtime": {"workspace_mode": "direct"},
+        "path": "/home/sonvh/chonhac",
+    }
+
+    assert effective_workspace_mode(job, checkpoint, project) == "direct"
+
+
+def test_existing_workspace_without_durable_mode_fails_closed():
+    job = {
+        "id": "job-unknown-existing",
+        "project_id": "chonhac",
+        "workspace": "/home/sonvh/.coding-platform/workspaces/job-unknown-existing",
+    }
+    project = {
+        "runtime": {"workspace_mode": "direct"},
+        "path": "/home/sonvh/chonhac",
+    }
+
+    with pytest.raises(
+        RuntimeError,
+        match="Persisted workspace is missing a valid durable workspace mode",
+    ):
+        effective_workspace_mode(job, {}, project)
