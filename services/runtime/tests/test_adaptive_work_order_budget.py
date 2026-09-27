@@ -111,7 +111,6 @@ def test_pre_adaptive_work_order_payload_stays_legacy_hard():
     assert budget["max_repair_iterations"] == 1
     assert budget["max_wall_time_minutes"] == 15
     assert budget["max_changed_files"] == 6
-    assert budget["max_changed_files"] == 6
 
 
 def test_explicit_adaptive_work_order_does_not_turn_estimates_into_hard_stops():
