@@ -288,8 +288,6 @@ class ControlActionService:
             return False
 
         progress = dict(job.get("progress") or {})
-        if progress.get("important_decision_flags"):
-            return False
         if not bool(progress.get("unexpected_scope")):
             return False
 
