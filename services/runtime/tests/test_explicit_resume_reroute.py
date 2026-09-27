@@ -310,7 +310,7 @@ def test_changed_file_scope_recovery_fails_closed_above_fresh_emergency_limit():
     assert engine.queue.empty()
 
 
-def test_changed_file_scope_recovery_fails_closed_on_sensitive_changed_path():
+def test_changed_file_scope_recovery_preserves_sensitive_path_for_pm_review():
     original = blocked_row()
     original["progress"].update({
         "changed_files": 9,
@@ -332,14 +332,17 @@ def test_changed_file_scope_recovery_fails_closed_on_sensitive_changed_path():
     engine = RuntimeEngine(storage)
     engine.router = Router(changed_file_recovery_route())
 
-    with pytest.raises(RuntimeError, match="protected changed-path boundary"):
-        asyncio.run(
-            engine.resume(
-                "job-resume",
-                reroute=True,
-                _require_changed_file_headroom=True,
-            )
+    updated = asyncio.run(
+        engine.resume(
+            "job-resume",
+            reroute=True,
+            _require_changed_file_headroom=True,
         )
+    )
 
-    assert storage.get("job-resume")["status"] == "blocked"
-    assert engine.queue.empty()
+    assert updated["status"] == "queued"
+    assert updated["progress"] == original["progress"]
+    assert updated["checkpoint"]["route_history"][-1]["reason"] == (
+        "changed_file_scope_policy_refresh"
+    )
+    assert engine.queue.get_nowait() == "job-resume"
