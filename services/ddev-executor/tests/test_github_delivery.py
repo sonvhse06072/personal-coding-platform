@@ -1,6 +1,7 @@
 import re
 
 import httpx
+import pytest
 
 from app.github_delivery import (
     GitHubDelivery,
@@ -802,3 +803,173 @@ def test_live_shaped_historical_runnerless_failures_are_audited_after_trusted_su
         assert job["runner_id"] == 0
         assert job["runner_name"] == ""
         assert job["steps"] == []
+
+
+def _merged_delivery_fixture(monkeypatch, *, head, pulls=None, ci_state="success", source_ok=True, head_ok=True):
+    expected = "b" * 40
+    source = "a" * 40
+    raw_pulls = pulls if pulls is not None else [{
+        "number": 27,
+        "state": "closed",
+        "merged": True,
+        "merged_at": "2026-09-27T17:03:22Z",
+        "merge_commit_sha": "e" * 40,
+        "html_url": "https://github.com/acme/demo/pull/27",
+        "head": {"sha": head, "ref": "ai/job12345", "repo": {"full_name": "acme/demo"}},
+        "base": {"ref": "main"},
+    }]
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        if path == "/repos/acme/demo/pulls":
+            assert request.url.params["state"] == "closed"
+            assert request.url.params["head"] == "acme:ai/job12345"
+            assert request.url.params["base"] == "main"
+            return httpx.Response(200, json=raw_pulls)
+        if path == f"/repos/acme/demo/compare/{source}...{expected}":
+            return httpx.Response(200, json={
+                "status": "ahead" if source_ok else "diverged",
+                "merge_base_commit": {"sha": source if source_ok else "f" * 40},
+            })
+        if path == f"/repos/acme/demo/compare/{expected}...{head}":
+            return httpx.Response(200, json={
+                "status": "identical" if head == expected and head_ok else ("ahead" if head_ok else "diverged"),
+                "merge_base_commit": {"sha": expected if head_ok else "f" * 40},
+            })
+        raise AssertionError(f"unexpected GitHub request: {request.url}")
+
+    delivery = GitHubDelivery("token")
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(
+        delivery,
+        "_client",
+        lambda: httpx.Client(transport=transport, headers=delivery.headers),
+    )
+    monkeypatch.setattr(
+        delivery,
+        "ci_status",
+        lambda **kwargs: {"state": ci_state, "commit": kwargs["commit"]},
+    )
+    return delivery, source, expected
+
+
+def test_reconcile_merged_delivery_accepts_exact_verified_head(monkeypatch):
+    expected = "b" * 40
+    delivery, source, expected = _merged_delivery_fixture(
+        monkeypatch,
+        head=expected,
+    )
+
+    result = delivery.reconcile_merged_delivery(
+        repository="acme/demo",
+        branch="ai/job12345",
+        base_branch="main",
+        source_commit=source,
+        expected_commit=expected,
+    )
+
+    assert result is not None
+    assert result["number"] == 27
+    assert result["head"] == expected
+    assert result["accepted_commit"] == expected
+    assert result["ci"]["state"] == "success"
+
+
+def test_reconcile_merged_delivery_accepts_green_descendant_head(monkeypatch):
+    head = "d" * 40
+    delivery, source, expected = _merged_delivery_fixture(
+        monkeypatch,
+        head=head,
+    )
+
+    result = delivery.reconcile_merged_delivery(
+        repository="acme/demo",
+        branch="ai/job12345",
+        base_branch="main",
+        source_commit=source,
+        expected_commit=expected,
+    )
+
+    assert result is not None
+    assert result["head"] == head
+    assert result["ancestry"]["accepted_to_head"]["merge_base"] == expected
+
+
+def test_reconcile_merged_delivery_returns_none_when_no_merged_candidate(monkeypatch):
+    delivery, source, expected = _merged_delivery_fixture(
+        monkeypatch,
+        head="d" * 40,
+        pulls=[],
+    )
+
+    result = delivery.reconcile_merged_delivery(
+        repository="acme/demo",
+        branch="ai/job12345",
+        base_branch="main",
+        source_commit=source,
+        expected_commit=expected,
+    )
+
+    assert result is None
+
+
+def test_reconcile_merged_delivery_fails_closed_when_head_does_not_contain_accepted(monkeypatch):
+    delivery, source, expected = _merged_delivery_fixture(
+        monkeypatch,
+        head="d" * 40,
+        head_ok=False,
+    )
+
+    with pytest.raises(RuntimeError, match="does not contain the preserved accepted commit"):
+        delivery.reconcile_merged_delivery(
+            repository="acme/demo",
+            branch="ai/job12345",
+            base_branch="main",
+            source_commit=source,
+            expected_commit=expected,
+        )
+
+
+def test_reconcile_merged_delivery_fails_closed_without_green_head_ci(monkeypatch):
+    delivery, source, expected = _merged_delivery_fixture(
+        monkeypatch,
+        head="d" * 40,
+        ci_state="failure",
+    )
+
+    with pytest.raises(RuntimeError, match="does not have successful GitHub CI"):
+        delivery.reconcile_merged_delivery(
+            repository="acme/demo",
+            branch="ai/job12345",
+            base_branch="main",
+            source_commit=source,
+            expected_commit=expected,
+        )
+
+
+def test_reconcile_merged_delivery_fails_closed_on_ambiguous_merged_history(monkeypatch):
+    head = "d" * 40
+    raw = {
+        "number": 27,
+        "state": "closed",
+        "merged": True,
+        "merged_at": "2026-09-27T17:03:22Z",
+        "merge_commit_sha": "e" * 40,
+        "html_url": "https://github.com/acme/demo/pull/27",
+        "head": {"sha": head, "ref": "ai/job12345", "repo": {"full_name": "acme/demo"}},
+        "base": {"ref": "main"},
+    }
+    delivery, source, expected = _merged_delivery_fixture(
+        monkeypatch,
+        head=head,
+        pulls=[raw, {**raw, "number": 28}],
+    )
+
+    with pytest.raises(RuntimeError, match="Ambiguous merged pull-request history"):
+        delivery.reconcile_merged_delivery(
+            repository="acme/demo",
+            branch="ai/job12345",
+            base_branch="main",
+            source_commit=source,
+            expected_commit=expected,
+        )
