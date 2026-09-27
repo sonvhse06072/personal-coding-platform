@@ -41,6 +41,7 @@ class PMReassessmentDecision(BaseModel):
     action: PMReassessmentAction
     summary: str = Field(min_length=1, max_length=4000)
     developer_message: str | None = Field(default=None, max_length=4000)
+    human_necessity: str | None = Field(default=None, max_length=4000)
     unresolved_risks: list[str] = Field(default_factory=list, max_length=12)
     human_triggers: list[str] = Field(default_factory=list, max_length=12)
 
@@ -52,9 +53,9 @@ class PMReassessmentDecision(BaseModel):
             raise ValueError("PM reassessment summary must not be blank")
         return value
 
-    @field_validator("developer_message")
+    @field_validator("developer_message", "human_necessity")
     @classmethod
-    def normalize_developer_message(cls, value: str | None) -> str | None:
+    def normalize_optional_text(cls, value: str | None) -> str | None:
         if value is None:
             return None
         value = value.strip()
@@ -76,8 +77,12 @@ class PMReassessmentDecision(BaseModel):
             raise ValueError(f"{self.action} requires developer_message")
         if self.action == "human_decision" and not self.human_triggers:
             raise ValueError("human_decision requires at least one human trigger")
+        if self.action == "human_decision" and not self.human_necessity:
+            raise ValueError("human_decision requires human_necessity")
         if self.action != "human_decision" and self.human_triggers:
             raise ValueError("human_triggers are valid only for human_decision")
+        if self.action != "human_decision" and self.human_necessity:
+            raise ValueError("human_necessity is valid only for human_decision")
         unknown = sorted(set(self.human_triggers) - _PM_HUMAN_TRIGGERS)
         if unknown:
             raise ValueError(f"PM reassessment returned unsupported Human Owner triggers: {unknown}")
@@ -175,10 +180,13 @@ def _prompt(
             "The Primary Developer has crossed a semantic working target. File count alone is not proof of scope drift.",
             "Approve continuation only when the evidence shows the change remains inside the approved WorkOrder and no Human Owner protected/material decision is required.",
             "If evidence is insufficient, ask the developer one concrete bounded question. If implementation should change, request a bounded repair.",
+            "A removable implementation choice that violates the WorkOrder or an out-of-scope rule is ordinarily a PM repair decision, not a request to expand scope. Prefer request_repair or request_developer_response when the approved objective can still be met by reverting/replacing the offending change.",
+            "Do not escalate merely because a protected signal exists. Escalate to Human Owner only when the evidence shows PM cannot resolve the issue inside the approved baseline, such as when the protected/material change is genuinely necessary and no viable in-scope repair is available.",
+            "For human_decision, human_necessity must state why repair, revert, or bounded developer dialogue cannot resolve the issue. Human Owner is not an implementation convenience.",
             "Escalate to Human Owner only for a decision the PM lacks authority to make: product/scope/non-goal, architecture invariant, major dependency/service, security/auth/trust, destructive data, production, protected governance/baseline authority, or material resource expansion.",
             "A Human Owner is not a substitute for ordinary engineering judgment.",
             "A prior Human Owner approval does not rewrite the WorkOrder or ProjectBaseline. Reassess within the still-authoritative baseline after considering that decision history.",
-            "Do not repeat an already-resolved Human trigger. If the approved answer still requires a baseline/scope amendment, request repair/block rather than treating the approval as permission to bypass the current contract.",
+            "Do not repeat an already-resolved Human trigger. A rejected Human decision means the requested expansion is not approved: repair/revert inside the current baseline or block if impossible. If an approved answer still requires a baseline/scope amendment, request repair/block rather than treating the approval as permission to bypass the current contract.",
             "Return EXACTLY one JSON object and no Markdown/prose outside it.",
             f"WORK_ORDER: {_compact(work_order, 12000)}",
             f"PROJECT_BASELINE: {_compact(baseline, 12000)}",
