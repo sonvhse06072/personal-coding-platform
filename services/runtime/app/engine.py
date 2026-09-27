@@ -122,6 +122,9 @@ class WorkOrderRouterProxy:
         bounded = apply_work_order_budget(route, work_order)
         return _apply_owner_budget_authorizations(bounded, checkpoint)
 
+    async def staff(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return await self.delegate.staff(payload)
+
     async def reassess(self, payload: dict[str, Any]) -> dict[str, Any]:
         return await self.delegate.reassess(payload)
 
