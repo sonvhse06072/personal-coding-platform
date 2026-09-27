@@ -111,7 +111,7 @@ def test_cancel_marks_job_and_cancels_active_runtime_task_and_ddev_process():
     asyncio.run(scenario())
 
 
-def test_human_approval_of_pm_reassessment_is_bound_to_exact_diff():
+def test_human_pm_decision_returns_to_pm_without_authorizing_diff():
     async def scenario():
         row = base_row("waiting_human")
         row["checkpoint"]["pending_decision"] = {
@@ -143,17 +143,13 @@ def test_human_approval_of_pm_reassessment_is_bound_to_exact_diff():
         result = await engine.resolve_human_decision(
             "job12345",
             action="approve",
-            note="Approved for this exact diff.",
+            note="Decision supplied; baseline remains authoritative.",
         )
 
         assert result["status"] == "queued"
-        assert "pending_pm_reassessment" not in result["checkpoint"]
-        authorization = result["checkpoint"]["pm_reassessment_authorizations"][-1]
-        assert authorization["diff_hash"] == "diff-abc"
-        assert authorization["used"] == 11
-        assert authorization["working_target"] == 8
-        assert authorization["emergency_limit"] == 16
-        assert authorization["approved_by"] == "human_owner"
+        assert result["checkpoint"]["pending_pm_reassessment"]["diff_hash"] == "diff-abc"
+        assert not result["checkpoint"].get("pm_reassessment_authorizations")
+        assert "scope_change" in result["checkpoint"]["approved_decisions"]
         assert queued == ["job12345"]
 
     asyncio.run(scenario())
