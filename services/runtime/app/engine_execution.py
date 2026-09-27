@@ -87,6 +87,11 @@ class RuntimeEngine(RuntimeEngineCore):
         runtime_cfg = project.get("runtime", {}) or {}
         task = dict(job["task"])
         checkpoint = checkpoint_from_row(job)
+        persisted_workspace_mode = str(checkpoint.get("workspace_mode") or "")
+        legacy_workspace_mode_inferred = bool(
+            job.get("workspace")
+            and persisted_workspace_mode not in _VALID_WORKSPACE_MODES
+        )
         workspace_mode = effective_workspace_mode(
             job,
             checkpoint,
@@ -151,6 +156,8 @@ class RuntimeEngine(RuntimeEngineCore):
                 )
                 if current_branch.returncode != 0 or current_branch.stdout.strip() != branch:
                     raise RuntimeError("Direct workspace branch changed outside the owning job")
+            if legacy_workspace_mode_inferred:
+                self.storage.update(job_id, checkpoint=checkpoint)
         else:
             acquired_direct_lease = workspace_mode == "direct"
             try:
