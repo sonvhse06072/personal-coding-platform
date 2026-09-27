@@ -384,6 +384,7 @@ def test_pm_human_escalation_is_limited_to_known_owner_boundaries() -> None:
                 "action": "human_decision",
                 "summary": "Ask owner for an ordinary implementation preference.",
                 "developer_message": None,
+                "human_necessity": "The PM claims this preference cannot be resolved inside the current WorkOrder.",
                 "unresolved_risks": [],
                 "human_triggers": ["ordinary_implementation_preference"],
             }
