@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from copy import deepcopy
 from datetime import datetime, timedelta, timezone
@@ -9,6 +10,30 @@ import pytest
 
 from app.control_actions import ControlActionService
 from app.engine import _apply_owner_budget_authorizations
+
+
+def _control_dedupe_key(
+    *,
+    action_type: str,
+    plan_id: str,
+    work_order_id: str,
+    job_id: str | None,
+    generation_fingerprint: str,
+    payload: dict,
+) -> str:
+    source = json.dumps(
+        {
+            "action_type": action_type,
+            "plan_id": plan_id,
+            "work_order_id": work_order_id,
+            "job_id": job_id,
+            "generation_fingerprint": generation_fingerprint,
+            "payload": payload,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
 
 class FakeStorage:
@@ -501,6 +526,71 @@ class ActionConnection:
             return ActionResult()
         if normalized.startswith("SELECT * FROM cp_control_actions WHERE action_id="):
             return ActionResult(self.storage.actions.get(params[0]))
+        if normalized.startswith("INSERT INTO cp_control_actions"):
+            (
+                action_id, dedupe_key, action_type, plan_id, work_order_id, job_id,
+                state_fingerprint, generation_fingerprint, payload, expires_at,
+                created_at, updated_at,
+            ) = params
+            existing = next(
+                (
+                    row for row in self.storage.actions.values()
+                    if row.get("dedupe_key") == dedupe_key
+                ),
+                None,
+            )
+            if existing is not None:
+                if (
+                    existing.get("status") == "failed"
+                    and existing.get("state_fingerprint") == state_fingerprint
+                    and existing.get("generation_fingerprint") == generation_fingerprint
+                ):
+                    existing.update(
+                        status="pending",
+                        result=None,
+                        expires_at=expires_at,
+                        updated_at=updated_at,
+                    )
+                return ActionResult(existing)
+            row = {
+                "action_id": action_id,
+                "dedupe_key": dedupe_key,
+                "action_type": action_type,
+                "plan_id": plan_id,
+                "work_order_id": work_order_id,
+                "job_id": job_id,
+                "state_fingerprint": state_fingerprint,
+                "generation_fingerprint": generation_fingerprint,
+                "payload": json.loads(payload),
+                "status": "pending",
+                "result": None,
+                "expires_at": expires_at,
+                "created_at": created_at,
+                "updated_at": updated_at,
+            }
+            self.storage.actions[action_id] = row
+            return ActionResult(row)
+        if (
+            normalized.startswith("UPDATE cp_control_actions SET status='cancelled'")
+            and "WHERE status='pending' AND plan_id=" in normalized
+            and "FROM cp_plan_work_orders" not in normalized
+        ):
+            updated_at, plan_id, work_order_id, *rest = params
+            except_generation = rest[0] if rest else None
+            changed = 0
+            for action in self.storage.actions.values():
+                if action.get("status") != "pending":
+                    continue
+                if action.get("plan_id") != plan_id or action.get("work_order_id") != work_order_id:
+                    continue
+                if (
+                    except_generation is not None
+                    and action.get("generation_fingerprint") == except_generation
+                ):
+                    continue
+                action.update(status="cancelled", updated_at=updated_at)
+                changed += 1
+            return ActionResult(rowcount=changed)
         if "SET status='cancelled'" in normalized and "FROM cp_plan_work_orders" in normalized:
             changed = 0
             if (
@@ -838,3 +928,106 @@ def test_changed_file_scope_reassessment_recovery_is_not_offered_for_other_anoma
     advisory = controls.blocked_advisory(row(), job)
 
     assert "pm_scope_reassess" not in action_types(advisory)
+
+
+def test_failed_control_action_is_rearmed_only_for_same_state_generation(monkeypatch):
+    monkeypatch.setenv("TELEGRAM_OWNER_USER_ID", "owner")
+    monkeypatch.setenv("TELEGRAM_CHAT_ID", "chat")
+    store = ActionStore("blocked")
+    timestamp = datetime.now(timezone.utc)
+    failed = {
+        **control_action("scope-failed", "pm_scope_reassess", status="failed", fingerprint="same-state"),
+        "dedupe_key": "placeholder",
+        "generation_fingerprint": "same-generation",
+        "result": {"status": "failed"},
+        "created_at": timestamp,
+        "updated_at": timestamp,
+    }
+    storage = ActionStorage([failed], store)
+    controls = ControlActionService(storage, FakeEngine(), store)
+
+    plan = {"plan_id": "plan-1", "status": "blocked", "lifecycle": "active", "updated_at": "p-current"}
+    work_order = {
+        **store.work_order,
+        "state": "blocked",
+        "lifecycle": "active",
+        "updated_at": "w-current",
+    }
+    job = base_job(reason="reassessment_stopped")
+    job["id"] = "job-1"
+    job["status"] = "blocked"
+
+    advisory = {
+        "reason": "reassessment_stopped",
+        "action_specs": [
+            {"action_type": "pm_scope_reassess", "label": "PM scope", "payload": {}}
+        ],
+    }
+    generation = controls.attention_generation_fingerprint(
+        plan,
+        work_order,
+        job,
+        advisory,
+    )
+    state = controls.state_fingerprint(plan, work_order, job)
+
+    failed["dedupe_key"] = _control_dedupe_key(
+        action_type="pm_scope_reassess",
+        plan_id="plan-1",
+        work_order_id="WO-1",
+        job_id="job-1",
+        generation_fingerprint=generation,
+        payload={},
+    )
+    failed["generation_fingerprint"] = generation
+    failed["state_fingerprint"] = state
+    storage.actions["scope-failed"] = failed
+
+    rendered = controls.create_actions(
+        plan=plan,
+        work_order=work_order,
+        job=job,
+        advisory=advisory,
+    )
+
+    assert rendered[0]["action_id"] == "scope-failed"
+    assert storage.actions["scope-failed"]["status"] == "pending"
+    assert storage.actions["scope-failed"]["result"] is None
+
+
+def test_failed_control_action_is_not_rearmed_after_state_drift():
+    store = ActionStore("blocked")
+    failed = {
+        **control_action(
+            "scope-failed",
+            "pm_scope_reassess",
+            status="failed",
+            fingerprint="old-state",
+        ),
+        "generation_fingerprint": "same-generation",
+        "result": {"status": "failed"},
+    }
+    failed["dedupe_key"] = _control_dedupe_key(
+        action_type="pm_scope_reassess",
+        plan_id="plan-1",
+        work_order_id="WO-1",
+        job_id="job-1",
+        generation_fingerprint="same-generation",
+        payload={},
+    )
+    storage = ActionStorage([failed], store)
+    controls = ControlActionService(storage, FakeEngine(), store)
+
+    row = controls.create_action(
+        action_type="pm_scope_reassess",
+        plan_id="plan-1",
+        work_order_id="WO-1",
+        job_id="job-1",
+        state_fingerprint="new-state",
+        generation_fingerprint="same-generation",
+        payload={},
+        ttl_hours=48,
+    )
+
+    assert row["status"] == "failed"
+    assert row["state_fingerprint"] == "old-state"

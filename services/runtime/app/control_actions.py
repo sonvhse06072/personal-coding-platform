@@ -714,7 +714,35 @@ class ControlActionService:
                  state_fingerprint, generation_fingerprint, payload, status, result,
                  expires_at, created_at, updated_at)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,'pending',NULL,%s,%s,%s)
-                ON CONFLICT (dedupe_key) DO UPDATE SET dedupe_key=EXCLUDED.dedupe_key
+                ON CONFLICT (dedupe_key) DO UPDATE SET
+                  status = CASE
+                    WHEN cp_control_actions.status='failed'
+                     AND cp_control_actions.state_fingerprint=EXCLUDED.state_fingerprint
+                     AND cp_control_actions.generation_fingerprint=EXCLUDED.generation_fingerprint
+                    THEN 'pending'
+                    ELSE cp_control_actions.status
+                  END,
+                  result = CASE
+                    WHEN cp_control_actions.status='failed'
+                     AND cp_control_actions.state_fingerprint=EXCLUDED.state_fingerprint
+                     AND cp_control_actions.generation_fingerprint=EXCLUDED.generation_fingerprint
+                    THEN NULL
+                    ELSE cp_control_actions.result
+                  END,
+                  expires_at = CASE
+                    WHEN cp_control_actions.status='failed'
+                     AND cp_control_actions.state_fingerprint=EXCLUDED.state_fingerprint
+                     AND cp_control_actions.generation_fingerprint=EXCLUDED.generation_fingerprint
+                    THEN EXCLUDED.expires_at
+                    ELSE cp_control_actions.expires_at
+                  END,
+                  updated_at = CASE
+                    WHEN cp_control_actions.status='failed'
+                     AND cp_control_actions.state_fingerprint=EXCLUDED.state_fingerprint
+                     AND cp_control_actions.generation_fingerprint=EXCLUDED.generation_fingerprint
+                    THEN EXCLUDED.updated_at
+                    ELSE cp_control_actions.updated_at
+                  END
                 RETURNING *""",
                 (
                     action_id, dedupe_key, action_type, plan_id, work_order_id, job_id,
@@ -840,7 +868,13 @@ class ControlActionService:
         try:
             result = await self._dispatch(action)
         except Exception as exc:
-            safe = {"status": "failed", "action_id": action_id, "message": f"Control action failed safely: {type(exc).__name__}"}
+            safe = {
+                "status": "failed",
+                "action_id": action_id,
+                "action_type": str(action.get("action_type") or ""),
+                "phase": "dispatch",
+                "message": f"Control action failed safely: {type(exc).__name__}",
+            }
             with self.storage.connect() as conn:
                 conn.execute(
                     """UPDATE cp_control_actions SET status='failed', result=%s::jsonb, updated_at=%s
