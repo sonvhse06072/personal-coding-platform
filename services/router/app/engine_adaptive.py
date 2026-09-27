@@ -22,6 +22,7 @@ _ELASTIC_COUNTERS = {
     "max_repair_iterations": "repair_iterations",
     "max_test_runs": "test_runs",
     "max_wall_time_minutes": "elapsed_minutes",
+    "max_changed_files": "changed_files",
 }
 
 
@@ -33,8 +34,8 @@ class RouterEngine(BudgetRouterEngine):
     are high-water telemetry thresholds. Cumulative input/output token totals,
     calls/iterations/repairs/tests/tools and total wall time remain telemetry and
     reassessment inputs on effective adaptive WorkOrders. Hard monetary cost,
-    provider quota/context enforcement and independent anomaly/protected-decision
-    signals remain fail-closed.
+    provider quota/context enforcement, bounded changed-file emergency scope and
+    independent anomaly/protected-decision signals remain fail-closed.
 
     Historical telemetry may adjust estimates only after the configured minimum
     sample size. It can never expand the configured emergency hard caps.
