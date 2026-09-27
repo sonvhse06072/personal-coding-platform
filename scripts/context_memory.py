@@ -64,6 +64,7 @@ ROLE_PREFERENCES = {
 T0_HEADINGS = {
     "product_manager": {
         "Authority order",
+        "Baseline authority preservation",
         "Core invariants",
         "Change discipline",
         "Mandatory documentation continuity",
@@ -77,6 +78,7 @@ T0_HEADINGS = {
     },
     "developer": {
         "Authority order",
+        "Baseline authority preservation",
         "Core invariants",
         "Change discipline",
         "Mandatory documentation continuity",
@@ -89,6 +91,7 @@ T0_HEADINGS = {
     },
     "reviewer": {
         "Authority order",
+        "Baseline authority preservation",
         "Core invariants",
         "Change discipline",
         "4. Authority hierarchy",
@@ -100,6 +103,7 @@ T0_HEADINGS = {
     },
     "debugger": {
         "Authority order",
+        "Baseline authority preservation",
         "Core invariants",
         "Change discipline",
         "4. Authority hierarchy",
@@ -110,6 +114,7 @@ T0_HEADINGS = {
     },
     "specialist": {
         "Authority order",
+        "Baseline authority preservation",
         "Core invariants",
         "Change discipline",
         "4. Authority hierarchy",
@@ -123,6 +128,7 @@ T0_HEADINGS = {
 T0_PRIORITY = {
     "product_manager": (
         "Authority order",
+        "Baseline authority preservation",
         "4. Authority hierarchy",
         "5. Human Owner authority",
         "6. Product Manager authority",
@@ -136,6 +142,7 @@ T0_PRIORITY = {
     ),
     "developer": (
         "Authority order",
+        "Baseline authority preservation",
         "4. Authority hierarchy",
         "5. Human Owner authority",
         "8. Agent-role principles",
@@ -148,6 +155,7 @@ T0_PRIORITY = {
     ),
     "reviewer": (
         "Authority order",
+        "Baseline authority preservation",
         "4. Authority hierarchy",
         "5. Human Owner authority",
         "8. Agent-role principles",
@@ -159,6 +167,7 @@ T0_PRIORITY = {
     ),
     "debugger": (
         "Authority order",
+        "Baseline authority preservation",
         "4. Authority hierarchy",
         "5. Human Owner authority",
         "Core invariants",
@@ -169,6 +178,7 @@ T0_PRIORITY = {
     ),
     "specialist": (
         "Authority order",
+        "Baseline authority preservation",
         "4. Authority hierarchy",
         "5. Human Owner authority",
         "Core invariants",
