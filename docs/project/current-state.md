@@ -2,7 +2,7 @@
 
 Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and live Runtime/GitHub evidence remain authoritative over chat history. Completed chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-09-27 after #317.
+Last updated: 2026-09-27 for #322 governance hardening.
 
 ## Resume order
 
@@ -38,8 +38,9 @@ For executable details, inspect code/tests on current `main`; historical rollout
 
 Approved ProjectBaseline for new PCP-managed Chợ Nhạc work:
 
-- revision: `mvp-v1-2026-09-22-design`;
-- immutable baseline source: `afc0901a6c073f763c440df4d492778c12fec11a`;
+- revision: `mvp-v1-2026-09-27-governed`;
+- immutable baseline source: `8383b0004ee649cb3ac0fef1e68f9ca40718005b`;
+- document authority classes: Human Owner protected / delegated Design Owner / mutable execution / evidence-history;
 - direct project root: `/home/sonvh/chonhac`;
 - runtime mode: `workspace_mode: direct`;
 - exclusive engineering lease: enabled;
