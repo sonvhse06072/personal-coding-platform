@@ -478,8 +478,8 @@ class ControlActionService:
                     "fresh changed-file emergency headroom exists and no protected path is present."
                 )
                 advisory["action_specs"].insert(0, {
-                    "action_type": "scope_reassess",
-                    "label": "🔄 Re-evaluate file scope",
+                    "action_type": "pm_scope_reassess",
+                    "label": "🧭 PM review file scope",
                     "payload": {},
                 })
             else:
@@ -954,7 +954,7 @@ class ControlActionService:
         if action_type in {"reroute_provider", "reroute_retry", "resume_reroute"}:
             row = await self._resume(job_id, reset_transient_provider_failures=True, reroute=True)
             return self._resume_result(action, row, "The same job was resumed through a fresh eligible route.")
-        if action_type == "scope_reassess":
+        if action_type == "pm_scope_reassess":
             current = self.storage.get(job_id) or {}
             if not self._changed_file_scope_recovery_candidate(current):
                 raise RuntimeError("Changed-file scope recovery is no longer valid")
@@ -967,7 +967,7 @@ class ControlActionService:
             return self._resume_result(
                 action,
                 row,
-                "Current adaptive scope policy was revalidated; the same job resumed with bounded changed-file headroom.",
+                "Current adaptive scope policy was revalidated; the same job resumed into the PM reassessment gate without resetting its workspace, diff or counters.",
             )
         if action_type == "resume_same":
             row = await self._resume(job_id, reset_transient_provider_failures=False, reroute=False)
