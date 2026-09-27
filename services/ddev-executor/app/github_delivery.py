@@ -590,7 +590,7 @@ class GitHubDelivery:
                 )
 
             raw = candidates[0]
-            if f"- Job: \`{job_id}\`" not in str(raw.get("body") or ""):
+            if f"- Job: `{job_id}`" not in str(raw.get("body") or ""):
                 raise RuntimeError(
                     "Merged pull request is not bound to the preserved Runtime job"
                 )
