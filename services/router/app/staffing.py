@@ -265,6 +265,7 @@ class RouterEngine(BudgetRouterEngine):
             request=pseudo,
             dimensions=dimensions,
             profile=request.profile,
+            exclude_model_ids=set(request.exclude_model_ids),
         )
         self._apply_reasoning(choice, _STAFF_REASONING_BY_PROFILE.get(request.profile))
         return StaffingResponse(
