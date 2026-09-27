@@ -676,9 +676,11 @@ class RuntimeEngine(RuntimeEngineCore):
                 try:
                     pm_result = await run_pm_reassessment(
                         router=self.router,
+                        ddev=self.ddev,
                         workspace=workspace,
                         job_id=job_id,
                         project_id=job["project_id"],
+                        source_commit=source_commit,
                         profile=str(strategy.get("profile") or "standard"),
                         current_executor=executor_choice,
                         provider_state=provider_state,
