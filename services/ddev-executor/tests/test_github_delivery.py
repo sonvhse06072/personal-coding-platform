@@ -815,6 +815,7 @@ def _merged_delivery_fixture(monkeypatch, *, head, pulls=None, ci_state="success
         "merged_at": "2026-09-27T17:03:22Z",
         "merge_commit_sha": "e" * 40,
         "html_url": "https://github.com/acme/demo/pull/27",
+        "body": "Automated coding-platform delivery.\n\n- Job: `job12345`",
         "head": {"sha": head, "ref": "ai/job12345", "repo": {"full_name": "acme/demo"}},
         "base": {"ref": "main"},
     }]
@@ -862,6 +863,7 @@ def test_reconcile_merged_delivery_accepts_exact_verified_head(monkeypatch):
 
     result = delivery.reconcile_merged_delivery(
         repository="acme/demo",
+        job_id="job12345",
         branch="ai/job12345",
         base_branch="main",
         source_commit=source,
@@ -884,6 +886,7 @@ def test_reconcile_merged_delivery_accepts_green_descendant_head(monkeypatch):
 
     result = delivery.reconcile_merged_delivery(
         repository="acme/demo",
+        job_id="job12345",
         branch="ai/job12345",
         base_branch="main",
         source_commit=source,
@@ -904,6 +907,7 @@ def test_reconcile_merged_delivery_returns_none_when_no_merged_candidate(monkeyp
 
     result = delivery.reconcile_merged_delivery(
         repository="acme/demo",
+        job_id="job12345",
         branch="ai/job12345",
         base_branch="main",
         source_commit=source,
@@ -956,6 +960,7 @@ def test_reconcile_merged_delivery_fails_closed_on_ambiguous_merged_history(monk
         "merged_at": "2026-09-27T17:03:22Z",
         "merge_commit_sha": "e" * 40,
         "html_url": "https://github.com/acme/demo/pull/27",
+        "body": "Automated coding-platform delivery.\n\n- Job: `job12345`",
         "head": {"sha": head, "ref": "ai/job12345", "repo": {"full_name": "acme/demo"}},
         "base": {"ref": "main"},
     }
