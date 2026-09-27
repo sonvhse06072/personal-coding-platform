@@ -284,7 +284,10 @@ class ProtectedRepairAdapter:
                 )
                 output = "Added focused tests with a third-party test helper."
             else:
-                package.unlink(missing_ok=True)
+                package.write_text(
+                    '{"dependencies":{}}\n',
+                    encoding="utf-8",
+                )
                 output = "Removed the out-of-scope test helper and used the existing stack."
             return AgentRun(
                 adapter="fake",
@@ -322,6 +325,16 @@ def test_protected_reviewer_failure_goes_to_pm_repair_before_router_human(
 ):
     job_id = "job338protected"
     root, workspace = _workspace(tmp_path, job_id)
+    (workspace / "package.json").write_text(
+        '{"dependencies":{}}\n',
+        encoding="utf-8",
+    )
+    subprocess.run(["git", "add", "package.json"], cwd=workspace, check=True)
+    subprocess.run(
+        ["git", "commit", "-qm", "baseline package manifest"],
+        cwd=workspace,
+        check=True,
+    )
     row = _row(workspace, job_id)
     row["checkpoint"]["work_order"]["out_of_scope"] = ["Third-party frontend libraries"]
     storage = FakeStorage(row)
@@ -371,7 +384,15 @@ def test_protected_reviewer_failure_goes_to_pm_repair_before_router_human(
     assert len(adapter.execution_prompts) >= 2
     assert "PCP_PM_REASSESSMENT:" in adapter.execution_prompts[1]
     assert "Remove the third-party frontend library" in adapter.execution_prompts[1]
-    assert not (workspace / "package.json").exists()
+    assert (workspace / "package.json").read_text(encoding="utf-8") == '{"dependencies":{}}\n'
+    package_diff = subprocess.run(
+        ["git", "diff", "--", "package.json"],
+        cwd=workspace,
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout
+    assert package_diff == ""
     assert storage.row["progress"]["repair_iterations"] >= 1
     assert storage.row["progress"]["important_decision_flags"] == []
     assert all(
