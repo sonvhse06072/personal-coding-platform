@@ -1,11 +1,17 @@
 from app.config import clear_config_cache, get_config
 from app.engine_budget import RouterEngine
+from app.staffing import RouterEngine as AdaptiveRouterEngine
 from app.schemas import ExecutionProgress, ReassessRequest, RoutingRequest
 
 
 def make_engine() -> RouterEngine:
     clear_config_cache()
     return RouterEngine(get_config())
+
+
+def make_adaptive_engine() -> AdaptiveRouterEngine:
+    clear_config_cache()
+    return AdaptiveRouterEngine(get_config())
 
 
 def base_request() -> RoutingRequest:
@@ -403,7 +409,7 @@ def test_legacy_hard_total_wall_time_remains_strict():
 
 
 def test_adaptive_changed_files_inside_emergency_headroom_are_not_scope_expansion():
-    engine = make_engine()
+    engine = make_adaptive_engine()
     route = engine.route(base_request())
     route.strategy.budget_mode = "adaptive"
     adaptive = route.strategy.adaptive_budget
