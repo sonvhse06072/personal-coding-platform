@@ -29,7 +29,14 @@ from .review import (
     should_run_review,
 )
 from .scope_guard import changed_path_protected_signals
-from .state import checkpoint_from_row, existing_repo_analysis, merge_progress, validate_workspace
+from .state import (
+    checkpoint_from_row,
+    clear_failure_context,
+    existing_repo_analysis,
+    merge_progress,
+    set_failure_context,
+    validate_workspace,
+)
 
 _VALID_WORKSPACE_MODES = {"direct", "isolated_clone"}
 
@@ -439,7 +446,12 @@ class RuntimeEngine(RuntimeEngineCore):
                     strategy=strategy,
                 )
                 checkpoint["provider_state"] = provider_state
-                checkpoint["last_failure"] = last_failure
+                set_failure_context(
+                    checkpoint,
+                    kind="route_transient",
+                    source="provider",
+                    message=last_failure,
+                )
                 if next_executor:
                     route_history.append({
                         "reason": f"provider_failover:{executor_choice['id']}:{run.failure_kind}",
@@ -882,7 +894,13 @@ class RuntimeEngine(RuntimeEngineCore):
                     progress["failure_fingerprints"].append(fp)
                     progress["progress_markers"].append(fp)
                     progress["repair_iterations"] += 1
-                    checkpoint["last_failure"] = last_failure
+                    set_failure_context(
+                        checkpoint,
+                        kind="semantic_repair",
+                        source="pm_reassessment",
+                        message=last_failure,
+                        diff_hash=str(diff.get("diff_hash") or ""),
+                    )
                     self.storage.update(
                         job_id,
                         status="executing",
@@ -1000,7 +1018,7 @@ class RuntimeEngine(RuntimeEngineCore):
                         "route_history": route_history,
                         "progress": progress,
                     }
-                    checkpoint["last_failure"] = None
+                    clear_failure_context(checkpoint)
                     checkpoint["executor_choice"] = executor_choice
                     checkpoint["provider_state"] = provider_state
                     self.storage.update(
@@ -1049,6 +1067,13 @@ class RuntimeEngine(RuntimeEngineCore):
                     repair_pack,
                     ensure_ascii=False,
                     sort_keys=True,
+                )
+                set_failure_context(
+                    checkpoint,
+                    kind="semantic_repair",
+                    source="reviewer",
+                    message=last_failure,
+                    diff_hash=str(diff.get("diff_hash") or ""),
                 )
             elif progress["unexpected_scope"]:
                 last_failure = "Evaluator completed but the diff exceeded the approved changed-file scope."

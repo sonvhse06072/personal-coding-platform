@@ -197,6 +197,14 @@ def test_rejected_pm_human_decision_queues_same_job_for_bounded_repair():
         assert result["checkpoint"]["pending_pm_reassessment"]["diff_hash"] == "diff-test-deps"
         assert "PCP_HUMAN_DECISION_REJECTED:" in result["checkpoint"]["last_failure"]
         assert "Remove third-party frontend test libraries" in result["checkpoint"]["last_failure"]
+        assert result["checkpoint"]["failure_context"] == {
+            "version": 1,
+            "kind": "semantic_repair",
+            "source": "human_rejection",
+            "message": result["checkpoint"]["last_failure"],
+            "diff_hash": "diff-test-deps",
+            "decision_key": "major_dependency_addition",
+        }
         assert result["checkpoint"]["decision_history"][-1]["action"] == "reject"
         assert result["result"]["reason"] == "human_decision_rejected_repair"
         assert queued == ["job12345"]

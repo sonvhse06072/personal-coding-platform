@@ -4,6 +4,7 @@ import pytest
 
 from app.state import (
     checkpoint_from_row,
+    clear_routing_choices_for_resume,
     clear_transient_provider_failures,
     decision_key,
     merge_progress,
@@ -30,6 +31,51 @@ def test_checkpoint_migrates_legacy_initial_job_shape():
     })
     assert checkpoint["hints"]["estimated_files"] == 2
     assert checkpoint["provider_state"]["provider:openai"]["available"] is False
+
+
+def test_checkpoint_migrates_legacy_reviewer_repair_context() -> None:
+    checkpoint = checkpoint_from_row({
+        "checkpoint": {
+            "last_failure": "PCP_REVIEW_FINDINGS: bounded repair",
+            "pending_review_findings": {
+                "diff_hash": "diff-review",
+                "findings": [{"message": "remove out-of-scope dependency"}],
+            },
+        }
+    })
+
+    assert checkpoint["failure_context"] == {
+        "version": 1,
+        "kind": "semantic_repair",
+        "source": "reviewer",
+        "message": "PCP_REVIEW_FINDINGS: bounded repair",
+        "diff_hash": "diff-review",
+    }
+
+
+def test_reroute_clears_stale_semantic_context_when_binding_changed() -> None:
+    checkpoint = {
+        "last_failure": "PCP_REVIEW_FINDINGS: bounded repair",
+        "failure_context": {
+            "version": 1,
+            "kind": "semantic_repair",
+            "source": "reviewer",
+            "message": "PCP_REVIEW_FINDINGS: bounded repair",
+            "diff_hash": "old-diff",
+        },
+        "pending_review_findings": {
+            "diff_hash": "new-diff",
+            "findings": [{"message": "new finding generation"}],
+        },
+        "executor_choice": {"id": "old-model"},
+    }
+
+    updated = clear_routing_choices_for_resume(checkpoint)
+
+    assert "executor_choice" not in updated
+    assert "last_failure" not in updated
+    assert "failure_context" not in updated
+    assert updated["pending_review_findings"]["diff_hash"] == "new-diff"
 
 
 def test_reset_provider_failures_keeps_deterministic_model_failures_but_clears_quota_state():

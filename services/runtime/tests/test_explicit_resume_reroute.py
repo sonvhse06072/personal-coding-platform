@@ -97,6 +97,12 @@ def blocked_row() -> dict:
             "executor_choice": {"id": "old-executor"},
             "evaluator_choice": {"id": "old-evaluator"},
             "last_failure": "old provider failure",
+            "failure_context": {
+                "version": 1,
+                "kind": "route_transient",
+                "source": "provider",
+                "message": "old provider failure",
+            },
             "provider_state": {
                 "provider:openai": {"available": False, "healthy": False},
                 "codex_terra": {"available": False, "healthy": False},
@@ -162,6 +168,7 @@ def test_orchestrated_failed_reroute_preserves_job_state_but_replaces_route_choi
     assert "executor_choice" not in checkpoint
     assert "evaluator_choice" not in checkpoint
     assert "last_failure" not in checkpoint
+    assert "failure_context" not in checkpoint
     assert "provider:openai" not in checkpoint["provider_state"]
     assert checkpoint["provider_state"]["codex_terra"]["available"] is False
     assert checkpoint["route_history"][0]["reason"] == "initial"
@@ -173,6 +180,94 @@ def test_orchestrated_failed_reroute_preserves_job_state_but_replaces_route_choi
     assert router.payloads[0]["provider_state"] == {
         "codex_terra": {"available": False, "healthy": False}
     }
+    assert engine.queue.get_nowait() == "job-resume"
+
+
+@pytest.mark.parametrize(
+    ("failure", "context", "durable"),
+    [
+        (
+            "PCP_REVIEW_FINDINGS: reviewer repair",
+            {
+                "version": 1,
+                "kind": "semantic_repair",
+                "source": "reviewer",
+                "message": "PCP_REVIEW_FINDINGS: reviewer repair",
+                "diff_hash": "review-diff",
+            },
+            {
+                "pending_review_findings": {
+                    "diff_hash": "review-diff",
+                    "findings": [{"message": "remove the out-of-scope dependency"}],
+                }
+            },
+        ),
+        (
+            "PCP_PM_REASSESSMENT: PM repair",
+            {
+                "version": 1,
+                "kind": "semantic_repair",
+                "source": "pm_reassessment",
+                "message": "PCP_PM_REASSESSMENT: PM repair",
+                "diff_hash": "pm-diff",
+            },
+            {
+                "last_pm_reassessment": {
+                    "diff_hash": "pm-diff",
+                    "decision": {
+                        "action": "request_repair",
+                        "developer_message": "Use the existing test stack.",
+                    },
+                }
+            },
+        ),
+        (
+            "PCP_HUMAN_DECISION_REJECTED: repair inside baseline",
+            {
+                "version": 1,
+                "kind": "semantic_repair",
+                "source": "human_rejection",
+                "message": "PCP_HUMAN_DECISION_REJECTED: repair inside baseline",
+                "diff_hash": "human-diff",
+                "decision_key": "major_dependency_addition",
+            },
+            {
+                "pending_pm_reassessment": {"diff_hash": "human-diff"},
+                "decision_history": [
+                    {
+                        "key": "major_dependency_addition",
+                        "action": "reject",
+                        "note": "Do not add the dependency.",
+                    }
+                ],
+            },
+        ),
+    ],
+)
+def test_explicit_reroute_preserves_current_semantic_repair_context(
+    failure: str,
+    context: dict,
+    durable: dict,
+) -> None:
+    original = blocked_row()
+    original["checkpoint"]["last_failure"] = failure
+    original["checkpoint"]["failure_context"] = deepcopy(context)
+    original["checkpoint"].update(deepcopy(durable))
+    storage = Storage(original)
+    engine = RuntimeEngine(storage)
+    engine.router = Router(fresh_route())
+
+    updated = asyncio.run(engine.resume("job-resume", reroute=True))
+
+    checkpoint = updated["checkpoint"]
+    assert updated["status"] == "queued"
+    assert checkpoint["last_failure"] == failure
+    assert checkpoint["failure_context"] == context
+    assert "planner_choice" not in checkpoint
+    assert "executor_choice" not in checkpoint
+    assert "evaluator_choice" not in checkpoint
+    for key, value in durable.items():
+        assert checkpoint[key] == value
     assert engine.queue.get_nowait() == "job-resume"
 
 

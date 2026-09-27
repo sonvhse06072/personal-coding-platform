@@ -9,6 +9,145 @@ from .config import models_doc
 
 _QUOTA_FAILURES = {"quota_exhausted", "rate_limited"}
 _ANTIGRAVITY_PROVIDER = "google_antigravity"
+_FAILURE_CONTEXT_VERSION = 1
+_SEMANTIC_FAILURE_SOURCES = {"reviewer", "pm_reassessment", "human_rejection"}
+
+
+def set_failure_context(
+    checkpoint: dict[str, Any],
+    *,
+    kind: str,
+    source: str,
+    message: str,
+    diff_hash: str | None = None,
+    decision_key_value: str | None = None,
+) -> str:
+    """Persist typed failure provenance alongside the legacy prompt text."""
+    if kind not in {"semantic_repair", "route_transient"}:
+        raise ValueError(f"Unsupported failure context kind: {kind}")
+    normalized = str(message or "")[-30000:]
+    checkpoint["last_failure"] = normalized or None
+    if not normalized:
+        checkpoint.pop("failure_context", None)
+        return normalized
+    context: dict[str, Any] = {
+        "version": _FAILURE_CONTEXT_VERSION,
+        "kind": kind,
+        "source": str(source or "")[:80],
+        "message": normalized,
+    }
+    if diff_hash:
+        context["diff_hash"] = str(diff_hash)[:200]
+    if decision_key_value:
+        context["decision_key"] = str(decision_key_value)[:500]
+    checkpoint["failure_context"] = context
+    return normalized
+
+
+def clear_failure_context(checkpoint: dict[str, Any]) -> None:
+    checkpoint["last_failure"] = None
+    checkpoint.pop("failure_context", None)
+
+
+def _legacy_semantic_failure_context(checkpoint: dict[str, Any]) -> dict[str, Any] | None:
+    message = str(checkpoint.get("last_failure") or "")
+    if not message:
+        return None
+    if message.startswith("PCP_REVIEW_FINDINGS:"):
+        pending = checkpoint.get("pending_review_findings")
+        if isinstance(pending, dict) and pending.get("diff_hash"):
+            return {
+                "version": _FAILURE_CONTEXT_VERSION,
+                "kind": "semantic_repair",
+                "source": "reviewer",
+                "message": message,
+                "diff_hash": str(pending["diff_hash"])[:200],
+            }
+    if message.startswith("PCP_PM_REASSESSMENT:"):
+        pm = checkpoint.get("last_pm_reassessment")
+        if isinstance(pm, dict) and pm.get("diff_hash"):
+            decision = dict(pm.get("decision") or {})
+            if str(decision.get("action") or "") in {"request_repair", "request_developer_response"}:
+                return {
+                    "version": _FAILURE_CONTEXT_VERSION,
+                    "kind": "semantic_repair",
+                    "source": "pm_reassessment",
+                    "message": message,
+                    "diff_hash": str(pm["diff_hash"])[:200],
+                }
+    if message.startswith("PCP_HUMAN_DECISION_REJECTED:"):
+        history = [
+            dict(item)
+            for item in (checkpoint.get("decision_history") or [])
+            if isinstance(item, dict)
+        ]
+        rejected = next(
+            (item for item in reversed(history) if item.get("action") == "reject" and item.get("key")),
+            None,
+        )
+        if rejected:
+            context = {
+                "version": _FAILURE_CONTEXT_VERSION,
+                "kind": "semantic_repair",
+                "source": "human_rejection",
+                "message": message,
+                "decision_key": str(rejected["key"])[:500],
+            }
+            boundary = checkpoint.get("pending_pm_reassessment")
+            if isinstance(boundary, dict) and boundary.get("diff_hash"):
+                context["diff_hash"] = str(boundary["diff_hash"])[:200]
+            return context
+    return None
+
+
+def _semantic_failure_context_is_current(
+    checkpoint: dict[str, Any],
+    context: dict[str, Any],
+) -> bool:
+    if context.get("kind") != "semantic_repair":
+        return False
+    source = str(context.get("source") or "")
+    if source not in _SEMANTIC_FAILURE_SOURCES:
+        return False
+    message = str(context.get("message") or "")
+    if not message or message != str(checkpoint.get("last_failure") or ""):
+        return False
+
+    diff_hash = str(context.get("diff_hash") or "")
+    if source == "reviewer":
+        pending = checkpoint.get("pending_review_findings")
+        return bool(
+            diff_hash
+            and isinstance(pending, dict)
+            and str(pending.get("diff_hash") or "") == diff_hash
+        )
+    if source == "pm_reassessment":
+        pm = checkpoint.get("last_pm_reassessment")
+        decision = dict((pm or {}).get("decision") or {}) if isinstance(pm, dict) else {}
+        return bool(
+            diff_hash
+            and isinstance(pm, dict)
+            and str(pm.get("diff_hash") or "") == diff_hash
+            and str(decision.get("action") or "") in {"request_repair", "request_developer_response"}
+        )
+    if source == "human_rejection":
+        key = str(context.get("decision_key") or "")
+        history = [
+            dict(item)
+            for item in (checkpoint.get("decision_history") or [])
+            if isinstance(item, dict)
+        ]
+        latest = next((item for item in reversed(history) if str(item.get("key") or "") == key), None)
+        if not key or not latest or latest.get("action") != "reject":
+            return False
+        if diff_hash:
+            boundary = checkpoint.get("pending_pm_reassessment")
+            return bool(
+                isinstance(boundary, dict)
+                and str(boundary.get("diff_hash") or "") == diff_hash
+            )
+        return True
+    return False
 
 
 
@@ -142,6 +281,10 @@ def checkpoint_from_row(row: dict[str, Any]) -> dict[str, Any]:
     checkpoint.setdefault("provider_state", {})
     checkpoint.setdefault("route_history", [])
     checkpoint.setdefault("approved_decisions", [])
+    if not isinstance(checkpoint.get("failure_context"), dict):
+        migrated = _legacy_semantic_failure_context(checkpoint)
+        if migrated:
+            checkpoint["failure_context"] = migrated
     return checkpoint
 
 
@@ -179,8 +322,14 @@ def clear_routing_choices_for_resume(checkpoint: dict[str, Any]) -> dict[str, An
     until the resumed run records its next terminal result.
     """
     updated = deepcopy(checkpoint)
-    for key in ("planner_choice", "executor_choice", "evaluator_choice", "last_failure"):
+    for key in ("planner_choice", "executor_choice", "evaluator_choice"):
         updated.pop(key, None)
+    context = dict(updated.get("failure_context") or {})
+    if _semantic_failure_context_is_current(updated, context):
+        updated["last_failure"] = str(context["message"])
+    else:
+        updated.pop("last_failure", None)
+        updated.pop("failure_context", None)
     return updated
 
 
