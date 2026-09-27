@@ -162,6 +162,7 @@ def _row(workspace: Path, job_id: str) -> dict:
             "work_order": work_order,
             "project_baseline": {"revision": "v1", "source_commit": "a" * 40},
             "provider_state": {},
+            "workspace_mode": "isolated_clone",
         },
         "progress": {},
     }
