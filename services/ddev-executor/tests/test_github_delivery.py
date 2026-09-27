@@ -927,6 +927,7 @@ def test_reconcile_merged_delivery_fails_closed_when_head_does_not_contain_accep
     with pytest.raises(RuntimeError, match="does not contain the preserved accepted commit"):
         delivery.reconcile_merged_delivery(
             repository="acme/demo",
+            job_id="job12345",
             branch="ai/job12345",
             base_branch="main",
             source_commit=source,
@@ -944,6 +945,7 @@ def test_reconcile_merged_delivery_fails_closed_without_green_head_ci(monkeypatc
     with pytest.raises(RuntimeError, match="does not have successful GitHub CI"):
         delivery.reconcile_merged_delivery(
             repository="acme/demo",
+            job_id="job12345",
             branch="ai/job12345",
             base_branch="main",
             source_commit=source,
@@ -973,6 +975,7 @@ def test_reconcile_merged_delivery_fails_closed_on_ambiguous_merged_history(monk
     with pytest.raises(RuntimeError, match="Ambiguous merged pull-request history"):
         delivery.reconcile_merged_delivery(
             repository="acme/demo",
+            job_id="job12345",
             branch="ai/job12345",
             base_branch="main",
             source_commit=source,
