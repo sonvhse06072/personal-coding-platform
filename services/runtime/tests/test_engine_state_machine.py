@@ -109,3 +109,51 @@ def test_cancel_marks_job_and_cancels_active_runtime_task_and_ddev_process():
         assert engine.ddev.cancelled == ["job12345"]
 
     asyncio.run(scenario())
+
+
+def test_human_approval_of_pm_reassessment_is_bound_to_exact_diff():
+    async def scenario():
+        row = base_row("waiting_human")
+        row["checkpoint"]["pending_decision"] = {
+            "key": "scope_change",
+            "decision": {
+                "required": True,
+                "triggers": ["scope_change"],
+                "reason": "PM cannot approve this scope boundary.",
+            },
+            "source": "pm_reassessment",
+        }
+        row["checkpoint"]["pending_pm_reassessment"] = {
+            "signal": "changed_file_working_target_exceeded",
+            "diff_hash": "diff-abc",
+            "used": 11,
+            "working_target": 8,
+            "emergency_limit": 16,
+            "pm_model_id": "pm-model",
+            "summary": "Human-owned scope decision is required.",
+        }
+        storage = FakeStorage(row)
+        engine = RuntimeEngine(storage)
+        queued = []
+
+        async def enqueue(job_id):
+            queued.append(job_id)
+
+        engine.enqueue = enqueue
+        result = await engine.resolve_human_decision(
+            "job12345",
+            action="approve",
+            note="Approved for this exact diff.",
+        )
+
+        assert result["status"] == "queued"
+        assert "pending_pm_reassessment" not in result["checkpoint"]
+        authorization = result["checkpoint"]["pm_reassessment_authorizations"][-1]
+        assert authorization["diff_hash"] == "diff-abc"
+        assert authorization["used"] == 11
+        assert authorization["working_target"] == 8
+        assert authorization["emergency_limit"] == 16
+        assert authorization["approved_by"] == "human_owner"
+        assert queued == ["job12345"]
+
+    asyncio.run(scenario())
