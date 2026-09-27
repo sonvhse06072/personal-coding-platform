@@ -34,6 +34,15 @@ When sources conflict, use this order:
 
 Lower-authority artifacts must not silently redefine higher-authority artifacts. If a requested change conflicts with a higher-authority source, stop at the decision boundary and produce a change proposal instead of implementing the conflict.
 
+### Baseline authority preservation
+
+For a PCP-managed project, repository `HEAD` is not automatically the approved project frame. The exact approved ProjectBaseline revision and source commit govern new WorkOrders until a separately approved successor revision is activated.
+
+- Never rewrite an approved baseline revision in place to advance product, architecture, security, governance, or design authority; create a successor revision.
+- A newer project `main` may be used as live implementation evidence, but it must not silently replace the pinned baseline as project-frame authority.
+- Machine-readable baseline authority classes are part of the merge boundary: `human_owner_protected` changes require matching Human Owner approval; `delegated_design_owner` changes are allowed only inside an explicit delegated design frame; `mutable_execution` and `evidence_history` never promote themselves into higher authority.
+- A WorkOrder, PR description, current-state entry, report, or historical note cannot downgrade or bypass those authority classes.
+
 ## Core invariants
 
 - The platform is a personal, budget-conscious system that models a small software-development team using logical agent roles.
