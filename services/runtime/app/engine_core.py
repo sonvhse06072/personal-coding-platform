@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import time
 import uuid
@@ -335,13 +336,49 @@ class RuntimeEngineCore:
         checkpoint.pop("pending_decision", None)
 
         if action == "reject":
-            self.storage.update(
-                job_id,
-                status="blocked",
-                checkpoint=checkpoint,
-                result={"reason": "human_decision_rejected", "decision": decision, "resolution": record},
-                error=None,
-            )
+            source = str(pending.get("source") or "")
+            pm_boundary = dict(checkpoint.get("pending_pm_reassessment") or {})
+            if source == "pm_reassessment" and pm_boundary:
+                repair_note = (note or "").strip() or str(
+                    decision.get("reason") or pm_boundary.get("summary") or "Human Owner rejected the requested boundary."
+                )
+                checkpoint["last_failure"] = (
+                    "PCP_HUMAN_DECISION_REJECTED: "
+                    + json.dumps(
+                        {
+                            "decision_key": key,
+                            "human_note": repair_note,
+                            "decision": decision,
+                            "pm_boundary": pm_boundary,
+                            "instruction": (
+                                "Do not expand the rejected boundary. Repair or revert the "
+                                "implementation so the approved WorkOrder and ProjectBaseline are satisfied."
+                            ),
+                        },
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    )
+                )[-30000:]
+                self.storage.update(
+                    job_id,
+                    status="queued",
+                    checkpoint=checkpoint,
+                    result={
+                        "reason": "human_decision_rejected_repair",
+                        "decision": decision,
+                        "resolution": record,
+                    },
+                    error=None,
+                )
+                await self.enqueue(job_id)
+            else:
+                self.storage.update(
+                    job_id,
+                    status="blocked",
+                    checkpoint=checkpoint,
+                    result={"reason": "human_decision_rejected", "decision": decision, "resolution": record},
+                    error=None,
+                )
         elif action == "approve":
             approved = list(checkpoint.get("approved_decisions") or [])
             if key and key not in approved:
