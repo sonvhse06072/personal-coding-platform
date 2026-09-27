@@ -19,6 +19,21 @@ PMReassessmentAction = Literal[
     "block",
 ]
 
+_PM_HUMAN_TRIGGERS = {
+    "architecture_choice",
+    "product_ambiguity_high_impact",
+    "scope_change",
+    "product_scope_change",
+    "non_goal_change",
+    "major_dependency_addition",
+    "security_boundary_change",
+    "destructive_migration",
+    "production_write",
+    "high_authority_governance",
+    "project_baseline_authority_change",
+    "material_budget_expansion",
+}
+
 
 class PMReassessmentDecision(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -63,6 +78,11 @@ class PMReassessmentDecision(BaseModel):
             raise ValueError("human_decision requires at least one human trigger")
         if self.action != "human_decision" and self.human_triggers:
             raise ValueError("human_triggers are valid only for human_decision")
+        unknown = sorted(set(self.human_triggers) - _PM_HUMAN_TRIGGERS)
+        if unknown:
+            raise ValueError(f"PM reassessment returned unsupported Human Owner triggers: {unknown}")
+        if self.action == "approve_continue" and self.unresolved_risks:
+            raise ValueError("approve_continue cannot retain unresolved risks")
         return self
 
 
