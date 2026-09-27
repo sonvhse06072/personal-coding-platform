@@ -637,7 +637,6 @@ class RuntimeEngine(RuntimeEngineCore):
             pm_scope_needs_review = bool(
                 progress["required_checks_passed"]
                 and pm_scope_state
-                and not progress.get("important_decision_flags")
                 and not has_pm_changed_file_authorization(
                     checkpoint,
                     diff_hash=str(diff.get("diff_hash") or ""),
@@ -689,6 +688,9 @@ class RuntimeEngine(RuntimeEngineCore):
                         trigger={
                             "signal": "changed_file_working_target_exceeded",
                             **dict(pm_scope_state or {}),
+                            "protected_decision_flags": list(
+                                progress.get("important_decision_flags") or []
+                            ),
                         },
                         diff=diff,
                         verification=verification,
@@ -743,6 +745,23 @@ class RuntimeEngine(RuntimeEngineCore):
                 }
                 pm_action = str(pm_decision.get("action") or "")
                 if pm_action == "approve_continue":
+                    protected_flags = list(
+                        progress.get("important_decision_flags") or []
+                    )
+                    if protected_flags:
+                        self._block(
+                            job_id=job_id,
+                            progress=progress,
+                            checkpoint=checkpoint,
+                            reason="pm_reassessment_invalid_protected_approval",
+                            last_failure=(
+                                "Product Manager attempted to approve a diff that "
+                                "still contains a Human Owner-protected boundary."
+                            ),
+                            pm_reassessment=pm_decision,
+                            diff=diff,
+                        )
+                        return
                     checkpoint.pop("pending_pm_reassessment", None)
                     authorizations = list(
                         checkpoint.get("pm_reassessment_authorizations") or []
@@ -783,6 +802,19 @@ class RuntimeEngine(RuntimeEngineCore):
                         sort_keys=True,
                     )
                     progress["required_checks_passed"] = False
+                    # PM owns the next bounded engineering step. Suppress the
+                    # current protected-path signal for this one repair/response
+                    # turn so Runtime does not jump directly to Human before the
+                    # developer can remove or explain the flagged change.
+                    pm_handled_flags = set(
+                        progress.get("important_decision_flags") or []
+                    )
+                    if pm_handled_flags:
+                        progress["important_decision_flags"] = [
+                            item
+                            for item in progress.get("important_decision_flags", [])
+                            if item not in pm_handled_flags
+                        ]
                     checkpoint["last_failure"] = last_failure
                     self.storage.update(
                         job_id,
