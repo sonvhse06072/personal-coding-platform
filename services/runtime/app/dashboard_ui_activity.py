@@ -55,8 +55,8 @@ DASHBOARD_HTML = DASHBOARD_HTML.replace(
     1,
 )
 DASHBOARD_HTML = DASHBOARD_HTML.replace(
-    "let snapshot=null,selected=null,source=null,streamJob=null,lastSeq=0,consoleEvents=[];",
-    "let snapshot=null,quotaSnapshot=null,selected=null,source=null,streamJob=null,lastSeq=0,consoleEvents=[];",
+    "let snapshot=null,selected=null,selectedStandalone=null,source=null,streamJob=null,lastSeq=0,consoleEvents=[];",
+    "let snapshot=null,quotaSnapshot=null,selected=null,selectedStandalone=null,source=null,streamJob=null,lastSeq=0,consoleEvents=[];",
     1,
 )
 
@@ -90,8 +90,8 @@ DASHBOARD_HTML = DASHBOARD_HTML.replace(
     1,
 )
 DASHBOARD_HTML = DASHBOARD_HTML.replace(
-    "let snapshot=null,quotaSnapshot=null,selected=null,source=null,streamJob=null,lastSeq=0,consoleEvents=[];",
-    "let snapshot=null,quotaSnapshot=null,selected=null,source=null,streamJob=null,lastSeq=0,consoleEvents=[],previewJob=null,previewState=null,previewBusy=false,previewRefreshBusy=false;",
+    "let snapshot=null,quotaSnapshot=null,selected=null,selectedStandalone=null,source=null,streamJob=null,lastSeq=0,consoleEvents=[];",
+    "let snapshot=null,quotaSnapshot=null,selected=null,selectedStandalone=null,source=null,streamJob=null,lastSeq=0,consoleEvents=[],previewJob=null,previewState=null,previewBusy=false,previewRefreshBusy=false;",
     1,
 )
 
