@@ -94,4 +94,4 @@ def test_quota_probe_is_serialized_with_antigravity_runs() -> None:
 
     assert "with bridge._agy_lock:" in source
     assert "_read_cli_usage_preserving_settings(" in source
-    assert 'version": "1.10"' in source
+    assert 'version": "1.11"' in source

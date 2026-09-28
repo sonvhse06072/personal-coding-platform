@@ -53,7 +53,7 @@ def test_antigravity_uses_router_reasoning_effort(monkeypatch, tmp_path: Path):
     assert captured["effort"] == "low"
 
 
-def test_antigravity_keeps_mode_default_when_effort_is_unset(monkeypatch, tmp_path: Path):
+def test_antigravity_omits_effort_when_router_leaves_it_unset(monkeypatch, tmp_path: Path):
     captured = {}
 
     class FakeClient:
@@ -82,4 +82,4 @@ def test_antigravity_keeps_mode_default_when_effort_is_unset(monkeypatch, tmp_pa
         )
     )
 
-    assert captured["effort"] == "high"
+    assert "effort" not in captured

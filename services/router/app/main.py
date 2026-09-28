@@ -18,7 +18,7 @@ from .schemas import (
 )
 
 
-ROUTER_VERSION = "1.0.28"
+ROUTER_VERSION = "1.0.29"
 
 
 app = FastAPI(
@@ -68,6 +68,7 @@ def models() -> dict[str, Any]:
             "tier": model.get("tier"),
             "cost_class": model.get("cost_class"),
             "quota_group": model.get("quota_group"),
+            "supports_reasoning_effort": model.get("supports_reasoning_effort", True),
             "roles": model.get("roles", []),
         }
     return {"version": cfg.get("version", 1), "models": public}

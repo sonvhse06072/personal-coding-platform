@@ -1,4 +1,4 @@
-version: 8
+version: 9
 models:
   groq_free:
     kind: llm
@@ -221,6 +221,7 @@ models:
     provider: google_antigravity
     adapter: antigravity_host
     model: claude-sonnet-4-6
+    supports_reasoning_effort: false
     tier: strong
     cost_class: scarce
     quota_group: antigravity_claude_gpt
