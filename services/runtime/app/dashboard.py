@@ -18,6 +18,7 @@ from .dashboard_ui import DASHBOARD_HTML
 
 _ACTIVE_PLAN_STATES = {"active", "executing", "waiting_merge", "waiting_human"}
 _ACTIVE_JOB_STATES = {"queued", "routing", "planning", "executing", "verifying", "evaluating", "delivering"}
+_STANDALONE_VISIBLE_JOB_STATES = _ACTIVE_JOB_STATES | {"waiting_human", "blocked", "interrupted"}
 _PLACEHOLDERS = {"", "CHANGE_ME", "change-me"}
 _COOKIE = "pcp_dashboard_session"
 _CONTROL_COOKIE = "pcp_dashboard_control_session"
@@ -141,6 +142,7 @@ def _job_snapshot(job: dict[str, Any] | None) -> dict[str, Any] | None:
     }
     return {
         "id": job.get("id"),
+        "project_id": job.get("project_id"),
         "status": status,
         "result_reason": result.get("reason"),
         "branch": job.get("branch"),
@@ -230,7 +232,8 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
         ).fetchone()
 
     plans: list[dict[str, Any]] = []
-    active_jobs = 0
+    active_job_ids: set[str] = set()
+    referenced_job_ids: set[str] = set()
     waiting_merge = 0
     waiting_human = 0
     blocked_plans = 0
@@ -243,12 +246,15 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
         totals = {"input_budget_tokens": 0, "output_tokens": 0}
         for wo in orchestrator_store.work_orders(plan_id):
             lifecycle = str(wo.get("lifecycle") or "active")
-            job = storage.get(str(wo["job_id"])) if wo.get("job_id") else None
+            job_id = str(wo.get("job_id") or "")
+            if job_id:
+                referenced_job_ids.add(job_id)
+            job = storage.get(job_id) if job_id else None
             job_view = _job_snapshot(job)
             if job_view:
                 job_views_by_id.setdefault(str(job_view["id"]), []).append(job_view)
             if lifecycle == "active" and job_view and job_view["status"] in _ACTIVE_JOB_STATES:
-                active_jobs += 1
+                active_job_ids.add(str(job_view["id"]))
             if job_view:
                 totals["input_budget_tokens"] += int(job_view["tokens"].get("input_budget_tokens", 0) or 0)
                 totals["output_tokens"] += int(job_view["tokens"].get("output_tokens", 0) or 0)
@@ -303,6 +309,31 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
             "work_orders": work_orders,
         })
 
+    standalone_jobs: list[dict[str, Any]] = []
+    for job in storage.list(limit=500):
+        job_id = str(job.get("id") or "")
+        job_status = str(job.get("status") or "")
+        if (
+            not job_id
+            or job_id in referenced_job_ids
+            or job_status not in _STANDALONE_VISIBLE_JOB_STATES
+        ):
+            continue
+        job_view = _job_snapshot(job)
+        if not job_view:
+            continue
+        standalone_jobs.append(job_view)
+        job_views_by_id.setdefault(job_id, []).append(job_view)
+        if job_status in _ACTIVE_JOB_STATES:
+            active_job_ids.add(job_id)
+        if job_status == "waiting_human":
+            waiting_human += 1
+
+    standalone_jobs.sort(
+        key=lambda item: str(item.get("updated_at") or ""),
+        reverse=True,
+    )
+
     events_by_job: dict[str, list[dict[str, Any]]] = {job_id: [] for job_id in job_views_by_id}
     for row in storage.recent_events(list(job_views_by_id), per_job_limit=40):
         event = public_event(dict(row))
@@ -332,7 +363,8 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "summary": {
             "active_plans": active_plans,
-            "active_jobs": active_jobs,
+            "active_jobs": len(active_job_ids),
+            "standalone_jobs": len(standalone_jobs),
             "waiting_merge": waiting_merge,
             "waiting_human": waiting_human,
             "blocked_plans": blocked_plans,
@@ -341,6 +373,7 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
         },
         "current_plan_id": current_plan["id"] if current_plan else None,
         "plans": plans,
+        "standalone_jobs": standalone_jobs,
         "alerts": [
             {
                 "id": row.get("id"),
