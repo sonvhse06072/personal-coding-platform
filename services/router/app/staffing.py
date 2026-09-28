@@ -160,18 +160,22 @@ class RouterEngine(BudgetRouterEngine):
             reasoning_requirement=semantic.reasoning_requirement,
         )
 
-    @staticmethod
-    def _apply_reasoning(choice: Any, effort: str | None) -> None:
-        if choice is None or choice.adapter not in _REASONING_ADAPTERS or effort not in _REASONING_ORDER:
+    def _supports_reasoning_effort(self, choice: Any) -> bool:
+        if choice is None or choice.adapter not in _REASONING_ADAPTERS:
+            return False
+        model = self.models.get(choice.id, {})
+        return bool(model.get("supports_reasoning_effort", True))
+
+    def _apply_reasoning(self, choice: Any, effort: str | None) -> None:
+        if not self._supports_reasoning_effort(choice) or effort not in _REASONING_ORDER:
             return
         choice.reasoning_effort = effort
         marker = f"reasoning_effort={effort}"
         if marker not in choice.reasons:
             choice.reasons.append(marker)
 
-    @staticmethod
-    def _next_reasoning_choice(choice: Any, ceiling: str | None) -> Any | None:
-        if choice is None or choice.adapter not in _REASONING_ADAPTERS:
+    def _next_reasoning_choice(self, choice: Any, ceiling: str | None) -> Any | None:
+        if not self._supports_reasoning_effort(choice):
             return None
         current = choice.reasoning_effort
         if current not in _REASONING_ORDER or ceiling not in _REASONING_ORDER:
