@@ -40,6 +40,7 @@ def route_payload():
     return {
         "strategy": {
             "profile": "standard",
+            "budget_mode": "adaptive",
             "budget": {
                 "max_model_calls": 18,
                 "max_tool_calls": 120,
