@@ -104,21 +104,21 @@ class AntigravityAdapter(AgentAdapter):
             )
 
         run_id = uuid.uuid4().hex
-        default_effort = "high" if mode in {"plan", "evaluate"} else "medium"
         effort = (
             self.reasoning_effort
             if self.reasoning_effort in _REASONING_EFFORTS
-            else default_effort
+            else None
         )
         payload = {
             "run_id": run_id,
             "workspace": str(workspace),
             "prompt": prompt,
             "model": self.model or "auto",
-            "effort": effort,
             "mode": mode,
             "timeout": timeout,
         }
+        if effort is not None:
+            payload["effort"] = effort
         emit_developer_event(
             agent_lifecycle_event(
                 adapter=self.name,
