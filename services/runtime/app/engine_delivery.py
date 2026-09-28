@@ -72,6 +72,41 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             return None
         return deepcopy(candidate)
 
+    @staticmethod
+    def _delivered_result_for_review_repair(row: dict[str, Any]) -> dict[str, Any] | None:
+        """Return accepted delivery evidence whether finalized or delivery-blocked."""
+        result = row.get("result") or {}
+        candidate = result
+        if candidate.get("status") != "accepted":
+            nested = result.get("accepted_result")
+            if not isinstance(nested, dict):
+                return None
+            candidate = nested
+        if candidate.get("status") != "accepted" or not candidate.get("commit"):
+            return None
+        delivery = candidate.get("delivery") or (row.get("checkpoint") or {}).get("delivery")
+        pull_request = (delivery or {}).get("pull_request") or {}
+        if not pull_request.get("number"):
+            return None
+        return deepcopy(candidate)
+
+    @staticmethod
+    def _update_review_repair_history(
+        checkpoint: dict[str, Any],
+        request_id: str,
+        **updates: Any,
+    ) -> None:
+        history = [
+            deepcopy(item)
+            for item in (checkpoint.get("review_repair_history") or [])
+            if isinstance(item, dict)
+        ]
+        for item in reversed(history):
+            if str(item.get("request_id") or "") == request_id:
+                item.update(deepcopy(updates))
+                break
+        checkpoint["review_repair_history"] = history
+
     @classmethod
     def _verified_result_needs_delivery(cls, row: dict[str, Any]) -> bool:
         result = cls._accepted_result_for_delivery(row)
@@ -131,9 +166,26 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         # spending another model call on already-verified work.
         before = self.storage.get(job_id)
         accepted = self._accepted_result_for_delivery(before) if before else None
+        pending_review_repair_record = (
+            (before.get("checkpoint") or {}).get("pending_review_repair")
+            if before
+            else None
+        )
+        pending_review_repair = isinstance(pending_review_repair_record, dict)
+        repaired_result_waiting_for_delivery = bool(
+            pending_review_repair
+            and accepted
+            and str(accepted.get("commit") or "")
+            != str(pending_review_repair_record.get("expected_commit") or "")
+        )
         recovery = (
             recover_legacy_accepted_result(before)
-            if before and before.get("status") == "queued" and accepted is None
+            if (
+                before
+                and before.get("status") == "queued"
+                and accepted is None
+                and not pending_review_repair
+            )
             else {"candidate": False, "accepted_result": None, "missing_evidence": []}
         )
         if recovery["candidate"] and recovery["accepted_result"] is None:
@@ -158,18 +210,63 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 },
             )
             return
-        if recovery["accepted_result"] is not None:
+        if repaired_result_waiting_for_delivery:
+            self.storage.update(job_id, status="delivering", result=accepted, error=None)
+        elif recovery["accepted_result"] is not None:
             accepted = recovery["accepted_result"]
             self.storage.update(job_id, status="delivering", result=accepted, error=None)
         elif (
             before
             and before.get("status") == "queued"
             and accepted
+            and not pending_review_repair
             and self._verified_result_needs_delivery(before)
         ):
             self.storage.update(job_id, status="delivering", result=accepted, error=None)
         else:
             await super().run_job(job_id)
+
+        repaired = self.storage.get(job_id)
+        if repaired and repaired.get("status") == "delivering":
+            repaired_checkpoint = deepcopy(repaired.get("checkpoint") or {})
+            pending = repaired_checkpoint.get("pending_review_repair")
+            if isinstance(pending, dict):
+                repaired_result = deepcopy(repaired.get("result") or {})
+                previous_commit = str(pending.get("expected_commit") or "")
+                new_commit = str(repaired_result.get("commit") or "")
+                request_id = str(pending.get("request_id") or "")
+                if not new_commit or new_commit == previous_commit:
+                    self._block(
+                        job_id=job_id,
+                        progress=deepcopy(repaired.get("progress") or {}),
+                        checkpoint=repaired_checkpoint,
+                        reason="review_repair_missing_new_commit",
+                        last_failure=(
+                            "PM review repair passed execution gates without producing "
+                            "a new commit distinct from the delivered head."
+                        ),
+                    )
+                    return
+                active = {
+                    "request_id": request_id,
+                    "expected_pr_number": int(pending["pr_number"]),
+                    "previous_commit": previous_commit,
+                    "new_commit": new_commit,
+                }
+                repaired_checkpoint["active_review_repair"] = active
+                repaired_checkpoint.pop("pending_review_repair", None)
+                self._update_review_repair_history(
+                    repaired_checkpoint,
+                    request_id,
+                    state="delivering",
+                    new_commit=new_commit,
+                )
+                repaired_result["review_repair"] = deepcopy(active)
+                self.storage.update(
+                    job_id,
+                    checkpoint=repaired_checkpoint,
+                    result=repaired_result,
+                )
 
         while True:
             row = self.storage.get(job_id)
@@ -195,6 +292,17 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 return
 
             checkpoint = deepcopy(row.get("checkpoint") or {})
+            active_review_repair = checkpoint.get("active_review_repair")
+            expected_pr_number = (
+                int(active_review_repair["expected_pr_number"])
+                if isinstance(active_review_repair, dict)
+                else None
+            )
+            expected_previous_commit = (
+                str(active_review_repair["previous_commit"])
+                if isinstance(active_review_repair, dict)
+                else None
+            )
             progress = deepcopy(row.get("progress") or {})
             previous_delivery_attempts = int(progress.get("delivery_attempts", 0))
             progress["delivery_attempts"] = previous_delivery_attempts + 1
@@ -253,6 +361,8 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                     permissions=permissions,
                     max_wait_seconds=self._delivery_wait_seconds(strategy, progress),
                     reconcile_existing=previous_delivery_attempts > 0,
+                    expected_pr_number=expected_pr_number,
+                    expected_previous_commit=expected_previous_commit,
                 )
             except DeliveryError as exc:
                 self._charge_delivery_time(progress, delivery_started)
@@ -317,6 +427,16 @@ class RuntimeEngine(ExecutionRuntimeEngine):
 
             result["delivery_finalized"] = True
             checkpoint["last_failure"] = None
+            if isinstance(active_review_repair, dict):
+                request_id = str(active_review_repair.get("request_id") or "")
+                self._update_review_repair_history(
+                    checkpoint,
+                    request_id,
+                    state="completed",
+                    new_commit=commit,
+                    delivery=delivery,
+                )
+                checkpoint.pop("active_review_repair", None)
             self.storage.update(
                 job_id,
                 status="completed",

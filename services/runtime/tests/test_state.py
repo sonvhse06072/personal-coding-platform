@@ -9,6 +9,7 @@ from app.state import (
     decision_key,
     merge_progress,
     migrate_legacy_antigravity_quota_failure,
+    review_repair_prompt_failure,
     validate_workspace,
 )
 
@@ -149,6 +150,34 @@ def test_decision_key_is_order_independent():
     a = decision_key({"triggers": ["production_write", "architecture_choice"]})
     b = decision_key({"triggers": ["architecture_choice", "production_write"]})
     assert a == b
+
+
+def test_pending_pm_review_repair_remains_in_prompt_across_provider_interruption():
+    checkpoint = {
+        "pending_review_repair": {
+            "message": "PCP_PM_REVIEW_REPAIR: bounded finding",
+        }
+    }
+
+    combined = review_repair_prompt_failure(checkpoint, "Provider failure: unavailable")
+
+    assert combined.startswith("PCP_PM_REVIEW_REPAIR: bounded finding")
+    assert "LATEST_OPERATIONAL_CONTEXT" in combined
+    assert "Provider failure: unavailable" in combined
+
+
+def test_large_operational_context_truncates_without_removing_pm_repair_instruction():
+    message = "PCP_PM_REVIEW_REPAIR: " + " ".join(["bounded-finding"] * 1200)
+    operational = "OPERATIONAL_START:" + ("provider-noise " * 3000) + ":OPERATIONAL_END"
+    checkpoint = {"pending_review_repair": {"message": message}}
+
+    combined = review_repair_prompt_failure(checkpoint, operational)
+
+    assert combined.startswith(message)
+    assert len(combined) == 30000
+    assert "LATEST_OPERATIONAL_CONTEXT" in combined
+    assert "OPERATIONAL_START" not in combined
+    assert combined.endswith(":OPERATIONAL_END")
 
 
 def test_validate_workspace_requires_exact_job_directory(tmp_path: Path):

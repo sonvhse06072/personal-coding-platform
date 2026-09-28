@@ -34,6 +34,7 @@ from .state import (
     clear_failure_context,
     existing_repo_analysis,
     merge_progress,
+    review_repair_prompt_failure,
     set_failure_context,
     validate_workspace,
 )
@@ -408,7 +409,7 @@ class RuntimeEngine(RuntimeEngineCore):
                     route=route,
                     repo_analysis=repo_analysis,
                     plan=plan,
-                    failure=last_failure,
+                    failure=review_repair_prompt_failure(checkpoint, last_failure),
                     work_order=checkpoint.get("work_order"),
                     baseline=checkpoint.get("project_baseline"),
                     collaboration_context=checkpoint.get("collaboration_context"),

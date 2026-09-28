@@ -240,6 +240,31 @@ GitHub Actions / commit-status monitoring
       └─ infrastructure failure → durable delivery checkpoint / resume
 ```
 
+### Delivered PR review repair
+
+A bounded PM implementation finding discovered after PR delivery uses a
+dedicated action rather than ordinary `/run`:
+
+```text
+POST /v1/jobs/<job_id>/review-repair
+```
+
+The authenticated request supplies the exact expected delivered commit, a
+non-empty bounded finding, and optional compact evidence/references. Runtime
+accepts it only after `ddev-executor` proves that the existing PR is still open
+and unmerged, belongs to the exact job branch/repository/base, remains bound to
+the job, and has exactly that head. The existing workspace and branch must also
+be clean and exact; a completed direct-workspace job reacquires its same-job
+lease and restores the existing AI branch.
+
+An accepted request persists a dedicated pending review-repair checkpoint and
+requeues the same job into engineering. It preserves the WorkOrder,
+ProjectBaseline, route/counter history, prior accepted result, delivery history,
+workspace, branch, and PR. Normal verification/review/PM/delivery gates then
+produce a new commit and update only the already-recorded PR; CI is observed for
+that new exact head. Provider/infrastructure interruption leaves the repair
+request resumable, and the action never merges or deploys.
+
 Every **isolated-clone** workspace receives a temporary `.ddev/config.coding-platform.yaml` with a unique DDEV project name, so parallel jobs do not collide with the source project's normal DDEV environment. Direct workspaces preserve the project's normal DDEV identity and are serialized by an exclusive project lease.
 
 ### Explicit orchestration supersession

@@ -150,6 +150,16 @@ local deterministic verification
 
 Blind auto-merge, force push, developer-agent merge, and production deployment by implication are not allowed. PM-controlled autonomous merge after explicit evidence gates is approved.
 
+A PM finding discovered after delivery but before merge uses a dedicated
+same-job review-repair transition, not ordinary run/resume. Runtime must first
+ask `ddev-executor` to verify the exact open, unmerged PR identity, repository,
+job branch, base branch, and expected delivered head. Once accepted, the
+durable pending repair takes precedence over delivery reconciliation and sends
+the unchanged job/WorkOrder/baseline/workspace back through normal engineering
+and review gates. A successful repair publishes a new commit to the same branch
+and PR and observes CI only for that new exact head; the transition grants no
+merge or deployment authority.
+
 ## 3. Approved target architecture
 
 The following layers are approved targets but are not all implemented yet.

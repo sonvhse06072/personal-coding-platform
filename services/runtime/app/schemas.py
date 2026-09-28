@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .work_order import WorkOrder
 
@@ -82,6 +83,56 @@ class JobCreateRequest(BaseModel):
 class JobRunRequest(BaseModel):
     reset_transient_provider_failures: bool = False
     reroute: bool = False
+
+
+class ReviewRepairRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_commit: str = Field(pattern=r"^[0-9a-fA-F]{40}$")
+    finding: str = Field(min_length=1, max_length=8000)
+    evidence: dict[str, Any] = Field(default_factory=dict)
+    references: list[str] = Field(default_factory=list, max_length=12)
+
+    @field_validator("finding")
+    @classmethod
+    def normalize_finding(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("Review repair finding must not be blank")
+        return normalized
+
+    @field_validator("references")
+    @classmethod
+    def normalize_references(cls, values: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for raw in values:
+            value = str(raw).strip()
+            if not value:
+                continue
+            if len(value) > 300:
+                raise ValueError("Review repair references must be at most 300 characters")
+            if value not in normalized:
+                normalized.append(value)
+        return normalized
+
+    @model_validator(mode="after")
+    def validate_compact_evidence(self) -> "ReviewRepairRequest":
+        encoded = json.dumps(self.evidence, ensure_ascii=False, sort_keys=True, default=str)
+        if len(encoded.encode("utf-8")) > 8000:
+            raise ValueError("Review repair evidence must be at most 8000 UTF-8 bytes")
+        combined = json.dumps(
+            {
+                "finding": self.finding,
+                "evidence": self.evidence,
+                "references": self.references,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            default=str,
+        )
+        if len(combined.encode("utf-8")) > 24000:
+            raise ValueError("Review repair finding and evidence must be compact")
+        return self
 
 
 class HumanDecisionRequest(BaseModel):

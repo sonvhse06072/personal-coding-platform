@@ -948,6 +948,23 @@ class PlanOrchestrator:
                     continue
 
             if state == "awaiting_merge":
+                # A governed PM review repair may reopen the same completed job
+                # after this WorkOrder entered its merge gate. Follow that
+                # durable job transition instead of evaluating or merging the
+                # stale delivered result. The normal running-state reconciliation
+                # will handle later repair completion/failure on the next tick.
+                if job_id:
+                    job = self.storage.get(str(job_id))
+                    if job is not None and str(job.get("status") or "") in _ACTIVE_JOB_STATUSES:
+                        detail = dict(tracked.get("detail") or {})
+                        detail["review_repair_reopened"] = True
+                        self.store.update_work_order(
+                            plan_id,
+                            work_order_id,
+                            state="running",
+                            detail=detail,
+                        )
+                        continue
                 pr_number = tracked.get("pr_number")
                 if not pr_number:
                     self._block_tracked(plan, tracked, "missing_pull_request_number")

@@ -10,7 +10,12 @@ from .config import models_doc
 _QUOTA_FAILURES = {"quota_exhausted", "rate_limited"}
 _ANTIGRAVITY_PROVIDER = "google_antigravity"
 _FAILURE_CONTEXT_VERSION = 1
-_SEMANTIC_FAILURE_SOURCES = {"reviewer", "pm_reassessment", "human_rejection"}
+_SEMANTIC_FAILURE_SOURCES = {
+    "reviewer",
+    "pm_reassessment",
+    "pm_review_repair",
+    "human_rejection",
+}
 
 
 def set_failure_context(
@@ -130,6 +135,14 @@ def _semantic_failure_context_is_current(
             and str(pm.get("diff_hash") or "") == diff_hash
             and str(decision.get("action") or "") in {"request_repair", "request_developer_response"}
         )
+    if source == "pm_review_repair":
+        pending = checkpoint.get("pending_review_repair")
+        return bool(
+            diff_hash
+            and isinstance(pending, dict)
+            and str(pending.get("delivered_diff_hash") or "") == diff_hash
+            and str(pending.get("message") or "") == message
+        )
     if source == "human_rejection":
         key = str(context.get("decision_key") or "")
         history = [
@@ -148,6 +161,27 @@ def _semantic_failure_context_is_current(
             )
         return True
     return False
+
+
+def review_repair_prompt_failure(
+    checkpoint: dict[str, Any],
+    current_failure: str | None,
+) -> str | None:
+    """Keep a pending PM repair authoritative across provider/infra failures."""
+    pending = checkpoint.get("pending_review_repair")
+    if not isinstance(pending, dict):
+        return current_failure
+    message = str(pending.get("message") or "").strip()
+    if not message:
+        return current_failure
+    operational = str(current_failure or "").strip()
+    if not operational or operational == message:
+        return message
+    separator = "\n\nLATEST_OPERATIONAL_CONTEXT:\n"
+    remaining = 30000 - len(message) - len(separator)
+    if remaining <= 0:
+        return message[:30000]
+    return f"{message}{separator}{operational[-remaining:]}"
 
 
 

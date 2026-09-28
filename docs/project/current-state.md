@@ -2,7 +2,7 @@
 
 Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and live Runtime/GitHub evidence remain authoritative over chat history. Completed chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-09-27 for #322 governance hardening.
+Last updated: 2026-09-29 for #354 delivered-PR review repair implementation.
 
 ## Resume order
 
@@ -17,10 +17,11 @@ Memory-tier rules and the proposed Context Composer contract are in `context-mem
 
 ## Current platform snapshot
 
-- GitHub `main` after the missing-workspace cleanup merge: `9a477d15c0a51054779a41f40b24230aa230484d`.
-- Last locally accepted service identities:
-  - Runtime `1.0.56`;
-  - ddev-executor `1.0.24`.
+- Checked-out `main`/`origin/main` baseline: `20ffc7f560d4616c9ed4d0ce720dc607f08a8cdc` (#353).
+- Current checked-out source identities on `ai/354-governed-review-repair`
+  (not rolled out):
+  - Runtime `1.0.68`;
+  - ddev-executor `1.0.27`.
 - PM-controlled routine merge is implemented and operationally proven. Developer agents never merge.
 - Healthy-progress non-blocking remains mandatory: static task/profile/provider-failover counters alone are not Human Owner stop reasons while meaningful progress continues inside the approved resource envelope.
 - On effective adaptive WorkOrders, `max_changed_files` is a semantic working target. Crossing it enters a bounded Product Manager reassessment; PM must be staffed with a different model from the Primary Developer and any approval is exact-diff-bound. Emergency overflow and actual sensitive/protected changed paths remain fail-closed boundaries. Legacy-hard WorkOrders retain strict file-count semantics.
@@ -65,6 +66,31 @@ Before any new mutation, re-read the live Chợ Nhạc branch/HEAD/worktree and 
 Historical DEC-025 PCP orchestration is retired. Do not recreate, reroute or resume it; remaining/future DEC-025 evidence is Human Owner-managed in the Chợ Nhạc repository/operator workflow.
 
 ## Active PCP work
+
+### #354 — Governed same-job repair after PR delivery
+
+Status: implemented and locally verified on `ai/354-governed-review-repair`;
+PR/CI handoff remains. No rollout has been performed.
+
+The bounded Runtime action preserves the existing job, workspace, branch,
+WorkOrder, ProjectBaseline, counters and histories; validates the exact open
+unmerged PR/head through ddev-executor; gives the pending PM finding precedence
+over delivery reconciliation; and binds later delivery to the same PR and a new
+exact commit. The Chợ Nhạc acceptance fixture must not be resumed until this
+capability is reviewed, merged, and deliberately rolled out.
+
+The post-review delta rejects repair admission until the prior worker has left
+its finalizer, revalidates the exact PR and previous delivered head at the
+executor immediately before any repair push, and preserves the complete PM
+instruction while truncating only appended operational/provider context.
+Closed, merged, base-moved or head-moved PR state reaches zero remote publish.
+
+Local CI-equivalent verification on the implementation branch after the PM
+review repairs: Runtime `576` passed, ddev-executor `137` passed, Router `106`
+passed, and structure `103` passed. Focused review-repair/state/API/plan tests
+passed (`43` Runtime and `15` executor) before the full run. These checks used
+disposable containers with the checkout and `config/` mounted read-only;
+running services were not rebuilt or restarted.
 
 ### #146 — Efficiency initiative
 
@@ -111,8 +137,9 @@ Their reusable lessons and primary references are in `history/episodes.md`. Git/
 
 ## Immediate next safe actions
 
-1. Keep #146 in calibration/watch mode and collect only naturally occurring routine-task evidence.
-2. Keep the deterministic context-memory evaluation in CI; treat a future recall/stale-authority regression or sustained corpus growth as evidence to reopen vector/hybrid retrieval evaluation.
-3. Do not add a vector database or embedding provider without a new measured retrieval gap.
-4. Keep shared/default BuildKit cache decisions separate from PCP-owned bounded GC and preserve unrelated Docker/DDEV resources.
-5. For future terminal-resource cleanup, use the bounded Runtime/executor cleanup path; never use broad Docker/DDEV prune as a substitute.
+1. Review #354, then commit/push/open its PR and complete CI handoff without rollout or use of the live Chợ Nhạc fixture.
+2. Keep #146 in calibration/watch mode and collect only naturally occurring routine-task evidence.
+3. Keep the deterministic context-memory evaluation in CI; treat a future recall/stale-authority regression or sustained corpus growth as evidence to reopen vector/hybrid retrieval evaluation.
+4. Do not add a vector database or embedding provider without a new measured retrieval gap.
+5. Keep shared/default BuildKit cache decisions separate from PCP-owned bounded GC and preserve unrelated Docker/DDEV resources.
+6. For future terminal-resource cleanup, use the bounded Runtime/executor cleanup path; never use broad Docker/DDEV prune as a substitute.

@@ -88,6 +88,8 @@ class DdevExecutorClient:
         branch: str,
         source_commit: str,
         expected_commit: str,
+        review_repair_pr_number: int | None = None,
+        review_repair_previous_commit: str | None = None,
     ) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=320) as client:
             response = await client.post(
@@ -99,6 +101,8 @@ class DdevExecutorClient:
                     "branch": branch,
                     "source_commit": source_commit,
                     "expected_commit": expected_commit,
+                    "review_repair_pr_number": review_repair_pr_number,
+                    "review_repair_previous_commit": review_repair_previous_commit,
                 },
                 headers=self.headers,
             )
@@ -114,6 +118,7 @@ class DdevExecutorClient:
         expected_commit: str,
         title: str,
         body: str,
+        expected_pr_number: int | None = None,
     ) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(
@@ -125,6 +130,35 @@ class DdevExecutorClient:
                     "expected_commit": expected_commit,
                     "title": title,
                     "body": body,
+                    "expected_pr_number": expected_pr_number,
+                },
+                headers=self.headers,
+            )
+            _raise_for_status_with_detail(response)
+            return response.json()
+
+    async def prepare_review_repair(
+        self,
+        *,
+        job_id: str,
+        project_id: str,
+        workspace: str,
+        branch: str,
+        source_commit: str,
+        expected_commit: str,
+        pr_number: int,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=90) as client:
+            response = await client.post(
+                f"{self.base}/v1/github/review-repair",
+                json={
+                    "job_id": job_id,
+                    "project_id": project_id,
+                    "workspace": workspace,
+                    "branch": branch,
+                    "source_commit": source_commit,
+                    "expected_commit": expected_commit,
+                    "pr_number": pr_number,
                 },
                 headers=self.headers,
             )
