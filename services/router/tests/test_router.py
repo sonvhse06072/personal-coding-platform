@@ -337,9 +337,10 @@ def test_reassess_completes_on_definition_of_done():
     assert result.action == "complete"
 
 
-def test_reassess_hard_budget_stops():
+def test_legacy_hard_reassess_model_call_budget_stops():
     eng = make_engine()
     route = eng.route(base_request())
+    route.strategy.budget_mode = "legacy_hard"
     progress = ExecutionProgress(model_calls=route.strategy.budget.max_model_calls)
     result = eng.reassess(ReassessRequest(route=route, progress=progress))
     assert result.action == "stop"
@@ -378,9 +379,10 @@ def test_repeated_failure_escalates_or_stops_but_never_loops():
     assert result.action in {"escalate", "stop"}
 
 
-def test_reassess_token_budget_stops():
+def test_legacy_hard_reassess_token_budget_stops():
     eng = make_engine()
     route = eng.route(base_request())
+    route.strategy.budget_mode = "legacy_hard"
     progress = ExecutionProgress(
         input_tokens=route.strategy.budget.max_input_tokens,
         output_tokens=0,

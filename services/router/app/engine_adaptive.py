@@ -164,6 +164,10 @@ class RouterEngine(BudgetRouterEngine):
         if adaptive is None:
             return result
         result.strategy.adaptive_budget = adaptive
+        # A raw Router route is the effective policy for standalone/direct jobs.
+        # WorkOrder-bound jobs may still override this mode in
+        # apply_work_order_budget(), including fail-closed legacy_hard contracts.
+        result.strategy.budget_mode = "adaptive"
         reasons = list(result.strategy.reasons) + [
             "Healthy-progress budget policy enabled: profile/default and work-shape emergency thresholds are non-blocking on effective adaptive WorkOrders; material resource ceilings remain circuit breakers."
         ]

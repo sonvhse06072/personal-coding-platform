@@ -43,6 +43,7 @@ def test_new_routes_expose_estimate_working_target_and_emergency_ceiling():
     adaptive = route.strategy.adaptive_budget
     assert adaptive is not None
     assert adaptive.enabled is True
+    assert route.strategy.budget_mode == "adaptive"
 
     profile_cfg = engine.policy["profiles"][route.strategy.profile]
     for dimension in (
@@ -83,7 +84,6 @@ def test_task_pressure_increases_effort_pressure_and_estimated_capacity():
 def test_effective_adaptive_work_shape_emergency_threshold_is_non_blocking():
     engine = make_engine()
     route = engine.route(request())
-    route.strategy.budget_mode = "adaptive"
     adaptive = route.strategy.adaptive_budget
     assert adaptive is not None
     repair = adaptive.dimensions["max_repair_iterations"]
@@ -114,6 +114,30 @@ def test_effective_adaptive_work_shape_emergency_threshold_is_non_blocking():
     assert "hard_budget_guard" not in emergency.signals
 
 
+
+def test_fresh_standalone_route_does_not_hard_stop_at_model_call_ceiling():
+    engine = make_engine()
+    route = engine.route(request())
+    assert route.strategy.budget_mode == "adaptive"
+
+    result = engine.reassess(ReassessRequest(
+        route=route,
+        progress=ExecutionProgress(
+            model_calls=route.strategy.budget.max_model_calls,
+            repair_iterations=route.strategy.budget.max_repair_iterations,
+            tests_passed=False,
+            required_checks_passed=False,
+            agent_succeeded=True,
+            material_change_present=True,
+        ),
+    ))
+
+    assert result.action in {"continue", "escalate"}
+    assert result.reason != "model-call budget exhausted"
+    assert "hard_budget_guard" not in result.signals
+    assert "budget_emergency_threshold_reached:max_model_calls" in result.signals
+    assert "budget_emergency_threshold_reached:max_repair_iterations" in result.signals
+
 def test_non_blocking_budget_signals_do_not_force_reasoning_escalation():
     engine = make_engine()
     route = engine.route(request())
@@ -139,6 +163,7 @@ def test_legacy_strategy_without_adaptive_metadata_keeps_hard_profile_limit():
     route = engine.route(request())
     payload = route.strategy.model_dump(mode="json")
     payload.pop("adaptive_budget", None)
+    payload["budget_mode"] = "legacy_hard"
     baseline = engine.policy["profiles"][route.strategy.profile]
     payload["budget"]["max_repair_iterations"] = baseline["max_repair_iterations"]
     legacy = ExecutionStrategy(**payload)
@@ -184,7 +209,6 @@ def test_abnormal_repeated_failure_is_not_hidden_by_budget_headroom():
 def test_changed_files_emit_non_blocking_headroom_signal_on_adaptive_route():
     engine = make_engine()
     route = engine.route(request())
-    route.strategy.budget_mode = "adaptive"
     adaptive = route.strategy.adaptive_budget
     assert adaptive is not None
     envelope = adaptive.dimensions["max_changed_files"]
