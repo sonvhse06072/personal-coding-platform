@@ -105,6 +105,67 @@ def test_gemini_quota_exhaustion_can_fall_through_to_sonnet_bucket():
     assert "antigravity_gemini_pro" in rejected
 
 
+
+def test_near_exhausted_gemini_quota_falls_through_to_sonnet_bucket():
+    request = standard_request(
+        {
+            "provider:openai": unavailable(),
+            "provider:openrouter": unavailable(),
+            "quota:antigravity_gemini": ProviderState(
+                quota_pressure=0.99912,
+                available=True,
+            ),
+        }
+    )
+    engine = make_engine()
+    dimensions = engine.compute_dimensions(request)
+
+    choice, rejected = engine.select_model(
+        role="executor",
+        role_names=["executor"],
+        preferred_ids=["antigravity_free", "antigravity_claude_sonnet"],
+        request=request,
+        dimensions=dimensions,
+        profile="standard",
+    )
+
+    assert choice.id == "antigravity_claude_sonnet"
+    assert choice.quota_group == "antigravity_claude_gpt"
+    assert "antigravity_free" in rejected
+    assert any(
+        "quota pressure at/above routing reserve threshold" in reason
+        for reason in rejected["antigravity_free"]
+    )
+
+
+def test_quota_pressure_below_reserve_threshold_remains_eligible():
+    request = standard_request(
+        {
+            "provider:openai": unavailable(),
+            "provider:openrouter": unavailable(),
+            "quota:antigravity_gemini": ProviderState(
+                quota_pressure=0.98,
+                available=True,
+            ),
+        }
+    )
+    engine = make_engine()
+    dimensions = engine.compute_dimensions(request)
+
+    choice, rejected = engine.select_model(
+        role="executor",
+        role_names=["executor"],
+        preferred_ids=["antigravity_free", "antigravity_claude_sonnet"],
+        request=request,
+        dimensions=dimensions,
+        profile="standard",
+    )
+
+    assert choice.id == "antigravity_free"
+    assert "antigravity_free" not in rejected
+    assert any("quota penalty=" in reason for reason in choice.reasons)
+
+
 def test_provider_wide_antigravity_failure_excludes_every_antigravity_bucket():
     request = standard_request(
         {
