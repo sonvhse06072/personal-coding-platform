@@ -15,6 +15,7 @@ NOW = datetime(2026, 9, 13, tzinfo=timezone.utc)
 def _job():
     return {
         "id": "job-1",
+        "project_id": "chonhac",
         "status": "executing",
         "branch": "coding/job-1",
         "source_commit": "abc123",
@@ -211,6 +212,10 @@ class _Storage:
     def get(self, job_id):
         return _job() if job_id == "job-1" else None
 
+    def list(self, limit=50):
+        assert limit == 500
+        return [_job()]
+
     def recent_events(self, job_ids, per_job_limit=40):
         assert job_ids == ["job-1"]
         assert per_job_limit == 40
@@ -267,6 +272,8 @@ def test_snapshot_orders_activity_newest_first_and_limits_alerts():
     snapshot = build_dashboard_snapshot(_Storage(), _Store())
     assert snapshot["summary"]["active_plans"] == 1
     assert snapshot["summary"]["active_jobs"] == 1
+    assert snapshot["summary"]["standalone_jobs"] == 0
+    assert snapshot["standalone_jobs"] == []
     assert snapshot["current_plan_id"] == "pm-gh-1"
     assert snapshot["plans"][0]["token_totals"]["input_budget_tokens"] == 668_037
 
@@ -286,6 +293,90 @@ def test_snapshot_orders_activity_newest_first_and_limits_alerts():
     assert "PRIVATE AGENT OUTPUT" not in encoded
     assert "MALICIOUS PHASE" not in encoded
     assert "MALICIOUS LEVEL" not in encoded
+
+
+
+def _standalone_job(status):
+    job = _job()
+    job.update(
+        id="standalone-job",
+        status=status,
+        branch="ai/standalone-job",
+    )
+    return job
+
+
+class _StandaloneStorage(_Storage):
+    def __init__(self, status):
+        self.status = status
+
+    def list(self, limit=50):
+        assert limit == 500
+        return [_job(), _standalone_job(self.status)]
+
+    def recent_events(self, job_ids, per_job_limit=40):
+        assert job_ids == ["job-1", "standalone-job"]
+        assert per_job_limit == 40
+        return [{
+            "id": 9,
+            "job_id": "standalone-job",
+            "event_type": "executor_started",
+            "phase": "PRIVATE PHASE",
+            "level": "PRIVATE LEVEL",
+            "message": "PRIVATE STANDALONE OUTPUT",
+            "data": {
+                "from_status": "routing",
+                "to_status": self.status,
+                "raw_prompt": "PRIVATE STANDALONE PROMPT",
+            },
+            "created_at": NOW,
+        }]
+
+
+@pytest.mark.parametrize(
+    ("job_status", "expected_active_jobs"),
+    [
+        ("queued", 2),
+        ("routing", 2),
+        ("executing", 2),
+        ("verifying", 2),
+        ("evaluating", 2),
+        ("delivering", 2),
+        ("blocked", 1),
+        ("interrupted", 1),
+    ],
+)
+def test_dashboard_surfaces_standalone_runtime_jobs_without_double_counting(
+    job_status,
+    expected_active_jobs,
+):
+    snapshot = build_dashboard_snapshot(_StandaloneStorage(job_status), _Store())
+
+    assert snapshot["summary"]["active_jobs"] == expected_active_jobs
+    assert snapshot["summary"]["standalone_jobs"] == 1
+    assert len(snapshot["standalone_jobs"]) == 1
+
+    standalone = snapshot["standalone_jobs"][0]
+    assert standalone["id"] == "standalone-job"
+    assert standalone["project_id"] == "chonhac"
+    assert standalone["status"] == job_status
+    assert standalone["branch"] == "ai/standalone-job"
+    assert [event["seq"] for event in standalone["recent_events"]] == [9]
+    assert standalone["recent_events"][0]["message"] == "Executor started"
+
+    encoded = json.dumps(standalone)
+    assert "PRIVATE STANDALONE OUTPUT" not in encoded
+    assert "PRIVATE STANDALONE PROMPT" not in encoded
+    assert "PRIVATE PHASE" not in encoded
+    assert "PRIVATE LEVEL" not in encoded
+
+
+def test_dashboard_does_not_duplicate_orchestrated_job_as_standalone():
+    snapshot = build_dashboard_snapshot(_Storage(), _Store())
+
+    assert snapshot["summary"]["active_jobs"] == 1
+    assert snapshot["summary"]["standalone_jobs"] == 0
+    assert snapshot["standalone_jobs"] == []
 
 
 class _SupersededConnection(_Connection):
@@ -356,6 +447,10 @@ def test_dashboard_ui_prioritizes_live_developer_console_and_keeps_audit_timelin
     assert "Live Developer Console" in DASHBOARD_HTML
     assert "Developer transcript" in DASHBOARD_HTML
     assert "Execution timeline" in DASHBOARD_HTML
+    assert "Standalone jobs" in DASHBOARD_HTML
+    assert "standalone_jobs" in DASHBOARD_HTML
+    assert 'id="standaloneSelect"' in DASHBOARD_HTML
+    assert "currentStandalone" in DASHBOARD_HTML
     assert "EventSource(" in DASHBOARD_HTML
     assert "raw chain-of-thought and secrets are never exposed" in DASHBOARD_HTML
     assert "Provider quota remaining" not in DASHBOARD_HTML
