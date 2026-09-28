@@ -8,6 +8,7 @@ validated and pinned atomically when a job row is first created.
 
 from __future__ import annotations
 
+import json
 import uuid
 from copy import deepcopy
 from pathlib import Path
@@ -17,12 +18,15 @@ from .baseline import resolve_project_baseline
 from .config import project_config
 from .engine_delivery import RuntimeEngine as _RuntimeEngine
 from .repo import diff_state
+from .preview import ProjectPreviewManager
 from .shell import CommandTimeoutError
 from .state import (
     checkpoint_from_row,
     clear_routing_choices_for_resume,
     clear_transient_provider_failures,
+    set_failure_context,
 )
+from .storage import now
 from .work_order import (
     WorkOrderPolicyError,
     apply_work_order_budget,
@@ -359,6 +363,230 @@ class RuntimeEngine(_RuntimeEngine):
             fields["checkpoint"] = checkpoint
 
         self.storage.update(job_id, **fields)
+        await self.enqueue(job_id)
+        updated = self.storage.get(job_id)
+        assert updated is not None
+        return updated
+
+    async def request_review_repair(
+        self,
+        job_id: str,
+        *,
+        expected_commit: str,
+        finding: str,
+        evidence: dict[str, Any] | None = None,
+        references: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Govern one PM-owned repair of an exact delivered, unmerged PR."""
+        row = self.storage.get(job_id)
+        if not row:
+            raise RuntimeError("Unknown job")
+        if row.get("status") not in {"blocked", "completed"}:
+            raise RuntimeError(
+                f"Review repair cannot be requested from status={row.get('status')}"
+            )
+        if job_id in self.active_jobs:
+            raise RuntimeError("Review repair cannot be requested while the job is active")
+
+        delivered = self._delivered_result_for_review_repair(row)
+        if delivered is None:
+            raise RuntimeError("Review repair requires a delivered accepted result with a pull request")
+        if row.get("status") == "blocked":
+            reason = str((row.get("result") or {}).get("reason") or "")
+            if reason not in {
+                "github_ci_timeout",
+                "github_ci_infrastructure_failure",
+                "github_delivery_failed",
+                "github_delivery_budget_exhausted",
+            }:
+                raise RuntimeError("Blocked job is not paused in a delivery-recovery state")
+
+        delivered_commit = str(delivered.get("commit") or "")
+        if delivered_commit.lower() != expected_commit.lower():
+            raise RuntimeError("Expected commit does not match the delivered accepted result")
+        delivery = dict(delivered.get("delivery") or {})
+        pull_request = dict(delivery.get("pull_request") or {})
+        try:
+            pr_number = int(pull_request["number"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RuntimeError("Delivered result is missing an exact pull-request number") from exc
+
+        branch = str(row.get("branch") or delivered.get("branch") or "")
+        workspace = str(row.get("workspace") or "")
+        source_commit = str(row.get("source_commit") or "")
+        if not branch or not workspace or not source_commit:
+            raise RuntimeError("Review repair requires the persisted job workspace/branch/source identity")
+        if pull_request.get("head") and str(pull_request.get("head")) != delivered_commit:
+            raise RuntimeError("Persisted pull-request head does not match the delivered commit")
+        if pull_request.get("head_ref") and str(pull_request.get("head_ref")) != branch:
+            raise RuntimeError("Persisted pull-request branch does not match the Runtime job branch")
+
+        checkpoint = checkpoint_from_row(row)
+        if isinstance(checkpoint.get("pending_review_repair"), dict):
+            raise RuntimeError("A PM review repair is already pending for this job")
+        if isinstance(checkpoint.get("active_review_repair"), dict):
+            raise RuntimeError("A PM review repair is already in delivery for this job")
+
+        workspace_mode = str(checkpoint.get("workspace_mode") or "")
+        if workspace_mode not in {"direct", "isolated_clone"}:
+            project = project_config(str(row["project_id"]))
+            workspace_mode = (
+                "direct"
+                if Path(workspace).resolve() == Path(str(project.get("path") or "")).resolve()
+                else "isolated_clone"
+            )
+        lease_reused = True
+        lease: dict[str, Any] | None = None
+        prepared: dict[str, Any] | None = None
+        transition_persisted = False
+        try:
+            if workspace_mode == "direct":
+                lease = self.storage.acquire_project_lease(str(row["project_id"]), job_id)
+                lease_reused = bool(lease.get("reused", False))
+                await ProjectPreviewManager(self.storage, self.ddev).handoff_to_job(
+                    str(row["project_id"]), job_id
+                )
+
+            prepared = await self.ddev.prepare_review_repair(
+                job_id=job_id,
+                project_id=str(row["project_id"]),
+                workspace=workspace,
+                branch=branch,
+                source_commit=source_commit,
+                expected_commit=delivered_commit,
+                pr_number=pr_number,
+            )
+            observed_pr = dict(prepared.get("pull_request") or {})
+            if (
+                str(prepared.get("workspace") or "") != workspace
+                or str(prepared.get("branch") or "") != branch
+                or str(prepared.get("expected_commit") or "") != delivered_commit
+                or str(prepared.get("workspace_mode") or "") != workspace_mode
+                or int(observed_pr.get("number") or 0) != pr_number
+                or str(observed_pr.get("head") or "") != delivered_commit
+                or str(observed_pr.get("head_ref") or "") != branch
+                or str(observed_pr.get("state") or "") != "open"
+                or bool(observed_pr.get("merged"))
+            ):
+                raise RuntimeError("Executor returned mismatched review-repair PR evidence")
+
+            latest = self.storage.get(job_id)
+            if not latest or latest.get("status") != row.get("status"):
+                raise RuntimeError("Job state changed while the review repair was being validated")
+            latest_delivered = self._delivered_result_for_review_repair(latest)
+            if not latest_delivered or str(latest_delivered.get("commit") or "") != delivered_commit:
+                raise RuntimeError("Delivered result changed while the review repair was being validated")
+
+            checkpoint = checkpoint_from_row(latest)
+            request_id = uuid.uuid4().hex
+            delivered_diff_hash = str(
+                (delivered.get("diff") or {}).get("diff_hash")
+                or f"commit:{delivered_commit}"
+            )
+            message = (
+                "PCP_PM_REVIEW_REPAIR: "
+                + json.dumps(
+                    {
+                        "finding": finding,
+                        "evidence": evidence or {},
+                        "references": references or [],
+                        "expected_delivered_commit": delivered_commit,
+                        "pull_request": pr_number,
+                        "instruction": (
+                            "Make the smallest in-scope repair on the existing job branch. "
+                            "Do not rewrite the WorkOrder or ProjectBaseline."
+                        ),
+                    },
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+            )[-30000:]
+            requested_at = now().isoformat()
+            record = {
+                "request_id": request_id,
+                "state": "pending",
+                "requested_at": requested_at,
+                "expected_commit": delivered_commit,
+                "delivered_diff_hash": delivered_diff_hash,
+                "pr_number": pr_number,
+                "finding": finding,
+                "evidence": deepcopy(evidence or {}),
+                "references": list(references or []),
+                "message": message,
+                "executor_verification": deepcopy(prepared),
+            }
+            checkpoint["pending_review_repair"] = deepcopy(record)
+            history = [
+                deepcopy(item)
+                for item in (checkpoint.get("review_repair_history") or [])
+                if isinstance(item, dict)
+            ]
+            history.append(deepcopy(record))
+            checkpoint["review_repair_history"] = history
+            accepted_history = list(checkpoint.get("accepted_result_history") or [])
+            accepted_history.append({
+                "reason": "pm_review_repair",
+                "request_id": request_id,
+                "result": deepcopy(delivered),
+            })
+            checkpoint["accepted_result_history"] = accepted_history
+            delivery_history = list(checkpoint.get("delivery_history") or [])
+            delivery_history.append({
+                "reason": "pm_review_repair",
+                "request_id": request_id,
+                "delivery": deepcopy(delivery),
+            })
+            checkpoint["delivery_history"] = delivery_history
+            if lease is not None:
+                checkpoint["project_lease_generation"] = int(lease.get("generation") or 0)
+            set_failure_context(
+                checkpoint,
+                kind="semantic_repair",
+                source="pm_review_repair",
+                message=message,
+                diff_hash=delivered_diff_hash,
+            )
+            visible_result = deepcopy(latest.get("result") or {})
+            visible_result["review_repair_pending"] = {
+                "request_id": request_id,
+                "expected_commit": delivered_commit,
+                "pr_number": pr_number,
+                "finding": finding,
+            }
+            self.storage.update(
+                job_id,
+                status="queued",
+                checkpoint=checkpoint,
+                result=visible_result,
+                error=None,
+            )
+            transition_persisted = True
+        except Exception:
+            if workspace_mode == "direct" and lease is not None and not lease_reused and not transition_persisted:
+                try:
+                    await self.ddev.return_direct_workspace_to_base(
+                        job_id=job_id,
+                        project_id=str(row["project_id"]),
+                        workspace=workspace,
+                        branch=branch,
+                    )
+                except Exception:
+                    pass
+                self.storage.release_project_lease(str(row["project_id"]), job_id)
+            raise
+
+        self._runtime_event(
+            job_id,
+            kind="pm_review_repair",
+            message="PM requested a bounded repair of the exact delivered PR head",
+            phase="review_repair",
+            status="queued",
+            output={
+                "request_id": checkpoint["pending_review_repair"]["request_id"],
+                "expected_commit": delivered_commit,
+                "pr_number": pr_number,
+            },
+        )
         await self.enqueue(job_id)
         updated = self.storage.get(job_id)
         assert updated is not None

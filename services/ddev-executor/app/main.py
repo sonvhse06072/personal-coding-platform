@@ -52,6 +52,11 @@ class PublishBranchRequest(BaseModel):
     branch: str = Field(min_length=1, max_length=200)
     source_commit: str = Field(min_length=7, max_length=64)
     expected_commit: str = Field(min_length=7, max_length=64)
+    review_repair_pr_number: int | None = Field(default=None, ge=1)
+    review_repair_previous_commit: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-fA-F]{40}$",
+    )
 
 
 class PullRequestRequest(BaseModel):
@@ -61,6 +66,7 @@ class PullRequestRequest(BaseModel):
     expected_commit: str = Field(min_length=7, max_length=64)
     title: str = Field(min_length=1, max_length=500)
     body: str = Field(default="", max_length=30000)
+    expected_pr_number: int | None = Field(default=None, ge=1)
 
 
 class ReconcileDeliveryRequest(BaseModel):
@@ -69,6 +75,18 @@ class ReconcileDeliveryRequest(BaseModel):
     branch: str = Field(min_length=1, max_length=200)
     source_commit: str = Field(min_length=7, max_length=64)
     expected_commit: str = Field(min_length=7, max_length=64)
+
+
+class ReviewRepairRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str = Field(min_length=8, max_length=100)
+    project_id: str = Field(min_length=1, max_length=200)
+    workspace: str = Field(min_length=1, max_length=2000)
+    branch: str = Field(min_length=1, max_length=200)
+    source_commit: str = Field(min_length=7, max_length=64)
+    expected_commit: str = Field(min_length=7, max_length=64)
+    pr_number: int = Field(ge=1)
 
 
 class CancelRequest(BaseModel):
@@ -1016,7 +1034,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-DDEV_EXECUTOR_VERSION = "1.0.26"
+DDEV_EXECUTOR_VERSION = "1.0.27"
 
 app = FastAPI(title="Constrained DDEV/Git Executor", version=DDEV_EXECUTOR_VERSION)
 app.include_router(pm_bridge_github_router)
@@ -1448,6 +1466,11 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
     autonomy = cfg.get("autonomy", {}) or {}
     if not bool(autonomy.get("allow_push_ai_branch", False)):
         raise HTTPException(403, "Project policy does not allow AI branch publishing")
+    guarded_repair = payload.review_repair_pr_number is not None
+    if guarded_repair != (payload.review_repair_previous_commit is not None):
+        raise HTTPException(422, "Review-repair publish guard requires exact PR and previous commit")
+    if guarded_repair and not bool(autonomy.get("allow_create_pr", False)):
+        raise HTTPException(403, "Project policy does not allow pull-request delivery")
 
     workspace = _validate_workspace(payload.job_id, payload.project_id, payload.workspace)
     mode = _workspace_instance_mode(
@@ -1486,6 +1509,45 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
             raise HTTPException(503, "GITHUB_DELIVERY_TOKEN is not configured for GitHub publishing")
         push_target = github_push_url(repository)
         push_env = github_git_env(delivery.token)
+    elif guarded_repair:
+        raise HTTPException(409, "Review-repair publication requires a GitHub repository")
+
+    if guarded_repair:
+        try:
+            delivery.verify_review_repair(
+                repository=repository,
+                job_id=payload.job_id,
+                pr_number=int(payload.review_repair_pr_number),
+                branch=payload.branch,
+                base_branch=str(cfg.get("base_branch", "main")),
+                source_commit=source_commit,
+                expected_commit=str(payload.review_repair_previous_commit),
+            )
+        except RuntimeError as previous_error:
+            try:
+                delivery.verify_review_repair(
+                    repository=repository,
+                    job_id=payload.job_id,
+                    pr_number=int(payload.review_repair_pr_number),
+                    branch=payload.branch,
+                    base_branch=str(cfg.get("base_branch", "main")),
+                    source_commit=source_commit,
+                    expected_commit=expected,
+                )
+            except httpx.HTTPError as exc:
+                raise _github_error(exc) from exc
+            except (RuntimeError, ValueError):
+                raise _github_error(previous_error) from previous_error
+            return {
+                "published": True,
+                "already_published": True,
+                "branch": payload.branch,
+                "commit": expected,
+                "source_commit": source_commit,
+                "repository": repository,
+            }
+        except (httpx.HTTPError, ValueError) as exc:
+            raise _github_error(exc) from exc
 
     returncode, stdout, stderr, timed_out = run_tracked(
         payload.job_id,
@@ -1538,6 +1600,94 @@ def reconcile_delivery(payload: ReconcileDeliveryRequest) -> dict[str, Any]:
     }
 
 
+@app.post("/v1/github/review-repair", dependencies=[Depends(auth)])
+def prepare_review_repair(payload: ReviewRepairRequest) -> dict[str, Any]:
+    """Revalidate one delivered PR and restore its exact job branch for repair."""
+    cfg = project(payload.project_id)
+    autonomy = cfg.get("autonomy", {}) or {}
+    if not bool(autonomy.get("allow_push_ai_branch", False)):
+        raise HTTPException(403, "Project policy does not allow AI branch publishing")
+    if not bool(autonomy.get("allow_create_pr", False)):
+        raise HTTPException(403, "Project policy does not allow pull-request delivery")
+
+    _validate_ai_branch(cfg, payload.branch)
+    workspace = _validate_workspace(payload.job_id, payload.project_id, payload.workspace)
+    mode = _workspace_instance_mode(cfg, job_id=payload.job_id, path=workspace)
+    if git(workspace, "status", "--porcelain", check=False):
+        raise HTTPException(409, "Review repair requires the existing job workspace to be clean")
+
+    local_branch_head = git(
+        workspace,
+        "rev-parse",
+        f"refs/heads/{payload.branch}",
+        check=False,
+    )
+    if local_branch_head != payload.expected_commit:
+        raise HTTPException(409, "Existing job branch does not match the expected delivered commit")
+    source_commit = git(workspace, "rev-parse", payload.source_commit)
+    ancestry = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(workspace),
+            "merge-base",
+            "--is-ancestor",
+            source_commit,
+            payload.expected_commit,
+        ],
+        text=True,
+        capture_output=True,
+    )
+    if ancestry.returncode != 0:
+        raise HTTPException(409, "Delivered commit is not descended from the job source commit")
+
+    current_branch = git(workspace, "branch", "--show-current", check=False)
+    base_branch = str(cfg.get("base_branch", "main"))
+    if mode == "direct":
+        if current_branch not in {payload.branch, base_branch}:
+            raise HTTPException(
+                409,
+                "Direct workspace is not on the job branch or configured base branch",
+            )
+    elif current_branch != payload.branch:
+        raise HTTPException(409, "Isolated job workspace is not on its exact AI branch")
+    if mode == "isolated_clone" and git(workspace, "remote", check=False).strip():
+        raise HTTPException(409, "Isolated job workspace must remain remote-free")
+
+    delivery, repository = _github_context(cfg)
+    try:
+        pull_request = delivery.verify_review_repair(
+            repository=repository,
+            job_id=payload.job_id,
+            pr_number=payload.pr_number,
+            branch=payload.branch,
+            base_branch=base_branch,
+            source_commit=source_commit,
+            expected_commit=payload.expected_commit,
+        )
+    except (httpx.HTTPError, RuntimeError, ValueError) as exc:
+        raise _github_error(exc) from exc
+
+    if current_branch == base_branch:
+        git(workspace, "checkout", payload.branch)
+    if git(workspace, "branch", "--show-current") != payload.branch:
+        raise HTTPException(409, "Review repair could not restore the exact job branch")
+    if git(workspace, "rev-parse", "HEAD") != payload.expected_commit:
+        raise HTTPException(409, "Restored job workspace HEAD does not match the delivered commit")
+    if git(workspace, "status", "--porcelain", check=False):
+        raise HTTPException(409, "Restored job workspace is not clean")
+
+    return {
+        "job_id": payload.job_id,
+        "workspace": str(workspace),
+        "workspace_mode": mode,
+        "branch": payload.branch,
+        "source_commit": source_commit,
+        "expected_commit": payload.expected_commit,
+        "pull_request": pull_request,
+    }
+
+
 @app.post("/v1/github/pull-request", dependencies=[Depends(auth)])
 def upsert_pull_request(payload: PullRequestRequest) -> dict[str, Any]:
     cfg = project(payload.project_id)
@@ -1550,11 +1700,13 @@ def upsert_pull_request(payload: PullRequestRequest) -> dict[str, Any]:
     try:
         result = delivery.upsert_pull_request(
             repository=repository,
+            job_id=payload.job_id,
             branch=payload.branch,
             base_branch=base_branch,
             expected_commit=payload.expected_commit,
             title=payload.title,
             body=payload.body,
+            expected_pr_number=payload.expected_pr_number,
         )
     except (httpx.HTTPError, RuntimeError, ValueError) as exc:
         raise _github_error(exc) from exc

@@ -298,6 +298,35 @@ def test_completed_ci_job_waits_for_manual_merge_then_unlocks_dependency():
     assert store.tracked[1]["state"] == "running"
 
 
+def test_review_repair_reopens_same_awaiting_merge_work_order():
+    first = work_order("WO-1")
+    second = work_order("WO-2", dependencies=["WO-1"])
+    service, storage, engine, store = orchestrator(
+        [first, second],
+        [
+            tracked("WO-1", 0, state="awaiting_merge", job_id="job-1", pr_number=7),
+            tracked("WO-2", 1),
+        ],
+    )
+    storage.jobs["job-1"] = {
+        "id": "job-1",
+        "status": "queued",
+        "checkpoint": {"pending_review_repair": {"request_id": "repair-1"}},
+        "progress": {},
+    }
+
+    result = asyncio.run(service.tick())
+
+    assert result["launched"] is None
+    assert store.tracked[0]["state"] == "running"
+    assert store.tracked[0]["job_id"] == "job-1"
+    assert store.tracked[0]["pr_number"] == 7
+    assert store.tracked[0]["detail"]["review_repair_reopened"] is True
+    assert store.tracked[1]["state"] == "pending"
+    assert store.plan_status == "executing"
+    assert engine.ddev.prs == {}
+
+
 def test_operator_work_order_holds_and_emits_deduplicated_notification():
     operator = work_order("WO-OP", requested_role="operator")
     service, storage, engine, store = orchestrator(

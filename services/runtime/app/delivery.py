@@ -58,6 +58,8 @@ async def deliver_verified_work(
     permissions: dict[str, Any],
     max_wait_seconds: int,
     reconcile_existing: bool = False,
+    expected_pr_number: int | None = None,
+    expected_previous_commit: str | None = None,
     sleeper: Callable[[float], Awaitable[None]] = asyncio.sleep,
     poll_seconds: float | None = None,
     discovery_seconds: float | None = None,
@@ -115,6 +117,8 @@ async def deliver_verified_work(
             branch=branch,
             source_commit=source_commit,
             expected_commit=commit,
+            review_repair_pr_number=expected_pr_number,
+            review_repair_previous_commit=expected_previous_commit,
         )
         metadata["publish"] = published
         metadata["state"] = "published"
@@ -129,6 +133,7 @@ async def deliver_verified_work(
             expected_commit=commit,
             title=title,
             body=body,
+            expected_pr_number=expected_pr_number,
         )
         metadata["pull_request"] = pr
         metadata["state"] = "ci_waiting"

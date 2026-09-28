@@ -502,41 +502,163 @@ class GitHubDelivery:
         if sha != expected_commit:
             raise RuntimeError("Published GitHub branch does not match the expected verified commit")
 
+    @staticmethod
+    def _review_repair_pull_request(
+        raw: dict[str, Any],
+        *,
+        repository: str,
+        job_id: str,
+        branch: str,
+        base_branch: str,
+        expected_commit: str,
+    ) -> dict[str, Any]:
+        head = dict(raw.get("head") or {})
+        base = dict(raw.get("base") or {})
+        if str(raw.get("state") or "") != "open" or bool(raw.get("merged")) or raw.get("merged_at"):
+            raise RuntimeError("Review repair requires an open, unmerged pull request")
+        if str(((head.get("repo") or {}).get("full_name")) or "").casefold() != repository.casefold():
+            raise RuntimeError("Pull request head repository does not match the configured project repository")
+        if str(head.get("ref") or "") != branch:
+            raise RuntimeError("Pull request head branch does not match the exact Runtime job branch")
+        if str(base.get("ref") or "") != base_branch:
+            raise RuntimeError("Pull request base branch does not match project policy")
+        if str(((base.get("repo") or {}).get("full_name")) or "").casefold() != repository.casefold():
+            raise RuntimeError("Pull request base repository does not match the configured project repository")
+        if str(head.get("sha") or "") != expected_commit:
+            raise RuntimeError("Pull request head moved from the expected delivered commit")
+        if f"- Job: `{job_id}`" not in str(raw.get("body") or ""):
+            raise RuntimeError("Pull request is not bound to the exact Runtime job")
+        return {
+            "number": int(raw["number"]),
+            "url": raw.get("html_url"),
+            "state": str(raw.get("state") or ""),
+            "merged": False,
+            "head": str(head.get("sha") or ""),
+            "head_ref": str(head.get("ref") or ""),
+            "base_ref": str(base.get("ref") or ""),
+            "repository": repository,
+        }
+
+    def verify_review_repair(
+        self,
+        *,
+        repository: str,
+        job_id: str,
+        pr_number: int,
+        branch: str,
+        base_branch: str,
+        source_commit: str,
+        expected_commit: str,
+    ) -> dict[str, Any]:
+        """Verify one exact delivered PR as eligible for same-job repair."""
+        with self._client() as client:
+            response = client.get(f"{self.base}/repos/{repository}/pulls/{pr_number}")
+            if response.status_code == 404:
+                raise RuntimeError("Delivered pull request does not exist")
+            response.raise_for_status()
+            pull_request = self._review_repair_pull_request(
+                dict(response.json() or {}),
+                repository=repository,
+                job_id=job_id,
+                branch=branch,
+                base_branch=base_branch,
+                expected_commit=expected_commit,
+            )
+            if int(pull_request["number"]) != pr_number:
+                raise RuntimeError("GitHub returned a different pull request identity")
+
+            branch_response = client.get(
+                f"{self.base}/repos/{repository}/git/ref/heads/{branch}"
+            )
+            branch_response.raise_for_status()
+            branch_head = str(
+                (dict(branch_response.json() or {}).get("object") or {}).get("sha") or ""
+            )
+            if branch_head != expected_commit:
+                raise RuntimeError("Published GitHub branch moved from the expected delivered commit")
+
+            compare = client.get(
+                f"{self.base}/repos/{repository}/compare/{source_commit}...{expected_commit}"
+            )
+            if compare.status_code == 404:
+                raise RuntimeError("Delivered commit is not available in the configured GitHub repository")
+            compare.raise_for_status()
+            relation = dict(compare.json() or {})
+            if (
+                str((relation.get("merge_base_commit") or {}).get("sha") or "") != source_commit
+                or str(relation.get("status") or "") not in {"ahead", "identical"}
+            ):
+                raise RuntimeError("Delivered commit is not descended from the pinned job source commit")
+
+        pull_request["source_commit"] = source_commit
+        pull_request["ancestry"] = {
+            "status": relation.get("status"),
+            "merge_base": (relation.get("merge_base_commit") or {}).get("sha"),
+        }
+        return pull_request
+
     def upsert_pull_request(
         self,
         *,
         repository: str,
+        job_id: str,
         branch: str,
         base_branch: str,
         expected_commit: str,
         title: str,
         body: str,
+        expected_pr_number: int | None = None,
     ) -> dict[str, Any]:
         owner = repository.split("/", 1)[0]
         self.assert_branch_commit(repository, branch, expected_commit)
         with self._client() as client:
-            lookup = client.get(
-                f"{self.base}/repos/{repository}/pulls",
-                params={"state": "open", "head": f"{owner}:{branch}", "base": base_branch},
-            )
-            lookup.raise_for_status()
-            existing = lookup.json()
-            if existing:
-                number = int(existing[0]["number"])
+            if expected_pr_number is not None:
+                lookup = client.get(
+                    f"{self.base}/repos/{repository}/pulls/{expected_pr_number}"
+                )
+                if lookup.status_code == 404:
+                    raise RuntimeError("Expected review-repair pull request no longer exists")
+                lookup.raise_for_status()
+                existing_pull = dict(lookup.json() or {})
+                validated = self._review_repair_pull_request(
+                    existing_pull,
+                    repository=repository,
+                    job_id=job_id,
+                    branch=branch,
+                    base_branch=base_branch,
+                    expected_commit=expected_commit,
+                )
+                if int(validated["number"]) != expected_pr_number:
+                    raise RuntimeError("GitHub returned a different pull request identity")
+                number = expected_pr_number
                 response = client.patch(
                     f"{self.base}/repos/{repository}/pulls/{number}",
                     json={"title": title, "body": body, "base": base_branch},
                 )
                 created = False
             else:
-                response = client.post(
+                lookup = client.get(
                     f"{self.base}/repos/{repository}/pulls",
-                    json={"title": title, "body": body, "head": branch, "base": base_branch, "draft": False},
+                    params={"state": "open", "head": f"{owner}:{branch}", "base": base_branch},
                 )
-                created = True
+                lookup.raise_for_status()
+                existing = lookup.json()
+                if existing:
+                    number = int(existing[0]["number"])
+                    response = client.patch(
+                        f"{self.base}/repos/{repository}/pulls/{number}",
+                        json={"title": title, "body": body, "base": base_branch},
+                    )
+                    created = False
+                else:
+                    response = client.post(
+                        f"{self.base}/repos/{repository}/pulls",
+                        json={"title": title, "body": body, "head": branch, "base": base_branch, "draft": False},
+                    )
+                    created = True
             response.raise_for_status()
             data = response.json()
-        return {
+        result = {
             "created": created,
             "number": int(data["number"]),
             "url": data.get("html_url"),
@@ -546,6 +668,18 @@ class GitHubDelivery:
             "base_ref": (data.get("base") or {}).get("ref"),
             "repository": repository,
         }
+        if expected_pr_number is not None:
+            validated = self._review_repair_pull_request(
+                dict(data or {}),
+                repository=repository,
+                job_id=job_id,
+                branch=branch,
+                base_branch=base_branch,
+                expected_commit=expected_commit,
+            )
+            if int(validated["number"]) != expected_pr_number:
+                raise RuntimeError("Updated pull request identity changed unexpectedly")
+        return result
 
     def reconcile_merged_delivery(
         self,

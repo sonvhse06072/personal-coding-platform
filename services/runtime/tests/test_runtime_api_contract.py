@@ -1,9 +1,12 @@
+import asyncio
+from datetime import datetime, timezone
+
 import pytest
 from fastapi import HTTPException
 
 from app import main
 from app.main import WorkOrderSupersessionRequest, auth
-from app.schemas import HumanDecisionRequest, JobRunRequest
+from app.schemas import HumanDecisionRequest, JobRunRequest, ReviewRepairRequest
 
 
 def test_run_request_defaults_to_preserving_provider_failures():
@@ -14,6 +17,61 @@ def test_run_request_defaults_to_preserving_provider_failures():
 
 def test_human_decision_request_is_explicit():
     assert HumanDecisionRequest(action="approve", note="ok").action == "approve"
+
+
+def test_review_repair_request_is_bounded_and_explicit():
+    request = ReviewRepairRequest(
+        expected_commit="a" * 40,
+        finding="Repair one bounded PM finding.",
+        evidence={"review": "PM-38"},
+        references=["PR #38"],
+    )
+
+    assert request.expected_commit == "a" * 40
+    assert request.finding == "Repair one bounded PM finding."
+    assert "reroute" not in ReviewRepairRequest.model_fields
+
+
+def test_review_repair_api_uses_dedicated_engine_transition(monkeypatch):
+    calls = []
+
+    async def request(job_id, **fields):
+        calls.append((job_id, fields))
+        return {
+            "id": job_id,
+            "project_id": "demo",
+            "status": "queued",
+            "source_commit": "a" * 40,
+            "branch": "ai/job12345",
+            "workspace": "/workspaces/job12345",
+            "route": {},
+            "checkpoint": {},
+            "result": {"review_repair_pending": True},
+            "error": None,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }
+
+    monkeypatch.setattr(main.engine, "request_review_repair", request)
+    payload = ReviewRepairRequest(
+        expected_commit="b" * 40,
+        finding="bounded finding",
+        evidence={"review": "PM-38"},
+        references=["PR #38"],
+    )
+
+    result = asyncio.run(main.request_review_repair("job12345", payload))
+
+    assert result.status == "queued"
+    assert calls == [(
+        "job12345",
+        {
+            "expected_commit": "b" * 40,
+            "finding": "bounded finding",
+            "evidence": {"review": "PM-38"},
+            "references": ["PR #38"],
+        },
+    )]
 
 
 def test_supersession_api_forwards_only_exact_structured_identity(monkeypatch):

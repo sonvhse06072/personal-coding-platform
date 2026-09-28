@@ -33,6 +33,7 @@ from .schemas import (
     HumanDecisionRequest,
     JobCreateRequest,
     JobList,
+    ReviewRepairRequest,
     JobRunRequest,
     JobView,
     RuntimeHealth,
@@ -141,7 +142,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-RUNTIME_VERSION = "1.0.67"
+RUNTIME_VERSION = "1.0.68"
 
 app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan=lifespan)
 app.include_router(pm_bridge_router)
@@ -460,6 +461,25 @@ async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
             ),
         )
         reopen_orchestrated_job(plan_orchestrator.store, orchestration_resume, job_id)
+    except RuntimeError as exc:
+        raise runtime_error(exc) from exc
+    return view(row)
+
+
+@app.post(
+    "/v1/jobs/{job_id}/review-repair",
+    response_model=JobView,
+    dependencies=[Depends(auth)],
+)
+async def request_review_repair(job_id: str, payload: ReviewRepairRequest) -> JobView:
+    try:
+        row = await engine.request_review_repair(
+            job_id,
+            expected_commit=payload.expected_commit,
+            finding=payload.finding,
+            evidence=payload.evidence,
+            references=payload.references,
+        )
     except RuntimeError as exc:
         raise runtime_error(exc) from exc
     return view(row)
