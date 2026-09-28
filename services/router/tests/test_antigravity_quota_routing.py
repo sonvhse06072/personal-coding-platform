@@ -50,7 +50,7 @@ def test_registry_exposes_explicit_antigravity_models_and_quota_groups():
     cfg = get_config()["models"]
     models = cfg["models"]
 
-    assert cfg["version"] == 8
+    assert cfg["version"] == 9
     assert models["antigravity_free"]["model"] == "gemini-3.8-flash-medium"
     assert models["antigravity_flash_high"]["model"] == "gemini-3.8-flash-high"
     assert models["antigravity_gemini_pro"]["model"] == "gemini-3.1-pro-high"
@@ -58,6 +58,7 @@ def test_registry_exposes_explicit_antigravity_models_and_quota_groups():
     assert models["antigravity_free"]["quota_group"] == "antigravity_gemini"
     assert models["antigravity_gemini_pro"]["quota_group"] == "antigravity_gemini"
     assert models["antigravity_claude_sonnet"]["quota_group"] == "antigravity_claude_gpt"
+    assert models["antigravity_claude_sonnet"]["supports_reasoning_effort"] is False
 
 
 def test_standard_route_applies_reasoning_effort_to_antigravity():
@@ -76,6 +77,22 @@ def test_standard_route_applies_reasoning_effort_to_antigravity():
     assert result.strategy.executor.model == "gemini-3.8-flash-medium"
     assert result.strategy.executor.quota_group == "antigravity_gemini"
     assert result.strategy.executor.reasoning_effort == "low"
+
+
+def test_sonnet_route_omits_unsupported_reasoning_effort():
+    request = standard_request(
+        {
+            "provider:openai": unavailable(),
+            "provider:openrouter": unavailable(),
+            "quota:antigravity_gemini": unavailable(),
+        }
+    )
+
+    result = make_engine().route(request)
+
+    assert result.strategy.executor.id == "antigravity_claude_sonnet"
+    assert result.strategy.executor.model == "claude-sonnet-4-6"
+    assert result.strategy.executor.reasoning_effort is None
 
 
 def test_gemini_quota_exhaustion_can_fall_through_to_sonnet_bucket():
