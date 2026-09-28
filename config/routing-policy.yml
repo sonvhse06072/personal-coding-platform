@@ -1,4 +1,4 @@
-version: 17
+version: 18
 complexity_weights:
   scope: 0.18
   dependency_depth: 0.1
@@ -319,6 +319,10 @@ scoring:
   premium_cost_penalty: 0.04
   scarce_cost_penalty: 0.1
   quota_pressure_penalty: 0.12
+  # Preserve a small provider allowance reserve instead of assigning new work
+  # to a bucket that is technically non-zero but operationally exhausted.
+  # quota_pressure is normalized 0..1, so 0.99 means >=99% used.
+  quota_near_exhaustion_threshold: 0.99
   error_rate_penalty: 0.12
   latency_penalty: 0.03
   unhealthy_penalty: 1.0
