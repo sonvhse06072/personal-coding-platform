@@ -356,6 +356,16 @@ class RouterEngine:
             if not state.healthy:
                 reasons.append("provider/model unhealthy")
 
+            scoring = self.policy.get("scoring", {})
+            reserve_threshold = float(
+                scoring.get("quota_near_exhaustion_threshold", 1.0)
+            )
+            if state.quota_pressure >= reserve_threshold:
+                reasons.append(
+                    "quota pressure at/above routing reserve threshold "
+                    f"({state.quota_pressure:.3f}>={reserve_threshold:.3f})"
+                )
+
             if reasons:
                 rejected[model_id] = reasons
                 continue
