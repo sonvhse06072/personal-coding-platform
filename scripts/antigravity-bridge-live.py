@@ -185,23 +185,22 @@ class StreamingBridge(legacy.Bridge):
                     return self.send_json(400, {"error": "prompt_required"})
                 timeout = max(30, min(int(payload.get("timeout", 900)), 5400))
                 model = str(payload.get("model") or "auto")
-                effort = str(payload.get("effort") or "medium")
-                if effort not in {"low", "medium", "high"}:
-                    effort = "medium"
+                raw_effort = payload.get("effort")
+                effort = str(raw_effort).strip() if raw_effort is not None else None
+                if effort not in legacy._REASONING_EFFORTS:
+                    effort = None
                 run_id = str(payload.get("run_id") or uuid.uuid4().hex).strip()
                 if not run_id or len(run_id) > 128:
                     return self.send_json(400, {"error": "invalid_run_id"})
 
-                cmd = [
+                cmd = legacy.build_run_command(
                     bridge.agy_bin,
-                    "-p", prompt,
-                    "--output-format", "stream-json",
-                    "--sandbox",
-                    "--effort", effort,
-                    "--print-timeout", f"{timeout}s",
-                ]
-                if model and model != "auto":
-                    cmd.extend(["--model", model])
+                    prompt=prompt,
+                    model=model,
+                    effort=effort,
+                    timeout=timeout,
+                    output_format="stream-json",
+                )
                 env = os.environ.copy()
                 env["NO_COLOR"] = "1"
 
