@@ -61,3 +61,13 @@ def test_dashboard_exposes_project_level_current_site_preview():
     assert "localStorage" not in DASHBOARD_HTML
     assert "sessionStorage" not in DASHBOARD_HTML
     assert "/home/sonvh/chonhac" not in DASHBOARD_HTML
+
+
+def test_dashboard_exposes_standalone_job_observability_without_synthetic_work_orders():
+    assert ">Standalone jobs<" in DASHBOARD_HTML
+    assert 'id="standaloneCard"' in DASHBOARD_HTML
+    assert 'id="standaloneSelect"' in DASHBOARD_HTML
+    assert "snapshot.standalone_jobs" in DASHBOARD_HTML
+    assert "currentStandalone" in DASHBOARD_HTML
+    assert "selectedStandalone" in DASHBOARD_HTML
+    assert "/v1/dashboard/jobs/" in DASHBOARD_HTML
