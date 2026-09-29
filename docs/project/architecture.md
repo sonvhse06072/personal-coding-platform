@@ -88,6 +88,35 @@ Current Runtime responsibilities:
 
 Runtime is an engineering-operations orchestrator. It does not own project/product direction.
 
+Authenticated `POST /v1/intake` is the canonical new Human/Chat PM ticket
+handoff. Its pure versioned classifier defaults to planning when explicit
+bounded-direct intent or structured evidence is missing. Complete low-materiality
+evidence and no protected/dependency/multi-unit trigger permit one normal direct
+job. Exact policy thresholds and required evidence are in
+`operating-model.md` under canonical new-ticket intake. File count alone cannot
+classify a ticket as large. Intake requires and pins an approved ProjectBaseline.
+Provider/model selection remains Router staffing, never intake-policy authority.
+
+The planning branch reuses `PMPlanner -> ExecutionPlan -> PlanOrchestrator ->
+WorkOrders`, including the same registration/tick path as `/v1/plans`. Structured
+semantic/repo hints accompany the ticket into PM triage. Materially non-trivial
+intake sets the backward-compatible `decomposition_required` constraint: an
+in-scope result with no decision boundaries needs at least two coherent,
+independently verifiable WorkOrders before becoming ready. Violations persist a
+failed planning result with no executable plan. Out-of-scope/human-decision/
+ambiguous plans need no artificial work. Default `/v1/plans` and externally
+supplied PM-bridge plans keep their existing single-WorkOrder behavior.
+
+Direct intake uses the existing engine and creates no ExecutionPlan. A private
+engine keyword includes compact `canonical_intake` decision evidence in the
+same initial INSERT as the job, before it is visible to enqueue/startup. It
+preserves task signals, repo hints, capacity state and the approved baseline.
+`auto_run=false` skips direct enqueue. Planning retains existing automatic
+orchestration. Explicit/manual `POST /v1/jobs`, its helper and legacy `/run`
+recovery are unchanged; existing durable jobs/plans are not migrated or
+reinterpreted. This intake adds no Human Owner continuation gate, parallel
+WorkOrders, developer credentials, merge or production authority.
+
 After successful base verification, project-owned path-scoped
 `ddev.auto_required_phases` apply to both legacy jobs without a WorkOrder and
 WorkOrder-backed jobs. Matching phases supplement WorkOrder-required phases
@@ -152,8 +181,8 @@ readiness, not permission to launch past other orchestration gates. The latest
 checkpoint includes preserved superseded history for that plan. Raw lifecycle
 detail and job results are not exposed. The existing `/orchestration` contract
 is unchanged. #365 supplies persistence/projection and #366 lifecycle emission;
-#367–#370 intake/publication/blocked-pack/supervised
-continuation remain unimplemented by this change.
+#367 adds canonical intake; #368–#370 publication/blocked-pack/supervised
+continuation remain unimplemented.
 
 The current implementation may still contain manual-merge orchestration behavior from the previous governance policy. That behavior is transitional implementation state, not the approved target authority model after issue #96. Runtime/ddev-executor changes that automate the PM merge gate must preserve all existing trust boundaries and be delivered separately through normal PR/CI review.
 

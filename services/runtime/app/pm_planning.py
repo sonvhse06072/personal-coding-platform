@@ -13,6 +13,7 @@ from .baseline import ProjectBaseline, SourceReference, resolve_project_baseline
 from .config import project_config
 from .executor_client import DdevExecutorClient
 from .router_client import RouterClient
+from .schemas import RepoHints, SemanticSignals
 from .shell import run_command
 from .storage import Storage
 from .usage import estimated_cost_usd, normalize_usage
@@ -81,6 +82,9 @@ class PMPlanCreateRequest(BaseModel):
     )
     planning_profile: PlanningProfile = "standard"
     provider_state: dict[str, PMProviderState] = Field(default_factory=dict, max_length=50)
+    decomposition_required: bool = False
+    semantic: SemanticSignals | None = None
+    repo_hints: RepoHints | None = None
 
 
 class DecisionBoundary(BaseModel):
@@ -234,7 +238,15 @@ def validate_plan_proposal(
     ticket: PMTicket,
     baseline: ProjectBaseline,
     project: dict[str, Any],
+    decomposition_required: bool = False,
 ) -> ExecutionPlanDocument:
+    if (
+        decomposition_required
+        and proposal.scope_assessment == "in_scope"
+        and not proposal.decision_boundaries
+        and len(proposal.work_orders) < 2
+    ):
+        raise ValueError("Decomposition-required in-scope tickets require at least two WorkOrders")
     _validate_decision_references(proposal.decision_boundaries, baseline)
 
     for work_order in proposal.work_orders:
@@ -281,6 +293,9 @@ def _planning_prompt(
     ticket: PMTicket,
     baseline: ProjectBaseline,
     project: dict[str, Any],
+    decomposition_required: bool = False,
+    semantic: SemanticSignals | None = None,
+    repo_hints: RepoHints | None = None,
 ) -> str:
     verification = _available_verification_phases(project)
     schema = PMPlanProposal.model_json_schema()
@@ -295,9 +310,15 @@ def _planning_prompt(
             "Every WorkOrder must set parent_ticket exactly to the input ticket id and baseline_revision exactly to the governing revision.",
             "Every WorkOrder source_references path must come from the governing baseline. Use only deterministic verification phases listed as available.",
             "Keep WorkOrders small, dependency-aware, and independently verifiable. Optimize for a personal, budget-conscious team; do not create unnecessary tasks or parallelism.",
+            (
+                "DECOMPOSITION_REQUIRED: This materially non-trivial ticket must produce at least two coherent, independently verifiable WorkOrders when in scope with no decision boundaries. Split by semantic/dependency boundaries, never arbitrary file counts. Out-of-scope, ambiguous or human-decision results need no artificial WorkOrders."
+                if decomposition_required else "A single bounded WorkOrder is valid when sufficient."
+            ),
             "Return EXACTLY one JSON object and no Markdown/prose outside the object. It must validate against the supplied JSON Schema.",
             "",
             f"TICKET: {json.dumps(ticket.model_dump(mode='json'), ensure_ascii=False, sort_keys=True)}",
+            f"SEMANTIC_SIGNALS: {json.dumps(semantic.model_dump(exclude_unset=True) if semantic is not None else None, sort_keys=True)}",
+            f"REPO_HINTS: {json.dumps(repo_hints.model_dump(exclude_none=True) if repo_hints is not None else None, sort_keys=True)}",
             f"PROJECT_BASELINE: {json.dumps(baseline.model_dump(mode='json'), ensure_ascii=False, sort_keys=True)}",
             f"AVAILABLE_VERIFICATION_PHASES: {json.dumps(verification)}",
             "OUTPUT_JSON_SCHEMA:",
@@ -440,7 +461,11 @@ class PMPlanner:
             adapter = self.adapter_builder(str(choice["adapter"]), str(choice["model"]))
             run = await adapter.run(
                 workspace=workspace,
-                prompt=_planning_prompt(ticket=request.ticket, baseline=baseline, project=project),
+                prompt=_planning_prompt(
+                    ticket=request.ticket, baseline=baseline, project=project,
+                    decomposition_required=request.decomposition_required,
+                    semantic=request.semantic, repo_hints=request.repo_hints,
+                ),
                 mode="plan",
                 timeout=600 if request.planning_profile == "complex" else 360,
             )
@@ -459,6 +484,7 @@ class PMPlanner:
                 ticket=request.ticket,
                 baseline=baseline,
                 project=project,
+                decomposition_required=request.decomposition_required,
             )
             status = execution_plan_status(plan)
             normalized_usage = normalize_usage(run.usage)

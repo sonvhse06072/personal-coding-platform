@@ -15,6 +15,9 @@ from .collaboration import (
     CollaborationRecheckRequest,
     CollaborationView,
 )
+from .baseline import resolve_project_baseline
+from .intake import IntakeRequest, IntakeResponse, DirectIntakeResponse, PlanningIntakeResponse
+from .intake_policy import classify_intake
 from .dashboard import _require_session, create_dashboard_router
 from .engine_telemetry import RuntimeEngine
 from .orchestrator_notifications import PlanOrchestrator
@@ -37,6 +40,7 @@ from .schemas import (
     JobRunRequest,
     JobView,
     RuntimeHealth,
+    TaskInput,
 )
 from .security import harden_runtime_process_secret_boundary
 from .telemetry_storage import TelemetryStorage
@@ -142,7 +146,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-RUNTIME_VERSION = "1.0.72"
+RUNTIME_VERSION = "1.0.73"
 
 app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan=lifespan)
 app.include_router(pm_bridge_router)
@@ -236,6 +240,47 @@ async def create_execution_plan(payload: PMPlanCreateRequest) -> ExecutionPlanVi
         raise HTTPException(422, str(exc)) from exc
     await plan_orchestrator.tick()
     return execution_plan_view(row)
+
+
+@app.post("/v1/intake", response_model=IntakeResponse, dependencies=[Depends(auth)])
+async def intake_ticket(payload: IntakeRequest) -> IntakeResponse:
+    try:
+        baseline = resolve_project_baseline(payload.project_id, payload.baseline_revision)
+        if baseline is None:
+            raise ValueError("Canonical intake requires an approved ProjectBaseline")
+        decision = classify_intake(
+            bounded_direct=payload.bounded_direct,
+            semantic=payload.semantic, repo_hints=payload.repo_hints,
+        )
+        result = {**decision.model_dump(), "baseline_revision": baseline.revision}
+        if decision.mode == "planning":
+            plan = await create_execution_plan(PMPlanCreateRequest(
+                project_id=payload.project_id, ticket=payload.ticket,
+                baseline_revision=baseline.revision,
+                planning_profile=payload.planning_profile,
+                provider_state=payload.provider_state,
+                decomposition_required=decision.decomposition_required,
+                semantic=payload.semantic, repo_hints=payload.repo_hints,
+            ))
+            return PlanningIntakeResponse(**result, plan={"id": plan.id, "status": plan.status})
+        request = JobCreateRequest(
+            project_id=payload.project_id,
+            task=TaskInput(
+                title=payload.ticket.title, description=payload.ticket.description,
+                semantic=payload.semantic,
+            ),
+            baseline_revision=baseline.revision, repo_hints=payload.repo_hints,
+            provider_state={key: state.model_dump(mode="json") for key, state in payload.provider_state.items()},
+            auto_run=payload.auto_run,
+        )
+        job_id = engine.create_job(request.model_dump(mode="json"), _intake_decision=decision)
+    except (RuntimeError, KeyError, ValueError) as exc:
+        raise HTTPException(422, str(exc)) from exc
+    if payload.auto_run:
+        await engine.enqueue(job_id)
+    row = storage.get(job_id)
+    assert row is not None
+    return DirectIntakeResponse(**result, job={"id": job_id, "status": row["status"]})
 
 
 @app.get("/v1/plans/{plan_id}", response_model=ExecutionPlanView, dependencies=[Depends(auth)])

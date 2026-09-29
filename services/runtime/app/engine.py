@@ -17,6 +17,7 @@ from typing import Any
 from .baseline import resolve_project_baseline
 from .config import project_config
 from .engine_delivery import RuntimeEngine as _RuntimeEngine
+from .intake_policy import IntakeDecision
 from .repo import diff_state
 from .preview import ProjectPreviewManager
 from .review_repair_churn import EPOCH_KEY as REVIEW_REPAIR_CHURN_EPOCH_KEY
@@ -609,7 +610,11 @@ class RuntimeEngine(_RuntimeEngine):
         assert updated is not None
         return updated
 
-    def create_job(self, payload: dict[str, Any], *, _orchestration: tuple[str, str] | None = None) -> str:
+    def create_job(
+        self, payload: dict[str, Any], *,
+        _orchestration: tuple[str, str] | None = None,
+        _intake_decision: IntakeDecision | None = None,
+    ) -> str:
         """Create one job with its governing baseline/contract in the same write.
 
         `_job_id` is an internal-only idempotency hook used by the durable plan
@@ -674,6 +679,15 @@ class RuntimeEngine(_RuntimeEngine):
             checkpoint["work_order"] = work_order.model_dump(mode="json")
         if launch:
             checkpoint["orchestrator_launch"] = {**launch, "state": "held"}
+        if _intake_decision is not None:
+            if baseline is None or _intake_decision.mode != "direct" or not _intake_decision.bounded_direct:
+                raise ValueError("Canonical direct intake requires an approved baseline and direct decision")
+            # Same INSERT as the job: startup can never see an unaudited queued
+            # canonical job. This private keyword is not a caller payload field.
+            checkpoint["canonical_intake"] = {
+                **_intake_decision.model_dump(mode="json"),
+                "baseline_revision": baseline.revision,
+            }
 
         self.storage.create({
             "id": job_id,

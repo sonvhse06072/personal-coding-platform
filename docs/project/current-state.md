@@ -2,7 +2,7 @@
 
 Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and live Runtime/GitHub evidence remain authoritative over chat history. Completed chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-09-29 for #366 PM-001 launch crash-consistency repair.
+Last updated: 2026-09-29 for #367 canonical ticket intake PM review.
 
 ## Resume order
 
@@ -17,10 +17,13 @@ Memory-tier rules and the proposed Context Composer contract are in `context-mem
 
 ## Current platform snapshot
 
-- Checked-out launch baseline: `fb548c5ebb58e24b8a201f5a1b2c12846e928db9` (#365 merged via PR #371).
-- Current checked-out source identities on `ai/366-orchestration-checkpoint-transitions`
-  (not rolled out):
-  - Runtime `1.0.72`;
+- Checked-out launch baseline: `798bc7b0170137daacb9524222e657c8f5f16dbd`
+  (#366 merged via PR #372; #365 via PR #371).
+- #362 PM rollout checkpoint confirms Runtime `1.0.72` active and the #367
+  dependency gate open. No live-state mutation or rollout is part of #367.
+- Current working-tree source identities on `ai/367-large-ticket-intake-policy`
+  (unstaged/uncommitted; not rolled out):
+  - Runtime `1.0.73`;
   - Router `1.0.30`;
   - routing policy `19`;
   - ddev-executor remains `1.0.27`.
@@ -69,61 +72,44 @@ Historical DEC-025 PCP orchestration is retired. Do not recreate, reroute or res
 
 ## Active PCP work
 
-### #362 / #366 — Atomic WorkOrder lifecycle checkpoints
+### #362 / #367 — Canonical large-ticket intake
 
-Status: WO-362-2 implemented locally on
-`ai/366-orchestration-checkpoint-transitions`. PM blocked the first patch on
-PM-001 only; the bounded repair is implemented and verified locally, pending PM
-re-review. Dependency #365 merged via PR #371; parent #362 remains open.
+Status: WO-362-3 implemented locally on `ai/367-large-ticket-intake-policy`,
+pending PM review. #366 is merged and rollout-accepted; parent #362 stays open.
+Only #367 is in this patch. #368 publication, #369 blocked evidence pack and
+#370 supervised continuation remain unimplemented and held.
 
-#366 reuses #365 append-only checkpoint validation in a single store transaction
-with exact WorkOrder locking, expected-source validation, lifecycle mutation and
-attention retirement. Conflicts/failures roll everything back. Checkpoints cover
-agent start, agent/operator waiting-human, accepted PR, no-PR/operator completion,
-confirmed manual/PM merge, all existing block paths and same-job review-repair
-reopening. Keys use durable identity and persisted source versions; later repair
-or block episodes remain distinct. Evidence is whitelisted and bounded to 16 KiB.
-Dependency evidence uses the existing graph as if the target state had committed;
-accepted PRs do not unlock children, and merge unlock is atomic with its checkpoint.
-Read-only `/progress` and `/orchestration`, state vocabulary, deterministic jobs,
-recovery, supersession, notifications, leases and merge authority are preserved.
+Authenticated `/v1/intake` requires an approved baseline and uses deterministic
+policy version `1`. Direct execution requires explicit bounded intent and known
+semantic/scope evidence. Hard protected/dependency/multi-unit signals or two
+independent material signals route to existing PM planning with required
+decomposition. File count alone is insufficient. Unknown evidence routes to
+planning without automatically forcing decomposition. Exact thresholds and API
+semantics are documented in `operating-model.md`.
 
-PM-001 adds an internal durable launch reservation, bound to exact plan/WorkOrder/
-deterministic job, in the same insert as job creation. Startup skips held jobs;
-only durable started proof releases them. Reconciliation recovers pre-execution
-launches idempotently. Before workspace side effects, a locked claim enters the
-existing in-flight state; genuine interrupted jobs still require explicit resume.
-Standalone queued startup and public intake are unchanged. No replacement jobs,
-new public states, budget resets or new decision gates are introduced.
+Material in-scope/no-boundary PM output must contain at least two WorkOrders;
+single-unit output fails before readiness/registration/launch. Out-of-scope and
+human-decision output needs no artificial work. Direct jobs atomically persist
+compact intake evidence with their initial row before enqueue. `auto_run=false`
+skips direct enqueue; planning retains the existing automatic registration/tick
+path. Manual `/v1/jobs`, `create-job.sh`, `/run`, default single-unit `/v1/plans`,
+PM bridge, #365 progress and #366 held/ready/launched reservations remain intact.
 
-Parent #362 has six sequential
-children: #365 persistence/projection, #366 transition emission, #367 large-ticket
-intake, #368 GitHub publication, #369 blocked evidence pack, #370 supervised
-continuation/dogfood. Later children remain pending and must start from merged
-main after their preceding dependency passes PM review/CI/merge. Parent #362
-remains open through #370 acceptance.
-
-Repair verification: focused launch/transition/store/orchestrator/API/recovery/
-engine/contract/lease tests `188` passed; `17` new launch/startup cases and all `20`
-existing checkpoint PostgreSQL tests passed (`37` real PostgreSQL tests total).
-Full Runtime `754` passed; structure `103` passed; `git diff --check` passed.
-Runtime reports one existing
-dependency deprecation warning. PostgreSQL coverage includes
-atomic commit, rollback before/after checkpoint insertion and on evidence overflow,
-conflict/stale-identity rejection, dependency safety, concurrent exact retries,
-attention rollback, repeated recovery episodes and store recreation. It uses
-opt-in `PCP_CHECKPOINT_TEST_DSN` against a disposable database.
-The reviewed `/tmp/issue-366-pm-review.patch` remains unchanged (SHA-256
-`7731e92013f8961679f80185b19cdf1bc417fdedded5db94c28677fd9f8b8183`).
-The repair artifact is `/tmp/issue-366-pm-review-delta.patch`, relative to that
-exact reviewed tree, not HEAD. Local verification is not remote CI evidence.
-No staging, commit, push, PCP restart/rebuild, Runtime job creation or Chợ Nhạc
-mutation. Test execution uses read-only source mounts in disposable containers;
-real PostgreSQL coverage uses a separate disposable database only.
-The container-pytest workflow used the existing Runtime image with checkout
-`config/` at `/config`; structure tests used a process-local Git safe-directory
-override. Router/policy and executor source are unchanged; their suites were not
-rerun. #367–#370 remain unimplemented.
+Verification: focused intake/planner/API/baseline/contract/orchestration/recovery/
+checkpoint tests `290` passed; full Runtime `854` passed; repository structure
+`103` passed; `git diff --check` passed. The full suite includes `43` real
+PostgreSQL cases (all `37` existing #365/#366 cases plus `6` canonical-intake
+integration cases), with no skipped database checks. Runtime reports one existing
+Starlette/AnyIO dependency deprecation warning. The first structure run exposed a
+generic-word collision in documentation retrieval; revising the new documentation
+wording restored all checks without changing retrieval implementation or fixtures.
+Tests use the existing Runtime image with read-only checkout/config mounts and a
+separate disposable PostgreSQL instance; no live Runtime engineering state,
+provider call or project workspace is used. Router/policy and executor source
+remain unchanged. No staging, commit, push, PCP restart/rebuild or Chợ Nhạc
+mutation is authorized. Handoff artifact: `/tmp/issue-367-pm-review.patch`, the
+complete working-tree diff against HEAD including untracked files. Local tests
+are not remote CI; exact-head CI and PM review remain required before merge.
 
 ### #146 — Efficiency initiative
 
@@ -173,7 +159,7 @@ Their reusable lessons and primary references are in `history/episodes.md`. Git/
 
 ## Immediate next safe actions
 
-1. Re-review the #366 PM-001 delta with PM. Keep it unstaged/uncommitted/unpushed; CI remains a later mandatory merge gate. Leave running PCP services and Chợ Nhạc untouched. Do not begin #367 before #366 dependency completion.
+1. PM-review the #367 patch. Keep it unstaged/uncommitted/unpushed; exact-head CI remains a later mandatory merge gate. Leave running PCP services and Chợ Nhạc untouched. Do not begin #368–#370 in this work.
 2. Keep #146 in calibration/watch mode and collect only naturally occurring routine-task evidence.
 3. Keep the deterministic context-memory evaluation in CI; treat a future recall/stale-authority regression or sustained corpus growth as evidence to reopen vector/hybrid retrieval evaluation.
 4. Do not add a vector database or embedding provider without a new measured retrieval gap.
