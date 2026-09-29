@@ -182,7 +182,28 @@ checkpoint includes preserved superseded history for that plan. Raw lifecycle
 detail and job results are not exposed. The existing `/orchestration` contract
 is unchanged. #365 supplies persistence/projection and #366 lifecycle emission;
 #367 adds canonical intake; #368 adds parent-ticket publication below.
-#369 detailed blocked evidence and #370 supervised continuation remain unimplemented.
+#369 adds the detailed blocked evidence projection below. #370 supervised
+continuation remains unimplemented.
+
+When an active WorkOrder is blocked, the progress projection derives one compact
+`blocked_evidence` pack from the same repeatable-read snapshot and append-only
+checkpoint store. It selects terminal `completed`/`merged` checkpoints only for
+currently completed WorkOrders, the newest `blocked` checkpoint matching the
+exact active WorkOrder/job identity, a 32-row checkpoint window restricted to
+that same identity for the latest useful evidence, and the preceding
+`completed`/`merged` checkpoint as the last known-good point. An `accepted`
+checkpoint invalidated by `repair_reopened` never becomes known-good. It reports
+untouched pending WorkOrders, the current branch when present, bounded
+verification and reviewer/PM outcomes from the existing checkpoint whitelist,
+and one advisory action from the closed
+`repair`/`reroute`/`human_decision`/`replan`/`retry_delivery` vocabulary. The
+exact current block reason takes precedence over retained PM outcomes. Hard
+budget stops advise a human decision; GitHub CI infrastructure failures advise
+delivery retry. Unrecognized free-form block
+text is hash-identified rather than echoed. Raw checkpoint JSON, logs, prompts,
+results and credentials are excluded. Projection reads never schedule, resume,
+reroute or mutate a plan, WorkOrder, job, checkpoint or GitHub object, and store
+recreation produces the same pack from PostgreSQL.
 
 Parent-ticket progress uses a separate `cp_plan_progress_handoffs` relation,
 never `cp_notification_outbox`. PlanOrchestrator stages a bounded whitelist
@@ -195,6 +216,13 @@ advance only when transition/body changes. One SHA-256(project_id + ':' +
 issue_number) row is shared by later plans for that issue; older plans cannot
 overwrite a newer plan's publication. Existing engineering/checkpoint semantics
 and n8n claim/ack/release are unchanged.
+
+For a blocked transition, the same managed comment renders the bounded
+`blocked_evidence` pack: prior completed checkpoint identities/commits/PRs,
+exact current block identity and safe diagnostics, untouched pending WorkOrders,
+last known-good checkpoint and advisory next action. The existing 12 KiB UTF-8
+body ceiling, one-comment identity, generation dedupe and publisher isolation
+remain authoritative.
 
 A persisted feature-install timestamp excludes earlier plans without a handoff.
 Eligible terminal plans are also revisited, so a crash after the final engineering

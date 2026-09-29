@@ -443,6 +443,58 @@ def test_dashboard_keeps_superseded_history_visible_but_not_actionable():
     assert work_order["job"]["status"] == "executing"
 
 
+class _BlockedConnection(_Connection):
+    def execute(self, query, params=None):
+        if "FROM cp_plan_orchestrations" in query:
+            row = dict(super().execute(query, params).rows[0])
+            row["status"] = "blocked"
+            return _Result(rows=[row])
+        return super().execute(query, params)
+
+
+class _BlockedStorage(_Storage):
+    @contextmanager
+    def connect(self):
+        yield _BlockedConnection()
+
+
+class _BlockedStore(_Store):
+    def work_orders(self, plan_id):
+        row = super().work_orders(plan_id)[0]
+        row["state"] = "blocked"
+        return [row]
+
+    def progress_snapshot(self, plan_id):
+        blocked = {
+            "id": 1, "checkpoint_key": "wo:blocked:dashboard", "plan_id": plan_id,
+            "work_order_id": "C1", "kind": "blocked", "state": "blocked",
+            "job_id": "job-1", "created_at": NOW, "evidence": {
+                "branch": "ai/job-1", "reason": "no_effect",
+                "verification": {"passed": False, "stderr": "PRIVATE STDERR"},
+                "prompt": "PRIVATE PROMPT",
+            },
+        }
+        return {
+            "orchestration": {"plan_id": plan_id, "plan": {"work_orders": [{"id": "C1"}]}},
+            "work_orders": [{"work_order_id": "C1", "state": "blocked", "job_id": "job-1"}],
+            "completed_checkpoints": [], "blocked_checkpoint": blocked,
+            "last_good_checkpoint": None, "last_checkpoint": blocked,
+        }
+
+
+def test_dashboard_read_model_surfaces_bounded_blocked_plan_evidence():
+    snapshot = build_dashboard_snapshot(_BlockedStorage(), _BlockedStore())
+    pack = snapshot["plans"][0]["blocked_evidence"]
+    assert pack["current"] == {
+        "work_order_id": "C1", "job_id": "job-1", "branch": "ai/job-1",
+        "checkpoint_id": 1, "checkpoint_key": "wo:blocked:dashboard",
+    }
+    assert pack["reason"] == "no_effect"
+    assert pack["latest_verification"] == {"passed": False}
+    assert pack["next_safe_action"] == "repair"
+    assert "PRIVATE" not in json.dumps(pack)
+
+
 def test_dashboard_ui_prioritizes_live_developer_console_and_keeps_audit_timeline():
     assert "Live Developer Console" in DASHBOARD_HTML
     assert "Developer transcript" in DASHBOARD_HTML

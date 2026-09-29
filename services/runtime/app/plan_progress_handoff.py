@@ -7,7 +7,7 @@ import json
 import re
 from typing import Any
 
-from .work_order_checkpoints import ready_work_order_ids
+from .work_order_checkpoints import blocked_plan_evidence, ready_work_order_ids
 
 
 BODY_MAX_BYTES = 12 * 1024
@@ -41,6 +41,26 @@ def _text(value: Any, limit: int = 200) -> str:
     return value.encode("utf-8")[:limit].decode("utf-8", errors="ignore") or "-"
 
 
+def _checkpoint_line(checkpoint: dict[str, Any] | None) -> str:
+    if not checkpoint:
+        return "checkpoint unavailable"
+    evidence = checkpoint.get("evidence") or {}
+    parts = [
+        f"{_text(checkpoint.get('kind'), 40)} checkpoint {_text(checkpoint.get('id'), 30)}",
+        f"key {_text(checkpoint.get('checkpoint_key'), 120)}",
+    ]
+    if checkpoint.get("job_id"):
+        parts.append(f"job {_text(checkpoint['job_id'])}")
+    for key, label in (
+        ("produced_commit", "commit"), ("pr_number", "PR"),
+        ("merge_commit", "merge"),
+    ):
+        if evidence.get(key) is not None:
+            prefix = "#" if key == "pr_number" else ""
+            parts.append(f"{label} {prefix}{_text(evidence[key])}")
+    return "; ".join(parts)
+
+
 def render_progress(snapshot: dict[str, Any], issue_number: int) -> tuple[str, str]:
     plan, rows = snapshot["orchestration"], snapshot["work_orders"]
     states = {row["work_order_id"]: row["state"] for row in rows}
@@ -48,6 +68,7 @@ def render_progress(snapshot: dict[str, Any], issue_number: int) -> tuple[str, s
                     if row["state"] in {"running", "awaiting_merge", "waiting_human"}), None)
     ready = ready_work_order_ids(plan.get("plan") or {}, states)
     checkpoint = snapshot.get("last_checkpoint") or {}
+    blocked_evidence = blocked_plan_evidence(snapshot)
     # No mutable polling timestamps, details, results or provider data enter this identity.
     identity = {
         "plan_id": plan["plan_id"], "state": plan["status"], "lifecycle": plan["lifecycle"],
@@ -62,9 +83,51 @@ def render_progress(snapshot: dict[str, Any], issue_number: int) -> tuple[str, s
              f"Current: {_text(current)}", "", "WorkOrders:"]
     for row in rows[:30]:
         lines.append(f"- {_text(row['work_order_id'], 100)} — {_text(row['state'], 40)}")
-    blocked = next((row for row in rows if row["state"] == "blocked"), None)
-    if blocked:
-        lines += ["", f"Blocked: {_text(blocked['work_order_id'])}; Job: {_text(blocked.get('job_id'))}"]
+    if blocked_evidence:
+        current_blocked = blocked_evidence["current"]
+        lines += ["", "Blocked evidence:",
+                  f"- WorkOrder: {_text(current_blocked.get('work_order_id'))}",
+                  f"- Job: {_text(current_blocked.get('job_id'))}",
+                  f"- Branch: {_text(current_blocked.get('branch'), 300)}",
+                  f"- Checkpoint: {_text(current_blocked.get('checkpoint_id'), 30)} / "
+                  f"{_text(current_blocked.get('checkpoint_key'), 120)}",
+                  f"- Reason: {_text(blocked_evidence.get('reason'))}",
+                  f"- Next safe action: {_text(blocked_evidence.get('next_safe_action'), 40)}"]
+        verification = blocked_evidence.get("latest_verification") or {}
+        if type(verification.get("passed")) is bool:
+            lines.append(f"- Latest verification: {'passed' if verification['passed'] else 'failed'}")
+        for phase in (verification.get("phases") or [])[:16]:
+            if isinstance(phase, dict) and type(phase.get("passed")) is bool:
+                lines.append(
+                    f"  - {_text(phase.get('phase'), 80)}: "
+                    f"{'passed' if phase['passed'] else 'failed'}"
+                )
+        outcome = blocked_evidence.get("latest_outcome") or {}
+        for key in ("review_verdict", "pm_outcome", "pm_action"):
+            if outcome.get(key) is not None:
+                lines.append(f"- {key}: {_text(outcome[key])}")
+        lines += ["", "Completed durable checkpoints:"]
+        completed = blocked_evidence.get("completed_work_orders") or []
+        for item in completed[:30]:
+            lines.append(
+                f"- {_text(item.get('work_order_id'), 100)} — "
+                f"{_checkpoint_line(item.get('checkpoint'))}"
+            )
+        if not completed:
+            lines.append("- none")
+        lines += ["", "Untouched pending WorkOrders:"]
+        pending = blocked_evidence.get("pending_work_orders") or []
+        for item in pending[:30]:
+            dependencies = item.get("dependencies") or []
+            dependency_text = ", ".join(_text(dep, 100) for dep in dependencies[:30]) or "none"
+            lines.append(
+                f"- {_text(item.get('work_order_id'), 100)} — pending; "
+                f"job {_text(item.get('job_id'))}; dependencies {dependency_text}"
+            )
+        if not pending:
+            lines.append("- none")
+        lines += ["", "Last known-good checkpoint:",
+                  f"- {_checkpoint_line(blocked_evidence.get('last_known_good_checkpoint'))}"]
     if checkpoint:
         lines += ["", "Last checkpoint:"]
         for key in ("work_order_id", "kind", "state", "job_id"):

@@ -2,7 +2,7 @@
 
 Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and live Runtime/GitHub evidence remain authoritative over chat history. Completed chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-09-30 for #368 parent-ticket progress handoff PM review.
+Last updated: 2026-09-30 for #369 blocked-plan evidence-pack PM repair.
 
 ## Resume order
 
@@ -17,14 +17,14 @@ Memory-tier rules and the proposed Context Composer contract are in `context-mem
 
 ## Current platform snapshot
 
-- Checked-out launch baseline: `d4e3121693328d19431b95a1f252b89caecd8c25`
-  (#367 merged via PR #373; #366 via PR #372; #365 via PR #371).
-- Parent #362 confirms #367 source acceptance and the #368 dependency gate open.
-  Runtime `1.0.73` has not been rolled out separately; #367/#368 rollout is a
-  later combined step after merge. No service restart is part of this work.
-- Current working-tree source identities on `ai/368-parent-ticket-progress-handoff`
+- Checked-out launch baseline: `df1dae3ce7c4a6ed78430358c13b5dd1cb4bddf9`
+  (#368 merged via PR #374; #367 via PR #373; #366 via PR #372; #365 via PR #371).
+- Runtime `1.0.74` / executor `1.0.28` rollout and the #367/#368 bounded live
+  dogfood are accepted. Parent #362 and child #369 confirm the WO-362-5 gate open;
+  #370 remains held. No service restart is part of #369 implementation.
+- Current working-tree source identities on `ai/369-blocked-plan-evidence-pack`
   (unstaged/uncommitted; not rolled out):
-  - Runtime `1.0.74`;
+  - Runtime `1.0.75`;
   - Router `1.0.30`;
   - routing policy `19`;
   - ddev-executor `1.0.28`.
@@ -73,49 +73,52 @@ Historical DEC-025 PCP orchestration is retired. Do not recreate, reroute or res
 
 ## Active PCP work
 
-### #362 / #368 — Parent-ticket progress handoff
+### #362 / #369 — Compact blocked-plan evidence pack
 
-Status: WO-362-4 implemented locally on `ai/368-parent-ticket-progress-handoff`,
-pending PM review. Dependency #367 is merged; parent #362 stays open. Only #368
-is in this patch. #369 detailed blocked evidence and #370 supervised continuation
-remain unimplemented and held.
+Status: WO-362-5 PM-001/PM-002 repairs implemented locally on
+`ai/369-blocked-plan-evidence-pack`, pending second independent PM review. Exact base is
+`df1dae3ce7c4a6ed78430358c13b5dd1cb4bddf9`. Only #369 is in this patch;
+#370 supervised continuation remains unimplemented and held.
 
-PlanOrchestrator derives bounded desired progress after engineering commits;
-separate `cp_plan_progress_handoffs` state owns generations, leases, attempts and
-restart recovery. The independent publisher calls the executor's authenticated
-`/v1/github/pm-bridge/progress` endpoint. One SHA-256(project + ':' + issue) row
-and executor-owned marker survive later plans for the same issue. Exact positive
-staffing issue identity takes precedence over canonical `GH-N`; prose/URLs never
-select targets. Pre-install plans without a row are excluded. Terminal eligible
-plans remain staging candidates after a crash. Older in-flight acknowledgements
-cannot mark newer desired generations sent; expired attempts are fenced.
+The authenticated plan-progress projection now adds `blocked_evidence` derived
+from the existing active WorkOrder rows and append-only checkpoints in the same
+repeatable-read snapshot. It selects terminal checkpoints for completed prior
+WorkOrders, the newest block checkpoint matching the exact current WorkOrder/job,
+the bounded checkpoint history for that same exact job, and the preceding
+completed/merged terminal checkpoint. A superseded `accepted` checkpoint is not
+last known-good. The bounded pack exposes exact
+checkpoint/job/branch identity, the latest useful allowlisted verification and
+reviewer/PM outcomes, untouched pending WorkOrders and one advisory action from
+`repair`/`reroute`/`human_decision`/`replan`/`retry_delivery`. The current block
+reason outranks historical PM evidence; hard budget stops advise Human Owner
+review and CI infrastructure failure advises preserved delivery retry.
+Unrecognized free-form reasons are
+hash-identified instead of echoed. Raw logs, prompts, result blobs and arbitrary
+checkpoint JSON remain excluded.
 
-Executor re-resolves the project repository, validates the issue and exact known
-comment, scans at most 500 issue comments for one marker, revalidates before
-PATCH, and verifies readback. Duplicate markers, mismatched identity and an
-incomplete scan fail closed. Uncertain creates recover through discovery. The
-comment is at most 12 KiB UTF-8 and excludes raw detail/log/result/provider data.
-Publication failures affect only this separate channel; engineering, dependency,
-checkpoint and notification/n8n authority remain unchanged. No GitHub credential
-is added to Runtime or developer agents. Detailed behavior is in `architecture.md`.
+The Dashboard snapshot exposes the same read model. The existing parent-ticket
+renderer includes the compact blocked diagnosis while retaining the one-comment,
+transition-driven generation/dedupe, 12 KiB body limit and independent publisher.
+These reads contain no resume/reroute/state/checkpoint/GitHub mutation path.
+Completed checkpoint history remains append-only and pending dependencies remain
+unlaunched. Runtime is versioned `1.0.75`; no executor boundary or version changes.
 
-Validation uses existing service images, read-only checkout/config mounts and a
-separate disposable PostgreSQL instance with no external network. No live plans,
-jobs, provider calls or project workspaces are fixtures. Focused handoff tests:
-Runtime `51` (including `22` real PostgreSQL cases); executor `43`. Existing
-plan/checkpoint/orchestration/intake regressions: `257` passed. Full Runtime:
-`905` passed; full executor: `180` passed; repository structure: `103` passed.
-Credential/agent-process checks: `13` passed; secret-scoping/n8n checks: `16`
-passed. Database checks ran without skips. `git diff --check` passed. Service
-suites report the existing Starlette/AnyIO dependency deprecation warning. The first
-structure run found Git's container mount ownership guard; validation uses
-an explicit safe-directory setting. An unnecessary mount-path mention in this
-note was removed to preserve the context-pack privacy check.
+Validation uses existing service images with the current checkout/config mounted
+read-only and separate disposable PostgreSQL containers with no external network.
+No live plan/job/provider/project workspace was used. Focused blocked/checkpoint/
+Dashboard/handoff tests: `94` passed. #365-#368 orchestration/intake/handoff
+regressions: `245` passed. PostgreSQL checkpoint/launch/intake/handoff tests:
+`66` passed without skips. Existing executor managed-comment tests: `43` passed.
+Full Runtime including PostgreSQL: `922` passed without skips. Repository
+structure: `103` passed; Python compilation and `git diff --check` pass. Suites
+report the existing Starlette/AnyIO dependency deprecation warning. The
+PostgreSQL handoff regression confirms the same managed comment ID survives a
+blocked progress generation.
 
-Handoff artifact: `/tmp/issue-368-pm-review.patch`, all tracked/untracked changes
-against HEAD. Keep unstaged/uncommitted/unpushed. No PCP restart/rebuild or
-Chợ Nhạc mutation. Local tests are not remote CI; exact-head CI and independent
-PM review remain mandatory before merge. Later rollout combines #367 and #368.
+Handoff artifact: `/tmp/issue-369-pm-review.patch`, containing all tracked changes
+against HEAD. Keep unstaged/uncommitted/unpushed. No PCP restart/rebuild, live
+fixture, GitHub mutation or Chợ Nhạc mutation occurred. Local tests are not remote
+CI; independent PM review, commit/push/PR and exact-head CI remain future gates.
 
 ### #146 — Efficiency initiative
 
@@ -143,6 +146,9 @@ The following are complete and no longer belong in active-state chronology:
 - #354 governed same-job delivered-PR review repair.
 - #358 durable review-repair churn circuit breaker (merged via PR #361).
 - #363 legacy auto-required verification (merged via PR #364).
+- #365-#368 durable WorkOrder checkpoints, lifecycle emission, canonical intake
+  and one-comment parent progress publication (merged via PRs #371-#374; rollout
+  and bounded live dogfood accepted).
 
 Their reusable lessons and primary references are in `history/episodes.md`. Git/issue/PR/Runtime history remains the detailed audit source.
 
@@ -165,7 +171,7 @@ Their reusable lessons and primary references are in `history/episodes.md`. Git/
 
 ## Immediate next safe actions
 
-1. PM-review the #368 patch. Keep it unstaged/uncommitted/unpushed; exact-head CI remains a later mandatory merge gate. Leave running PCP services and Chợ Nhạc untouched. Do not begin #369/#370. After merge and separate operational gates, roll out #367/#368 together.
+1. PM-review the repaired #369 patch and `/tmp/issue-369-pm-review.patch`. Keep it unstaged/uncommitted/unpushed; exact-head CI remains a later mandatory merge gate. Leave running PCP services and Chợ Nhạc untouched. Do not begin #370.
 2. Keep #146 in calibration/watch mode and collect only naturally occurring routine-task evidence.
 3. Keep the deterministic context-memory evaluation in CI; treat a future recall/stale-authority regression or sustained corpus growth as evidence to reopen vector/hybrid retrieval evaluation.
 4. Do not add a vector database or embedding provider without a new measured retrieval gap.

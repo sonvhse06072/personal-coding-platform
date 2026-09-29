@@ -187,6 +187,20 @@ def test_new_block_after_recovery_without_new_request_or_counter_is_distinct():
     assert len({cp["checkpoint_key"] for cp in store.checkpoint_history}) == 2
 
 
+def test_resolved_pm_decision_can_remain_in_bounded_checkpoint_context():
+    row = job(status="blocked")
+    row["checkpoint"]["last_pm_reassessment"] = {
+        "decision": {"action": "human_decision"},
+    }
+    row["result"]["reason"] = "provider_failure_without_fallback"
+    evidence = checkpoint_evidence(
+        {"work_order_id": "WO-1"}, row, reason=row["result"]["reason"],
+    )
+    assert "pending_decision" not in row["checkpoint"]
+    assert evidence["pm_action"] == "human_decision"
+    assert evidence["reason"] == "provider_failure_without_fallback"
+
+
 def test_evidence_whitelist_drops_nested_secrets_and_bounds_known_fields():
     row = job(status="blocked")
     row["checkpoint"].update({"prompt": "PRIVATE", "review_repair_churn_epoch": {
@@ -201,6 +215,25 @@ def test_evidence_whitelist_drops_nested_secrets_and_bounds_known_fields():
     assert cp["verification"] == {"passed": False}
     assert cp["reason_sha256"]
     assert len(json.dumps(cp).encode("utf-8")) < 16384
+
+
+def test_checkpoint_evidence_uses_bounded_last_deterministic_verification():
+    row = job(status="blocked")
+    row["result"].pop("verification")
+    row["checkpoint"]["last_verification_summary"] = {
+        "passed": False,
+        "failure_text": "PRIVATE FAILURE",
+        "phases": [{
+            "phase": "full_tests", "passed": False, "stdout": "PRIVATE STDOUT",
+        }],
+    }
+    cp = checkpoint_evidence(
+        tracked("WO-1", 0), row, reason="provider_failure_without_fallback",
+    )
+    assert cp["verification"] == {
+        "passed": False, "phases": [{"phase": "full_tests", "passed": False}],
+    }
+    assert "PRIVATE" not in json.dumps(cp)
 
 
 def test_transition_key_is_stable_across_object_order_and_new_service():
