@@ -39,6 +39,7 @@ from .state import (
     set_failure_context,
     validate_workspace,
 )
+from .work_order_checkpoints import orchestrator_launch
 
 _VALID_WORKSPACE_MODES = {"direct", "isolated_clone"}
 
@@ -91,6 +92,10 @@ class RuntimeEngine(RuntimeEngineCore):
             raise RuntimeError("Unknown job")
         if job["status"] != "queued":
             return
+        if orchestrator_launch(job):
+            job = self.storage.claim_orchestrated_launch(job_id)
+            if job is None:
+                return
 
         project = project_config(job["project_id"])
         runtime_cfg = project.get("runtime", {}) or {}

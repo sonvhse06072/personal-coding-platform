@@ -2,7 +2,7 @@
 
 Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and live Runtime/GitHub evidence remain authoritative over chat history. Completed chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-09-29 for #365 durable WorkOrder checkpoints/progress PM review.
+Last updated: 2026-09-29 for #366 PM-001 launch crash-consistency repair.
 
 ## Resume order
 
@@ -17,10 +17,10 @@ Memory-tier rules and the proposed Context Composer contract are in `context-mem
 
 ## Current platform snapshot
 
-- Checked-out launch baseline: `f026d5031fd72b4b92dc016f96dfb64cc2f9d704` (#363 merged via PR #364).
-- Current checked-out source identities on `ai/365-workorder-checkpoint-projection`
+- Checked-out launch baseline: `fb548c5ebb58e24b8a201f5a1b2c12846e928db9` (#365 merged via PR #371).
+- Current checked-out source identities on `ai/366-orchestration-checkpoint-transitions`
   (not rolled out):
-  - Runtime `1.0.71`;
+  - Runtime `1.0.72`;
   - Router `1.0.30`;
   - routing policy `19`;
   - ddev-executor remains `1.0.27`.
@@ -69,45 +69,61 @@ Historical DEC-025 PCP orchestration is retired. Do not recreate, reroute or res
 
 ## Active PCP work
 
-### #362 / #365 — Durable WorkOrder checkpoints and plan progress
+### #362 / #366 — Atomic WorkOrder lifecycle checkpoints
 
-Status: WO-362-1 implemented locally on
-`ai/365-workorder-checkpoint-projection`, verified locally and awaiting PM review.
-The latest #362 PM launch comment reports the prior DS-1/#358/#363 gate cleared
-after DS-1 acceptance and Chợ Nhạc PR #38 merge. That is PM launch evidence,
-not a fresh inspection of Chợ Nhạc or running Runtime state.
+Status: WO-362-2 implemented locally on
+`ai/366-orchestration-checkpoint-transitions`. PM blocked the first patch on
+PM-001 only; the bounded repair is implemented and verified locally, pending PM
+re-review. Dependency #365 merged via PR #371; parent #362 remains open.
 
-#365 adds append-only `cp_plan_work_order_checkpoints` under the existing
-PlanOrchestrator store, exact retry/conflict validation, a composite WorkOrder
-foreign key, bounded identity/evidence fields and authenticated read-only
-`GET /v1/plans/{plan_id}/progress`. Active WorkOrders alone contribute to
-completed/total/current/blocked/next. Dependencies require active completed
-WorkOrders; preserved checkpoint history includes superseded WorkOrders.
-The latest checkpoint uses stable row-ID order. The existing orchestration
-view, scheduling, merge gates and job lifecycle are unchanged.
+#366 reuses #365 append-only checkpoint validation in a single store transaction
+with exact WorkOrder locking, expected-source validation, lifecycle mutation and
+attention retirement. Conflicts/failures roll everything back. Checkpoints cover
+agent start, agent/operator waiting-human, accepted PR, no-PR/operator completion,
+confirmed manual/PM merge, all existing block paths and same-job review-repair
+reopening. Keys use durable identity and persisted source versions; later repair
+or block episodes remain distinct. Evidence is whitelisted and bounded to 16 KiB.
+Dependency evidence uses the existing graph as if the target state had committed;
+accepted PRs do not unlock children, and merge unlock is atomic with its checkpoint.
+Read-only `/progress` and `/orchestration`, state vocabulary, deterministic jobs,
+recovery, supersession, notifications, leases and merge authority are preserved.
 
-No lifecycle checkpoint hooks are included. Parent #362 has six sequential
+PM-001 adds an internal durable launch reservation, bound to exact plan/WorkOrder/
+deterministic job, in the same insert as job creation. Startup skips held jobs;
+only durable started proof releases them. Reconciliation recovers pre-execution
+launches idempotently. Before workspace side effects, a locked claim enters the
+existing in-flight state; genuine interrupted jobs still require explicit resume.
+Standalone queued startup and public intake are unchanged. No replacement jobs,
+new public states, budget resets or new decision gates are introduced.
+
+Parent #362 has six sequential
 children: #365 persistence/projection, #366 transition emission, #367 large-ticket
 intake, #368 GitHub publication, #369 blocked evidence pack, #370 supervised
 continuation/dogfood. Later children remain pending and must start from merged
 main after their preceding dependency passes PM review/CI/merge. Parent #362
 remains open through #370 acceptance.
 
-Verification: focused store/orchestrator/progress/API/version tests `80` passed;
-full Runtime `706` passed; repository structure `103` passed;
-`git diff --check` passed. Runtime reports one dependency deprecation warning.
-Four real PostgreSQL tests cover idempotent DDL, composite foreign key, durable
-recreation/immutability, canonical JSONB equality and concurrent retry conflicts.
-Those tests use opt-in `PCP_CHECKPOINT_TEST_DSN`; all four ran in this validation.
-The complete `/tmp/issue-365-pm-review.patch` contains the working-tree diff
-against HEAD, including new tests. Local verification is not remote CI evidence.
+Repair verification: focused launch/transition/store/orchestrator/API/recovery/
+engine/contract/lease tests `188` passed; `17` new launch/startup cases and all `20`
+existing checkpoint PostgreSQL tests passed (`37` real PostgreSQL tests total).
+Full Runtime `754` passed; structure `103` passed; `git diff --check` passed.
+Runtime reports one existing
+dependency deprecation warning. PostgreSQL coverage includes
+atomic commit, rollback before/after checkpoint insertion and on evidence overflow,
+conflict/stale-identity rejection, dependency safety, concurrent exact retries,
+attention rollback, repeated recovery episodes and store recreation. It uses
+opt-in `PCP_CHECKPOINT_TEST_DSN` against a disposable database.
+The reviewed `/tmp/issue-366-pm-review.patch` remains unchanged (SHA-256
+`7731e92013f8961679f80185b19cdf1bc417fdedded5db94c28677fd9f8b8183`).
+The repair artifact is `/tmp/issue-366-pm-review-delta.patch`, relative to that
+exact reviewed tree, not HEAD. Local verification is not remote CI evidence.
 No staging, commit, push, PCP restart/rebuild, Runtime job creation or Chợ Nhạc
 mutation. Test execution uses read-only source mounts in disposable containers;
 real PostgreSQL coverage uses a separate disposable database only.
 The container-pytest workflow used the existing Runtime image with checkout
 `config/` at `/config`; structure tests used a process-local Git safe-directory
 override. Router/policy and executor source are unchanged; their suites were not
-rerun. Checkpoint append has no lifecycle callers yet (#366 remains pending).
+rerun. #367–#370 remain unimplemented.
 
 ### #146 — Efficiency initiative
 
@@ -157,7 +173,7 @@ Their reusable lessons and primary references are in `history/episodes.md`. Git/
 
 ## Immediate next safe actions
 
-1. Review the #365 local patch with PM. Keep it unstaged/uncommitted/unpushed; CI remains a later mandatory merge gate. Leave running PCP services and Chợ Nhạc untouched. Do not begin #366 before #365 dependency completion.
+1. Re-review the #366 PM-001 delta with PM. Keep it unstaged/uncommitted/unpushed; CI remains a later mandatory merge gate. Leave running PCP services and Chợ Nhạc untouched. Do not begin #367 before #366 dependency completion.
 2. Keep #146 in calibration/watch mode and collect only naturally occurring routine-task evidence.
 3. Keep the deterministic context-memory evaluation in CI; treat a future recall/stale-authority regression or sustained corpus growth as evidence to reopen vector/hybrid retrieval evaluation.
 4. Do not add a vector database or embedding provider without a new measured retrieval gap.

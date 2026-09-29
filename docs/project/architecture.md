@@ -117,6 +117,30 @@ Schema installation uses the existing orchestrator `ensure()` startup path;
 checkpoint append/read operations do not run migrations. There is no checkpoint
 update/delete API. Supersession and later lifecycle changes preserve history.
 
+Lifecycle transitions emit `started`, `waiting_human`, `accepted`, `completed`,
+`merged`, `blocked` and `repair_reopened` checkpoints. The store locks the exact
+plan/WorkOrder, checks the expected source state/job/PR/persisted version, and
+commits the WorkOrder mutation, attention retirement and checkpoint together.
+Checkpoint conflicts or failures roll back the entire transition. Retries
+validate the existing immutable row without replaying a historical mutation.
+Keys hash durable plan/WorkOrder/job identity plus decision, delivery, merge or
+repair identity and persisted source versions as applicable; no polling clock
+or random identity is used. Evidence is a strict whitelist of bounded identities,
+outcomes and counters. Dependency state and next-ready IDs use the existing
+ExecutionPlan graph with the target transition applied inside the transaction.
+`accepted` does not unlock dependencies; confirmed merge completion and its
+`merged` checkpoint commit atomically before a dependent can launch. Job start
+is checkpointed after deterministic job creation and before enqueue. An internal
+plan/WorkOrder/deterministic-job reservation is stored atomically with the queued
+job; startup skips `held` reservations. Exact active running WorkOrder + durable
+`started` proof releases it to `ready` before enqueue. Reconciliation completes
+only held/ready pre-execution launches; queue dedupe and a locked execution claim
+prevent duplicate launch. The claim marks the reservation `launched` and enters
+the existing `routing` state before workspace side effects, so an in-flight
+restart still requires explicit resume. Standalone queued startup is unchanged.
+The reservation is a private engine keyword, not public job-intake policy. Existing
+manual/PM merge authority, recovery and default concurrency of one are unchanged.
+
 Authenticated `GET /v1/plans/{plan_id}/progress` projects a consistent read-only
 database snapshot of orchestration state, the ExecutionPlan dependency graph
 and checkpoints. It reports plan/project/ticket identity, state/lifecycle,
@@ -127,8 +151,8 @@ active completed dependencies unlock `next`; this list expresses dependency
 readiness, not permission to launch past other orchestration gates. The latest
 checkpoint includes preserved superseded history for that plan. Raw lifecycle
 detail and job results are not exposed. The existing `/orchestration` contract
-is unchanged. #365 provides persistence and projection only; #366 owns later
-lifecycle emission, and #367–#370 intake/publication/blocked-pack/supervised
+is unchanged. #365 supplies persistence/projection and #366 lifecycle emission;
+#367–#370 intake/publication/blocked-pack/supervised
 continuation remain unimplemented by this change.
 
 The current implementation may still contain manual-merge orchestration behavior from the previous governance policy. That behavior is transitional implementation state, not the approved target authority model after issue #96. Runtime/ddev-executor changes that automate the PM merge gate must preserve all existing trust boundaries and be delivered separately through normal PR/CI review.

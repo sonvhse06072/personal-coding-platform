@@ -290,9 +290,8 @@ class PlanOrchestrator(CorePlanOrchestrator):
                     "merge_commit_sha": confirmed.get("merge_commit_sha"),
                 }
             )
-            self.store.update_work_order(
-                plan_id,
-                str(tracked["work_order_id"]),
+            self._checkpoint_transition(
+                tracked, kind="merged", job=job, pr=confirmed,
                 state="completed",
                 detail=detail,
             )

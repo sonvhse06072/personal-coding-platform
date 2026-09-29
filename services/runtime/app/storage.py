@@ -12,6 +12,7 @@ from psycopg.rows import dict_row
 
 from .activity import job_registered_event, route_selected_event, status_transition_event
 from .developer_stream import bind_developer_sink, runtime_activity_event
+from .work_order_checkpoints import orchestrator_launch
 
 
 DDL = """
@@ -164,6 +165,31 @@ class Storage:
     def get(self, job_id: str) -> dict[str, Any] | None:
         with self.connect() as conn:
             return conn.execute("SELECT * FROM cp_jobs WHERE id=%s", (job_id,)).fetchone()
+
+    def claim_orchestrated_launch(self, job_id: str) -> dict[str, Any] | None:
+        """Enter existing in-flight state before any workspace/execution side effect.
+
+        A crash after this claim requires explicit resume, not launch recovery.
+        Previously launched jobs can enter again only after normal resume has
+        durably restored queued state. No budgets or execution metadata reset.
+        """
+        with self.connect() as conn:
+            job = conn.execute("SELECT * FROM cp_jobs WHERE id=%s FOR UPDATE", (job_id,)).fetchone()
+            marker = orchestrator_launch(job or {})
+            if not marker or marker["state"] == "held":
+                raise RuntimeError("Orchestrator launch is not released")
+            if job["status"] != "queued":
+                return None
+            checkpoint = {**job["checkpoint"], "orchestrator_launch": {**marker, "state": "launched"}}
+            row = conn.execute(
+                """UPDATE cp_jobs SET status='routing', checkpoint=%s::jsonb, updated_at=%s
+                WHERE id=%s RETURNING *""", (json.dumps(checkpoint), now(), job_id),
+            ).fetchone()
+            event = status_transition_event("queued", "routing")
+            if event:
+                _insert_job_event(conn, job_id, event)
+            conn.commit()
+            return row
 
     def list(self, limit: int = 50) -> list[dict[str, Any]]:
         with self.connect() as conn:
