@@ -39,7 +39,7 @@ from .state import (
     set_failure_context,
     validate_workspace,
 )
-from .work_order_checkpoints import orchestrator_launch
+from .work_order_checkpoints import orchestrator_launch, verification_checkpoint_summary
 
 _VALID_WORKSPACE_MODES = {"direct", "isolated_clone"}
 
@@ -568,6 +568,9 @@ class RuntimeEngine(RuntimeEngineCore):
             verification = await self._verify(
                 job_id, job["project_id"], workspace, project, strategy, started, progress
             )
+            verification_summary = verification_checkpoint_summary(verification)
+            if verification_summary is not None:
+                checkpoint["last_verification_summary"] = verification_summary
             record_review_repair_churn_observation(
                 checkpoint,
                 verification=verification,

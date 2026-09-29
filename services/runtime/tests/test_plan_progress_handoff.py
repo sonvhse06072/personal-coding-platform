@@ -62,6 +62,49 @@ def test_render_whitelist_bound_and_polling_identity():
     assert render_progress(value, 123)[1] == body
 
 
+def test_blocked_render_uses_compact_durable_pack_only():
+    value = snapshot()
+    value["orchestration"]["status"] = "blocked"
+    value["work_orders"] = [
+        {"work_order_id": "WO-1", "state": "completed", "job_id": "job-1"},
+        {"work_order_id": "WO-2", "state": "blocked", "job_id": "job-2"},
+    ]
+    completed = {
+        "id": 2, "checkpoint_key": "wo:merged:one", "work_order_id": "WO-1",
+        "kind": "merged", "state": "completed", "job_id": "job-1",
+        "created_at": "2026-09-30T01:00:00Z", "evidence": {
+            "produced_commit": "a" * 40, "pr_number": 41, "merge_commit": "b" * 40,
+            "prompt": "PRIVATE COMPLETED PROMPT",
+        },
+    }
+    blocked = {
+        "id": 4, "checkpoint_key": "wo:blocked:two", "work_order_id": "WO-2",
+        "kind": "blocked", "state": "blocked", "job_id": "job-2",
+        "created_at": "2026-09-30T02:00:00Z", "evidence": {
+            "branch": "ai/wo-2", "reason": "provider_failure_without_fallback",
+            "verification": {"passed": False, "phases": [
+                {"phase": "full_tests", "passed": False, "stderr": "PRIVATE STDERR"},
+            ]},
+            "review_verdict": "fail", "pm_outcome": "repair",
+            "result": "PRIVATE RESULT", "token": "PRIVATE TOKEN",
+        },
+    }
+    value.update(
+        completed_checkpoints=[completed], blocked_checkpoint=blocked,
+        last_good_checkpoint=completed, last_checkpoint=blocked,
+    )
+    _, body = render_progress(value, 123)
+    assert "Blocked evidence:" in body
+    assert "Job: job-2" in body and "Branch: ai/wo-2" in body
+    assert "Reason: provider_failure_without_fallback" in body
+    assert "Next safe action: reroute" in body
+    assert "WO-1 — merged checkpoint 2; key wo:merged:one; job job-1" in body
+    assert "commit " + "a" * 40 in body and "PR #41" in body
+    assert "Latest verification: failed" in body
+    assert "PRIVATE" not in body
+    assert len(body.encode()) + 100 <= BODY_MAX_BYTES
+
+
 def test_marker_and_mention_cannot_be_injected_through_identity():
     value = snapshot()
     value["orchestration"]["plan_id"] = "<!-- PCP:PLAN-PROGRESS:evil --> @owner\nspoof"

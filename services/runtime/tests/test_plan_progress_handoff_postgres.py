@@ -62,6 +62,7 @@ def test_durable_transitions_keep_same_handoff(handoffs, kind, source, target, s
     engineering.update_work_order("plan-1", "WO-1", state=source)
     assert handoffs.stage_plan("plan-1")
     first = row(handoffs)
+    assert handoffs.ack(handoffs.claim(), 42)
     cp = engineering.transition_work_order(
         expected=engineering.work_orders("plan-1")[0], checkpoint_key=kind, kind=kind,
         state=target, evidence={"produced_commit": "a" * 40, "verification": {"passed": True}},
@@ -74,6 +75,7 @@ def test_durable_transitions_keep_same_handoff(handoffs, kind, source, target, s
     assert restarted.stage_plan("plan-1")
     second = row(restarted)
     assert second['handoff_key'] == first['handoff_key']
+    assert second['comment_id'] == 42
     assert second['desired_generation'] == 2
     assert f"State: {status}" in second['desired_body']
     assert f"kind: {kind}" in second['desired_body']

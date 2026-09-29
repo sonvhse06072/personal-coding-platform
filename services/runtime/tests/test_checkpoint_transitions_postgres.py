@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from concurrent.futures import ThreadPoolExecutor
 
@@ -200,3 +201,95 @@ def test_postgres_reused_key_with_changed_source_episode_fails_closed(atomic_sto
         atomic_store.transition_work_order(**payload)
     assert atomic_store.work_orders("plan-1")[0]["state"] == "running"
     assert atomic_store.checkpoints("plan-1") == [original]
+
+
+def test_postgres_blocked_pack_is_durable_exact_and_advisory_only(atomic_store):
+    store = atomic_store
+    plan_doc = {"work_orders": [
+        {"id": "WO-1", "dependencies": []},
+        {"id": "WO-2", "dependencies": ["WO-1"]},
+        {"id": "WO-3", "dependencies": ["WO-1", "WO-2"]},
+    ]}
+    with store.storage.connect() as conn:
+        conn.execute(
+            "UPDATE cp_execution_plans SET plan=%s::jsonb WHERE id='plan-1'",
+            (json.dumps(plan_doc),),
+        )
+        conn.execute(
+            """INSERT INTO cp_plan_work_orders
+            (plan_id,work_order_id,sequence_no,execution_mode,state,created_at,updated_at)
+            VALUES ('plan-1','WO-3',3,'agent','pending',now(),now())"""
+        )
+
+    store.update_work_order("plan-1", "WO-1", state="running", job_id="job-1")
+    accepted = store.transition_work_order(
+        expected=store.work_orders("plan-1")[0], checkpoint_key="wo:accepted:one",
+        kind="accepted", state="awaiting_merge", pr_number=41,
+        pr_url="https://example.test/pull/41", evidence={
+            "source_commit": "a" * 40, "produced_commit": "b" * 40,
+            "branch": "ai/wo-1", "pr_number": 41,
+            "verification": {"passed": True}, "review_verdict": "pass",
+            "pm_outcome": "accepted",
+        },
+    )
+    completed = store.transition_work_order(
+        expected=store.work_orders("plan-1")[0], checkpoint_key="wo:merged:one",
+        kind="merged", state="completed", evidence={
+            "source_commit": "a" * 40, "produced_commit": "b" * 40,
+            "branch": "ai/wo-1", "pr_number": 41,
+            "merge_commit": "c" * 40, "verification": {"passed": True},
+            "review_verdict": "pass", "pm_outcome": "accepted",
+        },
+    )
+    store.update_work_order("plan-1", "WO-2", state="running", job_id="job-current")
+    current_accepted = store.transition_work_order(
+        expected=store.work_orders("plan-1")[1], checkpoint_key="wo:accepted:current",
+        kind="accepted", state="awaiting_merge", evidence={
+            "produced_commit": "d" * 40, "branch": "ai/current", "pr_number": 42,
+        },
+    )
+    reopened = store.transition_work_order(
+        expected=store.work_orders("plan-1")[1], checkpoint_key="wo:repair:current",
+        kind="repair_reopened", state="running", evidence={"branch": "ai/current"},
+    )
+    blocked = store.transition_work_order(
+        expected=store.work_orders("plan-1")[1], checkpoint_key="wo:blocked:current",
+        kind="blocked", state="blocked", evidence={
+            "branch": "ai/current", "reason": "provider_failure_without_fallback",
+            "verification": {"passed": False, "phases": [
+                {"phase": "full_tests", "passed": False, "stderr": "PRIVATE"},
+            ]},
+            "review_verdict": "fail", "pm_outcome": "repair",
+            "prompt": "PRIVATE", "stdout": "PRIVATE",
+        },
+    )
+    store.update_plan("plan-1", status="blocked")
+    before_work_orders = deepcopy(store.work_orders("plan-1"))
+    before_checkpoints = deepcopy(store.checkpoints("plan-1"))
+
+    pack = PlanOrchestrator(store.storage, None, store=store).progress("plan-1")["blocked_evidence"]
+    assert pack["completed_work_orders"][0]["checkpoint"]["id"] == completed["id"]
+    assert pack["completed_work_orders"][0]["checkpoint"]["checkpoint_key"] == "wo:merged:one"
+    assert pack["completed_work_orders"][0]["checkpoint"]["evidence"]["produced_commit"] == "b" * 40
+    assert pack["current"] == {
+        "work_order_id": "WO-2", "job_id": "job-current", "branch": "ai/current",
+        "checkpoint_id": blocked["id"], "checkpoint_key": "wo:blocked:current",
+    }
+    assert pack["last_known_good_checkpoint"]["id"] == completed["id"]
+    assert pack["last_known_good_checkpoint"]["id"] != current_accepted["id"]
+    assert pack["pending_work_orders"] == [{
+        "work_order_id": "WO-3", "state": "pending", "job_id": None,
+        "dependencies": ["WO-1", "WO-2"],
+    }]
+    assert pack["next_safe_action"] == "reroute"
+    assert "PRIVATE" not in json.dumps(pack)
+
+    recreated_store = PlanOrchestratorStore(type(store.storage)())
+    recreated = PlanOrchestrator(recreated_store.storage, None, store=recreated_store)
+    assert recreated.progress("plan-1")["blocked_evidence"] == pack
+    assert recreated_store.work_orders("plan-1") == before_work_orders
+    assert recreated_store.checkpoints("plan-1") == before_checkpoints
+    assert store.checkpoints("plan-1")[0] == accepted
+    assert [item["id"] for item in store.checkpoints("plan-1") if item["work_order_id"] == "WO-2"] == [
+        current_accepted["id"], reopened["id"], blocked["id"],
+    ]

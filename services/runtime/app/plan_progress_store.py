@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any
 
 from .plan_progress_handoff import handoff_key, issue_binding, render_progress, sha256
+from .work_order_checkpoints import blocked_evidence_checkpoint_rows
 
 
 DDL = """
@@ -83,7 +84,13 @@ class PlanProgressStore:
                 WHERE plan_id=%s AND lifecycle='active' ORDER BY sequence_no,work_order_id""", (plan_id,)).fetchall())
             checkpoint = conn.execute("""SELECT * FROM cp_plan_work_order_checkpoints
                 WHERE plan_id=%s ORDER BY id DESC LIMIT 1""", (plan_id,)).fetchone()
-            transition, body = render_progress({"orchestration": plan, "work_orders": rows, "last_checkpoint": checkpoint}, issue)
+            blocked_inputs = blocked_evidence_checkpoint_rows(conn, plan_id, rows)
+            transition, body = render_progress({
+                "orchestration": plan,
+                "work_orders": rows,
+                "last_checkpoint": checkpoint,
+                **blocked_inputs,
+            }, issue)
             result = conn.execute("""
                 INSERT INTO cp_plan_progress_handoffs AS h
                   (handoff_key,project_id,ticket_id,issue_number,plan_id,plan_created_at,

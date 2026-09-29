@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .activity import public_event
 from .dashboard_ui import DASHBOARD_HTML
+from .work_order_checkpoints import blocked_plan_evidence
 
 
 _ACTIVE_PLAN_STATES = {"active", "executing", "waiting_merge", "waiting_human"}
@@ -291,6 +292,11 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
             ),
             None,
         )
+        blocked_evidence = None
+        if lifecycle == "active" and status == "blocked":
+            progress_snapshot = orchestrator_store.progress_snapshot(plan_id)
+            if progress_snapshot is not None:
+                blocked_evidence = blocked_plan_evidence(progress_snapshot)
         plans.append({
             "id": plan_id,
             "project_id": plan_row.get("project_id"),
@@ -305,6 +311,7 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
             "created_at": _iso(plan_row.get("created_at")),
             "updated_at": _iso(plan_row.get("updated_at")),
             "current_work_order_id": current_wo["id"] if current_wo else None,
+            "blocked_evidence": blocked_evidence,
             "token_totals": totals,
             "work_orders": work_orders,
         })

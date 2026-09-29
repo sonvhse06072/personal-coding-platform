@@ -525,8 +525,12 @@ handoff. Durable state determines transitions; polling alone produces no update.
 Later plans for the same project/issue reuse the comment. Pre-install plans are
 not automatically enrolled. Publication retries independently of engineering;
 GitHub outages cannot roll back a checkpoint or change dependency readiness.
-The comment shows basic blocked WorkOrder/job identity only. Expanded blocked
-diagnostics (#369) and supervised continuation (#370) are not implemented.
+For a blocked plan, the read model and comment include prior completed durable
+checkpoints, exact current WorkOrder/job/branch, bounded whitelisted verification
+and reviewer/PM outcome, untouched pending WorkOrders, the last known-good
+checkpoint and an advisory closed-vocabulary next action. Reading this evidence
+cannot authorize or perform recovery. Supervised continuation (#370) is not
+implemented.
 
 PM should normally run when:
 

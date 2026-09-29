@@ -32,6 +32,44 @@ class ProgressConnection(CheckpointConnection):
                 {key: row[key] for key in ("work_order_id", "state", "job_id")}
                 for row in rows if row["lifecycle"] == "active"
             ])
+        if normalized.startswith("SELECT c.* FROM cp_plan_work_order_checkpoints c"):
+            checkpoints = list(self.storage.checkpoint_rows.values())
+            if "w.state='completed'" in normalized:
+                tracked = {row["work_order_id"]: row for row in self.storage.tracked}
+                checkpoints = [
+                    row for row in checkpoints
+                    if row["plan_id"] == params[0]
+                    and row["kind"] in {"completed", "merged"}
+                    and tracked[row["work_order_id"]]["state"] == "completed"
+                    and tracked[row["work_order_id"]]["lifecycle"] == "active"
+                    and row["job_id"] == tracked[row["work_order_id"]]["job_id"]
+                ]
+                checkpoints.sort(key=lambda row: (
+                    tracked[row["work_order_id"]]["sequence_no"], row["work_order_id"], row["id"]
+                ))
+                return Result(rows=checkpoints)
+            if "ORDER BY c.id DESC LIMIT 32" in normalized:
+                checkpoints = [
+                    row for row in checkpoints
+                    if row["plan_id"] == params[0] and row["work_order_id"] == params[1]
+                    and row["job_id"] == params[2]
+                ]
+                checkpoints.sort(key=lambda row: row["id"], reverse=True)
+                return Result(rows=checkpoints[:32])
+            assert "c.kind IN ('completed','merged')" in normalized
+            active = {
+                row["work_order_id"]: row for row in self.storage.tracked
+                if row["lifecycle"] == "active"
+            }
+            checkpoints = [
+                row for row in checkpoints
+                if row["plan_id"] == params[0] and row["id"] < params[1]
+                and row["kind"] in {"completed", "merged"}
+                and row["work_order_id"] in active
+                and row["job_id"] == active[row["work_order_id"]]["job_id"]
+            ]
+            checkpoints.sort(key=lambda row: row["id"], reverse=True)
+            return Result(row=checkpoints[0] if checkpoints else None)
         if normalized.startswith("SELECT * FROM cp_plan_orchestrations"):
             return Result(row=self.storage.plan)
         if normalized.startswith("SELECT * FROM cp_plan_work_orders"):
@@ -67,7 +105,8 @@ def test_fresh_pending_progress_is_compact_deterministic_and_read_only(progress_
     expected = {
         "plan_id": "plan-1", "project_id": "demo", "ticket_id": "GH-5",
         "state": "active", "lifecycle": "active", "completed": 0, "total": 3,
-        "current_work_order": None, "blocked": None, "next": ["WO-1"], "last_checkpoint": None,
+        "current_work_order": None, "blocked": None, "blocked_evidence": None,
+        "next": ["WO-1"], "last_checkpoint": None,
     }
     assert progress_service.progress("plan-1") == expected
     assert progress_service.progress("plan-1") == expected
@@ -98,7 +137,194 @@ def test_blocked_identity_excludes_raw_details_and_does_not_unlock_dependencies(
     assert result["current_work_order"] is None
     assert result["state"] == "blocked"
     assert result["next"] == []
+    assert result["blocked_evidence"]["reason"] == "blocked_checkpoint_evidence_unavailable"
+    assert result["blocked_evidence"]["next_safe_action"] == "repair"
     assert "private" not in str(result)
+
+
+def test_blocked_pack_preserves_completed_checkpoint_and_exact_current_identity(
+    progress_service, monkeypatch,
+):
+    storage = progress_service.storage
+    storage.tracked[0].update(state="completed", job_id="job-1")
+    storage.tracked[1].update(state="blocked", job_id="job-current")
+    storage.plan["status"] = "blocked"
+    completed = progress_service.store.append_checkpoint(**checkpoint(
+        checkpoint_key="wo:merged:one", kind="merged", state="completed",
+        job_id="job-1", evidence={
+            "source_commit": "a" * 40, "produced_commit": "b" * 40,
+            "branch": "ai/wo-1", "pr_number": 41, "merge_commit": "c" * 40,
+            "verification": {"passed": True, "phases": [{"phase": "unit", "passed": True}]},
+            "review_verdict": "pass", "pm_outcome": "accepted",
+        },
+    ))
+    progress_service.store.append_checkpoint(**checkpoint(
+        checkpoint_key="wo:stale:old-job", work_order_id="WO-2", kind="failed",
+        state="running", job_id="job-stale", evidence={
+            "branch": "ai/stale", "verification": {"passed": True},
+            "review_verdict": "pass", "pm_outcome": "accepted",
+        },
+    ))
+    accepted = progress_service.store.append_checkpoint(**checkpoint(
+        checkpoint_key="wo:accepted:current", work_order_id="WO-2", kind="accepted",
+        state="awaiting_merge", job_id="job-current", evidence={
+            "produced_commit": "d" * 40, "branch": "ai/current", "pr_number": 42,
+        },
+    ))
+    progress_service.store.append_checkpoint(**checkpoint(
+        checkpoint_key="wo:repair:current", work_order_id="WO-2", kind="repair_reopened",
+        state="running", job_id="job-current", evidence={"branch": "ai/current"},
+    ))
+    current_evidence = progress_service.store.append_checkpoint(**checkpoint(
+        checkpoint_key="wo:evidence:current", work_order_id="WO-2", kind="failed",
+        state="running", job_id="job-current", evidence={
+            "branch": "ai/current",
+            "verification": {"passed": False, "phases": [
+                {"phase": "full_tests", "passed": False, "stderr": "PRIVATE STDERR"},
+            ]},
+            "review_verdict": "fail", "pm_outcome": "repair",
+        },
+    ))
+    blocked = progress_service.store.append_checkpoint(**checkpoint(
+        checkpoint_key="wo:blocked:current", work_order_id="WO-2", kind="blocked",
+        state="blocked", job_id="job-current", evidence={
+            "reason": "provider_failure_without_fallback",
+            "prompt": "PRIVATE PROMPT", "result": {"raw": "PRIVATE RESULT"},
+        },
+    ))
+    assert current_evidence["id"] < blocked["id"]
+    before = deepcopy(storage.__dict__)
+
+    result = progress_service.progress("plan-1")
+    pack = result["blocked_evidence"]
+    assert pack["completed_work_orders"] == [{
+        "work_order_id": "WO-1",
+        "checkpoint": {
+            "id": completed["id"], "checkpoint_key": "wo:merged:one",
+            "work_order_id": "WO-1", "kind": "merged", "state": "completed",
+            "job_id": "job-1", "created_at": completed["created_at"].isoformat(),
+            "evidence": completed["evidence"],
+        },
+    }]
+    assert pack["current"] == {
+        "work_order_id": "WO-2", "job_id": "job-current", "branch": "ai/current",
+        "checkpoint_id": blocked["id"], "checkpoint_key": "wo:blocked:current",
+    }
+    assert pack["reason"] == "provider_failure_without_fallback"
+    assert pack["latest_verification"] == {
+        "passed": False, "phases": [{"phase": "full_tests", "passed": False}],
+    }
+    assert pack["latest_outcome"] == {"review_verdict": "fail", "pm_outcome": "repair"}
+    assert pack["pending_work_orders"] == [{
+        "work_order_id": "WO-3", "state": "pending", "job_id": None,
+        "dependencies": ["WO-1", "WO-2"],
+    }]
+    assert pack["last_known_good_checkpoint"]["id"] == completed["id"]
+    assert pack["last_known_good_checkpoint"]["id"] != accepted["id"]
+    assert pack["next_safe_action"] == "reroute"
+    assert "PRIVATE" not in str(result)
+    assert progress_service.progress("plan-1")["blocked_evidence"] == pack
+    for field in before.keys() - {"statements", "read_statements"}:
+        assert storage.__dict__[field] == before[field]
+
+    monkeypatch.setenv("RUNTIME_API_TOKEN", "test-progress-token")
+    monkeypatch.setattr(main, "plan_orchestrator", progress_service)
+    client = TestClient(main.app)
+    path = "/v1/plans/plan-1/progress"
+    assert client.get(path).status_code == 401
+    response = client.get(path, headers={"Authorization": "Bearer test-progress-token"})
+    assert response.status_code == 200
+    assert response.json()["blocked_evidence"] == pack
+    assert "PRIVATE" not in response.text
+
+
+def test_unstructured_block_reason_is_hashed_not_exposed(progress_service):
+    storage = progress_service.storage
+    storage.tracked[0].update(state="blocked", job_id="job-1")
+    storage.plan["status"] = "blocked"
+    progress_service.store.append_checkpoint(**checkpoint(
+        checkpoint_key="wo:blocked:secret", kind="blocked", state="blocked",
+        job_id="job-1", evidence={
+            "reason": "Bearer credential-must-not-leak", "stderr": "PRIVATE STDERR",
+            "branch": "ai/job-1",
+        },
+    ))
+    pack = progress_service.progress("plan-1")["blocked_evidence"]
+    assert pack["reason"] == "unclassified_block"
+    assert len(pack["reason_sha256"]) == 64
+    assert pack["next_safe_action"] == "repair"
+    assert "credential-must-not-leak" not in str(pack)
+    assert "PRIVATE" not in str(pack)
+
+
+@pytest.mark.parametrize(("reason", "job_id", "expected"), [
+    ("no_effect", "job-1", "repair"),
+    ("provider_failure_without_fallback", "job-1", "reroute"),
+    ("human_decision_required", "job-1", "human_decision"),
+    ("work_order_definition_missing", None, "replan"),
+    ("planner_budget_exhausted", "job-1", "human_decision"),
+    ("preflight_budget_exhausted", "job-1", "human_decision"),
+    ("execution_budget_exhausted", "job-1", "human_decision"),
+    ("github_ci_infrastructure_failure", "job-1", "retry_delivery"),
+])
+def test_next_safe_action_uses_closed_advisory_vocabulary(
+    progress_service, reason, job_id, expected,
+):
+    storage = progress_service.storage
+    storage.tracked[0].update(state="blocked", job_id=job_id)
+    storage.plan["status"] = "blocked"
+    progress_service.store.append_checkpoint(**checkpoint(
+        checkpoint_key=f"wo:blocked:{expected}", kind="blocked", state="blocked",
+        job_id=job_id, evidence={"reason": reason, "branch": "ai/job-1"},
+    ))
+    before = deepcopy(storage.__dict__)
+    pack = progress_service.progress("plan-1")["blocked_evidence"]
+    assert pack["next_safe_action"] == expected
+    assert pack["next_safe_action"] in {
+        "repair", "reroute", "human_decision", "replan", "retry_delivery",
+    }
+    for field in before.keys() - {"statements", "read_statements"}:
+        assert storage.__dict__[field] == before[field]
+
+
+@pytest.mark.parametrize(("reason", "expected"), [
+    ("provider_failure_without_fallback", "reroute"),
+    ("github_ci_infrastructure_failure", "retry_delivery"),
+])
+def test_current_block_reason_beats_resolved_historical_human_decision(
+    progress_service, reason, expected,
+):
+    storage = progress_service.storage
+    storage.tracked[0].update(state="blocked", job_id="job-1")
+    storage.plan["status"] = "blocked"
+    progress_service.store.append_checkpoint(**checkpoint(
+        checkpoint_key="wo:old:human-decision", kind="waiting_human",
+        state="waiting_human", job_id="job-1", evidence={
+            "pm_action": "human_decision", "pm_outcome": "needs_human_decision",
+        },
+    ))
+    progress_service.store.append_checkpoint(**checkpoint(
+        checkpoint_key="wo:blocked:after-resolution", kind="blocked",
+        state="blocked", job_id="job-1", evidence={
+            "reason": reason, "pm_action": "human_decision",
+            "pm_outcome": "needs_human_decision", "decision_key": "resolved-earlier",
+        },
+    ))
+    before = deepcopy(storage.__dict__)
+    pack = progress_service.progress("plan-1")["blocked_evidence"]
+    assert pack["reason"] == reason
+    assert pack["latest_outcome"] == {
+        "pm_outcome": "needs_human_decision", "pm_action": "human_decision",
+    }
+    assert pack["next_safe_action"] == expected
+    assert pack["pending_work_orders"] == [
+        {"work_order_id": "WO-2", "state": "pending", "job_id": None,
+         "dependencies": ["WO-1"]},
+        {"work_order_id": "WO-3", "state": "pending", "job_id": None,
+         "dependencies": ["WO-1", "WO-2"]},
+    ]
+    for field in before.keys() - {"statements", "read_statements"}:
+        assert storage.__dict__[field] == before[field]
 
 
 @pytest.mark.parametrize("completed,ready", [(1, ["WO-2"]), (2, ["WO-3"]), (3, [])])

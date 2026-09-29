@@ -11,7 +11,16 @@ from typing import Any
 
 from .config import project_config
 from .storage import Storage, now
-from .work_order_checkpoints import checkpoint_evidence, transition_key, ready_work_order_ids, launch_identity, orchestrator_launch
+from .work_order_checkpoints import (
+    blocked_evidence_checkpoint_rows,
+    blocked_plan_evidence,
+    checkpoint_evidence,
+    checkpoint_read_model,
+    launch_identity,
+    orchestrator_launch,
+    ready_work_order_ids,
+    transition_key,
+)
 
 
 ORCHESTRATOR_DDL = """
@@ -398,7 +407,13 @@ class PlanOrchestratorStore:
                 WHERE plan_id=%s ORDER BY id DESC LIMIT 1""",
                 (plan_id,),
             ).fetchone()
-            return {"orchestration": dict(plan), "work_orders": rows, "last_checkpoint": latest}
+            blocked_inputs = blocked_evidence_checkpoint_rows(conn, plan_id, rows)
+            return {
+                "orchestration": dict(plan),
+                "work_orders": rows,
+                "last_checkpoint": latest,
+                **blocked_inputs,
+            }
 
     def update_plan(self, plan_id: str, *, status: str) -> bool:
         with self.storage.connect() as conn:
@@ -1135,8 +1150,12 @@ class PlanOrchestrator:
             "total": len(rows),
             "current_work_order": current,
             "blocked": {"work_order_id": blocked["work_order_id"], "job_id": blocked["job_id"]} if blocked else None,
+            "blocked_evidence": blocked_plan_evidence(snapshot),
             "next": ready,
-            "last_checkpoint": snapshot["last_checkpoint"],
+            "last_checkpoint": (
+                checkpoint_read_model(snapshot["last_checkpoint"])
+                if blocked else snapshot["last_checkpoint"]
+            ),
         }
 
     def _checkpoint_transition(
