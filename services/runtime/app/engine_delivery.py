@@ -11,6 +11,8 @@ from .legacy_delivery_recovery import (
     LEGACY_RECOVERY_BLOCK_REASON,
     recover_legacy_accepted_result,
 )
+from .review_repair_churn import archive_epoch as archive_review_repair_churn_epoch
+from .review_repair_churn import ReviewRepairChurnPaused
 
 
 class DeliveryAwareStorage:
@@ -165,6 +167,18 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         # verification/commit, resume the idempotent delivery step instead of
         # spending another model call on already-verified work.
         before = self.storage.get(job_id)
+        if before:
+            checkpoint = deepcopy(before.get("checkpoint") or {})
+            progress = deepcopy(before.get("progress") or {})
+            try:
+                self._ensure_review_repair_churn_epoch(
+                    job_id=job_id,
+                    checkpoint=checkpoint,
+                    progress=progress,
+                )
+            except ReviewRepairChurnPaused:
+                return
+            before = self.storage.get(job_id)
         accepted = self._accepted_result_for_delivery(before) if before else None
         pending_review_repair_record = (
             (before.get("checkpoint") or {}).get("pending_review_repair")
@@ -435,6 +449,13 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                     state="completed",
                     new_commit=commit,
                     delivery=delivery,
+                )
+                archive_review_repair_churn_epoch(
+                    checkpoint,
+                    request_id,
+                    state="completed",
+                    completed_at=delivery.get("completed_at"),
+                    new_commit=commit,
                 )
                 checkpoint.pop("active_review_repair", None)
             self.storage.update(

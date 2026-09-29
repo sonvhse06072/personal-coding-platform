@@ -6,6 +6,7 @@ import pytest
 import app.engine_delivery as engine_delivery_module
 from app.engine import RuntimeEngine as GovernedRuntimeEngine
 from app.engine_delivery import RuntimeEngine
+from app.review_repair_churn import EPOCH_KEY, HISTORY_KEY, INITIALIZED_KEY, new_epoch
 
 
 OLD_COMMIT = "b" * 40
@@ -191,6 +192,15 @@ def test_completed_open_pr_can_be_reopened_without_resetting_job_contract_or_his
         assert checkpoint["project_baseline"] == original["checkpoint"]["project_baseline"]
         assert checkpoint["route_history"] == original["checkpoint"]["route_history"]
         assert checkpoint["pending_review_repair"]["expected_commit"] == OLD_COMMIT
+        assert checkpoint[EPOCH_KEY]["request_id"] == checkpoint["pending_review_repair"]["request_id"]
+        assert checkpoint[INITIALIZED_KEY] == {
+            "request_id": checkpoint["pending_review_repair"]["request_id"]
+        }
+        assert checkpoint[EPOCH_KEY]["baseline"] == {
+            "repair_iterations": 2,
+            "verification_attempts": 0,
+        }
+        assert updated["progress"] == original["progress"]
         assert checkpoint["accepted_result_history"][-1]["result"] == original["result"]
         assert checkpoint["delivery_history"][-1]["delivery"] == original["result"]["delivery"]
         assert checkpoint["failure_context"]["source"] == "pm_review_repair"
@@ -386,6 +396,14 @@ def test_restart_after_repair_commit_resumes_new_delivery_without_second_enginee
         assert next(fields for kind, fields in engine.ddev.calls if kind == "ci")[
             "commit"
         ] == NEW_COMMIT
+        archived_epoch = storage.row["checkpoint"][HISTORY_KEY][-1]
+        assert archived_epoch["request_id"] == "repair-1"
+        assert archived_epoch["legacy_baseline_migrated"] is True
+        assert archived_epoch["baseline"] == {
+            "repair_iterations": 2,
+            "verification_attempts": 0,
+        }
+        assert INITIALIZED_KEY not in storage.row["checkpoint"]
 
     asyncio.run(scenario())
 
@@ -396,6 +414,11 @@ def test_successful_repair_delivers_new_commit_to_same_pr_and_checks_new_head(mo
         row["status"] = "queued"
         row["checkpoint"]["pending_review_repair"] = pending_record()
         row["checkpoint"]["review_repair_history"] = [deepcopy(pending_record())]
+        row["checkpoint"][EPOCH_KEY] = new_epoch(
+            "repair-1",
+            row["progress"],
+            legacy_baseline_migrated=False,
+        )
         storage = MemoryStorage(row)
         engine = RuntimeEngine(storage)
         ddev = RepairDdev(ci_state="success")
@@ -426,6 +449,9 @@ def test_successful_repair_delivers_new_commit_to_same_pr_and_checks_new_head(mo
         assert storage.row["result"]["delivery_finalized"] is True
         assert "pending_review_repair" not in storage.row["checkpoint"]
         assert "active_review_repair" not in storage.row["checkpoint"]
+        assert EPOCH_KEY not in storage.row["checkpoint"]
+        assert storage.row["checkpoint"][HISTORY_KEY][-1]["request_id"] == "repair-1"
+        assert storage.row["checkpoint"][HISTORY_KEY][-1]["state"] == "completed"
         history = storage.row["checkpoint"]["review_repair_history"][-1]
         assert history["state"] == "completed"
         assert history["new_commit"] == NEW_COMMIT

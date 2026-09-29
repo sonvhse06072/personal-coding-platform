@@ -160,6 +160,26 @@ and review gates. A successful repair publishes a new commit to the same branch
 and PR and observes CI only for that new exact head; the transition grants no
 merge or deployment authority.
 
+Each active delivered-PR review repair also owns a durable churn epoch bound to
+its exact request id. The epoch snapshots cumulative repair and verification
+counters without resetting them and applies policy-defined anomaly limits before
+another developer-model or deterministic-verification cycle. A pre-feature
+pending request receives one persisted baseline on its first resumed run, so
+historical work is not charged to the new epoch. Hitting the bound enters the
+existing Human Owner decision flow with bounded evidence. Approval authorizes
+one new generation and counter baseline for that same request; ordinary resume,
+reroute, provider recovery and Runtime restart cannot re-arm it. Successful
+same-PR delivery archives and clears the epoch before a future unrelated repair.
+
+Legacy migration requires the epoch key to be genuinely absent and no churn
+gate, pending churn decision, or initialization/history evidence for that request.
+Explicit null, malformed metadata and inconsistent gate identities stop execution
+with bounded integrity evidence while preserving the original checkpoint. A
+persisted gate remains effective for its exact request/generation even if a stale
+progress snapshot falls below the counters that tripped it. Only exact-key Human
+authorization opens the next window; successful verified delivery retains its
+existing archive path, including cleanup of the request initialization marker.
+
 ## 3. Approved target architecture
 
 The following layers are approved targets but are not all implemented yet.

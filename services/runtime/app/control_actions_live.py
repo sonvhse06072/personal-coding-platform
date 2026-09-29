@@ -318,6 +318,15 @@ class ControlActionService(BaseControlActionService):
             advisory["summary"] = "Runtime bị gián đoạn và cần recovery rõ ràng trên cùng job."
             advisory["cause"] = "Process trước đã dừng; job/workspace bền vững vẫn được giữ nguyên."
             advisory["recommended"] = "Tiếp tục cùng job; chỉ yêu cầu định tuyến lại nếu cần."
+        elif str(advisory.get("reason") or "") == "repair_churn_circuit_breaker":
+            advisory.update({
+                "title": "CẦN QUYẾT ĐỊNH CỦA OWNER",
+                "summary": "Review repair đã chạm giới hạn anomaly của bounded window hiện tại.",
+                "cause": "Một repair/verification window mới cần owner phê duyệt cho đúng request và generation này.",
+                "preserved": ["Giữ nguyên cùng job/workspace, global counters và churn baseline bền vững."],
+                "impact": "Job không chạy thêm model hoặc DDEV verification cho đến khi exact durable decision này được xử lý.",
+                "recommended": "Chỉ phê duyệt để mở đúng một bounded window mới; từ chối sẽ giữ nguyên baseline hiện tại.",
+            })
         else:
             advisory["summary"] = "WorkOrder đang bị chặn và cần owner xử lý."
             advisory["cause"] = "Runtime đã dừng an toàn tại một control gate bền vững."
@@ -378,6 +387,15 @@ class ControlActionService(BaseControlActionService):
                 "preserved": ["Các WorkOrder phía sau tiếp tục chờ."],
                 "impact": "Automation không vượt qua operator gate này cho đến khi owner xử lý.",
                 "recommended": "Thực hiện đúng procedure đã được tài liệu hóa, sau đó đánh dấu hoàn tất hoặc bị chặn.",
+            })
+        elif str(advisory.get("reason") or "") == "repair_churn_circuit_breaker":
+            advisory.update({
+                "title": "CẦN QUYẾT ĐỊNH CỦA OWNER",
+                "summary": "Review repair đã chạm giới hạn anomaly của bounded window hiện tại.",
+                "cause": "Một repair/verification window mới cần owner phê duyệt cho đúng request và generation này.",
+                "preserved": ["Giữ nguyên cùng job/workspace, global counters và churn baseline bền vững."],
+                "impact": "Job không chạy thêm model hoặc DDEV verification cho đến khi exact durable decision này được xử lý.",
+                "recommended": "Chỉ phê duyệt để mở đúng một bounded window mới; từ chối sẽ giữ nguyên baseline hiện tại.",
             })
         else:
             advisory.update({

@@ -196,6 +196,14 @@ Primary circuit-break signals include:
 
 Normal engineering activity such as one more targeted test, a productive repair turn, or higher-than-estimated token use while progress remains meaningful should not itself be considered an anomaly.
 
+A delivered-PR review-repair request is a narrower semantic epoch: repeated
+repair and verification cycling inside that one exact PM request is itself
+material anomaly evidence even when every diff and failure fingerprint is new.
+Policy-defined epoch limits therefore stop before another expensive cycle while
+global progress counters remain cumulative telemetry. Continuing requires an
+exact request-and-generation Human Owner authorization for one new bounded
+window; generic resume/reroute/provider recovery cannot move the epoch baseline.
+
 ## 9. Layered deterministic verification
 
 Final acceptance remains deterministic and reproducible. Efficiency comes from changing when expensive verification runs, not weakening the final gate.
