@@ -319,3 +319,31 @@ def test_pm_requires_approved_baseline_before_persistence(monkeypatch, tmp_path)
         asyncio.run(planner.create_plan(request))
 
     assert storage.plans == {}
+
+
+@pytest.mark.parametrize("required,count,status", [(False, 1, "ready"), (True, 1, "failed"), (True, 2, "ready")])
+def test_decomposition_contract_validates_before_ready(monkeypatch, tmp_path, required, count, status):
+    output = proposal(*[work_order(f"WO-{index + 1}") for index in range(count)])
+    planner, request, storage, router, ddev, adapter = configure(monkeypatch, tmp_path, output)
+    request.decomposition_required = required
+    row = asyncio.run(planner.create_plan(request))
+    assert row["status"] == status
+    assert ("DECOMPOSITION_REQUIRED" in adapter.calls[0]["prompt"]) is required
+    if status == "failed":
+        assert "at least two WorkOrders" in row["error"]
+        assert row["plan"] is None
+
+
+@pytest.mark.parametrize("scope", ["out_of_scope", "ambiguous", "in_scope"])
+def test_decomposition_never_invents_work_orders_for_scope_or_decisions(monkeypatch, tmp_path, scope):
+    output = {
+        "scope_assessment": scope, "summary": "Needs scope triage", "work_orders": [],
+        "decision_boundaries": [] if scope == "out_of_scope" else [
+            {"id": "D-1", "category": "ambiguity", "reason": "Owner scope choice required"}
+        ],
+    }
+    planner, request, *_ = configure(monkeypatch, tmp_path, output)
+    request.decomposition_required = True
+    row = asyncio.run(planner.create_plan(request))
+    assert row["status"] == ("out_of_scope" if scope == "out_of_scope" else "human_decision")
+    assert row["plan"]["work_orders"] == row["plan"]["ready_work_order_ids"] == []

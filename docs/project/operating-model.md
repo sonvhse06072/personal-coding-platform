@@ -450,6 +450,73 @@ The detailed adaptive-budget, collaboration, review-efficiency, evidence-pack an
 
 PM is invoked at meaningful checkpoints, not every mechanical event.
 
+### Canonical new-ticket intake (#367)
+
+Authenticated `POST /v1/intake` is the canonical Human/Chat PM handoff for new
+tickets. It requires a registered project and approved ProjectBaseline; an
+omitted revision resolves and pins the active approved revision. Missing or
+unapproved baselines fail before creating a job or plan. Explicit/manual bounded
+`POST /v1/jobs`, `scripts/create-job.sh`, and `/v1/jobs/{id}/run` remain available
+with their existing contracts. Existing jobs/plans are not reclassified.
+
+The typed request carries `project_id`, `ticket` (existing PMTicket id/title/
+description), optional `baseline_revision`, `bounded_direct` (default false),
+existing `SemanticSignals` as `semantic`, existing `RepoHints` as `repo_hints`,
+`planning_profile` (standard/complex), typed PM `provider_state`, and `auto_run`
+(default true). No command, workspace path/mode, credential, merge/production
+authority or model-selection field is accepted. Unrecognized top-level or signal
+fields are rejected. Provider state is capacity evidence for existing execution
+paths and never intake-policy authority. Canonical intake has no `dry_run`:
+planning retains the existing read-only PM call and normal orchestration path.
+
+Policy version `1` defaults to planning unless `bounded_direct=true`, all seven
+semantic values were explicitly supplied, and all required hints are known.
+Required hints are positive `estimated_files` and `affected_components`,
+`dependency_depth`, `tests_available`, `existing_pattern`, `historical_churn`,
+and explicit values for all seven boundary booleans below. Defaults, omissions,
+null hints and zero file/component estimates cannot prove small scope.
+
+Hard planning triggers are any true `schema_change`, `security_sensitive`,
+`authentication_change`, `authorization_change`, `external_api`,
+`production_write`, or `destructive_migration`; `dependency_depth > 0`; or
+`affected_components >= 3` (multi-unit shape).
+
+Otherwise two or more independent material signals require planning:
+
+| Material signal | Inclusive threshold |
+| --- | --- |
+| ambiguity, architecture_impact, verification_difficulty, risk, novelty | 50 each |
+| context_requirement, reasoning_requirement | 70 each |
+| affected_components | 2 |
+| historical_churn | 50 |
+| estimated_files | 10 |
+| verification_shape | tests_available=false OR existing_pattern=false; counts once |
+
+File count alone never makes a ticket materially large or forces decomposition.
+The pure classifier reads structured signals only, makes no external call, and
+returns policy version, mode, reason codes and material-signal names. Insufficient
+evidence or absent direct intent routes to planning without itself claiming the
+ticket is large. Hard triggers or two material signals set
+`decomposition_required=true` on the existing PMPlanner request. An in-scope
+proposal with no decision boundaries must then have at least two coherent,
+independently verifiable WorkOrders before becoming ready. Invalid single-unit
+output fails planning and cannot launch. Out-of-scope/ambiguous/human-decision
+results need no artificial WorkOrders. Ordinary `/v1/plans` defaults this flag
+to false and still accepts a valid single-WorkOrder plan.
+
+Direct intake creates one normal job with ticket title/description, semantic
+signals, repo hints, provider state and the pinned baseline. The compact internal
+`canonical_intake` decision is committed with the initial job row before enqueue;
+it contains no ticket prose, prompts or raw request body. `auto_run=false` creates
+the direct job without enqueue. Planning calls the same PMPlanner and
+PlanOrchestrator registration/tick path as `/v1/plans`; `auto_run` controls only
+direct-job enqueue, not plan scheduling. Planning may launch dependency-ready
+WorkOrders under the existing concurrency-one gates, but creates no standalone
+direct job. Responses contain bounded decision evidence and either `job` or
+`plan` identity/status, plus baseline revision, without staffing internals.
+
+### Meaningful PM checkpoints
+
 PM should normally run when:
 
 - a new ticket arrives;
