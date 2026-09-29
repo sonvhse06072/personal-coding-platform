@@ -57,6 +57,24 @@ CREATE UNIQUE INDEX IF NOT EXISTS cp_plan_work_orders_job_idx
 CREATE INDEX IF NOT EXISTS cp_plan_work_orders_state_idx
   ON cp_plan_work_orders(state, updated_at);
 
+CREATE TABLE IF NOT EXISTS cp_plan_work_order_checkpoints (
+  id BIGSERIAL PRIMARY KEY,
+  checkpoint_key TEXT NOT NULL UNIQUE,
+  plan_id TEXT NOT NULL,
+  work_order_id TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  state TEXT NOT NULL,
+  job_id TEXT,
+  evidence JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL,
+  FOREIGN KEY (plan_id, work_order_id)
+    REFERENCES cp_plan_work_orders(plan_id, work_order_id)
+);
+CREATE INDEX IF NOT EXISTS cp_plan_work_order_checkpoints_plan_idx
+  ON cp_plan_work_order_checkpoints(plan_id, id);
+CREATE INDEX IF NOT EXISTS cp_plan_work_order_checkpoints_work_order_idx
+  ON cp_plan_work_order_checkpoints(plan_id, work_order_id, id);
+
 CREATE TABLE IF NOT EXISTS cp_notification_outbox (
   id BIGSERIAL PRIMARY KEY,
   dedupe_key TEXT NOT NULL UNIQUE,
@@ -117,6 +135,20 @@ _OWNER_ATTENTION_EVENT_TYPES = {
     "provider_quota_exhausted",
     "work_order_blocked",
 }
+CHECKPOINT_EVIDENCE_MAX_BYTES = 16 * 1024
+
+
+def _checkpoint_evidence_json(evidence: dict[str, Any]) -> str:
+    if not isinstance(evidence, dict):
+        raise ValueError("Checkpoint evidence must be a JSON object")
+    try:
+        serialized = json.dumps(evidence, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False)
+        size = len(serialized.encode("utf-8"))
+    except (TypeError, ValueError, UnicodeError, RecursionError) as exc:
+        raise ValueError("Checkpoint evidence must be serializable JSON") from exc
+    if size > CHECKPOINT_EVIDENCE_MAX_BYTES:
+        raise ValueError(f"Checkpoint evidence exceeds {CHECKPOINT_EVIDENCE_MAX_BYTES} bytes")
+    return serialized
 
 
 class PlanOrchestratorStore:
@@ -237,6 +269,112 @@ class PlanOrchestratorStore:
                     (plan_id,),
                 ).fetchall()
             )
+
+    def append_checkpoint(
+        self,
+        *,
+        checkpoint_key: str,
+        plan_id: str,
+        work_order_id: str,
+        kind: str,
+        state: str,
+        job_id: str | None = None,
+        evidence: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Append compact execution evidence, or return an identical retry.
+
+        Callers supply a stable transition key and summaries only: never raw
+        transcripts, logs, prompts, Runtime results or filesystem contents.
+        The store owns the timestamp; retries cannot refresh historical evidence.
+        Schema installation belongs to ensure() at orchestrator startup.
+        """
+        identity = {
+            "checkpoint_key": checkpoint_key,
+            "plan_id": plan_id,
+            "work_order_id": work_order_id,
+            "kind": kind,
+            "state": state,
+            "job_id": job_id,
+        }
+        for field, value in identity.items():
+            if field == "job_id" and value is None:
+                continue
+            limit = 500 if field == "checkpoint_key" else 200
+            if (
+                not isinstance(value, str) or not value or value != value.strip()
+                or len(value) > limit or "\x00" in value
+            ):
+                raise ValueError(f"Checkpoint {field} must be an exact non-empty string of at most {limit} characters")
+        serialized = _checkpoint_evidence_json({} if evidence is None else evidence)
+        with self.storage.connect() as conn:
+            tracked = conn.execute(
+                """SELECT 1 FROM cp_plan_work_orders
+                WHERE plan_id=%s AND work_order_id=%s FOR KEY SHARE""",
+                (plan_id, work_order_id),
+            ).fetchone()
+            if tracked is None:
+                raise RuntimeError("Unknown checkpoint plan/WorkOrder identity")
+            row = conn.execute(
+                """INSERT INTO cp_plan_work_order_checkpoints
+                (checkpoint_key, plan_id, work_order_id, kind, state, job_id, evidence, created_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s)
+                ON CONFLICT (checkpoint_key) DO NOTHING RETURNING *""",
+                (checkpoint_key, plan_id, work_order_id, kind, state, job_id, serialized, now()),
+            ).fetchone()
+            if row is None:
+                # A separate statement sees the committed winner of a concurrent
+                # insert under PostgreSQL's default READ COMMITTED isolation.
+                # JSONB equality ignores object-key ordering and numeric spelling,
+                # while retaining JSON types (true is not the number 1).
+                row = conn.execute(
+                    """SELECT * FROM cp_plan_work_order_checkpoints
+                    WHERE checkpoint_key=%s AND plan_id=%s AND work_order_id=%s
+                      AND kind=%s AND state=%s AND job_id IS NOT DISTINCT FROM %s
+                      AND evidence=%s::jsonb""",
+                    (checkpoint_key, plan_id, work_order_id, kind, state, job_id, serialized),
+                ).fetchone()
+                if row is None:
+                    raise RuntimeError("Checkpoint key already has different identity/content")
+            conn.commit()
+            return dict(row)
+
+    def checkpoints(self, plan_id: str, *, work_order_id: str | None = None) -> list[dict[str, Any]]:
+        """Read all durable history, including superseded WorkOrders, by row ID."""
+        where = "plan_id=%s"
+        params = [plan_id]
+        if work_order_id is not None:
+            where += " AND work_order_id=%s"
+            params.append(work_order_id)
+        with self.storage.connect() as conn:
+            return list(conn.execute(
+                f"SELECT * FROM cp_plan_work_order_checkpoints WHERE {where} ORDER BY id",
+                params,
+            ).fetchall())
+
+    def progress_snapshot(self, plan_id: str) -> dict[str, Any] | None:
+        """Read one consistent snapshot without DDL, reconciliation or scheduling."""
+        with self.storage.connect() as conn:
+            conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
+            plan = conn.execute(
+                """SELECT o.plan_id, o.project_id, o.ticket_id, o.status, o.lifecycle, p.plan
+                FROM cp_plan_orchestrations o
+                LEFT JOIN cp_execution_plans p ON p.id=o.plan_id
+                WHERE o.plan_id=%s""",
+                (plan_id,),
+            ).fetchone()
+            if plan is None:
+                return None
+            rows = list(conn.execute(
+                """SELECT work_order_id, state, job_id FROM cp_plan_work_orders
+                WHERE plan_id=%s AND lifecycle='active' ORDER BY sequence_no, work_order_id""",
+                (plan_id,),
+            ).fetchall())
+            latest = conn.execute(
+                """SELECT * FROM cp_plan_work_order_checkpoints
+                WHERE plan_id=%s ORDER BY id DESC LIMIT 1""",
+                (plan_id,),
+            ).fetchone()
+            return {"orchestration": dict(plan), "work_orders": rows, "last_checkpoint": latest}
 
     def update_plan(self, plan_id: str, *, status: str) -> bool:
         with self.storage.connect() as conn:
@@ -808,6 +946,36 @@ class PlanOrchestrator:
         return {
             **dict(orchestration),
             "work_orders": [dict(row) for row in self.store.work_orders(plan_id)],
+        }
+
+    def progress(self, plan_id: str) -> dict[str, Any] | None:
+        snapshot = self.store.progress_snapshot(plan_id)
+        if snapshot is None:
+            return None
+        plan = snapshot["orchestration"]
+        rows = snapshot["work_orders"]
+        definitions = {item["id"]: item for item in (plan.get("plan") or {}).get("work_orders") or []}
+        states = {row["work_order_id"]: row["state"] for row in rows}
+        current = next((row["work_order_id"] for row in rows if row["state"] in _BUSY_WORK_ORDER_STATES), None)
+        blocked = next((row for row in rows if row["state"] == "blocked"), None)
+        ready = [
+            row["work_order_id"] for row in rows
+            if row["state"] == "pending"
+            and row["work_order_id"] in definitions
+            and all(states.get(dep) == "completed" for dep in definitions[row["work_order_id"]].get("dependencies") or [])
+        ]
+        return {
+            "plan_id": plan["plan_id"],
+            "project_id": plan["project_id"],
+            "ticket_id": plan["ticket_id"],
+            "state": plan["status"],
+            "lifecycle": plan["lifecycle"],
+            "completed": sum(row["state"] == "completed" for row in rows),
+            "total": len(rows),
+            "current_work_order": current,
+            "blocked": {"work_order_id": blocked["work_order_id"], "job_id": blocked["job_id"]} if blocked else None,
+            "next": ready,
+            "last_checkpoint": snapshot["last_checkpoint"],
         }
 
     async def resolve_operator(

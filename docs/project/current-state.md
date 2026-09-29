@@ -2,7 +2,7 @@
 
 Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and live Runtime/GitHub evidence remain authoritative over chat history. Completed chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-09-29 for #363 legacy auto-required verification PM review.
+Last updated: 2026-09-29 for #365 durable WorkOrder checkpoints/progress PM review.
 
 ## Resume order
 
@@ -17,10 +17,10 @@ Memory-tier rules and the proposed Context Composer contract are in `context-mem
 
 ## Current platform snapshot
 
-- Checked-out `origin/main` baseline: `d350d1989d02fb8f40cb856ace5e66d26d32c663` (#358 merged via PR #361).
-- Current checked-out source identities on `ai/363-legacy-auto-required-verification`
+- Checked-out launch baseline: `f026d5031fd72b4b92dc016f96dfb64cc2f9d704` (#363 merged via PR #364).
+- Current checked-out source identities on `ai/365-workorder-checkpoint-projection`
   (not rolled out):
-  - Runtime `1.0.70`;
+  - Runtime `1.0.71`;
   - Router `1.0.30`;
   - routing policy `19`;
   - ddev-executor remains `1.0.27`.
@@ -69,45 +69,45 @@ Historical DEC-025 PCP orchestration is retired. Do not recreate, reroute or res
 
 ## Active PCP work
 
-### #363 — Apply project auto-required verification to legacy jobs
+### #362 / #365 — Durable WorkOrder checkpoints and plan progress
 
-Status: bounded platform correctness hotfix implemented locally; PM's first
-review of `/tmp/issue-363-pm-review.patch` found one fail-closed edge case.
-The bounded repair is pending PM review as
-`/tmp/issue-363-pm-review-delta.patch`. No stage, commit, push or rollout.
+Status: WO-362-1 implemented locally on
+`ai/365-workorder-checkpoint-projection`, verified locally and awaiting PM review.
+The latest #362 PM launch comment reports the prior DS-1/#358/#363 gate cleared
+after DS-1 acceptance and Chợ Nhạc PR #38 merge. That is PM launch evidence,
+not a fresh inspection of Chợ Nhạc or running Runtime state.
 
-The existing verification facade now resolves project-owned path-scoped
-`ddev.auto_required_phases` after successful base verification for both legacy
-jobs without a WorkOrder and WorkOrder-backed jobs. Matching project phases
-remain additive to WorkOrder requirements; completed phases are not rerun.
-All final required phases now have configured commands validated before phase
-deduplication; a base phase with no executed-command evidence cannot satisfy
-that requirement. Failing required phases still fail closed. Additional phases
-retain final/required evidence and command counts without changing adaptive
-budgets, verification-attempt accounting or review-repair churn metadata.
+#365 adds append-only `cp_plan_work_order_checkpoints` under the existing
+PlanOrchestrator store, exact retry/conflict validation, a composite WorkOrder
+foreign key, bounded identity/evidence fields and authenticated read-only
+`GET /v1/plans/{plan_id}/progress`. Active WorkOrders alone contribute to
+completed/total/current/blocked/next. Dependencies require active completed
+WorkOrders; preserved checkpoint history includes superseded WorkOrders.
+The latest checkpoint uses stable row-ID order. The existing orchestration
+view, scheduling, merge gates and job lifecycle are unchanged.
 
-Final repaired-tree verification: focused Runtime verification/WorkOrder/budget/
-review-repair tests `136` passed; full Runtime `656` passed (one existing
-dependency deprecation warning); repository structure `103` passed;
-`git diff --check` passed. The complete reviewed patch remains preserved and
-the bounded repair is captured separately as the PM review delta.
-Tests used the current checkout mounted read-only in disposable containers from
-the existing Runtime image, with checkout `config/` at `/config` for Runtime.
-Container Git used a process-local safe-directory override for structure tests.
-Router/policy and ddev-executor source remain unchanged and their suites were
-not rerun. No #357 sandbox work, #362 work, reviewer-policy changes or product
-code changes. Running services and the live DS-1 job were not accessed for tests.
+No lifecycle checkpoint hooks are included. Parent #362 has six sequential
+children: #365 persistence/projection, #366 transition emission, #367 large-ticket
+intake, #368 GitHub publication, #369 blocked evidence pack, #370 supervised
+continuation/dogfood. Later children remain pending and must start from merged
+main after their preceding dependency passes PM review/CI/merge. Parent #362
+remains open through #370 acceptance.
 
-The preserved Chợ Nhạc DS-1 remains untouched. Supplied acceptance state (not
-re-queried during this implementation): `waiting_human`, job
-`06cd8e0b9c244ae6965b9db8ec4d2e8f`, branch `ai/06cd8e0b9c24`, workspace
-`/home/sonvh/chonhac`, PR #38, request `fa1126e1c2204b2583ff613c0a8eb1a7`.
-Churn generation is `0`, baseline repair/verification `45/47`, current `51/53`;
-decision key is
-`review_repair_churn:fa1126e1c2204b2583ff613c0a8eb1a7:generation:0`.
-Do not authorize generation 1 or resume/modify this job during implementation.
-Any later continuation requires separate PM review, merge, deliberate rollout
-and the existing exact-key governed decision path.
+Verification: focused store/orchestrator/progress/API/version tests `80` passed;
+full Runtime `706` passed; repository structure `103` passed;
+`git diff --check` passed. Runtime reports one dependency deprecation warning.
+Four real PostgreSQL tests cover idempotent DDL, composite foreign key, durable
+recreation/immutability, canonical JSONB equality and concurrent retry conflicts.
+Those tests use opt-in `PCP_CHECKPOINT_TEST_DSN`; all four ran in this validation.
+The complete `/tmp/issue-365-pm-review.patch` contains the working-tree diff
+against HEAD, including new tests. Local verification is not remote CI evidence.
+No staging, commit, push, PCP restart/rebuild, Runtime job creation or Chợ Nhạc
+mutation. Test execution uses read-only source mounts in disposable containers;
+real PostgreSQL coverage uses a separate disposable database only.
+The container-pytest workflow used the existing Runtime image with checkout
+`config/` at `/config`; structure tests used a process-local Git safe-directory
+override. Router/policy and executor source are unchanged; their suites were not
+rerun. Checkpoint append has no lifecycle callers yet (#366 remains pending).
 
 ### #146 — Efficiency initiative
 
@@ -134,6 +134,7 @@ The following are complete and no longer belong in active-state chronology:
 - #282 bounded missing-workspace terminal DDEV resource release.
 - #354 governed same-job delivered-PR review repair.
 - #358 durable review-repair churn circuit breaker (merged via PR #361).
+- #363 legacy auto-required verification (merged via PR #364).
 
 Their reusable lessons and primary references are in `history/episodes.md`. Git/issue/PR/Runtime history remains the detailed audit source.
 
@@ -156,7 +157,7 @@ Their reusable lessons and primary references are in `history/episodes.md`. Git/
 
 ## Immediate next safe actions
 
-1. Review the #363 local patch with PM. Keep it unstaged/uncommitted/unpushed until PM PASS; leave DS-1 and running PCP services untouched. CI remains a later mandatory merge gate.
+1. Review the #365 local patch with PM. Keep it unstaged/uncommitted/unpushed; CI remains a later mandatory merge gate. Leave running PCP services and Chợ Nhạc untouched. Do not begin #366 before #365 dependency completion.
 2. Keep #146 in calibration/watch mode and collect only naturally occurring routine-task evidence.
 3. Keep the deterministic context-memory evaluation in CI; treat a future recall/stale-authority regression or sustained corpus growth as evidence to reopen vector/hybrid retrieval evaluation.
 4. Do not add a vector database or embedding provider without a new measured retrieval gap.
