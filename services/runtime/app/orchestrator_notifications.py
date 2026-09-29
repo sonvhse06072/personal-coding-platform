@@ -36,8 +36,9 @@ class PlanOrchestrator(CorePlanOrchestrator):
         *,
         store: Any | None = None,
         controls: Any | None = None,
+        progress_handoffs: Any = None,
     ) -> None:
-        super().__init__(storage, engine, store=store)
+        super().__init__(storage, engine, store=store, progress_handoffs=progress_handoffs)
         self.controls = controls or ControlActionService(storage, engine, self.store, self)
         self.provider_capacity_recovery = ProviderCapacityRecovery(storage, engine, self.store)
         self.legacy_adaptive_recovery = LegacyAdaptiveRecovery(storage, engine, self.store)

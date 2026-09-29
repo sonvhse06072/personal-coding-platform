@@ -181,8 +181,47 @@ readiness, not permission to launch past other orchestration gates. The latest
 checkpoint includes preserved superseded history for that plan. Raw lifecycle
 detail and job results are not exposed. The existing `/orchestration` contract
 is unchanged. #365 supplies persistence/projection and #366 lifecycle emission;
-#367 adds canonical intake; #368–#370 publication/blocked-pack/supervised
-continuation remain unimplemented.
+#367 adds canonical intake; #368 adds parent-ticket publication below.
+#369 detailed blocked evidence and #370 supervised continuation remain unimplemented.
+
+Parent-ticket progress uses a separate `cp_plan_progress_handoffs` relation,
+never `cp_notification_outbox`. PlanOrchestrator stages a bounded whitelist
+of durable plan/WorkOrder/checkpoint fields after engineering commits. Its
+transition fingerprint includes plan identity/state/lifecycle, latest checkpoint
+ID/key, ordered WorkOrder state/job identities and dependency-ready IDs; the
+checkpoint-free initial shape is deterministic too. Polling timestamps, raw
+detail, results, prompts, logs and provider failures are excluded. Generations
+advance only when transition/body changes. One SHA-256(project_id + ':' +
+issue_number) row is shared by later plans for that issue; older plans cannot
+overwrite a newer plan's publication. Existing engineering/checkpoint semantics
+and n8n claim/ack/release are unchanged.
+
+A persisted feature-install timestamp excludes earlier plans without a handoff.
+Eligible terminal plans are also revisited, so a crash after the final engineering
+commit cannot lose completion/block publication. Existing rows recover on restart.
+A separate Runtime publisher claims with `FOR UPDATE SKIP LOCKED`, a 180-second
+lease and an increasing attempt fence. Staging preserves an in-flight lease.
+Acknowledging an older generation records its comment ID and published hash but
+leaves newer desired progress pending. Only exact desired generation/body/hash
+acknowledgement marks sent. Expired leases recover; failures retain known comment
+identity, record only an error type and retry with a capped 300-second delay.
+Publication never gates scheduling or changes engineering state.
+
+Parent binding prefers an exact positive integer `staffing.issue_number`, then
+an exact canonical `GH-N` ticket ID. Malformed supplied staffing fails closed;
+prose and stored URLs never select an issue or repository. Runtime sends only
+project/issue/key/body/optional known comment ID to the internal-token-authenticated
+executor `/v1/github/pm-bridge/progress` endpoint. The executor resolves repository
+from registered project source origin, checks the real issue (rejecting PRs),
+recomputes the key and owns the `PCP:PLAN-PROGRESS` HTML marker. Final UTF-8
+comment size is at most 12 KiB. It validates a known comment's exact repository,
+issue and marker; only a missing/deleted ID falls back to discovery. Discovery
+examines at most five 100-comment pages, fails closed on ambiguity or an incomplete
+scan, and finds an uncertain prior create before attempting another. Mutations
+are serialized across executor threads/processes on the existing single host.
+Exact comment revalidation precedes PATCH; readback validates body/hash and
+identity before success. Runtime and developer agents receive no GitHub delivery
+credential. This adds no merge or deployment authority.
 
 The current implementation may still contain manual-merge orchestration behavior from the previous governance policy. That behavior is transitional implementation state, not the approved target authority model after issue #96. Runtime/ddev-executor changes that automate the PM merge gate must preserve all existing trust boundaries and be delivered separately through normal PR/CI review.
 

@@ -517,6 +517,17 @@ direct job. Responses contain bounded decision evidence and either `job` or
 
 ### Meaningful PM checkpoints
 
+For an eligible ExecutionPlan with a structured parent GitHub issue identity,
+#368 maintains one compact managed progress comment for the Human-operated PM.
+Initial decomposition, started, accepted/awaiting-merge, merged/completed,
+blocked, waiting-human, repair-reopened and final completion update the same
+handoff. Durable state determines transitions; polling alone produces no update.
+Later plans for the same project/issue reuse the comment. Pre-install plans are
+not automatically enrolled. Publication retries independently of engineering;
+GitHub outages cannot roll back a checkpoint or change dependency readiness.
+The comment shows basic blocked WorkOrder/job identity only. Expanded blocked
+diagnostics (#369) and supervised continuation (#370) are not implemented.
+
 PM should normally run when:
 
 - a new ticket arrives;

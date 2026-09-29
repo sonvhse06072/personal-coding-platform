@@ -21,6 +21,8 @@ from .intake_policy import classify_intake
 from .dashboard import _require_session, create_dashboard_router
 from .engine_telemetry import RuntimeEngine
 from .orchestrator_notifications import PlanOrchestrator
+from .plan_progress_store import PlanProgressStore
+from .plan_progress_publisher import PlanProgressPublisher
 from .orchestrator_resume import prepare_orchestrated_job_resume, reopen_orchestrated_job
 from .pm_bridge import router as pm_bridge_router
 from .preview import PreviewManager, ProjectPreviewManager
@@ -88,7 +90,9 @@ storage = TelemetryStorage()
 engine = RuntimeEngine(storage)
 pm_planner = PMPlanner(storage)
 collaboration_manager = engine.collaboration
-plan_orchestrator = PlanOrchestrator(storage, engine)
+progress_handoffs = PlanProgressStore(storage)
+plan_orchestrator = PlanOrchestrator(storage, engine, progress_handoffs=progress_handoffs)
+progress_publisher = PlanProgressPublisher(progress_handoffs, engine.ddev)
 preview_manager = PreviewManager(storage, engine.ddev)
 project_preview_manager = ProjectPreviewManager(storage, engine.ddev)
 
@@ -141,12 +145,14 @@ async def lifespan(app: FastAPI):
     harden_runtime_process_secret_boundary()
     await engine.start()
     await plan_orchestrator.start()
+    await progress_publisher.start()
     yield
+    await progress_publisher.stop()
     await plan_orchestrator.stop()
     await engine.stop()
 
 
-RUNTIME_VERSION = "1.0.73"
+RUNTIME_VERSION = "1.0.74"
 
 app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan=lifespan)
 app.include_router(pm_bridge_router)
