@@ -104,6 +104,33 @@ its job remain queryable and retain their historical state, result, counters
 and workspace references; pending owner attention becomes non-actionable while
 sent/executed audit history remains unchanged.
 
+WorkOrder checkpoint history is stored separately from mutable lifecycle
+`cp_plan_work_orders.detail` in append-only `cp_plan_work_order_checkpoints`.
+Each row has a database-ordered ID, unique caller-supplied transition key,
+exact plan/WorkOrder foreign key, kind/state, optional job ID, bounded evidence
+and a store-owned creation timestamp. Exact key/content retries return the
+original row; conflicting reuse fails closed without updating it. Identity
+strings are bounded (key: 500 characters; other fields: 200), and compact JSON
+evidence is limited to 16 KiB serialized UTF-8. Evidence contains summaries and
+identities, never raw transcripts, logs, prompts, Runtime results or file contents.
+Schema installation uses the existing orchestrator `ensure()` startup path;
+checkpoint append/read operations do not run migrations. There is no checkpoint
+update/delete API. Supersession and later lifecycle changes preserve history.
+
+Authenticated `GET /v1/plans/{plan_id}/progress` projects a consistent read-only
+database snapshot of orchestration state, the ExecutionPlan dependency graph
+and checkpoints. It reports plan/project/ticket identity, state/lifecycle,
+active-only completed/total counts, the current running/awaiting-merge/waiting-human
+WorkOrder, a compact blocked WorkOrder/job identity, dependency-ready pending
+WorkOrders in sequence order and the latest checkpoint by database ID. Only
+active completed dependencies unlock `next`; this list expresses dependency
+readiness, not permission to launch past other orchestration gates. The latest
+checkpoint includes preserved superseded history for that plan. Raw lifecycle
+detail and job results are not exposed. The existing `/orchestration` contract
+is unchanged. #365 provides persistence and projection only; #366 owns later
+lifecycle emission, and #367–#370 intake/publication/blocked-pack/supervised
+continuation remain unimplemented by this change.
+
 The current implementation may still contain manual-merge orchestration behavior from the previous governance policy. That behavior is transitional implementation state, not the approved target authority model after issue #96. Runtime/ddev-executor changes that automate the PM merge gate must preserve all existing trust boundaries and be delivered separately through normal PR/CI review.
 
 ### Isolated workspaces

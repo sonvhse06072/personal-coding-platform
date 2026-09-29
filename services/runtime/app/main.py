@@ -142,7 +142,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-RUNTIME_VERSION = "1.0.70"
+RUNTIME_VERSION = "1.0.71"
 
 app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan=lifespan)
 app.include_router(pm_bridge_router)
@@ -249,6 +249,14 @@ def get_execution_plan(plan_id: str) -> ExecutionPlanView:
 @app.get("/v1/plans/{plan_id}/orchestration", dependencies=[Depends(auth)])
 def get_plan_orchestration(plan_id: str) -> dict[str, Any]:
     result = plan_orchestrator.view(plan_id)
+    if result is None:
+        raise HTTPException(404, "Plan is not registered for orchestration")
+    return result
+
+
+@app.get("/v1/plans/{plan_id}/progress", dependencies=[Depends(auth)])
+def get_plan_progress(plan_id: str) -> dict[str, Any]:
+    result = plan_orchestrator.progress(plan_id)
     if result is None:
         raise HTTPException(404, "Plan is not registered for orchestration")
     return result
