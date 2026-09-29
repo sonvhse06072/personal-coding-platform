@@ -19,6 +19,9 @@ from .config import project_config
 from .engine_delivery import RuntimeEngine as _RuntimeEngine
 from .repo import diff_state
 from .preview import ProjectPreviewManager
+from .review_repair_churn import EPOCH_KEY as REVIEW_REPAIR_CHURN_EPOCH_KEY
+from .review_repair_churn import INITIALIZED_KEY as REVIEW_REPAIR_CHURN_INITIALIZED_KEY
+from .review_repair_churn import new_epoch as new_review_repair_churn_epoch
 from .shell import CommandTimeoutError
 from .state import (
     checkpoint_from_row,
@@ -426,6 +429,10 @@ class RuntimeEngine(_RuntimeEngine):
             raise RuntimeError("A PM review repair is already pending for this job")
         if isinstance(checkpoint.get("active_review_repair"), dict):
             raise RuntimeError("A PM review repair is already in delivery for this job")
+        if isinstance(checkpoint.get(REVIEW_REPAIR_CHURN_EPOCH_KEY), dict):
+            raise RuntimeError(
+                "A prior review-repair churn epoch remains active for this job"
+            )
 
         workspace_mode = str(checkpoint.get("workspace_mode") or "")
         if workspace_mode not in {"direct", "isolated_clone"}:
@@ -516,6 +523,15 @@ class RuntimeEngine(_RuntimeEngine):
                 "executor_verification": deepcopy(prepared),
             }
             checkpoint["pending_review_repair"] = deepcopy(record)
+            checkpoint[REVIEW_REPAIR_CHURN_EPOCH_KEY] = (
+                new_review_repair_churn_epoch(
+                    request_id,
+                    dict(latest.get("progress") or {}),
+                    started_at=requested_at,
+                    legacy_baseline_migrated=False,
+                )
+            )
+            checkpoint[REVIEW_REPAIR_CHURN_INITIALIZED_KEY] = {"request_id": request_id}
             history = [
                 deepcopy(item)
                 for item in (checkpoint.get("review_repair_history") or [])

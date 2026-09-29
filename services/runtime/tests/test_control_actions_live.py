@@ -184,6 +184,28 @@ def test_owner_attention_advisories_and_action_labels_are_vietnamese():
     assert "merge thủ công" in merge["recommended"]
 
 
+def test_review_repair_churn_advisory_binds_actions_to_exact_decision_key():
+    job = c1_reassessment_job()
+    job["status"] = "waiting_human"
+    job["checkpoint"]["pending_decision"] = {
+        "key": "review_repair_churn:request-1:generation:3",
+        "source": "review_repair_churn",
+        "decision": {"required": True},
+    }
+    controls, _ = service(job)
+
+    advisory = controls.waiting_human_advisory(work_order(), job)
+
+    assert advisory["reason"] == "repair_churn_circuit_breaker"
+    assert "bounded window" in advisory["summary"]
+    assert advisory["action_specs"][0]["payload"] == {
+        "decision_key": "review_repair_churn:request-1:generation:3"
+    }
+    assert advisory["action_specs"][1]["payload"] == {
+        "decision_key": "review_repair_churn:request-1:generation:3"
+    }
+
+
 def test_legacy_delivery_candidate_never_offers_coding_reroute():
     job = c1_reassessment_job()
     job["result"] = {"reason": "material_change_missing_without_model_fallback"}

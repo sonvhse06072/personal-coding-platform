@@ -13,6 +13,19 @@ from .adapters.antigravity import cancel_all_antigravity_runs
 from .config import project_config
 from .executor_client import DdevExecutorClient
 from .preview import PreviewManager
+from .review_repair_churn import (
+    DECISION_SOURCE as REVIEW_REPAIR_CHURN_DECISION_SOURCE,
+    EPOCH_KEY as REVIEW_REPAIR_CHURN_EPOCH_KEY,
+    GATE_KEY as REVIEW_REPAIR_CHURN_GATE_KEY,
+    RESULT_REASON as REVIEW_REPAIR_CHURN_RESULT_REASON,
+    ReviewRepairChurnIntegrityError,
+    ReviewRepairChurnPaused,
+    decision_identity as review_repair_churn_decision_identity,
+    ensure_legacy_epoch,
+    evidence as review_repair_churn_evidence,
+    integrity_evidence as review_repair_churn_integrity_evidence,
+    validate_epoch as validate_review_repair_churn_epoch,
+)
 from .router_client import RouterClient
 from .state import (
     checkpoint_from_row,
@@ -320,7 +333,14 @@ class RuntimeEngineCore:
         assert updated is not None
         return updated
 
-    async def resolve_human_decision(self, job_id: str, *, action: str, note: str = "") -> dict[str, Any]:
+    async def resolve_human_decision(
+        self,
+        job_id: str,
+        *,
+        action: str,
+        note: str = "",
+        expected_decision_key: str | None = None,
+    ) -> dict[str, Any]:
         row = self.storage.get(job_id)
         if not row:
             raise RuntimeError("Unknown job")
@@ -330,6 +350,24 @@ class RuntimeEngineCore:
         pending = dict(checkpoint.get("pending_decision") or {})
         decision = dict(pending.get("decision") or {})
         key = str(pending.get("key") or decision_key(decision))
+        source = str(pending.get("source") or "")
+        if expected_decision_key is not None and str(expected_decision_key) != key:
+            raise RuntimeError("Human decision key is stale or does not match")
+        if source == REVIEW_REPAIR_CHURN_DECISION_SOURCE:
+            if not expected_decision_key:
+                raise RuntimeError(
+                    "Review-repair churn decisions require the exact decision key"
+                )
+            return await self._resolve_review_repair_churn_decision(
+                job_id=job_id,
+                row=row,
+                checkpoint=checkpoint,
+                pending=pending,
+                decision=decision,
+                key=key,
+                action=action,
+                note=note,
+            )
         history = list(checkpoint.get("decision_history") or [])
         record = {"key": key, "action": action, "note": note}
         history.append(record)
@@ -408,6 +446,118 @@ class RuntimeEngineCore:
         assert updated is not None
         return updated
 
+    async def _resolve_review_repair_churn_decision(
+        self,
+        *,
+        job_id: str,
+        row: dict[str, Any],
+        checkpoint: dict[str, Any],
+        pending: dict[str, Any],
+        decision: dict[str, Any],
+        key: str,
+        action: str,
+        note: str,
+    ) -> dict[str, Any]:
+        epoch = validate_review_repair_churn_epoch(checkpoint)
+        gate = dict(checkpoint.get(REVIEW_REPAIR_CHURN_GATE_KEY) or {})
+        if epoch is None or not gate:
+            raise RuntimeError("Review-repair churn decision is missing its durable gate")
+        request_id = str(epoch.get("request_id") or "")
+        generation = int(epoch.get("generation") or 0)
+        expected_key = review_repair_churn_decision_identity(request_id, generation)
+        if (
+            key != expected_key
+            or str(gate.get("request_id") or "") != request_id
+            or int(gate.get("generation", -1)) != generation
+            or str(pending.get("key") or "") != expected_key
+        ):
+            raise RuntimeError(
+                "Review-repair churn decision identity no longer matches its request generation"
+            )
+
+        history = list(checkpoint.get("decision_history") or [])
+        record = {
+            "key": key,
+            "action": action,
+            "note": note,
+            "source": REVIEW_REPAIR_CHURN_DECISION_SOURCE,
+            "request_id": request_id,
+            "generation": generation,
+        }
+        history.append(record)
+        checkpoint["decision_history"] = history[-20:]
+        checkpoint.pop("pending_decision", None)
+
+        if action == "reject":
+            self.storage.update(
+                job_id,
+                status="blocked",
+                checkpoint=checkpoint,
+                result={
+                    "reason": REVIEW_REPAIR_CHURN_RESULT_REASON,
+                    "source": REVIEW_REPAIR_CHURN_DECISION_SOURCE,
+                    "decision": decision,
+                    "evidence": deepcopy(gate),
+                    "resolution": record,
+                },
+                error=None,
+            )
+        elif action == "approve":
+            progress = dict(row.get("progress") or self._new_progress())
+            prior = {
+                "generation": generation,
+                "baseline": deepcopy(epoch.get("baseline") or {}),
+                "authorized_at": now().isoformat(),
+                "decision_key": key,
+                "note": note,
+            }
+            authorizations = [
+                deepcopy(item)
+                for item in (epoch.get("authorizations") or [])
+                if isinstance(item, dict)
+            ]
+            authorizations.append(prior)
+            epoch["authorizations"] = authorizations[-20:]
+            epoch["generation"] = generation + 1
+            epoch["baseline"] = {
+                "repair_iterations": max(
+                    0, int(progress.get("repair_iterations", 0) or 0)
+                ),
+                "verification_attempts": max(
+                    0, int(progress.get("verification_attempts", 0) or 0)
+                ),
+            }
+            epoch["started_at"] = now().isoformat()
+            epoch["baseline_origin"] = "human_authorized_window"
+            for field in (
+                "latest_diff_hash",
+                "latest_review_summary",
+                "latest_verification_summary",
+            ):
+                epoch.pop(field, None)
+            checkpoint[REVIEW_REPAIR_CHURN_EPOCH_KEY] = epoch
+            checkpoint.pop(REVIEW_REPAIR_CHURN_GATE_KEY, None)
+            self.storage.update(
+                job_id,
+                status="queued",
+                checkpoint=checkpoint,
+                result={
+                    "reason": "review_repair_churn_authorized",
+                    "source": REVIEW_REPAIR_CHURN_DECISION_SOURCE,
+                    "request_id": request_id,
+                    "generation": generation + 1,
+                    "resolution": record,
+                },
+                error=None,
+            )
+            await self.enqueue(job_id)
+        else:
+            raise RuntimeError(f"Unsupported decision action: {action}")
+
+        updated = self.storage.get(job_id)
+        assert updated is not None
+        return updated
+
     @staticmethod
     def _new_progress() -> dict[str, Any]:
         return {
@@ -422,6 +572,91 @@ class RuntimeEngineCore:
             "unexpected_scope": False, "important_decision_flags": [],
             "provider_failures": [], "agent_attempts": [], "pm_reassessments": 0,
         }
+
+    def _ensure_review_repair_churn_epoch(
+        self,
+        *,
+        job_id: str,
+        checkpoint: dict[str, Any],
+        progress: dict[str, Any],
+    ) -> bool:
+        try:
+            migrated = ensure_legacy_epoch(checkpoint, progress)
+        except ReviewRepairChurnIntegrityError as exc:
+            self._block_review_repair_churn_integrity(job_id, checkpoint, progress, exc)
+            raise ReviewRepairChurnPaused() from exc
+        if migrated:
+            self.storage.update(job_id, checkpoint=checkpoint, progress=progress)
+        return migrated
+
+    def _block_review_repair_churn_integrity(
+        self,
+        job_id: str,
+        checkpoint: dict[str, Any],
+        progress: dict[str, Any],
+        error: ReviewRepairChurnIntegrityError,
+    ) -> None:
+        # No replacement epoch/gate or approval identity can be inferred from
+        # inconsistent state. Preserve it for inspection instead of re-arming.
+        self.storage.update(
+            job_id,
+            status="blocked",
+            checkpoint=checkpoint,
+            progress=progress,
+            result={
+                "reason": REVIEW_REPAIR_CHURN_RESULT_REASON,
+                "source": REVIEW_REPAIR_CHURN_DECISION_SOURCE,
+                "evidence": review_repair_churn_integrity_evidence(checkpoint, error),
+            },
+            error=None,
+        )
+
+    def _review_repair_churn_guard(
+        self,
+        *,
+        job_id: str,
+        checkpoint: dict[str, Any],
+        progress: dict[str, Any],
+    ) -> bool:
+        try:
+            hit, evidence = review_repair_churn_evidence(checkpoint, progress)
+        except ReviewRepairChurnIntegrityError as exc:
+            self._block_review_repair_churn_integrity(job_id, checkpoint, progress, exc)
+            return True
+        if not hit:
+            return False
+        key = str(evidence["decision_key"])
+        decision = {
+            "required": True,
+            "triggers": [key],
+            "reason": (
+                "Review-repair activity reached its bounded anomaly window; "
+                "another model or deterministic verification cycle requires "
+                "an exact Human Owner authorization."
+            ),
+        }
+        checkpoint[REVIEW_REPAIR_CHURN_GATE_KEY] = deepcopy(evidence)
+        checkpoint["pending_decision"] = {
+            "key": key,
+            "decision": decision,
+            "source": REVIEW_REPAIR_CHURN_DECISION_SOURCE,
+            "request_id": evidence["request_id"],
+            "generation": evidence["generation"],
+        }
+        self.storage.update(
+            job_id,
+            status="waiting_human",
+            progress=progress,
+            checkpoint=checkpoint,
+            result={
+                "reason": REVIEW_REPAIR_CHURN_RESULT_REASON,
+                "source": REVIEW_REPAIR_CHURN_DECISION_SOURCE,
+                "decision": decision,
+                "evidence": evidence,
+            },
+            error=None,
+        )
+        return True
 
     @classmethod
     def _remaining_seconds(

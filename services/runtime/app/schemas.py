@@ -138,6 +138,7 @@ class ReviewRepairRequest(BaseModel):
 class HumanDecisionRequest(BaseModel):
     action: Literal["approve", "reject"]
     note: str = Field(default="", max_length=5000)
+    decision_key: str | None = Field(default=None, min_length=1, max_length=500)
 
 
 class JobView(BaseModel):

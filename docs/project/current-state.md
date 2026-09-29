@@ -2,7 +2,7 @@
 
 Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and live Runtime/GitHub evidence remain authoritative over chat history. Completed chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-09-29 for #354 delivered-PR review repair implementation.
+Last updated: 2026-09-29 for #358 final post-main-sync verification and delivery handoff.
 
 ## Resume order
 
@@ -17,11 +17,13 @@ Memory-tier rules and the proposed Context Composer contract are in `context-mem
 
 ## Current platform snapshot
 
-- Checked-out `main`/`origin/main` baseline: `20ffc7f560d4616c9ed4d0ce720dc607f08a8cdc` (#353).
-- Current checked-out source identities on `ai/354-governed-review-repair`
+- Checked-out `origin/main` baseline: `5289d3568ac6890d665f911f88b973cf3d0d83da`.
+- Current checked-out source identities on `ai/358-review-repair-churn-guard`
   (not rolled out):
-  - Runtime `1.0.68`;
-  - ddev-executor `1.0.27`.
+  - Runtime `1.0.69`;
+  - Router `1.0.30`;
+  - routing policy `19`;
+  - ddev-executor remains `1.0.27`.
 - PM-controlled routine merge is implemented and operationally proven. Developer agents never merge.
 - Healthy-progress non-blocking remains mandatory: static task/profile/provider-failover counters alone are not Human Owner stop reasons while meaningful progress continues inside the approved resource envelope.
 - On effective adaptive WorkOrders, `max_changed_files` is a semantic working target. Crossing it enters a bounded Product Manager reassessment; PM must be staffed with a different model from the Primary Developer and any approval is exact-diff-bound. Emergency overflow and actual sensitive/protected changed paths remain fail-closed boundaries. Legacy-hard WorkOrders retain strict file-count semantics.
@@ -67,30 +69,48 @@ Historical DEC-025 PCP orchestration is retired. Do not recreate, reroute or res
 
 ## Active PCP work
 
-### #354 — Governed same-job repair after PR delivery
+### #358 — Durable review-repair churn circuit breaker
 
-Status: implemented and locally verified on `ai/354-governed-review-repair`;
-PR/CI handoff remains. No rollout has been performed.
+Status: PM review PASS. Final verification passed on the synchronized
+`ai/358-review-repair-churn-guard` tree; it is ready for commit, push, PR and
+CI handoff. No rollout has been performed.
 
-The bounded Runtime action preserves the existing job, workspace, branch,
-WorkOrder, ProjectBaseline, counters and histories; validates the exact open
-unmerged PR/head through ddev-executor; gives the pending PM finding precedence
-over delivery reconciliation; and binds later delivery to the same PR and a new
-exact commit. The Chợ Nhạc acceptance fixture must not be resumed until this
-capability is reviewed, merged, and deliberately rolled out.
+The Runtime now creates a durable epoch for the exact pending review-repair
+request while preserving cumulative global counters. Routing policy v19 limits
+one epoch to six repair cycles or eight verification cycles and checks the bound
+before another developer-model or DDEV verification cycle. Pre-feature pending
+requests receive a one-time persisted baseline at first resume.
 
-The post-review delta rejects repair admission until the prior worker has left
-its finalizer, revalidates the exact PR and previous delivered head at the
-executor immediately before any repair push, and preserves the complete PM
-instruction while truncating only appended operational/provider context.
-Closed, merged, base-moved or head-moved PR state reaches zero remote publish.
+On a hit, Runtime exposes `repair_churn_circuit_breaker` with bounded
+request/generation, counter, diff, fingerprint/progress and review/verification
+evidence through the existing Human Owner decision flow. Exact-key approval
+creates generation N+1 with a current-counter baseline; rejection, ordinary
+`/run`, reroute, provider reset/quota recovery and restart cannot move it.
+Successful same-PR/new-exact-head delivery archives and clears the epoch.
 
-Local CI-equivalent verification on the implementation branch after the PM
-review repairs: Runtime `576` passed, ddev-executor `137` passed, Router `106`
-passed, and structure `103` passed. Focused review-repair/state/API/plan tests
-passed (`43` Runtime and `15` executor) before the full run. These checks used
-disposable containers with the checkout and `config/` mounted read-only;
-running services were not rebuilt or restarted.
+The PM review of patch SHA-256
+`d9cb7e296dc4958d4083ad34cea35c213b4678a1f05fc576b4fc064ff0aabf9c`
+identified two negative recovery cases: malformed/missing feature metadata could
+be mistaken for legacy absence, and stale counters could bypass a persisted stop.
+The bounded review delta rejects inconsistent metadata with preserved checkpoint
+and bounded integrity evidence, records request initialization independently, and
+keeps a matching gate latched until exact authorization or successful delivery.
+These are recovery regressions, not a diagnosis of the live DS-1 checkpoint.
+
+Final checkout-mounted disposable-container verification after fast-forward to
+`5289d3568ac6890d665f911f88b973cf3d0d83da`: focused Runtime review-repair
+lifecycle/guard `112` passed, full Runtime `637` passed, full Router `106`
+passed and repository structure `103` passed. Runtime and Router each reported
+one existing dependency deprecation warning. `git diff --check` passed.
+`docs/project/operating-model.md` is unchanged from `origin/main`.
+ddev-executor source was not changed or rerun. No service was rebuilt or
+restarted. The branch is ready for normal commit/push, PR and CI handoff; no
+rollout has occurred.
+
+The preserved Chợ Nhạc DS-1 acceptance fixture remains deliberately
+interrupted and must not be resumed before review, merge and deliberate rollout:
+job `06cd8e0b9c244ae6965b9db8ec4d2e8f`, branch `ai/06cd8e0b9c24`, PR #38,
+request `fa1126e1c2204b2583ff613c0a8eb1a7`.
 
 ### #146 — Efficiency initiative
 
@@ -115,6 +135,7 @@ The following are complete and no longer belong in active-state chronology:
 - #309 project-level Current site preview;
 - #313/#314/#317 tiered context/memory architecture, T1 compaction and deterministic Context Composer/evaluation;
 - #282 bounded missing-workspace terminal DDEV resource release.
+- #354 governed same-job delivered-PR review repair.
 
 Their reusable lessons and primary references are in `history/episodes.md`. Git/issue/PR/Runtime history remains the detailed audit source.
 
@@ -137,7 +158,7 @@ Their reusable lessons and primary references are in `history/episodes.md`. Git/
 
 ## Immediate next safe actions
 
-1. Review #354, then commit/push/open its PR and complete CI handoff without rollout or use of the live Chợ Nhạc fixture.
+1. Commit/push #358 normally, open its PR and complete CI handoff without rollout or use of the live Chợ Nhạc fixture.
 2. Keep #146 in calibration/watch mode and collect only naturally occurring routine-task evidence.
 3. Keep the deterministic context-memory evaluation in CI; treat a future recall/stale-authority regression or sustained corpus growth as evidence to reopen vector/hybrid retrieval evaluation.
 4. Do not add a vector database or embedding provider without a new measured retrieval gap.

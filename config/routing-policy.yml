@@ -1,4 +1,4 @@
-version: 18
+version: 19
 complexity_weights:
   scope: 0.18
   dependency_depth: 0.1
@@ -332,5 +332,9 @@ anti_loop:
   no_progress_iterations: 2
   diff_oscillation_limit: 2
   scope_growth_ratio: 2.0
+  # Review-repair epochs are request-scoped anomaly windows. They do not reset
+  # cumulative progress and are independent from adaptive planning budgets.
+  review_repair_max_repair_cycles: 6
+  review_repair_max_verification_cycles: 8
   escalation_monotonic: true
   escalation_resets_budget: false

@@ -16,7 +16,59 @@ def test_run_request_defaults_to_preserving_provider_failures():
 
 
 def test_human_decision_request_is_explicit():
-    assert HumanDecisionRequest(action="approve", note="ok").action == "approve"
+    request = HumanDecisionRequest(
+        action="approve",
+        note="ok",
+        decision_key="review_repair_churn:request-1:generation:0",
+    )
+    assert request.action == "approve"
+    assert request.decision_key == "review_repair_churn:request-1:generation:0"
+
+
+def test_human_decision_api_forwards_exact_decision_key(monkeypatch):
+    calls = []
+
+    async def resolve(job_id, **fields):
+        calls.append((job_id, fields))
+        return {
+            "id": job_id,
+            "project_id": "demo",
+            "status": "queued",
+            "source_commit": "a" * 40,
+            "route": {},
+            "checkpoint": {},
+            "result": {"reason": "review_repair_churn_authorized"},
+            "error": None,
+            "created_at": datetime.now(timezone.utc),
+            "updated_at": datetime.now(timezone.utc),
+        }
+
+    async def tick():
+        return None
+
+    monkeypatch.setattr(main.engine, "resolve_human_decision", resolve)
+    monkeypatch.setattr(main.plan_orchestrator, "tick", tick)
+    payload = HumanDecisionRequest(
+        action="approve",
+        note="one bounded window",
+        decision_key="review_repair_churn:request-1:generation:0",
+    )
+
+    result = asyncio.run(main.resolve_decision("job12345", payload))
+
+    assert result.status == "queued"
+    assert calls == [
+        (
+            "job12345",
+            {
+                "action": "approve",
+                "note": "one bounded window",
+                "expected_decision_key": (
+                    "review_repair_churn:request-1:generation:0"
+                ),
+            },
+        )
+    ]
 
 
 def test_review_repair_request_is_bounded_and_explicit():

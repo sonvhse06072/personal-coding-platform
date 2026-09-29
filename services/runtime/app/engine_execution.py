@@ -21,6 +21,7 @@ from .pm_reassessment import (
 )
 from .prompts import evaluator_prompt, execution_prompt, planning_prompt
 from .repo import analyze_repo, commit_changes, diff_state
+from .review_repair_churn import record_observation as record_review_repair_churn_observation
 from .review import (
     mark_actioned_review_findings,
     parse_review_output,
@@ -115,6 +116,11 @@ class RuntimeEngine(RuntimeEngineCore):
                     "Direct project path does not match the exact mounted CODING_DIRECT_PROJECT_ROOT"
                 )
         progress = merge_progress(self._new_progress(), job.get("progress"))
+        self._ensure_review_repair_churn_epoch(
+            job_id=job_id,
+            checkpoint=checkpoint,
+            progress=progress,
+        )
         started = time.monotonic() - float(progress.get("elapsed_minutes", 0.0)) * 60.0
         hints = dict(checkpoint.get("hints") or {})
         provider_state = dict(checkpoint.get("provider_state") or {})
@@ -212,6 +218,13 @@ class RuntimeEngine(RuntimeEngineCore):
             route = await self.router.route(route_payload)
             self.storage.update(job_id, route=route)
         strategy = route["strategy"]
+
+        if self._review_repair_churn_guard(
+            job_id=job_id,
+            checkpoint=checkpoint,
+            progress=progress,
+        ):
+            return
 
         route_history: list[dict[str, Any]] = list(checkpoint.get("route_history") or [])
         if not route_history:
@@ -374,6 +387,12 @@ class RuntimeEngine(RuntimeEngineCore):
             if self._cancelled(job_id):
                 return
             self._update_elapsed(progress, started)
+            if self._review_repair_churn_guard(
+                job_id=job_id,
+                checkpoint=checkpoint,
+                progress=progress,
+            ):
+                return
             budget_reason = self._pre_model_budget_reason(progress, strategy, include_iteration=True)
             if budget_reason:
                 self._block(
@@ -497,6 +516,11 @@ class RuntimeEngine(RuntimeEngineCore):
                 progress,
                 current_diff_hash=diff["diff_hash"],
             )
+            record_review_repair_churn_observation(
+                checkpoint,
+                diff_hash=str(diff.get("diff_hash") or ""),
+            )
+            self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
 
             material_required = "material_change" in strategy.get("definition_of_done", {}).get("required", [])
             if material_required and not progress["material_change_present"]:
@@ -538,6 +562,10 @@ class RuntimeEngine(RuntimeEngineCore):
 
             verification = await self._verify(
                 job_id, job["project_id"], workspace, project, strategy, started, progress
+            )
+            record_review_repair_churn_observation(
+                checkpoint,
+                verification=verification,
             )
             progress["tool_calls"] += verification["tool_calls"]
             progress["test_runs"] += verification["test_runs"]
@@ -640,6 +668,10 @@ class RuntimeEngine(RuntimeEngineCore):
                         raw_usage=evaluation.usage,
                     )
                     checkpoint["last_review_report"] = review_report_summary(review_report)
+                    record_review_repair_churn_observation(
+                        checkpoint,
+                        review=checkpoint["last_review_report"],
+                    )
 
                     if not review_report.protocol_valid:
                         next_choice, reroute = await self._model_failover(
@@ -692,6 +724,10 @@ class RuntimeEngine(RuntimeEngineCore):
                     "findings": [],
                     "jit_context_used": False,
                 }
+                record_review_repair_churn_observation(
+                    checkpoint,
+                    review=checkpoint["last_review_report"],
+                )
                 self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
 
             progress["required_checks_passed"] = verification["passed"] and evaluator_ok and not progress["unexpected_scope"]

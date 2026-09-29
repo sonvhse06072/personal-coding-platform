@@ -265,6 +265,25 @@ produce a new commit and update only the already-recorded PR; CI is observed for
 that new exact head. Provider/infrastructure interruption leaves the repair
 request resumable, and the action never merges or deploys.
 
+Runtime snapshots a request-scoped churn epoch at admission while leaving all
+global counters cumulative. Routing policy v19 initially allows six repair
+cycles or eight verification cycles in one epoch. Reaching either limit stops
+before another developer-model/DDEV cycle with
+`repair_churn_circuit_breaker`. The returned evidence includes an exact
+`decision_key`; authorize one additional bounded generation through the existing
+decision endpoint:
+
+```json
+{
+  "action": "approve",
+  "decision_key": "review_repair_churn:<request_id>:generation:<generation>",
+  "note": "Authorize one bounded review-repair window"
+}
+```
+
+Rejecting leaves the baseline unchanged. Ordinary `/run`, reroute, provider
+reset, quota recovery and Runtime restart never advance or replace the epoch.
+
 Every **isolated-clone** workspace receives a temporary `.ddev/config.coding-platform.yaml` with a unique DDEV project name, so parallel jobs do not collide with the source project's normal DDEV environment. Direct workspaces preserve the project's normal DDEV identity and are serialized by an exclusive project lease.
 
 ### Explicit orchestration supersession

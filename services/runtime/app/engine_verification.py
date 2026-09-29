@@ -14,6 +14,7 @@ from .collaboration import (
 from .developer_stream import runtime_activity_event
 from .engine_execution import RuntimeEngine as ExecutionRuntimeEngine
 from .repo import diff_state
+from .review_repair_churn import ReviewRepairChurnPaused
 from .shell import run_command
 from .work_order import work_order_snapshot
 
@@ -98,6 +99,8 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             await super().run_job(job_id)
         except _CollaborationRequested as requested:
             await self._handle_collaboration_request(job_id, requested)
+        except ReviewRepairChurnPaused:
+            return
 
     async def _consume_collaboration_request(
         self,
@@ -371,6 +374,20 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         started: float,
         progress: dict[str, Any],
     ) -> dict[str, Any]:
+        row = self.storage.get(job_id) or {}
+        checkpoint = dict(row.get("checkpoint") or {})
+        self._ensure_review_repair_churn_epoch(
+            job_id=job_id,
+            checkpoint=checkpoint,
+            progress=progress,
+        )
+        if self._review_repair_churn_guard(
+            job_id=job_id,
+            checkpoint=checkpoint,
+            progress=progress,
+        ):
+            raise ReviewRepairChurnPaused()
+
         collaboration_request = await self._consume_collaboration_request(
             job_id=job_id,
             workspace=workspace,
@@ -394,6 +411,9 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 status="verification_retry",
                 output={"attempt": attempt},
             )
+        # Charge the cycle before entering DDEV so a Runtime interruption cannot
+        # replay an uncounted expensive verification attempt after restart.
+        self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
 
         row = self.storage.get(job_id) or {}
         checkpoint = row.get("checkpoint") or {}

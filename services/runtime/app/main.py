@@ -142,7 +142,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-RUNTIME_VERSION = "1.0.68"
+RUNTIME_VERSION = "1.0.69"
 
 app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan=lifespan)
 app.include_router(pm_bridge_router)
@@ -506,6 +506,7 @@ async def resolve_decision(job_id: str, payload: HumanDecisionRequest) -> JobVie
             job_id,
             action=payload.action,
             note=payload.note,
+            expected_decision_key=payload.decision_key,
         )
     except RuntimeError as exc:
         raise runtime_error(exc) from exc

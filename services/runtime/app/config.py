@@ -69,6 +69,16 @@ def project_baselines_doc() -> dict[str, Any]:
     )
 
 
+@lru_cache(maxsize=1)
+def routing_policy_doc() -> dict[str, Any]:
+    return _load_yaml(
+        os.getenv(
+            "ROUTING_POLICY_FILE",
+            _default_config_file("routing-policy.yml", "/config/routing-policy.yml"),
+        )
+    )
+
+
 def project_config(project_id: str) -> dict[str, Any]:
     projects = projects_doc().get("projects", {})
     if project_id not in projects:
@@ -100,3 +110,4 @@ def project_config(project_id: str) -> dict[str, Any]:
 def clear_config_cache() -> None:
     project_baselines_doc.cache_clear()
     models_doc.cache_clear()
+    routing_policy_doc.cache_clear()

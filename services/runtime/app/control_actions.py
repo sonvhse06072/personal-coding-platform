@@ -582,19 +582,40 @@ class ControlActionService:
                     {"action_type": "details", "label": "📋 Xem hướng dẫn", "payload": {}},
                 ],
             }
+        checkpoint = dict((job or {}).get("checkpoint") or {})
+        pending = dict(checkpoint.get("pending_decision") or {})
+        decision_key = str(pending.get("key") or "")
+        decision_payload = {"decision_key": decision_key} if decision_key else {}
+        review_repair_churn = str(pending.get("source") or "") == "review_repair_churn"
         return {
             "title": "HUMAN DECISION REQUIRED",
             "phase": "decision",
-            "reason": "human_decision_required",
-            "summary": "Runtime is waiting for an explicit human decision.",
-            "cause": "A configured governance decision boundary requires owner approval before execution continues.",
+            "reason": (
+                "repair_churn_circuit_breaker"
+                if review_repair_churn
+                else "human_decision_required"
+            ),
+            "summary": (
+                "Review repair reached its bounded anomaly window."
+                if review_repair_churn
+                else "Runtime is waiting for an explicit human decision."
+            ),
+            "cause": (
+                "Another repair/verification window requires explicit authorization for this exact request generation."
+                if review_repair_churn
+                else "A configured governance decision boundary requires owner approval before execution continues."
+            ),
             "preserved": ["Same job/workspace and durable progress are preserved."],
             "impact": "The job will not continue until this exact durable decision is resolved.",
-            "recommended": "Approve only if the displayed WorkOrder decision boundary is acceptable; otherwise reject it.",
+            "recommended": (
+                "Approve only to authorize one new bounded repair window; otherwise reject and keep the epoch baseline unchanged."
+                if review_repair_churn
+                else "Approve only if the displayed WorkOrder decision boundary is acceptable; otherwise reject it."
+            ),
             "metrics": [],
             "action_specs": [
-                {"action_type": "human_decision_approve", "label": "✅ Approve", "payload": {}},
-                {"action_type": "human_decision_reject", "label": "❌ Reject", "payload": {}},
+                {"action_type": "human_decision_approve", "label": "✅ Approve", "payload": decision_payload},
+                {"action_type": "human_decision_reject", "label": "❌ Reject", "payload": decision_payload},
                 {"action_type": "details", "label": "📋 Chi tiết", "payload": {}},
             ],
         }
@@ -1025,7 +1046,16 @@ class ControlActionService:
             return self._resume_result(action, row, "Preserved accepted work was queued for delivery/CI recheck.")
         if action_type in {"human_decision_approve", "human_decision_reject"}:
             decision_action = "approve" if action_type.endswith("approve") else "reject"
-            row = await self.engine.resolve_human_decision(job_id, action=decision_action, note="Resolved by Telegram owner control action")
+            row = await self.engine.resolve_human_decision(
+                job_id,
+                action=decision_action,
+                note="Resolved by Telegram owner control action",
+                expected_decision_key=(
+                    str(payload.get("decision_key"))
+                    if payload.get("decision_key")
+                    else None
+                ),
+            )
             if self.orchestrator is not None:
                 await self.orchestrator.tick()
             return self._resume_result(action, row, f"Human decision {decision_action}d through the exact durable decision key.")
