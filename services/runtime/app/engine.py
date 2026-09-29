@@ -729,20 +729,21 @@ class RuntimeEngine(_RuntimeEngine):
             started,
             progress,
         )
+        if not result.get("passed", False):
+            return result
+
         row = self.storage.get(job_id)
         checkpoint = (row or {}).get("checkpoint") or {}
         work_order = work_order_snapshot(checkpoint.get("work_order"))
-        if work_order is None or not result.get("passed", False):
-            return result
 
         ddev_cfg = project.get("ddev", {}) or {}
-        required_order = list(work_order.verification.required_phases)
+        required_order = list(work_order.verification.required_phases) if work_order else []
         required = set(required_order)
 
         # Project-owned final checks may be required by the shape of the actual
-        # diff even when an older immutable WorkOrder snapshot predates that
-        # verification phase. This is deliberately path-scoped so backend-only
-        # work does not pay frontend verification cost.
+        # diff for legacy jobs without a WorkOrder as well as older immutable
+        # WorkOrders that predate a phase. Path scoping avoids charging
+        # backend-only work for frontend verification.
         auto_rules = ddev_cfg.get("auto_required_phases", []) or []
         changed_files: list[str] = []
         if auto_rules:
@@ -773,6 +774,29 @@ class RuntimeEngine(_RuntimeEngine):
                 required.add(phase)
                 required_order.append(phase)
 
+        for phase in required_order:
+            if not (ddev_cfg.get(phase, []) or []):
+                result["passed"] = False
+                result["tests_passed"] = False
+                result["failure_text"] = (
+                    str(result.get("failure_text") or "")
+                    + f"\n{phase}: required verification has no configured commands"
+                ).strip()[-30000:]
+                return result
+            if any(
+                isinstance(item, dict)
+                and item.get("phase") == phase
+                and not item.get("commands")
+                for item in (result.get("phases") or [])
+            ):
+                result["passed"] = False
+                result["tests_passed"] = False
+                result["failure_text"] = (
+                    str(result.get("failure_text") or "")
+                    + f"\n{phase}: required verification has no executed commands"
+                ).strip()[-30000:]
+                return result
+
         completed_phases = {
             str(item.get("phase") or "")
             for item in (result.get("phases") or [])
@@ -786,14 +810,6 @@ class RuntimeEngine(_RuntimeEngine):
 
         for phase in extra_phases:
             commands = ddev_cfg.get(phase, []) or []
-            if not commands:
-                result["passed"] = False
-                result["tests_passed"] = False
-                result["failure_text"] = (
-                    str(result.get("failure_text") or "")
-                    + f"\n{phase}: required verification has no configured commands"
-                ).strip()[-30000:]
-                return result
             count = len(commands)
             budget = strategy["budget"]
             if (
@@ -831,6 +847,14 @@ class RuntimeEngine(_RuntimeEngine):
                 result["tests_passed"] = False
                 result["failure_text"] = (
                     str(result.get("failure_text") or "") + "\n" + str(phase_result)
+                ).strip()[-30000:]
+                return result
+            if not phase_result.get("commands"):
+                result["passed"] = False
+                result["tests_passed"] = False
+                result["failure_text"] = (
+                    str(result.get("failure_text") or "")
+                    + f"\n{phase}: required verification has no executed commands"
                 ).strip()[-30000:]
                 return result
 

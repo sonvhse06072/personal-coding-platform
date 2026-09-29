@@ -2,7 +2,10 @@ import asyncio
 import time
 from copy import deepcopy
 
+import pytest
+
 from app.engine import RuntimeEngine
+from app.review_repair_churn import EPOCH_KEY, new_epoch
 
 
 class FakeStorage:
@@ -76,13 +79,13 @@ def work_order(*, layered=True):
     }
 
 
-def row(*, layered=True):
+def row(*, layered=True, legacy=False):
     return {
         "id": "job148",
         "project_id": "demo",
         "status": "verifying",
         "workspace": "/workspaces/job148",
-        "checkpoint": {"work_order": work_order(layered=layered)},
+        "checkpoint": {"work_order": None if legacy else work_order(layered=layered)},
         "progress": {},
     }
 
@@ -318,9 +321,10 @@ def test_legacy_hard_verification_keeps_tool_test_ceiling():
 
     asyncio.run(scenario())
 
-def test_frontend_diff_gets_project_owned_final_quality_phase(monkeypatch):
+@pytest.mark.parametrize("legacy", [False, True])
+def test_frontend_diff_gets_project_owned_final_quality_phase(monkeypatch, legacy):
     async def scenario():
-        storage = FakeStorage(row())
+        storage = FakeStorage(row(legacy=legacy))
         engine = RuntimeEngine(storage)
         ddev = FakeDdev()
         engine.ddev = ddev
@@ -341,12 +345,14 @@ def test_frontend_diff_gets_project_owned_final_quality_phase(monkeypatch):
             },
         )
 
+        route = strategy()
+        route["profile"] = "complex"
         result = await engine._verify(
             "job148",
             "demo",
             "/workspaces/job148",
             cfg,
-            strategy(),
+            route,
             time.monotonic(),
             state,
         )
@@ -362,13 +368,16 @@ def test_frontend_diff_gets_project_owned_final_quality_phase(monkeypatch):
         assert frontend["phase"] == "frontend_quality"
         assert frontend["verification_layer"] == "final"
         assert frontend["required_for_final"] is True
+        assert result["tool_calls"] == result["test_runs"] == 4
+        assert state["verification_attempts"] == 1
 
     asyncio.run(scenario())
 
 
-def test_backend_diff_does_not_pay_frontend_quality_cost(monkeypatch):
+@pytest.mark.parametrize("legacy", [False, True])
+def test_backend_diff_does_not_pay_frontend_quality_cost(monkeypatch, legacy):
     async def scenario():
-        storage = FakeStorage(row())
+        storage = FakeStorage(row(legacy=legacy))
         engine = RuntimeEngine(storage)
         ddev = FakeDdev()
         engine.ddev = ddev
@@ -389,12 +398,14 @@ def test_backend_diff_does_not_pay_frontend_quality_cost(monkeypatch):
             },
         )
 
+        route = strategy()
+        route["profile"] = "complex"
         result = await engine._verify(
             "job148",
             "demo",
             "/workspaces/job148",
             cfg,
-            strategy(),
+            route,
             time.monotonic(),
             state,
         )
@@ -412,3 +423,213 @@ def test_backend_diff_does_not_pay_frontend_quality_cost(monkeypatch):
 
     asyncio.run(scenario())
 
+
+@pytest.fixture
+def auto_required_project(monkeypatch):
+    cfg = project()
+    cfg["ddev"]["frontend_quality"] = ["frontend-quality"]
+    cfg["ddev"]["auto_required_phases"] = [
+        {"phase": "frontend_quality", "path_prefixes": ["frontend/"]},
+    ]
+    monkeypatch.setattr(
+        "app.engine.diff_state",
+        lambda workspace, max_bytes: {"changed_files": ["frontend/app/page.tsx"]},
+    )
+    return cfg
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+@pytest.mark.parametrize("missing", [False, True])
+def test_auto_required_phase_without_commands_fails_closed(auto_required_project, legacy, missing):
+    cfg = auto_required_project
+    if missing:
+        del cfg["ddev"]["frontend_quality"]
+    else:
+        cfg["ddev"]["frontend_quality"] = []
+    engine = RuntimeEngine(FakeStorage(row(legacy=legacy)))
+    engine.ddev = FakeDdev()
+
+    result = asyncio.run(engine._verify(
+        "job148", "demo", "/workspaces/job148", cfg, strategy(), time.monotonic(), progress(),
+    ))
+
+    assert result["passed"] is result["tests_passed"] is False
+    assert "frontend_quality: required verification has no configured commands" in result["failure_text"]
+    assert "frontend_quality" not in engine.ddev.calls
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_failing_auto_required_phase_fails_verification(auto_required_project, legacy):
+    engine = RuntimeEngine(FakeStorage(row(legacy=legacy)))
+    engine.ddev = FakeDdev({"frontend_quality": False})
+
+    result = asyncio.run(engine._verify(
+        "job148", "demo", "/workspaces/job148", auto_required_project,
+        strategy(), time.monotonic(), progress(),
+    ))
+
+    assert result["passed"] is result["tests_passed"] is False
+    assert "frontend_quality" in result["failure_text"]
+    assert result["phases"][-1] == {
+        "phase": "frontend_quality", "passed": False,
+        "commands": ["run-frontend_quality"],
+        "verification_layer": "final", "required_for_final": True,
+    }
+    assert result["tool_calls"] == result["test_runs"] == len(engine.ddev.calls)
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_auto_required_union_is_ordered_and_does_not_rerun_phases(auto_required_project, legacy):
+    cfg = auto_required_project
+    cfg["ddev"]["auto_required_phases"] = [
+        {"phase": phase, "path_prefixes": ["frontend/"]}
+        for phase in ["static_analysis", "frontend_quality", "frontend_quality", "full_tests"]
+    ]
+    engine = RuntimeEngine(FakeStorage(row(legacy=legacy)))
+    engine.ddev = FakeDdev()
+
+    result = asyncio.run(engine._verify(
+        "job148", "demo", "/workspaces/job148", cfg, strategy(), time.monotonic(), progress(),
+    ))
+
+    expected = ["targeted_tests", "static_analysis"]
+    expected += ["frontend_quality", "full_tests"] if legacy else ["full_tests", "frontend_quality"]
+    assert result["passed"] is True
+    assert engine.ddev.calls == expected
+    assert [item["phase"] for item in result["phases"]] == expected
+    assert result["tool_calls"] == result["test_runs"] == 4
+
+
+@pytest.mark.parametrize("configured_commands", [[], ["full"]])
+def test_completed_legacy_phase_without_commands_cannot_satisfy_auto_requirement(
+    auto_required_project, configured_commands,
+):
+    cfg = auto_required_project
+    cfg["ddev"]["full_tests"] = configured_commands
+    cfg["ddev"]["auto_required_phases"] = [
+        {"phase": "full_tests", "path_prefixes": ["frontend/"]},
+    ]
+
+    class EmptyFullTestsDdev(FakeDdev):
+        async def phase(self, **kwargs):
+            result = await super().phase(**kwargs)
+            if kwargs["phase"] == "full_tests":
+                result["commands"] = []
+            return result
+
+    engine = RuntimeEngine(FakeStorage(row(legacy=True)))
+    engine.ddev = EmptyFullTestsDdev()
+    route = strategy()
+    route["profile"] = "complex"
+    result = asyncio.run(engine._verify(
+        "job148", "demo", "/workspaces/job148", cfg, route, time.monotonic(), progress(),
+    ))
+
+    assert result["verification_mode"] == "legacy"
+    assert engine.ddev.calls == ["targeted_tests", "static_analysis", "full_tests"]
+    assert result["phases"][-1]["phase"] == "full_tests"
+    assert result["phases"][-1]["passed"] is True
+    assert result["phases"][-1]["commands"] == []
+    assert result["passed"] is result["tests_passed"] is False
+    expected = (
+        "required verification has no executed commands"
+        if configured_commands else "required verification has no configured commands"
+    )
+    assert f"full_tests: {expected}" in result["failure_text"]
+
+
+def test_newly_executed_required_phase_without_command_evidence_fails(auto_required_project):
+    class EmptyAutoPhaseDdev(FakeDdev):
+        async def phase(self, **kwargs):
+            result = await super().phase(**kwargs)
+            if kwargs["phase"] == "frontend_quality":
+                result["commands"] = []
+            return result
+
+    engine = RuntimeEngine(FakeStorage(row(legacy=True)))
+    engine.ddev = EmptyAutoPhaseDdev()
+    result = asyncio.run(engine._verify(
+        "job148", "demo", "/workspaces/job148", auto_required_project,
+        strategy(), time.monotonic(), progress(),
+    ))
+
+    assert engine.ddev.calls == ["targeted_tests", "static_analysis", "frontend_quality"]
+    assert result["phases"][-1]["commands"] == []
+    assert result["passed"] is result["tests_passed"] is False
+    assert "frontend_quality: required verification has no executed commands" in result["failure_text"]
+
+
+@pytest.mark.parametrize("legacy", [False, True])
+def test_failed_base_verification_does_not_resolve_auto_phases(monkeypatch, auto_required_project, legacy):
+    def unexpected_diff(*args):
+        pytest.fail("Failed base verification must not resolve auto phases")
+
+    monkeypatch.setattr("app.engine.diff_state", unexpected_diff)
+    engine = RuntimeEngine(FakeStorage(row(legacy=legacy)))
+    engine.ddev = FakeDdev({"targeted_tests": False})
+
+    result = asyncio.run(engine._verify(
+        "job148", "demo", "/workspaces/job148", auto_required_project,
+        strategy(), time.monotonic(), progress(),
+    ))
+
+    assert result["passed"] is result["tests_passed"] is False
+    assert "frontend_quality" not in engine.ddev.calls
+    assert "frontend_quality" not in result["failure_text"]
+
+
+@pytest.mark.parametrize("mode", ["adaptive", "legacy_hard"])
+def test_legacy_auto_required_phase_preserves_budget_mode(auto_required_project, mode):
+    engine = RuntimeEngine(FakeStorage(row(legacy=True)))
+    engine.ddev = FakeDdev()
+    route = strategy(mode=mode)
+    route["budget"].update(max_tool_calls=2, max_test_runs=2)
+
+    result = asyncio.run(engine._verify(
+        "job148", "demo", "/workspaces/job148", auto_required_project,
+        route, time.monotonic(), progress(),
+    ))
+
+    assert result["passed"] is (mode == "adaptive")
+    assert ("frontend_quality" in engine.ddev.calls) is (mode == "adaptive")
+    if mode == "legacy_hard":
+        assert "would exceed execution budget" in result["failure_text"]
+
+
+@pytest.mark.parametrize("passed", [False, True])
+def test_legacy_auto_phase_preserves_churn_epoch_and_counts_one_attempt(auto_required_project, passed):
+    job = row(legacy=True)
+    state = progress()
+    state.update(repair_iterations=50, verification_attempts=52, verification_retry_attempts=51)
+    job["checkpoint"].update({
+        "pending_review_repair": {"request_id": "test-auto-phase-repair", "state": "pending"},
+        EPOCH_KEY: new_epoch(
+            "test-auto-phase-repair",
+            {"repair_iterations": 45, "verification_attempts": 47},
+            legacy_baseline_migrated=False,
+        ),
+    })
+    storage = FakeStorage(job)
+    engine = RuntimeEngine(storage)
+
+    class MultiCommandDdev(FakeDdev):
+        async def phase(self, **kwargs):
+            result = await super().phase(**kwargs)
+            if kwargs["phase"] == "frontend_quality":
+                result["commands"] = ["typecheck", "build", "browser"]
+            return result
+
+    auto_required_project["ddev"]["frontend_quality"] = ["typecheck", "build", "browser"]
+    engine.ddev = MultiCommandDdev({"frontend_quality": passed})
+    result = asyncio.run(engine._verify(
+        "job148", "demo", "/workspaces/job148", auto_required_project,
+        strategy(), time.monotonic(), state,
+    ))
+
+    assert result["passed"] is passed
+    assert result["tool_calls"] == result["test_runs"] == 5
+    assert result["verification_attempt"] == state["verification_attempts"] == 53
+    assert state["verification_retry_attempts"] == 52
+    assert state["repair_iterations"] == 50
+    assert storage.row["progress"] == state
+    assert storage.row["checkpoint"] == job["checkpoint"]
