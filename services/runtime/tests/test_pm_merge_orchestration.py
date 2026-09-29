@@ -5,6 +5,7 @@ from copy import deepcopy
 
 import app.orchestrator_merge as merge_module
 from app.orchestrator_merge import PlanOrchestrator
+from checkpoint_fakes import CheckpointTransitions
 
 
 HEAD = "b" * 40
@@ -123,7 +124,7 @@ class FakeStorage:
         self.continuity.append(deepcopy(payload))
 
 
-class FakeStore:
+class FakeStore(CheckpointTransitions):
     def __init__(self, plan, rows):
         self.plan = deepcopy(plan)
         self.rows = [deepcopy(row) for row in rows]
@@ -203,7 +204,7 @@ class FakeEngine:
         self.created = []
         self.enqueued = []
 
-    def create_job(self, payload):
+    def create_job(self, payload, *, _orchestration=None):
         self.created.append(deepcopy(payload))
         job_id = payload["_job_id"]
         self.storage.jobs[job_id] = {
@@ -286,6 +287,10 @@ def test_eligible_pr_merges_once_then_unlocks_dependency(monkeypatch) -> None:
     assert store.rows[0]["detail"]["merge_commit_sha"] == "c" * 40
     assert result["launched"]["work_order_id"] == "WO-2"
     assert store.rows[1]["state"] == "running"
+    merged = store.checkpoint_history[0]
+    assert merged["kind"] == "merged"
+    assert merged["evidence"]["merge_commit"] == "c" * 40
+    assert merged["evidence"]["next"] == ["WO-2"]
     audit = next(iter(svc.merge_audit.records.values()))
     assert audit["status"] == "merged"
     assert storage.continuity[0]["event_type"] == "pr_merged"

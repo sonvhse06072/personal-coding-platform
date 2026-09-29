@@ -35,6 +35,7 @@ from .state import (
     set_failure_context,
 )
 from .storage import Storage, now
+from .work_order_checkpoints import orchestrator_launch
 from .usage import estimated_cost_usd, normalize_usage
 
 
@@ -52,6 +53,7 @@ class RuntimeEngineCore:
         self.queue: asyncio.Queue[str] = asyncio.Queue()
         self.worker_task: asyncio.Task | None = None
         self.active_jobs: dict[str, asyncio.Task[None]] = {}
+        self._queued_orchestrated_jobs: set[str] = set()
         self._stopping = False
 
     async def start(self) -> None:
@@ -60,7 +62,9 @@ class RuntimeEngineCore:
         await cancel_all_antigravity_runs()
         for job in self.storage.list(limit=500):
             if job["status"] == "queued":
-                await self.queue.put(job["id"])
+                marker = orchestrator_launch(job)
+                if not marker or marker["state"] != "held":
+                    await self.enqueue(job["id"])
             elif job["status"] not in STABLE:
                 self.storage.update(
                     job["id"],
@@ -115,6 +119,13 @@ class RuntimeEngineCore:
         self.worker_task = None
 
     async def enqueue(self, job_id: str) -> None:
+        marker = orchestrator_launch(self.storage.get(job_id) or {})
+        if marker:
+            if marker["state"] == "held":
+                raise RuntimeError("Orchestrator launch is held until its started checkpoint commits")
+            if job_id in self._queued_orchestrated_jobs or job_id in self.active_jobs:
+                return
+            self._queued_orchestrated_jobs.add(job_id)
         await self.queue.put(job_id)
 
     async def _quiesce_stable_manual_job(self, job_id: str) -> None:
@@ -272,6 +283,7 @@ class RuntimeEngineCore:
                     if preview_retired and workspace_restored:
                         self._release_terminal_direct_lease(job_id)
                 self.active_jobs.pop(job_id, None)
+                self._queued_orchestrated_jobs.discard(job_id)
                 self.queue.task_done()
 
     def create_job(self, payload: dict[str, Any]) -> str:

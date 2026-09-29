@@ -30,6 +30,7 @@ from .state import (
     set_failure_context,
 )
 from .storage import now
+from .work_order_checkpoints import launch_identity, orchestrator_launch
 from .work_order import (
     WorkOrderPolicyError,
     apply_work_order_budget,
@@ -608,12 +609,14 @@ class RuntimeEngine(_RuntimeEngine):
         assert updated is not None
         return updated
 
-    def create_job(self, payload: dict[str, Any]) -> str:
+    def create_job(self, payload: dict[str, Any], *, _orchestration: tuple[str, str] | None = None) -> str:
         """Create one job with its governing baseline/contract in the same write.
 
         `_job_id` is an internal-only idempotency hook used by the durable plan
         orchestrator. Public API models never expose it. Reusing the same id is
         accepted only when the persisted project and WorkOrder identity match.
+        `_orchestration` is a private keyword (not a payload field): it reserves
+        the queued job until its exact durable started checkpoint releases it.
         """
 
         project = project_config(payload["project_id"])
@@ -633,6 +636,9 @@ class RuntimeEngine(_RuntimeEngine):
 
         requested_job_id = str(payload.get("_job_id") or "").strip()
         job_id = requested_job_id or uuid.uuid4().hex
+        launch = launch_identity(*_orchestration) if _orchestration is not None else None
+        if launch and (job_id != launch["job_id"] or work_order is None or work_order.id != launch["work_order_id"]):
+            raise RuntimeError("Orchestrator launch requires its exact deterministic job/WorkOrder")
         if requested_job_id:
             try:
                 uuid.UUID(hex=requested_job_id)
@@ -650,6 +656,10 @@ class RuntimeEngine(_RuntimeEngine):
                     or existing_work_order.baseline_revision != work_order.baseline_revision
                 ):
                     raise RuntimeError("Deterministic orchestrator job id collides with different job metadata")
+                if launch:
+                    marker = orchestrator_launch(existing)
+                    if marker is None or any(marker.get(key) != value for key, value in launch.items()):
+                        raise RuntimeError("Deterministic job lacks its exact orchestrator launch reservation")
                 return job_id
 
         checkpoint = {
@@ -662,6 +672,8 @@ class RuntimeEngine(_RuntimeEngine):
             checkpoint["project_baseline"] = baseline.model_dump(mode="json")
         if work_order is not None:
             checkpoint["work_order"] = work_order.model_dump(mode="json")
+        if launch:
+            checkpoint["orchestrator_launch"] = {**launch, "state": "held"}
 
         self.storage.create({
             "id": job_id,
@@ -689,6 +701,9 @@ class RuntimeEngine(_RuntimeEngine):
             self.storage.update(job_id, task=canonical)
 
     async def run_job(self, job_id: str) -> None:
+        marker = orchestrator_launch(self.storage.get(job_id) or {})
+        if marker and marker["state"] == "held":
+            raise RuntimeError("Orchestrator launch is held until its started checkpoint commits")
         self._restore_work_order_task(job_id)
         try:
             await super().run_job(job_id)

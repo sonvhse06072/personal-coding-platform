@@ -4,6 +4,7 @@ import asyncio
 from copy import deepcopy
 
 from app.orchestrator_notifications import PlanOrchestrator
+from checkpoint_fakes import CheckpointTransitions
 
 
 class FakeQueryResult:
@@ -202,7 +203,7 @@ class FakeControls:
         return changed
 
 
-class FakeStore:
+class FakeStore(CheckpointTransitions):
     def __init__(self, rows, *, plan_id="pm-gh-200"):
         self.rows = [dict(row) for row in rows]
         self.plan_id = plan_id

@@ -10,6 +10,7 @@ from typing import Any
 
 from .config import project_config
 from .storage import Storage, now
+from .work_order_checkpoints import checkpoint_evidence, transition_key, ready_work_order_ids, launch_identity, orchestrator_launch
 
 
 ORCHESTRATOR_DDL = """
@@ -128,6 +129,15 @@ _TERMINAL_JOB_STATUSES = {"blocked", "failed", "interrupted", "cancelled"}
 _BUSY_WORK_ORDER_STATES = {"running", "awaiting_merge", "waiting_human"}
 _ATTENTION_WORK_ORDER_STATES = {"awaiting_merge", "blocked", "waiting_human"}
 _SUPERSEDEABLE_WORK_ORDER_STATES = {"awaiting_merge", "blocked", "pending", "waiting_human"}
+_CHECKPOINT_TRANSITIONS = {
+    "started": ({"pending"}, "running"),
+    "waiting_human": ({"pending", "running"}, "waiting_human"),
+    "accepted": ({"running", "waiting_human"}, "awaiting_merge"),
+    "completed": ({"running", "waiting_human"}, "completed"),
+    "merged": ({"awaiting_merge"}, "completed"),
+    "blocked": ({"pending", "running", "waiting_human", "awaiting_merge"}, "blocked"),
+    "repair_reopened": ({"awaiting_merge"}, "running"),
+}
 _OWNER_ATTENTION_EVENT_TYPES = {
     "ci_failed_after_repairs",
     "human_decision_required",
@@ -288,6 +298,21 @@ class PlanOrchestratorStore:
         The store owns the timestamp; retries cannot refresh historical evidence.
         Schema installation belongs to ensure() at orchestrator startup.
         """
+        with self.storage.connect() as conn:
+            row = self._append_checkpoint(
+                conn, checkpoint_key=checkpoint_key, plan_id=plan_id,
+                work_order_id=work_order_id, kind=kind, state=state,
+                job_id=job_id, evidence=evidence,
+            )
+            conn.commit()
+            return row
+
+    def _append_checkpoint(
+        self, conn: Any, *, checkpoint_key: str, plan_id: str,
+        work_order_id: str, kind: str, state: str,
+        job_id: str | None = None, evidence: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Shared append validation/insert; the caller owns the transaction."""
         identity = {
             "checkpoint_key": checkpoint_key,
             "plan_id": plan_id,
@@ -306,37 +331,35 @@ class PlanOrchestratorStore:
             ):
                 raise ValueError(f"Checkpoint {field} must be an exact non-empty string of at most {limit} characters")
         serialized = _checkpoint_evidence_json({} if evidence is None else evidence)
-        with self.storage.connect() as conn:
-            tracked = conn.execute(
-                """SELECT 1 FROM cp_plan_work_orders
-                WHERE plan_id=%s AND work_order_id=%s FOR KEY SHARE""",
-                (plan_id, work_order_id),
-            ).fetchone()
-            if tracked is None:
-                raise RuntimeError("Unknown checkpoint plan/WorkOrder identity")
+        tracked = conn.execute(
+            """SELECT 1 FROM cp_plan_work_orders
+            WHERE plan_id=%s AND work_order_id=%s FOR KEY SHARE""",
+            (plan_id, work_order_id),
+        ).fetchone()
+        if tracked is None:
+            raise RuntimeError("Unknown checkpoint plan/WorkOrder identity")
+        row = conn.execute(
+            """INSERT INTO cp_plan_work_order_checkpoints
+            (checkpoint_key, plan_id, work_order_id, kind, state, job_id, evidence, created_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s)
+            ON CONFLICT (checkpoint_key) DO NOTHING RETURNING *""",
+            (checkpoint_key, plan_id, work_order_id, kind, state, job_id, serialized, now()),
+        ).fetchone()
+        if row is None:
+            # A separate statement sees the committed winner of a concurrent
+            # insert under PostgreSQL's default READ COMMITTED isolation.
+            # JSONB equality ignores object-key ordering and numeric spelling,
+            # while retaining JSON types (true is not the number 1).
             row = conn.execute(
-                """INSERT INTO cp_plan_work_order_checkpoints
-                (checkpoint_key, plan_id, work_order_id, kind, state, job_id, evidence, created_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s)
-                ON CONFLICT (checkpoint_key) DO NOTHING RETURNING *""",
-                (checkpoint_key, plan_id, work_order_id, kind, state, job_id, serialized, now()),
+                """SELECT * FROM cp_plan_work_order_checkpoints
+                WHERE checkpoint_key=%s AND plan_id=%s AND work_order_id=%s
+                  AND kind=%s AND state=%s AND job_id IS NOT DISTINCT FROM %s
+                  AND evidence=%s::jsonb""",
+                (checkpoint_key, plan_id, work_order_id, kind, state, job_id, serialized),
             ).fetchone()
             if row is None:
-                # A separate statement sees the committed winner of a concurrent
-                # insert under PostgreSQL's default READ COMMITTED isolation.
-                # JSONB equality ignores object-key ordering and numeric spelling,
-                # while retaining JSON types (true is not the number 1).
-                row = conn.execute(
-                    """SELECT * FROM cp_plan_work_order_checkpoints
-                    WHERE checkpoint_key=%s AND plan_id=%s AND work_order_id=%s
-                      AND kind=%s AND state=%s AND job_id IS NOT DISTINCT FROM %s
-                      AND evidence=%s::jsonb""",
-                    (checkpoint_key, plan_id, work_order_id, kind, state, job_id, serialized),
-                ).fetchone()
-                if row is None:
-                    raise RuntimeError("Checkpoint key already has different identity/content")
-            conn.commit()
-            return dict(row)
+                raise RuntimeError("Checkpoint key already has different identity/content")
+        return dict(row)
 
     def checkpoints(self, plan_id: str, *, work_order_id: str | None = None) -> list[dict[str, Any]]:
         """Read all durable history, including superseded WorkOrders, by row ID."""
@@ -387,6 +410,13 @@ class PlanOrchestratorStore:
             return bool(result.rowcount)
 
     def update_work_order(self, plan_id: str, work_order_id: str, **fields: Any) -> bool:
+        with self.storage.connect() as conn:
+            changed = self._update_work_order(conn, plan_id, work_order_id, **fields)
+            conn.commit()
+            return changed
+
+    def _update_work_order(self, conn: Any, plan_id: str, work_order_id: str, **fields: Any) -> bool:
+        """Existing mutable update and attention retirement in the caller's transaction."""
         allowed = {"state", "job_id", "pr_number", "pr_url", "detail"}
         unknown = set(fields) - allowed
         if unknown:
@@ -398,47 +428,153 @@ class PlanOrchestratorStore:
             key: (dict(value or {}) if key == "detail" else value)
             for key, value in fields.items()
         }
+        current = conn.execute(
+            """SELECT * FROM cp_plan_work_orders
+            WHERE plan_id=%s AND work_order_id=%s FOR UPDATE""",
+            (plan_id, work_order_id),
+        ).fetchone()
+        if current is None or all(current.get(key) == value for key, value in normalized.items()):
+            return False
+
+        previous_state = str(current.get("state") or "")
+        sets: list[str] = []
+        values: list[Any] = []
+        for key, value in normalized.items():
+            if key == "detail":
+                sets.append("detail=%s::jsonb")
+                values.append(json.dumps(value))
+            else:
+                sets.append(f"{key}=%s")
+                values.append(value)
+        sets.append("updated_at=%s")
+        values.append(now())
+        values.extend([plan_id, work_order_id])
+        conn.execute(
+            f"UPDATE cp_plan_work_orders SET {', '.join(sets)} WHERE plan_id=%s AND work_order_id=%s",
+            values,
+        )
+        if previous_state in _ATTENTION_WORK_ORDER_STATES:
+            self._supersede_notification_rows(
+                conn, plan_id=plan_id, work_order_id=work_order_id,
+                attention_state=previous_state,
+            )
+            conn.execute(
+                """UPDATE cp_control_actions SET status='cancelled', updated_at=%s
+                WHERE status='pending' AND plan_id=%s AND work_order_id=%s""",
+                (now(), plan_id, work_order_id),
+            )
+        return True
+
+    def transition_work_order(
+        self, *, expected: dict[str, Any], checkpoint_key: str, kind: str,
+        evidence: dict[str, Any], **fields: Any,
+    ) -> dict[str, Any]:
+        """Commit one exact lifecycle mutation and its evidence, or neither.
+
+        Exact retries validate the original checkpoint and never reapply an old
+        mutation. Dependency evidence is a store-owned post-transition snapshot.
+        """
+        plan_id, work_order_id = expected["plan_id"], expected["work_order_id"]
+        state = fields["state"]
+        job_id = fields.get("job_id", expected.get("job_id"))
+        sources, target = _CHECKPOINT_TRANSITIONS.get(kind, (set(), None))
+        if expected.get("state") not in sources or state != target:
+            raise RuntimeError("Invalid checkpoint transition kind/state")
+        if job_id != expected.get("job_id") and kind != "started":
+            raise RuntimeError("Checkpoint transition cannot replace the Runtime job")
+        if {"transition", "dependencies", "next"} & evidence.keys():
+            raise ValueError("Transition and dependency evidence is store-owned")
         with self.storage.connect() as conn:
+            # Match supersession's plan-before-WorkOrder lock order. Serialize
+            # checkpoint transitions within one plan, including dependency reads.
+            plan = conn.execute(
+                "SELECT * FROM cp_plan_orchestrations WHERE plan_id=%s FOR UPDATE", (plan_id,),
+            ).fetchone()
             current = conn.execute(
                 """SELECT * FROM cp_plan_work_orders
-                WHERE plan_id=%s AND work_order_id=%s FOR UPDATE""",
+                WHERE plan_id=%s AND work_order_id=%s FOR UPDATE""", (plan_id, work_order_id),
+            ).fetchone()
+            if plan is None or current is None:
+                raise RuntimeError("Unknown checkpoint plan/WorkOrder identity")
+            existing = conn.execute(
+                "SELECT * FROM cp_plan_work_order_checkpoints WHERE checkpoint_key=%s", (checkpoint_key,),
+            ).fetchone()
+            materialized = dict(evidence)
+            materialized["transition"] = {
+                "from_state": expected["state"],
+                "source_updated_at": str(expected.get("updated_at") or ""),
+                "source_job_id": expected.get("job_id"),
+                "source_pr_number": expected.get("pr_number"),
+            }
+            if existing is not None:
+                # Retry observes its original dependency snapshot, even after a
+                # later child has advanced. All caller-owned content is rechecked.
+                for key in ("dependencies", "next"):
+                    materialized[key] = existing["evidence"].get(key)
+            else:
+                if plan["lifecycle"] != "active" or current["lifecycle"] != "active":
+                    raise RuntimeError("Superseded orchestration cannot transition")
+                if any(current.get(key) != expected.get(key) for key in (
+                    "state", "job_id", "pr_number", "updated_at",
+                )):
+                    raise RuntimeError("Stale WorkOrder transition identity/state")
+                definition = conn.execute(
+                    "SELECT plan FROM cp_execution_plans WHERE id=%s", (plan_id,),
+                ).fetchone()
+                plan_doc = (definition or {}).get("plan") or {}
+                rows = list(conn.execute(
+                    """SELECT work_order_id, state FROM cp_plan_work_orders
+                    WHERE plan_id=%s AND lifecycle='active' ORDER BY sequence_no, work_order_id""", (plan_id,),
+                ).fetchall())
+                states = {row["work_order_id"]: row["state"] for row in rows}
+                states[work_order_id] = state
+                definitions = {item["id"]: item for item in plan_doc.get("work_orders") or []}
+                dependencies = definitions.get(work_order_id, {}).get("dependencies") or []
+                materialized["dependencies"] = {dep: states.get(dep) for dep in dependencies}
+                materialized["next"] = ready_work_order_ids(plan_doc, states)
+                self._update_work_order(conn, plan_id, work_order_id, **fields)
+            checkpoint = self._append_checkpoint(
+                conn, checkpoint_key=checkpoint_key, plan_id=plan_id, work_order_id=work_order_id,
+                kind=kind, state=state, job_id=job_id, evidence=materialized,
+            )
+            conn.commit()
+            return checkpoint
+
+    def release_launch(self, plan_id: str, work_order_id: str, job_id: str) -> bool:
+        """Release only a never-executed reservation with durable started proof."""
+        identity = launch_identity(plan_id, work_order_id)
+        if job_id != identity["job_id"]:
+            raise RuntimeError("Mismatched orchestrator launch job")
+        with self.storage.connect() as conn:
+            plan = conn.execute(
+                "SELECT * FROM cp_plan_orchestrations WHERE plan_id=%s FOR UPDATE", (plan_id,),
+            ).fetchone()
+            tracked = conn.execute(
+                "SELECT * FROM cp_plan_work_orders WHERE plan_id=%s AND work_order_id=%s FOR UPDATE",
                 (plan_id, work_order_id),
             ).fetchone()
-            if current is None:
-                conn.commit()
+            if (not plan or not tracked or plan["lifecycle"] != "active" or tracked["lifecycle"] != "active"
+                    or tracked["execution_mode"] != "agent" or tracked["state"] != "running" or tracked["job_id"] != job_id):
+                raise RuntimeError("Orchestrator launch requires exact active running WorkOrder")
+            key = transition_key(tracked, "started", job_id, {})
+            proof = conn.execute(
+                """SELECT 1 FROM cp_plan_work_order_checkpoints
+                WHERE checkpoint_key=%s AND plan_id=%s AND work_order_id=%s AND job_id=%s
+                  AND kind='started' AND state='running'""", (key, plan_id, work_order_id, job_id),
+            ).fetchone()
+            if proof is None:
+                raise RuntimeError("Orchestrator launch lacks exact durable started checkpoint")
+            job = conn.execute("SELECT * FROM cp_jobs WHERE id=%s FOR UPDATE", (job_id,)).fetchone()
+            marker = orchestrator_launch(job or {})
+            if (not marker or job["project_id"] != plan["project_id"]
+                    or any(marker.get(key) != value for key, value in identity.items())):
+                raise RuntimeError("Orchestrator launch lacks exact reservation")
+            if job["status"] != "queued" or marker["state"] == "launched":
                 return False
-            if all(current.get(key) == value for key, value in normalized.items()):
-                conn.commit()
-                return False
-
-            previous_state = str(current.get("state") or "")
-            sets: list[str] = []
-            values: list[Any] = []
-            for key, value in normalized.items():
-                if key == "detail":
-                    sets.append("detail=%s::jsonb")
-                    values.append(json.dumps(value))
-                else:
-                    sets.append(f"{key}=%s")
-                    values.append(value)
-            sets.append("updated_at=%s")
-            values.append(now())
-            values.extend([plan_id, work_order_id])
-            conn.execute(
-                f"UPDATE cp_plan_work_orders SET {', '.join(sets)} WHERE plan_id=%s AND work_order_id=%s",
-                values,
-            )
-            if previous_state in _ATTENTION_WORK_ORDER_STATES:
-                self._supersede_notification_rows(
-                    conn,
-                    plan_id=plan_id,
-                    work_order_id=work_order_id,
-                    attention_state=previous_state,
-                )
+            if marker["state"] == "held":
                 conn.execute(
-                    """UPDATE cp_control_actions SET status='cancelled', updated_at=%s
-                    WHERE status='pending' AND plan_id=%s AND work_order_id=%s""",
-                    (now(), plan_id, work_order_id),
+                    """UPDATE cp_jobs SET checkpoint=jsonb_set(checkpoint, '{orchestrator_launch,state}', '"ready"'),
+                    updated_at=%s WHERE id=%s""", (now(), job_id),
                 )
             conn.commit()
             return True
@@ -954,16 +1090,10 @@ class PlanOrchestrator:
             return None
         plan = snapshot["orchestration"]
         rows = snapshot["work_orders"]
-        definitions = {item["id"]: item for item in (plan.get("plan") or {}).get("work_orders") or []}
         states = {row["work_order_id"]: row["state"] for row in rows}
         current = next((row["work_order_id"] for row in rows if row["state"] in _BUSY_WORK_ORDER_STATES), None)
         blocked = next((row for row in rows if row["state"] == "blocked"), None)
-        ready = [
-            row["work_order_id"] for row in rows
-            if row["state"] == "pending"
-            and row["work_order_id"] in definitions
-            and all(states.get(dep) == "completed" for dep in definitions[row["work_order_id"]].get("dependencies") or [])
-        ]
+        ready = ready_work_order_ids(plan.get("plan") or {}, states)
         return {
             "plan_id": plan["plan_id"],
             "project_id": plan["project_id"],
@@ -977,6 +1107,20 @@ class PlanOrchestrator:
             "next": ready,
             "last_checkpoint": snapshot["last_checkpoint"],
         }
+
+    def _checkpoint_transition(
+        self, tracked: dict[str, Any], *, kind: str, state: str,
+        job: dict[str, Any] | None = None, pr: dict[str, Any] | None = None,
+        reason: str | None = None, **fields: Any,
+    ) -> dict[str, Any]:
+        if job is None and tracked.get("job_id"):
+            job = self.storage.get(str(tracked["job_id"]))
+        evidence = checkpoint_evidence(tracked, job, pr=pr, reason=reason)
+        job_id = fields.get("job_id", tracked.get("job_id"))
+        return self.store.transition_work_order(
+            expected=tracked, kind=kind, state=state, evidence=evidence,
+            checkpoint_key=transition_key(tracked, kind, job_id, evidence, job), **fields,
+        )
 
     async def resolve_operator(
         self,
@@ -997,10 +1141,12 @@ class PlanOrchestrator:
         detail = dict(row.get("detail") or {})
         detail["operator_note"] = note.strip()[:2000]
         if action == "complete":
-            self.store.update_work_order(plan_id, work_order_id, state="completed", detail=detail)
+            self._checkpoint_transition(row, kind="completed", state="completed", detail=detail)
             self.store.update_plan(plan_id, status="active")
         elif action == "block":
-            self.store.update_work_order(plan_id, work_order_id, state="blocked", detail=detail)
+            self._checkpoint_transition(
+                row, kind="blocked", state="blocked", reason=note.strip() or "operator_blocked", detail=detail,
+            )
             self.store.update_plan(plan_id, status="blocked")
             plan = self.storage.get_execution_plan(plan_id) or {}
             self._notify(
@@ -1050,12 +1196,18 @@ class PlanOrchestrator:
                     self._block_tracked(plan, tracked, "orchestrated_job_missing")
                     continue
                 job_status = str(job.get("status") or "")
+                marker = orchestrator_launch(job)
+                if state == "running" and job_status == "queued" and marker and marker["state"] in {"held", "ready"}:
+                    if self.store.release_launch(plan_id, work_order_id, str(job_id)):
+                        await self.engine.enqueue(str(job_id))
+                    continue
                 if job_status in _ACTIVE_JOB_STATUSES:
                     if state != "running":
                         self.store.update_work_order(plan_id, work_order_id, state="running")
                     continue
                 if job_status == "waiting_human":
-                    self.store.update_work_order(plan_id, work_order_id, state="waiting_human")
+                    if state != "waiting_human":
+                        self._checkpoint_transition(tracked, kind="waiting_human", state="waiting_human", job=job)
                     self._notify(
                         plan,
                         work_order_id=work_order_id,
@@ -1076,9 +1228,8 @@ class PlanOrchestrator:
                     delivery = dict(result.get("delivery") or {})
                     pr = dict(delivery.get("pull_request") or {})
                     if pr.get("number"):
-                        self.store.update_work_order(
-                            plan_id,
-                            work_order_id,
+                        self._checkpoint_transition(
+                            tracked, kind="accepted", job=job,
                             state="awaiting_merge",
                             pr_number=int(pr["number"]),
                             pr_url=pr.get("url"),
@@ -1089,9 +1240,8 @@ class PlanOrchestrator:
                             },
                         )
                     else:
-                        self.store.update_work_order(
-                            plan_id,
-                            work_order_id,
+                        self._checkpoint_transition(
+                            tracked, kind="completed", job=job,
                             state="completed",
                             detail={
                                 "job_id": job_id,
@@ -1126,9 +1276,8 @@ class PlanOrchestrator:
                     if job is not None and str(job.get("status") or "") in _ACTIVE_JOB_STATUSES:
                         detail = dict(tracked.get("detail") or {})
                         detail["review_repair_reopened"] = True
-                        self.store.update_work_order(
-                            plan_id,
-                            work_order_id,
+                        self._checkpoint_transition(
+                            tracked, kind="repair_reopened", job=job,
                             state="running",
                             detail=detail,
                         )
@@ -1149,9 +1298,8 @@ class PlanOrchestrator:
                             "merge_commit_sha": pr.get("merge_commit_sha"),
                         }
                     )
-                    self.store.update_work_order(
-                        plan_id,
-                        work_order_id,
+                    self._checkpoint_transition(
+                        tracked, kind="merged", pr=pr,
                         state="completed",
                         detail=detail,
                     )
@@ -1211,6 +1359,7 @@ class PlanOrchestrator:
                 if str(row.get("lifecycle") or "active") == "active"
             ]
             states = {row["work_order_id"]: row["state"] for row in tracked}
+            ready = set(ready_work_order_ids(plan_doc, states))
             for row in tracked:
                 if row["state"] != "pending":
                     continue
@@ -1218,13 +1367,11 @@ class PlanOrchestrator:
                 if not definition:
                     self._block_tracked(plan, row, "work_order_definition_missing")
                     return None
-                dependencies = list(definition.get("dependencies") or [])
-                if not all(states.get(dep) == "completed" for dep in dependencies):
+                if row["work_order_id"] not in ready:
                     continue
                 if row["execution_mode"] == "operator":
-                    self.store.update_work_order(
-                        str(plan["plan_id"]),
-                        str(row["work_order_id"]),
+                    self._checkpoint_transition(
+                        row, kind="waiting_human", reason="operator_execution_required",
                         state="waiting_human",
                         detail={"reason": "operator_execution_required"},
                     )
@@ -1255,17 +1402,17 @@ class PlanOrchestrator:
                     "provider_state": {},
                     "dry_run": False,
                 }
-                created_job_id = self.engine.create_job(payload)
-                self.store.update_work_order(
-                    str(plan["plan_id"]),
-                    str(row["work_order_id"]),
+                created_job_id = self.engine.create_job(
+                    payload, _orchestration=(str(plan["plan_id"]), str(row["work_order_id"])),
+                )
+                self._checkpoint_transition(
+                    row, kind="started", job=self.storage.get(created_job_id),
                     state="running",
                     job_id=created_job_id,
                     detail={"job_id": created_job_id},
                 )
                 self.store.update_plan(str(plan["plan_id"]), status="executing")
-                job = self.storage.get(created_job_id)
-                if job and str(job.get("status")) == "queued":
+                if self.store.release_launch(str(plan["plan_id"]), str(row["work_order_id"]), created_job_id):
                     await self.engine.enqueue(created_job_id)
                 return {"plan_id": str(plan["plan_id"]), "work_order_id": str(row["work_order_id"]), "job_id": created_job_id}
         return None
@@ -1325,9 +1472,8 @@ class PlanOrchestrator:
             if isinstance(item, dict)
         )
         ci_failures = int(progress.get("ci_failures", 0) or 0)
-        self.store.update_work_order(
-            plan_id,
-            work_order_id,
+        self._checkpoint_transition(
+            tracked, kind="blocked", job=job, reason=reason,
             state="blocked",
             detail={
                 "reason": reason,
@@ -1358,9 +1504,8 @@ class PlanOrchestrator:
     def _block_tracked(self, plan: dict[str, Any], tracked: dict[str, Any], reason: str) -> None:
         plan_id = str(plan["plan_id"])
         work_order_id = str(tracked["work_order_id"])
-        self.store.update_work_order(
-            plan_id,
-            work_order_id,
+        self._checkpoint_transition(
+            tracked, kind="blocked", reason=reason,
             state="blocked",
             detail={"reason": reason},
         )

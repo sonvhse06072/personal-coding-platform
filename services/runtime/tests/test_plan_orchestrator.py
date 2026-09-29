@@ -5,6 +5,7 @@ from copy import deepcopy
 from datetime import datetime, timezone
 
 from app.plan_orchestrator import PlanOrchestrator
+from checkpoint_fakes import CheckpointTransitions
 
 
 def work_order(work_order_id, *, dependencies=None, requested_role="developer"):
@@ -102,7 +103,7 @@ class FakeEngine:
         self.created = []
         self.enqueued = []
 
-    def create_job(self, payload):
+    def create_job(self, payload, *, _orchestration=None):
         self.created.append(deepcopy(payload))
         job_id = payload["_job_id"]
         self.storage.jobs.setdefault(
@@ -122,7 +123,7 @@ class FakeEngine:
         self.enqueued.append(job_id)
 
 
-class FakeStore:
+class FakeStore(CheckpointTransitions):
     def __init__(self, plan, tracked):
         self.plan = plan
         self.tracked = [dict(item) for item in tracked]
@@ -162,7 +163,10 @@ class FakeStore:
 
     def update_work_order(self, plan_id, work_order_id, **fields):
         row = next(item for item in self.tracked if item["work_order_id"] == work_order_id)
+        if all(row.get(key) == value for key, value in fields.items()):
+            return False
         row.update(deepcopy(fields))
+        row["updated_at"] = datetime.now(timezone.utc)
 
     def any_busy_work_order(self):
         return any(
