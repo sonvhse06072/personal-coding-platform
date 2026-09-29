@@ -110,6 +110,61 @@ PM may not autonomously:
 - materially expand the project/personal resource envelope or override a justified emergency ceiling;
 - merge a PR whose content or unresolved finding requires a Human Owner decision.
 
+### Human-operated ChatGPT PM model convention
+
+This subsection applies only when the Human Owner is manually using ChatGPT as
+the Product Manager/operator outside Runtime/Router staffing. It does **not**
+change Router authority, PCP model registry, provider policy, WorkOrder role
+identity, or the architectural rule that a logical role is not a model name.
+The role remains Product Manager; the settings below are operator-side ChatGPT
+configuration choices.
+
+Use the following operating defaults:
+
+- routine PM checks such as CI/status inspection, short log triage and narrow
+  operational verification may use GPT-5.6 Sol with **High** reasoning;
+- substantive PM work defaults to GPT-5.6 Sol with **Extra High** reasoning,
+  including planning, root-cause analysis, bounded patch review, governance
+  checks and rollout decisions;
+- GPT-6 Pro is reserved for unusually difficult or high-blast-radius PM
+  reasoning where additional model capability is materially useful.
+
+Typical triggers for a GPT-6 Pro recommendation include:
+
+- architecture or state-machine changes spanning multiple services/lifecycle
+  transitions;
+- concurrency, race-condition or finalizer/lease correctness;
+- durable-state migration, checkpoint/recovery/resume semantics;
+- security, trust-boundary or authority-boundary changes;
+- high-blast-radius governance/resource-policy changes;
+- final PM review of an unusually complex hotfix or patch where several
+  independent invariants interact.
+
+Before beginning substantive work for which GPT-6 Pro is recommended, PM should
+tell the Human Owner explicitly so the Human Owner can select the model in the
+ChatGPT UI. Use a concise form such as:
+
+```text
+Model recommendation: GPT-6 Pro — <bounded reason>.
+```
+
+Do not recommend GPT-6 Pro for routine work merely because it is available.
+Model scarcity/usage, latency and Human Owner attention remain legitimate
+resource considerations.
+
+The labels **High**, **Extra High**, and the named ChatGPT models in this
+subsection are external operator-product settings, not PCP Router reasoning
+effort values or architecture invariants. They may change as the ChatGPT
+product changes. Revalidate material capability/availability claims when they
+matter, and update this convention rather than hard-coding a commercial plan or
+ChatGPT UI setting into Runtime/Router policy.
+
+A longer ChatGPT conversation is not a substitute for repository continuity.
+PM must continue to treat the checked-in project docs plus current executable
+evidence as authoritative over chat history. When a PM chat is restarted or its
+active context is insufficient, recover through the repository reading order
+and live state checks defined in `AGENTS.md` and `docs/project/README.md`.
+
 ## 4. Router / Staffing Policy
 
 Router answers **who/how expensive/how strong**, not **what/why**.
