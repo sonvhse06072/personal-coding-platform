@@ -88,6 +88,15 @@ Current Runtime responsibilities:
 
 Runtime is an engineering-operations orchestrator. It does not own project/product direction.
 
+After successful base verification, project-owned path-scoped
+`ddev.auto_required_phases` apply to both legacy jobs without a WorkOrder and
+WorkOrder-backed jobs. Matching phases supplement WorkOrder-required phases
+in deterministic order; phases already present in that verification result are
+not rerun. Missing configured commands, completed phases without executed-command
+evidence, or a failed required phase fail final verification.
+Executed additional phases carry final/required evidence and command counts;
+the existing verification-attempt and review-repair churn accounting remain intact.
+
 Supersession is never inferred from ticket identity, WorkOrder naming, source
 commit, timestamps, later PR success or PM prose. Runtime accepts it only
 through the exact-identity supersession operation. A superseded WorkOrder and

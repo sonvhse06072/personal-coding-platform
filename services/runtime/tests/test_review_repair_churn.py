@@ -277,10 +277,13 @@ def test_guard_stops_before_another_developer_model_turn(monkeypatch, tmp_path):
     assert storage.row["progress"]["model_calls"] == 119
 
 
-def test_guard_stops_before_another_ddev_verification_cycle():
+def test_guard_stops_before_another_ddev_verification_cycle(monkeypatch):
     row = _row(status="verifying", repairs=42, verifications=53)
     storage = MemoryStorage(row)
     engine = _engine(storage)
+    original_epoch = deepcopy(row["checkpoint"][EPOCH_KEY])
+    current_diff = Mock(side_effect=AssertionError("Auto phases must not be resolved after churn stop"))
+    monkeypatch.setattr("app.engine.diff_state", current_diff)
 
     class NoDdev:
         async def phase(self, **_kwargs):
@@ -293,7 +296,13 @@ def test_guard_stops_before_another_ddev_verification_cycle():
                 row["id"],
                 "demo",
                 "/workspaces/job-churn-1",
-                {"ddev": {"enabled": True}},
+                {"ddev": {
+                    "enabled": True,
+                    "auto_required_phases": [
+                        {"phase": "frontend_quality", "path_prefixes": ["frontend/"]},
+                    ],
+                    "frontend_quality": ["browser"],
+                }},
                 row["route"]["strategy"],
                 time.monotonic(),
                 deepcopy(row["progress"]),
@@ -301,6 +310,8 @@ def test_guard_stops_before_another_ddev_verification_cycle():
         )
     assert storage.row["status"] == "waiting_human"
     assert storage.row["progress"]["verification_attempts"] == 53
+    assert storage.row["checkpoint"][EPOCH_KEY] == original_epoch
+    current_diff.assert_not_called()
 
 
 def test_interrupted_ddev_attempt_is_durable_and_blocks_replay_after_restart():
