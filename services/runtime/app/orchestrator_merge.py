@@ -20,8 +20,8 @@ class PlanOrchestrator(CorePlanOrchestrator):
     after a fresh GitHub read confirms the exact PR was merged.
     """
 
-    def __init__(self, storage: Any, engine: Any, *, store: Any | None = None) -> None:
-        super().__init__(storage, engine, store=store)
+    def __init__(self, storage: Any, engine: Any, *, store: Any | None = None, progress_handoffs: Any = None) -> None:
+        super().__init__(storage, engine, store=store, progress_handoffs=progress_handoffs)
         self.merge_audit = PMMergeAuditStore(storage)
 
     @staticmethod

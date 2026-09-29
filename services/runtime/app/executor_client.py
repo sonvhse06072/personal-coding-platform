@@ -44,6 +44,19 @@ class DdevExecutorClient:
         except httpx.HTTPError:
             return False
 
+    async def upsert_plan_progress(
+        self, *, project_id: str, issue_number: int, handoff_key: str,
+        body: str, known_comment_id: int | None = None,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=120) as client:
+            response = await client.post(
+                f"{self.base}/v1/github/pm-bridge/progress", headers=self.headers,
+                json={"project_id": project_id, "issue_number": issue_number,
+                      "handoff_key": handoff_key, "body": body, "known_comment_id": known_comment_id},
+            )
+            response.raise_for_status()
+            return response.json()
+
     async def cancel(self, *, job_id: str) -> bool:
         try:
             async with httpx.AsyncClient(timeout=5) as client:

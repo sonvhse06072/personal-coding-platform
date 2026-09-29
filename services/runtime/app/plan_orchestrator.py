@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import uuid
 from datetime import timedelta
@@ -1027,10 +1028,12 @@ class PlanOrchestratorStore:
 
 
 class PlanOrchestrator:
-    def __init__(self, storage: Storage, engine: Any, *, store: PlanOrchestratorStore | None = None) -> None:
+    def __init__(self, storage: Storage, engine: Any, *, store: PlanOrchestratorStore | None = None, progress_handoffs: Any = None) -> None:
         self.storage = storage
         self.engine = engine
         self.store = store or PlanOrchestratorStore(storage)
+        self.progress_handoffs = progress_handoffs
+        self._progress_installed = False
         self._task: asyncio.Task[None] | None = None
         self._lock = asyncio.Lock()
         self._stopping = False
@@ -1066,14 +1069,42 @@ class PlanOrchestrator:
 
     async def tick(self) -> dict[str, Any]:
         async with self._lock:
+            self._ensure_progress_handoffs()
             registered = self.store.register_new_plans()
-            plans = self.store.active_plans()
-            for plan in plans:
-                await self._reconcile_plan(plan)
-            launched = None
-            if not self.store.any_busy_work_order():
-                launched = await self._launch_one()
-            return {"registered": registered, "launched": launched}
+            self._stage_progress_handoffs(registered)
+            try:
+                plans = self.store.active_plans()
+                for plan in plans:
+                    await self._reconcile_plan(plan)
+                launched = None
+                if not self.store.any_busy_work_order():
+                    launched = await self._launch_one()
+                return {"registered": registered, "launched": launched}
+            finally:
+                # All engineering transactions have ended, including terminal
+                # transitions. Failed staging is retried from durable snapshots.
+                self._stage_progress_handoffs()
+
+    def _ensure_progress_handoffs(self) -> None:
+        if self.progress_handoffs is not None and not self._progress_installed:
+            try:
+                self.progress_handoffs.ensure()
+                self._progress_installed = True
+            except Exception as exc:
+                logging.getLogger(__name__).warning("Progress installation unavailable (%s)", type(exc).__name__)
+
+    def _stage_progress_handoffs(self, plan_ids: list[str] | None = None) -> None:
+        if not self._progress_installed:
+            return
+        try:
+            candidates = plan_ids if plan_ids is not None else self.progress_handoffs.candidates()
+            for plan_id in candidates:
+                try:
+                    self.progress_handoffs.stage_plan(plan_id)
+                except Exception as exc:
+                    logging.getLogger(__name__).warning("Progress staging unavailable (%s)", type(exc).__name__)
+        except Exception as exc:
+            logging.getLogger(__name__).warning("Progress candidates unavailable (%s)", type(exc).__name__)
 
     def view(self, plan_id: str) -> dict[str, Any] | None:
         orchestration = self.store.orchestration(plan_id)

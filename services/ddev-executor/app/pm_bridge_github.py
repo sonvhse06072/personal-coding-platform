@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from .continuity_github import router as continuity_router
 from .github_delivery import GitHubDelivery, github_repository_from_origin
 from .github_merge import merge_pull_request
+from .plan_progress_github import ProgressRequest, upsert_progress
 
 
 router = APIRouter(prefix="/v1/github/pm-bridge", tags=["pm-bridge"])
@@ -88,6 +89,17 @@ def _issue_number(issue_url: str) -> int:
     if not match:
         raise ValueError("GitHub comment does not reference a bounded issue URL")
     return int(match.group(1))
+
+
+@router.post("/progress", dependencies=[Depends(auth)])
+def progress(payload: ProgressRequest) -> dict[str, Any]:
+    delivery, repository = _repository(payload.project_id)
+    try:
+        return upsert_progress(delivery, repository, payload)
+    except (httpx.HTTPError, RuntimeError, ValueError, KeyError) as exc:
+        # Never reflect GitHub response bodies or credentials into Runtime errors.
+        raise HTTPException(502 if isinstance(exc, httpx.HTTPError) else 409,
+                            f"Progress publication failed ({type(exc).__name__})") from exc
 
 
 def _validate_ai_branch(cfg: dict[str, Any], branch: str) -> None:
