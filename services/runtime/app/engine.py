@@ -18,6 +18,7 @@ from .baseline import resolve_project_baseline
 from .config import project_config
 from .engine_delivery import RuntimeEngine as _RuntimeEngine
 from .intake_policy import IntakeDecision
+from .model_capabilities import next_supported_effort
 from .repo import diff_state
 from .preview import ProjectPreviewManager
 from .review_repair_churn import EPOCH_KEY as REVIEW_REPAIR_CHURN_EPOCH_KEY
@@ -42,7 +43,6 @@ from .work_order import (
 )
 
 
-_REASONING_ORDER = ["low", "medium", "high"]
 _OWNER_BUDGET_HARD_MAX = {
     "max_model_calls": 100,
     "max_tool_calls": 500,
@@ -146,18 +146,13 @@ class RuntimeEngine(_RuntimeEngine):
     def _next_reasoning_choice(
         current_choice: dict[str, Any], strategy: dict[str, Any], role: str = "executor"
     ) -> dict[str, Any] | None:
-        if current_choice.get("adapter") != "codex_cli":
-            return None
         current = current_choice.get("reasoning_effort")
         ceiling = (strategy.get("reasoning_ceiling") or {}).get(role)
-        if current not in _REASONING_ORDER or ceiling not in _REASONING_ORDER:
-            return None
-        current_idx = _REASONING_ORDER.index(current)
-        ceiling_idx = _REASONING_ORDER.index(ceiling)
-        if current_idx >= ceiling_idx:
+        next_effort = next_supported_effort(current_choice, ceiling)
+        if next_effort is None:
             return None
         next_choice = dict(current_choice)
-        next_choice["reasoning_effort"] = _REASONING_ORDER[current_idx + 1]
+        next_choice["reasoning_effort"] = next_effort
         reasons = list(next_choice.get("reasons") or [])
         reasons.append(f"reasoning escalation {current}->{next_choice['reasoning_effort']}")
         next_choice["reasons"] = reasons

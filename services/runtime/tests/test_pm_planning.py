@@ -42,10 +42,11 @@ class FakeRouter:
             "role": "product_manager",
             "profile": payload["profile"],
             "choice": {
-                "id": "codex_plus",
+                "id": "codex_terra",
                 "provider": "openai",
-                "adapter": "fake",
-                "model": "fake-model",
+                "adapter": "codex_cli",
+                "model": "gpt-5.6-terra",
+                "reasoning_effort": "low",
                 "score": 0.9,
                 "predicted_success": 0.9,
                 "reasons": ["test"],
@@ -199,7 +200,7 @@ def configure(monkeypatch, tmp_path: Path, output: dict, *, mutate: bool = False
         storage,
         router=router,
         ddev=ddev,
-        adapter_builder=lambda adapter_name, model: adapter,
+        adapter_builder=lambda adapter_name, model, reasoning_effort=None: adapter,
     )
     request = PMPlanCreateRequest(project_id="demo", ticket=ticket(), baseline_revision="v1")
     return planner, request, storage, router, ddev, adapter
@@ -218,7 +219,7 @@ def test_pm_creates_ready_dependency_aware_plan(monkeypatch, tmp_path):
     assert row["plan"]["ready_work_order_ids"] == ["WO-1"]
     assert row["baseline_revision"] == "v1"
     assert row["baseline_source_commit"] == "a" * 40
-    assert row["staffing"]["choice"]["id"] == "codex_plus"
+    assert row["staffing"]["choice"]["id"] == "codex_terra"
     assert row["usage"]["model_calls"] == 1
     assert len(router.calls) == 1
     assert router.calls[0]["role"] == "product_manager"
@@ -331,6 +332,44 @@ def test_pm_workspace_mutation_fails_closed(monkeypatch, tmp_path):
     assert "modified the read-only planning workspace" in row["error"]
     assert len(adapter.calls) == 1
     assert len(ddev.remove_calls) == 1
+
+
+def test_pm_planning_rejects_invalid_staffing_before_workspace_or_model_call(
+    monkeypatch,
+    tmp_path,
+):
+    planner, request, _, _, ddev, adapter = configure(
+        monkeypatch,
+        tmp_path,
+        proposal(work_order()),
+    )
+
+    class InvalidStaffingRouter:
+        async def staff(self, payload: dict) -> dict:
+            return {
+                "request_id": payload["request_id"],
+                "project_id": payload["project_id"],
+                "role": "product_manager",
+                "profile": payload["profile"],
+                "choice": {
+                    "id": "antigravity_free",
+                    "provider": "google_antigravity",
+                    "adapter": "antigravity_host",
+                    "model": "gemini-3.8-flash-medium",
+                    "reasoning_effort": "max",
+                },
+                "policy_version": 19,
+                "registry_version": 10,
+            }
+
+    planner.router = InvalidStaffingRouter()
+    row = asyncio.run(planner.create_plan(request))
+
+    assert row["status"] == "failed"
+    assert "unsupported" in row["error"]
+    assert row["usage"] is None
+    assert ddev.create_calls == []
+    assert adapter.calls == []
 
 
 def test_pm_requires_approved_baseline_before_persistence(monkeypatch, tmp_path):

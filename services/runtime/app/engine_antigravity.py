@@ -8,8 +8,6 @@ from .quota_runtime import quota_coordinator
 from .state import checkpoint_from_row, migrate_legacy_provider_quota_failure
 
 
-_REASONING_ORDER = ["low", "medium", "high"]
-_REASONING_ADAPTERS = {"codex_cli", "antigravity_host"}
 class RuntimeEngine(BaseRuntimeEngine):
     """Runtime engine with Antigravity model/quota-aware recovery semantics."""
 
@@ -23,29 +21,6 @@ class RuntimeEngine(BaseRuntimeEngine):
         # Stop the advisory collector before Runtime tears down its worker loop.
         await quota_coordinator.stop()
         await super().stop()
-
-    @staticmethod
-    def _next_reasoning_choice(
-        current_choice: dict[str, Any],
-        strategy: dict[str, Any],
-        role: str = "executor",
-    ) -> dict[str, Any] | None:
-        if current_choice.get("adapter") not in _REASONING_ADAPTERS:
-            return None
-        current = current_choice.get("reasoning_effort")
-        ceiling = (strategy.get("reasoning_ceiling") or {}).get(role)
-        if current not in _REASONING_ORDER or ceiling not in _REASONING_ORDER:
-            return None
-        current_idx = _REASONING_ORDER.index(current)
-        ceiling_idx = _REASONING_ORDER.index(ceiling)
-        if current_idx >= ceiling_idx:
-            return None
-        next_choice = dict(current_choice)
-        next_choice["reasoning_effort"] = _REASONING_ORDER[current_idx + 1]
-        reasons = list(next_choice.get("reasons") or [])
-        reasons.append(f"reasoning escalation {current}->{next_choice['reasoning_effort']}")
-        next_choice["reasons"] = reasons
-        return next_choice
 
     @staticmethod
     def _mark_provider_failure(

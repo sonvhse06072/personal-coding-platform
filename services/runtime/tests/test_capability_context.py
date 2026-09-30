@@ -6,6 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import app.engine_execution as execution_module
+import pytest
 from app.adapters.base import AgentAdapter, AgentRun, InvocationCapabilities
 from app.adapters.codex import CodexAdapter
 from app.capability_context import agent_verification_capability_context
@@ -284,11 +285,22 @@ class EngineAdapter(AgentAdapter):
 
 def _engine_route(executor_adapter: str, evaluator_adapter: str) -> dict:
     def choice(adapter: str, role: str) -> dict:
+        registry = {
+            "codex_cli": ("codex_terra", "openai", "gpt-5.6-terra", "low"),
+            "opencode": (
+                "openrouter_qwen3_coder_free",
+                "openrouter",
+                "openrouter/cohere/north-mini-code:free",
+                None,
+            ),
+        }
+        model_id, provider, model, effort = registry[adapter]
         return {
-            "id": f"{role}-{adapter}",
-            "provider": "fixture-provider",
+            "id": model_id,
+            "provider": provider,
             "adapter": adapter,
-            "model": f"fixture-{role}",
+            "model": model,
+            "reasoning_effort": effort,
         }
 
     return {
@@ -450,3 +462,101 @@ def test_engine_configured_but_unrequired_phase_is_not_required_for_evaluator(
     assert "when they are applicable" in result["prompts"]["execute"][0]
     assert "AGENT CAPABILITY BOUNDARY" not in result["prompts"]["evaluate"][0]
     assert "opaque_listener_gate" not in result["prompts"]["evaluate"][0]
+
+
+def _invalid_antigravity_choice() -> dict:
+    return {
+        "id": "antigravity_free",
+        "provider": "google_antigravity",
+        "adapter": "antigravity_host",
+        "model": "gemini-3.8-flash-medium",
+        "reasoning_effort": "max",
+    }
+
+
+def _run_invalid_engine_choice(monkeypatch, tmp_path: Path, phase: str):
+    job_id = f"job-invalid-{phase}"
+    workspace_root = tmp_path / "workspaces"
+    workspace = workspace_root / job_id
+    workspace.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q"], cwd=workspace, check=True)
+    subprocess.run(["git", "config", "user.email", "tests@example.com"], cwd=workspace, check=True)
+    subprocess.run(["git", "config", "user.name", "Tests"], cwd=workspace, check=True)
+    (workspace / "README.md").write_text("baseline\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], cwd=workspace, check=True)
+    subprocess.run(["git", "commit", "-qm", "baseline"], cwd=workspace, check=True)
+
+    route = _engine_route("codex_cli", "opencode")
+    if phase == "planner":
+        route["strategy"]["planner"] = _invalid_antigravity_choice()
+    elif phase == "executor":
+        route["strategy"]["executor"] = _invalid_antigravity_choice()
+        route["strategy"]["evaluator"] = None
+    elif phase == "evaluator":
+        route["strategy"]["evaluator"] = _invalid_antigravity_choice()
+    else:
+        raise AssertionError(phase)
+
+    storage = EngineStorage(
+        {
+            "id": job_id,
+            "project_id": "demo",
+            "status": "queued",
+            "source_commit": "a" * 40,
+            "workspace": str(workspace),
+            "branch": f"ai/{job_id}",
+            "task": {"title": "Capability rejection", "description": "Do not invoke"},
+            "repo_analysis": {"estimated_files": 1},
+            "route": route,
+            "checkpoint": {"provider_state": {}, "workspace_mode": "isolated_clone"},
+            "progress": {"model_calls": 0},
+        }
+    )
+    prompts: dict[str, list[str]] = {}
+    engine = object.__new__(RuntimeEngine)
+    engine.storage = storage
+    engine.router = EngineRouter()
+    engine.ddev = EngineDdev()
+    engine.workspace_root = workspace_root
+    builder_calls: list[tuple[str, str, str | None]] = []
+
+    monkeypatch.setattr(execution_module, "project_config", lambda project_id: _engine_project())
+
+    def builder(adapter: str, model: str, reasoning_effort: str | None = None):
+        builder_calls.append((adapter, model, reasoning_effort))
+        return EngineAdapter(adapter, model, prompts, "listener/implementation.txt")
+
+    monkeypatch.setattr(execution_module, "build_adapter", builder)
+    with pytest.raises(RuntimeError, match="unsupported"):
+        asyncio.run(engine.run_job(job_id))
+    return storage, builder_calls
+
+
+@pytest.mark.parametrize("phase", ["planner", "executor"])
+def test_invalid_persisted_choice_consumes_zero_model_calls_and_builds_no_adapter(
+    monkeypatch,
+    tmp_path,
+    phase,
+):
+    storage, builder_calls = _run_invalid_engine_choice(
+        monkeypatch,
+        tmp_path / phase,
+        phase,
+    )
+
+    assert storage.row["progress"]["model_calls"] == 0
+    assert builder_calls == []
+
+
+def test_invalid_evaluator_choice_does_not_record_a_second_model_attempt(
+    monkeypatch,
+    tmp_path,
+):
+    storage, builder_calls = _run_invalid_engine_choice(
+        monkeypatch,
+        tmp_path / "evaluator",
+        "evaluator",
+    )
+
+    assert storage.row["progress"]["model_calls"] == 1
+    assert len(builder_calls) == 1

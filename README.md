@@ -494,7 +494,7 @@ The registry already reserves `adapter: litellm` for Groq, Cloudflare and Luna u
 
 ## Model IDs
 
-`config/models.yml` currently uses `gpt-5.6-sol` for the normal Codex Plus pool and `gpt-6-astra` for frontier escalation. Plus includes Sol and Astra access subject to your account's current Codex allowance/availability. OpenCode model IDs are catalog/provider IDs; if a provider changes an alias, verify it once with `opencode models` and update only `config/models.yml`.
+`config/models.yml` currently uses `gpt-5.6-sol` in the shared ChatGPT-backed Codex subscription pool and `gpt-6-astra` for manual frontier escalation. The durable quota-group literal `codex_chatgpt_plus` is retained as a legacy stable identifier and does not assert the current commercial plan name. ChatGPT-session allowance and API-key OpenAI usage remain separate resources. OpenCode model IDs are catalog/provider IDs; if a provider changes an alias, verify it once with `opencode models` and update only `config/models.yml`.
 
 ## v1.0.3 integration fixes
 

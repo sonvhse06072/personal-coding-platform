@@ -31,10 +31,10 @@ class FakeRouter:
             "role": "product_manager",
             "profile": payload["profile"],
             "choice": {
-                "id": "pm-model",
-                "provider": "other-provider",
-                "adapter": "fake",
-                "model": "pm-model-name",
+                "id": "codex_terra",
+                "provider": "openai",
+                "adapter": "codex_cli",
+                "model": "gpt-5.6-terra",
                 "reasoning_effort": "low",
                 "score": 0.9,
                 "predicted_success": 0.9,
@@ -231,7 +231,7 @@ def test_pm_reassessment_uses_different_model_and_keeps_workspace_read_only(tmp_
         )
     )
 
-    assert result["model_id"] == "pm-model"
+    assert result["model_id"] == "codex_terra"
     assert result["decision"]["action"] == "approve_continue"
     assert router.calls[0]["exclude_model_ids"] == ["developer-model"]
     assert len(adapter.calls) == 1
@@ -298,6 +298,79 @@ def test_pm_reassessment_fails_closed_if_pm_mutates_workspace(tmp_path) -> None:
                 adapter_builder=lambda *_args: adapter,
             )
         )
+
+
+def test_pm_reassessment_rejects_invalid_choice_before_precharge_or_invocation(
+    tmp_path,
+) -> None:
+    class InvalidRouter:
+        async def staff(self, payload: dict) -> dict:
+            return {
+                "request_id": payload["request_id"],
+                "project_id": payload["project_id"],
+                "role": "product_manager",
+                "profile": payload["profile"],
+                "choice": {
+                    "id": "antigravity_free",
+                    "provider": "google_antigravity",
+                    "adapter": "antigravity_host",
+                    "model": "gemini-3.8-flash-medium",
+                    "reasoning_effort": "max",
+                },
+                "policy_version": 19,
+                "registry_version": 10,
+            }
+
+    root = workspace(tmp_path)
+    ddev = FakeDdev(root, tmp_path)
+    adapter = FakeAdapter(
+        {
+            "action": "approve_continue",
+            "summary": "must not run",
+            "developer_message": None,
+            "human_necessity": None,
+            "unresolved_risks": [],
+            "human_triggers": [],
+        }
+    )
+    precharges: list[str] = []
+    source_commit = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout.strip()
+
+    with pytest.raises(RuntimeError, match="unsupported"):
+        asyncio.run(
+            run_pm_reassessment(
+                router=InvalidRouter(),
+                ddev=ddev,
+                workspace=root,
+                job_id="job-invalid-pm",
+                project_id="demo",
+                source_commit=source_commit,
+                profile="standard",
+                current_executor={"id": "developer-model"},
+                provider_state={},
+                work_order={"id": "WO-1"},
+                baseline={"revision": "v1"},
+                trigger={"signal": "changed_file_working_target_exceeded"},
+                diff={"diff_hash": "invalid"},
+                verification={"passed": True},
+                review_summary=None,
+                developer_report=None,
+                decision_context={},
+                max_diff_bytes=500000,
+                timeout_seconds=60,
+                adapter_builder=lambda *_args: adapter,
+                precharge_call=lambda: precharges.append("charged"),
+            )
+        )
+
+    assert precharges == []
+    assert adapter.calls == []
+    assert ddev.created == []
 
 
 def test_pm_mutation_never_changes_developer_workspace(tmp_path) -> None:

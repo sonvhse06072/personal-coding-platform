@@ -33,6 +33,27 @@ def test_route_endpoint():
     assert "strategy" in data
 
 
+def test_models_endpoint_exposes_per_model_reasoning_capabilities():
+    response = client.get("/v1/models", headers=HEADERS)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["version"] == 10
+    assert data["models"]["codex_terra"]["reasoning_efforts"] == [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+    ]
+    assert data["models"]["antigravity_free"]["reasoning_efforts"] == [
+        "low",
+        "medium",
+        "high",
+    ]
+    assert data["models"]["antigravity_claude_sonnet"]["reasoning_efforts"] == []
+
+
 @pytest.mark.parametrize("configured", [None, "", "   ", "CHANGE_ME", "change-me"])
 def test_router_auth_fails_closed_when_token_is_not_configured(monkeypatch, configured):
     if configured is None:

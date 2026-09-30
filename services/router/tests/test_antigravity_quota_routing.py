@@ -50,7 +50,7 @@ def test_registry_exposes_explicit_antigravity_models_and_quota_groups():
     cfg = get_config()["models"]
     models = cfg["models"]
 
-    assert cfg["version"] == 9
+    assert cfg["version"] == 10
     assert models["antigravity_free"]["model"] == "gemini-3.8-flash-medium"
     assert models["antigravity_flash_high"]["model"] == "gemini-3.8-flash-high"
     assert models["antigravity_gemini_pro"]["model"] == "gemini-3.1-pro-high"
@@ -59,6 +59,28 @@ def test_registry_exposes_explicit_antigravity_models_and_quota_groups():
     assert models["antigravity_gemini_pro"]["quota_group"] == "antigravity_gemini"
     assert models["antigravity_claude_sonnet"]["quota_group"] == "antigravity_claude_gpt"
     assert models["antigravity_claude_sonnet"]["supports_reasoning_effort"] is False
+    assert models["antigravity_free"]["reasoning_efforts"] == ["low", "medium", "high"]
+    assert "reasoning_efforts" not in models["antigravity_claude_sonnet"]
+
+
+def test_shared_legacy_codex_quota_key_suppresses_all_codex_models():
+    request = standard_request(
+        {"quota:codex_chatgpt_plus": unavailable()}
+    )
+    engine = make_engine()
+    dimensions = engine.compute_dimensions(request)
+
+    _, rejected = engine.select_model(
+        role="executor",
+        role_names=["executor", "critical_executor", "frontier_escalation"],
+        preferred_ids=["codex_luna", "codex_terra", "codex_sol", "frontier_codex"],
+        request=request,
+        dimensions=dimensions,
+        profile="critical",
+    )
+
+    for model_id in ("codex_luna", "codex_terra", "codex_sol", "frontier_codex"):
+        assert "provider/model unavailable" in rejected[model_id]
 
 
 def test_standard_route_applies_reasoning_effort_to_antigravity():

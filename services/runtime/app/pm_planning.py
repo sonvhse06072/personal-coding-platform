@@ -12,6 +12,7 @@ from .adapters.factory import build_adapter
 from .baseline import ProjectBaseline, SourceReference, resolve_project_baseline
 from .config import project_config
 from .executor_client import DdevExecutorClient
+from .model_capabilities import validate_model_choice
 from .router_client import RouterClient
 from .schemas import RepoHints, SemanticSignals
 from .shell import run_command
@@ -447,6 +448,9 @@ class PMPlanner:
             )
             self.storage.update_execution_plan(plan_id, staffing=staffing)
 
+            choice = staffing.get("choice") or {}
+            validate_model_choice(choice)
+
             workspace_info = await self.ddev.create_workspace(
                 job_id=plan_id,
                 project_id=request.project_id,
@@ -462,8 +466,11 @@ class PMPlanner:
             _validate_baseline_files(workspace, baseline)
             before = await _workspace_state(workspace)
 
-            choice = staffing.get("choice") or {}
-            adapter = self.adapter_builder(str(choice["adapter"]), str(choice["model"]))
+            adapter = self.adapter_builder(
+                str(choice["adapter"]),
+                str(choice["model"]),
+                choice.get("reasoning_effort"),
+            )
             run = await adapter.run(
                 workspace=workspace,
                 prompt=_planning_prompt(

@@ -2,7 +2,7 @@
 
 Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and live Runtime/GitHub evidence remain authoritative over chat history. Completed chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-10-01 for #357 adapter verification-capability context source review.
+Last updated: 2026-10-01 for #359 Phase 2/3 capability and quota-identity review.
 
 ## Resume order
 
@@ -17,15 +17,17 @@ Memory-tier rules and the proposed Context Composer contract are in `context-mem
 
 ## Current platform snapshot
 
-- Exact #357 implementation base: `10adba21455e837bd906f423b2f73e1a204ceec8`.
-- Current working-tree source identities on
-  `ai/357-codex-listener-capability-context` (unstaged/uncommitted; not
-  rolled out):
+- Exact #359 implementation base: `9e47bb2938f2f769bd6b43bfacf984a437c4e38f`.
+- Current deployed identities, unchanged by this review-only branch:
   - Runtime `1.0.78`;
   - Router `1.0.30`;
+  - model registry `9`;
   - routing policy `19`;
   - ddev-executor `1.0.28`;
   - safe quota Antigravity bridge `1.12`.
+- The unstaged/uncommitted `ai/359-codex-effort-capabilities` working tree
+  proposes Runtime `1.0.79`, Router `1.0.31` and model registry `10`; routing
+  policy `19`, ddev-executor and the bridge remain unchanged.
 - PM-controlled routine merge is implemented and operationally proven. Developer agents never merge.
 - Healthy-progress non-blocking remains mandatory: static task/profile/provider-failover counters alone are not Human Owner stop reasons while meaningful progress continues inside the approved resource envelope.
 - On effective adaptive WorkOrders, `max_changed_files` is a semantic working target. Crossing it enters a bounded Product Manager reassessment; PM must be staffed with a different model from the Primary Developer and any approval is exact-diff-bound. Emergency overflow and actual sensitive/protected changed paths remain fail-closed boundaries. Legacy-hard WorkOrders retain strict file-count semantics.
@@ -71,35 +73,40 @@ Historical DEC-025 PCP orchestration is retired. Do not recreate, reroute or res
 
 ## Active PCP work
 
-### #357 — Adapter verification-capability context
+### #359 — Per-model reasoning capability and durable Codex quota identity
 
-Status: source implementation is validated locally on
-`ai/357-codex-listener-capability-context` and pending independent PM exact-patch
-review. No live Runtime restart/job, deployment, Chợ Nhạc mutation or DS-1
-resume was performed.
+Status: Phase 2/3 implementation is validated locally on
+`ai/359-codex-effort-capabilities` and pending independent PM exact-patch review.
+Phase 4 Astra routing expansion was not implemented. No live Runtime restart,
+PCP job, deployment, Chợ Nhạc mutation or DS-1 operation was performed.
 
-Adapters now declare invocation capabilities, defaulting to local-listener
-capable. Codex declares the listener unavailable for workspace-write
-execute/repair and read-only evaluation while preserving `approval_policy=never`
-and workspace network disabled; planning remains unaffected. Project DDEV phase
-metadata declares `frontend_quality` requires `local_listener`. Runtime injects
-only the unavailable capability, bounded reason and phase name. Developer
-context names project-owned listener phases conditionally before a future diff
-is known. Evaluator context names only phases marked `required_for_final` by the
-completed authoritative verification result, so backend-only work does not
-inherit `frontend_quality` as a review requirement. Capable adapters receive no
-restriction. The instruction does not turn a skipped check into pass evidence,
-and project-owned auto-required DDEV verification remains unchanged and
-authoritative.
+Registry `10` declares ordered per-model effort capabilities: Codex Luna,
+Terra, Sol and Astra allow `low` through `max`; reasoning-capable Antigravity
+Gemini entries allow only `low` through `high`; Claude retains
+`supports_reasoning_effort: false`. Router uses one capability resolver for
+initial routes, staffing, failover output and same-model escalation. The global
+order is not eligibility, and unchanged policy `19` still requests/ceilings only
+`low`/`medium`/`high`.
 
-Runtime is `1.0.78`; Router `1.0.30`, routing policy `19`, ddev-executor `1.0.28`
-and safe quota Antigravity bridge `1.12` are unchanged. Focused Runtime tests:
-`175` passed. Full Runtime with disposable PostgreSQL: `959` passed; one existing
-Starlette/anyio deprecation warning. Repository tests: `106` passed. Local tests
-used the current checkout mounted read-only in disposable containers after host
-Python reported no pytest; they are not remote CI. Python compilation and
-`git diff --check` passed. The review artifact is
-`/tmp/issue-357-pm-review.patch`.
+Runtime `1.0.79` revalidates the durable PCP model id, adapter, upstream model
+and effort before adapter construction and model-attempt accounting on all six
+invocation surfaces: engineering planner/executor/evaluator, collaboration, PM
+planning and PM reassessment. Invalid local choices consume no new provider
+call; collaboration and PM reassessment also validate before precharge.
+
+The literal quota group `codex_chatgpt_plus` is unchanged and documented as a
+legacy stable identifier for shared ChatGPT-backed Codex subscription allowance.
+No alias, migration, state copy/reset or commercial-plan conditional was added.
+All four Codex models remain suppressed by the same durable quota marker.
+`frontier_codex.roles` remains exactly `frontier_escalation`; no preferred list,
+routine role, Product Manager role or policy ceiling changed.
+
+Local checkout-mounted container validation: focused Router `101` passed; full
+Router `122` passed; focused Runtime `160` passed; full Runtime with disposable
+PostgreSQL `983` passed; repository/structure `106` passed. The only warnings
+were existing Starlette/anyio deprecations. Host Python lacked pytest. Final
+Python compilation and `git diff --check` passed. The exact PM review artifact
+is `/tmp/issue-359-phase23-pm-review.patch`.
 
 ### #146 — Efficiency initiative
 
@@ -132,6 +139,7 @@ The following are complete and no longer belong in active-state chronology:
   and bounded live dogfood accepted).
 - #362/#370 supervised WorkOrder continuation (merged via PR #379).
 - #355 Antigravity quota/health settings synchronization race (merged via PR #380).
+- #357 adapter verification-capability context (merged/rolled out before #359).
 
 Their reusable lessons and primary references are in `history/episodes.md`. Git/issue/PR/Runtime history remains the detailed audit source.
 
@@ -154,9 +162,9 @@ Their reusable lessons and primary references are in `history/episodes.md`. Git/
 
 ## Immediate next safe actions
 
-1. Independently PM-review `/tmp/issue-357-pm-review.patch`. Keep the tree
-   unstaged/uncommitted/unpushed. Preserve running PCP services and Chợ Nhạc.
-   Exact-head CI, merge and controlled rollout remain later gates.
+1. Independently PM-review `/tmp/issue-359-phase23-pm-review.patch`. Keep the
+   tree unstaged/uncommitted/unpushed. Preserve running PCP services and Chợ
+   Nhạc. Exact-head CI, merge and controlled rollout remain later gates.
 2. Keep #146 in calibration/watch mode and collect only naturally occurring routine-task evidence.
 3. Keep the deterministic context-memory evaluation in CI; treat a future recall/stale-authority regression or sustained corpus growth as evidence to reopen vector/hybrid retrieval evaluation.
 4. Do not add a vector database or embedding provider without a new measured retrieval gap.

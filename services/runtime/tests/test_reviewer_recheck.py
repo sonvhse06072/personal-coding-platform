@@ -109,11 +109,19 @@ def _workspace(tmp_path: Path, job_id: str) -> tuple[Path, Path]:
 
 
 def _route() -> dict:
-    choice = {
+    executor = {
         "id": "codex_terra",
         "provider": "openai",
-        "adapter": "fake",
-        "model": "fake-model",
+        "adapter": "codex_cli",
+        "model": "gpt-5.6-terra",
+        "reasoning_effort": "low",
+    }
+    evaluator = {
+        "id": "antigravity_free",
+        "provider": "google_antigravity",
+        "adapter": "antigravity_host",
+        "model": "gemini-3.8-flash-medium",
+        "reasoning_effort": "low",
     }
     return {
         "strategy": {
@@ -133,8 +141,8 @@ def _route() -> dict:
             },
             "definition_of_done": {"required": ["material_change"]},
             "permissions": {"commit": False},
-            "executor": choice,
-            "evaluator": {**choice, "id": "reviewer_model"},
+            "executor": executor,
+            "evaluator": evaluator,
             "review_policy": {"level": "standard", "required": True},
         }
     }

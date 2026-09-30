@@ -1,4 +1,4 @@
-version: 9
+version: 10
 models:
   groq_free:
     kind: llm
@@ -121,6 +121,10 @@ models:
     provider: google_antigravity
     adapter: antigravity_host
     model: gemini-3.8-flash-medium
+    reasoning_efforts:
+    - low
+    - medium
+    - high
     tier: balanced
     cost_class: free
     quota_group: antigravity_gemini
@@ -155,6 +159,10 @@ models:
     provider: google_antigravity
     adapter: antigravity_host
     model: gemini-3.8-flash-high
+    reasoning_efforts:
+    - low
+    - medium
+    - high
     tier: strong
     cost_class: free
     quota_group: antigravity_gemini
@@ -187,6 +195,10 @@ models:
     provider: google_antigravity
     adapter: antigravity_host
     model: gemini-3.1-pro-high
+    reasoning_efforts:
+    - low
+    - medium
+    - high
     tier: strong
     cost_class: scarce
     quota_group: antigravity_gemini
@@ -251,10 +263,18 @@ models:
       zero_retention_supported: false
 
   codex_luna:
+    # `codex_chatgpt_plus` is a durable legacy key. It denotes the shared
+    # ChatGPT-backed Codex subscription allowance, not a current plan name.
     kind: agent
     provider: openai
     adapter: codex_cli
     model: gpt-5.6-luna
+    reasoning_efforts:
+    - low
+    - medium
+    - high
+    - xhigh
+    - max
     tier: utility
     cost_class: ultra_low
     quota_group: codex_chatgpt_plus
@@ -282,6 +302,12 @@ models:
     provider: openai
     adapter: codex_cli
     model: gpt-5.6-terra
+    reasoning_efforts:
+    - low
+    - medium
+    - high
+    - xhigh
+    - max
     tier: strong
     cost_class: subscription
     quota_group: codex_chatgpt_plus
@@ -313,6 +339,12 @@ models:
     provider: openai
     adapter: codex_cli
     model: gpt-5.6-sol
+    reasoning_efforts:
+    - low
+    - medium
+    - high
+    - xhigh
+    - max
     tier: premium
     cost_class: scarce
     quota_group: codex_chatgpt_plus
@@ -371,6 +403,12 @@ models:
     provider: openai
     adapter: codex_cli
     model: gpt-6-astra
+    reasoning_efforts:
+    - low
+    - medium
+    - high
+    - xhigh
+    - max
     tier: frontier
     cost_class: scarce
     quota_group: codex_chatgpt_plus

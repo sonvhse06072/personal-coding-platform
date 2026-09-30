@@ -117,7 +117,15 @@ The active initial pool is:
 - `antigravity_gemini_pro` -> `gemini-3.1-pro-high`, preferred for planning, debugging and high-reasoning work;
 - `antigravity_claude_sonnet` -> `claude-sonnet-4-6`, preferred for independent review/evaluation and strong fallback reasoning.
 
-The Router may attach `low`, `medium` or `high` reasoning effort to an Antigravity choice. Runtime must pass that exact effort to the headless bridge. A bounded reasoning escalation may increase effort on the same selected model before consuming a different model tier when policy allows it.
+Reasoning-effort eligibility is registered per PCP model. Current
+reasoning-capable Antigravity Gemini entries allow only `low`, `medium` and
+`high`; Antigravity Claude declares no explicit effort support and receives no
+effort value. Current Codex Luna, Terra, Sol and Astra entries allow `low`,
+`medium`, `high`, `xhigh` and `max`, based on the accepted #359 capability
+audit. The canonical order does not imply provider-wide support. Router and
+Runtime must reject an explicit value outside the selected model's list before
+provider invocation. Existing automatic profile requests and ceilings remain
+at or below `high`, and Astra remains manual/frontier-only.
 
 Antigravity health is tracked at three distinct levels:
 
@@ -134,7 +142,7 @@ The initial quota groups follow the externally visible Antigravity resource fami
 
 A `quota_exhausted` or `rate_limited` result from an Antigravity model marks only its quota group unavailable. It must **not** mark all of `google_antigravity` unavailable. Authentication, bridge or true provider-wide failures remain provider-scoped. This lets PCP move from an exhausted Gemini pool to the Claude/GPT pool before leaving Antigravity entirely, while avoiding repeated calls into models sharing a quota bucket that is already known exhausted.
 
-For compatibility, preserved pre-fix provider-wide quota markers may be narrowed only when durable failure evidence proves the latest failure for that provider was quota/rate-limit exhaustion. Antigravity direct model failures remain model-scoped; Codex ChatGPT subscription failures use the registered shared `codex_chatgpt_plus` quota group. Authentication, configuration, bridge and true provider-wide failures are never narrowed automatically.
+For compatibility, preserved pre-fix provider-wide quota markers may be narrowed only when durable failure evidence proves the latest failure for that provider was quota/rate-limit exhaustion. Antigravity direct model failures remain model-scoped; Codex ChatGPT subscription failures use the registered shared `codex_chatgpt_plus` quota group. That literal is a durable legacy stable identifier meaning the shared ChatGPT-backed Codex subscription allowance, not an assertion about the owner's current commercial plan name. It remains authoritative for existing jobs, route/checkpoint history, telemetry and failure recovery; no alias, copy, reset or migration is introduced. Authentication, configuration, bridge and true provider-wide failures are never narrowed automatically.
 
 Antigravity plan terms currently include weekly limits, while eligible paid plans may also refresh usable quota on a shorter window until the weekly limit is reached. PCP treats these windows as external operational state. It does not invent recovery from a reset timestamp. When a fresh authoritative provider observation made **after** a durable quota/rate-limit failure reports that the exact quota key is available again, Runtime may rehabilitate only that quota key and autonomously retry the same blocked job. Stale observations, elapsed time alone, auth/config failures and provider-wide failures never qualify.
 
@@ -149,6 +157,10 @@ It must not present an authoritative "quota remaining" value unless the upstream
 The Human Owner has funded at least $10 of OpenRouter credit, which currently raises the documented free-model allowance to 1,000 requests/day with a 20 RPM free-model limit. These are external terms and may change; they are not architecture invariants.
 
 For Antigravity and Codex, provider/model availability and quota reset cadence are external terms. Durable PCP state records observed exhaustion; authoritative post-failure quota observations may record bounded automatic rehabilitation. Speculative remaining percentages or reset-time inference are never sufficient recovery evidence.
+
+ChatGPT-session-backed Codex allowance and API-key-backed OpenAI usage remain
+distinct resources. Router uses observed provider/quota state and model
+capability rather than commercial plan-name conditionals.
 
 ## 9. Rollout rule
 

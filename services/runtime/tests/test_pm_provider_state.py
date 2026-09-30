@@ -34,7 +34,12 @@ class AvailabilityAwareRouter:
     async def staff(self, payload: dict) -> dict:
         self.calls.append(payload)
         codex = payload["provider_state"].get("codex_plus", {})
-        choice_id = "antigravity_free" if codex.get("available") is False else "codex_plus"
+        choice_id = "antigravity_free" if codex.get("available") is False else "codex_terra"
+        adapter, model = (
+            ("antigravity_host", "gemini-3.8-flash-medium")
+            if choice_id == "antigravity_free"
+            else ("codex_cli", "gpt-5.6-terra")
+        )
         return {
             "request_id": payload["request_id"],
             "project_id": payload["project_id"],
@@ -43,8 +48,9 @@ class AvailabilityAwareRouter:
             "choice": {
                 "id": choice_id,
                 "provider": "google_antigravity" if choice_id == "antigravity_free" else "openai",
-                "adapter": "fake",
-                "model": "fake-model",
+                "adapter": adapter,
+                "model": model,
+                "reasoning_effort": "low",
                 "score": 0.9,
                 "predicted_success": 0.9,
                 "reasons": ["test availability"],
@@ -123,7 +129,7 @@ def test_pm_defaults_to_empty_provider_state(monkeypatch) -> None:
 
     assert row["status"] == "failed"
     assert router.calls[0]["provider_state"] == {}
-    assert row["staffing"]["choice"]["id"] == "codex_plus"
+    assert row["staffing"]["choice"]["id"] == "codex_terra"
 
 
 def test_pm_forwards_codex_unavailability_and_allows_staffing_fallback(monkeypatch) -> None:

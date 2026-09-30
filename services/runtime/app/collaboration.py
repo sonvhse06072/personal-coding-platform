@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from .adapters.factory import build_adapter
 from .developer_stream import runtime_activity_event
 from .executor_client import DdevExecutorClient
+from .model_capabilities import validate_model_choice
 from .router_client import RouterClient
 from .shell import run_command
 from .state import provider_failure_state_key
@@ -674,6 +675,7 @@ class CollaborationManager:
                 self._ensure_budget(current)
                 staffing = await self.router.staff({"request_id": thread_id, "project_id": current["project_id"], "role": thread["participant_role"], "profile": profile, "semantic": self._semantic(current, thread["participant_role"]), "provider_state": (current.get("checkpoint") or {}).get("provider_state") or {}})
                 choice = staffing.get("choice") or {}
+                validate_model_choice(choice)
                 self._precharge_call(job_id)
                 self._record_activity(current, kind="collaboration_round", message=f"Starting read-only {thread['participant_role']} collaboration round {round_number}/{_MAX_ROUNDS}", status="started", output={"thread_id": thread_id, "round": round_number, "role": thread["participant_role"], "provider_attempt": provider_attempt + 1}, choice=choice)
                 adapter = self.adapter_builder(str(choice["adapter"]), str(choice["model"]), str(choice.get("reasoning_effort") or "") or None)

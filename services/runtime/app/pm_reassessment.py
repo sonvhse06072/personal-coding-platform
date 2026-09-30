@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import subprocess
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Callable, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .adapters import build_adapter
+from .model_capabilities import validate_model_choice
 from .repo import diff_state
 
 
@@ -237,6 +238,7 @@ async def run_pm_reassessment(
     max_diff_bytes: int,
     timeout_seconds: int,
     adapter_builder=build_adapter,
+    precharge_call: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     pm_profile = profile if profile in {"complex", "critical"} else "standard"
     current_model_id = str(current_executor.get("id") or "").strip()
@@ -264,6 +266,7 @@ async def run_pm_reassessment(
         raise RuntimeError("PM reassessment staffing returned no model")
     if current_model_id and choice.get("id") == current_model_id:
         raise RuntimeError("PM reassessment must use a different model from the Primary Developer")
+    validate_model_choice(choice)
 
     # Snapshot the developer diff, then review it in a disposable isolated clone.
     # The PM never receives write access to the owning developer workspace.
@@ -325,6 +328,8 @@ async def run_pm_reassessment(
                 "PM reassessment clone does not match the exact developer diff"
             )
 
+        if precharge_call is not None:
+            precharge_call()
         run = await adapter_builder(
             str(choice["adapter"]),
             str(choice["model"]),

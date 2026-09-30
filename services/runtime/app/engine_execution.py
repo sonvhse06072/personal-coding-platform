@@ -14,6 +14,7 @@ from .config import project_config
 from .engine_core import RuntimeEngineCore
 from .evidence_packs import developer_repair_evidence_pack, pm_evidence_pack
 from .fingerprint import failure_fingerprint
+from .model_capabilities import validate_model_choice
 from .preview import ProjectPreviewManager, ready_preview_context
 from .pm_reassessment import (
     changed_file_reassessment_state,
@@ -287,6 +288,7 @@ class RuntimeEngine(RuntimeEngineCore):
                         last_failure=budget_reason,
                     )
                     return
+                validate_model_choice(choice)
                 progress["model_calls"] += 1
                 checkpoint["planner_choice"] = choice
                 checkpoint["provider_state"] = provider_state
@@ -410,6 +412,7 @@ class RuntimeEngine(RuntimeEngineCore):
                 )
                 return
 
+            validate_model_choice(executor_choice)
             progress["iteration"] += 1
             progress["model_calls"] += 1
             checkpoint.update({
@@ -610,6 +613,7 @@ class RuntimeEngine(RuntimeEngineCore):
                         last_failure = budget_reason
                         evaluator_ok = False
                         break
+                    validate_model_choice(choice)
                     progress["model_calls"] += 1
                     checkpoint["evaluator_choice"] = choice
                     self.storage.update(job_id, status="evaluating", progress=progress, checkpoint=checkpoint)
@@ -795,7 +799,6 @@ class RuntimeEngine(RuntimeEngineCore):
                     )
                     return
 
-                progress["model_calls"] += 1
                 self.storage.update(
                     job_id,
                     status="evaluating",
@@ -807,6 +810,14 @@ class RuntimeEngine(RuntimeEngineCore):
                     if review_report is not None
                     else checkpoint.get("last_review_report")
                 )
+                def precharge_pm_reassessment() -> None:
+                    progress["model_calls"] += 1
+                    self.storage.update(
+                        job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                    )
+
                 try:
                     pm_result = await run_pm_reassessment(
                         router=self.router,
@@ -846,6 +857,7 @@ class RuntimeEngine(RuntimeEngineCore):
                         },
                         max_diff_bytes=max_diff,
                         timeout_seconds=self._remaining_seconds(strategy, started, 600),
+                        precharge_call=precharge_pm_reassessment,
                     )
                 except Exception as exc:
                     self._update_elapsed(progress, started)

@@ -306,6 +306,17 @@ PM-controlled merge capability, when implemented, must remain behind a constrain
 
 Current coding adapters include Codex CLI, OpenCode and the Antigravity host adapter. Provider/model choice is separate from the logical role being performed.
 
+Reasoning effort is a per-PCP-model capability, not an adapter-wide or
+provider-wide assumption. The model registry supplies each model's ordered
+allowed values. Router may assign or escalate only within that list and the
+route's unchanged policy ceiling; the canonical ordering is used only to find
+the next allowed value. Runtime revalidates the durable PCP model id, adapter,
+upstream model and explicit effort against its mounted registry before every
+agent invocation and before model-attempt accounting. `xhigh` and `max` are
+currently representable Codex capabilities, not automatic routing policy;
+normal profile ceilings remain at or below `high`, and Astra remains limited
+to its existing manual `frontier_escalation` role.
+
 The architecture requires developer-agent subprocesses to receive only the process environment and provider credential needed for that specific call. They must not receive internal platform credentials or unrelated provider keys.
 
 Codex CLI is an unattended Runtime worker, so its approval behavior must be explicit rather than inherited from mounted user configuration. Planner/evaluator turns use `read-only`; execute/repair turns use `workspace-write`; all Codex turns use approval policy `never`, and workspace-write network access is explicitly disabled. A command that requires permission outside the selected sandbox must fail closed rather than wait for interactive approval. `danger-full-access` and approval/sandbox bypass flags are outside the approved developer-agent trust boundary.
