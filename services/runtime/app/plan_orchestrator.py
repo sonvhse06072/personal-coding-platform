@@ -1194,6 +1194,9 @@ class PlanOrchestrator:
             self._checkpoint_transition(row, kind="completed", state="completed", detail=detail)
             self.store.update_plan(plan_id, status="active")
         elif action == "block":
+            # Detail serves operator attention; the immutable checkpoint owns
+            # the bounded block reason used by progress and parent handoff.
+            detail["reason"] = "operator_blocked"
             self._checkpoint_transition(
                 row, kind="blocked", state="blocked", reason=note.strip() or "operator_blocked", detail=detail,
             )

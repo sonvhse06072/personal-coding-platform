@@ -244,44 +244,6 @@ class PlanOrchestrator(CorePlanOrchestrator):
             },
         )
 
-    async def resolve_operator(
-        self,
-        *,
-        plan_id: str,
-        work_order_id: str,
-        action: str,
-        note: str,
-    ) -> dict[str, Any]:
-        # Core complete flow is safe and also reconciles downstream dependencies.
-        # For block we perform the same state transition but leave notification
-        # formatting to the post-tick attention materializer.
-        if action != "block":
-            return await super().resolve_operator(
-                plan_id=plan_id,
-                work_order_id=work_order_id,
-                action=action,
-                note=note,
-            )
-
-        rows = {row["work_order_id"]: row for row in self.store.work_orders(plan_id)}
-        row = rows.get(work_order_id)
-        if row is None:
-            raise RuntimeError("Unknown orchestrated WorkOrder")
-        if str(row.get("lifecycle") or "active") != "active":
-            raise RuntimeError("Superseded WorkOrders do not require operator recovery")
-        if row["execution_mode"] != "operator" or row["state"] != "waiting_human":
-            raise RuntimeError("WorkOrder is not waiting for an operator")
-
-        detail = dict(row.get("detail") or {})
-        detail["operator_note"] = note.strip()[:2000]
-        detail["reason"] = "operator_blocked"
-        self.store.update_work_order(plan_id, work_order_id, state="blocked", detail=detail)
-        self.store.update_plan(plan_id, status="blocked")
-        await self.tick()
-        result = self.view(plan_id)
-        assert result is not None
-        return result
-
     def _notify_new_quota_failures(
         self,
         plan: dict[str, Any],
