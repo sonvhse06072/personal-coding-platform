@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .adapters import build_adapter
+from .capability_context import agent_verification_capability_context
 from .config import project_config
 from .engine_core import RuntimeEngineCore
 from .evidence_packs import developer_repair_evidence_pack, pm_evidence_pack
@@ -438,6 +439,11 @@ class RuntimeEngine(RuntimeEngineCore):
                     baseline=checkpoint.get("project_baseline"),
                     collaboration_context=checkpoint.get("collaboration_context"),
                     preview_context=preview_context,
+                    capability_context=agent_verification_capability_context(
+                        adapter,
+                        mode="execute",
+                        project=project,
+                    ),
                 ),
                 mode="execute",
                 timeout=self._remaining_seconds(strategy, started, 2400),
@@ -612,9 +618,10 @@ class RuntimeEngine(RuntimeEngineCore):
                         self.ddev,
                         job_id,
                     )
-                    evaluation = await build_adapter(
+                    evaluator_adapter = build_adapter(
                         choice["adapter"], choice["model"], choice.get("reasoning_effort")
-                    ).run(
+                    )
+                    evaluation = await evaluator_adapter.run(
                         workspace=workspace,
                         prompt=evaluator_prompt(
                             task=enriched_task,
@@ -624,6 +631,12 @@ class RuntimeEngine(RuntimeEngineCore):
                             baseline=checkpoint.get("project_baseline"),
                             developer_report=run.output if run.returncode == 0 else None,
                             preview_context=evaluator_preview_context,
+                            capability_context=agent_verification_capability_context(
+                                evaluator_adapter,
+                                mode="evaluate",
+                                project=project,
+                                verification=verification,
+                            ),
                         ),
                         mode="evaluate",
                         timeout=self._remaining_seconds(strategy, started, 1200),

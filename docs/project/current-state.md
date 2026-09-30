@@ -2,7 +2,7 @@
 
 Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and live Runtime/GitHub evidence remain authoritative over chat history. Completed chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-10-01 for #355 Antigravity quota/health settings synchronization source review.
+Last updated: 2026-10-01 for #357 adapter verification-capability context source review.
 
 ## Resume order
 
@@ -17,11 +17,11 @@ Memory-tier rules and the proposed Context Composer contract are in `context-mem
 
 ## Current platform snapshot
 
-- Exact #355 implementation base: `09c4604aa9579fbb5658c78093a0899e66741bf6`.
+- Exact #357 implementation base: `10adba21455e837bd906f423b2f73e1a204ceec8`.
 - Current working-tree source identities on
-  `ai/355-antigravity-health-quota-settings-race` (unstaged/uncommitted; not
+  `ai/357-codex-listener-capability-context` (unstaged/uncommitted; not
   rolled out):
-  - Runtime `1.0.77`;
+  - Runtime `1.0.78`;
   - Router `1.0.30`;
   - routing policy `19`;
   - ddev-executor `1.0.28`;
@@ -71,30 +71,35 @@ Historical DEC-025 PCP orchestration is retired. Do not recreate, reroute or res
 
 ## Active PCP work
 
-### #355 — Antigravity quota/health settings synchronization
+### #357 — Adapter verification-capability context
 
 Status: source implementation is validated locally on
-`ai/355-antigravity-health-quota-settings-race` and pending independent PM
-exact-patch review. No live bridge/PCP restart, live quota probe, or production
-mutation was performed; Chợ Nhạc remains untouched.
+`ai/357-codex-listener-capability-context` and pending independent PM exact-patch
+review. No live Runtime restart/job, deployment, Chợ Nhạc mutation or DS-1
+resume was performed.
 
-`SafeQuotaRefreshBridge` now owns a dedicated quota-settings lock. A quota CLI
-fallback retains the existing Antigravity execution lock and then takes the new
-lock across the complete settings snapshot, possible CLI mutation, and exact
-bytes/mode restore transaction. Health takes only the new lock for the real
-persisted `settings_status()` read. Therefore health cannot observe a
-bridge-owned transient mutation, does not wait behind a long model run, and
-still returns degraded/503 for genuinely unsafe persisted settings. Lock order
-is `_agy_lock -> _quota_settings_lock`; no path takes the reverse order.
+Adapters now declare invocation capabilities, defaulting to local-listener
+capable. Codex declares the listener unavailable for workspace-write
+execute/repair and read-only evaluation while preserving `approval_policy=never`
+and workspace network disabled; planning remains unaffected. Project DDEV phase
+metadata declares `frontend_quality` requires `local_listener`. Runtime injects
+only the unavailable capability, bounded reason and phase name. Developer
+context names project-owned listener phases conditionally before a future diff
+is known. Evaluator context names only phases marked `required_for_final` by the
+completed authoritative verification result, so backend-only work does not
+inherit `frontend_quality` as a review requirement. Capable adapters receive no
+restriction. The instruction does not turn a skipped check into pass evidence,
+and project-owned auto-required DDEV verification remains unchanged and
+authoritative.
 
-The safe quota bridge is `1.12`; Runtime `1.0.77`, Router `1.0.30`, routing
-policy `19`, and ddev-executor `1.0.28` are unchanged. Focused settings-restore/
-concurrency tests: `6` passed; complete root Antigravity subset: `40` passed;
-repository root tests: `106` passed, including `10` structure tests. Python
-compilation and `git diff --check` passed. Local tests used the current checkout
-mounted read-only in a disposable Runtime image after host Python reported no
-pytest; they are not remote CI. The handoff artifact is
-`/tmp/issue-355-pm-review.patch`.
+Runtime is `1.0.78`; Router `1.0.30`, routing policy `19`, ddev-executor `1.0.28`
+and safe quota Antigravity bridge `1.12` are unchanged. Focused Runtime tests:
+`175` passed. Full Runtime with disposable PostgreSQL: `959` passed; one existing
+Starlette/anyio deprecation warning. Repository tests: `106` passed. Local tests
+used the current checkout mounted read-only in disposable containers after host
+Python reported no pytest; they are not remote CI. Python compilation and
+`git diff --check` passed. The review artifact is
+`/tmp/issue-357-pm-review.patch`.
 
 ### #146 — Efficiency initiative
 
@@ -126,6 +131,7 @@ The following are complete and no longer belong in active-state chronology:
   and one-comment parent progress publication (merged via PRs #371-#374; rollout
   and bounded live dogfood accepted).
 - #362/#370 supervised WorkOrder continuation (merged via PR #379).
+- #355 Antigravity quota/health settings synchronization race (merged via PR #380).
 
 Their reusable lessons and primary references are in `history/episodes.md`. Git/issue/PR/Runtime history remains the detailed audit source.
 
@@ -148,7 +154,7 @@ Their reusable lessons and primary references are in `history/episodes.md`. Git/
 
 ## Immediate next safe actions
 
-1. Independently PM-review `/tmp/issue-355-pm-review.patch`. Keep the tree
+1. Independently PM-review `/tmp/issue-357-pm-review.patch`. Keep the tree
    unstaged/uncommitted/unpushed. Preserve running PCP services and Chợ Nhạc.
    Exact-head CI, merge and controlled rollout remain later gates.
 2. Keep #146 in calibration/watch mode and collect only naturally occurring routine-task evidence.

@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from app.adapters.base import AgentAdapter
 from app.adapters.codex import CodexAdapter
 from app.developer_stream import bind_developer_sink
 from app.shell import CommandResult, CommandTimeoutError
@@ -18,6 +19,25 @@ def _assert_bounded_unattended_policy(argv: list[str], *, sandbox: str) -> None:
     assert 'approval_policy="never"' in argv
     assert "danger-full-access" not in argv
     assert "--dangerously-bypass-approvals-and-sandbox" not in argv
+
+
+def test_invocation_capabilities_default_to_local_listener_available():
+    assert AgentAdapter("test-model").invocation_capabilities("execute").local_listener is True
+
+
+def test_codex_invocation_capabilities_are_explicit_by_mode():
+    adapter = CodexAdapter("gpt-5.6-sol")
+
+    for mode in ("execute", "repair"):
+        capabilities = adapter.invocation_capabilities(mode)
+        assert capabilities.local_listener is False
+        assert capabilities.reason == "codex_workspace_network_disabled"
+
+    evaluation = adapter.invocation_capabilities("evaluate")
+    assert evaluation.local_listener is False
+    assert evaluation.reason == "codex_read_only_evaluation"
+
+    assert adapter.invocation_capabilities("plan").local_listener is True
 
 
 def test_codex_turn_completed_is_authoritative_over_transient_rate_limit_text(monkeypatch, tmp_path: Path):
@@ -309,4 +329,3 @@ def test_codex_timeout_returns_structured_failure_and_removes_last_message_file(
         if event["event_type"] == "developer_step"
     ]
     assert lifecycle == ["started", "failed"]
-

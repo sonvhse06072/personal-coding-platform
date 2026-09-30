@@ -159,6 +159,11 @@ projects:
           path_prefixes:
             - frontend/
 
+      verification_phase_capabilities:
+        frontend_quality:
+          requires:
+            - local_listener
+
       preflight:
         - ddev start -y
         - ddev composer install --no-interaction

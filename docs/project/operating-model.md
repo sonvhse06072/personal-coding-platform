@@ -307,6 +307,18 @@ Verification should be layered:
 
 Layering is an efficiency mechanism, not a way to weaken final acceptance. Model review does not replace deterministic tests/static analysis.
 
+When a selected model-agent invocation cannot provide a verification surface
+that a project-owned Runtime/DDEV phase requires, Runtime may tell that agent not
+to retry the impossible in-agent check and to continue supported deterministic
+work. The context is derived from explicit adapter and phase capabilities, not
+framework or command-name heuristics. Skipping that attempt is never pass
+evidence: required Runtime/DDEV results remain the final gate, evaluator findings
+remain evidence-driven, and listener-capable adapters remain unrestricted.
+Developer guidance may name project-owned phases conditionally before a diff
+exists. Evaluator guidance may name only phases that the completed Runtime
+verification result identifies as required for final acceptance; configured but
+inapplicable phases do not become review requirements.
+
 ## 9. Independent Reviewer
 
 Reviewer is a logically independent role whose purpose is to challenge developer assumptions and verify alignment.

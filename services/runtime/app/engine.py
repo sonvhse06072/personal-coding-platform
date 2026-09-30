@@ -826,6 +826,17 @@ class RuntimeEngine(_RuntimeEngine):
                 ).strip()[-30000:]
                 return result
 
+        # Base/layered verification may already have executed a phase that the
+        # WorkOrder or project auto-rule makes authoritative for final
+        # acceptance. Normalize that existing evidence at the point where the
+        # authoritative required order is known; do not rerun or reinterpret it.
+        for item in result.get("phases") or []:
+            if (
+                isinstance(item, dict)
+                and str(item.get("phase") or "") in required
+            ):
+                item["required_for_final"] = True
+
         completed_phases = {
             str(item.get("phase") or "")
             for item in (result.get("phases") or [])

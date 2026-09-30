@@ -113,12 +113,24 @@ class AgentRun:
         }
 
 
+@dataclass(frozen=True)
+class InvocationCapabilities:
+    """Verification surfaces available to one adapter invocation."""
+
+    local_listener: bool = True
+    reason: str | None = None
+
+
 class AgentAdapter:
     name = "base"
 
     def __init__(self, model: str, reasoning_effort: str | None = None):
         self.model = model
         self.reasoning_effort = reasoning_effort
+
+    def invocation_capabilities(self, mode: str) -> InvocationCapabilities:
+        del mode
+        return InvocationCapabilities()
 
     async def run(self, *, workspace: Path, prompt: str, mode: str, timeout: int) -> AgentRun:
         raise NotImplementedError

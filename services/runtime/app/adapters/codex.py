@@ -4,13 +4,31 @@ import json
 import tempfile
 from pathlib import Path
 
-from .base import AgentAdapter, AgentRun, classify_provider_failure
+from .base import (
+    AgentAdapter,
+    AgentRun,
+    InvocationCapabilities,
+    classify_provider_failure,
+)
 from ..developer_stream import agent_lifecycle_event, agent_public_event, emit_developer_event
 from ..shell import CommandResult, CommandTimeoutError, run_command
 
 
 class CodexAdapter(AgentAdapter):
     name = "codex_cli"
+
+    def invocation_capabilities(self, mode: str) -> InvocationCapabilities:
+        if mode in {"execute", "repair"}:
+            return InvocationCapabilities(
+                local_listener=False,
+                reason="codex_workspace_network_disabled",
+            )
+        if mode == "evaluate":
+            return InvocationCapabilities(
+                local_listener=False,
+                reason="codex_read_only_evaluation",
+            )
+        return super().invocation_capabilities(mode)
 
     async def run(self, *, workspace: Path, prompt: str, mode: str, timeout: int) -> AgentRun:
         sandbox = "read-only" if mode in {"plan", "evaluate"} else "workspace-write"

@@ -59,6 +59,55 @@ def _collaboration_lines() -> list[str]:
     ]
 
 
+def _capability_boundary_lines(
+    context: dict[str, Any] | None,
+    *,
+    evaluator: bool,
+) -> list[str]:
+    if not context or "local_listener" not in (
+        context.get("unavailable_capabilities") or []
+    ):
+        return []
+    phases = [
+        str(phase)
+        for phase in (context.get("runtime_owned_verification_phases") or [])
+        if str(phase)
+    ]
+    if not phases:
+        return []
+
+    lines = [
+        "",
+        "AGENT CAPABILITY BOUNDARY:",
+        "This agent invocation cannot run checks that require opening a local network listener.",
+    ]
+    if evaluator:
+        lines += [
+            "Do not attempt or repeatedly retry recreating those listener-dependent checks in this invocation.",
+            "Judge the authoritative Runtime/DDEV verification evidence for these required phases:",
+        ]
+    else:
+        lines += [
+            "Do not attempt or repeatedly retry those listener-dependent checks.",
+            "Runtime/ddev-executor owns these listener-dependent verification phases when they are applicable:",
+        ]
+    lines += [f"  - {phase}" for phase in phases]
+    if evaluator:
+        lines += [
+            "The lack of an in-agent listener-dependent check is not evidence that it passed.",
+            "Missing or failing required Runtime/DDEV evidence must produce an actionable finding and must not receive PASS.",
+            "Final Runtime/DDEV verification remains authoritative; do not automatically trust developer prose.",
+        ]
+    else:
+        lines += [
+            "Continue deterministic checks supported in this sandbox.",
+            "Runtime/DDEV will run applicable project-owned final verification.",
+            "Skipping an impossible in-agent check is not evidence that it passed.",
+            "Final Runtime/DDEV verification remains authoritative.",
+        ]
+    return lines
+
+
 def execution_prompt(
     *,
     task: dict[str, Any],
@@ -70,6 +119,7 @@ def execution_prompt(
     baseline: dict[str, Any] | None = None,
     collaboration_context: dict[str, Any] | None = None,
     preview_context: dict[str, Any] | None = None,
+    capability_context: dict[str, Any] | None = None,
 ) -> str:
     strategy = route["strategy"]
     lines = [
@@ -81,6 +131,7 @@ def execution_prompt(
         "Stop when the requested behavior is implemented. The runtime will run deterministic verification afterward.",
     ]
     lines += _contract_lines(work_order=work_order, baseline=baseline)
+    lines += _capability_boundary_lines(capability_context, evaluator=False)
     canonical_description = str(task.get("description") or "")
     is_work_order = bool(work_order) or canonical_description.startswith(
         "AUTHORITATIVE WORKORDER / TASK CONTRACT."
@@ -170,6 +221,7 @@ def evaluator_prompt(
     baseline: dict[str, Any] | None = None,
     developer_report: str | None = None,
     preview_context: dict[str, Any] | None = None,
+    capability_context: dict[str, Any] | None = None,
 ) -> str:
     pack = reviewer_evidence_pack(
         task=task,
@@ -182,26 +234,28 @@ def evaluator_prompt(
         "revision": (baseline or {}).get("revision"),
         "source_commit": (baseline or {}).get("source_commit"),
     }
-    return "\n".join(
-        [
-            "Review the current workspace changes read-only. Do not edit files.",
-            "AUTHORITATIVE WORKORDER / TASK CONTRACT: preserve the canonical contract embedded in REVIEW_EVIDENCE_PACK; it overrides advisory context.",
-            "Treat developer_report as advisory repair/rebuttal evidence: reconsider prior findings against it, but do not accept a developer claim automatically.",
-            "The authoritative WorkOrder and deterministic repository evidence remain decisive when they conflict with developer_report.",
-            "The compact REVIEW_EVIDENCE_PACK is the default context. Do not request or reconstruct full agent/model transcripts.",
-            "If the pack is insufficient for one concrete finding, use the permitted read-only repository access just in time and retrieve only the smallest relevant context.",
-            "PASS only when the authoritative Task Contract/WorkOrder, scope, deterministic evidence, correctness, security, regressions and required tests are satisfactory.",
-            "FAIL only for concise actionable findings that can change code/tests/decision; avoid style-only or speculative findings.",
-            "Return exactly two lines: first PASS or FAIL; second REVIEW_JSON: followed by one compact JSON object.",
-            'REVIEW_JSON schema: {"verdict":"pass|fail","summary":"...","findings":[{"id":"...","severity":"low|medium|high|critical","category":"correctness|security|regression|scope|tests|other","message":"...","evidence_refs":["path/check/ref"]}],"jit_context_used":false}',
-            f"BASELINE_REF: {json.dumps(baseline_summary, ensure_ascii=False, sort_keys=True)}",
-            (
-                "LOCAL_PREVIEW_CONTEXT: "
-                + json.dumps(preview_context, ensure_ascii=False, sort_keys=True)
-                if preview_context
-                else "LOCAL_PREVIEW_CONTEXT: unavailable"
-            ),
-            "A Ready preview is an optional review surface, not proof that visual/browser review occurred. Claim browser evidence only when tooling actually used it.",
-            f"REVIEW_EVIDENCE_PACK: {json.dumps(pack, ensure_ascii=False, sort_keys=True)}",
-        ]
-    )
+    lines = [
+        "Review the current workspace changes read-only. Do not edit files.",
+        "AUTHORITATIVE WORKORDER / TASK CONTRACT: preserve the canonical contract embedded in REVIEW_EVIDENCE_PACK; it overrides advisory context.",
+        "Treat developer_report as advisory repair/rebuttal evidence: reconsider prior findings against it, but do not accept a developer claim automatically.",
+        "The authoritative WorkOrder and deterministic repository evidence remain decisive when they conflict with developer_report.",
+        "The compact REVIEW_EVIDENCE_PACK is the default context. Do not request or reconstruct full agent/model transcripts.",
+        "If the pack is insufficient for one concrete finding, use the permitted read-only repository access just in time and retrieve only the smallest relevant context.",
+        "PASS only when the authoritative Task Contract/WorkOrder, scope, deterministic evidence, correctness, security, regressions and required tests are satisfactory.",
+        "FAIL only for concise actionable findings that can change code/tests/decision; avoid style-only or speculative findings.",
+    ]
+    lines += _capability_boundary_lines(capability_context, evaluator=True)
+    lines += [
+        "Return exactly two lines: first PASS or FAIL; second REVIEW_JSON: followed by one compact JSON object.",
+        'REVIEW_JSON schema: {"verdict":"pass|fail","summary":"...","findings":[{"id":"...","severity":"low|medium|high|critical","category":"correctness|security|regression|scope|tests|other","message":"...","evidence_refs":["path/check/ref"]}],"jit_context_used":false}',
+        f"BASELINE_REF: {json.dumps(baseline_summary, ensure_ascii=False, sort_keys=True)}",
+        (
+            "LOCAL_PREVIEW_CONTEXT: "
+            + json.dumps(preview_context, ensure_ascii=False, sort_keys=True)
+            if preview_context
+            else "LOCAL_PREVIEW_CONTEXT: unavailable"
+        ),
+        "A Ready preview is an optional review surface, not proof that visual/browser review occurred. Claim browser evidence only when tooling actually used it.",
+        f"REVIEW_EVIDENCE_PACK: {json.dumps(pack, ensure_ascii=False, sort_keys=True)}",
+    ]
+    return "\n".join(lines)
