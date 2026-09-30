@@ -4,6 +4,8 @@ from copy import deepcopy
 
 import pytest
 
+from app.adapters.codex import CodexAdapter
+from app.capability_context import agent_verification_capability_context
 from app.engine import RuntimeEngine
 from app.review_repair_churn import EPOCH_KEY, new_epoch
 
@@ -231,6 +233,10 @@ def test_legacy_work_order_keeps_historical_verification_path():
         # Historical standard behavior runs targeted + static; the governance
         # facade then appends WorkOrder-required full_tests.
         assert engine.ddev.calls == ["targeted_tests", "static_analysis", "full_tests"]
+        by_phase = {item["phase"]: item for item in result["phases"]}
+        assert by_phase["static_analysis"]["required_for_final"] is True
+        assert by_phase["full_tests"]["required_for_final"] is True
+        assert "required_for_final" not in by_phase["targeted_tests"]
 
     asyncio.run(scenario())
 
@@ -322,7 +328,7 @@ def test_legacy_hard_verification_keeps_tool_test_ceiling():
     asyncio.run(scenario())
 
 @pytest.mark.parametrize("legacy", [False, True])
-def test_frontend_diff_gets_project_owned_final_quality_phase(monkeypatch, legacy):
+def test_chonhac_frontend_diff_gets_project_owned_final_quality_phase(monkeypatch, legacy):
     async def scenario():
         storage = FakeStorage(row(legacy=legacy))
         engine = RuntimeEngine(storage)
@@ -338,6 +344,9 @@ def test_frontend_diff_gets_project_owned_final_quality_phase(monkeypatch, legac
                 "path_prefixes": ["frontend/"],
             }
         ]
+        cfg["ddev"]["verification_phase_capabilities"] = {
+            "frontend_quality": {"requires": ["local_listener"]},
+        }
         monkeypatch.setattr(
             "app.engine.diff_state",
             lambda workspace, max_bytes: {
@@ -370,12 +379,20 @@ def test_frontend_diff_gets_project_owned_final_quality_phase(monkeypatch, legac
         assert frontend["required_for_final"] is True
         assert result["tool_calls"] == result["test_runs"] == 4
         assert state["verification_attempts"] == 1
+        context = agent_verification_capability_context(
+            CodexAdapter("gpt-5.6-sol"),
+            mode="evaluate",
+            project=cfg,
+            verification=result,
+        )
+        assert context is not None
+        assert context["runtime_owned_verification_phases"] == ["frontend_quality"]
 
     asyncio.run(scenario())
 
 
 @pytest.mark.parametrize("legacy", [False, True])
-def test_backend_diff_does_not_pay_frontend_quality_cost(monkeypatch, legacy):
+def test_chonhac_backend_diff_does_not_require_frontend_quality(monkeypatch, legacy):
     async def scenario():
         storage = FakeStorage(row(legacy=legacy))
         engine = RuntimeEngine(storage)
@@ -420,8 +437,52 @@ def test_backend_diff_does_not_pay_frontend_quality_cost(monkeypatch, legacy):
             item.get("phase") != "frontend_quality"
             for item in result["phases"]
         )
+        assert agent_verification_capability_context(
+            CodexAdapter("gpt-5.6-sol"),
+            mode="evaluate",
+            project=cfg,
+            verification=result,
+        ) is None
 
     asyncio.run(scenario())
+
+
+def test_work_order_required_listener_phase_is_authoritative_for_evaluator():
+    job = row()
+    contract = work_order()
+    contract["verification"] = {
+        "intermediate_phases": ["targeted_tests"],
+        "required_phases": ["frontend_quality"],
+    }
+    job["checkpoint"]["work_order"] = contract
+    storage = FakeStorage(job)
+    engine = RuntimeEngine(storage)
+    ddev = FakeDdev()
+    engine.ddev = ddev
+    cfg = project()
+    cfg["ddev"]["frontend_quality"] = ["frontend-quality"]
+    cfg["ddev"]["verification_phase_capabilities"] = {
+        "frontend_quality": {"requires": ["local_listener"]},
+    }
+
+    result = asyncio.run(engine._verify(
+        "job148", "demo", "/workspaces/job148", cfg,
+        strategy(), time.monotonic(), progress(),
+    ))
+
+    assert result["passed"] is True
+    assert ddev.calls == ["targeted_tests", "frontend_quality"]
+    frontend = result["phases"][-1]
+    assert frontend["phase"] == "frontend_quality"
+    assert frontend["required_for_final"] is True
+    context = agent_verification_capability_context(
+        CodexAdapter("gpt-5.6-sol"),
+        mode="evaluate",
+        project=cfg,
+        verification=result,
+    )
+    assert context is not None
+    assert context["runtime_owned_verification_phases"] == ["frontend_quality"]
 
 
 @pytest.fixture
@@ -431,6 +492,9 @@ def auto_required_project(monkeypatch):
     cfg["ddev"]["auto_required_phases"] = [
         {"phase": "frontend_quality", "path_prefixes": ["frontend/"]},
     ]
+    cfg["ddev"]["verification_phase_capabilities"] = {
+        "frontend_quality": {"requires": ["local_listener"]},
+    }
     monkeypatch.setattr(
         "app.engine.diff_state",
         lambda workspace, max_bytes: {"changed_files": ["frontend/app/page.tsx"]},

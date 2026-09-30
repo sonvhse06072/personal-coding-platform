@@ -156,6 +156,13 @@ def test_chonhac_frontend_quality_installs_playwright_browser_for_runtime_user()
     commands = ddev["frontend_quality"]
 
     assert ddev["workspace_nodejs_version"] == "24"
+    assert ddev["verification_phase_capabilities"] == {
+        "frontend_quality": {"requires": ["local_listener"]},
+    }
+    assert ddev["auto_required_phases"] == [
+        {"phase": "frontend_quality", "path_prefixes": ["frontend/"]},
+    ]
+    assert len(commands) == 9
     assert any(
         "playwright install-deps chromium" in command
         and "ddev exec -u root" in command
