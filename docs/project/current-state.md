@@ -2,7 +2,7 @@
 
 Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and live Runtime/GitHub evidence remain authoritative over chat history. Completed chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-09-30 for #369 blocked-plan evidence-pack PM repair.
+Last updated: 2026-09-30 for #377 operator checkpoint atomicity PM review.
 
 ## Resume order
 
@@ -17,14 +17,13 @@ Memory-tier rules and the proposed Context Composer contract are in `context-mem
 
 ## Current platform snapshot
 
-- Checked-out launch baseline: `df1dae3ce7c4a6ed78430358c13b5dd1cb4bddf9`
-  (#368 merged via PR #374; #367 via PR #373; #366 via PR #372; #365 via PR #371).
+- Exact #377 implementation base: `99b79cba49c249f6e9a96a12de19c6914848bdf6`
+  (#369 merged via PR #376; #365-#368 previously merged via PRs #371-#374).
 - Runtime `1.0.74` / executor `1.0.28` rollout and the #367/#368 bounded live
-  dogfood are accepted. Parent #362 and child #369 confirm the WO-362-5 gate open;
-  #370 remains held. No service restart is part of #369 implementation.
-- Current working-tree source identities on `ai/369-blocked-plan-evidence-pack`
+  dogfood were accepted. The #369 live acceptance exposed #377; #370 remains held.
+- Current working-tree source identities on `ai/377-operator-block-checkpoint-atomicity`
   (unstaged/uncommitted; not rolled out):
-  - Runtime `1.0.75`;
+  - Runtime `1.0.76`;
   - Router `1.0.30`;
   - routing policy `19`;
   - ddev-executor `1.0.28`.
@@ -73,52 +72,45 @@ Historical DEC-025 PCP orchestration is retired. Do not recreate, reroute or res
 
 ## Active PCP work
 
-### #362 / #369 — Compact blocked-plan evidence pack
+### #362 / #369 / #377 — Operator block checkpoint atomicity
 
-Status: WO-362-5 PM-001/PM-002 repairs implemented locally on
-`ai/369-blocked-plan-evidence-pack`, pending second independent PM review. Exact base is
-`df1dae3ce7c4a6ed78430358c13b5dd1cb4bddf9`. Only #369 is in this patch;
-#370 supervised continuation remains unimplemented and held.
+Status: #377 repair implemented locally on `ai/377-operator-block-checkpoint-atomicity`,
+pending independent PM review. The #369 live acceptance fixture at
+`sonvhse06072/pcp-validation-fixture#11`, plan
+`pm-ac270fd5296f4e46918d5776ce1f8d3b`, remains untouched. Do not backfill,
+replace or mutate it. #370 supervised continuation remains held.
 
-The authenticated plan-progress projection now adds `blocked_evidence` derived
-from the existing active WorkOrder rows and append-only checkpoints in the same
-repeatable-read snapshot. It selects terminal checkpoints for completed prior
-WorkOrders, the newest block checkpoint matching the exact current WorkOrder/job,
-the bounded checkpoint history for that same exact job, and the preceding
-completed/merged terminal checkpoint. A superseded `accepted` checkpoint is not
-last known-good. The bounded pack exposes exact
-checkpoint/job/branch identity, the latest useful allowlisted verification and
-reviewer/PM outcomes, untouched pending WorkOrders and one advisory action from
-`repair`/`reroute`/`human_decision`/`replan`/`retry_delivery`. The current block
-reason outranks historical PM evidence; hard budget stops advise Human Owner
-review and CI infrastructure failure advises preserved delivery retry.
-Unrecognized free-form reasons are
-hash-identified instead of echoed. Raw logs, prompts, result blobs and arbitrary
-checkpoint JSON remain excluded.
+RCA: the production API uses `orchestrator_notifications.PlanOrchestrator`.
+Its operator `block` override directly called `update_work_order`, bypassing
+the core `transition_work_order` transaction and checkpoint append. That override
+also set `detail.reason=operator_blocked`, explaining the live detail discrepancy.
+An automated PostgreSQL API reproduction observed the same HTTP 200, blocked
+WorkOrder and missing checkpoint before the repair. The override is removed;
+both operator actions now use the core atomic transition. Operator block detail
+retains `operator_blocked` plus the private bounded note; immutable checkpoint
+evidence owns the block reason. The #369 public projection still hashes and
+unclassifies unknown free-form reasons, and the parent comment excludes the note.
 
-The Dashboard snapshot exposes the same read model. The existing parent-ticket
-renderer includes the compact blocked diagnosis while retaining the one-comment,
-transition-driven generation/dedupe, 12 KiB body limit and independent publisher.
-These reads contain no resume/reroute/state/checkpoint/GitHub mutation path.
-Completed checkpoint history remains append-only and pending dependencies remain
-unlaunched. Runtime is versioned `1.0.75`; no executor boundary or version changes.
+Disposable PostgreSQL tests prove complete/block checkpoint commits, rollback
+after injected append failure, prior completed checkpoint preservation, pending
+dependent WorkOrders, exact blocked/last-good evidence after store recreation,
+and one managed parent-comment identity. Focused new tests: `4` passed;
+checkpoint units: `54`; PostgreSQL checkpoint/orchestration: `54`; progress:
+`83`; Dashboard/intake: `131`; full Runtime with PostgreSQL: `926` passed without
+skips. Repository structure: `103` passed; Python compilation passed. The only
+suite warning is the existing Starlette/AnyIO deprecation. The first compile
+attempt targeted a read-only mount and failed to write `.pyc`; rerunning with
+the cache in `/tmp` passed. The first structure run lacked container Git
+safe-directory provenance; rerunning with process-local configuration passed.
+`git diff --check` and final patch metadata are recorded at handoff.
 
-Validation uses existing service images with the current checkout/config mounted
-read-only and separate disposable PostgreSQL containers with no external network.
-No live plan/job/provider/project workspace was used. Focused blocked/checkpoint/
-Dashboard/handoff tests: `94` passed. #365-#368 orchestration/intake/handoff
-regressions: `245` passed. PostgreSQL checkpoint/launch/intake/handoff tests:
-`66` passed without skips. Existing executor managed-comment tests: `43` passed.
-Full Runtime including PostgreSQL: `922` passed without skips. Repository
-structure: `103` passed; Python compilation and `git diff --check` pass. Suites
-report the existing Starlette/AnyIO dependency deprecation warning. The
-PostgreSQL handoff regression confirms the same managed comment ID survives a
-blocked progress generation.
-
-Handoff artifact: `/tmp/issue-369-pm-review.patch`, containing all tracked changes
-against HEAD. Keep unstaged/uncommitted/unpushed. No PCP restart/rebuild, live
-fixture, GitHub mutation or Chợ Nhạc mutation occurred. Local tests are not remote
-CI; independent PM review, commit/push/PR and exact-head CI remain future gates.
+Runtime image build-context `__pycache__`/`.pyc` artifacts were incidental to
+#377: the bypass is explicit source code and reproduced through the mounted
+checkout. A later image-hygiene task can exclude these artifacts from Runtime
+build context; it is non-blocking for this repair. No service restart/rebuild,
+new live fixture/job, GitHub mutation, Chợ Nhạc mutation, executor change, commit
+or push occurred. Handoff patch: `/tmp/issue-377-pm-review.patch`. Local tests
+are not remote CI; independent PM review and later exact-head CI remain gates.
 
 ### #146 — Efficiency initiative
 
@@ -171,7 +163,7 @@ Their reusable lessons and primary references are in `history/episodes.md`. Git/
 
 ## Immediate next safe actions
 
-1. PM-review the repaired #369 patch and `/tmp/issue-369-pm-review.patch`. Keep it unstaged/uncommitted/unpushed; exact-head CI remains a later mandatory merge gate. Leave running PCP services and Chợ Nhạc untouched. Do not begin #370.
+1. PM-review the #377 repair and `/tmp/issue-377-pm-review.patch`. Keep it unstaged/uncommitted/unpushed; exact-head CI remains a later mandatory merge gate. Preserve the live #11 plan, running PCP services and Chợ Nhạc. Do not begin #370.
 2. Keep #146 in calibration/watch mode and collect only naturally occurring routine-task evidence.
 3. Keep the deterministic context-memory evaluation in CI; treat a future recall/stale-authority regression or sustained corpus growth as evidence to reopen vector/hybrid retrieval evaluation.
 4. Do not add a vector database or embedding provider without a new measured retrieval gap.
