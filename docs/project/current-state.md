@@ -2,7 +2,7 @@
 
 Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and live Runtime/GitHub evidence remain authoritative over chat history. Completed chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-09-30 for #370 supervised WorkOrder continuation source review.
+Last updated: 2026-10-01 for #355 Antigravity quota/health settings synchronization source review.
 
 ## Resume order
 
@@ -17,17 +17,15 @@ Memory-tier rules and the proposed Context Composer contract are in `context-mem
 
 ## Current platform snapshot
 
-- Exact #370 implementation base: `c573764a3a17330df98af1db2911567650104196`
-  (#365-#369 and the #377 atomicity repair are prerequisites on this base).
-- The accepted live platform before this uncommitted source work runs Runtime
-  `1.0.76` and executor `1.0.28`. The #367/#368 bounded live dogfood was
-  accepted; the #369 live acceptance exposed and led to #377.
-- Current working-tree source identities on `ai/370-supervised-workorder-continuation`
-  (unstaged/uncommitted; not rolled out):
+- Exact #355 implementation base: `09c4604aa9579fbb5658c78093a0899e66741bf6`.
+- Current working-tree source identities on
+  `ai/355-antigravity-health-quota-settings-race` (unstaged/uncommitted; not
+  rolled out):
   - Runtime `1.0.77`;
   - Router `1.0.30`;
   - routing policy `19`;
-  - ddev-executor `1.0.28`.
+  - ddev-executor `1.0.28`;
+  - safe quota Antigravity bridge `1.12`.
 - PM-controlled routine merge is implemented and operationally proven. Developer agents never merge.
 - Healthy-progress non-blocking remains mandatory: static task/profile/provider-failover counters alone are not Human Owner stop reasons while meaningful progress continues inside the approved resource envelope.
 - On effective adaptive WorkOrders, `max_changed_files` is a semantic working target. Crossing it enters a bounded Product Manager reassessment; PM must be staffed with a different model from the Primary Developer and any approval is exact-diff-bound. Emergency overflow and actual sensitive/protected changed paths remain fail-closed boundaries. Legacy-hard WorkOrders retain strict file-count semantics.
@@ -73,53 +71,30 @@ Historical DEC-025 PCP orchestration is retired. Do not recreate, reroute or res
 
 ## Active PCP work
 
-### #362 / #370 — Supervised WorkOrder continuation
+### #355 — Antigravity quota/health settings synchronization
 
-Status: #370 source implementation is validated locally on
-`ai/370-supervised-workorder-continuation` and pending independent PM exact-patch
-review. This session performs no live dogfood. Live
-fixtures #11 and #12, running PCP services and Chợ Nhạc remain untouched.
+Status: source implementation is validated locally on
+`ai/355-antigravity-health-quota-settings-race` and pending independent PM
+exact-patch review. No live bridge/PCP restart, live quota probe, or production
+mutation was performed; Chợ Nhạc remains untouched.
 
-ExecutionPlans now accept caller-owned `autonomous` or `supervised` execution
-mode; missing legacy mode remains autonomous and the planning model cannot
-select it. Canonical intake rejects a supervised request if deterministic intake
-classification selects direct execution. Autonomous direct and plan execution
-retain their existing behavior.
+`SafeQuotaRefreshBridge` now owns a dedicated quota-settings lock. A quota CLI
+fallback retains the existing Antigravity execution lock and then takes the new
+lock across the complete settings snapshot, possible CLI mutation, and exact
+bytes/mode restore transaction. Health takes only the new lock for the real
+persisted `settings_status()` read. Therefore health cannot observe a
+bridge-owned transient mutation, does not wait behind a long model run, and
+still returns degraded/503 for genuinely unsafe persisted settings. Lock order
+is `_agy_lock -> _quota_settings_lock`; no path takes the reverse order.
 
-The existing `cp_plan_orchestrations` row owns a supervised between-WorkOrder
-gate. After an exact durable `completed` or `merged` checkpoint makes pending
-dependencies ready, the plan persists `supervised_hold` with a monotonic
-generation, exact checkpoint ID/key/WorkOrder, sorted complete ready set and a
-deterministic `plan:continue:` SHA-256 key over that canonical identity. It does
-not hold before WO-1, during a child/operator/merge/block/repair gate, at a plan
-decision boundary or after plan completion. No successor Runtime job exists
-while held.
-
-Authenticated exact continuation locks and revalidates the durable row,
-atomically changes the same generation from `held` to `released`, and invokes
-the normal orchestrator tick. It never creates a child directly. Exact released
-retries remain read-only idempotent success while that generation is current
-and return without invoking an orchestration tick, including after the released
-child runs, waits for an operator or merge, blocks, or completes. Mismatches and
-stale generations conflict. Released
-state survives restart and a busy direct-project lease, allowing the existing
-launch path to retry without a second continuation. A later terminal checkpoint
-creates a newer generation. Runtime progress, Dashboard and the single managed
-parent GitHub progress comment share this durable identity.
-
-Supervision releases only the plan checkpoint gate. Existing Human Owner
-decision boundaries, operator actions, PM exact-head merge, production/security/
-architecture/destructive-data authority, dependency readiness, one-at-a-time
-policy, lease, routing, budget, verification and delivery gates remain
-authoritative. Runtime source is `1.0.77`; Router, routing policy and executor
-versions are unchanged. Issue-specific PostgreSQL/API tests: `15` passed; the
-required focused planning/intake/orchestrator/checkpoint/progress/Dashboard/
-control matrix: `407` passed; full Runtime with PostgreSQL: `948` passed;
-repository structure: `103` passed; Python compilation and `git diff --check`
-passed. The only warning is the existing Starlette/AnyIO deprecation. Local
-tests are not remote CI; independent PM review, exact-head CI, merge, controlled
-rollout and live dogfood remain later gates. The handoff artifact is
-`/tmp/issue-370-pm-review.patch`.
+The safe quota bridge is `1.12`; Runtime `1.0.77`, Router `1.0.30`, routing
+policy `19`, and ddev-executor `1.0.28` are unchanged. Focused settings-restore/
+concurrency tests: `6` passed; complete root Antigravity subset: `40` passed;
+repository root tests: `106` passed, including `10` structure tests. Python
+compilation and `git diff --check` passed. Local tests used the current checkout
+mounted read-only in a disposable Runtime image after host Python reported no
+pytest; they are not remote CI. The handoff artifact is
+`/tmp/issue-355-pm-review.patch`.
 
 ### #146 — Efficiency initiative
 
@@ -150,6 +125,7 @@ The following are complete and no longer belong in active-state chronology:
 - #365-#368 durable WorkOrder checkpoints, lifecycle emission, canonical intake
   and one-comment parent progress publication (merged via PRs #371-#374; rollout
   and bounded live dogfood accepted).
+- #362/#370 supervised WorkOrder continuation (merged via PR #379).
 
 Their reusable lessons and primary references are in `history/episodes.md`. Git/issue/PR/Runtime history remains the detailed audit source.
 
@@ -172,7 +148,9 @@ Their reusable lessons and primary references are in `history/episodes.md`. Git/
 
 ## Immediate next safe actions
 
-1. Independently PM-review `/tmp/issue-370-pm-review.patch`. Keep the tree unstaged/uncommitted/unpushed. Preserve live fixtures #11/#12, running PCP services and Chợ Nhạc. Exact-head CI, merge, rollout and live dogfood remain later gates.
+1. Independently PM-review `/tmp/issue-355-pm-review.patch`. Keep the tree
+   unstaged/uncommitted/unpushed. Preserve running PCP services and Chợ Nhạc.
+   Exact-head CI, merge and controlled rollout remain later gates.
 2. Keep #146 in calibration/watch mode and collect only naturally occurring routine-task evidence.
 3. Keep the deterministic context-memory evaluation in CI; treat a future recall/stale-authority regression or sustained corpus growth as evidence to reopen vector/hybrid retrieval evaluation.
 4. Do not add a vector database or embedding provider without a new measured retrieval gap.

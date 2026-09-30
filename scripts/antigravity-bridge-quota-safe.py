@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import shutil
 import tempfile
+import threading
 from http.server import ThreadingHTTPServer
 
 
@@ -76,12 +77,19 @@ def _read_cli_usage_preserving_settings(
 
 
 class SafeQuotaRefreshBridge(quota19.QuotaRefreshBridge):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # This lock covers only the quota CLI settings snapshot/mutate/restore
+        # transaction. When both locks are needed, _agy_lock is acquired first;
+        # health takes only this lock so model runs cannot delay health checks.
+        self._quota_settings_lock = threading.Lock()
+
     def handler(self):
         bridge = self
         ParentHandler = super().handler()
 
         class Handler(ParentHandler):
-            server_version = "PersonalCodingAntigravityBridge/1.11"
+            server_version = "PersonalCodingAntigravityBridge/1.12"
 
             def do_GET(self):
                 if not self.authorized():
@@ -95,10 +103,11 @@ class SafeQuotaRefreshBridge(quota19.QuotaRefreshBridge):
                         # settings file. Serialize them, then restore that file exactly
                         # because the CLI may normalize/drop keys while serving /usage.
                         with bridge._agy_lock:
-                            cli_snapshot, cli_status = _read_cli_usage_preserving_settings(
-                                bridge._real_agy_bin,
-                                bridge.settings,
-                            )
+                            with bridge._quota_settings_lock:
+                                cli_snapshot, cli_status = _read_cli_usage_preserving_settings(
+                                    bridge._real_agy_bin,
+                                    bridge.settings,
+                                )
                     cached_snapshot = None
                     if live_snapshot is None and cli_snapshot is None:
                         cached_snapshot = quota19.quota18._read_quota_snapshot()
@@ -122,7 +131,8 @@ class SafeQuotaRefreshBridge(quota19.QuotaRefreshBridge):
                         "snapshot": snapshot,
                     })
                 if self.path == "/health":
-                    safe, safety = quota19.quota18.live.legacy.settings_status(bridge.settings)
+                    with bridge._quota_settings_lock:
+                        safe, safety = quota19.quota18.live.legacy.settings_status(bridge.settings)
                     with bridge._runs_lock:
                         active_runs = len(bridge._runs)
                         pending_cancellations = len(bridge._cancelled_runs)
@@ -134,7 +144,7 @@ class SafeQuotaRefreshBridge(quota19.QuotaRefreshBridge):
                     return self.send_json(200 if safe else 503, {
                         "status": "ok" if safe else "degraded",
                         "service": "antigravity-host-bridge",
-                        "version": "1.11",
+                        "version": "1.12",
                         "agy": bridge.agy_bin,
                         "workspaces": str(bridge.workspaces),
                         "active_runs": active_runs,
@@ -189,7 +199,7 @@ def main() -> None:
     )
     server = ThreadingHTTPServer((args.host, args.port), bridge.handler())
     print(
-        f"Antigravity host bridge 1.11 listening on {args.host}:{args.port}; "
+        f"Antigravity host bridge 1.12 listening on {args.host}:{args.port}; "
         "safe_settings=true; streaming=true; quota=true; quota_cli_refresh=true; settings_restore=true",
         flush=True,
     )
