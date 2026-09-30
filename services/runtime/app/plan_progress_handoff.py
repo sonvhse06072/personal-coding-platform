@@ -7,6 +7,7 @@ import json
 import re
 from typing import Any
 
+from .plan_orchestrator import supervision_read_model
 from .work_order_checkpoints import blocked_plan_evidence, ready_work_order_ids
 
 
@@ -69,12 +70,14 @@ def render_progress(snapshot: dict[str, Any], issue_number: int) -> tuple[str, s
     ready = ready_work_order_ids(plan.get("plan") or {}, states)
     checkpoint = snapshot.get("last_checkpoint") or {}
     blocked_evidence = blocked_plan_evidence(snapshot)
+    supervision = supervision_read_model(plan.get("plan") or {}, plan)
     # No mutable polling timestamps, details, results or provider data enter this identity.
     identity = {
         "plan_id": plan["plan_id"], "state": plan["status"], "lifecycle": plan["lifecycle"],
         "checkpoint": [checkpoint.get("id"), checkpoint.get("checkpoint_key")],
         "work_orders": [[row["work_order_id"], row["state"], row.get("job_id")] for row in rows],
         "next": ready,
+        "supervision": supervision,
     }
     transition = sha256(json.dumps(identity, sort_keys=True, separators=(",", ":")))
     lines = ["## PCP execution progress", "", f"Ticket: GH-{issue_number}",
@@ -83,6 +86,19 @@ def render_progress(snapshot: dict[str, Any], issue_number: int) -> tuple[str, s
              f"Current: {_text(current)}", "", "WorkOrders:"]
     for row in rows[:30]:
         lines.append(f"- {_text(row['work_order_id'], 100)} — {_text(row['state'], 40)}")
+    if supervision.get("mode") == "supervised" and supervision.get("generation"):
+        supervised_checkpoint = supervision.get("checkpoint") or {}
+        supervised_ready = supervision.get("ready_work_order_ids") or []
+        lines += [
+            "",
+            "Supervised checkpoint:",
+            f"- State: {_text(supervision.get('state'), 40)}",
+            f"- Generation: {_text(supervision.get('generation'), 30)}",
+            f"- Checkpoint: {_text(supervised_checkpoint.get('id'), 30)} / "
+            f"{_text(supervised_checkpoint.get('checkpoint_key'), 120)}",
+            f"- Ready: {', '.join(_text(item, 100) for item in supervised_ready[:30]) or '-'}",
+            f"- Continuation key: {_text(supervision.get('continuation_key'), 100)}",
+        ]
     if blocked_evidence:
         current_blocked = blocked_evidence["current"]
         lines += ["", "Blocked evidence:",

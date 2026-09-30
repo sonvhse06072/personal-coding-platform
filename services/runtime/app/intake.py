@@ -6,7 +6,13 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .intake_policy import IntakeDecision
-from .pm_planning import PMProviderState, PMTicket, PlanningProfile, PlanStatus
+from .pm_planning import (
+    PMProviderState,
+    PMTicket,
+    PlanExecutionMode,
+    PlanningProfile,
+    PlanStatus,
+)
 from .schemas import JobStatus, RepoHints, SemanticSignals
 
 
@@ -23,6 +29,7 @@ class IntakeRequest(BaseModel):
     semantic: SemanticSignals | None = None
     repo_hints: RepoHints = Field(default_factory=RepoHints)
     planning_profile: PlanningProfile = "standard"
+    execution_mode: PlanExecutionMode = "autonomous"
     provider_state: dict[Annotated[str, Field(min_length=1, max_length=200)], PMProviderState] = Field(
         default_factory=dict, max_length=50,
     )

@@ -461,6 +461,7 @@ with their existing contracts. Existing jobs/plans are not reclassified.
 
 The typed request carries `project_id`, `ticket` (existing PMTicket id/title/
 description), optional `baseline_revision`, `bounded_direct` (default false),
+caller-owned `execution_mode` (`autonomous` by default or `supervised`),
 existing `SemanticSignals` as `semantic`, existing `RepoHints` as `repo_hints`,
 `planning_profile` (standard/complex), typed PM `provider_state`, and `auto_run`
 (default true). No command, workspace path/mode, credential, merge/production
@@ -468,6 +469,8 @@ authority or model-selection field is accepted. Unrecognized top-level or signal
 fields are rejected. Provider state is capacity evidence for existing execution
 paths and never intake-policy authority. Canonical intake has no `dry_run`:
 planning retains the existing read-only PM call and normal orchestration path.
+If supervised mode is requested but policy classifies the intake as direct,
+intake fails validation; it does not force planning or ignore the mode.
 
 Policy version `1` defaults to planning unless `bounded_direct=true`, all seven
 semantic values were explicitly supplied, and all required hints are known.
@@ -529,8 +532,20 @@ For a blocked plan, the read model and comment include prior completed durable
 checkpoints, exact current WorkOrder/job/branch, bounded whitelisted verification
 and reviewer/PM outcome, untouched pending WorkOrders, the last known-good
 checkpoint and an advisory closed-vocabulary next action. Reading this evidence
-cannot authorize or perform recovery. Supervised continuation (#370) is not
-implemented.
+cannot authorize or perform recovery.
+
+For a supervised ExecutionPlan, the first WorkOrder launches through the normal
+path. After each later dependency-unlocking `completed` or `merged` checkpoint,
+the plan holds before any ready successor job or operator gate is created. Chat
+PM reviews the durable checkpoint and uses the authenticated continuation API
+with the exact generation, continuation key, checkpoint ID/key and sorted ready
+set. The release is durable and idempotent; an exact retry of an already released
+generation returns without invoking a scheduling tick. Normal scheduling keeps
+retrying a released generation if a lease or other infrastructure condition delays launch.
+The same managed parent comment and Dashboard show the held/released identity.
+This checkpoint does not authorize a Human Owner decision, merge, production
+write, destructive change or existing operator action. Those gates keep their
+existing authority and must be resolved separately.
 
 PM should normally run when:
 

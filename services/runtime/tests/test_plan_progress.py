@@ -105,14 +105,43 @@ def test_fresh_pending_progress_is_compact_deterministic_and_read_only(progress_
     expected = {
         "plan_id": "plan-1", "project_id": "demo", "ticket_id": "GH-5",
         "state": "active", "lifecycle": "active", "completed": 0, "total": 3,
-        "current_work_order": None, "blocked": None, "blocked_evidence": None,
-        "next": ["WO-1"], "last_checkpoint": None,
+            "current_work_order": None, "blocked": None, "blocked_evidence": None,
+            "next": ["WO-1"], "supervision": {"mode": "autonomous", "state": None},
+            "last_checkpoint": None,
     }
     assert progress_service.progress("plan-1") == expected
     assert progress_service.progress("plan-1") == expected
     after = storage.__dict__
     for field in before.keys() - {"statements", "read_statements"}:
         assert after[field] == before[field]
+
+
+def test_progress_projects_exact_durable_supervision_identity(progress_service):
+    storage = progress_service.storage
+    storage.plan["plan"]["execution_mode"] = "supervised"
+    storage.plan.update(
+        status="supervised_hold",
+        supervision_generation=3,
+        supervision_state="held",
+        supervision_checkpoint_id=91,
+        supervision_checkpoint_key="wo:merged:exact",
+        supervision_checkpoint_work_order_id="WO-1",
+        supervision_ready_work_order_ids=["WO-2", "WO-3"],
+        supervision_continuation_key="plan:continue:" + "a" * 64,
+    )
+
+    assert progress_service.progress("plan-1")["supervision"] == {
+        "mode": "supervised",
+        "state": "held",
+        "generation": 3,
+        "checkpoint": {
+            "id": 91,
+            "checkpoint_key": "wo:merged:exact",
+            "work_order_id": "WO-1",
+        },
+        "ready_work_order_ids": ["WO-2", "WO-3"],
+        "continuation_key": "plan:continue:" + "a" * 64,
+    }
     assert all(sql.startswith(("SELECT", "SET TRANSACTION")) for sql in storage.statements + storage.read_statements)
 
 

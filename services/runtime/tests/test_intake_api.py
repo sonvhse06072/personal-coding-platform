@@ -111,6 +111,45 @@ def test_planning_uses_existing_planner_and_tick_without_direct_job(api, monkeyp
     assert "staffing" not in result and "provider_state" not in result
 
 
+def test_supervised_planning_is_accepted_and_persisted(api, monkeypatch, tmp_path):
+    client, storage, _, enqueued = api
+    planner, _, plans, *_ = configure_planner(
+        monkeypatch,
+        tmp_path,
+        proposal(work_order(), work_order("WO-2", dependencies=["WO-1"])),
+    )
+    monkeypatch.setattr(main, "pm_planner", planner)
+    tick = AsyncMock()
+    monkeypatch.setattr(main.plan_orchestrator, "tick", tick)
+    payload = request_payload(execution_mode="supervised")
+    payload.pop("semantic")
+    payload.pop("repo_hints")
+
+    response = client.post("/v1/intake", json=payload)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["mode"] == "planning"
+    assert next(iter(plans.plans.values()))["plan"]["execution_mode"] == "supervised"
+    assert storage.rows == {} and enqueued == []
+    tick.assert_awaited_once()
+
+
+def test_supervised_direct_classification_fails_closed_without_job_or_plan(api, monkeypatch):
+    client, storage, _, enqueued = api
+    planner = AsyncMock(side_effect=AssertionError("Direct classification must not be forced to planning"))
+    monkeypatch.setattr(main.pm_planner, "create_plan", planner)
+
+    response = client.post(
+        "/v1/intake",
+        json=request_payload(execution_mode="supervised"),
+    )
+
+    assert response.status_code == 422
+    assert "requires planning intake" in response.json()["detail"]
+    assert storage.rows == {} and enqueued == []
+    planner.assert_not_awaited()
+
+
 def test_ordinary_plans_api_still_accepts_single_work_order(api, monkeypatch, tmp_path):
     client, *_ = api
     planner, request, *_ = configure_planner(monkeypatch, tmp_path, proposal(work_order()))

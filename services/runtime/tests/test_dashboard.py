@@ -495,6 +495,65 @@ def test_dashboard_read_model_surfaces_bounded_blocked_plan_evidence():
     assert "PRIVATE" not in json.dumps(pack)
 
 
+class _SupervisedConnection(_Connection):
+    def execute(self, query, params=None):
+        if "FROM cp_plan_orchestrations" in query:
+            row = dict(super().execute(query, params).rows[0])
+            row.update(
+                status="supervised_hold",
+                lifecycle="active",
+                plan={"execution_mode": "supervised"},
+                supervision_generation=4,
+                supervision_state="held",
+                supervision_checkpoint_id=92,
+                supervision_checkpoint_key="wo:completed:exact",
+                supervision_checkpoint_work_order_id="C1",
+                supervision_ready_work_order_ids=["C2"],
+                supervision_continuation_key="plan:continue:" + "b" * 64,
+            )
+            return _Result(rows=[row])
+        return super().execute(query, params)
+
+
+class _SupervisedStorage(_Storage):
+    @contextmanager
+    def connect(self):
+        yield _SupervisedConnection()
+
+
+class _SupervisedStore(_Store):
+    def work_orders(self, plan_id):
+        return [
+            {
+                "work_order_id": "C1", "sequence_no": 0, "execution_mode": "agent",
+                "state": "completed", "lifecycle": "active", "job_id": None,
+                "pr_number": None, "pr_url": None, "updated_at": NOW,
+            },
+            {
+                "work_order_id": "C2", "sequence_no": 1, "execution_mode": "agent",
+                "state": "pending", "lifecycle": "active", "job_id": None,
+                "pr_number": None, "pr_url": None, "updated_at": NOW,
+            },
+        ]
+
+
+def test_dashboard_uses_durable_supervised_hold_identity():
+    snapshot = build_dashboard_snapshot(_SupervisedStorage(), _SupervisedStore())
+    assert snapshot["summary"]["supervised_holds"] == 1
+    assert snapshot["plans"][0]["supervision"] == {
+        "mode": "supervised",
+        "state": "held",
+        "generation": 4,
+        "checkpoint": {
+            "id": 92,
+            "checkpoint_key": "wo:completed:exact",
+            "work_order_id": "C1",
+        },
+        "ready_work_order_ids": ["C2"],
+        "continuation_key": "plan:continue:" + "b" * 64,
+    }
+
+
 def test_dashboard_ui_prioritizes_live_developer_console_and_keeps_audit_timeline():
     assert "Live Developer Console" in DASHBOARD_HTML
     assert "Developer transcript" in DASHBOARD_HTML
@@ -503,6 +562,9 @@ def test_dashboard_ui_prioritizes_live_developer_console_and_keeps_audit_timelin
     assert "standalone_jobs" in DASHBOARD_HTML
     assert 'id="standaloneSelect"' in DASHBOARD_HTML
     assert "currentStandalone" in DASHBOARD_HTML
+    assert "Supervised holds" in DASHBOARD_HTML
+    assert "Supervised checkpoint" in DASHBOARD_HTML
+    assert "p.supervision" in DASHBOARD_HTML
     assert "EventSource(" in DASHBOARD_HTML
     assert "raw chain-of-thought and secrets are never exposed" in DASHBOARD_HTML
     assert "Provider quota remaining" not in DASHBOARD_HTML
