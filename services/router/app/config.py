@@ -7,6 +7,8 @@ from typing import Any
 
 import yaml
 
+from .model_capabilities import validate_model_registry
+
 
 SERVICE_DIR = Path(__file__).resolve().parent.parent
 def _default_config_file(name: str) -> str:
@@ -34,8 +36,10 @@ def get_config() -> dict[str, Any]:
     models_file = os.getenv("ROUTER_MODELS_FILE", _default_config_file("models.yml"))
     policy_file = os.getenv("ROUTER_POLICY_FILE", _default_config_file("routing-policy.yml"))
     projects_file = os.getenv("ROUTER_PROJECTS_FILE", _default_config_file("projects.yml"))
+    models = _load_yaml(models_file)
+    validate_model_registry(models)
     return {
-        "models": _load_yaml(models_file),
+        "models": models,
         "policy": _load_yaml(policy_file),
         "projects": _load_yaml(projects_file),
     }

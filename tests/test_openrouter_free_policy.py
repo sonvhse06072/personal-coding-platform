@@ -23,7 +23,7 @@ def test_openrouter_free_uses_one_explicit_effectiveness_first_model() -> None:
     models = models_doc["models"]
     model = models[MODEL_ID]
 
-    assert models_doc["version"] == 9
+    assert models_doc["version"] == 10
     assert all(item.get("model") != "openrouter/free" for item in models.values())
     assert model["kind"] == "agent"
     assert model["provider"] == "openrouter"

@@ -100,10 +100,11 @@ def _row(*, status="blocked", repairs=42, verifications=45):
                 "definition_of_done": {"required": ["material_change"]},
                 "permissions": {"commit": False},
                 "executor": {
-                    "id": "developer",
-                    "provider": "test",
-                    "adapter": "fake",
-                    "model": "fake",
+                    "id": "codex_terra",
+                    "provider": "openai",
+                    "adapter": "codex_cli",
+                    "model": "gpt-5.6-terra",
+                    "reasoning_effort": "low",
                 },
             }
         },

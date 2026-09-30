@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 ProfileName = Literal["fast", "standard", "complex", "critical"]
 RouteAction = Literal["continue", "escalate", "stop", "complete", "human_decision"]
-ReasoningEffort = Literal["low", "medium", "high"]
+ReasoningEffort = Literal["low", "medium", "high", "xhigh", "max"]
 ReviewLevel = Literal["none", "lightweight", "standard", "strong", "critical"]
 BudgetMode = Literal["legacy_hard", "adaptive"]
 

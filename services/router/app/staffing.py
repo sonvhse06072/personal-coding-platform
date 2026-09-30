@@ -3,6 +3,11 @@ from __future__ import annotations
 from typing import Any
 
 from .engine_adaptive import RouterEngine as BudgetRouterEngine
+from .model_capabilities import (
+    ReasoningCapability,
+    next_supported_effort,
+    reasoning_capability,
+)
 from .schemas import (
     DimensionScores,
     ProviderState,
@@ -15,8 +20,6 @@ from .schemas import (
 )
 
 
-_REASONING_ORDER = ["low", "medium", "high"]
-_REASONING_ADAPTERS = {"codex_cli", "antigravity_host"}
 _STAFF_REASONING_BY_PROFILE = {
     "fast": "low",
     "standard": "low",
@@ -160,31 +163,58 @@ class RouterEngine(BudgetRouterEngine):
             reasoning_requirement=semantic.reasoning_requirement,
         )
 
-    def _supports_reasoning_effort(self, choice: Any) -> bool:
-        if choice is None or choice.adapter not in _REASONING_ADAPTERS:
-            return False
-        model = self.models.get(choice.id, {})
-        return bool(model.get("supports_reasoning_effort", True))
+    def _reasoning_capability(self, choice: Any) -> ReasoningCapability:
+        if choice is None:
+            return ReasoningCapability(False, ())
+        model = self.models.get(choice.id)
+        if not isinstance(model, dict):
+            raise RuntimeError(f"Unknown PCP model id in model choice: {choice.id!r}")
+        if choice.adapter != model.get("adapter") or choice.model != str(model.get("model")):
+            raise RuntimeError(
+                f"Model choice metadata does not match registry for {choice.id!r}"
+            )
+        try:
+            return reasoning_capability(choice.id, model)
+        except ValueError as exc:
+            raise RuntimeError(str(exc)) from exc
+
+    def _validate_reasoning_choice(self, choice: Any) -> ReasoningCapability:
+        capability = self._reasoning_capability(choice)
+        if choice is None or choice.reasoning_effort is None:
+            return capability
+        if choice.reasoning_effort not in capability.allowed_efforts:
+            raise RuntimeError(
+                f"Reasoning effort {choice.reasoning_effort!r} is unsupported "
+                f"for PCP model {choice.id!r}"
+            )
+        return capability
 
     def _apply_reasoning(self, choice: Any, effort: str | None) -> None:
-        if not self._supports_reasoning_effort(choice) or effort not in _REASONING_ORDER:
+        capability = self._reasoning_capability(choice)
+        if choice is None or not capability.supports_explicit_effort:
             return
+        if effort is None:
+            return
+        if effort not in capability.allowed_efforts:
+            raise RuntimeError(
+                f"Configured reasoning effort {effort!r} is unsupported "
+                f"for PCP model {choice.id!r}"
+            )
         choice.reasoning_effort = effort
         marker = f"reasoning_effort={effort}"
         if marker not in choice.reasons:
             choice.reasons.append(marker)
 
     def _next_reasoning_choice(self, choice: Any, ceiling: str | None) -> Any | None:
-        if not self._supports_reasoning_effort(choice):
+        capability = self._validate_reasoning_choice(choice)
+        if not capability.supports_explicit_effort:
             return None
         current = choice.reasoning_effort
-        if current not in _REASONING_ORDER or ceiling not in _REASONING_ORDER:
+        if current is None or ceiling is None:
             return None
-        current_idx = _REASONING_ORDER.index(current)
-        ceiling_idx = _REASONING_ORDER.index(ceiling)
-        if current_idx >= ceiling_idx:
+        next_effort = next_supported_effort(capability, current, ceiling)
+        if next_effort is None:
             return None
-        next_effort = _REASONING_ORDER[current_idx + 1]
         value = choice.model_copy(deep=True)
         value.reasoning_effort = next_effort
         value.reasons = list(value.reasons) + [f"reasoning escalation {current}->{next_effort}"]
@@ -201,6 +231,7 @@ class RouterEngine(BudgetRouterEngine):
         return result
 
     def reassess(self, request: ReassessRequest) -> ReassessResponse:
+        self._validate_reasoning_choice(request.route.strategy.executor)
         result = super().reassess(request)
         profile_cfg = self.policy["profiles"][request.route.strategy.profile]
         efforts = dict(profile_cfg.get("reasoning_effort") or {})

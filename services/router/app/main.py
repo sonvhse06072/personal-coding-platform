@@ -8,6 +8,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 
 from .config import clear_config_cache, get_config
 from .engine_review import RouterEngine
+from .model_capabilities import reasoning_capability
 from .schemas import (
     ReassessRequest,
     ReassessResponse,
@@ -18,7 +19,7 @@ from .schemas import (
 )
 
 
-ROUTER_VERSION = "1.0.30"
+ROUTER_VERSION = "1.0.31"
 
 
 app = FastAPI(
@@ -60,6 +61,7 @@ def models() -> dict[str, Any]:
     cfg = get_config()["models"]
     public = {}
     for model_id, model in cfg.get("models", {}).items():
+        reasoning = reasoning_capability(model_id, model)
         public[model_id] = {
             "kind": model.get("kind"),
             "provider": model.get("provider"),
@@ -68,7 +70,8 @@ def models() -> dict[str, Any]:
             "tier": model.get("tier"),
             "cost_class": model.get("cost_class"),
             "quota_group": model.get("quota_group"),
-            "supports_reasoning_effort": model.get("supports_reasoning_effort", True),
+            "supports_reasoning_effort": reasoning.supports_explicit_effort,
+            "reasoning_efforts": list(reasoning.allowed_efforts),
             "roles": model.get("roles", []),
         }
     return {"version": cfg.get("version", 1), "models": public}

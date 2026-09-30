@@ -50,8 +50,8 @@ class FakeRouter:
             "choice": {
                 "id": "codex_terra",
                 "provider": "openai",
-                "adapter": "fake",
-                "model": "fake-model",
+                "adapter": "codex_cli",
+                "model": "gpt-5.6-terra",
                 "reasoning_effort": "low",
             },
             "policy_version": 10,
@@ -260,6 +260,57 @@ def test_collaborator_cannot_become_second_writer(tmp_path):
         assert thread.status == "open"
         assert thread.rounds == 0
         assert storage.row["progress"]["repair_iterations"] == 0
+
+    asyncio.run(scenario())
+
+
+def test_invalid_collaboration_staffing_does_not_precharge_or_invoke(tmp_path):
+    class InvalidStaffingRouter:
+        async def staff(self, payload: dict) -> dict:
+            return {
+                "request_id": payload["request_id"],
+                "project_id": payload["project_id"],
+                "role": payload["role"],
+                "profile": payload["profile"],
+                "choice": {
+                    "id": "antigravity_free",
+                    "provider": "google_antigravity",
+                    "adapter": "antigravity_host",
+                    "model": "gemini-3.8-flash-medium",
+                    "reasoning_effort": "max",
+                },
+                "policy_version": 19,
+                "registry_version": 10,
+            }
+
+    async def scenario():
+        workspace = git_workspace(tmp_path)
+        storage = FakeStorage(row(workspace))
+        adapter = SequenceAdapter(
+            [{"recommendation": "must not run", "unresolved": False}]
+        )
+        manager = CollaborationManager(
+            storage,
+            router=InvalidStaffingRouter(),
+            ddev=FakeDdev(workspace),
+            adapter_builder=lambda *args: adapter,
+        )
+
+        with pytest.raises(RuntimeError, match="unsupported"):
+            await manager.create(
+                storage.row["id"],
+                CollaborationCreateRequest(
+                    role="reviewer",
+                    topic="capability",
+                    objective="reject an invalid local choice",
+                    question="Should this call run?",
+                    evidence=evidence(),
+                ),
+            )
+
+        assert storage.row["progress"]["model_calls"] == 0
+        assert "collaboration_model_calls" not in storage.row["progress"]
+        assert len(adapter.outputs) == 1
 
     asyncio.run(scenario())
 

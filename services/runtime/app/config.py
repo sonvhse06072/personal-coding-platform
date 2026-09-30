@@ -40,7 +40,13 @@ def expand_env(value: str) -> str:
 
 @lru_cache(maxsize=1)
 def models_doc() -> dict[str, Any]:
-    return _load_yaml(os.getenv("MODELS_FILE", _default_config_file("models.yml", "/config/models.yml")))
+    from .model_capabilities import validate_model_registry
+
+    document = _load_yaml(
+        os.getenv("MODELS_FILE", _default_config_file("models.yml", "/config/models.yml"))
+    )
+    validate_model_registry(document)
+    return document
 
 
 def model_config(model_id: str) -> dict[str, Any]:

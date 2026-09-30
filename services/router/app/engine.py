@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from .model_capabilities import validate_model_registry
 from .schemas import (
     Budget,
     DimensionScores,
@@ -26,6 +27,7 @@ PROFILE_ORDER = ["fast", "standard", "complex", "critical"]
 class RouterEngine:
     def __init__(self, config: dict[str, Any]):
         self.models_doc = config["models"]
+        validate_model_registry(self.models_doc)
         self.policy = config["policy"]
         self.projects_doc = config["projects"]
         self.models: dict[str, dict[str, Any]] = self.models_doc.get("models", {})

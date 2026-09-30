@@ -191,6 +191,13 @@ Outputs include:
 - optional planner/evaluator/consultant staffing;
 - deterministic human-decision triggers tied to protected/material/anomalous conditions.
 
+Explicit reasoning effort is constrained by both the selected model's registry
+capability list and the route's policy ceiling. A global effort order is only an
+ordering aid and cannot make an unsupported value eligible. The current
+automatic profiles continue to request and cap effort at `low`, `medium`, or
+`high`; higher registered Codex capabilities do not make Astra routine/default
+staffing or expand Product Manager eligibility.
+
 Profile budgets are priors and safety defaults, not necessarily the final task estimate and not sufficient Human Owner stop reasons by themselves. Provider quota is resource state and must not be conflated with task estimate/profile-counter exhaustion.
 
 Router must not modify product scope or project state.

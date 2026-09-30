@@ -60,6 +60,11 @@ class FailoverRouter:
 
 
 def staffing(payload, *, model_id: str, provider: str):
+    registry = {
+        "codex_terra": ("codex_cli", "gpt-5.6-terra"),
+        "antigravity_free": ("antigravity_host", "gemini-3.8-flash-medium"),
+    }
+    adapter, model = registry[model_id]
     return {
         "request_id": payload["request_id"],
         "project_id": payload["project_id"],
@@ -68,8 +73,8 @@ def staffing(payload, *, model_id: str, provider: str):
         "choice": {
             "id": model_id,
             "provider": provider,
-            "adapter": "fake",
-            "model": "fake-model",
+            "adapter": adapter,
+            "model": model,
             "reasoning_effort": "low",
         },
         "policy_version": 10,
