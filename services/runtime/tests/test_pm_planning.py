@@ -11,7 +11,7 @@ import pytest
 from app import pm_planning
 from app.adapters.base import AgentRun
 from app.baseline import BaselineReferences, ProjectBaseline, SourceReference
-from app.pm_planning import PMPlanCreateRequest, PMPlanner
+from app.pm_planning import ExecutionPlanDocument, PMPlanCreateRequest, PMPlanner
 
 
 class FakeStorage:
@@ -229,6 +229,31 @@ def test_pm_creates_ready_dependency_aware_plan(monkeypatch, tmp_path):
     assert ddev.create_calls[0]["ref"] == "a" * 40
     assert ddev.create_calls[0]["workspace_mode"] == "isolated_clone"
     assert len(ddev.remove_calls) == 1
+
+
+def test_execution_mode_is_caller_policy_and_legacy_plans_default_autonomous(monkeypatch, tmp_path):
+    output = proposal(work_order("WO-1"), work_order("WO-2", dependencies=["WO-1"]))
+    planner, request, *_ = configure(monkeypatch, tmp_path, output)
+    assert request.execution_mode == "autonomous"
+    request.execution_mode = "supervised"
+
+    row = asyncio.run(planner.create_plan(request))
+
+    assert row["plan"]["execution_mode"] == "supervised"
+    legacy = dict(row["plan"])
+    legacy.pop("execution_mode")
+    assert ExecutionPlanDocument.model_validate(legacy).execution_mode == "autonomous"
+
+
+def test_pm_model_cannot_choose_or_override_execution_mode(monkeypatch, tmp_path):
+    output = {**proposal(work_order()), "execution_mode": "supervised"}
+    planner, request, *_ = configure(monkeypatch, tmp_path, output)
+
+    row = asyncio.run(planner.create_plan(request))
+
+    assert request.execution_mode == "autonomous"
+    assert row["status"] == "failed"
+    assert "extra_forbidden" in row["error"]
 
 
 def test_pm_persists_out_of_scope_without_work_orders(monkeypatch, tmp_path):

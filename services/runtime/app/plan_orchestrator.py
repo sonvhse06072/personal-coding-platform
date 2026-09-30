@@ -18,7 +18,7 @@ from .work_order_checkpoints import (
     checkpoint_read_model,
     launch_identity,
     orchestrator_launch,
-    ready_work_order_ids,
+    ready_work_order_ids as dependency_ready_work_order_ids,
     transition_key,
 )
 
@@ -38,6 +38,14 @@ CREATE TABLE IF NOT EXISTS cp_plan_orchestrations (
   github_url TEXT,
   lifecycle TEXT NOT NULL DEFAULT 'active',
   superseded_at TIMESTAMPTZ,
+  supervision_generation BIGINT NOT NULL DEFAULT 0 CHECK (supervision_generation >= 0),
+  supervision_state TEXT CHECK (supervision_state IS NULL OR supervision_state IN ('held','released')),
+  supervision_checkpoint_id BIGINT,
+  supervision_checkpoint_key TEXT,
+  supervision_checkpoint_work_order_id TEXT,
+  supervision_ready_work_order_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+  supervision_continuation_key TEXT,
+  supervision_released_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL,
   updated_at TIMESTAMPTZ NOT NULL
 );
@@ -114,6 +122,22 @@ ALTER TABLE cp_plan_orchestrations
   ADD COLUMN IF NOT EXISTS lifecycle TEXT NOT NULL DEFAULT 'active';
 ALTER TABLE cp_plan_orchestrations
   ADD COLUMN IF NOT EXISTS superseded_at TIMESTAMPTZ;
+ALTER TABLE cp_plan_orchestrations
+  ADD COLUMN IF NOT EXISTS supervision_generation BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE cp_plan_orchestrations
+  ADD COLUMN IF NOT EXISTS supervision_state TEXT;
+ALTER TABLE cp_plan_orchestrations
+  ADD COLUMN IF NOT EXISTS supervision_checkpoint_id BIGINT;
+ALTER TABLE cp_plan_orchestrations
+  ADD COLUMN IF NOT EXISTS supervision_checkpoint_key TEXT;
+ALTER TABLE cp_plan_orchestrations
+  ADD COLUMN IF NOT EXISTS supervision_checkpoint_work_order_id TEXT;
+ALTER TABLE cp_plan_orchestrations
+  ADD COLUMN IF NOT EXISTS supervision_ready_work_order_ids JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE cp_plan_orchestrations
+  ADD COLUMN IF NOT EXISTS supervision_continuation_key TEXT;
+ALTER TABLE cp_plan_orchestrations
+  ADD COLUMN IF NOT EXISTS supervision_released_at TIMESTAMPTZ;
 ALTER TABLE cp_plan_work_orders
   ADD COLUMN IF NOT EXISTS lifecycle TEXT NOT NULL DEFAULT 'active';
 ALTER TABLE cp_plan_work_orders
@@ -156,6 +180,58 @@ _OWNER_ATTENTION_EVENT_TYPES = {
     "work_order_blocked",
 }
 CHECKPOINT_EVIDENCE_MAX_BYTES = 16 * 1024
+
+
+class PlanContinuationConflict(RuntimeError):
+    """The supplied continuation does not match the current durable plan gate."""
+
+
+def plan_execution_mode(plan: dict[str, Any]) -> str:
+    mode = plan.get("execution_mode", "autonomous")
+    if mode not in {"autonomous", "supervised"}:
+        raise RuntimeError("ExecutionPlan has an invalid execution mode")
+    return str(mode)
+
+
+def build_continuation_key(
+    *,
+    plan_id: str,
+    generation: int,
+    checkpoint_id: int,
+    checkpoint_key: str,
+    ready_work_order_ids: list[str],
+) -> str:
+    identity = {
+        "checkpoint_id": checkpoint_id,
+        "checkpoint_key": checkpoint_key,
+        "generation": generation,
+        "plan_id": plan_id,
+        "ready_work_order_ids": sorted(ready_work_order_ids),
+    }
+    encoded = json.dumps(identity, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return "plan:continue:" + hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def supervision_read_model(
+    plan: dict[str, Any], orchestration: dict[str, Any],
+) -> dict[str, Any]:
+    mode = plan_execution_mode(plan)
+    result: dict[str, Any] = {"mode": mode, "state": None}
+    if mode != "supervised" or int(orchestration.get("supervision_generation") or 0) < 1:
+        return result
+    ready = orchestration.get("supervision_ready_work_order_ids") or []
+    result.update(
+        state=orchestration.get("supervision_state"),
+        generation=int(orchestration["supervision_generation"]),
+        checkpoint={
+            "id": orchestration.get("supervision_checkpoint_id"),
+            "checkpoint_key": orchestration.get("supervision_checkpoint_key"),
+            "work_order_id": orchestration.get("supervision_checkpoint_work_order_id"),
+        },
+        ready_work_order_ids=list(ready),
+        continuation_key=orchestration.get("supervision_continuation_key"),
+    )
+    return result
 
 
 def _checkpoint_evidence_json(evidence: dict[str, Any]) -> str:
@@ -389,7 +465,12 @@ class PlanOrchestratorStore:
         with self.storage.connect() as conn:
             conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
             plan = conn.execute(
-                """SELECT o.plan_id, o.project_id, o.ticket_id, o.status, o.lifecycle, p.plan
+                """SELECT o.plan_id,o.project_id,o.ticket_id,o.status,o.lifecycle,
+                          o.supervision_generation,o.supervision_state,
+                          o.supervision_checkpoint_id,o.supervision_checkpoint_key,
+                          o.supervision_checkpoint_work_order_id,
+                          o.supervision_ready_work_order_ids,o.supervision_continuation_key,
+                          p.plan
                 FROM cp_plan_orchestrations o
                 LEFT JOIN cp_execution_plans p ON p.id=o.plan_id
                 WHERE o.plan_id=%s""",
@@ -414,6 +495,246 @@ class PlanOrchestratorStore:
                 "last_checkpoint": latest,
                 **blocked_inputs,
             }
+
+    @staticmethod
+    def _terminal_checkpoint(conn: Any, plan_id: str) -> dict[str, Any] | None:
+        row = conn.execute(
+            """SELECT c.* FROM cp_plan_work_order_checkpoints c
+            JOIN cp_plan_work_orders w
+              ON w.plan_id=c.plan_id AND w.work_order_id=c.work_order_id
+            WHERE c.plan_id=%s AND w.lifecycle='active' AND w.state='completed'
+              AND c.kind IN ('completed','merged')
+              AND c.job_id IS NOT DISTINCT FROM w.job_id
+            ORDER BY c.id DESC LIMIT 1""",
+            (plan_id,),
+        ).fetchone()
+        return dict(row) if row is not None else None
+
+    @staticmethod
+    def _supervision_identity_matches(
+        orchestration: dict[str, Any], checkpoint: dict[str, Any], ready: list[str],
+    ) -> bool:
+        return (
+            orchestration.get("supervision_checkpoint_id") == checkpoint.get("id")
+            and orchestration.get("supervision_checkpoint_key") == checkpoint.get("checkpoint_key")
+            and list(orchestration.get("supervision_ready_work_order_ids") or []) == ready
+        )
+
+    def reconcile_supervision(self, plan_id: str) -> dict[str, Any] | None:
+        """Create or preserve the exact between-WorkOrder supervised gate."""
+        with self.storage.connect() as conn:
+            orchestration = conn.execute(
+                """SELECT o.*, p.plan FROM cp_plan_orchestrations o
+                JOIN cp_execution_plans p ON p.id=o.plan_id
+                WHERE o.plan_id=%s FOR UPDATE OF o""",
+                (plan_id,),
+            ).fetchone()
+            if orchestration is None:
+                return None
+            current = dict(orchestration)
+            plan = dict(current.get("plan") or {})
+            if plan_execution_mode(plan) != "supervised":
+                conn.commit()
+                return supervision_read_model(plan, current)
+            if current.get("lifecycle") != "active" or plan.get("decision_boundaries"):
+                conn.commit()
+                return supervision_read_model(plan, current)
+
+            rows = list(conn.execute(
+                """SELECT work_order_id,state FROM cp_plan_work_orders
+                WHERE plan_id=%s AND lifecycle='active'
+                ORDER BY sequence_no,work_order_id""",
+                (plan_id,),
+            ).fetchall())
+            states = {str(row["work_order_id"]): str(row["state"]) for row in rows}
+            if (
+                not rows
+                or any(state in _BUSY_WORK_ORDER_STATES | {"blocked"} for state in states.values())
+                or all(state == "completed" for state in states.values())
+            ):
+                conn.commit()
+                return supervision_read_model(plan, current)
+
+            ready = sorted(dependency_ready_work_order_ids(plan, states))
+            checkpoint = self._terminal_checkpoint(conn, plan_id)
+            if not ready or checkpoint is None:
+                conn.commit()
+                return supervision_read_model(plan, current)
+
+            if self._supervision_identity_matches(current, checkpoint, ready):
+                if current.get("supervision_state") == "held" and current.get("status") != "supervised_hold":
+                    conn.execute(
+                        """UPDATE cp_plan_orchestrations
+                        SET status='supervised_hold',updated_at=%s WHERE plan_id=%s""",
+                        (now(), plan_id),
+                    )
+                    current["status"] = "supervised_hold"
+                conn.commit()
+                return supervision_read_model(plan, current)
+
+            generation = int(current.get("supervision_generation") or 0) + 1
+            key = build_continuation_key(
+                plan_id=plan_id,
+                generation=generation,
+                checkpoint_id=int(checkpoint["id"]),
+                checkpoint_key=str(checkpoint["checkpoint_key"]),
+                ready_work_order_ids=ready,
+            )
+            timestamp = now()
+            conn.execute(
+                """UPDATE cp_plan_orchestrations
+                SET status='supervised_hold',supervision_generation=%s,
+                    supervision_state='held',supervision_checkpoint_id=%s,
+                    supervision_checkpoint_key=%s,
+                    supervision_checkpoint_work_order_id=%s,
+                    supervision_ready_work_order_ids=%s::jsonb,
+                    supervision_continuation_key=%s,supervision_released_at=NULL,
+                    updated_at=%s
+                WHERE plan_id=%s""",
+                (
+                    generation,
+                    checkpoint["id"],
+                    checkpoint["checkpoint_key"],
+                    checkpoint["work_order_id"],
+                    json.dumps(ready),
+                    key,
+                    timestamp,
+                    plan_id,
+                ),
+            )
+            current.update(
+                status="supervised_hold",
+                supervision_generation=generation,
+                supervision_state="held",
+                supervision_checkpoint_id=checkpoint["id"],
+                supervision_checkpoint_key=checkpoint["checkpoint_key"],
+                supervision_checkpoint_work_order_id=checkpoint["work_order_id"],
+                supervision_ready_work_order_ids=ready,
+                supervision_continuation_key=key,
+                supervision_released_at=None,
+            )
+            conn.commit()
+            return supervision_read_model(plan, current)
+
+    def supervision_allows_launch(self, plan_id: str) -> bool:
+        """Read the plan gate immediately before the existing launch path mutates."""
+        with self.storage.connect() as conn:
+            row = conn.execute(
+                """SELECT o.status,o.supervision_generation,o.supervision_state,p.plan
+                FROM cp_plan_orchestrations o JOIN cp_execution_plans p ON p.id=o.plan_id
+                WHERE o.plan_id=%s""",
+                (plan_id,),
+            ).fetchone()
+            if row is None:
+                return False
+            if plan_execution_mode(dict(row.get("plan") or {})) == "autonomous":
+                return True
+            if row.get("status") == "supervised_hold" or row.get("supervision_state") == "held":
+                return False
+            if row.get("supervision_state") == "released":
+                return True
+            if int(row.get("supervision_generation") or 0) != 0:
+                return False
+            # Generation zero is launchable only before the first durable
+            # terminal boundary. This keeps a direct _launch_one() invocation
+            # from skipping reconciliation and creating WO-2 before its hold.
+            return self._terminal_checkpoint(conn, plan_id) is None
+
+    def _mark_supervision_released(
+        self, conn: Any, *, plan_id: str, generation: int,
+    ) -> None:
+        result = conn.execute(
+            """UPDATE cp_plan_orchestrations
+            SET supervision_state='released',supervision_released_at=%s,
+                status='active',updated_at=%s
+            WHERE plan_id=%s AND supervision_generation=%s
+              AND supervision_state='held' AND status='supervised_hold'""",
+            (now(), now(), plan_id, generation),
+        )
+        if result.rowcount != 1:
+            raise PlanContinuationConflict("Supervised continuation changed before release")
+
+    def release_supervision(
+        self,
+        *,
+        plan_id: str,
+        generation: int,
+        continuation_key: str,
+        checkpoint_id: int,
+        checkpoint_key: str,
+        ready_work_order_ids: list[str],
+    ) -> dict[str, Any]:
+        """Atomically release one exact held generation or return its exact retry."""
+        ready = list(ready_work_order_ids)
+        if ready != sorted(set(ready)):
+            raise PlanContinuationConflict("Continuation ready WorkOrder set must be unique and sorted")
+        with self.storage.connect() as conn:
+            orchestration = conn.execute(
+                """SELECT o.*,p.plan FROM cp_plan_orchestrations o
+                JOIN cp_execution_plans p ON p.id=o.plan_id
+                WHERE o.plan_id=%s FOR UPDATE OF o""",
+                (plan_id,),
+            ).fetchone()
+            if orchestration is None:
+                raise PlanContinuationConflict("Unknown orchestration plan")
+            current = dict(orchestration)
+            plan = dict(current.get("plan") or {})
+            if plan_execution_mode(plan) != "supervised":
+                raise PlanContinuationConflict("ExecutionPlan is not supervised")
+            if current.get("lifecycle") != "active":
+                raise PlanContinuationConflict("ExecutionPlan is not active")
+            if plan.get("decision_boundaries"):
+                raise PlanContinuationConflict("ExecutionPlan has an unresolved Human Owner decision boundary")
+
+            expected_key = build_continuation_key(
+                plan_id=plan_id,
+                generation=generation,
+                checkpoint_id=checkpoint_id,
+                checkpoint_key=checkpoint_key,
+                ready_work_order_ids=ready,
+            )
+            exact = (
+                current.get("supervision_generation") == generation
+                and current.get("supervision_checkpoint_id") == checkpoint_id
+                and current.get("supervision_checkpoint_key") == checkpoint_key
+                and list(current.get("supervision_ready_work_order_ids") or []) == ready
+                and current.get("supervision_continuation_key") == continuation_key
+                and continuation_key == expected_key
+            )
+            if not exact:
+                raise PlanContinuationConflict("Continuation identity does not match the current supervised generation")
+            if current.get("supervision_state") == "released":
+                conn.commit()
+                return {"changed": False, "supervision": supervision_read_model(plan, current)}
+            if current.get("status") in {"blocked", "waiting_human", "waiting_merge"}:
+                raise PlanContinuationConflict("ExecutionPlan is at a separate protected or child gate")
+            if current.get("supervision_state") != "held" or current.get("status") != "supervised_hold":
+                raise PlanContinuationConflict("ExecutionPlan is not at the current supervised hold")
+
+            rows = list(conn.execute(
+                """SELECT work_order_id,state FROM cp_plan_work_orders
+                WHERE plan_id=%s AND lifecycle='active'
+                ORDER BY sequence_no,work_order_id""",
+                (plan_id,),
+            ).fetchall())
+            states = {str(row["work_order_id"]): str(row["state"]) for row in rows}
+            terminal = self._terminal_checkpoint(conn, plan_id)
+            if (
+                any(state in _BUSY_WORK_ORDER_STATES | {"blocked"} for state in states.values())
+                or sorted(dependency_ready_work_order_ids(plan, states)) != ready
+                or terminal is None
+                or terminal.get("id") != checkpoint_id
+                or terminal.get("checkpoint_key") != checkpoint_key
+            ):
+                raise PlanContinuationConflict("Durable plan state no longer matches the held continuation")
+            self._mark_supervision_released(conn, plan_id=plan_id, generation=generation)
+            current.update(
+                status="active",
+                supervision_state="released",
+                supervision_released_at=now(),
+            )
+            conn.commit()
+            return {"changed": True, "supervision": supervision_read_model(plan, current)}
 
     def update_plan(self, plan_id: str, *, status: str) -> bool:
         with self.storage.connect() as conn:
@@ -547,7 +868,7 @@ class PlanOrchestratorStore:
                 definitions = {item["id"]: item for item in plan_doc.get("work_orders") or []}
                 dependencies = definitions.get(work_order_id, {}).get("dependencies") or []
                 materialized["dependencies"] = {dep: states.get(dep) for dep in dependencies}
-                materialized["next"] = ready_work_order_ids(plan_doc, states)
+                materialized["next"] = dependency_ready_work_order_ids(plan_doc, states)
                 self._update_work_order(conn, plan_id, work_order_id, **fields)
             checkpoint = self._append_checkpoint(
                 conn, checkpoint_key=checkpoint_key, plan_id=plan_id, work_order_id=work_order_id,
@@ -1091,6 +1412,9 @@ class PlanOrchestrator:
                 plans = self.store.active_plans()
                 for plan in plans:
                     await self._reconcile_plan(plan)
+                    reconcile_supervision = getattr(self.store, "reconcile_supervision", None)
+                    if callable(reconcile_supervision):
+                        reconcile_supervision(str(plan["plan_id"]))
                 launched = None
                 if not self.store.any_busy_work_order():
                     launched = await self._launch_one()
@@ -1139,7 +1463,7 @@ class PlanOrchestrator:
         states = {row["work_order_id"]: row["state"] for row in rows}
         current = next((row["work_order_id"] for row in rows if row["state"] in _BUSY_WORK_ORDER_STATES), None)
         blocked = next((row for row in rows if row["state"] == "blocked"), None)
-        ready = ready_work_order_ids(plan.get("plan") or {}, states)
+        ready = dependency_ready_work_order_ids(plan.get("plan") or {}, states)
         return {
             "plan_id": plan["plan_id"],
             "project_id": plan["project_id"],
@@ -1152,6 +1476,7 @@ class PlanOrchestrator:
             "blocked": {"work_order_id": blocked["work_order_id"], "job_id": blocked["job_id"]} if blocked else None,
             "blocked_evidence": blocked_plan_evidence(snapshot),
             "next": ready,
+            "supervision": supervision_read_model(plan.get("plan") or {}, plan),
             "last_checkpoint": (
                 checkpoint_read_model(snapshot["last_checkpoint"])
                 if blocked else snapshot["last_checkpoint"]
@@ -1216,6 +1541,41 @@ class PlanOrchestrator:
         result = self.view(plan_id)
         assert result is not None
         return result
+
+    async def continue_plan(
+        self,
+        *,
+        plan_id: str,
+        generation: int,
+        continuation_key: str,
+        checkpoint_id: int,
+        checkpoint_key: str,
+        ready_work_order_ids: list[str],
+    ) -> dict[str, Any]:
+        release = self.store.release_supervision(
+            plan_id=plan_id,
+            generation=generation,
+            continuation_key=continuation_key,
+            checkpoint_id=checkpoint_id,
+            checkpoint_key=checkpoint_key,
+            ready_work_order_ids=ready_work_order_ids,
+        )
+        if not release["changed"]:
+            return {
+                "plan_id": plan_id,
+                "status": "released",
+                "idempotent": True,
+                "supervision": release["supervision"],
+                "launched": None,
+            }
+        tick = await self.tick()
+        return {
+            "plan_id": plan_id,
+            "status": "released",
+            "idempotent": False,
+            "supervision": release["supervision"],
+            "launched": tick.get("launched"),
+        }
 
     async def _reconcile_plan(self, plan: dict[str, Any]) -> None:
         plan_id = str(plan["plan_id"])
@@ -1382,6 +1742,8 @@ class PlanOrchestrator:
             self.store.update_plan(plan_id, status="waiting_merge")
         elif any(state == "running" for state in states):
             self.store.update_plan(plan_id, status="executing")
+        elif str(plan.get("status") or "") == "supervised_hold":
+            self.store.update_plan(plan_id, status="supervised_hold")
         else:
             self.store.update_plan(plan_id, status="active")
 
@@ -1403,7 +1765,9 @@ class PlanOrchestrator:
 
     async def _launch_one(self) -> dict[str, str] | None:
         for plan in self.store.active_plans():
-            if str(plan.get("status")) in {"blocked", "completed", "waiting_human"}:
+            if str(plan.get("status")) in {
+                "blocked", "completed", "waiting_human", "supervised_hold",
+            }:
                 continue
             plan_doc = dict(plan.get("plan") or {})
             definitions = {item["id"]: item for item in plan_doc.get("work_orders") or []}
@@ -1412,7 +1776,7 @@ class PlanOrchestrator:
                 if str(row.get("lifecycle") or "active") == "active"
             ]
             states = {row["work_order_id"]: row["state"] for row in tracked}
-            ready = set(ready_work_order_ids(plan_doc, states))
+            ready = set(dependency_ready_work_order_ids(plan_doc, states))
             for row in tracked:
                 if row["state"] != "pending":
                     continue
@@ -1421,6 +1785,11 @@ class PlanOrchestrator:
                     self._block_tracked(plan, row, "work_order_definition_missing")
                     return None
                 if row["work_order_id"] not in ready:
+                    continue
+                supervision_allows_launch = getattr(self.store, "supervision_allows_launch", None)
+                if callable(supervision_allows_launch) and not supervision_allows_launch(
+                    str(plan["plan_id"])
+                ):
                     continue
                 if row["execution_mode"] == "operator":
                     self._checkpoint_transition(

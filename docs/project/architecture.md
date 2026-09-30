@@ -170,6 +170,43 @@ restart still requires explicit resume. Standalone queued startup is unchanged.
 The reservation is a private engine keyword, not public job-intake policy. Existing
 manual/PM merge authority, recovery and default concurrency of one are unchanged.
 
+ExecutionPlans have a caller-owned `execution_mode` of `autonomous` or
+`supervised`; omitted legacy fields resolve to `autonomous`. The planning model
+proposal does not contain this policy field. Canonical intake carries the caller
+selection into planning, and rejects a supervised request when deterministic
+classification selects direct execution instead of silently changing the
+classification. Autonomous scheduling remains unchanged.
+
+For a supervised plan, the existing orchestrator creates a `supervised_hold`
+only between WorkOrders: after an active WorkOrder has an exact durable
+`completed` or `merged` checkpoint, no child is running, awaiting merge,
+waiting for an operator, blocked or repair-reopened, and at least one pending
+WorkOrder is dependency-ready. The first WorkOrder starts normally and a fully
+completed plan does not hold. The existing `cp_plan_orchestrations` row owns the
+gate; there is no additional scheduler or WorkOrder state machine.
+
+Each hold persists a monotonic generation, exact checkpoint ID/key/WorkOrder,
+the sorted complete ready set, state `held` or `released`, and a bounded
+`plan:continue:` SHA-256 key over canonical JSON containing plan ID, generation,
+checkpoint ID/key and the sorted ready set. Authenticated
+`POST /v1/plans/{plan_id}/continue` locks that row, recomputes and validates the
+whole identity, and atomically changes only the gate to `released`. It then uses
+the normal tick and launch path. An exact retry of the current released identity
+is a read-only idempotent success that returns without invoking the orchestrator
+tick, even after its child runs, waits for an operator or merge, blocks, or
+completes; stale or mismatched generations fail closed. A released generation remains released
+while ordinary launch constraints such as a direct-project lease are busy, so a
+later tick may launch without another continuation. A later terminal checkpoint
+and ready-set identity creates the next generation. With no next job created
+before release, ordinary job `/run` cannot bypass the gate.
+
+Supervised continuation never supplies Human Owner authorization or changes
+decision boundaries, operator `waiting_human`, merge, dependency, concurrency,
+lease, Runtime job identity, budget, routing, verification or delivery policy.
+Protected decisions and child gates retain precedence. Runtime progress and the
+Dashboard project the same durable supervision identity, and the single managed
+parent progress comment renders its current held or released state.
+
 Authenticated `GET /v1/plans/{plan_id}/progress` projects a consistent read-only
 database snapshot of orchestration state, the ExecutionPlan dependency graph
 and checkpoints. It reports plan/project/ticket identity, state/lifecycle,
@@ -182,8 +219,8 @@ checkpoint includes preserved superseded history for that plan. Raw lifecycle
 detail and job results are not exposed. The existing `/orchestration` contract
 is unchanged. #365 supplies persistence/projection and #366 lifecycle emission;
 #367 adds canonical intake; #368 adds parent-ticket publication below.
-#369 adds the detailed blocked evidence projection below. #370 supervised
-continuation remains unimplemented.
+#369 adds the detailed blocked evidence projection below; #370 adds the
+plan-level supervised projection and exact continuation gate above.
 
 When an active WorkOrder is blocked, the progress projection derives one compact
 `blocked_evidence` pack from the same repeatable-read snapshot and append-only

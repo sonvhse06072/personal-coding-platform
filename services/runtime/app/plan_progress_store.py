@@ -66,7 +66,7 @@ class PlanProgressStore:
         with self.storage.connect() as conn:
             conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
             plan = conn.execute("""
-                SELECT o.plan_id,o.project_id,o.ticket_id,o.status,o.lifecycle,
+                SELECT o.*,
                        p.plan,p.staffing,p.created_at AS plan_created_at,m.installed_at
                 FROM cp_plan_orchestrations o JOIN cp_execution_plans p ON p.id=o.plan_id
                 CROSS JOIN cp_plan_progress_meta m WHERE o.plan_id=%s AND o.lifecycle='active'

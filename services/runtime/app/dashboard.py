@@ -14,10 +14,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .activity import public_event
 from .dashboard_ui import DASHBOARD_HTML
+from .plan_orchestrator import supervision_read_model
 from .work_order_checkpoints import blocked_plan_evidence
 
 
-_ACTIVE_PLAN_STATES = {"active", "executing", "waiting_merge", "waiting_human"}
+_ACTIVE_PLAN_STATES = {
+    "active", "executing", "waiting_merge", "waiting_human", "supervised_hold",
+}
 _ACTIVE_JOB_STATES = {"queued", "routing", "planning", "executing", "verifying", "evaluating", "delivering"}
 _STANDALONE_VISIBLE_JOB_STATES = _ACTIVE_JOB_STATES | {"waiting_human", "blocked", "interrupted"}
 _PLACEHOLDERS = {"", "CHANGE_ME", "change-me"}
@@ -238,6 +241,7 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
     waiting_merge = 0
     waiting_human = 0
     blocked_plans = 0
+    supervised_holds = 0
     superseded_plans = 0
     job_views_by_id: dict[str, list[dict[str, Any]]] = {}
 
@@ -282,6 +286,8 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
         lifecycle = str(plan_row.get("lifecycle") or "active")
         if lifecycle == "active" and status == "blocked":
             blocked_plans += 1
+        if lifecycle == "active" and status == "supervised_hold":
+            supervised_holds += 1
         if lifecycle == "superseded":
             superseded_plans += 1
         current_wo = next(
@@ -312,6 +318,7 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
             "updated_at": _iso(plan_row.get("updated_at")),
             "current_work_order_id": current_wo["id"] if current_wo else None,
             "blocked_evidence": blocked_evidence,
+            "supervision": supervision_read_model(plan_row.get("plan") or {}, plan_row),
             "token_totals": totals,
             "work_orders": work_orders,
         })
@@ -375,6 +382,7 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
             "waiting_merge": waiting_merge,
             "waiting_human": waiting_human,
             "blocked_plans": blocked_plans,
+            "supervised_holds": supervised_holds,
             "superseded_plans": superseded_plans,
             "pending_notifications": int((pending_notifications or {}).get("count", 0) or 0),
         },

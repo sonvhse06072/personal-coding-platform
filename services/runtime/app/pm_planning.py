@@ -28,6 +28,7 @@ PlanStatus = Literal[
     "failed",
     "interrupted",
 ]
+PlanExecutionMode = Literal["autonomous", "supervised"]
 ScopeAssessment = Literal["in_scope", "out_of_scope", "ambiguous"]
 PlanningProfile = Literal["standard", "complex"]
 DecisionCategory = Literal[
@@ -81,6 +82,7 @@ class PMPlanCreateRequest(BaseModel):
         pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$",
     )
     planning_profile: PlanningProfile = "standard"
+    execution_mode: PlanExecutionMode = "autonomous"
     provider_state: dict[str, PMProviderState] = Field(default_factory=dict, max_length=50)
     decomposition_required: bool = False
     semantic: SemanticSignals | None = None
@@ -143,6 +145,7 @@ class ExecutionPlanDocument(BaseModel):
     work_orders: list[WorkOrder]
     decision_boundaries: list[DecisionBoundary]
     ready_work_order_ids: list[str]
+    execution_mode: PlanExecutionMode = "autonomous"
 
 
 class ExecutionPlanView(BaseModel):
@@ -239,6 +242,7 @@ def validate_plan_proposal(
     baseline: ProjectBaseline,
     project: dict[str, Any],
     decomposition_required: bool = False,
+    execution_mode: PlanExecutionMode = "autonomous",
 ) -> ExecutionPlanDocument:
     if (
         decomposition_required
@@ -266,6 +270,7 @@ def validate_plan_proposal(
         work_orders=proposal.work_orders,
         decision_boundaries=proposal.decision_boundaries,
         ready_work_order_ids=ready_ids,
+        execution_mode=execution_mode,
     )
 
 
@@ -485,6 +490,7 @@ class PMPlanner:
                 baseline=baseline,
                 project=project,
                 decomposition_required=request.decomposition_required,
+                execution_mode=request.execution_mode,
             )
             status = execution_plan_status(plan)
             normalized_usage = normalize_usage(run.usage)

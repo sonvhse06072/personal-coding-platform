@@ -62,6 +62,35 @@ def test_render_whitelist_bound_and_polling_identity():
     assert render_progress(value, 123)[1] == body
 
 
+def test_managed_comment_projects_held_and_released_supervision_on_same_body_path():
+    value = snapshot()
+    plan = value["orchestration"]
+    plan["plan"]["execution_mode"] = "supervised"
+    plan.update(
+        status="supervised_hold",
+        supervision_generation=3,
+        supervision_state="held",
+        supervision_checkpoint_id=91,
+        supervision_checkpoint_key="wo:merged:exact",
+        supervision_checkpoint_work_order_id="WO-1",
+        supervision_ready_work_order_ids=["WO-2"],
+        supervision_continuation_key="plan:continue:" + "a" * 64,
+    )
+    held_transition, held_body = render_progress(value, 123)
+    assert "Supervised checkpoint:" in held_body
+    assert "- State: held" in held_body
+    assert "- Generation: 3" in held_body
+    assert "- Checkpoint: 91 / wo:merged:exact" in held_body
+    assert "- Ready: WO-2" in held_body
+    assert "- Continuation key: plan:continue:" + "a" * 64 in held_body
+
+    plan.update(status="active", supervision_state="released")
+    released_transition, released_body = render_progress(value, 123)
+    assert released_transition != held_transition
+    assert "- State: released" in released_body
+    assert "- Generation: 3" in released_body
+
+
 def test_blocked_render_uses_compact_durable_pack_only():
     value = snapshot()
     value["orchestration"]["status"] = "blocked"

@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Literal
 
 from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .collaboration import (
     CollaborationCreateRequest,
@@ -23,6 +23,7 @@ from .engine_telemetry import RuntimeEngine
 from .orchestrator_notifications import PlanOrchestrator
 from .plan_progress_store import PlanProgressStore
 from .plan_progress_publisher import PlanProgressPublisher
+from .plan_orchestrator import PlanContinuationConflict
 from .orchestrator_resume import prepare_orchestrated_job_resume, reopen_orchestrated_job
 from .pm_bridge import router as pm_bridge_router
 from .preview import PreviewManager, ProjectPreviewManager
@@ -53,6 +54,35 @@ class OperatorResolutionRequest(BaseModel):
 
     action: Literal["complete", "block"]
     note: str = Field(default="", max_length=2000)
+
+
+class PlanContinuationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    generation: int = Field(ge=1)
+    continuation_key: str = Field(
+        min_length=78,
+        max_length=78,
+        pattern=r"^plan:continue:[0-9a-f]{64}$",
+    )
+    checkpoint_id: int = Field(ge=1)
+    checkpoint_key: str = Field(min_length=1, max_length=500)
+    ready_work_order_ids: list[str] = Field(min_length=1, max_length=30)
+
+    @field_validator("ready_work_order_ids")
+    @classmethod
+    def exact_sorted_ready_set(cls, value: list[str]) -> list[str]:
+        if any(
+            not isinstance(item, str)
+            or not item
+            or item != item.strip()
+            or len(item) > 200
+            for item in value
+        ):
+            raise ValueError("Ready WorkOrder ids must be exact non-empty strings of at most 200 characters")
+        if value != sorted(set(value)):
+            raise ValueError("Ready WorkOrder ids must be unique and sorted")
+        return value
 
 
 class WorkOrderSupersessionRequest(BaseModel):
@@ -152,7 +182,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-RUNTIME_VERSION = "1.0.76"
+RUNTIME_VERSION = "1.0.77"
 
 app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan=lifespan)
 app.include_router(pm_bridge_router)
@@ -258,6 +288,10 @@ async def intake_ticket(payload: IntakeRequest) -> IntakeResponse:
             bounded_direct=payload.bounded_direct,
             semantic=payload.semantic, repo_hints=payload.repo_hints,
         )
+        if payload.execution_mode == "supervised" and decision.mode != "planning":
+            raise ValueError(
+                "Supervised execution mode requires planning intake; direct intake classification cannot be overridden"
+            )
         result = {**decision.model_dump(), "baseline_revision": baseline.revision}
         if decision.mode == "planning":
             plan = await create_execution_plan(PMPlanCreateRequest(
@@ -266,6 +300,7 @@ async def intake_ticket(payload: IntakeRequest) -> IntakeResponse:
                 planning_profile=payload.planning_profile,
                 provider_state=payload.provider_state,
                 decomposition_required=decision.decomposition_required,
+                execution_mode=payload.execution_mode,
                 semantic=payload.semantic, repo_hints=payload.repo_hints,
             ))
             return PlanningIntakeResponse(**result, plan={"id": plan.id, "status": plan.status})
@@ -311,6 +346,24 @@ def get_plan_progress(plan_id: str) -> dict[str, Any]:
     if result is None:
         raise HTTPException(404, "Plan is not registered for orchestration")
     return result
+
+
+@app.post("/v1/plans/{plan_id}/continue", dependencies=[Depends(auth)])
+async def continue_execution_plan(
+    plan_id: str,
+    payload: PlanContinuationRequest,
+) -> dict[str, Any]:
+    try:
+        return await plan_orchestrator.continue_plan(
+            plan_id=plan_id,
+            generation=payload.generation,
+            continuation_key=payload.continuation_key,
+            checkpoint_id=payload.checkpoint_id,
+            checkpoint_key=payload.checkpoint_key,
+            ready_work_order_ids=payload.ready_work_order_ids,
+        )
+    except PlanContinuationConflict as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @app.post("/v1/plans/{plan_id}/work-orders/{work_order_id}/operator", dependencies=[Depends(auth)])
