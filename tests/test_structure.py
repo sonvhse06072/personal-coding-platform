@@ -31,10 +31,11 @@ def test_chonhac_targeted_tests_execute_phpunit_and_static_analysis_executes_php
     targeted = ddev["targeted_tests"]
     static = ddev["static_analysis"]
 
-    assert len(targeted) == 1
-    assert "vendor/bin/phpunit" in targeted[0]
+    assert len(targeted) == 2
+    assert all("vendor/bin/phpunit" in command for command in targeted)
     assert "tests/src/Unit/*Test.php" in targeted[0]
-    assert "web/core/phpunit.xml.dist" in targeted[0]
+    assert "tests/src/Kernel/*Test.php" in targeted[1]
+    assert all("web/core/phpunit.xml.dist" in command for command in targeted)
     assert static == ["ddev exec vendor/bin/phpcs web/modules/custom"]
     assert all("|| true" not in command for command in targeted + static)
 
