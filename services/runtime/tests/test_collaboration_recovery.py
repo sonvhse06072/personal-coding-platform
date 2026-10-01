@@ -242,6 +242,186 @@ def test_unresolved_thread_survives_manager_recreation_and_can_recheck(tmp_path)
     asyncio.run(scenario())
 
 
+def test_resolved_round_can_be_rechecked_after_developer_repair(tmp_path):
+    async def scenario():
+        workspace = git_workspace(tmp_path)
+        storage = FakeStorage(row(workspace))
+        first_adapter = SequenceAdapter(
+            [{
+                "recommendation": "Repair the persisted eligibility query.",
+                "risks": ["Public collection filtering is incomplete."],
+                "suggested_tests": ["Re-run the focused public API coverage."],
+                "unresolved": False,
+            }]
+        )
+        first_manager = CollaborationManager(
+            storage,
+            router=FixedRouter(),
+            ddev=FakeDdev(workspace),
+            adapter_builder=lambda *args: first_adapter,
+        )
+        first = await first_manager.create(
+            storage.row["id"],
+            CollaborationCreateRequest(
+                role="test_engineer",
+                topic="public API eligibility",
+                objective="review the persisted marketplace eligibility behavior",
+                question="Does the current implementation enforce the required public visibility rules?",
+                evidence=evidence(),
+            ),
+        )
+
+        assert first.status == "resolved"
+        assert first.rounds == 1
+
+        second_adapter = SequenceAdapter(
+            [{
+                "recommendation": "The repaired query now satisfies the focused requirement.",
+                "risks": [],
+                "suggested_tests": [],
+                "unresolved": False,
+            }]
+        )
+        second_manager = CollaborationManager(
+            storage,
+            router=FixedRouter(),
+            ddev=FakeDdev(workspace),
+            adapter_builder=lambda *args: second_adapter,
+        )
+        second = await second_manager.recheck(
+            storage.row["id"],
+            first.id,
+            CollaborationRecheckRequest(
+                developer_response="Persisted canonical availability and count facts are now applied.",
+                evidence=[
+                    CollaborationEvidence(
+                        ref="runtime:current_diff",
+                        summary="The repaired public query and focused coverage are present.",
+                    )
+                ],
+            ),
+        )
+
+        assert second.id == first.id
+        assert second.status == "resolved"
+        assert second.rounds == 2
+        assert len(second.trace) == 4
+        assert second.response.recommendation.startswith("The repaired query")
+
+    asyncio.run(scenario())
+
+
+def test_resolved_round_two_cannot_be_rechecked_again(tmp_path):
+    async def scenario():
+        workspace = git_workspace(tmp_path)
+        current = row(workspace)
+        current["checkpoint"]["collaboration_threads"] = [
+            {
+                "id": "ct-resolved-round-two",
+                "job_id": current["id"],
+                "work_order_id": "WO-149-recovery",
+                "topic": "public API eligibility",
+                "initiator_role": "developer",
+                "participant_role": "test_engineer",
+                "role": "test_engineer",
+                "objective": "review persisted public eligibility",
+                "question": "Does the repair hold?",
+                "status": "resolved",
+                "rounds": 2,
+                "max_rounds": 2,
+                "evidence": [item.model_dump(mode="json") for item in evidence()],
+                "response": {
+                    "recommendation": "Resolved.",
+                    "risks": [],
+                    "suggested_tests": [],
+                    "unresolved": False,
+                },
+                "staffing": None,
+                "usage": {},
+                "trace": [],
+                "pm_handoff": None,
+                "error": None,
+            }
+        ]
+        storage = FakeStorage(current)
+        manager = CollaborationManager(
+            storage,
+            router=FixedRouter(),
+            ddev=FakeDdev(workspace),
+            adapter_builder=lambda *args: SequenceAdapter([]),
+        )
+
+        with pytest.raises(RuntimeError, match="round limit"):
+            await manager.recheck(
+                current["id"],
+                "ct-resolved-round-two",
+                CollaborationRecheckRequest(
+                    developer_response="Another change.",
+                    evidence=[],
+                ),
+            )
+
+    asyncio.run(scenario())
+
+
+def test_cancelled_and_pm_handoff_threads_still_reject_recheck(tmp_path):
+    async def scenario():
+        workspace = git_workspace(tmp_path)
+        for status in ("cancelled", "pm_handoff"):
+            current = row(workspace)
+            current["checkpoint"]["collaboration_threads"] = [
+                {
+                    "id": f"ct-{status}",
+                    "job_id": current["id"],
+                    "work_order_id": "WO-149-recovery",
+                    "topic": "bounded dialogue",
+                    "initiator_role": "developer",
+                    "participant_role": "reviewer",
+                    "role": "reviewer",
+                    "objective": "review",
+                    "question": "Is this safe?",
+                    "status": status,
+                    "rounds": 1,
+                    "max_rounds": 2,
+                    "evidence": [item.model_dump(mode="json") for item in evidence()],
+                    "response": {
+                        "recommendation": "Previous response.",
+                        "risks": [],
+                        "suggested_tests": [],
+                        "unresolved": status == "pm_handoff",
+                    },
+                    "staffing": None,
+                    "usage": {},
+                    "trace": [],
+                    "pm_handoff": (
+                        {"reason": "collaboration_round_limit_with_unresolved_disagreement"}
+                        if status == "pm_handoff"
+                        else None
+                    ),
+                    "error": None,
+                }
+            ]
+            storage = FakeStorage(current)
+            manager = CollaborationManager(
+                storage,
+                router=FixedRouter(),
+                ddev=FakeDdev(workspace),
+                adapter_builder=lambda *args: SequenceAdapter([]),
+            )
+
+            with pytest.raises(RuntimeError, match=f"status={status}"):
+                await manager.recheck(
+                    current["id"],
+                    f"ct-{status}",
+                    CollaborationRecheckRequest(
+                        developer_response="Attempted follow-up.",
+                        evidence=[],
+                    ),
+                )
+
+    asyncio.run(scenario())
+
+
 def test_provider_failure_restafs_same_logical_role_without_engineering_repair(tmp_path):
     async def scenario():
         workspace = git_workspace(tmp_path)
