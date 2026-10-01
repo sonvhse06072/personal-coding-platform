@@ -315,6 +315,59 @@ def test_invalid_collaboration_staffing_does_not_precharge_or_invoke(tmp_path):
     asyncio.run(scenario())
 
 
+def test_adaptive_create_runs_above_static_model_call_limit(tmp_path) -> None:
+    async def scenario():
+        workspace = git_workspace(tmp_path)
+        current = row(workspace)
+        current["route"]["strategy"]["budget_mode"] = "adaptive"
+        current["progress"].update(
+            {
+                "model_calls": 73,
+                "input_tokens": 500000,
+                "output_tokens": 50000,
+                "elapsed_minutes": 190.0,
+                "cost_usd": 1.0,
+            }
+        )
+        storage = FakeStorage(current)
+        adapter = SequenceAdapter(
+            [
+                {
+                    "recommendation": "Security consultation completed.",
+                    "risks": [],
+                    "suggested_tests": ["Run the focused access-control test."],
+                    "unresolved": False,
+                }
+            ]
+        )
+        manager = CollaborationManager(
+            storage,
+            router=FakeRouter(),
+            ddev=FakeDdev(workspace),
+            adapter_builder=lambda *args: adapter,
+        )
+
+        result = await manager.create(
+            current["id"],
+            CollaborationCreateRequest(
+                role="security_specialist",
+                topic="trust boundary",
+                objective="review the bounded security-sensitive change",
+                question="Does the implementation preserve the approved trust boundary?",
+                evidence=evidence(),
+                deadline_seconds=360,
+            ),
+        )
+
+        assert result.status == "resolved"
+        assert result.participant_role == "security_specialist"
+        assert storage.row["progress"]["model_calls"] == 74
+        assert storage.row["progress"]["collaboration_model_calls"] == 1
+        assert len(adapter.outputs) == 0
+
+    asyncio.run(scenario())
+
+
 def test_adaptive_collaboration_ignores_static_cumulative_counters() -> None:
     current = row(Path("/tmp/unused"))
     current["route"]["strategy"]["budget_mode"] = "adaptive"
