@@ -690,3 +690,151 @@ def test_pm_handoff_persists_latest_context_before_block(tmp_path):
         assert storage.row["result"]["reason"] == "collaboration_pm_handoff"
 
     asyncio.run(scenario())
+
+
+def test_legacy_pm_handoff_result_hydrates_latest_context(tmp_path):
+    workspace = git_workspace(tmp_path)
+    current = row(workspace)
+    current["status"] = "queued"
+    current["checkpoint"]["collaboration_context"] = {
+        "thread_id": "ct-live",
+        "role": "test_engineer",
+        "status": "resolved",
+        "round": 1,
+        "recommendation": "Repair the persisted eligibility query.",
+        "risks": [],
+        "suggested_tests": [],
+        "unresolved": False,
+        "previous_failure": None,
+    }
+    current["checkpoint"]["last_failure"] = (
+        'PCP_COLLABORATION_CONTEXT: {"round": 1, "status": "resolved"}'
+    )
+    current["result"] = {
+        "reason": "collaboration_pm_handoff",
+        "collaboration": {
+            "id": "ct-live",
+            "participant_role": "test_engineer",
+            "role": "test_engineer",
+            "status": "pm_handoff",
+            "rounds": 2,
+            "response": {
+                "recommendation": (
+                    "No remaining code-side repair identified. "
+                    "Run the exact Kernel target in Runtime."
+                ),
+                "risks": [
+                    "PHP/PHPUnit could not run in the collaborator sandbox."
+                ],
+                "suggested_tests": [
+                    "Run the exact Kernel target against PostgreSQL."
+                ],
+                "unresolved": True,
+            },
+            "pm_handoff": {
+                "reason": "collaboration_round_limit_with_unresolved_disagreement",
+                "thread_id": "ct-live",
+                "trace_hash": "trace-live",
+            },
+        },
+    }
+    storage = FakeStorage(current)
+    engine = object.__new__(VerificationRuntimeEngine)
+    engine.storage = storage
+
+    updated = engine._hydrate_legacy_pm_handoff_context(current["id"], storage.get(current["id"]))
+
+    context = updated["checkpoint"]["collaboration_context"]
+    assert context["thread_id"] == "ct-live"
+    assert context["status"] == "pm_handoff"
+    assert context["round"] == 2
+    assert context["recommendation"].startswith("No remaining code-side repair")
+    assert context["pm_handoff"]["trace_hash"] == "trace-live"
+    assert updated["checkpoint"]["last_failure"].startswith(
+        "PCP_COLLABORATION_CONTEXT:"
+    )
+
+
+def test_pm_handoff_hydration_is_noop_for_non_handoff_result(tmp_path):
+    workspace = git_workspace(tmp_path)
+    current = row(workspace)
+    current["status"] = "queued"
+    current["result"] = {"reason": "collaboration_failed"}
+    storage = FakeStorage(current)
+    engine = object.__new__(VerificationRuntimeEngine)
+    engine.storage = storage
+
+    before = storage.get(current["id"])
+    updated = engine._hydrate_legacy_pm_handoff_context(current["id"], before)
+
+    assert updated == before
+    assert "collaboration_context" not in updated["checkpoint"]
+
+
+def test_pm_handoff_hydration_does_not_invent_missing_evidence(tmp_path):
+    workspace = git_workspace(tmp_path)
+    current = row(workspace)
+    current["status"] = "queued"
+    current["result"] = {
+        "reason": "collaboration_pm_handoff",
+        "collaboration": {
+            "id": "ct-bad",
+            "status": "pm_handoff",
+            "rounds": 2,
+        },
+    }
+    storage = FakeStorage(current)
+    engine = object.__new__(VerificationRuntimeEngine)
+    engine.storage = storage
+
+    before = storage.get(current["id"])
+    updated = engine._hydrate_legacy_pm_handoff_context(current["id"], before)
+
+    assert updated == before
+    assert "collaboration_context" not in updated["checkpoint"]
+
+
+def test_native_pm_handoff_context_is_idempotent(tmp_path):
+    workspace = git_workspace(tmp_path)
+    current = row(workspace)
+    current["status"] = "queued"
+    context = {
+        "thread_id": "ct-native",
+        "role": "test_engineer",
+        "status": "pm_handoff",
+        "round": 2,
+        "recommendation": "Use Runtime verification.",
+        "risks": [],
+        "suggested_tests": ["Run Kernel tests."],
+        "unresolved": True,
+        "previous_failure": None,
+        "pm_handoff": {"trace_hash": "native"},
+    }
+    current["checkpoint"]["collaboration_context"] = deepcopy(context)
+    current["checkpoint"]["last_failure"] = (
+        "PCP_COLLABORATION_CONTEXT: " + json.dumps(context, sort_keys=True)
+    )
+    current["result"] = {
+        "reason": "collaboration_pm_handoff",
+        "collaboration": {
+            "id": "ct-native",
+            "participant_role": "test_engineer",
+            "status": "pm_handoff",
+            "rounds": 2,
+            "response": {
+                "recommendation": "Use Runtime verification.",
+                "risks": [],
+                "suggested_tests": ["Run Kernel tests."],
+                "unresolved": True,
+            },
+            "pm_handoff": {"trace_hash": "native"},
+        },
+    }
+    storage = FakeStorage(current)
+    engine = object.__new__(VerificationRuntimeEngine)
+    engine.storage = storage
+
+    before = storage.get(current["id"])
+    updated = engine._hydrate_legacy_pm_handoff_context(current["id"], before)
+
+    assert updated == before
