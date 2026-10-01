@@ -143,6 +143,7 @@ def baseline_covered_protected_authorized_signals(
     *,
     diff_hash: str,
     current_signals: list[str] | set[str],
+    baseline_revision: str | None = None,
 ) -> set[str]:
     """Return exact-diff PM authorizations for baseline-covered protected signals."""
 
@@ -160,6 +161,19 @@ def baseline_covered_protected_authorized_signals(
             for signal in item.get("protected_signals") or []
             if str(signal)
         }
+        authority_refs = [
+            str(ref).strip()
+            for ref in item.get("baseline_authority_refs") or []
+            if str(ref).strip()
+        ]
+        if str(item.get("review_verdict") or "") != "pass":
+            continue
+        if not authority_refs:
+            continue
+        if baseline_revision is not None and str(
+            item.get("baseline_revision") or ""
+        ) != str(baseline_revision):
+            continue
         if (
             authorized
             and authorized <= _PM_BASELINE_COVERED_PROTECTED_SIGNALS
