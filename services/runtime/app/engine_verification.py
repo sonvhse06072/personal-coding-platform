@@ -95,12 +95,21 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                     status="preflight_retry",
                     output={"attempt": progress["infrastructure_retry_attempts"]},
                 )
-        try:
-            await super().run_job(job_id)
-        except _CollaborationRequested as requested:
-            await self._handle_collaboration_request(job_id, requested)
-        except ReviewRepairChurnPaused:
-            return
+
+        # Collaboration is initiated from inside the active worker task. A
+        # resolved consultation must therefore continue inside this worker
+        # rather than enqueueing the same active job, which queue deduplication
+        # intentionally rejects. The loop remains bounded by CollaborationThread
+        # round/thread limits plus the ordinary execution guards.
+        while True:
+            try:
+                await super().run_job(job_id)
+                return
+            except _CollaborationRequested as requested:
+                if not await self._handle_collaboration_request(job_id, requested):
+                    return
+            except ReviewRepairChurnPaused:
+                return
 
     async def _consume_collaboration_request(
         self,
@@ -196,7 +205,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         self,
         job_id: str,
         requested: _CollaborationRequested,
-    ) -> None:
+    ) -> bool:
         row = self.storage.get(job_id)
         if not row:
             raise RuntimeError("Unknown job")
@@ -246,7 +255,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 last_failure=f"{type(exc).__name__}: {exc}"[-12000:],
                 collaboration_request=request.model_dump(mode="json"),
             )
-            return
+            return False
 
         latest = self.storage.get(job_id)
         if not latest:
@@ -267,7 +276,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 last_failure="Bounded collaboration remained unresolved after the maximum dialogue rounds.",
                 collaboration=thread_payload,
             )
-            return
+            return False
         if thread.status == "cancelled":
             self._block(
                 job_id=job_id,
@@ -277,7 +286,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 last_failure="Collaboration was cancelled before verification could continue.",
                 collaboration=thread_payload,
             )
-            return
+            return False
 
         previous_failure = checkpoint.get("pre_collaboration_failure")
         if previous_failure is None:
@@ -318,7 +327,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             status=thread.status,
             output={"thread_id": thread.id, "round": thread.rounds},
         )
-        await self.enqueue(job_id)
+        return True
 
     async def _provider_failover(
         self,
