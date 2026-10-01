@@ -179,7 +179,8 @@ projects:
             - path: PROJECT-CONTEXT.md
             - path: docs/09-roadmap.md
             - path: docs/10-backlog.md
-            - path: infra/staging/DEC-025-PRE-BETA-HARDENING.m      mvp-v1-2026-10-01-completion:
+            - path: infra/staging/DEC-025-PRE-BETA-HARDENING.md
+      mvp-v1-2026-10-01-completion:
         status: approved
         source_commit: 6038857e33d3717321a54e35743fa8b9dbeba8d2
         authority:
@@ -300,7 +301,6 @@ projects:
             - path: docs/10-backlog.md
             - path: docs/26-local-demo-workflow.md
             - path: infra/staging/DEC-025-PRE-BETA-HARDENING.md
-d
   pcp-validation-fixture:
     active_revision: validation-v2-2026-09-16-r3
     revisions:
