@@ -6,7 +6,7 @@ version: 1
 # revisions only; changing the active project frame requires a new revision.
 projects:
   chonhac:
-    active_revision: mvp-v1-2026-09-27-governed
+    active_revision: mvp-v1-2026-10-01-completion
     revisions:
       mvp-v1-2026-09-13:
         status: approved
@@ -179,7 +179,128 @@ projects:
             - path: PROJECT-CONTEXT.md
             - path: docs/09-roadmap.md
             - path: docs/10-backlog.md
+            - path: infra/staging/DEC-025-PRE-BETA-HARDENING.m      mvp-v1-2026-10-01-completion:
+        status: approved
+        source_commit: 6038857e33d3717321a54e35743fa8b9dbeba8d2
+        authority:
+          - path: AGENTS.md
+            authority: human_owner_protected
+          - path: .agents/skills/project-context/SKILL.md
+            authority: human_owner_protected
+          - path: .github/workflows/ci.yml
+            authority: human_owner_protected
+          - path: .github/workflows/exact-sha-ci.yml
+            authority: human_owner_protected
+          - path: .governance/document-authority.json
+            authority: human_owner_protected
+          - path: tools/check-document-authority.php
+            authority: human_owner_protected
+          - path: docs/context-memory-architecture.md
+            authority: human_owner_protected
+          - path: docs/00-project-overview.md
+            authority: human_owner_protected
+          - path: docs/01-product-brief.md
+            authority: human_owner_protected
+          - path: docs/02-mvp-scope.md
+            authority: human_owner_protected
+          - path: docs/03-user-flows.md
+            authority: human_owner_protected
+          - path: docs/04-business-rules.md
+            authority: human_owner_protected
+          - path: docs/05-data-model.md
+            authority: human_owner_protected
+          - path: docs/06-architecture.md
+            authority: human_owner_protected
+          - path: docs/07-api-contracts.md
+            authority: human_owner_protected
+          - path: docs/08-ux-notes.md
+            authority: human_owner_protected
+          - path: docs/11-decisions.md
+            authority: human_owner_protected
+          - path: docs/12-launch-metrics.md
+            authority: human_owner_protected
+          - path: docs/13-permissions-access-matrix.md
+            authority: human_owner_protected
+          - path: docs/14-cho-nhac-profile-implementation-plan.md
+            authority: human_owner_protected
+          - path: docs/15-account-email-verification-producer-plan.md
+            authority: human_owner_protected
+          - path: infra/staging/DEC-025-PRE-BETA-HARDENING.md
+            authority: human_owner_protected
+          - path: docs/24-mvp-completion-contract.md
+            authority: human_owner_protected
+          - path: docs/17-design-language.md
+            authority: delegated_design_owner
+          - path: docs/18-design-execution-plan.md
+            authority: delegated_design_owner
+          - path: docs/19-information-architecture-sitemap.md
+            authority: delegated_design_owner
+          - path: docs/20-core-wireframe-system.md
+            authority: delegated_design_owner
+          - path: docs/21-responsive-mobile-review.md
+            authority: delegated_design_owner
+          - path: docs/22-shared-component-contract.md
+            authority: delegated_design_owner
+          - path: docs/25-mvp-workflow-design.md
+            authority: delegated_design_owner
+          - path: PROJECT-CONTEXT.md
+            authority: mutable_execution
+          - path: README.md
+            authority: mutable_execution
+          - path: docs/09-roadmap.md
+            authority: mutable_execution
+          - path: docs/10-backlog.md
+            authority: mutable_execution
+          - path: docs/26-local-demo-workflow.md
+            authority: mutable_execution
+          - path: docs/16-account-email-verification-e4-review.md
+            authority: evidence_history
+          - path: docs/history/episodes.md
+            authority: evidence_history
+        references:
+          goals:
+            - path: docs/00-project-overview.md
+            - path: docs/01-product-brief.md
+          non_goals:
+            - path: docs/02-mvp-scope.md
+          requirements:
+            - path: docs/02-mvp-scope.md
+            - path: docs/04-business-rules.md
+            - path: docs/08-ux-notes.md
+            - path: docs/17-design-language.md
+            - path: docs/18-design-execution-plan.md
+            - path: docs/19-information-architecture-sitemap.md
+            - path: docs/20-core-wireframe-system.md
+            - path: docs/21-responsive-mobile-review.md
+            - path: docs/22-shared-component-contract.md
+            - path: docs/24-mvp-completion-contract.md
+            - path: docs/25-mvp-workflow-design.md
+          architecture_constraints:
+            - path: docs/06-architecture.md
+            - path: docs/11-decisions.md
+          quality_policy:
+            - path: AGENTS.md
+            - path: .governance/document-authority.json
+            - path: docs/context-memory-architecture.md
+            - path: docs/17-design-language.md
+            - path: docs/18-design-execution-plan.md
+            - path: docs/20-core-wireframe-system.md
+            - path: docs/21-responsive-mobile-review.md
+            - path: docs/22-shared-component-contract.md
+            - path: docs/25-mvp-workflow-design.md
+            - path: docs/26-local-demo-workflow.md
+          security_policy:
+            - path: docs/13-permissions-access-matrix.md
+            - path: docs/24-mvp-completion-contract.md
+          budget_policy:
+            - path: AGENTS.md
+          roadmap_frame:
+            - path: PROJECT-CONTEXT.md
+            - path: docs/09-roadmap.md
+            - path: docs/10-backlog.md
+            - path: docs/26-local-demo-workflow.md
             - path: infra/staging/DEC-025-PRE-BETA-HARDENING.md
+d
   pcp-validation-fixture:
     active_revision: validation-v2-2026-09-16-r3
     revisions:
