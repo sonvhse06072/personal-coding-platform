@@ -566,7 +566,11 @@ def test_baseline_covered_protected_approval_requires_exact_green_evidence() -> 
                 "authority": "human_owner_protected",
             }
         ],
-        "references": {},
+        "references": {
+            "security_policy": [
+                {"path": "docs/24-mvp-completion-contract.md"}
+            ]
+        },
     }
     assert validate_baseline_covered_protected_approval(
         decision,
@@ -709,6 +713,7 @@ def test_pm_prompt_prefers_repair_for_removable_scope_violation(tmp_path) -> Non
     assert "authorized_protected_signals MUST exactly equal" in prompt
     assert "authorized_protected_signals and baseline_authority_refs MUST both be []" in prompt
     assert "baseline_authority_refs MUST name" in prompt
+    assert "references.security_policy" in prompt
     assert "no new auth mechanism" in prompt
     assert "human_necessity" in prompt
 
