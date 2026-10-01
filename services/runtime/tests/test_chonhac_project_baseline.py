@@ -14,7 +14,7 @@ LEGACY_COMMIT = "b143fbb001c2006ec82570619802b607085fbeb0"
 LEGACY_REVISION = "mvp-v1-2026-09-13"
 
 
-def test_chonhac_active_baseline_resolves_to_approved_design_source_of_truth() -> None:
+def test_chonhac_active_baseline_resolves_to_approved_completion_source_of_truth() -> None:
     clear_config_cache()
     baseline = resolve_project_baseline("chonhac")
 
