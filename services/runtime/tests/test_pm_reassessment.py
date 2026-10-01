@@ -520,6 +520,7 @@ def test_baseline_covered_protected_approval_is_security_only_and_risk_free() ->
             "unresolved_risks": [],
             "human_triggers": [],
             "authorized_protected_signals": ["security_boundary_change"],
+            "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
         }
     )
     assert decision.authorized_protected_signals == ["security_boundary_change"]
@@ -534,6 +535,7 @@ def test_baseline_covered_protected_approval_is_security_only_and_risk_free() ->
                 "unresolved_risks": [],
                 "human_triggers": [],
                 "authorized_protected_signals": ["major_dependency_addition"],
+                "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
             }
         )
 
@@ -547,6 +549,7 @@ def test_baseline_covered_protected_approval_is_security_only_and_risk_free() ->
                 "unresolved_risks": ["Trust boundary is unclear."],
                 "human_triggers": [],
                 "authorized_protected_signals": ["security_boundary_change"],
+                "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
             }
         )
 
@@ -554,12 +557,23 @@ def test_baseline_covered_protected_approval_is_security_only_and_risk_free() ->
 def test_baseline_covered_protected_approval_requires_exact_green_evidence() -> None:
     decision = {
         "authorized_protected_signals": ["security_boundary_change"],
+        "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
+    }
+    baseline = {
+        "authority": [
+            {
+                "path": "docs/24-mvp-completion-contract.md",
+                "authority": "human_owner_protected",
+            }
+        ],
+        "references": {},
     }
     assert validate_baseline_covered_protected_approval(
         decision,
         protected_flags=["security_boundary_change"],
         verification={"passed": True},
         review_summary={"verdict": "pass", "protocol_valid": True},
+        baseline=baseline,
     ) is None
 
     assert "exactly match" in str(
@@ -568,6 +582,7 @@ def test_baseline_covered_protected_approval_requires_exact_green_evidence() -> 
             protected_flags=["security_boundary_change", "scope_change"],
             verification={"passed": True},
             review_summary={"verdict": "pass", "protocol_valid": True},
+            baseline=baseline,
         )
     )
     assert "verification" in str(
@@ -576,6 +591,7 @@ def test_baseline_covered_protected_approval_requires_exact_green_evidence() -> 
             protected_flags=["security_boundary_change"],
             verification={"passed": False},
             review_summary={"verdict": "pass", "protocol_valid": True},
+            baseline=baseline,
         )
     )
     assert "review" in str(
@@ -584,6 +600,7 @@ def test_baseline_covered_protected_approval_requires_exact_green_evidence() -> 
             protected_flags=["security_boundary_change"],
             verification={"passed": True},
             review_summary={"verdict": "fail", "protocol_valid": True},
+            baseline=baseline,
         )
     )
 
@@ -684,6 +701,7 @@ def test_pm_prompt_prefers_repair_for_removable_scope_violation(tmp_path) -> Non
     assert "security_boundary_change" in prompt
     assert "approve_baseline_covered_protected" in prompt
     assert "authorized_protected_signals MUST exactly equal" in prompt
-    assert "authorized_protected_signals MUST be []" in prompt
+    assert "authorized_protected_signals and baseline_authority_refs MUST both be []" in prompt
+    assert "baseline_authority_refs MUST name" in prompt
     assert "no new auth mechanism" in prompt
     assert "human_necessity" in prompt
