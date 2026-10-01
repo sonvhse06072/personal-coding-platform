@@ -955,6 +955,7 @@ class RuntimeEngine(RuntimeEngineCore):
                             if isinstance(current_review_summary, dict)
                             else None
                         ),
+                        baseline=dict(checkpoint.get("project_baseline") or {}),
                     )
                     if approval_error:
                         self._block(
@@ -994,6 +995,9 @@ class RuntimeEngine(RuntimeEngineCore):
                             "approved_by": str(pm_result.get("model_id") or ""),
                             "provider": str(pm_result.get("provider") or ""),
                             "summary": str(pm_decision.get("summary") or "")[:2000],
+                            "baseline_authority_refs": list(
+                                pm_decision.get("baseline_authority_refs") or []
+                            )[:8],
                             "review_verdict": str(
                                 (
                                     current_review_summary
