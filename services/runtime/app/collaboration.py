@@ -374,24 +374,43 @@ class CollaborationManager:
         }
 
     @staticmethod
-    def _ensure_budget(row: dict[str, Any]) -> None:
+    def _adaptive_budget_nonblocking(row: dict[str, Any]) -> bool:
         route = row.get("route") or {}
-        budget = (route.get("strategy") or {}).get("budget") or {}
+        strategy = route.get("strategy") or {}
+        return str(strategy.get("budget_mode") or "") == "adaptive"
+
+    @classmethod
+    def _ensure_budget(cls, row: dict[str, Any]) -> None:
+        route = row.get("route") or {}
+        strategy = route.get("strategy") or {}
+        budget = strategy.get("budget") or {}
         progress = row.get("progress") or {}
-        checks = (
-            ("model_calls", "max_model_calls", "model-call"),
-            ("input_tokens", "max_input_tokens", "input-token"),
-            ("output_tokens", "max_output_tokens", "output-token"),
-            ("elapsed_minutes", "max_wall_time_minutes", "wall-time"),
+
+        checks = [
             ("cost_usd", "hard_cost_usd", "hard-cost"),
-        )
+        ]
+        if not cls._adaptive_budget_nonblocking(row):
+            checks = [
+                ("model_calls", "max_model_calls", "model-call"),
+                ("input_tokens", "max_input_tokens", "input-token"),
+                ("output_tokens", "max_output_tokens", "output-token"),
+                ("elapsed_minutes", "max_wall_time_minutes", "wall-time"),
+                *checks,
+            ]
+
         for progress_key, budget_key, label in checks:
             limit = float(budget.get(budget_key, 0) or 0)
             if limit > 0 and float(progress.get(progress_key, 0) or 0) >= limit:
                 raise RuntimeError(f"Collaboration would exceed the job {label} emergency ceiling")
 
-    @staticmethod
-    def _timeout_seconds(row: dict[str, Any], requested: int) -> int:
+    @classmethod
+    def _timeout_seconds(cls, row: dict[str, Any], requested: int) -> int:
+        if cls._adaptive_budget_nonblocking(row):
+            # Effective adaptive jobs treat cumulative wall time as telemetry.
+            # Keep each collaboration round bounded by its validated request
+            # deadline rather than reintroducing a legacy total-wall stop.
+            return max(10, min(int(requested), 900))
+
         route = row.get("route") or {}
         budget = (route.get("strategy") or {}).get("budget") or {}
         progress = row.get("progress") or {}
