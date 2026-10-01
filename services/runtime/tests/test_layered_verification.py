@@ -7,6 +7,10 @@ import pytest
 from app.adapters.codex import CodexAdapter
 from app.capability_context import agent_verification_capability_context
 from app.engine import RuntimeEngine
+from app.engine_execution import (
+    deterministic_verification_failure_signature,
+    record_deterministic_verification_failure_streak,
+)
 from app.review_repair_churn import EPOCH_KEY, new_epoch
 
 
@@ -697,3 +701,119 @@ def test_legacy_auto_phase_preserves_churn_epoch_and_counts_one_attempt(auto_req
     assert state["repair_iterations"] == 50
     assert storage.row["progress"] == state
     assert storage.row["checkpoint"] == job["checkpoint"]
+
+
+def _failed_verification(*, output: str, command: str = "phpunit", attempt: int = 1):
+    return {
+        "passed": False,
+        "tests_passed": False,
+        "verification_attempt": attempt,
+        "phases": [
+            {
+                "phase": "targeted_tests",
+                "passed": False,
+                "commands": [
+                    {
+                        "command": command,
+                        "returncode": 1,
+                        "timed_out": False,
+                        "stdout": output,
+                        "stderr": "",
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def test_deterministic_failure_signature_ignores_volatile_output() -> None:
+    first = deterministic_verification_failure_signature(
+        _failed_verification(output="failure at 2.41s"),
+        diff_hash="diff-a",
+    )
+    second = deterministic_verification_failure_signature(
+        _failed_verification(output="same failure at 3.02s"),
+        diff_hash="diff-a",
+    )
+    assert first == second
+
+
+def test_deterministic_failure_streak_trips_after_configured_limit() -> None:
+    checkpoint = {}
+    one = record_deterministic_verification_failure_streak(
+        checkpoint,
+        _failed_verification(output="run one", attempt=1),
+        diff_hash="diff-a",
+        limit=2,
+    )
+    two = record_deterministic_verification_failure_streak(
+        checkpoint,
+        _failed_verification(output="run two changed output", attempt=2),
+        diff_hash="diff-a",
+        limit=2,
+    )
+    three = record_deterministic_verification_failure_streak(
+        checkpoint,
+        _failed_verification(output="run three changed output", attempt=3),
+        diff_hash="diff-a",
+        limit=2,
+    )
+
+    assert one["count"] == 1
+    assert two["count"] == 2
+    assert three["count"] == 3
+    assert three["count"] > three["limit"]
+
+
+def test_deterministic_failure_streak_resets_on_diff_or_command_change() -> None:
+    checkpoint = {}
+    record_deterministic_verification_failure_streak(
+        checkpoint,
+        _failed_verification(output="failure", attempt=1),
+        diff_hash="diff-a",
+        limit=2,
+    )
+    changed_diff = record_deterministic_verification_failure_streak(
+        checkpoint,
+        _failed_verification(output="failure", attempt=2),
+        diff_hash="diff-b",
+        limit=2,
+    )
+    changed_command = record_deterministic_verification_failure_streak(
+        checkpoint,
+        _failed_verification(output="failure", command="phpcs", attempt=3),
+        diff_hash="diff-b",
+        limit=2,
+    )
+
+    assert changed_diff["count"] == 1
+    assert changed_command["count"] == 1
+
+
+def test_deterministic_failure_streak_clears_on_pass() -> None:
+    checkpoint = {}
+    record_deterministic_verification_failure_streak(
+        checkpoint,
+        _failed_verification(output="failure"),
+        diff_hash="diff-a",
+        limit=2,
+    )
+    passed = {
+        "passed": True,
+        "tests_passed": True,
+        "verification_attempt": 2,
+        "phases": [
+            {
+                "phase": "targeted_tests",
+                "passed": True,
+                "commands": [{"command": "phpunit", "returncode": 0, "timed_out": False}],
+            }
+        ],
+    }
+    assert record_deterministic_verification_failure_streak(
+        checkpoint,
+        passed,
+        diff_hash="diff-a",
+        limit=2,
+    ) is None
+    assert "deterministic_verification_failure_streak" not in checkpoint

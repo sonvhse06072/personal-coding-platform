@@ -16,7 +16,8 @@ def test_chonhac_targeted_verification_covers_unit_and_kernel_phpunit() -> None:
 
     joined = "\n".join(commands)
     assert '*/tests/src/Unit/*Test.php' in joined
-    assert '*/tests/src/Kernel/*Test.php' in joined
+    assert "web/modules/custom/cho_nhac_show/tests/src/Kernel/ShowDomainTest.php" in joined
+    assert "SIMPLETEST_DB=pgsql://db:db@db:5432/db" in joined
     assert joined.count("vendor/bin/phpunit -c web/core/phpunit.xml.dist") >= 2
 
     assert any(

@@ -52,6 +52,7 @@ _PUBLIC_BLOCK_REASONS = {
     "preflight_budget_exhausted",
     "preflight_failed",
     "provider_failure_without_fallback",
+    "repeated_deterministic_verification_failure",
     "pull_request_closed_without_merge",
     "reassessment_stopped",
     "repair_churn_circuit_breaker",

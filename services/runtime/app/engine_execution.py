@@ -89,6 +89,107 @@ def effective_workspace_mode(
 
 
 
+_DETERMINISTIC_VERIFICATION_STREAK_KEY = "deterministic_verification_failure_streak"
+
+
+def deterministic_verification_failure_signature(
+    verification: dict[str, Any],
+    *,
+    diff_hash: str,
+) -> str:
+    """Return a stable signature for failed deterministic verification commands.
+
+    Volatile stdout/stderr is deliberately excluded so repeated failures of the
+    same command on the same diff cannot evade the circuit breaker merely
+    because PHPUnit timing/order/output text changed.
+    """
+
+    failures: list[dict[str, Any]] = []
+    for raw_phase in verification.get("phases") or []:
+        phase = dict(raw_phase) if isinstance(raw_phase, dict) else {}
+        if bool(phase.get("passed", False)):
+            continue
+        failed_commands: list[dict[str, Any]] = []
+        for raw_command in phase.get("commands") or []:
+            if isinstance(raw_command, dict):
+                returncode = raw_command.get("returncode")
+                timed_out = bool(raw_command.get("timed_out", False))
+                if returncode == 0 and not timed_out:
+                    continue
+                failed_commands.append(
+                    {
+                        "command": str(raw_command.get("command") or ""),
+                        "returncode": returncode,
+                        "timed_out": timed_out,
+                    }
+                )
+            else:
+                failed_commands.append(
+                    {
+                        "command": str(raw_command),
+                        "returncode": None,
+                        "timed_out": False,
+                    }
+                )
+        failures.append(
+            {
+                "phase": str(phase.get("phase") or ""),
+                "commands": failed_commands,
+            }
+        )
+    stable = {
+        "diff_hash": str(diff_hash or ""),
+        "failures": failures,
+    }
+    return failure_fingerprint(
+        json.dumps(stable, ensure_ascii=False, sort_keys=True, default=str)
+    )
+
+
+def record_deterministic_verification_failure_streak(
+    checkpoint: dict[str, Any],
+    verification: dict[str, Any],
+    *,
+    diff_hash: str,
+    limit: int,
+) -> dict[str, Any] | None:
+    """Track repeated deterministic failures independently from review churn."""
+
+    if bool(verification.get("passed", False)):
+        checkpoint.pop(_DETERMINISTIC_VERIFICATION_STREAK_KEY, None)
+        return None
+
+    signature = deterministic_verification_failure_signature(
+        verification,
+        diff_hash=diff_hash,
+    )
+    previous = checkpoint.get(_DETERMINISTIC_VERIFICATION_STREAK_KEY)
+    previous = dict(previous) if isinstance(previous, dict) else {}
+    if (
+        str(previous.get("diff_hash") or "") == str(diff_hash or "")
+        and str(previous.get("signature") or "") == signature
+    ):
+        count = int(previous.get("count") or 0) + 1
+    else:
+        count = 1
+
+    failing_phases = [
+        str(item.get("phase") or "")
+        for item in verification.get("phases") or []
+        if isinstance(item, dict) and not bool(item.get("passed", False))
+    ]
+    state = {
+        "diff_hash": str(diff_hash or ""),
+        "signature": signature,
+        "count": count,
+        "limit": max(1, int(limit)),
+        "failing_phases": failing_phases,
+        "verification_attempt": int(verification.get("verification_attempt") or 0),
+    }
+    checkpoint[_DETERMINISTIC_VERIFICATION_STREAK_KEY] = state
+    return state
+
+
 class RuntimeEngine(RuntimeEngineCore):
     async def run_job(self, job_id: str) -> None:
         job = self.storage.get(job_id)
@@ -602,6 +703,37 @@ class RuntimeEngine(RuntimeEngineCore):
             progress["required_checks_passed"] = False
             progress["unexpected_scope"] = diff["changed_file_count"] > int(strategy["budget"]["max_changed_files"])
             self._update_elapsed(progress, started)
+
+            deterministic_streak = record_deterministic_verification_failure_streak(
+                checkpoint,
+                verification,
+                diff_hash=str(diff.get("diff_hash") or ""),
+                limit=int(
+                    (strategy.get("anti_loop") or {}).get(
+                        "same_failure_fingerprint_limit",
+                        2,
+                    )
+                ),
+            )
+            if (
+                deterministic_streak is not None
+                and int(deterministic_streak.get("count") or 0)
+                > int(deterministic_streak.get("limit") or 0)
+            ):
+                self._block(
+                    job_id=job_id,
+                    progress=progress,
+                    checkpoint=checkpoint,
+                    reason="repeated_deterministic_verification_failure",
+                    last_failure=(
+                        verification.get("failure_text")
+                        or "Deterministic verification repeatedly failed without a diff/signature change."
+                    ),
+                    diff=diff,
+                    verification=verification,
+                    verification_failure_streak=deterministic_streak,
+                )
+                return
 
             evaluator_output = None
             evaluator_ok = True
