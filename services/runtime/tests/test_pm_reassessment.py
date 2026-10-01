@@ -554,6 +554,32 @@ def test_baseline_covered_protected_approval_is_security_only_and_risk_free() ->
         )
 
 
+def test_live_approval_shape_with_nonblocking_notes_still_rejects_unresolved_risks() -> None:
+    with pytest.raises(ValueError, match="cannot retain unresolved risks"):
+        PMReassessmentDecision.model_validate(
+            {
+                "action": "approve_baseline_covered_protected",
+                "authorized_protected_signals": ["security_boundary_change"],
+                "baseline_authority_refs": [
+                    "docs/13-permissions-access-matrix.md",
+                    "docs/24-mvp-completion-contract.md",
+                ],
+                "developer_message": (
+                    "Preserve the reviewed diff and obtain authoritative "
+                    "Runtime/DDEV evidence before final handoff."
+                ),
+                "human_necessity": None,
+                "human_triggers": [],
+                "summary": (
+                    "The exact security-looking diff remains within the pinned baseline."
+                ),
+                "unresolved_risks": [
+                    "Host PHP is unavailable; rely on authoritative DDEV evidence."
+                ],
+            }
+        )
+
+
 def test_baseline_covered_protected_approval_requires_exact_green_evidence() -> None:
     decision = {
         "authorized_protected_signals": ["security_boundary_change"],
@@ -712,6 +738,8 @@ def test_pm_prompt_prefers_repair_for_removable_scope_violation(tmp_path) -> Non
     assert "approve_baseline_covered_protected" in prompt
     assert "authorized_protected_signals MUST exactly equal" in prompt
     assert "authorized_protected_signals and baseline_authority_refs MUST both be []" in prompt
+    assert "unresolved_risks MUST be []" in prompt
+    assert "never unresolved_risks" in prompt
     assert "baseline_authority_refs MUST name" in prompt
     assert "references.security_policy" in prompt
     assert "no new auth mechanism" in prompt
