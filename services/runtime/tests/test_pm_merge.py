@@ -49,6 +49,11 @@ def context() -> tuple[dict, dict, dict, dict, dict]:
             "production_write": False,
         },
         "checkpoint": {
+            "project_baseline": {
+                "revision": "v1",
+                "authority": [],
+                "references": {},
+            },
             "work_order": {
                 "id": "WO-1",
                 "risk": {"level": "standard", "flags": []},
@@ -172,7 +177,9 @@ def test_baseline_covered_security_authorization_can_satisfy_merge_gate() -> Non
             "diff_hash": "diff-1",
             "protected_signals": ["security_boundary_change"],
             "approved_by": "pm-model",
+            "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
             "review_verdict": "pass",
+            "baseline_revision": "v1",
         }
     ]
 
@@ -194,7 +201,9 @@ def test_baseline_covered_security_authorization_is_invalidated_by_diff_change()
             "diff_hash": "diff-old",
             "protected_signals": ["security_boundary_change"],
             "approved_by": "pm-model",
+            "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
             "review_verdict": "pass",
+            "baseline_revision": "v1",
         }
     ]
 
