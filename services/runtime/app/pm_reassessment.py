@@ -51,6 +51,7 @@ class PMReassessmentDecision(BaseModel):
     unresolved_risks: list[str] = Field(default_factory=list, max_length=12)
     human_triggers: list[str] = Field(default_factory=list, max_length=12)
     authorized_protected_signals: list[str] = Field(default_factory=list, max_length=4)
+    baseline_authority_refs: list[str] = Field(default_factory=list, max_length=8)
 
     @field_validator("summary")
     @classmethod
@@ -68,7 +69,12 @@ class PMReassessmentDecision(BaseModel):
         value = value.strip()
         return value or None
 
-    @field_validator("unresolved_risks", "human_triggers", "authorized_protected_signals")
+    @field_validator(
+        "unresolved_risks",
+        "human_triggers",
+        "authorized_protected_signals",
+        "baseline_authority_refs",
+    )
     @classmethod
     def normalize_lists(cls, values: list[str]) -> list[str]:
         result: list[str] = []
@@ -111,10 +117,14 @@ class PMReassessmentDecision(BaseModel):
                 raise ValueError(
                     "approve_baseline_covered_protected cannot retain unresolved risks"
                 )
-        elif self.authorized_protected_signals:
+            if not self.baseline_authority_refs:
+                raise ValueError(
+                    "approve_baseline_covered_protected requires baseline_authority_refs"
+                )
+        elif self.authorized_protected_signals or self.baseline_authority_refs:
             raise ValueError(
-                "authorized_protected_signals are valid only for "
-                "approve_baseline_covered_protected"
+                "authorized_protected_signals and baseline_authority_refs are valid "
+                "only for approve_baseline_covered_protected"
             )
         if self.action == "approve_continue" and self.unresolved_risks:
             raise ValueError("approve_continue cannot retain unresolved risks")
@@ -165,6 +175,7 @@ def validate_baseline_covered_protected_approval(
     protected_flags: list[str],
     verification: dict[str, Any],
     review_summary: dict[str, Any] | None,
+    baseline: dict[str, Any],
 ) -> str | None:
     """Fail closed unless a PM approval exactly matches the allowed protected set."""
 
@@ -191,6 +202,29 @@ def validate_baseline_covered_protected_approval(
             "baseline-covered protected approval does not support: "
             + ", ".join(sorted(unsupported))
         )
+    authority_refs = {
+        str(item)
+        for item in decision.get("baseline_authority_refs") or []
+        if str(item)
+    }
+    if not authority_refs:
+        return "baseline authority references are required"
+    baseline_paths: set[str] = set()
+    for raw in baseline.get("authority") or []:
+        item = dict(raw) if isinstance(raw, dict) else {}
+        path = str(item.get("path") or "").strip()
+        if path:
+            baseline_paths.add(path)
+    references = dict(baseline.get("references") or {})
+    for group in references.values():
+        for raw in group or []:
+            item = dict(raw) if isinstance(raw, dict) else {}
+            path = str(item.get("path") or "").strip()
+            if path:
+                baseline_paths.add(path)
+    unknown_refs = sorted(authority_refs - baseline_paths)
+    if unknown_refs:
+        return "baseline authority references are not pinned: " + ", ".join(unknown_refs)
     return None
 
 
@@ -277,13 +311,13 @@ def _prompt(
             "Approve continuation only when the evidence shows the change remains inside the approved WorkOrder and no Human Owner protected/material decision is required.",
             "Plain approve_continue remains forbidden while any protected_execution_signal is present.",
             "For the special action approve_baseline_covered_protected, use it only when deterministic verification PASS and independent review PASS, every current protected flag is exactly security_boundary_change, the exact diff is already covered by the pinned ProjectBaseline/WorkOrder, and no new auth mechanism, credential transport, trust boundary, or security boundary is introduced.",
-            "For approve_baseline_covered_protected, authorized_protected_signals MUST exactly equal the current protected_decision_flags and human_triggers MUST be [] with human_necessity null.",
+            "For approve_baseline_covered_protected, authorized_protected_signals MUST exactly equal the current protected_decision_flags, baseline_authority_refs MUST name one or more exact paths present in the pinned ProjectBaseline authority/references, and human_triggers MUST be [] with human_necessity null.",
             "Never use approve_baseline_covered_protected for scope changes, dependency additions, destructive migrations, production writes, governance/baseline authority changes, or actual auth/trust-boundary changes.",
             "If evidence is insufficient, ask the developer one concrete bounded question. If implementation should change, request a bounded repair.",
             "A removable implementation choice that violates the WorkOrder or an out-of-scope rule is ordinarily a PM repair decision, not a request to expand scope. Prefer request_repair or request_developer_response when the approved objective can still be met by reverting/replacing the offending change.",
             "Do not escalate merely because a protected signal exists. Escalate to Human Owner only when the evidence shows PM cannot resolve the issue inside the approved baseline, such as when the protected/material change is genuinely necessary and no viable in-scope repair is available.",
             "For any action other than human_decision, human_triggers MUST be [] and human_necessity MUST be null.",
-            "For any action other than approve_baseline_covered_protected, authorized_protected_signals MUST be [].",
+            "For any action other than approve_baseline_covered_protected, authorized_protected_signals and baseline_authority_refs MUST both be [].",
             "Never put a reviewed-but-not-escalated protected signal in human_triggers. Describe that review in summary or unresolved_risks instead.",
             f"For human_decision, human_triggers MUST contain only exact trigger IDs from: {', '.join(sorted(_PM_HUMAN_TRIGGERS))}.",
             "For human_decision, human_necessity must state why repair, revert, or bounded developer dialogue cannot resolve the issue. Human Owner is not an implementation convenience.",
