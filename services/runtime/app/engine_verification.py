@@ -267,16 +267,6 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             f"collaboration:{thread.id}:round:{thread.rounds}:{thread.status}"
         )
 
-        if thread.status == "pm_handoff":
-            self._block(
-                job_id=job_id,
-                progress=progress,
-                checkpoint=checkpoint,
-                reason="collaboration_pm_handoff",
-                last_failure="Bounded collaboration remained unresolved after the maximum dialogue rounds.",
-                collaboration=thread_payload,
-            )
-            return False
         if thread.status == "cancelled":
             self._block(
                 job_id=job_id,
@@ -304,6 +294,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             "suggested_tests": thread.response.suggested_tests if thread.response else [],
             "unresolved": thread.response.unresolved if thread.response else False,
             "previous_failure": previous_failure,
+            "pm_handoff": thread.pm_handoff if thread.status == "pm_handoff" else None,
         }
         checkpoint["collaboration_context"] = context
         checkpoint["last_failure"] = "PCP_COLLABORATION_CONTEXT: " + json.dumps(
@@ -311,6 +302,17 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             ensure_ascii=False,
             sort_keys=True,
         )
+
+        if thread.status == "pm_handoff":
+            self._block(
+                job_id=job_id,
+                progress=progress,
+                checkpoint=checkpoint,
+                reason="collaboration_pm_handoff",
+                last_failure="Bounded collaboration remained unresolved after the maximum dialogue rounds.",
+                collaboration=thread_payload,
+            )
+            return False
         self.storage.update(
             job_id,
             status="queued",

@@ -158,6 +158,11 @@ def execution_prompt(
             "LATEST COLLABORATION ARTIFACT (STRUCTURED, ADVISORY; WORKORDER REMAINS AUTHORITATIVE):",
             json.dumps(collaboration_context, ensure_ascii=False, sort_keys=True),
         ]
+        if str(collaboration_context.get("status") or "") == "pm_handoff":
+            lines += [
+                "This collaboration already reached its maximum bounded dialogue rounds and was handed to PM. Do not create another collaboration request or recheck for this thread.",
+                "If PM resumed the job, act only on a concrete code-side repair identified by the latest handoff. If the handoff says no code-side repair remains and asks for deterministic/runtime verification, do not invent a code change; leave the diff unchanged and let Runtime verification execute.",
+            ]
     if preview_context:
         lines += [
             "",
@@ -168,12 +173,24 @@ def execution_prompt(
     if failure:
         if failure.startswith("PCP_COLLABORATION_CONTEXT:"):
             payload = failure.split(":", 1)[1].strip()
+            try:
+                collaboration_failure = json.loads(payload)
+            except json.JSONDecodeError:
+                collaboration_failure = {}
             lines += [
                 "",
                 "LATEST COLLABORATION ARTIFACT (STRUCTURED, ADVISORY; WORKORDER REMAINS AUTHORITATIVE):",
                 payload,
-                "Use this artifact to make or justify the next bounded implementation decision. If it remains unresolved and another check is necessary, use the same thread_id with action=recheck.",
             ]
+            if str(collaboration_failure.get("status") or "") == "pm_handoff":
+                lines += [
+                    "This collaboration is already at its maximum bounded round and has been handed to PM. Do not request another recheck or create a replacement thread for the same question.",
+                    "If PM resumed the job and the handoff identifies no remaining code-side repair, do not invent changes merely to continue; leave the diff unchanged so Runtime can perform the required deterministic verification.",
+                ]
+            else:
+                lines += [
+                    "Use this artifact to make or justify the next bounded implementation decision. If it remains unresolved and another check is necessary, use the same thread_id with action=recheck.",
+                ]
         elif failure.startswith("PCP_REVIEW_FINDINGS:"):
             payload = failure.split(":", 1)[1].strip()
             lines += [

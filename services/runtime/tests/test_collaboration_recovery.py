@@ -599,3 +599,94 @@ def test_blocked_collaboration_does_not_continue_parent_worker(monkeypatch, tmp_
         assert storage.row["status"] == "blocked"
 
     asyncio.run(scenario())
+
+
+def test_pm_handoff_persists_latest_context_before_block(tmp_path):
+    async def scenario():
+        workspace = git_workspace(tmp_path)
+        current = row(workspace)
+        storage = FakeStorage(current)
+        engine = object.__new__(VerificationRuntimeEngine)
+        engine.storage = storage
+
+        class HandoffCollaboration:
+            async def create(self, job_id, request):
+                raise AssertionError("create should not be used")
+
+            async def recheck(self, job_id, thread_id, request):
+                from app.collaboration import CollaborationResponse, CollaborationView
+                return CollaborationView(
+                    id=thread_id,
+                    job_id=job_id,
+                    work_order_id="WO-149-recovery",
+                    topic="focused-kernel-verification",
+                    initiator_role="developer",
+                    participant_role="test_engineer",
+                    role="test_engineer",
+                    objective="verify focused kernel coverage",
+                    question="Is any code-side blocker left?",
+                    status="pm_handoff",
+                    rounds=2,
+                    max_rounds=2,
+                    evidence=evidence(),
+                    response=CollaborationResponse(
+                        recommendation="No remaining code-side repair identified; run the exact Kernel target in Runtime.",
+                        risks=["PHP/PHPUnit could not run in the collaborator sandbox."],
+                        suggested_tests=["Run the exact Kernel target against PostgreSQL."],
+                        unresolved=True,
+                    ),
+                    staffing=None,
+                    usage={},
+                    trace=[],
+                    pm_handoff={
+                        "reason": "collaboration_round_limit_with_unresolved_disagreement",
+                        "thread_id": thread_id,
+                        "work_order_id": "WO-149-recovery",
+                        "topic": "focused-kernel-verification",
+                        "question": "Is any code-side blocker left?",
+                        "latest_response": {
+                            "recommendation": "No remaining code-side repair identified; run the exact Kernel target in Runtime.",
+                            "risks": ["PHP/PHPUnit could not run in the collaborator sandbox."],
+                            "suggested_tests": ["Run the exact Kernel target against PostgreSQL."],
+                            "unresolved": True,
+                        },
+                        "evidence_refs": ["runtime:current_diff"],
+                        "trace_hash": "abc123",
+                    },
+                    error=None,
+                )
+
+        engine.collaboration = HandoffCollaboration()
+        engine._runtime_event = lambda *args, **kwargs: None
+
+        request = DeveloperCollaborationRequest(
+            action="recheck",
+            thread_id="ct-handoff",
+            developer_response="Applied the requested repair.",
+            evidence=evidence(),
+        )
+        requested = _CollaborationRequested(
+            request,
+            {
+                "changed_file_count": 1,
+                "changed_files": ["README.md"],
+                "diff": "diff",
+                "diff_hash": "diff-handoff",
+            },
+        )
+
+        continued = await engine._handle_collaboration_request(current["id"], requested)
+
+        assert continued is False
+        assert storage.row["status"] == "blocked"
+        context = storage.row["checkpoint"]["collaboration_context"]
+        assert context["status"] == "pm_handoff"
+        assert context["round"] == 2
+        assert context["recommendation"].startswith("No remaining code-side repair")
+        assert context["pm_handoff"]["trace_hash"] == "abc123"
+        assert storage.row["checkpoint"]["last_failure"].startswith(
+            "PCP_COLLABORATION_CONTEXT:"
+        )
+        assert storage.row["result"]["reason"] == "collaboration_pm_handoff"
+
+    asyncio.run(scenario())
