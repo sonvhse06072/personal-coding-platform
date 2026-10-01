@@ -600,8 +600,11 @@ class CollaborationManager:
             thread = next((item for item in threads if item.get("id") == thread_id), None)
             if thread is None:
                 raise RuntimeError("Unknown collaboration thread")
-            if thread.get("status") != "open":
-                raise RuntimeError(f"Collaboration thread cannot be re-checked from status={thread.get('status')}")
+            status = str(thread.get("status") or "")
+            if status not in {"open", "resolved"}:
+                raise RuntimeError(
+                    f"Collaboration thread cannot be re-checked from status={status}"
+                )
             if int(thread.get("rounds", 0)) >= _MAX_ROUNDS:
                 raise RuntimeError("Collaboration round limit reached")
             if thread_id in self._active_tasks:
