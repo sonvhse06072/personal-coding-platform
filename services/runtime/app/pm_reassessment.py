@@ -283,6 +283,7 @@ def _prompt(
             "A removable implementation choice that violates the WorkOrder or an out-of-scope rule is ordinarily a PM repair decision, not a request to expand scope. Prefer request_repair or request_developer_response when the approved objective can still be met by reverting/replacing the offending change.",
             "Do not escalate merely because a protected signal exists. Escalate to Human Owner only when the evidence shows PM cannot resolve the issue inside the approved baseline, such as when the protected/material change is genuinely necessary and no viable in-scope repair is available.",
             "For any action other than human_decision, human_triggers MUST be [] and human_necessity MUST be null.",
+            "For any action other than approve_baseline_covered_protected, authorized_protected_signals MUST be [].",
             "Never put a reviewed-but-not-escalated protected signal in human_triggers. Describe that review in summary or unresolved_risks instead.",
             f"For human_decision, human_triggers MUST contain only exact trigger IDs from: {', '.join(sorted(_PM_HUMAN_TRIGGERS))}.",
             "For human_decision, human_necessity must state why repair, revert, or bounded developer dialogue cannot resolve the issue. Human Owner is not an implementation convenience.",
