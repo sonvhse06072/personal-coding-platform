@@ -239,6 +239,13 @@ def validate_baseline_covered_protected_approval(
     unknown_refs = sorted(authority_refs - baseline_paths)
     if unknown_refs:
         return "baseline authority references are not pinned: " + ", ".join(unknown_refs)
+    security_policy_paths = {
+        str(item.get("path") or "").strip()
+        for item in references.get("security_policy") or []
+        if isinstance(item, dict) and str(item.get("path") or "").strip()
+    }
+    if not (authority_refs & security_policy_paths):
+        return "baseline authority references must include a pinned security_policy path"
     return None
 
 
@@ -325,7 +332,7 @@ def _prompt(
             "Approve continuation only when the evidence shows the change remains inside the approved WorkOrder and no Human Owner protected/material decision is required.",
             "Plain approve_continue remains forbidden while any protected_execution_signal is present.",
             "For the special action approve_baseline_covered_protected, use it only when deterministic verification PASS and independent review PASS, every current protected flag is exactly security_boundary_change, the exact diff is already covered by the pinned ProjectBaseline/WorkOrder, and no new auth mechanism, credential transport, trust boundary, or security boundary is introduced.",
-            "For approve_baseline_covered_protected, authorized_protected_signals MUST exactly equal the current protected_decision_flags, baseline_authority_refs MUST name one or more exact paths present in the pinned ProjectBaseline authority/references, and human_triggers MUST be [] with human_necessity null.",
+            "For approve_baseline_covered_protected, authorized_protected_signals MUST exactly equal the current protected_decision_flags, baseline_authority_refs MUST name one or more exact pinned paths and include at least one path from ProjectBaseline references.security_policy, and human_triggers MUST be [] with human_necessity null.",
             "Never use approve_baseline_covered_protected for scope changes, dependency additions, destructive migrations, production writes, governance/baseline authority changes, or actual auth/trust-boundary changes.",
             "If evidence is insufficient, ask the developer one concrete bounded question. If implementation should change, request a bounded repair.",
             "A removable implementation choice that violates the WorkOrder or an out-of-scope rule is ordinarily a PM repair decision, not a request to expand scope. Prefer request_repair or request_developer_response when the approved objective can still be met by reverting/replacing the offending change.",
