@@ -430,6 +430,49 @@ PM/Runtime should produce a compact continuity update that replaces stale mutabl
 
 Automation may update mutable continuity artifacts through the normal Git authority path. It must not silently rewrite durable architecture, governance, security, scope, or product policy.
 
+### Incident learning and known-failure prevention
+
+Incident learning is an efficiency mechanism, not an always-on retrospective
+agent.
+
+The default rule is:
+
+- first ordinary lint/test/provider failures stay with Runtime/Developer;
+- deterministic evidence may create one incident-learning candidate only after
+  recurrence, anomalous retry volume, manual recovery, a platform defect,
+  reusable collaboration/PM handoff evidence, or a repeated capability/
+  verification gap;
+- candidate generation should be deterministic and should not consume a model
+  call merely to notice that the same failure class is recurring;
+- related failures from one WorkOrder should be consolidated into one incident
+  review rather than one PM conversation per attempt;
+- at most one PM classification is expected at a meaningful checkpoint unless
+  materially new evidence changes the incident class.
+
+Known recurring failures should be prevented at the cheapest authoritative
+layer available. Preferred order:
+
+1. executable preflight/capability/config validation;
+2. bounded stable-signature circuit breaker;
+3. exact deterministic verification command;
+4. regression test;
+5. compact runbook/T2 rule when operator knowledge is still required;
+6. compact T3 episode for completed rationale/history.
+
+A historical note by itself is insufficient when Runtime can mechanically
+prevent the same failure.
+
+Repeated deterministic verification must not consume unbounded quota merely
+because stdout/stderr varies. Circuit breaking should bind to stable execution
+identity such as exact diff, phase, command and exit/timeout result rather than
+volatile long-form output. A changed diff or materially changed failure
+signature may start a new bounded streak; verification success clears the
+streak.
+
+The authoritative memory-promotion rules are in
+`context-memory-architecture.md`; the PM classification/authority rules are
+in `operating-model.md`.
+
 ## 18. Personal-scale concurrency
 
 Default engineering concurrency remains one active WorkOrder because the platform is personal and quota-conscious.
@@ -465,6 +508,7 @@ Ticket
   -> risk-proportionate reviewer
      - optional bounded dialogue
   -> PM outcome
+     - classify a material incident-learning candidate when one exists
   -> PR / CI
   -> PM merge
   -> telemetry + continuity update
@@ -482,7 +526,7 @@ Priority order:
 2. **#148 — Layered verification + failure-budget separation.** Reduce unnecessary full-suite runs and make repair telemetry accurate.
 3. **#149 — Bounded inter-agent collaboration + review dialogue.** Add read-only consultants and bounded role-to-role collaboration after budget semantics can absorb normal teamwork.
 4. **#150 — Risk-proportionate review + role-specific evidence packs.** Spend review/context where useful.
-5. **#151 — Telemetry calibration + Human-attention metrics + continuity automation.** Learn from real project data and prevent state-document drift.
+5. **#151 — Telemetry calibration + Human-attention metrics + continuity automation.** Learn from real project data and prevent state-document drift. The Human Owner-approved #406 incident-learning/advisory-triage direction is a bounded child of this continuity work, not a separate always-on agent subsystem.
 6. **#98 — Constrained PM-controlled merge path.** Complete executable alignment so routine eligible PRs have no leftover manual merge checkpoint.
 7. Any discovered static-counter continuation gate affecting healthy work takes priority as a bounded follow-up under this policy.
 8. Telegram terminal convenience work remains lower priority than the execution-efficiency initiative unless an operational need changes that priority.
