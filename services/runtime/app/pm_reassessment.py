@@ -14,11 +14,16 @@ from .repo import diff_state
 
 PMReassessmentAction = Literal[
     "approve_continue",
+    "approve_baseline_covered_protected",
     "request_developer_response",
     "request_repair",
     "human_decision",
     "block",
 ]
+
+_PM_BASELINE_COVERED_PROTECTED_SIGNALS = {
+    "security_boundary_change",
+}
 
 _PM_HUMAN_TRIGGERS = {
     "architecture_choice",
@@ -45,6 +50,7 @@ class PMReassessmentDecision(BaseModel):
     human_necessity: str | None = Field(default=None, max_length=4000)
     unresolved_risks: list[str] = Field(default_factory=list, max_length=12)
     human_triggers: list[str] = Field(default_factory=list, max_length=12)
+    authorized_protected_signals: list[str] = Field(default_factory=list, max_length=4)
 
     @field_validator("summary")
     @classmethod
@@ -62,7 +68,7 @@ class PMReassessmentDecision(BaseModel):
         value = value.strip()
         return value or None
 
-    @field_validator("unresolved_risks", "human_triggers")
+    @field_validator("unresolved_risks", "human_triggers", "authorized_protected_signals")
     @classmethod
     def normalize_lists(cls, values: list[str]) -> list[str]:
         result: list[str] = []
@@ -87,6 +93,29 @@ class PMReassessmentDecision(BaseModel):
         unknown = sorted(set(self.human_triggers) - _PM_HUMAN_TRIGGERS)
         if unknown:
             raise ValueError(f"PM reassessment returned unsupported Human Owner triggers: {unknown}")
+        if self.action == "approve_baseline_covered_protected":
+            if not self.authorized_protected_signals:
+                raise ValueError(
+                    "approve_baseline_covered_protected requires authorized_protected_signals"
+                )
+            unsupported = sorted(
+                set(self.authorized_protected_signals)
+                - _PM_BASELINE_COVERED_PROTECTED_SIGNALS
+            )
+            if unsupported:
+                raise ValueError(
+                    "approve_baseline_covered_protected supports only: "
+                    + ", ".join(sorted(_PM_BASELINE_COVERED_PROTECTED_SIGNALS))
+                )
+            if self.unresolved_risks:
+                raise ValueError(
+                    "approve_baseline_covered_protected cannot retain unresolved risks"
+                )
+        elif self.authorized_protected_signals:
+            raise ValueError(
+                "authorized_protected_signals are valid only for "
+                "approve_baseline_covered_protected"
+            )
         if self.action == "approve_continue" and self.unresolved_risks:
             raise ValueError("approve_continue cannot retain unresolved risks")
         return self
@@ -97,6 +126,72 @@ def _compact(value: Any, limit: int) -> str:
     if len(text) <= limit:
         return text
     return text[: max(0, limit - 20)] + "...<truncated>"
+
+
+def baseline_covered_protected_authorized_signals(
+    checkpoint: dict[str, Any],
+    *,
+    diff_hash: str,
+    current_signals: list[str] | set[str],
+) -> set[str]:
+    """Return exact-diff PM authorizations for baseline-covered protected signals."""
+
+    current = {str(item) for item in current_signals if str(item)}
+    if not diff_hash or not current:
+        return set()
+    for raw in reversed(
+        list(checkpoint.get("pm_baseline_covered_protected_authorizations") or [])
+    ):
+        item = dict(raw) if isinstance(raw, dict) else {}
+        if str(item.get("diff_hash") or "") != diff_hash:
+            continue
+        authorized = {
+            str(signal)
+            for signal in item.get("protected_signals") or []
+            if str(signal)
+        }
+        if (
+            authorized
+            and authorized <= _PM_BASELINE_COVERED_PROTECTED_SIGNALS
+            and authorized <= current
+        ):
+            return authorized
+    return set()
+
+
+def validate_baseline_covered_protected_approval(
+    decision: dict[str, Any],
+    *,
+    protected_flags: list[str],
+    verification: dict[str, Any],
+    review_summary: dict[str, Any] | None,
+) -> str | None:
+    """Fail closed unless a PM approval exactly matches the allowed protected set."""
+
+    authorized = {
+        str(item)
+        for item in decision.get("authorized_protected_signals") or []
+        if str(item)
+    }
+    current = {str(item) for item in protected_flags if str(item)}
+    if not verification.get("passed", False):
+        return "deterministic verification must pass"
+    review = dict(review_summary or {})
+    if str(review.get("verdict") or "") != "pass":
+        return "independent review must pass"
+    if review.get("protocol_valid") is False:
+        return "independent review protocol must be valid"
+    if not authorized:
+        return "authorized protected signals are required"
+    if authorized != current:
+        return "authorized protected signals must exactly match current protected signals"
+    unsupported = authorized - _PM_BASELINE_COVERED_PROTECTED_SIGNALS
+    if unsupported:
+        return (
+            "baseline-covered protected approval does not support: "
+            + ", ".join(sorted(unsupported))
+        )
+    return None
 
 
 def changed_file_reassessment_state(
@@ -180,6 +275,10 @@ def _prompt(
             "The approved WorkOrder and pinned ProjectBaseline are authoritative.",
             "The Primary Developer has crossed a semantic working target. File count alone is not proof of scope drift.",
             "Approve continuation only when the evidence shows the change remains inside the approved WorkOrder and no Human Owner protected/material decision is required.",
+            "Plain approve_continue remains forbidden while any protected_execution_signal is present.",
+            "For the special action approve_baseline_covered_protected, use it only when deterministic verification PASS and independent review PASS, every current protected flag is exactly security_boundary_change, the exact diff is already covered by the pinned ProjectBaseline/WorkOrder, and no new auth mechanism, credential transport, trust boundary, or security boundary is introduced.",
+            "For approve_baseline_covered_protected, authorized_protected_signals MUST exactly equal the current protected_decision_flags and human_triggers MUST be [] with human_necessity null.",
+            "Never use approve_baseline_covered_protected for scope changes, dependency additions, destructive migrations, production writes, governance/baseline authority changes, or actual auth/trust-boundary changes.",
             "If evidence is insufficient, ask the developer one concrete bounded question. If implementation should change, request a bounded repair.",
             "A removable implementation choice that violates the WorkOrder or an out-of-scope rule is ordinarily a PM repair decision, not a request to expand scope. Prefer request_repair or request_developer_response when the approved objective can still be met by reverting/replacing the offending change.",
             "Do not escalate merely because a protected signal exists. Escalate to Human Owner only when the evidence shows PM cannot resolve the issue inside the approved baseline, such as when the protected/material change is genuinely necessary and no viable in-scope repair is available.",
