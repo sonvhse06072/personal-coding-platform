@@ -1,3 +1,5 @@
+from app import engine_verification as engine_verification_module
+from app.engine_verification import RuntimeEngine as VerificationRuntimeEngine, _CollaborationRequested
 from __future__ import annotations
 
 import asyncio
@@ -12,6 +14,7 @@ from app.collaboration import (
     CollaborationEvidence,
     CollaborationManager,
     CollaborationRecheckRequest,
+    DeveloperCollaborationRequest,
 )
 
 
@@ -281,5 +284,120 @@ def test_provider_failure_restafs_same_logical_role_without_engineering_repair(t
         assert progress["repair_iterations"] == 0
         provider_state = storage.row["checkpoint"]["provider_state"]
         assert provider_state["quota:model:codex_terra"]["available"] is False
+
+    asyncio.run(scenario())
+
+
+def test_resolved_collaboration_continues_in_same_worker_without_enqueue(monkeypatch, tmp_path):
+    async def scenario():
+        workspace = git_workspace(tmp_path)
+        current = row(workspace)
+        current["status"] = "queued"
+        storage = FakeStorage(current)
+        engine = object.__new__(VerificationRuntimeEngine)
+        engine.storage = storage
+        engine.collaboration = None
+
+        request = DeveloperCollaborationRequest(
+            action="consult",
+            role="security_specialist",
+            topic="trust boundary",
+            objective="review bounded security behavior",
+            question="Is the repair acceptable?",
+            evidence=evidence(),
+        )
+        requested = _CollaborationRequested(
+            request,
+            {
+                "changed_file_count": 1,
+                "changed_files": ["src/Security/Access.php"],
+                "diff": "diff",
+                "diff_hash": "diff-1",
+            },
+        )
+        parent_calls = []
+        enqueue_calls = []
+
+        async def fake_parent_run(self, job_id):
+            parent_calls.append(job_id)
+            if len(parent_calls) == 1:
+                raise requested
+            storage.update(job_id, status="completed")
+
+        async def fake_handle(job_id, received):
+            assert received is requested
+            storage.update(job_id, status="queued")
+            return True
+
+        async def fake_enqueue(job_id):
+            enqueue_calls.append(job_id)
+
+        monkeypatch.setattr(
+            engine_verification_module.ExecutionRuntimeEngine,
+            "run_job",
+            fake_parent_run,
+        )
+        engine._handle_collaboration_request = fake_handle
+        engine.enqueue = fake_enqueue
+        engine._runtime_event = lambda *args, **kwargs: None
+
+        await VerificationRuntimeEngine.run_job(engine, current["id"])
+
+        assert parent_calls == [current["id"], current["id"]]
+        assert enqueue_calls == []
+        assert storage.row["status"] == "completed"
+
+    asyncio.run(scenario())
+
+
+def test_blocked_collaboration_does_not_continue_parent_worker(monkeypatch, tmp_path):
+    async def scenario():
+        workspace = git_workspace(tmp_path)
+        current = row(workspace)
+        current["status"] = "queued"
+        storage = FakeStorage(current)
+        engine = object.__new__(VerificationRuntimeEngine)
+        engine.storage = storage
+        engine.collaboration = None
+
+        request = DeveloperCollaborationRequest(
+            action="consult",
+            role="security_specialist",
+            topic="trust boundary",
+            objective="review bounded security behavior",
+            question="Is the repair acceptable?",
+            evidence=evidence(),
+        )
+        requested = _CollaborationRequested(
+            request,
+            {
+                "changed_file_count": 1,
+                "changed_files": ["src/Security/Access.php"],
+                "diff": "diff",
+                "diff_hash": "diff-1",
+            },
+        )
+        parent_calls = []
+
+        async def fake_parent_run(self, job_id):
+            parent_calls.append(job_id)
+            raise requested
+
+        async def fake_handle(job_id, received):
+            storage.update(job_id, status="blocked")
+            return False
+
+        monkeypatch.setattr(
+            engine_verification_module.ExecutionRuntimeEngine,
+            "run_job",
+            fake_parent_run,
+        )
+        engine._handle_collaboration_request = fake_handle
+        engine._runtime_event = lambda *args, **kwargs: None
+
+        await VerificationRuntimeEngine.run_job(engine, current["id"])
+
+        assert parent_calls == [current["id"]]
+        assert storage.row["status"] == "blocked"
 
     asyncio.run(scenario())
