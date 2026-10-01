@@ -230,6 +230,11 @@ def pm_evidence_pack(
                 "approved_by": _clip(str(item.get("approved_by") or ""), 200),
                 "provider": _clip(str(item.get("provider") or ""), 100),
                 "summary": _clip(str(item.get("summary") or ""), 1000),
+                "baseline_authority_refs": [
+                    _clip(str(ref), 300)
+                    for ref in (item.get("baseline_authority_refs") or [])[:8]
+                    if str(ref)
+                ],
                 "review_verdict": _clip(str(item.get("review_verdict") or ""), 100),
                 "baseline_revision": _clip(str(item.get("baseline_revision") or ""), 200),
             }
