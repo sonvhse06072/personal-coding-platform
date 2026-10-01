@@ -1171,12 +1171,18 @@ class RuntimeEngine(RuntimeEngineCore):
                         review_summary=review_summary if isinstance(review_summary, dict) else None,
                         unresolved_risks=[],
                         protected_decision_flags=list(progress.get("important_decision_flags") or []),
-                        baseline_covered_protected_authorizations=list(
-                            checkpoint.get(
-                                "pm_baseline_covered_protected_authorizations"
+                        baseline_covered_protected_authorizations=[
+                            item
+                            for item in (
+                                checkpoint.get(
+                                    "pm_baseline_covered_protected_authorizations"
+                                )
+                                or []
                             )
-                            or []
-                        ),
+                            if isinstance(item, dict)
+                            and str(item.get("diff_hash") or "")
+                            == str(diff.get("diff_hash") or "")
+                        ],
                     )
                     result = {
                         "status": "accepted",
