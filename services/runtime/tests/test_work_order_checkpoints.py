@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import pytest
 
 from app.plan_orchestrator import CHECKPOINT_EVIDENCE_MAX_BYTES, PlanOrchestratorStore
+from app.work_order_checkpoints import blocked_plan_evidence
 from test_plan_orchestrator_store import Connection, Result, Storage
 
 
