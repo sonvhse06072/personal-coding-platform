@@ -310,26 +310,38 @@ def test_resolved_collaboration_continues_in_same_worker_without_enqueue(monkeyp
             question="Is the repair acceptable?",
             evidence=evidence(),
         )
-        requested = _CollaborationRequested(
+        first_requested = _CollaborationRequested(
             request,
             {
                 "changed_file_count": 1,
                 "changed_files": ["src/Security/Access.php"],
-                "diff": "diff",
+                "diff": "diff-1",
                 "diff_hash": "diff-1",
             },
         )
+        second_requested = _CollaborationRequested(
+            request,
+            {
+                "changed_file_count": 1,
+                "changed_files": ["src/Security/Access.php"],
+                "diff": "diff-2",
+                "diff_hash": "diff-2",
+            },
+        )
         parent_calls = []
+        handled = []
         enqueue_calls = []
 
         async def fake_parent_run(self, job_id):
             parent_calls.append(job_id)
             if len(parent_calls) == 1:
-                raise requested
+                raise first_requested
+            if len(parent_calls) == 2:
+                raise second_requested
             storage.update(job_id, status="completed")
 
         async def fake_handle(job_id, received):
-            assert received is requested
+            handled.append(received)
             storage.update(job_id, status="queued")
             return True
 
@@ -347,7 +359,8 @@ def test_resolved_collaboration_continues_in_same_worker_without_enqueue(monkeyp
 
         await VerificationRuntimeEngine.run_job(engine, current["id"])
 
-        assert parent_calls == [current["id"], current["id"]]
+        assert parent_calls == [current["id"], current["id"], current["id"]]
+        assert handled == [first_requested, second_requested]
         assert enqueue_calls == []
         assert storage.row["status"] == "completed"
 
