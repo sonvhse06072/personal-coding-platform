@@ -21,7 +21,7 @@ Implementation order:
 3. #148 Layered verification and failure-budget separation;
 4. #149 Bounded inter-agent collaboration and review dialogue;
 5. #150 Risk-proportionate review and role-specific evidence packs;
-6. #151 Telemetry calibration, Human-attention metrics, and continuity automation;
+6. #151 Telemetry calibration, Human-attention metrics, and continuity automation, including the Human Owner-approved #406 bounded incident-learning/advisory-triage direction. Implement #406 as an extension of TaskOutcome/continuity/memory promotion rather than a separate always-on retrospective agent;
 7. #98 Constrained PM-controlled PR merge may proceed where dependencies permit, but must be complete before PCP can claim a routine zero-human-touch happy path.
 
 Guiding constraints for the initiative:
@@ -33,7 +33,10 @@ Guiding constraints for the initiative:
 - inter-agent collaboration is selective, bounded, and single-writer by default;
 - no always-on swarm or recursive agent meeting;
 - strong/scarce models and heavy review are risk/value proportional;
-- telemetry improves heuristics only after meaningful evidence exists.
+- telemetry improves heuristics only after meaningful evidence exists;
+- incident learning must prefer deterministic detection and executable prevention,
+  must not invoke PM for each ordinary first failure, and must preserve the
+  T0/T1/T2/T3/T4 memory lifecycle rather than creating an append-only log.
 
 ## Phase 0 — Trust-boundary hardening
 

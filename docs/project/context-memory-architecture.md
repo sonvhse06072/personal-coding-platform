@@ -128,6 +128,31 @@ After a meaningful change:
 
 A decision that changes architecture, governance, security, scope or material policy belongs in the relevant T0/T2 document through normal reviewed change control.
 
+### Incident-learning promotion
+
+Live failures do not automatically become durable memory.
+
+A deterministic incident-learning candidate may be created when durable evidence
+shows recurrence, anomalous retry volume, operator recovery, a platform defect,
+a reusable collaboration/PM handoff constraint, or a capability/verification
+gap with avoidable resource cost. Ordinary first failures should remain
+Runtime/Developer-local and should not invoke PM merely to create memory.
+
+At a stable checkpoint or TaskOutcome, PM classifies the candidate using the
+operating model and promotes only reusable conclusions:
+
+- executable Runtime/code/config invariant -> implementation + regression test
+  is authoritative; docs may reference it but should not restate mechanics in
+  multiple places;
+- current operational rule -> the narrow relevant T1/T2/runbook source;
+- completed reusable rationale/incident -> compact T3 episode;
+- project-specific prerequisite -> project verification config/runbook;
+- raw chronology/logs/transcripts -> native GitHub/Runtime/CI source only.
+
+One WorkOrder with many related failures should normally produce one consolidated
+episode, not one T3 entry per attempt. A historical episode is never sufficient
+when the recurrence can be mechanically prevented.
+
 ### Raw evidence
 
 Raw evidence remains at its native source. Do not duplicate full logs into T1/T3.
@@ -244,7 +269,9 @@ Default:
 - full compact T1;
 - relevant T2 product/architecture/operating policy;
 - relevant T3 lessons;
-- live GitHub/Runtime evidence for current execution.
+- live GitHub/Runtime evidence for current execution;
+- bounded incident-learning candidates only when a stable checkpoint/task
+  outcome or a material recurrence justifies classification.
 
 ### Developer
 

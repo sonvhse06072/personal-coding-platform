@@ -288,6 +288,80 @@ Accepted evaluation gates:
 
 Status: historical architecture rollout; deterministic tiered retrieval remains current. Reconsider vector/hybrid RAG only after a future benchmark shows a material gap.
 
+## 2026-10 — Chợ Nhạc GH-42 WO-01 platform-hardening episode
+
+### Show-domain/API WorkOrder dogfood — GH-42 WO-01 / Chợ Nhạc PR #44
+
+Outcome: product WorkOrder completed and merged; the preserved same job exposed
+and drove a sequence of PCP control-plane/verification fixes while maintaining
+the original workspace/diff/counters until delivery.
+
+Product evidence:
+
+- Chợ Nhạc WorkOrder: `GH-42-WO-01-show-domain-api`;
+- preserved job: `579cdcd715bf5aba9f9ec26d7abca121`;
+- product PR #44 exact final head:
+  `afe8aa81340d66ce0b010103d8302a97f4f38441`;
+- merge/main commit:
+  `e8ccde0f9854fa86a9fa37fe9504fb63c90a477f`;
+- final local evidence included PHPCS PASS, Unit 39/39 PASS, Kernel 75/75 PASS
+  on PHP 8.3/PostgreSQL, full verification PASS and independent review PASS;
+- exact-head GitHub CI passed before PM merge.
+
+Durable lessons:
+
+- preserve the same WorkOrder/job/workspace/diff/counters while diagnosing a
+  platform blocker; replacement jobs hide the real state-machine defect;
+- evaluator/PM prompts and strict output validators are one protocol and must be
+  regression-tested together; an approval action cannot retain unresolved
+  blocking risks merely because the model calls them caveats;
+- coarse protected-path signals require semantic PM review, but a baseline-
+  covered exact diff can be authorized only through a narrow exact-diff/
+  baseline-bound mechanism rather than by weakening the protected gate;
+- bounded collaboration must respect adaptive execution semantics, return
+  resolved context to the same worker, permit an eligible round-2 recheck, stop
+  at the configured round limit and preserve latest PM-handoff evidence;
+- agent-sandbox capability failures such as missing PHP are not authoritative
+  project-test failures when DDEV owns PHP verification; capability context
+  should prevent impossible repeated tool attempts;
+- authoritative verification must execute the actual required test class in the
+  correct runtime. Drupal Kernel PHPUnit needs explicit test-database wiring
+  when invoked directly;
+- broad verification can create misleading unrelated failures. Prefer the
+  narrow required target during iteration while keeping final project/CI gates
+  proportionate to the WorkOrder;
+- repeated deterministic verification failures must use a stable signature
+  based on diff/phase/command/result rather than volatile stdout/stderr, or a
+  single infrastructure/configuration defect can consume large test/model
+  quota;
+- when a live WorkOrder exposes many related platform failures, consolidate the
+  reusable conclusion into one incident-learning review/episode and prefer
+  executable prevention over prose-only memory.
+
+Primary PCP evidence:
+
+- #385 / PR #386 — PM reassessment output-contract mismatch;
+- #387 / PR #388 — exact-diff baseline-covered protected authorization;
+- #389 / PR #390 — adaptive collaboration budget semantics;
+- #391 / PR #392 — same-worker collaboration continuation;
+- #393 / PR #394 — bounded recheck after a resolved round;
+- #395 / PR #396 — PM-handoff context preservation;
+- #397 / PR #398 — legacy PM-handoff hydration;
+- #401 / PR #402 — approval `unresolved_risks` prompt/validator alignment;
+- #404 / PR #405 — focused Kernel DB wiring and stable deterministic
+  verification anti-loop;
+- #406 — Human Owner-approved incident-learning/PM-advisory direction.
+
+Open follow-ups:
+
+- #399 — advertise unavailable PHP runtime/capability to coding agents;
+- #400 — remaining Chợ Nhạc repository-CI Kernel-verification alignment;
+- #406 — implement deterministic incident candidate generation and bounded PM
+  classification using existing TaskOutcome/continuity/tiered-memory paths.
+
+Status: historical incident/lesson. Live GH-42 state belongs in T1 and Runtime;
+open follow-ups remain current work, not proof that WO-01 itself is incomplete.
+
 ## Retrieval guidance
 
 Use this file when the current task asks:
