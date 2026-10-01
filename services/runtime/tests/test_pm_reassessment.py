@@ -492,6 +492,22 @@ def test_non_human_action_cannot_carry_human_necessity() -> None:
         )
 
 
+def test_non_human_action_cannot_carry_reviewed_human_trigger_text() -> None:
+    with pytest.raises(ValueError, match="human_triggers are valid only for human_decision"):
+        PMReassessmentDecision.model_validate(
+            {
+                "action": "request_repair",
+                "summary": "Repair bounded security and validation defects.",
+                "developer_message": "Add CSRF enforcement and focused tests.",
+                "human_necessity": None,
+                "unresolved_risks": ["Session-authenticated POST lacks CSRF enforcement."],
+                "human_triggers": [
+                    "security_boundary_change signal reviewed; no escalation because the defect is repairable"
+                ],
+            }
+        )
+
+
 def test_pm_prompt_prefers_repair_for_removable_scope_violation(tmp_path) -> None:
     root = workspace(tmp_path)
     router = FakeRouter()
@@ -555,4 +571,9 @@ def test_pm_prompt_prefers_repair_for_removable_scope_violation(tmp_path) -> Non
     prompt = adapter.calls[0]["prompt"]
     assert "removable implementation choice" in prompt
     assert "Prefer request_repair or request_developer_response" in prompt
+    assert "human_triggers MUST be []" in prompt
+    assert "human_necessity MUST be null" in prompt
+    assert "reviewed-but-not-escalated protected signal" in prompt
+    assert "human_triggers MUST contain only exact trigger IDs" in prompt
+    assert "security_boundary_change" in prompt
     assert "human_necessity" in prompt
