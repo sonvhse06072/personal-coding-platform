@@ -191,6 +191,7 @@ def test_role_specific_packs_remain_small_structured_artifacts():
                 "approved_by": "pm-model",
                 "provider": "openai",
                 "summary": "Covered by the pinned baseline.",
+                "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
                 "review_verdict": "pass",
                 "baseline_revision": "v1",
             }
@@ -203,6 +204,7 @@ def test_role_specific_packs_remain_small_structured_artifacts():
     assert pm["role"] == "product_manager"
     assert pm["baseline_covered_protected_authorizations"][0]["diff_hash"] == "diff-1"
     assert pm["baseline_covered_protected_authorizations"][0]["protected_signals"] == ["security_boundary_change"]
+    assert pm["baseline_covered_protected_authorizations"][0]["baseline_authority_refs"] == ["docs/24-mvp-completion-contract.md"]
     assert all(pack["jit_retrieval"]["mode"] == "repository_read_only" for pack in [repair, consultant, pm])
 
 
