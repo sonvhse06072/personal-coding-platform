@@ -611,6 +611,9 @@ def test_baseline_covered_protected_authorization_is_exact_diff_bound() -> None:
             {
                 "diff_hash": "diff-a",
                 "protected_signals": ["security_boundary_change"],
+                "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
+                "review_verdict": "pass",
+                "baseline_revision": "v1",
             }
         ]
     }
@@ -618,16 +621,19 @@ def test_baseline_covered_protected_authorization_is_exact_diff_bound() -> None:
         checkpoint,
         diff_hash="diff-a",
         current_signals={"security_boundary_change"},
+        baseline_revision="v1",
     ) == {"security_boundary_change"}
     assert baseline_covered_protected_authorized_signals(
         checkpoint,
         diff_hash="diff-b",
         current_signals={"security_boundary_change"},
+        baseline_revision="v1",
     ) == set()
     assert baseline_covered_protected_authorized_signals(
         checkpoint,
         diff_hash="diff-a",
         current_signals={"security_boundary_change", "scope_change"},
+        baseline_revision="v1",
     ) == {"security_boundary_change"}
 
 
@@ -705,3 +711,25 @@ def test_pm_prompt_prefers_repair_for_removable_scope_violation(tmp_path) -> Non
     assert "baseline_authority_refs MUST name" in prompt
     assert "no new auth mechanism" in prompt
     assert "human_necessity" in prompt
+
+
+def test_baseline_covered_protected_authorization_rejects_stale_or_incomplete_metadata() -> None:
+    complete = {
+        "diff_hash": "diff-a",
+        "protected_signals": ["security_boundary_change"],
+        "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
+        "review_verdict": "pass",
+        "baseline_revision": "v1",
+    }
+    for mutation in (
+        {"review_verdict": "fail"},
+        {"baseline_authority_refs": []},
+        {"baseline_revision": "v0"},
+    ):
+        item = {**complete, **mutation}
+        assert baseline_covered_protected_authorized_signals(
+            {"pm_baseline_covered_protected_authorizations": [item]},
+            diff_hash="diff-a",
+            current_signals={"security_boundary_change"},
+            baseline_revision="v1",
+        ) == set()
