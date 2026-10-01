@@ -166,3 +166,27 @@ def test_optional_job_and_evidence_defaults_are_durable(checkpoint_store):
     assert first["job_id"] is None
     assert first["evidence"] == {}
     assert checkpoint_store.append_checkpoint(**values) == first
+
+
+def test_repeated_deterministic_verification_failure_is_bounded_repair() -> None:
+    snapshot = {
+        "work_orders": [
+            {
+                "work_order_id": "WO-verify",
+                "state": "blocked",
+                "job_id": "job-verify",
+            }
+        ],
+        "blocked_checkpoint": {
+            "evidence": {
+                "reason": "repeated_deterministic_verification_failure",
+            }
+        },
+        "current_checkpoint_history": [],
+    }
+
+    result = blocked_plan_evidence(snapshot)
+
+    assert result is not None
+    assert result["reason"] == "repeated_deterministic_verification_failure"
+    assert result["next_safe_action"] == "repair"
