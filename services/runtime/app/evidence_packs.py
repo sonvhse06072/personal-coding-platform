@@ -207,6 +207,7 @@ def pm_evidence_pack(
     review_summary: dict[str, Any] | None,
     unresolved_risks: list[str] | None,
     protected_decision_flags: list[str] | None,
+    baseline_covered_protected_authorizations: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     return {
         "role": "product_manager",
@@ -216,6 +217,25 @@ def pm_evidence_pack(
         "review": review_summary or {},
         "unresolved_risks": [_clip(item, 1000) for item in (unresolved_risks or [])[:12]],
         "protected_decision_flags": list(dict.fromkeys(protected_decision_flags or []))[:20],
+        "baseline_covered_protected_authorizations": [
+            {
+                "diff_hash": _clip(str(item.get("diff_hash") or ""), 200),
+                "protected_signals": list(
+                    dict.fromkeys(
+                        str(signal)
+                        for signal in item.get("protected_signals") or []
+                        if str(signal)
+                    )
+                )[:8],
+                "approved_by": _clip(str(item.get("approved_by") or ""), 200),
+                "provider": _clip(str(item.get("provider") or ""), 100),
+                "summary": _clip(str(item.get("summary") or ""), 1000),
+                "review_verdict": _clip(str(item.get("review_verdict") or ""), 100),
+                "baseline_revision": _clip(str(item.get("baseline_revision") or ""), 200),
+            }
+            for item in (baseline_covered_protected_authorizations or [])[-8:]
+            if isinstance(item, dict)
+        ],
         "jit_retrieval": jit_retrieval_contract(),
     }
 
