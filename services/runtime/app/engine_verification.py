@@ -148,10 +148,16 @@ class RuntimeEngine(ExecutionRuntimeEngine):
 
         checkpoint = dict(row.get("checkpoint") or {})
         current_context = checkpoint.get("collaboration_context")
+        current_round = -1
+        if isinstance(current_context, dict):
+            try:
+                current_round = int(current_context.get("round") or 0)
+            except (TypeError, ValueError):
+                current_round = -1
         if isinstance(current_context, dict) and (
             str(current_context.get("thread_id") or "") == thread_id
             and str(current_context.get("status") or "") == "pm_handoff"
-            and int(current_context.get("round") or 0) == round_number
+            and current_round == round_number
         ):
             return row
 
