@@ -684,5 +684,6 @@ def test_pm_prompt_prefers_repair_for_removable_scope_violation(tmp_path) -> Non
     assert "security_boundary_change" in prompt
     assert "approve_baseline_covered_protected" in prompt
     assert "authorized_protected_signals MUST exactly equal" in prompt
+    assert "authorized_protected_signals MUST be []" in prompt
     assert "no new auth mechanism" in prompt
     assert "human_necessity" in prompt
