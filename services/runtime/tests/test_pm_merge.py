@@ -49,6 +49,11 @@ def context() -> tuple[dict, dict, dict, dict, dict]:
             "production_write": False,
         },
         "checkpoint": {
+            "project_baseline": {
+                "revision": "v1",
+                "authority": [],
+                "references": {},
+            },
             "work_order": {
                 "id": "WO-1",
                 "risk": {"level": "standard", "flags": []},
@@ -62,6 +67,7 @@ def context() -> tuple[dict, dict, dict, dict, dict]:
             "commit": HEAD,
             "verification": {"passed": True},
             "review": {"verdict": "pass", "findings": []},
+            "diff": {"diff_hash": "diff-1", "changed_files": []},
             "pm_evidence": {
                 "outcome": "accepted",
                 "unresolved_risks": [],
@@ -160,6 +166,51 @@ def test_protected_change_requires_matching_durable_owner_decision() -> None:
     result = evaluate(tuple(values))
     assert result.eligible is True
     assert result.approved_protected_signals == ("security_boundary_change",)
+
+
+def test_baseline_covered_security_authorization_can_satisfy_merge_gate() -> None:
+    values = list(context())
+    values[3] = deepcopy(values[3])
+    values[3]["repo_analysis"]["security_sensitive"] = True
+    values[3]["checkpoint"]["pm_baseline_covered_protected_authorizations"] = [
+        {
+            "diff_hash": "diff-1",
+            "protected_signals": ["security_boundary_change"],
+            "approved_by": "pm-model",
+            "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
+            "review_verdict": "pass",
+            "baseline_revision": "v1",
+        }
+    ]
+
+    result = evaluate(tuple(values))
+    assert result.eligible is True
+    assert result.requires_human is False
+    assert result.approved_protected_signals == ("security_boundary_change",)
+    assert result.evidence[
+        "baseline_covered_pm_authorized_protected_signals"
+    ] == ["security_boundary_change"]
+
+
+def test_baseline_covered_security_authorization_is_invalidated_by_diff_change() -> None:
+    values = list(context())
+    values[3] = deepcopy(values[3])
+    values[3]["repo_analysis"]["security_sensitive"] = True
+    values[3]["checkpoint"]["pm_baseline_covered_protected_authorizations"] = [
+        {
+            "diff_hash": "diff-old",
+            "protected_signals": ["security_boundary_change"],
+            "approved_by": "pm-model",
+            "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
+            "review_verdict": "pass",
+            "baseline_revision": "v1",
+        }
+    ]
+
+    result = evaluate(tuple(values))
+    assert result.eligible is False
+    assert result.requires_human is True
+    assert "protected_change_without_matching_owner_approval" in result.blockers
 
 
 def test_high_risk_and_pending_decision_never_use_low_risk_auto_merge() -> None:

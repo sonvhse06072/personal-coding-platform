@@ -11,9 +11,11 @@ import pytest
 from app.adapters.base import AgentRun
 from app.pm_reassessment import (
     PMReassessmentDecision,
+    baseline_covered_protected_authorized_signals,
     changed_file_reassessment_state,
     has_pm_changed_file_authorization,
     run_pm_reassessment,
+    validate_baseline_covered_protected_approval,
 )
 
 
@@ -508,6 +510,137 @@ def test_non_human_action_cannot_carry_reviewed_human_trigger_text() -> None:
         )
 
 
+def test_baseline_covered_protected_approval_is_security_only_and_risk_free() -> None:
+    decision = PMReassessmentDecision.model_validate(
+        {
+            "action": "approve_baseline_covered_protected",
+            "summary": "The exact access-control diff is already covered by the pinned baseline.",
+            "developer_message": None,
+            "human_necessity": None,
+            "unresolved_risks": [],
+            "human_triggers": [],
+            "authorized_protected_signals": ["security_boundary_change"],
+            "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
+        }
+    )
+    assert decision.authorized_protected_signals == ["security_boundary_change"]
+
+    with pytest.raises(ValueError, match="supports only"):
+        PMReassessmentDecision.model_validate(
+            {
+                "action": "approve_baseline_covered_protected",
+                "summary": "Do not allow a dependency boundary.",
+                "developer_message": None,
+                "human_necessity": None,
+                "unresolved_risks": [],
+                "human_triggers": [],
+                "authorized_protected_signals": ["major_dependency_addition"],
+                "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
+            }
+        )
+
+    with pytest.raises(ValueError, match="cannot retain unresolved risks"):
+        PMReassessmentDecision.model_validate(
+            {
+                "action": "approve_baseline_covered_protected",
+                "summary": "Risk remains.",
+                "developer_message": None,
+                "human_necessity": None,
+                "unresolved_risks": ["Trust boundary is unclear."],
+                "human_triggers": [],
+                "authorized_protected_signals": ["security_boundary_change"],
+                "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
+            }
+        )
+
+
+def test_baseline_covered_protected_approval_requires_exact_green_evidence() -> None:
+    decision = {
+        "authorized_protected_signals": ["security_boundary_change"],
+        "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
+    }
+    baseline = {
+        "authority": [
+            {
+                "path": "docs/24-mvp-completion-contract.md",
+                "authority": "human_owner_protected",
+            }
+        ],
+        "references": {
+            "security_policy": [
+                {"path": "docs/24-mvp-completion-contract.md"}
+            ]
+        },
+    }
+    assert validate_baseline_covered_protected_approval(
+        decision,
+        protected_flags=["security_boundary_change"],
+        verification={"passed": True},
+        review_summary={"verdict": "pass", "protocol_valid": True},
+        baseline=baseline,
+    ) is None
+
+    assert "exactly match" in str(
+        validate_baseline_covered_protected_approval(
+            decision,
+            protected_flags=["security_boundary_change", "scope_change"],
+            verification={"passed": True},
+            review_summary={"verdict": "pass", "protocol_valid": True},
+            baseline=baseline,
+        )
+    )
+    assert "verification" in str(
+        validate_baseline_covered_protected_approval(
+            decision,
+            protected_flags=["security_boundary_change"],
+            verification={"passed": False},
+            review_summary={"verdict": "pass", "protocol_valid": True},
+            baseline=baseline,
+        )
+    )
+    assert "review" in str(
+        validate_baseline_covered_protected_approval(
+            decision,
+            protected_flags=["security_boundary_change"],
+            verification={"passed": True},
+            review_summary={"verdict": "fail", "protocol_valid": True},
+            baseline=baseline,
+        )
+    )
+
+
+def test_baseline_covered_protected_authorization_is_exact_diff_bound() -> None:
+    checkpoint = {
+        "pm_baseline_covered_protected_authorizations": [
+            {
+                "diff_hash": "diff-a",
+                "protected_signals": ["security_boundary_change"],
+                "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
+                "review_verdict": "pass",
+                "baseline_revision": "v1",
+            }
+        ]
+    }
+    assert baseline_covered_protected_authorized_signals(
+        checkpoint,
+        diff_hash="diff-a",
+        current_signals={"security_boundary_change"},
+        baseline_revision="v1",
+    ) == {"security_boundary_change"}
+    assert baseline_covered_protected_authorized_signals(
+        checkpoint,
+        diff_hash="diff-b",
+        current_signals={"security_boundary_change"},
+        baseline_revision="v1",
+    ) == set()
+    assert baseline_covered_protected_authorized_signals(
+        checkpoint,
+        diff_hash="diff-a",
+        current_signals={"security_boundary_change", "scope_change"},
+        baseline_revision="v1",
+    ) == {"security_boundary_change"}
+
+
 def test_pm_prompt_prefers_repair_for_removable_scope_violation(tmp_path) -> None:
     root = workspace(tmp_path)
     router = FakeRouter()
@@ -576,4 +709,32 @@ def test_pm_prompt_prefers_repair_for_removable_scope_violation(tmp_path) -> Non
     assert "reviewed-but-not-escalated protected signal" in prompt
     assert "human_triggers MUST contain only exact trigger IDs" in prompt
     assert "security_boundary_change" in prompt
+    assert "approve_baseline_covered_protected" in prompt
+    assert "authorized_protected_signals MUST exactly equal" in prompt
+    assert "authorized_protected_signals and baseline_authority_refs MUST both be []" in prompt
+    assert "baseline_authority_refs MUST name" in prompt
+    assert "references.security_policy" in prompt
+    assert "no new auth mechanism" in prompt
     assert "human_necessity" in prompt
+
+
+def test_baseline_covered_protected_authorization_rejects_stale_or_incomplete_metadata() -> None:
+    complete = {
+        "diff_hash": "diff-a",
+        "protected_signals": ["security_boundary_change"],
+        "baseline_authority_refs": ["docs/24-mvp-completion-contract.md"],
+        "review_verdict": "pass",
+        "baseline_revision": "v1",
+    }
+    for mutation in (
+        {"review_verdict": "fail"},
+        {"baseline_authority_refs": []},
+        {"baseline_revision": "v0"},
+    ):
+        item = {**complete, **mutation}
+        assert baseline_covered_protected_authorized_signals(
+            {"pm_baseline_covered_protected_authorizations": [item]},
+            diff_hash="diff-a",
+            current_signals={"security_boundary_change"},
+            baseline_revision="v1",
+        ) == set()

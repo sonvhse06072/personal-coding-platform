@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
+from .pm_reassessment import baseline_covered_protected_authorized_signals
 from .scope_guard import (
     baseline_authority_changes,
     changed_path_protected_signals,
@@ -231,7 +232,18 @@ def evaluate_pm_merge(
         human_blockers.append("route_human_decision_not_durably_approved")
 
     protected = _protected_signals(job)
-    approved_protected = protected & approved_route
+    accepted_diff = _dict(result.get("diff"))
+    baseline_covered_protected = baseline_covered_protected_authorized_signals(
+        checkpoint,
+        diff_hash=str(accepted_diff.get("diff_hash") or ""),
+        current_signals=protected,
+        baseline_revision=str(
+            (checkpoint.get("project_baseline") or {}).get("revision") or ""
+        ),
+    )
+    approved_protected = protected & (
+        approved_route | baseline_covered_protected
+    )
     unapproved_protected = protected - approved_protected
     if unapproved_protected:
         human_blockers.append("protected_change_without_matching_owner_approval")
@@ -267,6 +279,9 @@ def evaluate_pm_merge(
         "risk_level": risk_level,
         "changed_files": _changed_paths(job),
         "baseline_authority_changes": _baseline_authority_changes(job),
+        "baseline_covered_pm_authorized_protected_signals": sorted(
+            baseline_covered_protected
+        ),
     }
     return MergeEligibility(
         eligible=eligible,

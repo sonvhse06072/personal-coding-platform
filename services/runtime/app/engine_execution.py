@@ -17,9 +17,11 @@ from .fingerprint import failure_fingerprint
 from .model_capabilities import validate_model_choice
 from .preview import ProjectPreviewManager, ready_preview_context
 from .pm_reassessment import (
+    baseline_covered_protected_authorized_signals,
     changed_file_reassessment_state,
     has_pm_changed_file_authorization,
     run_pm_reassessment,
+    validate_baseline_covered_protected_approval,
 )
 from .prompts import evaluator_prompt, execution_prompt, planning_prompt
 from .repo import analyze_repo, commit_changes, diff_state
@@ -524,7 +526,17 @@ class RuntimeEngine(RuntimeEngineCore):
             # historical diffs. Decision history is persisted separately in
             # checkpoint; carrying removed path signals forward would create
             # false Human/PM boundaries after a successful repair.
-            progress["important_decision_flags"] = sorted(path_signals)
+            exact_protected_authorized = baseline_covered_protected_authorized_signals(
+                checkpoint,
+                diff_hash=str(diff.get("diff_hash") or ""),
+                current_signals=path_signals,
+                baseline_revision=str(
+                    (checkpoint.get("project_baseline") or {}).get("revision") or ""
+                ),
+            )
+            progress["important_decision_flags"] = sorted(
+                path_signals - exact_protected_authorized
+            )
             mark_actioned_review_findings(
                 checkpoint,
                 progress,
@@ -933,6 +945,92 @@ class RuntimeEngine(RuntimeEngineCore):
                         progress=progress,
                         checkpoint=checkpoint,
                     )
+                elif pm_action == "approve_baseline_covered_protected":
+                    protected_flags = list(
+                        progress.get("important_decision_flags") or []
+                    )
+                    approval_error = validate_baseline_covered_protected_approval(
+                        pm_decision,
+                        protected_flags=protected_flags,
+                        verification=verification,
+                        review_summary=(
+                            current_review_summary
+                            if isinstance(current_review_summary, dict)
+                            else None
+                        ),
+                        baseline=dict(checkpoint.get("project_baseline") or {}),
+                    )
+                    if approval_error:
+                        self._block(
+                            job_id=job_id,
+                            progress=progress,
+                            checkpoint=checkpoint,
+                            reason="pm_reassessment_invalid_protected_approval",
+                            last_failure=(
+                                "Product Manager baseline-covered protected approval "
+                                f"was invalid: {approval_error}."
+                            ),
+                            pm_reassessment=pm_decision,
+                            diff=diff,
+                        )
+                        return
+                    authorized_signals = sorted(
+                        {
+                            str(item)
+                            for item in pm_decision.get(
+                                "authorized_protected_signals"
+                            )
+                            or []
+                            if str(item)
+                        }
+                    )
+                    checkpoint.pop("pending_pm_reassessment", None)
+                    protected_authorizations = list(
+                        checkpoint.get(
+                            "pm_baseline_covered_protected_authorizations"
+                        )
+                        or []
+                    )
+                    protected_authorizations.append(
+                        {
+                            "diff_hash": str(diff.get("diff_hash") or ""),
+                            "protected_signals": authorized_signals,
+                            "approved_by": str(pm_result.get("model_id") or ""),
+                            "provider": str(pm_result.get("provider") or ""),
+                            "summary": str(pm_decision.get("summary") or "")[:2000],
+                            "baseline_authority_refs": list(
+                                pm_decision.get("baseline_authority_refs") or []
+                            )[:8],
+                            "review_verdict": str(
+                                (
+                                    current_review_summary
+                                    if isinstance(current_review_summary, dict)
+                                    else {}
+                                ).get("verdict")
+                                or ""
+                            ),
+                            "baseline_revision": str(
+                                (
+                                    checkpoint.get("project_baseline") or {}
+                                ).get("revision")
+                                or ""
+                            ),
+                        }
+                    )
+                    checkpoint[
+                        "pm_baseline_covered_protected_authorizations"
+                    ] = protected_authorizations[-20:]
+                    approved_set = set(authorized_signals)
+                    progress["important_decision_flags"] = [
+                        item
+                        for item in progress.get("important_decision_flags", [])
+                        if item not in approved_set
+                    ]
+                    self.storage.update(
+                        job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                    )
                 elif pm_action in {"request_developer_response", "request_repair"}:
                     checkpoint.pop("pending_pm_reassessment", None)
                     last_failure = "PCP_PM_REASSESSMENT: " + json.dumps(
@@ -1073,6 +1171,18 @@ class RuntimeEngine(RuntimeEngineCore):
                         review_summary=review_summary if isinstance(review_summary, dict) else None,
                         unresolved_risks=[],
                         protected_decision_flags=list(progress.get("important_decision_flags") or []),
+                        baseline_covered_protected_authorizations=[
+                            item
+                            for item in (
+                                checkpoint.get(
+                                    "pm_baseline_covered_protected_authorizations"
+                                )
+                                or []
+                            )
+                            if isinstance(item, dict)
+                            and str(item.get("diff_hash") or "")
+                            == str(diff.get("diff_hash") or "")
+                        ],
                     )
                     result = {
                         "status": "accepted",
