@@ -80,6 +80,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
     async def run_job(self, job_id: str) -> None:
         before = self.storage.get(job_id)
         if before and before.get("status") == "queued":
+            before = self._hydrate_legacy_pm_handoff_context(job_id, before)
             result = before.get("result") or {}
             if result.get("reason") == "preflight_failed":
                 progress = dict(before.get("progress") or {})
@@ -110,6 +111,88 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                     return
             except ReviewRepairChurnPaused:
                 return
+
+    def _hydrate_legacy_pm_handoff_context(
+        self,
+        job_id: str,
+        row: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Restore latest durable PM-handoff evidence for pre-fix blocked jobs."""
+
+        result = dict(row.get("result") or {})
+        if str(result.get("reason") or "") != "collaboration_pm_handoff":
+            return row
+        raw_thread = result.get("collaboration")
+        if not isinstance(raw_thread, dict):
+            return row
+        if str(raw_thread.get("status") or "") != "pm_handoff":
+            return row
+        response = raw_thread.get("response")
+        pm_handoff = raw_thread.get("pm_handoff")
+        if not isinstance(response, dict) or not isinstance(pm_handoff, dict):
+            return row
+
+        thread_id = str(raw_thread.get("id") or "").strip()
+        role = str(
+            raw_thread.get("participant_role")
+            or raw_thread.get("role")
+            or ""
+        ).strip()
+        try:
+            round_number = int(raw_thread.get("rounds") or 0)
+        except (TypeError, ValueError):
+            return row
+        recommendation = str(response.get("recommendation") or "").strip()
+        if not thread_id or not role or round_number < 1 or not recommendation:
+            return row
+
+        checkpoint = dict(row.get("checkpoint") or {})
+        current_context = checkpoint.get("collaboration_context")
+        if isinstance(current_context, dict) and (
+            str(current_context.get("thread_id") or "") == thread_id
+            and str(current_context.get("status") or "") == "pm_handoff"
+            and int(current_context.get("round") or 0) == round_number
+        ):
+            return row
+
+        previous_failure = checkpoint.get("pre_collaboration_failure")
+        if previous_failure is None:
+            current_failure = checkpoint.get("last_failure")
+            if isinstance(current_failure, str) and not current_failure.startswith(
+                "PCP_COLLABORATION_CONTEXT:"
+            ):
+                previous_failure = current_failure
+            checkpoint["pre_collaboration_failure"] = previous_failure
+
+        context = {
+            "thread_id": thread_id,
+            "role": role,
+            "status": "pm_handoff",
+            "round": round_number,
+            "recommendation": recommendation,
+            "risks": [
+                str(item)
+                for item in response.get("risks") or []
+                if str(item)
+            ][:12],
+            "suggested_tests": [
+                str(item)
+                for item in response.get("suggested_tests") or []
+                if str(item)
+            ][:12],
+            "unresolved": bool(response.get("unresolved", False)),
+            "previous_failure": previous_failure,
+            "pm_handoff": pm_handoff,
+        }
+        checkpoint["collaboration_context"] = context
+        checkpoint["last_failure"] = "PCP_COLLABORATION_CONTEXT: " + json.dumps(
+            context,
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        self.storage.update(job_id, checkpoint=checkpoint)
+        updated = self.storage.get(job_id)
+        return updated if updated is not None else row
 
     async def _consume_collaboration_request(
         self,
