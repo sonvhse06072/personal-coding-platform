@@ -1,18 +1,19 @@
 from __future__ import annotations
 
-from app import engine_verification as engine_verification_module
-from app.engine_verification import (
-    RuntimeEngine as VerificationRuntimeEngine,
-    _CollaborationRequested,
-)
-
 import asyncio
 import json
 import subprocess
 from copy import deepcopy
 from pathlib import Path
 
+import pytest
+
+from app import engine_verification as engine_verification_module
 from app.adapters.base import AgentRun
+from app.engine_verification import (
+    RuntimeEngine as VerificationRuntimeEngine,
+    _CollaborationRequested,
+)
 from app.collaboration import (
     CollaborationCreateRequest,
     CollaborationEvidence,
