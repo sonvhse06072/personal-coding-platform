@@ -35,8 +35,8 @@ class RuntimeEngine(ExecutionRuntimeEngine):
 
     A primary developer may emit one temporary structured collaboration artifact.
     Runtime consumes and removes that control artifact before deterministic tests,
-    runs one bounded read-only role, then requeues the same job/workspace without
-    charging an engineering repair iteration.
+    runs one bounded read-only role, then continues the same job/workspace in
+    the current worker without charging an engineering repair iteration.
     """
 
     def __init__(self, storage: Any) -> None:
