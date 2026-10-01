@@ -530,6 +530,9 @@ class RuntimeEngine(RuntimeEngineCore):
                 checkpoint,
                 diff_hash=str(diff.get("diff_hash") or ""),
                 current_signals=path_signals,
+                baseline_revision=str(
+                    (checkpoint.get("project_baseline") or {}).get("revision") or ""
+                ),
             )
             progress["important_decision_flags"] = sorted(
                 path_signals - exact_protected_authorized
