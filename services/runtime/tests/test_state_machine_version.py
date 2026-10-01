@@ -4,8 +4,8 @@ from app import main as main_module
 from app.main import RUNTIME_VERSION, app
 
 
-def test_runtime_version_is_1_0_81():
-    assert RUNTIME_VERSION == "1.0.81"
+def test_runtime_version_is_1_0_82():
+    assert RUNTIME_VERSION == "1.0.82"
     assert app.version == RUNTIME_VERSION
 
 
