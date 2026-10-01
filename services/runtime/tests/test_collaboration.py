@@ -315,6 +315,111 @@ def test_invalid_collaboration_staffing_does_not_precharge_or_invoke(tmp_path):
     asyncio.run(scenario())
 
 
+def test_adaptive_create_runs_above_static_model_call_limit(tmp_path) -> None:
+    async def scenario():
+        workspace = git_workspace(tmp_path)
+        current = row(workspace)
+        current["route"]["strategy"]["budget_mode"] = "adaptive"
+        current["progress"].update(
+            {
+                "model_calls": 73,
+                "input_tokens": 500000,
+                "output_tokens": 50000,
+                "elapsed_minutes": 190.0,
+                "cost_usd": 1.0,
+            }
+        )
+        storage = FakeStorage(current)
+        adapter = SequenceAdapter(
+            [
+                {
+                    "recommendation": "Security consultation completed.",
+                    "risks": [],
+                    "suggested_tests": ["Run the focused access-control test."],
+                    "unresolved": False,
+                }
+            ]
+        )
+        manager = CollaborationManager(
+            storage,
+            router=FakeRouter(),
+            ddev=FakeDdev(workspace),
+            adapter_builder=lambda *args: adapter,
+        )
+
+        result = await manager.create(
+            current["id"],
+            CollaborationCreateRequest(
+                role="security_specialist",
+                topic="trust boundary",
+                objective="review the bounded security-sensitive change",
+                question="Does the implementation preserve the approved trust boundary?",
+                evidence=evidence(),
+                deadline_seconds=360,
+            ),
+        )
+
+        assert result.status == "resolved"
+        assert result.participant_role == "security_specialist"
+        assert storage.row["progress"]["model_calls"] == 74
+        assert storage.row["progress"]["collaboration_model_calls"] == 1
+        assert len(adapter.outputs) == 0
+
+    asyncio.run(scenario())
+
+
+def test_adaptive_collaboration_ignores_static_cumulative_counters() -> None:
+    current = row(Path("/tmp/unused"))
+    current["route"]["strategy"]["budget_mode"] = "adaptive"
+    current["progress"].update(
+        {
+            "model_calls": 73,
+            "input_tokens": 500000,
+            "output_tokens": 50000,
+            "elapsed_minutes": 190.0,
+            "cost_usd": 1.0,
+        }
+    )
+
+    CollaborationManager._ensure_budget(current)
+    assert CollaborationManager._timeout_seconds(current, 360) == 360
+
+
+def test_adaptive_collaboration_still_enforces_hard_cost() -> None:
+    current = row(Path("/tmp/unused"))
+    current["route"]["strategy"]["budget_mode"] = "adaptive"
+    current["progress"]["model_calls"] = 73
+    current["progress"]["elapsed_minutes"] = 190.0
+    current["progress"]["cost_usd"] = 10.0
+
+    with pytest.raises(RuntimeError, match="hard-cost emergency ceiling"):
+        CollaborationManager._ensure_budget(current)
+
+
+def test_legacy_collaboration_preserves_fixed_counter_and_wall_limits() -> None:
+    current = row(Path("/tmp/unused"))
+    current["route"]["strategy"]["budget_mode"] = "legacy_hard"
+    current["progress"]["model_calls"] = 20
+
+    with pytest.raises(RuntimeError, match="model-call emergency ceiling"):
+        CollaborationManager._ensure_budget(current)
+
+    current["progress"]["model_calls"] = 0
+    current["progress"]["elapsed_minutes"] = 59.95
+    with pytest.raises(RuntimeError, match="Insufficient job wall-time"):
+        CollaborationManager._timeout_seconds(current, 360)
+
+
+def test_adaptive_collaboration_timeout_remains_per_round_bounded() -> None:
+    current = row(Path("/tmp/unused"))
+    current["route"]["strategy"]["budget_mode"] = "adaptive"
+    current["progress"]["elapsed_minutes"] = 999.0
+
+    assert CollaborationManager._timeout_seconds(current, 30) == 30
+    assert CollaborationManager._timeout_seconds(current, 360) == 360
+    assert CollaborationManager._timeout_seconds(current, 5000) == 900
+
+
 def test_recursive_collaborator_fanout_is_rejected():
     with pytest.raises(ValidationError, match="consultant-to-consultant fanout"):
         CollaborationCreateRequest(
