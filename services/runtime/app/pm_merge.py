@@ -237,6 +237,9 @@ def evaluate_pm_merge(
         checkpoint,
         diff_hash=str(accepted_diff.get("diff_hash") or ""),
         current_signals=protected,
+        baseline_revision=str(
+            (checkpoint.get("project_baseline") or {}).get("revision") or ""
+        ),
     )
     approved_protected = protected & (
         approved_route | baseline_covered_protected
