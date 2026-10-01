@@ -94,7 +94,6 @@ def test_chonhac_active_baseline_resolves_to_approved_design_source_of_truth() -
     clear_config_cache()
 
 
-
 def test_previous_governed_baseline_remains_explicitly_resolvable() -> None:
     clear_config_cache()
     baseline = resolve_project_baseline("chonhac", PREVIOUS_GOVERNED_REVISION)
@@ -107,6 +106,7 @@ def test_previous_governed_baseline_remains_explicitly_resolvable() -> None:
     assert len(baseline.authority) == 34
 
     clear_config_cache()
+
 
 def test_previous_design_baseline_remains_explicitly_resolvable() -> None:
     clear_config_cache()
