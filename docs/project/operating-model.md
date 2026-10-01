@@ -110,6 +110,70 @@ PM may not autonomously:
 - materially expand the project/personal resource envelope or override a justified emergency ceiling;
 - merge a PR whose content or unresolved finding requires a Human Owner decision.
 
+### PM advisory triage
+
+A Human Owner request is a high-authority input to PM reasoning, not an
+automatic declaration that the requested implementation tactic is already the
+best or approved engineering decision.
+
+Before material execution, PM should:
+
+1. identify the objective behind the request;
+2. inspect the current source of truth and live state when they may materially
+   change the answer;
+3. assess scope, dependency ordering, architecture/security boundaries,
+   verification implications, reversibility and resource impact;
+4. distinguish the underlying problem from a proposed symptom-level fix;
+5. recommend the most effective bounded path, including refining or disagreeing
+   with the proposed tactic when evidence supports a better option;
+6. state material uncertainty and what must be verified before relying on it;
+7. execute routine, reversible, in-scope actions without creating needless
+   Human Owner approval loops;
+8. surface a Human Owner decision only when the remaining choice crosses an
+   existing protected/material boundary.
+
+PM should not be passively order-taking. PM should give a recommendation and
+rationale when alternatives materially differ. The Human Owner retains final
+authority for protected project/governance decisions and may choose a different
+path after reviewing the recommendation.
+
+### Incident-learning review
+
+Do not invoke PM merely because the first ordinary lint/test/provider failure
+occurred. Incident learning is intended to reduce repeated failures and quota
+waste, not to create an additional conversation after every error.
+
+A bounded incident-learning candidate is justified when durable evidence shows
+one or more of the following:
+
+- the same blocker or root cause recurs in one WorkOrder;
+- deterministic verification retry volume becomes anomalous;
+- manual operator recovery/rollout is required;
+- a live project exposes a PCP platform defect;
+- collaboration/PM handoff exposes a reusable execution constraint;
+- a capability or verification gap causes avoidable model/tool/test spend;
+- the same root cause appears across multiple tasks/projects.
+
+Candidate detection should be deterministic from Runtime/GitHub evidence where
+possible and should not itself require a model call.
+
+At a stable checkpoint or TaskOutcome, PM classifies a candidate as:
+
+- `ephemeral_task_failure`;
+- `project_runbook_lesson`;
+- `platform_operational_lesson`;
+- `verification_contract_change`;
+- `platform_defect`;
+- `governance_change_proposal`.
+
+PM records the root cause, avoidable impact, existing rule coverage, preferred
+prevention mechanism and the smallest authoritative destination for the lesson.
+Executable prevention (code/config/preflight/circuit-breaker/regression test)
+is preferred over prose when the recurrence can be mechanically prevented.
+Promotion into repository memory follows
+`context-memory-architecture.md`; raw chronology stays in GitHub/Runtime
+evidence.
+
 ### Human-operated ChatGPT PM model convention
 
 This subsection applies only when the Human Owner is manually using ChatGPT as
@@ -378,6 +442,9 @@ new_information: [...]
 discovered_work:
   - description: ...
     relation: within_scope | outside_scope
+incident_learning:
+  candidates: [...]
+  promoted: [...]
 plan_changes: [...]
 next_task: T-124
 ```
@@ -385,6 +452,12 @@ next_task: T-124
 If a next task is already inside the approved Project Plan, PM may schedule it automatically subject to budget/dependency rules. When the accepted task is represented by a PR, PM may merge it after the required merge gates pass and then advance the dependency graph.
 
 Outside-scope discovered work is recorded but not silently added to the roadmap.
+
+`incident_learning` is optional for ordinary tasks. When present, it contains
+only bounded candidate/classification references and compact promoted lessons;
+it does not embed raw logs or trigger recursive retrospective agents. A reusable
+lesson should be promoted once at a meaningful checkpoint rather than repeated
+after every failed attempt.
 
 ## 11. ChangeProposal
 
