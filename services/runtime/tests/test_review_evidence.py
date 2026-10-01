@@ -184,12 +184,25 @@ def test_role_specific_packs_remain_small_structured_artifacts():
         review_summary={"verdict": "pass", "finding_count": 0},
         unresolved_risks=[],
         protected_decision_flags=[],
+        baseline_covered_protected_authorizations=[
+            {
+                "diff_hash": "diff-1",
+                "protected_signals": ["security_boundary_change"],
+                "approved_by": "pm-model",
+                "provider": "openai",
+                "summary": "Covered by the pinned baseline.",
+                "review_verdict": "pass",
+                "baseline_revision": "v1",
+            }
+        ],
     )
 
     assert repair["role"] == "developer_repair"
     assert repair["relevant_files"] == ["a.py", "b.py"]
     assert consultant["role"] == "consultant"
     assert pm["role"] == "product_manager"
+    assert pm["baseline_covered_protected_authorizations"][0]["diff_hash"] == "diff-1"
+    assert pm["baseline_covered_protected_authorizations"][0]["protected_signals"] == ["security_boundary_change"]
     assert all(pack["jit_retrieval"]["mode"] == "repository_read_only" for pack in [repair, consultant, pm])
 
 
