@@ -1,6 +1,10 @@
-from app import engine_verification as engine_verification_module
-from app.engine_verification import RuntimeEngine as VerificationRuntimeEngine, _CollaborationRequested
 from __future__ import annotations
+
+from app import engine_verification as engine_verification_module
+from app.engine_verification import (
+    RuntimeEngine as VerificationRuntimeEngine,
+    _CollaborationRequested,
+)
 
 import asyncio
 import json
