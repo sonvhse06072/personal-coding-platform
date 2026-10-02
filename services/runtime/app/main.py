@@ -41,6 +41,7 @@ from .schemas import (
     JobList,
     ReviewRepairRequest,
     JobRunRequest,
+    JobSourceAdvanceRequest,
     JobView,
     RuntimeHealth,
     TaskInput,
@@ -182,7 +183,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-RUNTIME_VERSION = "1.0.87"
+RUNTIME_VERSION = "1.0.88"
 
 app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan=lifespan)
 app.include_router(pm_bridge_router)
@@ -557,6 +558,26 @@ async def cancel_collaboration(job_id: str, thread_id: str) -> CollaborationView
         return await collaboration_manager.cancel(job_id, thread_id)
     except RuntimeError as exc:
         raise runtime_error(exc) from exc
+
+
+@app.post(
+    "/v1/jobs/{job_id}/advance-source",
+    response_model=JobView,
+    dependencies=[Depends(auth)],
+)
+async def advance_job_source(
+    job_id: str,
+    payload: JobSourceAdvanceRequest,
+) -> JobView:
+    try:
+        row = await engine.advance_direct_job_source(
+            job_id,
+            expected_old_source=payload.expected_old_source,
+            expected_new_source=payload.expected_new_source,
+        )
+    except RuntimeError as exc:
+        raise runtime_error(exc) from exc
+    return view(row)
 
 
 @app.post("/v1/jobs/{job_id}/run", response_model=JobView, dependencies=[Depends(auth)])
