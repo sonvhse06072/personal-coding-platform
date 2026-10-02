@@ -331,15 +331,17 @@ def diff_state(workspace: Path, max_bytes: int) -> dict[str, Any]:
         if add.returncode != 0:
             raise RuntimeError(add.stderr.strip() or "git add -N failed")
 
-    entries = _status_entries(workspace)
+    # Canonical execution/review identity is the final working tree relative to
+    # the persisted source commit, not the mutable index relative to the working
+    # tree. This keeps staged, unstaged, and intent-to-add states equivalent when
+    # they produce the same final files.
     names = [
         name
-        for status, name in entries
-        if name not in _RUNTIME_UNTRACKED_EXACT_EXCLUDES
-        and not (status == "??" and _is_python_bytecode(name))
+        for name in _git(workspace, "diff", "HEAD", "--name-only", check=False).splitlines()
+        if name
     ]
-    stat = _git(workspace, "diff", "--stat")
-    diff = _git(workspace, "diff", "--binary", check=False)
+    stat = _git(workspace, "diff", "HEAD", "--stat")
+    diff = _git(workspace, "diff", "HEAD", "--binary", check=False)
     truncated = len(diff.encode()) > max_bytes
     visible = diff.encode()[:max_bytes].decode("utf-8", errors="replace") if truncated else diff
     return {
