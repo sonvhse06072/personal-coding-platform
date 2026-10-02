@@ -92,3 +92,42 @@ def test_tracked_bytecode_remains_visible_and_committable(tmp_path):
     assert committed == b"v2"
     tree = git(repo, "ls-tree", "-r", "--name-only", "HEAD").splitlines()
     assert "fixtures/__pycache__/generated.cpython-311.pyc" not in tree
+
+
+def test_diff_state_drops_deleted_intent_to_add_but_preserves_real_changes(tmp_path):
+    repo = make_repo(tmp_path)
+
+    temporary = repo / "temporary.php"
+    temporary.write_text("<?php echo 'temporary';\n")
+    first = diff_state(repo, 100000)
+    assert "temporary.php" in first["changed_files"]
+    assert "temporary.php" in first["diff"]
+
+    temporary.unlink()
+    (repo / "README.md").write_text("real modification\n")
+    second = diff_state(repo, 100000)
+
+    assert second["changed_files"] == ["README.md"]
+    assert "temporary.php" not in second["diff"]
+    assert "README.md" in second["diff"]
+    assert "temporary.php" not in git(
+        repo,
+        "status",
+        "--porcelain=v1",
+        "--untracked-files=all",
+    )
+
+
+def test_diff_state_preserves_tracked_deletion(tmp_path):
+    repo = make_repo(tmp_path)
+    tracked = repo / "tracked.txt"
+    tracked.write_text("tracked\n")
+    subprocess.check_call(["git", "-C", str(repo), "add", "tracked.txt"])
+    subprocess.check_call(["git", "-C", str(repo), "commit", "-qm", "track file"])
+
+    tracked.unlink()
+    state = diff_state(repo, 100000)
+
+    assert state["changed_files"] == ["tracked.txt"]
+    assert "deleted file mode" in state["diff"]
+    assert "tracked.txt" in state["diff"]

@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from app.adapters.base import AgentRun
+from app.repo import diff_state
 from app.pm_reassessment import (
     PMReassessmentDecision,
     baseline_covered_protected_authorized_signals,
@@ -241,6 +242,84 @@ def test_pm_reassessment_uses_different_model_and_keeps_workspace_read_only(tmp_
     assert Path(adapter.calls[0]["workspace"]) != root
     assert len(ddev.created) == 1
     assert len(ddev.removed) == 1
+
+
+def test_pm_reassessment_drops_deleted_intent_to_add_before_clone_apply(tmp_path) -> None:
+    root = workspace(tmp_path)
+    router = FakeRouter()
+    ddev = FakeDdev(root, tmp_path)
+    source_commit = subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        text=True,
+        capture_output=True,
+        check=True,
+    ).stdout.strip()
+
+    transient = root / "temporary.php"
+    transient.write_text("<?php echo 'temporary';\n", encoding="utf-8")
+    first = diff_state(root, 500000)
+    assert "temporary.php" in first["changed_files"]
+    transient.unlink()
+
+    adapter = FakeAdapter(
+        {
+            "action": "approve_continue",
+            "summary": "The remaining exact diff is reviewable.",
+            "developer_message": None,
+            "human_necessity": None,
+            "unresolved_risks": [],
+            "human_triggers": [],
+        }
+    )
+
+    result = asyncio.run(
+        run_pm_reassessment(
+            router=router,
+            ddev=ddev,
+            workspace=root,
+            job_id="job-stale-ita",
+            project_id="demo",
+            source_commit=source_commit,
+            profile="standard",
+            current_executor={"id": "developer-model"},
+            provider_state={},
+            work_order={"id": "WO-1"},
+            baseline={"revision": "v1"},
+            trigger={
+                "signal": "changed_file_working_target_exceeded",
+                "used": 9,
+                "working_target": 8,
+                "emergency_limit": 16,
+            },
+            diff={
+                "changed_file_count": 1,
+                "changed_files": ["component.tsx"],
+                "diff_stat": "1 file changed",
+                "diff_hash": "stale-ita-regression",
+            },
+            verification={"passed": True},
+            review_summary={"verdict": "pass"},
+            developer_report="Preserve the real component change.",
+            decision_context={},
+            max_diff_bytes=500000,
+            timeout_seconds=60,
+            adapter_builder=lambda *_args: adapter,
+        )
+    )
+
+    assert result["decision"]["action"] == "approve_continue"
+    assert len(adapter.calls) == 1
+    assert "temporary.php" not in subprocess.check_output(
+        [
+            "git",
+            "-C",
+            str(root),
+            "status",
+            "--porcelain=v1",
+            "--untracked-files=all",
+        ],
+        text=True,
+    )
 
 
 def test_pm_reassessment_fails_closed_if_pm_mutates_workspace(tmp_path) -> None:
