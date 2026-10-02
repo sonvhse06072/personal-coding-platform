@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from .base import AgentAdapter, AgentRun, classify_provider_failure
+from .base import AgentAdapter, AgentRun, InvocationCapabilities, classify_provider_failure
 from ..developer_stream import (
     agent_lifecycle_event,
     agent_public_event,
@@ -98,6 +98,13 @@ def opencode_env_for_model(model: str) -> dict[str, str]:
 
 class OpenCodeAdapter(AgentAdapter):
     name = "opencode"
+
+    def invocation_capabilities(self, mode: str) -> InvocationCapabilities:
+        del mode
+        return InvocationCapabilities(
+            php_runtime=False,
+            php_runtime_reason="runtime_container_php_unavailable",
+        )
 
     async def run(self, *, workspace: Path, prompt: str, mode: str, timeout: int) -> AgentRun:
         agent = "plan" if mode in {"plan", "evaluate"} else "build"
