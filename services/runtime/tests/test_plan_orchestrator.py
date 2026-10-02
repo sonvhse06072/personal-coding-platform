@@ -574,3 +574,27 @@ def test_direct_project_lease_defers_launch_until_repo_is_available(monkeypatch)
     assert launched["launched"]["job_id"] == candidate
     assert len(engine.created) == 1
     assert engine.enqueued == [candidate]
+
+
+def test_failed_runtime_job_uses_stable_runtime_failed_reason():
+    wo = work_order("WO-1")
+    service, storage, engine, store = orchestrator(
+        [wo],
+        [tracked("WO-1", 0, state="running", job_id="job-1")],
+    )
+    storage.jobs["job-1"] = {
+        "id": "job-1",
+        "project_id": "demo",
+        "workspace": "/tmp/workspaces/job-1",
+        "status": "failed",
+        "error": "ValueError: Separator is not found, and chunk exceed the limit",
+        "result": None,
+        "progress": {},
+    }
+
+    asyncio.run(service.tick())
+
+    assert store.tracked[0]["state"] == "blocked"
+    assert store.tracked[0]["detail"]["reason"] == "runtime_failed"
+    assert store.notifications[0]["event_type"] == "work_order_blocked"
+    assert "runtime_failed" in store.notifications[0]["summary"]
