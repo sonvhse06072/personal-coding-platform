@@ -621,6 +621,20 @@ def test_direct_source_advance_preserves_disjoint_dirty_worktree(tmp_path, monke
     assert (source / "frontend" / "page.tsx").read_text() == "preserve frontend\n"
     assert "frontend/page.tsx" in run("git", "status", "--porcelain", cwd=source)
 
+    repeated = advance_direct_workspace_source(
+        AdvanceDirectWorkspaceSourceRequest(
+            job_id="jobsourcestep",
+            project_id="demo",
+            workspace=str(source),
+            branch=created["branch"],
+            old_source=old,
+            new_source=remote_head,
+        )
+    )
+    assert repeated["already_advanced"] is True
+    assert run("git", "rev-parse", "HEAD", cwd=source) == remote_head
+    assert (source / "frontend" / "page.tsx").read_text() == "preserve frontend\n"
+
 
 def test_direct_source_advance_refuses_overlapping_dirty_path(tmp_path, monkeypatch):
     source, remote, _workspaces = configure_direct(monkeypatch, tmp_path)
