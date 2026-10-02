@@ -25,12 +25,13 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP source after #409 targets Runtime `1.0.89` and ddev-executor `1.0.29`:
-  it retains #410 / PR #411 oversized-JSONL streaming hardening and adds #408 /
-  PR #409 direct-workspace base synchronization plus bounded same-job source
-  advance for stale sequential WorkOrders.
+- PCP source on the #412 recovery branch targets Runtime `1.0.90` while
+  ddev-executor remains `1.0.29`: it retains #409/#411 recovery hardening and
+  permits source advance for a legacy `failed` job only when the existing
+  orchestration validator proves the exact job is still an active blocked agent
+  WorkOrder under a blocked plan. Source advance does not reopen or enqueue it.
 - The deployed local Runtime/service identities are time-sensitive. Verify
-  `/health` and service/source identity live before assuming the combined `1.0.89` / `1.0.29` repair is deployed.
+  `/health` and service/source identity live before assuming the `1.0.90` / `1.0.29` recovery pair is deployed.
 - PM-controlled routine merge is implemented and has been used on the live
   Chợ Nhạc GH-42 path. Developer agents never merge.
 - Exact-diff baseline-covered protected authorization is implemented for the
@@ -194,14 +195,15 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Keep GH-42 WO-02 blocked until #409 has exact-head green CI, is merged and
-   the combined Runtime/executor repair is rolled out at the stable checkpoint.
-2. Use the bounded same-job source advance to move the preserved WO-02 job from
+1. Keep GH-42 WO-02 unexecuted while its legacy Runtime state is `failed`;
+   do not call ordinary `/run` before source correction because failed resume
+   both reopens orchestration and queues execution.
+2. Merge/roll out #412 Runtime `1.0.90`, then use bounded same-job source
+   advance to move job `7e68e53af0fc53c388a24ae56df867d0` from
    `6038857e33d3717321a54e35743fa8b9dbeba8d2` to Chợ Nhạc main
-   `e8ccde0f9854fa86a9fa37fe9504fb63c90a477f` only after executor proof passes.
-3. Resume the exact preserved job only after durable `source_commit` reflects
-   that proven advance; prior WO-02 verification evidence is not authoritative
-   while the job remains on the stale dependency base.
+   `e8ccde0f9854fa86a9fa37fe9504fb63c90a477f`; the job must remain `failed`.
+3. Only after durable source-advance proof succeeds, call ordinary explicit
+   `/run` so existing orchestration recovery reopens and queues the same job.
 4. Keep #399/#400 as bounded follow-ups; do not fold them into product scope.
 5. Implement #406 only through reviewed continuity/TaskOutcome/tiered-memory
    changes and use the completed WO-01 incident as the first real acceptance
