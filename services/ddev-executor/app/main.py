@@ -1527,14 +1527,6 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
         else configured_mode
     )
     ref = payload.ref or str(cfg.get("base_branch", "main"))
-    if mode == "direct" and payload.ref is None:
-        source_commit = _sync_clean_direct_base(
-            cfg,
-            repo,
-            job_id=payload.job_id,
-        )
-    else:
-        source_commit = git(repo, "rev-parse", ref)
     prefix = str(cfg.get("runtime", {}).get("branch_prefix", "ai"))
     branch = f"{prefix}/{payload.job_id[:12]}"
     _validate_ai_branch(cfg, branch)
@@ -1550,6 +1542,11 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
         ).returncode == 0
 
         if current_branch == branch:
+            source_commit = (
+                git(repo, "rev-parse", ref)
+                if payload.ref is not None
+                else git(repo, "rev-parse", str(cfg.get("base_branch", "main")))
+            )
             if status or current_head != source_commit:
                 raise HTTPException(
                     409,
@@ -1569,6 +1566,11 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
             )
         if existing_branch:
             raise HTTPException(409, "Direct workspace AI branch already exists")
+        source_commit = (
+            _sync_clean_direct_base(cfg, repo, job_id=payload.job_id)
+            if payload.ref is None
+            else git(repo, "rev-parse", ref)
+        )
         git(repo, "checkout", "-b", branch, source_commit)
         return {
             "workspace": str(repo),
@@ -2000,10 +2002,11 @@ def advance_direct_workspace_source(
 
     current_head = git(workspace, "rev-parse", "HEAD")
     old_source = git(workspace, "rev-parse", payload.old_source)
-    if current_head != old_source:
+    new_source = git(workspace, "rev-parse", payload.new_source)
+    if current_head not in {old_source, new_source}:
         raise HTTPException(
             409,
-            "Source advance requires the job branch HEAD to remain exactly at the old source commit",
+            "Source advance requires the job branch HEAD to remain at the exact old or already-advanced source commit",
         )
 
     remote_head = _fetch_remote_base_head(cfg, workspace, job_id=payload.job_id)
@@ -2012,7 +2015,6 @@ def advance_direct_workspace_source(
             409,
             "Requested new source does not match the authoritative remote base head",
         )
-    new_source = git(workspace, "rev-parse", payload.new_source)
     _assert_fast_forward(
         workspace,
         old_source,
@@ -2041,7 +2043,9 @@ def advance_direct_workspace_source(
         )
 
     before = _worktree_fingerprint(workspace, dirty)
-    git(workspace, "merge", "--ff-only", new_source)
+    already_advanced = current_head == new_source
+    if not already_advanced:
+        git(workspace, "merge", "--ff-only", new_source)
     if git(workspace, "rev-parse", "HEAD") != new_source:
         raise HTTPException(409, "Source advance did not reach the requested new source")
     after = _worktree_fingerprint(workspace, dirty)
@@ -2058,6 +2062,7 @@ def advance_direct_workspace_source(
         "branch": payload.branch,
         "old_source": old_source,
         "new_source": new_source,
+        "already_advanced": already_advanced,
         "dirty_paths": sorted(dirty)[:200],
         "dependency_paths": sorted(dependency_paths)[:200],
     }
