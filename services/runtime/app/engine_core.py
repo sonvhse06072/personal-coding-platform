@@ -314,6 +314,7 @@ class RuntimeEngineCore:
         *,
         expected_old_source: str,
         expected_new_source: str,
+        _allow_failed_orchestrated_recovery: bool = False,
     ) -> dict[str, Any]:
         """Advance one preserved blocked direct job onto an exact newer base.
 
@@ -326,9 +327,14 @@ class RuntimeEngineCore:
         row = self.storage.get(job_id)
         if not row:
             raise RuntimeError("Unknown job")
-        if row["status"] not in {"blocked", "interrupted"}:
+        status = str(row["status"])
+        failed_orchestrated_recovery = (
+            status == "failed" and _allow_failed_orchestrated_recovery
+        )
+        if status not in {"blocked", "interrupted"} and not failed_orchestrated_recovery:
             raise RuntimeError(
-                f"Direct source advance requires blocked/interrupted status, got {row['status']}"
+                "Direct source advance requires blocked/interrupted status or an "
+                f"explicitly tracked failed orchestrated recovery, got {status}"
             )
 
         active = self.active_jobs.get(job_id)
