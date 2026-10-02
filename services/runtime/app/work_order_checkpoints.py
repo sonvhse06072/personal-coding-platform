@@ -57,6 +57,7 @@ _PUBLIC_BLOCK_REASONS = {
     "reassessment_stopped",
     "repair_churn_circuit_breaker",
     "review_repair_missing_new_commit",
+    "runtime_failed",
     "unsafe_bare_completion",
     "work_order_definition_missing",
     "work_order_policy_rejected",
