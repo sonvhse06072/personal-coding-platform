@@ -6,12 +6,14 @@ import yaml
 from fastapi import HTTPException
 
 from app.main import (
+    AdvanceDirectWorkspaceSourceRequest,
     PhaseRequest,
     PreviewRequest,
     PublishBranchRequest,
     QuiesceWorkspaceRequest,
     ReturnDirectWorkspaceRequest,
     WorkspaceRequest,
+    advance_direct_workspace_source,
     create_workspace,
     phase,
     preview_status,
@@ -524,6 +526,132 @@ def configure_direct(monkeypatch, tmp_path: Path, *, allow_push: bool = True):
     projects_file.write_text(yaml.safe_dump(data))
     monkeypatch.setenv("CODING_DIRECT_PROJECT_ROOT", str(source))
     return source, remote, workspaces
+
+
+def _advance_remote_main(remote: Path, tmp_path: Path, *, filename: str, content: str) -> str:
+    producer = tmp_path / f"producer-{filename.replace('/', '-')}"
+    run("git", "clone", str(remote), str(producer))
+    run("git", "config", "user.email", "producer@example.com", cwd=producer)
+    run("git", "config", "user.name", "Producer", cwd=producer)
+    path = producer / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content)
+    run("git", "add", filename, cwd=producer)
+    run("git", "commit", "-m", f"advance {filename}", cwd=producer)
+    run("git", "push", "origin", "main", cwd=producer)
+    return run("git", "rev-parse", "HEAD", cwd=producer)
+
+
+def test_direct_workspace_fast_forwards_clean_local_base_before_new_job(tmp_path, monkeypatch):
+    source, remote, _workspaces = configure_direct(monkeypatch, tmp_path)
+    old = run("git", "rev-parse", "main", cwd=source)
+    remote_head = _advance_remote_main(
+        remote,
+        tmp_path,
+        filename="BACKEND.txt",
+        content="merged dependency\n",
+    )
+    assert run("git", "rev-parse", "main", cwd=source) == old
+
+    result = create_workspace(
+        WorkspaceRequest(job_id="jobdirectsync", project_id="demo")
+    )
+
+    assert result["source_commit"] == remote_head
+    assert result["branch"] == "ai/jobdirectsync"
+    assert run("git", "rev-parse", "HEAD", cwd=source) == remote_head
+    assert run("git", "rev-parse", "main", cwd=source) == remote_head
+
+
+def test_direct_workspace_refuses_diverged_local_base(tmp_path, monkeypatch):
+    source, remote, _workspaces = configure_direct(monkeypatch, tmp_path)
+    (source / "LOCAL.txt").write_text("local only\n")
+    run("git", "add", "LOCAL.txt", cwd=source)
+    run("git", "commit", "-m", "local divergent commit", cwd=source)
+    local_head = run("git", "rev-parse", "HEAD", cwd=source)
+    _advance_remote_main(
+        remote,
+        tmp_path,
+        filename="REMOTE.txt",
+        content="remote only\n",
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        create_workspace(
+            WorkspaceRequest(job_id="jobdirectdiverge", project_id="demo")
+        )
+
+    assert exc.value.status_code == 409
+    assert "diverged" in str(exc.value.detail)
+    assert run("git", "rev-parse", "HEAD", cwd=source) == local_head
+    assert run("git", "branch", "--show-current", cwd=source) == "main"
+
+
+def test_direct_source_advance_preserves_disjoint_dirty_worktree(tmp_path, monkeypatch):
+    source, remote, _workspaces = configure_direct(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobsourcestep", project_id="demo")
+    )
+    old = created["source_commit"]
+    (source / "frontend").mkdir()
+    (source / "frontend" / "page.tsx").write_text("preserve frontend\n")
+    remote_head = _advance_remote_main(
+        remote,
+        tmp_path,
+        filename="web/BACKEND.txt",
+        content="merged backend\n",
+    )
+
+    result = advance_direct_workspace_source(
+        AdvanceDirectWorkspaceSourceRequest(
+            job_id="jobsourcestep",
+            project_id="demo",
+            workspace=str(source),
+            branch=created["branch"],
+            old_source=old,
+            new_source=remote_head,
+        )
+    )
+
+    assert result["old_source"] == old
+    assert result["new_source"] == remote_head
+    assert "frontend/page.tsx" in result["dirty_paths"]
+    assert "web/BACKEND.txt" in result["dependency_paths"]
+    assert run("git", "rev-parse", "HEAD", cwd=source) == remote_head
+    assert (source / "frontend" / "page.tsx").read_text() == "preserve frontend\n"
+    assert "frontend/page.tsx" in run("git", "status", "--porcelain", cwd=source)
+
+
+def test_direct_source_advance_refuses_overlapping_dirty_path(tmp_path, monkeypatch):
+    source, remote, _workspaces = configure_direct(monkeypatch, tmp_path)
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobsourcelap", project_id="demo")
+    )
+    old = created["source_commit"]
+    (source / "README.md").write_text("local frontend-adjacent edit\n")
+    remote_head = _advance_remote_main(
+        remote,
+        tmp_path,
+        filename="README.md",
+        content="dependency edit\n",
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        advance_direct_workspace_source(
+            AdvanceDirectWorkspaceSourceRequest(
+                job_id="jobsourcelap",
+                project_id="demo",
+                workspace=str(source),
+                branch=created["branch"],
+                old_source=old,
+                new_source=remote_head,
+            )
+        )
+
+    assert exc.value.status_code == 409
+    assert "overlap" in str(exc.value.detail)
+    assert run("git", "rev-parse", "HEAD", cwd=source) == old
+    assert (source / "README.md").read_text() == "local frontend-adjacent edit\n"
 
 
 def test_direct_workspace_uses_registered_repo_and_preserves_origin(tmp_path, monkeypatch):
