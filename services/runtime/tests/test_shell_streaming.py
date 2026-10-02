@@ -70,3 +70,28 @@ def test_run_command_timeout_preserves_streamed_output_without_prompt_in_error(t
     assert "partial-before-timeout" not in str(exc)
     assert "Command timed out after" in str(exc)
 
+
+
+def test_run_command_survives_oversized_single_line_and_streams_later_line(tmp_path: Path):
+    seen: list[str] = []
+    oversized_chars = 1024 * 1024 + 8192
+    script = (
+        "import sys; "
+        f"sys.stdout.write('x' * {oversized_chars} + '\\n'); "
+        "sys.stdout.flush(); "
+        "print('after-oversized-line', flush=True)"
+    )
+
+    result = asyncio.run(
+        run_command(
+            [sys.executable, "-c", script],
+            cwd=tmp_path,
+            timeout=10,
+            on_stdout_line=seen.append,
+        )
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.startswith("x" * 1024)
+    assert result.stdout.endswith("after-oversized-line\n")
+    assert seen == ["after-oversized-line"]

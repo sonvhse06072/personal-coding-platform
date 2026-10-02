@@ -197,9 +197,9 @@ def test_runtime_failed_is_public_bounded_repair_reason() -> None:
     snapshot = {
         "work_orders": [
             {
-                "work_order_id": "WO-runtime-failed",
+                "work_order_id": "WO-runtime",
                 "state": "blocked",
-                "job_id": "job-runtime-failed",
+                "job_id": "job-runtime",
             }
         ],
         "blocked_checkpoint": {

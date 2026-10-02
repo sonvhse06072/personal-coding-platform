@@ -1885,7 +1885,18 @@ class PlanOrchestrator:
         plan_id = str(plan["plan_id"])
         work_order_id = str(tracked["work_order_id"])
         result = dict(job.get("result") or {})
-        reason = str(result.get("reason") or job.get("error") or job.get("status") or "job_blocked")
+        explicit_reason = str(result.get("reason") or "").strip()
+        status = str(job.get("status") or "").strip()
+        if explicit_reason:
+            reason = explicit_reason
+        elif status == "failed":
+            # Generic worker exceptions retain their raw bounded job.error for
+            # diagnostics, but orchestration/public evidence uses one stable
+            # reason instead of leaking a free-form exception string into the
+            # reason classifier.
+            reason = "runtime_failed"
+        else:
+            reason = str(job.get("error") or status or "job_blocked")
         progress = dict(job.get("progress") or {})
         failures = list(progress.get("provider_failures") or [])
         quota_failure = any(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import codecs
 import os
 import signal
 from contextlib import suppress
@@ -120,25 +121,88 @@ async def _terminate_process_group(proc: asyncio.subprocess.Process) -> None:
             await asyncio.wait_for(proc.communicate(), timeout=5)
 
 
+_STREAM_READ_CHUNK_BYTES = 64 * 1024
+_MAX_STREAM_CALLBACK_LINE_CHARS = 256 * 1024
+
+
 async def _drain_stream(
     stream: asyncio.StreamReader | None,
     chunks: list[str],
     callback: Callable[[str], None] | None,
 ) -> None:
+    """Drain process output without letting one oversized line kill execution.
+
+    Agent CLIs may emit JSONL tool-result events whose single logical line is
+    much larger than asyncio's StreamReader separator limit. Reading fixed-size
+    chunks preserves the raw process output while keeping live observability
+    bounded. If one callback line exceeds the bound, only that callback event is
+    dropped; subsequent lines are still streamed and command execution remains
+    authoritative.
+    """
+
     if stream is None:
         return
-    while True:
-        line = await stream.readline()
-        if not line:
+
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    pending = ""
+    dropping_oversized_callback_line = False
+
+    def feed_callback(text: str) -> None:
+        nonlocal pending, dropping_oversized_callback_line
+        if callback is None or not text:
             return
-        text = line.decode("utf-8", errors="replace")
-        chunks.append(text)
-        if callback is not None:
-            try:
-                callback(text.rstrip("\r\n"))
-            except Exception:
-                # Live observability is explicitly fail-open for execution.
-                pass
+
+        cursor = 0
+        while cursor < len(text):
+            newline = text.find("\n", cursor)
+            end = newline + 1 if newline >= 0 else len(text)
+            piece = text[cursor:end]
+
+            if dropping_oversized_callback_line:
+                if newline >= 0:
+                    dropping_oversized_callback_line = False
+                cursor = end
+                if newline < 0:
+                    break
+                continue
+
+            if len(pending) + len(piece) > _MAX_STREAM_CALLBACK_LINE_CHARS:
+                pending = ""
+                if newline < 0:
+                    dropping_oversized_callback_line = True
+                    break
+                cursor = end
+                continue
+
+            pending += piece
+            if newline >= 0:
+                try:
+                    callback(pending.rstrip("\r\n"))
+                except Exception:
+                    # Live observability is explicitly fail-open for execution.
+                    pass
+                pending = ""
+                cursor = end
+                continue
+            break
+
+    while True:
+        raw = await stream.read(_STREAM_READ_CHUNK_BYTES)
+        if not raw:
+            tail = decoder.decode(b"", final=True)
+            if tail:
+                chunks.append(tail)
+                feed_callback(tail)
+            if callback is not None and pending and not dropping_oversized_callback_line:
+                try:
+                    callback(pending.rstrip("\r\n"))
+                except Exception:
+                    pass
+            return
+        text = decoder.decode(raw)
+        if text:
+            chunks.append(text)
+            feed_callback(text)
 
 
 async def _run_legacy_communicate(

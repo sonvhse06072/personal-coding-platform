@@ -559,7 +559,7 @@ def test_direct_workspace_fast_forwards_clean_local_base_before_new_job(tmp_path
     )
 
     assert result["source_commit"] == remote_head
-    assert result["branch"] == "ai/jobdirectsync"
+    assert result["branch"] == f"ai/{'jobdirectsync'[:12]}"
     assert run("git", "rev-parse", "HEAD", cwd=source) == remote_head
     assert run("git", "rev-parse", "main", cwd=source) == remote_head
     assert run("git", "rev-parse", "origin/main", cwd=source) == remote_head
@@ -621,7 +621,7 @@ def test_direct_source_advance_preserves_disjoint_dirty_worktree(tmp_path, monke
     assert "web/BACKEND.txt" in result["dependency_paths"]
     assert run("git", "rev-parse", "HEAD", cwd=source) == remote_head
     assert (source / "frontend" / "page.tsx").read_text() == "preserve frontend\n"
-    assert "frontend/page.tsx" in run("git", "status", "--porcelain", cwd=source)
+    assert "frontend/page.tsx" in run("git", "status", "--porcelain", "--untracked-files=all", cwd=source)
 
     repeated = advance_direct_workspace_source(
         AdvanceDirectWorkspaceSourceRequest(
