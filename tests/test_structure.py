@@ -159,6 +159,8 @@ def test_chonhac_frontend_quality_installs_playwright_browser_for_runtime_user()
 
     assert ddev["workspace_nodejs_version"] == "24"
     assert ddev["verification_phase_capabilities"] == {
+        "targeted_tests": {"requires": ["php_runtime"]},
+        "static_analysis": {"requires": ["php_runtime"]},
         "frontend_quality": {"requires": ["local_listener"]},
     }
     assert ddev["auto_required_phases"] == [
