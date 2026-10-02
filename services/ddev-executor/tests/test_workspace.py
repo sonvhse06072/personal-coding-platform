@@ -531,6 +531,7 @@ def configure_direct(monkeypatch, tmp_path: Path, *, allow_push: bool = True):
 def _advance_remote_main(remote: Path, tmp_path: Path, *, filename: str, content: str) -> str:
     producer = tmp_path / f"producer-{filename.replace('/', '-')}"
     run("git", "clone", str(remote), str(producer))
+    run("git", "checkout", "main", cwd=producer)
     run("git", "config", "user.email", "producer@example.com", cwd=producer)
     run("git", "config", "user.name", "Producer", cwd=producer)
     path = producer / filename
