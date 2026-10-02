@@ -191,3 +191,27 @@ def test_repeated_deterministic_verification_failure_is_bounded_repair() -> None
     assert result is not None
     assert result["reason"] == "repeated_deterministic_verification_failure"
     assert result["next_safe_action"] == "repair"
+
+
+def test_runtime_failed_is_public_bounded_repair_reason() -> None:
+    snapshot = {
+        "work_orders": [
+            {
+                "work_order_id": "WO-runtime-failed",
+                "state": "blocked",
+                "job_id": "job-runtime-failed",
+            }
+        ],
+        "blocked_checkpoint": {
+            "evidence": {
+                "reason": "runtime_failed",
+            }
+        },
+        "current_checkpoint_history": [],
+    }
+
+    result = blocked_plan_evidence(snapshot)
+
+    assert result is not None
+    assert result["reason"] == "runtime_failed"
+    assert result["next_safe_action"] == "repair"
