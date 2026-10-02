@@ -64,37 +64,77 @@ def _capability_boundary_lines(
     *,
     evaluator: bool,
 ) -> list[str]:
-    if not context or "local_listener" not in (
-        context.get("unavailable_capabilities") or []
-    ):
+    if not context:
         return []
-    phases = [
+
+    unavailable = {
+        str(capability)
+        for capability in (context.get("unavailable_capabilities") or [])
+        if str(capability)
+    }
+    if not unavailable:
+        return []
+
+    raw_phase_map = context.get("capability_phases")
+    phase_map: dict[str, list[str]] = {}
+    if isinstance(raw_phase_map, dict):
+        for capability, raw_phases in raw_phase_map.items():
+            if str(capability) not in unavailable or not isinstance(raw_phases, list):
+                continue
+            phases = [str(phase) for phase in raw_phases if str(phase)]
+            if phases:
+                phase_map[str(capability)] = phases
+
+    all_phases = [
         str(phase)
         for phase in (context.get("runtime_owned_verification_phases") or [])
         if str(phase)
     ]
-    if not phases:
+    if not phase_map and len(unavailable) == 1 and all_phases:
+        phase_map[next(iter(unavailable))] = all_phases
+
+    lines = ["", "AGENT CAPABILITY BOUNDARY:"]
+
+    listener_phases = phase_map.get("local_listener") or []
+    if "local_listener" in unavailable and listener_phases:
+        lines.append(
+            "This agent invocation cannot run checks that require opening a local network listener."
+        )
+        if evaluator:
+            lines += [
+                "Do not attempt or repeatedly retry recreating those listener-dependent checks in this invocation.",
+                "Judge the authoritative Runtime/DDEV verification evidence for these required phases:",
+            ]
+        else:
+            lines += [
+                "Do not attempt or repeatedly retry those listener-dependent checks.",
+                "Runtime/ddev-executor owns these listener-dependent verification phases when they are applicable:",
+            ]
+        lines += [f"  - {phase}" for phase in listener_phases]
+
+    php_phases = phase_map.get("php_runtime") or []
+    if "php_runtime" in unavailable and php_phases:
+        lines.append(
+            "This agent invocation has no PHP runtime; direct PHP, PHPCS, PHPUnit, PHPStan, and Drupal PHP test commands cannot run in this sandbox."
+        )
+        if evaluator:
+            lines += [
+                "Do not attempt or repeatedly retry recreating PHP-dependent checks in this invocation.",
+                "Judge the authoritative Runtime/DDEV verification evidence for these required PHP-dependent phases:",
+            ]
+        else:
+            lines += [
+                "Do not attempt or repeatedly retry PHP, PHPCS, PHPUnit, PHPStan, or other PHP-runtime commands here.",
+                "Runtime/ddev-executor owns these PHP-dependent verification phases when they are applicable:",
+            ]
+        lines += [f"  - {phase}" for phase in php_phases]
+
+    if len(lines) == 2:
         return []
 
-    lines = [
-        "",
-        "AGENT CAPABILITY BOUNDARY:",
-        "This agent invocation cannot run checks that require opening a local network listener.",
-    ]
     if evaluator:
         lines += [
-            "Do not attempt or repeatedly retry recreating those listener-dependent checks in this invocation.",
-            "Judge the authoritative Runtime/DDEV verification evidence for these required phases:",
-        ]
-    else:
-        lines += [
-            "Do not attempt or repeatedly retry those listener-dependent checks.",
-            "Runtime/ddev-executor owns these listener-dependent verification phases when they are applicable:",
-        ]
-    lines += [f"  - {phase}" for phase in phases]
-    if evaluator:
-        lines += [
-            "The lack of an in-agent listener-dependent check is not evidence that it passed.",
+            "The lack of an in-agent unavailable-capability check is not evidence that it passed.",
             "Missing or failing required Runtime/DDEV evidence must produce an actionable finding and must not receive PASS.",
             "Final Runtime/DDEV verification remains authoritative; do not automatically trust developer prose.",
         ]
@@ -106,7 +146,6 @@ def _capability_boundary_lines(
             "Final Runtime/DDEV verification remains authoritative.",
         ]
     return lines
-
 
 def execution_prompt(
     *,

@@ -118,7 +118,9 @@ class InvocationCapabilities:
     """Verification surfaces available to one adapter invocation."""
 
     local_listener: bool = True
+    php_runtime: bool = True
     reason: str | None = None
+    php_runtime_reason: str | None = None
 
 
 class AgentAdapter:

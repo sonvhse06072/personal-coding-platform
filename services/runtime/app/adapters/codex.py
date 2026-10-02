@@ -21,12 +21,16 @@ class CodexAdapter(AgentAdapter):
         if mode in {"execute", "repair"}:
             return InvocationCapabilities(
                 local_listener=False,
+                php_runtime=False,
                 reason="codex_workspace_network_disabled",
+                php_runtime_reason="runtime_container_php_unavailable",
             )
         if mode == "evaluate":
             return InvocationCapabilities(
                 local_listener=False,
+                php_runtime=False,
                 reason="codex_read_only_evaluation",
+                php_runtime_reason="runtime_container_php_unavailable",
             )
         return super().invocation_capabilities(mode)
 

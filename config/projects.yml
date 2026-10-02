@@ -23,6 +23,13 @@ projects:
       keep_workspace_on_failure: true
     ddev:
       enabled: true
+      verification_phase_capabilities:
+        targeted_tests:
+          requires:
+            - php_runtime
+        static_analysis:
+          requires:
+            - php_runtime
       preflight:
       - ddev start -y
       targeted_tests:
@@ -57,6 +64,16 @@ projects:
       keep_workspace_on_failure: true
     ddev:
       enabled: true
+      verification_phase_capabilities:
+        targeted_tests:
+          requires:
+            - php_runtime
+        static_analysis:
+          requires:
+            - php_runtime
+        full_tests:
+          requires:
+            - php_runtime
       preflight:
       - ddev start -y
       - ddev drush cr
@@ -91,6 +108,16 @@ projects:
       keep_workspace_on_failure: true
     ddev:
       enabled: true
+      verification_phase_capabilities:
+        targeted_tests:
+          requires:
+            - php_runtime
+        static_analysis:
+          requires:
+            - php_runtime
+        full_tests:
+          requires:
+            - php_runtime
       preflight:
       - ddev start -y
       targeted_tests:
@@ -160,6 +187,12 @@ projects:
             - frontend/
 
       verification_phase_capabilities:
+        targeted_tests:
+          requires:
+            - php_runtime
+        static_analysis:
+          requires:
+            - php_runtime
         frontend_quality:
           requires:
             - local_listener
