@@ -25,13 +25,14 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP source on the #412 recovery branch targets Runtime `1.0.90` while
-  ddev-executor remains `1.0.29`: it retains #409/#411 recovery hardening and
-  permits source advance for a legacy `failed` job only when the existing
-  orchestration validator proves the exact job is still an active blocked agent
-  WorkOrder under a blocked plan. Source advance does not reopen or enqueue it.
-- The deployed local Runtime/service identities are time-sensitive. Verify
-  `/health` and service/source identity live before assuming the `1.0.90` / `1.0.29` recovery pair is deployed.
+- PCP source on the #399 capability branch targets Runtime `1.0.91` while
+  ddev-executor remains `1.0.29`: it retains #409/#411/#413 recovery hardening
+  and adds explicit `php_runtime` capability advertising for container coding
+  agents so impossible in-agent PHP/PHPCS/PHPUnit/PHPStan checks are not retried
+  when Runtime/DDEV owns those verification phases.
+- The deployed local Runtime/service identities are time-sensitive. The current
+  live rollout remains Runtime `1.0.90` / ddev-executor `1.0.29` until a
+  later stable checkpoint rolls out the #399 source change.
 - PM-controlled routine merge is implemented and has been used on the live
   Chợ Nhạc GH-42 path. Developer agents never merge.
 - Exact-diff baseline-covered protected authorization is implemented for the
@@ -120,12 +121,14 @@ or resume it.
 
 ### #399 — advertise unavailable PHP runtime to coding agents
 
-Status: open.
+Status: source implementation prepared; closes when the reviewed PR merges.
 
-The coding-agent sandbox intentionally lacks PHP while authoritative Drupal/PHP
-verification runs in DDEV. Prompt/capability context should prevent agents from
-repeatedly attempting PHPCS/PHPUnit/PHPStan directly and treating host
-`php: not found` as engineering evidence.
+Container-backed Codex/OpenCode invocations now advertise `php_runtime=false`
+through the existing invocation-capability contract. Project verification
+metadata maps PHP-dependent phases to Runtime/DDEV ownership, and developer /
+evaluator prompts forbid repeated impossible PHP/PHPCS/PHPUnit/PHPStan attempts
+without treating skipped checks as PASS. Antigravity host capability remains
+unchanged pending separate host-runtime evidence.
 
 ### #400 — Chợ Nhạc authoritative Kernel verification follow-up
 
@@ -195,15 +198,17 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Keep GH-42 WO-02 unexecuted while its legacy Runtime state is `failed`;
-   do not call ordinary `/run` before source correction because failed resume
-   both reopens orchestration and queues execution.
-2. Merge/roll out #412 Runtime `1.0.90`, then use bounded same-job source
-   advance to move job `7e68e53af0fc53c388a24ae56df867d0` from
-   `6038857e33d3717321a54e35743fa8b9dbeba8d2` to Chợ Nhạc main
-   `e8ccde0f9854fa86a9fa37fe9504fb63c90a477f`; the job must remain `failed`.
-3. Only after durable source-advance proof succeeds, call ordinary explicit
-   `/run` so existing orchestration recovery reopens and queues the same job.
+1. Keep GH-42 WO-02 on the exact preserved job/workspace/source
+   `7e68e53af0fc53c388a24ae56df867d0` / `e8ccde0...`; source correction and
+   same-job resume are complete.
+2. Current blocker is transient DDEV preflight infrastructure: Docker Hub timed
+   out during the `postgres:17` metadata TLS handshake before product
+   verification. Retry the exact preflight outside the model loop only while the
+   job is stably blocked; resume the same job only after preflight succeeds.
+3. Treat one such transient failure as ephemeral. If the same stable
+   registry/network signature recurs, open one narrow #146 child for bounded
+   infrastructure retry/backoff and separate infrastructure-retry accounting
+   rather than consuming engineering/model cycles.
 4. Keep #399/#400 as bounded follow-ups; do not fold them into product scope.
 5. Implement #406 only through reviewed continuity/TaskOutcome/tiered-memory
    changes and use the completed WO-01 incident as the first real acceptance
