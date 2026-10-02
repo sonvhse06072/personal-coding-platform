@@ -25,13 +25,14 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP source after #415 targets Runtime `1.0.92` while ddev-executor remains
-  `1.0.29`: it includes #399 PHP-runtime capability advertising and repairs
-  source-relative exact-diff / PM-reassessment snapshot handling for stale
-  intent-to-add paths.
+- PCP source after #419 targets Runtime `1.0.93` while ddev-executor remains
+  `1.0.29`: it includes #399 PHP-runtime capability advertising, #415
+  source-relative PM-reassessment snapshot repair, and moves Chợ Nhạc
+  code-sensitive `drush cr` from preflight into targeted verification so a
+  preserved broken worktree can reach the normal developer repair loop.
 - The deployed local Runtime/service identities are time-sensitive. The current
-  live rollout remains Runtime `1.0.90` / ddev-executor `1.0.29` until the
-  stable WO-03 blocker checkpoint rolls out the merged platform fixes.
+  live rollout is now Runtime `1.0.92` / ddev-executor `1.0.29`; the next
+  stable WO-03 blocker checkpoint should roll out #419 / Runtime `1.0.93`.
 - PM-controlled merge is enabled for Chợ Nhạc routine/standard WorkOrders under
   the existing exact-head/verification/review/protected-boundary gates (#416).
   Developer agents never merge; complex/critical or unresolved protected
@@ -97,8 +98,12 @@ Current implementation evidence:
   independent review correctly requested bounded repairs for scheduling-hint
   semantics, schedule-dependent cache invalidation and HTTP privacy/access
   coverage;
-- the immediate blocker is PCP #415: PM isolated-clone patch materialization
-  failed on a stale intent-to-add path before a PM repair decision could run;
+- #415 was rolled out successfully; the current blocker is a real Drupal
+  service-container failure in the preserved WO-03 diff:
+  `cho_nhac_profile.api_repository` references missing
+  `cho_nhac_availability.manager`;
+- PCP #419 moves `drush cr` out of preflight so this code defect can return to
+  the same-job developer repair loop instead of deadlocking before execution;
 - WO-04 through WO-08 remain dependency-ordered successors.
 
 Before acting on WO-02, verify the live WorkOrder/job/branch/lease rather than
@@ -203,19 +208,21 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Merge and roll out PCP #415 / Runtime `1.0.92` only while WO-03 remains
-   stably blocked and no engineering worker is active; preserve the exact
-   Chợ Nhạc job/workspace/source/diff/counters.
-2. Ensure local PCP source also contains #416 so Chợ Nhạc routine/standard
-   delivery uses constrained PM-controlled merge instead of routine manual
-   merge attention.
-3. After health/version proof, resume the exact WO-03 job with no reroute or
-   counter reset. PM reassessment should materialize the source-relative exact
-   diff and route the existing AVL-001/002/003 findings to bounded repair.
-4. Do not reinterpret AVL-001/002/003 as a new Human Owner product decision:
-   they are repairs inside the already-approved Availability/discovery/privacy
-   contract.
-5. Keep #400 bounded to its remaining repository-CI follow-up; implement #406
-   only through reviewed continuity/TaskOutcome/tiered-memory changes.
-6. Keep deterministic context-memory evaluation in CI and do not add vector
-   infrastructure without a measured retrieval gap.
+1. Merge/roll out PCP #419 / Runtime `1.0.93` only while WO-03 remains stably
+   blocked and no engineering worker is active; preserve exact job/workspace/
+   source/diff/counters.
+2. Resume the exact WO-03 job with no reroute/provider reset/replacement.
+   Preflight should stop after DDEV start + Composer preparation and reach the
+   developer turn; mandatory `drush cr` then runs first in targeted
+   verification.
+3. Repair the current Chợ Nhạc service wiring inside WO-03 rather than masking
+   it: the already-enabled Profile module must not hard-require a concrete
+   Availability service before the new Availability module is enabled.
+4. Preserve the evaluator repairs AVL-001/002/003: no-row discovery has no hint,
+   schedule-filtered public cache state must invalidate on Availability/Booking
+   changes, and HTTP privacy/access boundaries need functional coverage.
+5. Chợ Nhạc routine/standard deliveries now use constrained PM-controlled merge;
+   Human Owner remains required for complex/critical or unresolved protected
+   decisions.
+6. Keep #400 bounded to repository-CI follow-up and #406 to reviewed
+   continuity/TaskOutcome/tiered-memory implementation.
