@@ -25,16 +25,17 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP source after #399 targets Runtime `1.0.91` while
-  ddev-executor remains `1.0.29`: it retains #409/#411/#413 recovery hardening
-  and adds explicit `php_runtime` capability advertising for container coding
-  agents so impossible in-agent PHP/PHPCS/PHPUnit/PHPStan checks are not retried
-  when Runtime/DDEV owns those verification phases.
+- PCP source after #415 targets Runtime `1.0.92` while ddev-executor remains
+  `1.0.29`: it includes #399 PHP-runtime capability advertising and repairs
+  source-relative exact-diff / PM-reassessment snapshot handling for stale
+  intent-to-add paths.
 - The deployed local Runtime/service identities are time-sensitive. The current
-  live rollout remains Runtime `1.0.90` / ddev-executor `1.0.29` until a
-  later stable checkpoint rolls out the #399 source change.
-- PM-controlled routine merge is implemented and has been used on the live
-  Chợ Nhạc GH-42 path. Developer agents never merge.
+  live rollout remains Runtime `1.0.90` / ddev-executor `1.0.29` until the
+  stable WO-03 blocker checkpoint rolls out the merged platform fixes.
+- PM-controlled merge is enabled for Chợ Nhạc routine/standard WorkOrders under
+  the existing exact-head/verification/review/protected-boundary gates (#416).
+  Developer agents never merge; complex/critical or unresolved protected
+  decisions remain Human Owner gates.
 - Exact-diff baseline-covered protected authorization is implemented for the
   bounded `security_boundary_change` case. It does not authorize new auth,
   credential transport, trust-boundary, production, destructive-data, scope or
@@ -85,16 +86,20 @@ Current implementation evidence:
 
 - Chợ Nhạc GH-42 is the active MVP implementation umbrella;
 - plan: `pm-c63bc4f63c084dd1ac4eed9cf80ec87a`;
-- WO-01 `GH-42-WO-01-show-domain-api` completed and PR #44 merged;
-- WO-01 merge/current product commit:
+- WO-01 `GH-42-WO-01-show-domain-api` completed; PR #44 merged at
   `e8ccde0f9854fa86a9fa37fe9504fb63c90a477f`;
-- final WO-01 evidence included PHPCS PASS, Unit 39/39 PASS, Kernel 75/75 PASS
-  on PHP 8.3/PostgreSQL, full verification PASS, independent review PASS and
-  exact-head GitHub CI PASS;
-- at this handoff the Human Owner reports live PCP orchestration has advanced to
-  `GH-42-WO-02-show-frontend`;
-- WO-03 through WO-08 remain dependency-ordered successors unless live
-  orchestration shows a later state.
+- WO-02 `GH-42-WO-02-show-frontend` completed; PR #45 merged at
+  `dc8d60ae0c8ce913146e1c417d11ca37b20874ee`;
+- WO-03 `GH-42-WO-03-availability` is the active preserved WorkOrder, job
+  `c7011f370eb153acb7786b5a3e3cbff8`, currently blocked at
+  `pm_reassessment_failed`;
+- WO-03 deterministic static/targeted/full/frontend verification passed, while
+  independent review correctly requested bounded repairs for scheduling-hint
+  semantics, schedule-dependent cache invalidation and HTTP privacy/access
+  coverage;
+- the immediate blocker is PCP #415: PM isolated-clone patch materialization
+  failed on a stale intent-to-add path before a PM repair decision could run;
+- WO-04 through WO-08 remain dependency-ordered successors.
 
 Before acting on WO-02, verify the live WorkOrder/job/branch/lease rather than
 guessing an identity from WO-01.
@@ -198,21 +203,19 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Keep GH-42 WO-02 on the exact preserved job/workspace/source
-   `7e68e53af0fc53c388a24ae56df867d0` / `e8ccde0...`; source correction and
-   same-job resume are complete.
-2. Current blocker is transient DDEV preflight infrastructure: Docker Hub timed
-   out during the `postgres:17` metadata TLS handshake before product
-   verification. Retry the exact preflight outside the model loop only while the
-   job is stably blocked; resume the same job only after preflight succeeds.
-3. Treat one such transient failure as ephemeral. If the same stable
-   registry/network signature recurs, open one narrow #146 child for bounded
-   infrastructure retry/backoff and separate infrastructure-retry accounting
-   rather than consuming engineering/model cycles.
-4. Keep #400 as a bounded follow-up; #399 is source-complete but should remain
-   unrolled until a stable checkpoint. Do not fold either into product scope.
-5. Implement #406 only through reviewed continuity/TaskOutcome/tiered-memory
-   changes and use the completed WO-01 incident as the first real acceptance
-   corpus.
+1. Merge and roll out PCP #415 / Runtime `1.0.92` only while WO-03 remains
+   stably blocked and no engineering worker is active; preserve the exact
+   Chợ Nhạc job/workspace/source/diff/counters.
+2. Ensure local PCP source also contains #416 so Chợ Nhạc routine/standard
+   delivery uses constrained PM-controlled merge instead of routine manual
+   merge attention.
+3. After health/version proof, resume the exact WO-03 job with no reroute or
+   counter reset. PM reassessment should materialize the source-relative exact
+   diff and route the existing AVL-001/002/003 findings to bounded repair.
+4. Do not reinterpret AVL-001/002/003 as a new Human Owner product decision:
+   they are repairs inside the already-approved Availability/discovery/privacy
+   contract.
+5. Keep #400 bounded to its remaining repository-CI follow-up; implement #406
+   only through reviewed continuity/TaskOutcome/tiered-memory changes.
 6. Keep deterministic context-memory evaluation in CI and do not add vector
    infrastructure without a measured retrieval gap.
