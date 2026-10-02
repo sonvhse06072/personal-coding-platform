@@ -1602,6 +1602,7 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
             "workspace_mode": "direct",
         }
 
+    source_commit = git(repo, "rev-parse", ref)
     root = Path(os.environ["CODING_WORKSPACES_ROOT"]).resolve()
     root.mkdir(parents=True, exist_ok=True)
     workspace = (root / payload.job_id).resolve()
