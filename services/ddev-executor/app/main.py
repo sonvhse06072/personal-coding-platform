@@ -843,7 +843,7 @@ def _dirty_paths(repo: Path) -> set[str]:
     )
 
 
-def _worktree_fingerprint(repo: Path, paths: set[str]) -> dict[str, str]:
+def _worktree_fingerprint(repo: Path, paths: set[str]) -> dict[str, Any]:
     result: dict[str, str] = {}
     for rel in sorted(paths):
         path = repo / rel
@@ -856,7 +856,30 @@ def _worktree_fingerprint(repo: Path, paths: set[str]) -> dict[str, str]:
             result[rel] = "missing"
         else:
             raise HTTPException(409, f"Unsupported dirty path type during source advance: {rel}")
-    return result
+
+    status = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(repo),
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=all",
+        ],
+        text=False,
+        capture_output=True,
+    )
+    if status.returncode != 0:
+        detail = (status.stderr or status.stdout or b"git status failed").decode(
+            "utf-8",
+            "replace",
+        )
+        raise HTTPException(422, detail[-12000:])
+    return {
+        "files": result,
+        "status_sha256": hashlib.sha256(status.stdout).hexdigest(),
+    }
 
 
 def _github_error(exc: Exception) -> HTTPException:
