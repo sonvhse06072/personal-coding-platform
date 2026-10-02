@@ -308,6 +308,132 @@ class RuntimeEngineCore:
         })
         return job_id
 
+    async def advance_direct_job_source(
+        self,
+        job_id: str,
+        *,
+        expected_old_source: str,
+        expected_new_source: str,
+    ) -> dict[str, Any]:
+        """Rebase one preserved blocked direct job onto an exact newer base.
+
+        The executor performs the filesystem mutation first under strict
+        fast-forward/no-overlap guards. Runtime updates durable source identity
+        only after that proof succeeds. A retry is idempotent when the durable
+        source was already advanced by an earlier successful call.
+        """
+
+        row = self.storage.get(job_id)
+        if not row:
+            raise RuntimeError("Unknown job")
+        if row["status"] not in {"blocked", "interrupted"}:
+            raise RuntimeError(
+                f"Direct source advance requires blocked/interrupted status, got {row['status']}"
+            )
+
+        active = self.active_jobs.get(job_id)
+        if active is not None and not active.done():
+            raise RuntimeError("Direct source advance requires no active Runtime worker")
+
+        old_source = str(expected_old_source).lower()
+        new_source = str(expected_new_source).lower()
+        checkpoint = checkpoint_from_row(row)
+        if str(checkpoint.get("workspace_mode") or "") != "direct":
+            raise RuntimeError("Direct source advance requires a durably direct workspace")
+
+        current_source = str(row.get("source_commit") or "").lower()
+        last_advance = dict(checkpoint.get("last_source_advance") or {})
+        if current_source == new_source:
+            if (
+                str(last_advance.get("old_source") or "").lower() == old_source
+                and str(last_advance.get("new_source") or "").lower() == new_source
+            ):
+                return row
+            raise RuntimeError(
+                "Job already has the requested new source without matching source-advance evidence"
+            )
+        if current_source != old_source:
+            raise RuntimeError(
+                "Job source commit does not match the exact expected old source"
+            )
+
+        workspace = str(row.get("workspace") or "").strip()
+        branch = str(row.get("branch") or "").strip()
+        if not workspace or not branch:
+            raise RuntimeError("Direct source advance requires persisted workspace and branch")
+
+        proof = await self.ddev.advance_direct_workspace_source(
+            job_id=job_id,
+            project_id=str(row["project_id"]),
+            workspace=workspace,
+            branch=branch,
+            old_source=old_source,
+            new_source=new_source,
+        )
+        if (
+            str(proof.get("old_source") or "").lower() != old_source
+            or str(proof.get("new_source") or "").lower() != new_source
+            or str(proof.get("branch") or "") != branch
+            or str(proof.get("workspace") or "") != workspace
+        ):
+            raise RuntimeError("Executor source-advance proof does not match the preserved job")
+
+        invalidated: list[str] = []
+        for key in (
+            "deterministic_verification_failure_streak",
+            "last_verification_summary",
+            "last_review_report",
+            "last_pm_reassessment",
+            "pending_pm_reassessment",
+            "pending_review_findings",
+            "review_repair_churn_epoch",
+            "review_repair_churn_gate",
+            "pm_baseline_covered_protected_authorizations",
+        ):
+            if key in checkpoint:
+                invalidated.append(key)
+                checkpoint.pop(key, None)
+
+        record = {
+            "old_source": old_source,
+            "new_source": new_source,
+            "branch": branch,
+            "dirty_path_count": len(proof.get("dirty_paths") or []),
+            "dependency_path_count": len(proof.get("dependency_paths") or []),
+            "already_advanced": bool(proof.get("already_advanced", False)),
+            "invalidated_exact_diff_state": invalidated,
+        }
+        history = [
+            deepcopy(item)
+            for item in checkpoint.get("source_advance_history") or []
+            if isinstance(item, dict)
+        ]
+        history.append(record)
+        checkpoint["source_advance_history"] = history[-8:]
+        checkpoint["last_source_advance"] = record
+        set_failure_context(
+            checkpoint,
+            kind="semantic_repair",
+            source="source_advance",
+            message=(
+                "PCP_SOURCE_ADVANCED: The preserved direct-workspace job was "
+                f"fast-forwarded from {old_source} to dependency/base {new_source}. "
+                "Keep the same WorkOrder and preserved worktree changes, re-read the "
+                "current backend/API source, and re-evaluate the current diff before "
+                "continuing repair or verification."
+            ),
+        )
+
+        self.storage.update(
+            job_id,
+            source_commit=new_source,
+            repo_analysis=None,
+            checkpoint=checkpoint,
+        )
+        updated = self.storage.get(job_id)
+        assert updated is not None
+        return updated
+
     async def resume(self, job_id: str, *, reset_transient_provider_failures: bool = False) -> dict[str, Any]:
         row = self.storage.get(job_id)
         if not row:
