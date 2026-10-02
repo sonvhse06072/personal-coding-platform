@@ -25,10 +25,11 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP source now contains Runtime `1.0.87` behavior from #404 / PR #405:
-  Chợ Nhạc focused Show Kernel verification is wired to the DDEV PostgreSQL test
-  database, and repeated deterministic verification failures use a stable
-  diff/phase/command/result streak rather than volatile stdout/stderr.
+- PCP source now contains Runtime `1.0.88` behavior: #404 / PR #405 provides
+  focused Show Kernel verification plus stable deterministic verification
+  anti-loop semantics; #410 hardens coding-agent streaming so one oversized
+  JSONL tool-result line cannot crash the Runtime worker and normalizes generic
+  worker exceptions to public `runtime_failed` repair evidence.
 - The deployed local Runtime/service identities are time-sensitive. Verify
   `/health` and service/source identity live before assuming `1.0.87` is
   deployed.
@@ -200,8 +201,8 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 2. At WO-02 checkpoints, enforce the frontend scope/auth/domain-authority guards
    above and require the configured frontend-quality evidence.
 3. Verify the deployed Runtime version at the next stable checkpoint before any
-   rollout; source contains `1.0.87` but T1 must not assume deployment from Git
-   alone.
+   rollout; source contains `1.0.88` after #410, but T1 must not assume
+   deployment from Git alone.
 4. Keep #399/#400 as bounded follow-ups; do not fold them into product scope.
 5. Implement #406 only through reviewed continuity/TaskOutcome/tiered-memory
    changes and use the completed WO-01 incident as the first real acceptance
