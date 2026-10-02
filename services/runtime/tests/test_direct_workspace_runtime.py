@@ -269,6 +269,66 @@ def test_blocked_direct_job_advances_source_without_resetting_work_or_counters()
     assert "deterministic_verification_failure_streak" not in checkpoint
 
 
+def test_failed_direct_source_advance_requires_explicit_orchestrated_recovery():
+    old = "a" * 40
+    new = "b" * 40
+    row = {
+        "id": "job-direct-source-failed",
+        "project_id": "chonhac",
+        "workspace": "/home/sonvh/chonhac",
+        "branch": "ai/job-direct-failed",
+        "status": "failed",
+        "source_commit": old,
+        "repo_analysis": {"estimated_files": 9},
+        "progress": {"model_calls": 12, "tool_calls": 37},
+        "checkpoint": {
+            "workspace_mode": "direct",
+            "work_order": {"id": "GH-42-WO-02-show-frontend"},
+        },
+        "result": None,
+        "error": "ValueError: Separator is found, but chunk is longer than limit",
+    }
+    storage = CleanupStorage(row)
+    ddev = CleanupDdev()
+    engine = object.__new__(RuntimeEngineCore)
+    engine.storage = storage
+    engine.ddev = ddev
+    engine.active_jobs = {}
+
+    with pytest.raises(
+        RuntimeError,
+        match="explicitly tracked failed orchestrated recovery",
+    ):
+        asyncio.run(
+            engine.advance_direct_job_source(
+                row["id"],
+                expected_old_source=old,
+                expected_new_source=new,
+            )
+        )
+
+    assert storage.get(row["id"])["source_commit"] == old
+    assert ddev.source_advance_calls == []
+
+    updated = asyncio.run(
+        engine.advance_direct_job_source(
+            row["id"],
+            expected_old_source=old,
+            expected_new_source=new,
+            _allow_failed_orchestrated_recovery=True,
+        )
+    )
+
+    assert updated["status"] == "failed"
+    assert updated["source_commit"] == new
+    assert updated["workspace"] == row["workspace"]
+    assert updated["branch"] == row["branch"]
+    assert updated["progress"] == row["progress"]
+    assert updated["result"] is None
+    assert updated["error"] == row["error"]
+    assert len(ddev.source_advance_calls) == 1
+
+
 @pytest.mark.parametrize(
     ("status", "mode", "source", "message"),
     [

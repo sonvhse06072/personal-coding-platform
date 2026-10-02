@@ -11,7 +11,7 @@ from fastapi import HTTPException
 from app import main as runtime_main
 from app.engine import RuntimeEngine
 from app.orchestrator_resume import prepare_orchestrated_job_resume, reopen_orchestrated_job
-from app.schemas import JobRunRequest
+from app.schemas import JobRunRequest, JobSourceAdvanceRequest
 
 
 class Result:
@@ -152,6 +152,61 @@ def test_operator_work_order_fails_closed() -> None:
 def test_non_orchestrated_job_is_unchanged() -> None:
     store = Store([])
     assert prepare_orchestrated_job_resume(store, "job-free") is None
+
+
+def test_failed_orchestrated_source_advance_is_authorized_without_reopening(monkeypatch) -> None:
+    store = Store([tracked()])
+    calls = []
+
+    class Engine:
+        async def advance_direct_job_source(
+            self,
+            job_id,
+            *,
+            expected_old_source,
+            expected_new_source,
+            _allow_failed_orchestrated_recovery=False,
+        ):
+            calls.append({
+                "job_id": job_id,
+                "old": expected_old_source,
+                "new": expected_new_source,
+                "allow_failed": _allow_failed_orchestrated_recovery,
+            })
+            row = failed_job_row()
+            row["source_commit"] = expected_new_source
+            return row
+
+    monkeypatch.setattr(runtime_main, "engine", Engine())
+    monkeypatch.setattr(
+        runtime_main,
+        "plan_orchestrator",
+        SimpleNamespace(store=store),
+    )
+    monkeypatch.setattr(runtime_main, "view", lambda row: row)
+
+    result = asyncio.run(
+        runtime_main.advance_job_source(
+            "job-1",
+            JobSourceAdvanceRequest(
+                expected_old_source="a" * 40,
+                expected_new_source="b" * 40,
+            ),
+        )
+    )
+
+    assert result["status"] == "failed"
+    assert result["source_commit"] == "b" * 40
+    assert calls == [{
+        "job_id": "job-1",
+        "old": "a" * 40,
+        "new": "b" * 40,
+        "allow_failed": True,
+    }]
+    assert store.work_order_updates == []
+    assert store.plan_updates == []
+    assert store.storage.tracked[0]["state"] == "blocked"
+    assert store.plan_status == "blocked"
 
 
 def test_failed_orchestrated_job_reopens_only_after_engine_resume_succeeds(monkeypatch) -> None:

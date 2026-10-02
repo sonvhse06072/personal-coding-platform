@@ -183,7 +183,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-RUNTIME_VERSION = "1.0.89"
+RUNTIME_VERSION = "1.0.90"
 
 app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan=lifespan)
 app.include_router(pm_bridge_router)
@@ -570,10 +570,17 @@ async def advance_job_source(
     payload: JobSourceAdvanceRequest,
 ) -> JobView:
     try:
+        orchestration_resume = prepare_orchestrated_job_resume(
+            plan_orchestrator.store,
+            job_id,
+        )
         row = await engine.advance_direct_job_source(
             job_id,
             expected_old_source=payload.expected_old_source,
             expected_new_source=payload.expected_new_source,
+            _allow_failed_orchestrated_recovery=bool(
+                orchestration_resume and orchestration_resume.get("reopen")
+            ),
         )
     except RuntimeError as exc:
         raise runtime_error(exc) from exc
