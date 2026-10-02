@@ -9,6 +9,7 @@ import app.engine_execution as execution_module
 import pytest
 from app.adapters.base import AgentAdapter, AgentRun, InvocationCapabilities
 from app.adapters.codex import CodexAdapter
+from app.adapters.opencode import OpenCodeAdapter
 from app.capability_context import agent_verification_capability_context
 from app.engine import RuntimeEngine
 from app.prompts import evaluator_prompt, execution_prompt
@@ -175,6 +176,116 @@ def test_evaluator_prompt_uses_actual_required_evidence_and_preserves_schema():
         verification=verification,
     )
     assert "AGENT CAPABILITY BOUNDARY" not in capable
+
+
+def _php_project() -> dict:
+    return {
+        "ddev": {
+            "enabled": True,
+            "targeted_tests": ["runtime-phpunit"],
+            "static_analysis": ["runtime-phpcs"],
+            "verification_phase_capabilities": {
+                "targeted_tests": {"requires": ["php_runtime"]},
+                "static_analysis": {"requires": ["php_runtime"]},
+            },
+        }
+    }
+
+
+def test_opencode_php_runtime_boundary_is_bounded_and_prompted():
+    context = _context(
+        OpenCodeAdapter("openrouter/cohere/north-mini-code:free"),
+        project=_php_project(),
+    )
+
+    assert context == {
+        "unavailable_capabilities": ["php_runtime"],
+        "runtime_owned_verification_phases": ["static_analysis", "targeted_tests"],
+        "reason": "runtime_container_php_unavailable",
+    }
+
+    prompt = _execution_prompt(context)
+    assert "AGENT CAPABILITY BOUNDARY" in prompt
+    assert "has no PHP runtime" in prompt
+    assert "direct PHP, PHPCS, PHPUnit, PHPStan" in prompt
+    assert "Do not attempt or repeatedly retry PHP" in prompt
+    assert "  - static_analysis" in prompt
+    assert "  - targeted_tests" in prompt
+    assert "Final Runtime/DDEV verification remains authoritative" in prompt
+
+
+def test_evaluator_php_boundary_uses_only_required_runtime_evidence():
+    verification = {
+        "passed": True,
+        "phases": [
+            {
+                "phase": "targeted_tests",
+                "passed": True,
+                "required_for_final": True,
+            },
+            {
+                "phase": "static_analysis",
+                "passed": True,
+                "required_for_final": False,
+            },
+        ],
+    }
+    context = _context(
+        OpenCodeAdapter("openrouter/cohere/north-mini-code:free"),
+        mode="evaluate",
+        project=_php_project(),
+        verification=verification,
+    )
+
+    assert context == {
+        "unavailable_capabilities": ["php_runtime"],
+        "runtime_owned_verification_phases": ["targeted_tests"],
+        "reason": "runtime_container_php_unavailable",
+    }
+
+    prompt = _evaluator_prompt(context, verification=verification)
+    assert "has no PHP runtime" in prompt
+    assert "required PHP-dependent phases" in prompt
+    assert "  - targeted_tests" in prompt
+    assert "  - static_analysis" not in prompt
+    assert "Missing or failing required Runtime/DDEV evidence" in prompt
+    assert "must not receive PASS" in prompt
+
+
+def test_codex_context_keeps_capabilities_separate_when_both_are_unavailable():
+    project = {
+        "ddev": {
+            "enabled": True,
+            "frontend_quality": ["runtime-browser"],
+            "targeted_tests": ["runtime-phpunit"],
+            "verification_phase_capabilities": {
+                "frontend_quality": {"requires": ["local_listener"]},
+                "targeted_tests": {"requires": ["php_runtime"]},
+            },
+        }
+    }
+
+    context = _context(CodexAdapter("gpt-5.6-sol"), project=project)
+
+    assert context == {
+        "unavailable_capabilities": ["local_listener", "php_runtime"],
+        "runtime_owned_verification_phases": ["frontend_quality", "targeted_tests"],
+        "reason": "multiple_capabilities_unavailable",
+        "capability_phases": {
+            "local_listener": ["frontend_quality"],
+            "php_runtime": ["targeted_tests"],
+        },
+        "reasons": {
+            "local_listener": "codex_workspace_network_disabled",
+            "php_runtime": "runtime_container_php_unavailable",
+        },
+    }
+
+    prompt = _execution_prompt(context)
+    assert "opening a local network listener" in prompt
+    assert "has no PHP runtime" in prompt
+    assert "  - frontend_quality" in prompt
+    assert "  - targeted_tests" in prompt
 
 
 class ExplicitlyConstrainedAdapter(AgentAdapter):
