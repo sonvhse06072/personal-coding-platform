@@ -85,6 +85,13 @@ class JobRunRequest(BaseModel):
     reroute: bool = False
 
 
+class JobSourceAdvanceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    expected_old_source: str = Field(pattern=r"^[0-9a-fA-F]{40}$")
+    expected_new_source: str = Field(pattern=r"^[0-9a-fA-F]{40}$")
+
+
 class ReviewRepairRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

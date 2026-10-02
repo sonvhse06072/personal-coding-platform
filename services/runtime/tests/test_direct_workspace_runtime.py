@@ -96,6 +96,7 @@ class CleanupDdev:
         self.remove_calls = []
         self.preview_stop_calls = []
         self.base_restore_calls = []
+        self.source_advance_calls = []
         self.cancel_calls = []
         self.actions = actions if actions is not None else []
         self.fail_preview_stop = fail_preview_stop
@@ -123,6 +124,21 @@ class CleanupDdev:
             "branch": "main",
             "head": "base-head",
             "reused": False,
+        }
+
+    async def advance_direct_workspace_source(self, **payload):
+        self.source_advance_calls.append(dict(payload))
+        self.actions.append(("advance_source", payload["job_id"]))
+        return {
+            "job_id": payload["job_id"],
+            "project_id": payload["project_id"],
+            "workspace": payload["workspace"],
+            "branch": payload["branch"],
+            "old_source": payload["old_source"],
+            "new_source": payload["new_source"],
+            "already_advanced": False,
+            "dirty_paths": ["frontend/src/app/shows/page.tsx"],
+            "dependency_paths": ["web/modules/custom/cho_nhac_show/src/Entity/Show.php"],
         }
 
     async def quiesce_workspace(self, **payload):
@@ -180,6 +196,167 @@ def test_cleanup_reports_preserved_direct_workspace_truthfully(monkeypatch, tmp_
     assert engine.ddev.quiesce_calls[0]["remove_data"] is True
     assert len(engine.ddev.remove_calls) == 1
     assert workspace.exists()
+
+
+def test_blocked_direct_job_advances_source_without_resetting_work_or_counters():
+    old = "a" * 40
+    new = "b" * 40
+    row = {
+        "id": "job-direct-source-advance",
+        "project_id": "chonhac",
+        "workspace": "/home/sonvh/chonhac",
+        "branch": "ai/job-direct-source",
+        "status": "blocked",
+        "source_commit": old,
+        "repo_analysis": {"estimated_files": 9},
+        "progress": {
+            "model_calls": 38,
+            "tool_calls": 111,
+            "test_runs": 108,
+            "repair_iterations": 36,
+        },
+        "checkpoint": {
+            "workspace_mode": "direct",
+            "last_verification_summary": {"passed": False},
+            "last_review_report": {"verdict": "fail"},
+            "last_pm_reassessment": {"diff_hash": "old-diff"},
+            "deterministic_verification_failure_streak": {
+                "diff_hash": "old-diff",
+                "count": 2,
+            },
+            "work_order": {"id": "GH-42-WO-02-show-frontend"},
+        },
+        "result": {"reason": "runtime_failed"},
+        "error": "preserve historical runtime failure",
+    }
+    storage = CleanupStorage(row)
+    ddev = CleanupDdev()
+    engine = object.__new__(RuntimeEngineCore)
+    engine.storage = storage
+    engine.ddev = ddev
+    engine.active_jobs = {}
+
+    updated = asyncio.run(
+        engine.advance_direct_job_source(
+            row["id"],
+            expected_old_source=old,
+            expected_new_source=new,
+        )
+    )
+
+    assert updated["id"] == row["id"]
+    assert updated["status"] == "blocked"
+    assert updated["workspace"] == row["workspace"]
+    assert updated["branch"] == row["branch"]
+    assert updated["source_commit"] == new
+    assert updated["repo_analysis"] is None
+    assert updated["progress"] == row["progress"]
+    assert updated["result"] == row["result"]
+    assert updated["error"] == row["error"]
+    assert len(ddev.source_advance_calls) == 1
+
+    checkpoint = updated["checkpoint"]
+    assert checkpoint["work_order"] == row["checkpoint"]["work_order"]
+    assert checkpoint["last_source_advance"]["old_source"] == old
+    assert checkpoint["last_source_advance"]["new_source"] == new
+    assert checkpoint["last_source_advance"]["dirty_path_count"] == 1
+    assert checkpoint["last_source_advance"]["dependency_path_count"] == 1
+    assert checkpoint["last_failure"].startswith("PCP_SOURCE_ADVANCED:")
+    assert checkpoint["failure_context"]["source"] == "source_advance"
+    assert "last_verification_summary" not in checkpoint
+    assert "last_review_report" not in checkpoint
+    assert "last_pm_reassessment" not in checkpoint
+    assert "deterministic_verification_failure_streak" not in checkpoint
+
+
+@pytest.mark.parametrize(
+    ("status", "mode", "source", "message"),
+    [
+        ("executing", "direct", "a" * 40, "blocked/interrupted"),
+        ("blocked", "isolated_clone", "a" * 40, "durably direct"),
+        ("blocked", "direct", "c" * 40, "expected old source"),
+    ],
+)
+def test_direct_source_advance_fails_closed_on_invalid_preserved_state(
+    status,
+    mode,
+    source,
+    message,
+):
+    old = "a" * 40
+    new = "b" * 40
+    row = {
+        "id": "job-direct-source-invalid",
+        "project_id": "chonhac",
+        "workspace": "/home/sonvh/chonhac",
+        "branch": "ai/job-direct-invalid",
+        "status": status,
+        "source_commit": source,
+        "repo_analysis": {},
+        "progress": {"model_calls": 7},
+        "checkpoint": {"workspace_mode": mode},
+        "result": {"reason": "runtime_failed"},
+        "error": None,
+    }
+    storage = CleanupStorage(row)
+    ddev = CleanupDdev()
+    engine = object.__new__(RuntimeEngineCore)
+    engine.storage = storage
+    engine.ddev = ddev
+    engine.active_jobs = {}
+
+    with pytest.raises(RuntimeError, match=message):
+        asyncio.run(
+            engine.advance_direct_job_source(
+                row["id"],
+                expected_old_source=old,
+                expected_new_source=new,
+            )
+        )
+
+    assert storage.get(row["id"])["source_commit"] == source
+    assert ddev.source_advance_calls == []
+
+
+def test_direct_source_advance_is_idempotent_after_durable_update():
+    old = "a" * 40
+    new = "b" * 40
+    row = {
+        "id": "job-direct-source-idempotent",
+        "project_id": "chonhac",
+        "workspace": "/home/sonvh/chonhac",
+        "branch": "ai/job-direct-idempotent",
+        "status": "blocked",
+        "source_commit": new,
+        "repo_analysis": None,
+        "progress": {"model_calls": 9},
+        "checkpoint": {
+            "workspace_mode": "direct",
+            "last_source_advance": {
+                "old_source": old,
+                "new_source": new,
+            },
+        },
+        "result": {"reason": "runtime_failed"},
+        "error": None,
+    }
+    storage = CleanupStorage(row)
+    ddev = CleanupDdev()
+    engine = object.__new__(RuntimeEngineCore)
+    engine.storage = storage
+    engine.ddev = ddev
+    engine.active_jobs = {}
+
+    updated = asyncio.run(
+        engine.advance_direct_job_source(
+            row["id"],
+            expected_old_source=old,
+            expected_new_source=new,
+        )
+    )
+
+    assert updated["source_commit"] == new
+    assert ddev.source_advance_calls == []
 
 
 def test_terminal_direct_lease_release_uses_durable_checkpoint_not_live_config():

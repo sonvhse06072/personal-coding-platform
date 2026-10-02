@@ -383,6 +383,32 @@ class DdevExecutorClient:
             _raise_for_status_with_detail(response)
             return response.json()
 
+    async def advance_direct_workspace_source(
+        self,
+        *,
+        job_id: str,
+        project_id: str,
+        workspace: str,
+        branch: str,
+        old_source: str,
+        new_source: str,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=320) as client:
+            response = await client.post(
+                f"{self.base}/v1/workspaces/advance-direct-source",
+                json={
+                    "job_id": job_id,
+                    "project_id": project_id,
+                    "workspace": workspace,
+                    "branch": branch,
+                    "old_source": old_source,
+                    "new_source": new_source,
+                },
+                headers=self.headers,
+            )
+            _raise_for_status_with_detail(response)
+            return response.json()
+
     async def return_direct_workspace_to_base(
         self,
         *,

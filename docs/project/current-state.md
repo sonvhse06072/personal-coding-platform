@@ -4,8 +4,8 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 live Runtime/GitHub evidence remain authoritative over chat history. Completed
 chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-10-02 after Chợ Nhạc GH-42 WO-01 merge and transition to
-WO-02.
+Last updated: 2026-10-02 after GH-42 WO-02 platform-blocker diagnosis and
+bounded source-continuity repair preparation.
 
 ## Resume order
 
@@ -25,14 +25,12 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP source now contains Runtime `1.0.88` behavior: #404 / PR #405 provides
-  focused Show Kernel verification plus stable deterministic verification
-  anti-loop semantics; #410 hardens coding-agent streaming so one oversized
-  JSONL tool-result line cannot crash the Runtime worker and normalizes generic
-  worker exceptions to public `runtime_failed` repair evidence.
+- PCP source after #409 targets Runtime `1.0.89` and ddev-executor `1.0.29`:
+  it retains #410 / PR #411 oversized-JSONL streaming hardening and adds #408 /
+  PR #409 direct-workspace base synchronization plus bounded same-job source
+  advance for stale sequential WorkOrders.
 - The deployed local Runtime/service identities are time-sensitive. Verify
-  `/health` and service/source identity live before assuming `1.0.87` is
-  deployed.
+  `/health` and service/source identity live before assuming the combined `1.0.89` / `1.0.29` repair is deployed.
 - PM-controlled routine merge is implemented and has been used on the live
   Chợ Nhạc GH-42 path. Developer agents never merge.
 - Exact-diff baseline-covered protected authorization is implemented for the
@@ -196,13 +194,14 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Let live WO-02 continue while healthy; do not restart PCP merely for
-   documentation or #406 implementation.
-2. At WO-02 checkpoints, enforce the frontend scope/auth/domain-authority guards
-   above and require the configured frontend-quality evidence.
-3. Verify the deployed Runtime version at the next stable checkpoint before any
-   rollout; source contains `1.0.88` after #410, but T1 must not assume
-   deployment from Git alone.
+1. Keep GH-42 WO-02 blocked until #409 has exact-head green CI, is merged and
+   the combined Runtime/executor repair is rolled out at the stable checkpoint.
+2. Use the bounded same-job source advance to move the preserved WO-02 job from
+   `6038857e33d3717321a54e35743fa8b9dbeba8d2` to Chợ Nhạc main
+   `e8ccde0f9854fa86a9fa37fe9504fb63c90a477f` only after executor proof passes.
+3. Resume the exact preserved job only after durable `source_commit` reflects
+   that proven advance; prior WO-02 verification evidence is not authoritative
+   while the job remains on the stale dependency base.
 4. Keep #399/#400 as bounded follow-ups; do not fold them into product scope.
 5. Implement #406 only through reviewed continuity/TaskOutcome/tiered-memory
    changes and use the completed WO-01 incident as the first real acceptance

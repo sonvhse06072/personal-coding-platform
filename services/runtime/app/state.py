@@ -15,6 +15,7 @@ _SEMANTIC_FAILURE_SOURCES = {
     "pm_reassessment",
     "pm_review_repair",
     "human_rejection",
+    "source_advance",
 }
 
 
