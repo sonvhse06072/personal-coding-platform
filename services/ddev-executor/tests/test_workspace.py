@@ -562,6 +562,7 @@ def test_direct_workspace_fast_forwards_clean_local_base_before_new_job(tmp_path
     assert result["branch"] == "ai/jobdirectsync"
     assert run("git", "rev-parse", "HEAD", cwd=source) == remote_head
     assert run("git", "rev-parse", "main", cwd=source) == remote_head
+    assert run("git", "rev-parse", "origin/main", cwd=source) == remote_head
 
 
 def test_direct_workspace_refuses_diverged_local_base(tmp_path, monkeypatch):
