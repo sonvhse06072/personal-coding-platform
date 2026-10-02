@@ -757,7 +757,7 @@ def _fetch_remote_base_head(
             "--no-tags",
             "--no-recurse-submodules",
             fetch_target,
-            f"refs/heads/{base_branch}",
+            f"refs/heads/{base_branch}:refs/remotes/origin/{base_branch}",
         ],
         cwd=repo,
         timeout=300,
@@ -766,7 +766,7 @@ def _fetch_remote_base_head(
     if returncode != 0:
         detail = (stderr or stdout or "git fetch failed")[-12000:]
         raise HTTPException(504 if timed_out else 502, detail)
-    return git(repo, "rev-parse", "FETCH_HEAD")
+    return git(repo, "rev-parse", f"refs/remotes/origin/{base_branch}")
 
 
 def _assert_fast_forward(repo: Path, old: str, new: str, *, message: str) -> None:
