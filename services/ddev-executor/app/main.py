@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import secrets
@@ -116,6 +117,17 @@ class ReturnDirectWorkspaceRequest(BaseModel):
     project_id: str = Field(min_length=1, max_length=200)
     workspace: str = Field(min_length=1, max_length=2000)
     branch: str = Field(min_length=1, max_length=200)
+
+
+class AdvanceDirectWorkspaceSourceRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str = Field(min_length=8, max_length=100)
+    project_id: str = Field(min_length=1, max_length=200)
+    workspace: str = Field(min_length=1, max_length=2000)
+    branch: str = Field(min_length=1, max_length=200)
+    old_source: str = Field(pattern=r"^[0-9a-fA-F]{40}$")
+    new_source: str = Field(pattern=r"^[0-9a-fA-F]{40}$")
 
 
 class PreviewRequest(BaseModel):
@@ -710,6 +722,143 @@ def _github_context(cfg: dict[str, Any]) -> tuple[GitHubDelivery, str]:
     return delivery, repository
 
 
+def _fetch_remote_base_head(
+    cfg: dict[str, Any],
+    repo: Path,
+    *,
+    job_id: str,
+) -> str:
+    """Fetch the configured base branch without rewriting local branches."""
+
+    base_branch = str(cfg.get("base_branch", "main")).strip()
+    if not base_branch:
+        raise HTTPException(500, "Direct project base branch is not configured")
+    _, origin = _source_origin(cfg)
+    repository = github_repository_from_origin(origin)
+    fetch_target = origin
+    fetch_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
+    if repository:
+        delivery = GitHubDelivery()
+        if not delivery.configured:
+            raise HTTPException(
+                503,
+                "GITHUB_DELIVERY_TOKEN is not configured for direct-workspace base synchronization",
+            )
+        fetch_target = github_push_url(repository)
+        fetch_env = github_git_env(delivery.token)
+
+    returncode, stdout, stderr, timed_out = run_tracked(
+        job_id,
+        [
+            "git",
+            "-C",
+            str(repo),
+            "fetch",
+            "--no-tags",
+            "--no-recurse-submodules",
+            fetch_target,
+            f"refs/heads/{base_branch}",
+        ],
+        cwd=repo,
+        timeout=300,
+        env=fetch_env,
+    )
+    if returncode != 0:
+        detail = (stderr or stdout or "git fetch failed")[-12000:]
+        raise HTTPException(504 if timed_out else 502, detail)
+    return git(repo, "rev-parse", "FETCH_HEAD")
+
+
+def _assert_fast_forward(repo: Path, old: str, new: str, *, message: str) -> None:
+    ancestry = subprocess.run(
+        ["git", "-C", str(repo), "merge-base", "--is-ancestor", old, new],
+        text=True,
+        capture_output=True,
+    )
+    if ancestry.returncode != 0:
+        raise HTTPException(409, message)
+
+
+def _sync_clean_direct_base(
+    cfg: dict[str, Any],
+    repo: Path,
+    *,
+    job_id: str,
+) -> str:
+    """Fast-forward a clean direct base branch to the authoritative remote head."""
+
+    base_branch = str(cfg.get("base_branch", "main")).strip()
+    current_branch = git(repo, "branch", "--show-current", check=False)
+    if current_branch != base_branch:
+        raise HTTPException(
+            409,
+            "Direct workspace must be on the configured base branch before a new job starts",
+        )
+    if git(repo, "status", "--porcelain", check=False):
+        raise HTTPException(
+            409,
+            "Direct workspace repository is dirty; PCP will not reset, clean or stash Human Owner changes",
+        )
+
+    local_head = git(repo, "rev-parse", base_branch)
+    remote_head = _fetch_remote_base_head(cfg, repo, job_id=job_id)
+    if local_head == remote_head:
+        return local_head
+
+    _assert_fast_forward(
+        repo,
+        local_head,
+        remote_head,
+        message=(
+            "Direct workspace base diverged from the authoritative remote base; "
+            "PCP will not reset or rewrite local history"
+        ),
+    )
+    git(repo, "merge", "--ff-only", remote_head)
+    updated = git(repo, "rev-parse", "HEAD")
+    if updated != remote_head:
+        raise HTTPException(409, "Direct workspace base fast-forward did not reach the remote head")
+    return updated
+
+
+def _zlist(repo: Path, *args: str) -> list[str]:
+    proc = subprocess.run(
+        ["git", "-C", str(repo), *args],
+        text=False,
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout or b"git command failed").decode("utf-8", "replace")
+        raise HTTPException(422, detail[-12000:])
+    return [
+        item.decode("utf-8", "surrogateescape")
+        for item in proc.stdout.split(b"\0")
+        if item
+    ]
+
+
+def _dirty_paths(repo: Path) -> set[str]:
+    return set(_zlist(repo, "diff", "--name-only", "-z", "HEAD", "--")) | set(
+        _zlist(repo, "ls-files", "--others", "--exclude-standard", "-z")
+    )
+
+
+def _worktree_fingerprint(repo: Path, paths: set[str]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for rel in sorted(paths):
+        path = repo / rel
+        if path.is_symlink():
+            payload = ("symlink:" + os.readlink(path)).encode("utf-8", "surrogateescape")
+            result[rel] = hashlib.sha256(payload).hexdigest()
+        elif path.is_file():
+            result[rel] = hashlib.sha256(path.read_bytes()).hexdigest()
+        elif not path.exists():
+            result[rel] = "missing"
+        else:
+            raise HTTPException(409, f"Unsupported dirty path type during source advance: {rel}")
+    return result
+
+
 def _github_error(exc: Exception) -> HTTPException:
     if isinstance(exc, httpx.HTTPStatusError):
         detail = exc.response.text[-12000:] if exc.response is not None else str(exc)
@@ -1034,7 +1183,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-DDEV_EXECUTOR_VERSION = "1.0.28"
+DDEV_EXECUTOR_VERSION = "1.0.29"
 
 app = FastAPI(title="Constrained DDEV/Git Executor", version=DDEV_EXECUTOR_VERSION)
 app.include_router(pm_bridge_github_router)
@@ -1378,7 +1527,14 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
         else configured_mode
     )
     ref = payload.ref or str(cfg.get("base_branch", "main"))
-    source_commit = git(repo, "rev-parse", ref)
+    if mode == "direct" and payload.ref is None:
+        source_commit = _sync_clean_direct_base(
+            cfg,
+            repo,
+            job_id=payload.job_id,
+        )
+    else:
+        source_commit = git(repo, "rev-parse", ref)
     prefix = str(cfg.get("runtime", {}).get("branch_prefix", "ai"))
     branch = f"{prefix}/{payload.job_id[:12]}"
     _validate_ai_branch(cfg, branch)
@@ -1813,6 +1969,97 @@ def return_direct_workspace_to_base(payload: ReturnDirectWorkspaceRequest) -> di
         "head": git(workspace, "rev-parse", "HEAD"),
         "returned": True,
         "reused": False,
+    }
+
+
+@app.post("/v1/workspaces/advance-direct-source", dependencies=[Depends(auth)])
+def advance_direct_workspace_source(
+    payload: AdvanceDirectWorkspaceSourceRequest,
+) -> dict[str, Any]:
+    """Advance one blocked direct job branch onto an exact newer base safely."""
+
+    cfg = project(payload.project_id)
+    workspace = _validate_workspace(
+        payload.job_id,
+        payload.project_id,
+        payload.workspace,
+    )
+    if _workspace_instance_mode(
+        cfg,
+        job_id=payload.job_id,
+        path=workspace,
+    ) != "direct":
+        raise HTTPException(409, "Source advance is supported only for a direct workspace")
+    if _job_has_active_process(payload.job_id):
+        raise HTTPException(409, "Source advance requires no active executor process")
+
+    _validate_ai_branch(cfg, payload.branch)
+    current_branch = git(workspace, "branch", "--show-current", check=False)
+    if current_branch != payload.branch:
+        raise HTTPException(409, "Direct workspace is not on the exact owning job branch")
+
+    current_head = git(workspace, "rev-parse", "HEAD")
+    old_source = git(workspace, "rev-parse", payload.old_source)
+    if current_head != old_source:
+        raise HTTPException(
+            409,
+            "Source advance requires the job branch HEAD to remain exactly at the old source commit",
+        )
+
+    remote_head = _fetch_remote_base_head(cfg, workspace, job_id=payload.job_id)
+    if remote_head != payload.new_source:
+        raise HTTPException(
+            409,
+            "Requested new source does not match the authoritative remote base head",
+        )
+    new_source = git(workspace, "rev-parse", payload.new_source)
+    _assert_fast_forward(
+        workspace,
+        old_source,
+        new_source,
+        message="Requested source advance is not a fast-forward of the old job source",
+    )
+
+    dirty = _dirty_paths(workspace)
+    dependency_paths = set(
+        _zlist(
+            workspace,
+            "diff",
+            "--name-only",
+            "-z",
+            old_source,
+            new_source,
+            "--",
+        )
+    )
+    overlap = sorted(dirty & dependency_paths)
+    if overlap:
+        raise HTTPException(
+            409,
+            "Source advance would overlap preserved worktree changes: "
+            + ", ".join(overlap[:20]),
+        )
+
+    before = _worktree_fingerprint(workspace, dirty)
+    git(workspace, "merge", "--ff-only", new_source)
+    if git(workspace, "rev-parse", "HEAD") != new_source:
+        raise HTTPException(409, "Source advance did not reach the requested new source")
+    after = _worktree_fingerprint(workspace, dirty)
+    if after != before:
+        raise HTTPException(
+            409,
+            "Source advance changed preserved worktree content unexpectedly",
+        )
+
+    return {
+        "job_id": payload.job_id,
+        "project_id": payload.project_id,
+        "workspace": str(workspace),
+        "branch": payload.branch,
+        "old_source": old_source,
+        "new_source": new_source,
+        "dirty_paths": sorted(dirty)[:200],
+        "dependency_paths": sorted(dependency_paths)[:200],
     }
 
 
