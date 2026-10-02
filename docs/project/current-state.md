@@ -25,7 +25,7 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP source on the #399 capability branch targets Runtime `1.0.91` while
+- PCP source after #399 targets Runtime `1.0.91` while
   ddev-executor remains `1.0.29`: it retains #409/#411/#413 recovery hardening
   and adds explicit `php_runtime` capability advertising for container coding
   agents so impossible in-agent PHP/PHPCS/PHPUnit/PHPStan checks are not retried
@@ -121,7 +121,7 @@ or resume it.
 
 ### #399 — advertise unavailable PHP runtime to coding agents
 
-Status: source implementation prepared; closes when the reviewed PR merges.
+Status: implemented in source; rollout pending a stable checkpoint.
 
 Container-backed Codex/OpenCode invocations now advertise `php_runtime=false`
 through the existing invocation-capability contract. Project verification
@@ -209,7 +209,8 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
    registry/network signature recurs, open one narrow #146 child for bounded
    infrastructure retry/backoff and separate infrastructure-retry accounting
    rather than consuming engineering/model cycles.
-4. Keep #399/#400 as bounded follow-ups; do not fold them into product scope.
+4. Keep #400 as a bounded follow-up; #399 is source-complete but should remain
+   unrolled until a stable checkpoint. Do not fold either into product scope.
 5. Implement #406 only through reviewed continuity/TaskOutcome/tiered-memory
    changes and use the completed WO-01 incident as the first real acceptance
    corpus.
