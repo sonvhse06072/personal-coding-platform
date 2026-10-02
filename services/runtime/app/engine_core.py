@@ -315,7 +315,7 @@ class RuntimeEngineCore:
         expected_old_source: str,
         expected_new_source: str,
     ) -> dict[str, Any]:
-        """Rebase one preserved blocked direct job onto an exact newer base.
+        """Advance one preserved blocked direct job onto an exact newer base.
 
         The executor performs the filesystem mutation first under strict
         fast-forward/no-overlap guards. Runtime updates durable source identity
