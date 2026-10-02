@@ -431,7 +431,7 @@ async def run_pm_reassessment(
     # The PM never receives write access to the owning developer workspace.
     original = diff_state(workspace, max_diff_bytes)
     patch_proc = subprocess.run(
-        ["git", "-C", str(workspace), "diff", "--binary"],
+        ["git", "-C", str(workspace), "diff", "HEAD", "--binary"],
         text=True,
         capture_output=True,
     )
