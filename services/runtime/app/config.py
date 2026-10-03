@@ -115,6 +115,10 @@ def project_config(project_id: str) -> dict[str, Any]:
         raise ValueError(
             f"Project {project_id} direct workspace mode requires exclusive_project_lease=true"
         )
+    if developer_permission_mode == "trusted_local" and workspace_mode != "direct":
+        raise ValueError(
+            f"Project {project_id} trusted_local developer permission requires workspace_mode=direct"
+        )
     runtime["workspace_mode"] = workspace_mode
     runtime["exclusive_project_lease"] = exclusive_project_lease
     runtime["developer_permission_mode"] = developer_permission_mode
