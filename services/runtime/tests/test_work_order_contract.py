@@ -134,6 +134,7 @@ class CaptureStorage:
     def __init__(self) -> None:
         self.rows: dict[str, dict] = {}
         self.created: dict | None = None
+        self.events: list[tuple[str, dict]] = []
 
     def create(self, row: dict) -> None:
         self.created = deepcopy(row)
@@ -145,6 +146,9 @@ class CaptureStorage:
 
     def update(self, job_id: str, **fields) -> None:
         self.rows[job_id].update(deepcopy(fields))
+
+    def append_event(self, job_id: str, event: dict) -> None:
+        self.events.append((job_id, deepcopy(event)))
 
 
 def test_request_requires_task_or_work_order() -> None:
