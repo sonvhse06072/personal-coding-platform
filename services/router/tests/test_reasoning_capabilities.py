@@ -233,3 +233,14 @@ def test_staffing_flash_medium_omits_effort() -> None:
     assert result.choice.id == "antigravity_free"
     assert result.choice.model == "gemini-3.8-flash-medium"
     assert result.choice.reasoning_effort is None
+
+
+def test_persisted_flash_medium_effort_is_normalized_for_reassessment() -> None:
+    engine = make_engine()
+    stale = choice("antigravity_free", effort="low")
+
+    capability = engine._validate_reasoning_choice(stale)
+
+    assert capability.supports_explicit_effort is False
+    assert stale.reasoning_effort is None
+    assert "ignored_legacy_reasoning_effort=low" in stale.reasons
