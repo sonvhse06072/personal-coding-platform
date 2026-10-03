@@ -300,8 +300,14 @@ def test_antigravity_stream_persists_only_completed_response(monkeypatch, tmp_pa
 
     assert run.returncode == 0
     assert run.output == "human_decision"
-    messages = [event for event in events if event and event.get("event_type") == "developer_message"]
+    public_events = [event for event in events if event]
+    messages = [
+        event
+        for event in public_events
+        if event.get("event_type") == "developer_message"
+    ]
     assert len(messages) == 1
     assert messages[0]["data"]["text"] == "human_decision"
-    assert "huma" not in [event.get("data", {}).get("text") for event in events]
-    assert "n_decision" not in [event.get("data", {}).get("text") for event in events]
+    texts = [event.get("data", {}).get("text") for event in public_events]
+    assert "huma" not in texts
+    assert "n_decision" not in texts
