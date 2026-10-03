@@ -38,7 +38,7 @@ def test_models_endpoint_exposes_per_model_reasoning_capabilities():
 
     assert response.status_code == 200
     data = response.json()
-    assert data["version"] == 10
+    assert data["version"] == 11
     assert data["models"]["codex_terra"]["reasoning_efforts"] == [
         "low",
         "medium",
@@ -46,11 +46,7 @@ def test_models_endpoint_exposes_per_model_reasoning_capabilities():
         "xhigh",
         "max",
     ]
-    assert data["models"]["antigravity_free"]["reasoning_efforts"] == [
-        "low",
-        "medium",
-        "high",
-    ]
+    assert data["models"]["antigravity_free"]["reasoning_efforts"] == []
     assert data["models"]["antigravity_claude_sonnet"]["reasoning_efforts"] == []
 
 

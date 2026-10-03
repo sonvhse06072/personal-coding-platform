@@ -20,6 +20,7 @@ _PERMISSION_DENIED_PATTERNS = (
     "was auto-denied",
 )
 _REASONING_EFFORTS = {"low", "medium", "high"}
+_NO_EXPLICIT_EFFORT_MODELS = {"gemini-3.8-flash-medium"}
 
 
 def _bridge_config() -> tuple[str, str]:
@@ -107,7 +108,10 @@ class AntigravityAdapter(AgentAdapter):
         run_id = uuid.uuid4().hex
         effort = (
             self.reasoning_effort
-            if self.reasoning_effort in _REASONING_EFFORTS
+            if (
+                self.model not in _NO_EXPLICIT_EFFORT_MODELS
+                and self.reasoning_effort in _REASONING_EFFORTS
+            )
             else None
         )
         payload = {

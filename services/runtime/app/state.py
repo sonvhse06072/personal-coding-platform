@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -164,17 +165,10 @@ def _semantic_failure_context_is_current(
     return False
 
 
-def review_repair_prompt_failure(
-    checkpoint: dict[str, Any],
+def _append_operational_context(
+    message: str,
     current_failure: str | None,
-) -> str | None:
-    """Keep a pending PM repair authoritative across provider/infra failures."""
-    pending = checkpoint.get("pending_review_repair")
-    if not isinstance(pending, dict):
-        return current_failure
-    message = str(pending.get("message") or "").strip()
-    if not message:
-        return current_failure
+) -> str:
     operational = str(current_failure or "").strip()
     if not operational or operational == message:
         return message
@@ -183,6 +177,63 @@ def review_repair_prompt_failure(
     if remaining <= 0:
         return message[:30000]
     return f"{message}{separator}{operational[-remaining:]}"
+
+
+def _pending_review_findings_message(checkpoint: dict[str, Any]) -> str | None:
+    pending = checkpoint.get("pending_review_findings")
+    if not isinstance(pending, dict):
+        return None
+    diff_hash = str(pending.get("diff_hash") or "").strip()
+    findings = [
+        dict(item)
+        for item in (pending.get("findings") or [])
+        if isinstance(item, dict)
+    ][:8]
+    if not diff_hash or not findings:
+        return None
+    work_order = checkpoint.get("work_order")
+    work_order_ref = (
+        str(work_order.get("id") or "legacy-task")
+        if isinstance(work_order, dict)
+        else "legacy-task"
+    )
+    review = checkpoint.get("last_review_report")
+    summary = (
+        str(review.get("summary") or "")[:4000]
+        if isinstance(review, dict)
+        else ""
+    )
+    payload = {
+        "role": "developer_repair",
+        "work_order_ref": work_order_ref,
+        "current_diff_ref": f"sha256:{diff_hash}",
+        "reviewer_findings": findings,
+        "prior_attempt_summary": summary,
+        "jit_retrieval": {"mode": "repository_read_only"},
+    }
+    return "PCP_REVIEW_FINDINGS: " + json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+
+
+def review_repair_prompt_failure(
+    checkpoint: dict[str, Any],
+    current_failure: str | None,
+) -> str | None:
+    """Keep actionable reviewer/PM repair authoritative across infra failures."""
+    pending = checkpoint.get("pending_review_repair")
+    if isinstance(pending, dict):
+        message = str(pending.get("message") or "").strip()
+        if message:
+            return _append_operational_context(message, current_failure)
+
+    reviewer_message = _pending_review_findings_message(checkpoint)
+    if reviewer_message:
+        return _append_operational_context(reviewer_message, current_failure)
+
+    return current_failure
 
 
 

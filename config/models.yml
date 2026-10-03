@@ -1,4 +1,4 @@
-version: 10
+version: 11
 models:
   groq_free:
     kind: llm
@@ -121,7 +121,8 @@ models:
     provider: google_antigravity
     adapter: antigravity_host
     model: gemini-3.8-flash-medium
-    reasoning_efforts:
+    supports_reasoning_effort: false
+    legacy_ignored_reasoning_efforts:
     - low
     - medium
     - high

@@ -50,7 +50,7 @@ def test_registry_exposes_explicit_antigravity_models_and_quota_groups():
     cfg = get_config()["models"]
     models = cfg["models"]
 
-    assert cfg["version"] == 10
+    assert cfg["version"] == 11
     assert models["antigravity_free"]["model"] == "gemini-3.8-flash-medium"
     assert models["antigravity_flash_high"]["model"] == "gemini-3.8-flash-high"
     assert models["antigravity_gemini_pro"]["model"] == "gemini-3.1-pro-high"
@@ -59,7 +59,8 @@ def test_registry_exposes_explicit_antigravity_models_and_quota_groups():
     assert models["antigravity_gemini_pro"]["quota_group"] == "antigravity_gemini"
     assert models["antigravity_claude_sonnet"]["quota_group"] == "antigravity_claude_gpt"
     assert models["antigravity_claude_sonnet"]["supports_reasoning_effort"] is False
-    assert models["antigravity_free"]["reasoning_efforts"] == ["low", "medium", "high"]
+    assert models["antigravity_free"]["supports_reasoning_effort"] is False
+    assert "reasoning_efforts" not in models["antigravity_free"]
     assert "reasoning_efforts" not in models["antigravity_claude_sonnet"]
 
 
@@ -83,7 +84,7 @@ def test_shared_legacy_codex_quota_key_suppresses_all_codex_models():
         assert "provider/model unavailable" in rejected[model_id]
 
 
-def test_standard_route_applies_reasoning_effort_to_antigravity():
+def test_standard_route_omits_reasoning_effort_for_flash_medium():
     request = standard_request(
         {
             "provider:openai": unavailable(),
@@ -98,7 +99,7 @@ def test_standard_route_applies_reasoning_effort_to_antigravity():
     assert result.strategy.executor.id == "antigravity_free"
     assert result.strategy.executor.model == "gemini-3.8-flash-medium"
     assert result.strategy.executor.quota_group == "antigravity_gemini"
-    assert result.strategy.executor.reasoning_effort == "low"
+    assert result.strategy.executor.reasoning_effort is None
 
 
 def test_sonnet_route_omits_unsupported_reasoning_effort():
