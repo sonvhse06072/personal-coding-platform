@@ -10,7 +10,12 @@ import pytest
 
 from app import pm_planning
 from app.adapters.base import AgentRun
-from app.baseline import BaselineReferences, ProjectBaseline, SourceReference
+from app.baseline import (
+    BaselineAuthorityRule,
+    BaselineReferences,
+    ProjectBaseline,
+    SourceReference,
+)
 from app.pm_planning import ExecutionPlanDocument, PMPlanCreateRequest, PMPlanner
 
 
@@ -518,6 +523,37 @@ def test_available_verification_phases_includes_configured_visual_quality():
         "frontend_quality",
         "visual_quality",
     ]
+
+
+def test_pm_planning_prompt_exposes_exact_source_reference_allowlist():
+    governed = baseline().model_copy(
+        update={
+            "authority": [
+                BaselineAuthorityRule(
+                    path="docs/scope.md",
+                    authority="human_owner_protected",
+                ),
+                BaselineAuthorityRule(
+                    path="docs/authority-only.md",
+                    authority="human_owner_protected",
+                ),
+            ]
+        }
+    )
+    prompt = pm_planning._planning_prompt(
+        ticket=pm_planning.PMTicket.model_validate(ticket()),
+        baseline=governed,
+        project=project_config(),
+    )
+
+    marker = next(
+        line for line in prompt.splitlines()
+        if line.startswith("AUTHORIZED_SOURCE_REFERENCE_PATHS:")
+    )
+    assert "docs/scope.md" in marker
+    assert "docs/authority-only.md" not in marker
+    assert "authority-only paths" in prompt
+    assert "do not cite them" in prompt
 
 
 def test_pm_planning_prompt_explains_max_profile_risk_floor():

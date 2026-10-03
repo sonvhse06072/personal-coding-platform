@@ -350,6 +350,7 @@ def _planning_prompt(
 ) -> str:
     verification = _available_verification_phases(project)
     schema = PMPlanProposal.model_json_schema()
+    authorized_source_reference_paths = sorted(_baseline_reference_paths(baseline))
     return "\n".join(
         [
             "You are the Product Manager for a bounded personal software-development project.",
@@ -359,7 +360,7 @@ def _planning_prompt(
             "If the ticket conflicts with scope, architecture, security policy, a major dependency rule, destructive-data policy, production policy, or material budget policy, identify a human decision boundary instead of silently changing the project frame.",
             "Use logical team roles only. Never name a model/provider as requested_role.",
             "Every WorkOrder must set parent_ticket exactly to the input ticket id and baseline_revision exactly to the governing revision.",
-            "Every WorkOrder source_references path must come from the governing baseline. Use only deterministic verification phases listed as available.",
+            "Every WorkOrder and DecisionBoundary source_references path MUST be chosen only from AUTHORIZED_SOURCE_REFERENCE_PATHS below. ProjectBaseline authority-only paths and arbitrary repository files are not valid source_references unless they also appear in that exact authorized list. You may inspect other repository files read-only for implementation context, but do not cite them as WorkOrder or decision authority.",
             "For PM-generated WorkOrders, budget.max_profile is an execution upper bound, not merely a cost hint. It must be at least fast for routine risk, standard for standard risk, complex for high risk, and critical for critical risk; canonical protected risk flags may raise that floor.",
             "When visual_quality is available and a WorkOrder materially changes a user-facing frontend/UI surface, require frontend_quality before visual_quality and provide bounded visual_routes for concrete local routes that the WorkOrder can actually render. visual_quality supplements rather than replaces deterministic frontend/browser functional checks. Do not invent fixture-dependent routes that the current WorkOrder cannot make available.",
             "Keep WorkOrders small, dependency-aware, and independently verifiable. Optimize for a personal, budget-conscious team; do not create unnecessary tasks or parallelism.",
@@ -373,6 +374,7 @@ def _planning_prompt(
             f"SEMANTIC_SIGNALS: {json.dumps(semantic.model_dump(exclude_unset=True) if semantic is not None else None, sort_keys=True)}",
             f"REPO_HINTS: {json.dumps(repo_hints.model_dump(exclude_none=True) if repo_hints is not None else None, sort_keys=True)}",
             f"PROJECT_BASELINE: {json.dumps(baseline.model_dump(mode='json'), ensure_ascii=False, sort_keys=True)}",
+            f"AUTHORIZED_SOURCE_REFERENCE_PATHS: {json.dumps(authorized_source_reference_paths, ensure_ascii=False)}",
             f"AVAILABLE_VERIFICATION_PHASES: {json.dumps(verification)}",
             "OUTPUT_JSON_SCHEMA:",
             json.dumps(schema, ensure_ascii=False, sort_keys=True),
