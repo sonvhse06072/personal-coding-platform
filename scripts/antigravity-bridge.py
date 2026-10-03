@@ -411,6 +411,15 @@ class Bridge:
                     workspace = Path(str(payload["workspace"])).resolve()
                     if not workspace.is_dir() or not bridge.workspace_allowed(workspace):
                         return self.send_json(403, {"error": "workspace_not_allowed"})
+                    trusted_requested = bool(payload.get("trusted_local_developer", False))
+                    trusted_local = bool(
+                        trusted_requested
+                        and bridge.direct_workspace is not None
+                        and workspace == bridge.direct_workspace
+                        and str(payload.get("mode") or "") in {"execute", "repair"}
+                    )
+                    if trusted_requested and not trusted_local:
+                        return self.send_json(403, {"error": "trusted_local_developer_not_allowed"})
                     prompt = str(payload.get("prompt") or "").strip()
                     if not prompt:
                         return self.send_json(400, {"error": "prompt_required"})
@@ -431,6 +440,7 @@ class Bridge:
                         effort=effort,
                         timeout=timeout,
                         output_format="json",
+                        sandbox=not trusted_local,
                     )
 
                     env = os.environ.copy()
@@ -439,6 +449,11 @@ class Bridge:
                     # settings.json is global to the signed-in host account. One run
                     # at a time receives absolute grants for only its isolated clone.
                     with bridge._agy_lock:
+                        original_settings = None
+                        if trusted_local:
+                            original_settings = apply_trusted_local_developer_settings(
+                                bridge.settings
+                            )
                         if bridge.consume_cancelled(run_id):
                             return self.send_json(200, {
                                 "run_id": run_id,
