@@ -239,6 +239,95 @@ def is_git_repo(repo: Path) -> bool:
     return proc.returncode == 0
 
 
+def _has_git_commit(repo: Path, commit: str) -> bool:
+    proc = subprocess.run(
+        ["git", "-C", str(repo), "cat-file", "-e", commit + "^{commit}"],
+        text=True,
+        capture_output=True,
+    )
+    return proc.returncode == 0
+
+
+def _materialize_commit_from_source_refs(
+    source_repo: Path,
+    workspace: Path,
+    source_commit: str,
+    *,
+    base_branch: str,
+) -> None:
+    """Materialize one exact source commit without mutating the source worktree.
+
+    A direct project may be parked on a historical AI branch while a newer
+    governed baseline exists only under refs/remotes/origin/*. A normal clone
+    of the local repository advertises local heads/tags, so that newer commit
+    can be absent even though the source object store can resolve it. Fetch one
+    containing source ref by name into a private workspace ref, then remove it
+    after the exact commit is checked out.
+    """
+    if _has_git_commit(workspace, source_commit):
+        return
+
+    refs = [
+        value
+        for value in git(
+            source_repo,
+            "for-each-ref",
+            "--format=%(refname)",
+            "--contains",
+            source_commit,
+            "refs/remotes/origin",
+            "refs/heads",
+            "refs/tags",
+            check=False,
+        ).splitlines()
+        if value
+    ]
+    preferred = f"refs/remotes/origin/{base_branch}"
+    refs.sort(
+        key=lambda value: (
+            0 if value == preferred else
+            1 if value.startswith("refs/remotes/origin/") else
+            2 if value.startswith("refs/heads/") else
+            3,
+            value,
+        )
+    )
+    if not refs:
+        raise HTTPException(
+            422,
+            f"Exact source commit {source_commit} is not reachable from any trusted local source ref",
+        )
+
+    temp_ref = "refs/pcp/materialized-source"
+    failures: list[str] = []
+    for source_ref in refs:
+        proc = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(workspace),
+                "fetch",
+                "--no-tags",
+                "origin",
+                f"+{source_ref}:{temp_ref}",
+            ],
+            text=True,
+            capture_output=True,
+        )
+        if proc.returncode == 0 and _has_git_commit(workspace, source_commit):
+            return
+        detail = (proc.stderr or proc.stdout or "fetch failed").strip()
+        failures.append(f"{source_ref}: {detail[-1000:]}")
+
+    raise HTTPException(
+        422,
+        (
+            f"Exact source commit {source_commit} could not be materialized "
+            f"from trusted local source refs: {'; '.join(failures)[:8000]}"
+        ),
+    )
+
+
 def remote_origin(repo: Path) -> str | None:
     proc = subprocess.run(
         ["git", "-C", str(repo), "remote", "get-url", "origin"],
@@ -1206,7 +1295,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-DDEV_EXECUTOR_VERSION = "1.0.30"
+DDEV_EXECUTOR_VERSION = "1.0.31"
 
 app = FastAPI(title="Constrained DDEV/Git Executor", version=DDEV_EXECUTOR_VERSION)
 app.include_router(pm_bridge_github_router)
@@ -1621,9 +1710,16 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
         raise HTTPException(422, stderr.strip() or stdout.strip() or "git clone failed")
 
     try:
+        _materialize_commit_from_source_refs(
+            repo,
+            workspace,
+            source_commit,
+            base_branch=str(cfg.get("base_branch", "main")).strip() or "main",
+        )
         if remote_origin(workspace):
             git(workspace, "remote", "remove", "origin")
         git(workspace, "checkout", "-b", branch, source_commit)
+        git(workspace, "update-ref", "-d", "refs/pcp/materialized-source", check=False)
         _reconcile_workspace_ddev_identity(
             workspace,
             payload.job_id,
