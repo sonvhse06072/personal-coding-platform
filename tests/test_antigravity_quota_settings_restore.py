@@ -313,5 +313,5 @@ def test_quota_probe_lock_order_and_version() -> None:
     assert "with bridge._quota_settings_lock:" in source
     assert "_read_cli_usage_preserving_settings(" in source
     assert 'server_version = "PersonalCodingAntigravityBridge/1.13"' in source
-    assert 'version": "1.12"' in source
+    assert 'version": "1.13"' in source
     assert "Antigravity host bridge 1.13 listening" in source
