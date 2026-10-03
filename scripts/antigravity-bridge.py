@@ -450,23 +450,25 @@ class Bridge:
                     # at a time receives absolute grants for only its isolated clone.
                     with bridge._agy_lock:
                         original_settings = None
-                        if trusted_local:
-                            original_settings = apply_trusted_local_developer_settings(
-                                bridge.settings
-                            )
-                        if bridge.consume_cancelled(run_id):
-                            return self.send_json(200, {
-                                "run_id": run_id,
-                                "returncode": 130,
-                                "stdout": "",
-                                "stderr": "Antigravity run cancelled before start",
-                                "payload": None,
-                            })
-                        scoped_allow, scoped_deny = add_workspace_file_rules(
-                            bridge.settings, workspace
-                        )
-                        proc = None
+                        scoped_allow: set[str] = set()
+                        scoped_deny: set[str] = set()
                         try:
+                            if trusted_local:
+                                original_settings = apply_trusted_local_developer_settings(
+                                    bridge.settings
+                                )
+                            if bridge.consume_cancelled(run_id):
+                                return self.send_json(200, {
+                                    "run_id": run_id,
+                                    "returncode": 130,
+                                    "stdout": "",
+                                    "stderr": "Antigravity run cancelled before start",
+                                    "payload": None,
+                                })
+                            scoped_allow, scoped_deny = add_workspace_file_rules(
+                                bridge.settings, workspace
+                            )
+                            proc = None
                             if bridge.consume_cancelled(run_id):
                                 return self.send_json(200, {
                                     "run_id": run_id,
@@ -500,9 +502,12 @@ class Bridge:
                             finally:
                                 bridge.unregister_run(run_id)
                         finally:
-                            remove_workspace_file_rules(
-                                bridge.settings, scoped_allow, scoped_deny
-                            )
+                            if original_settings is not None:
+                                restore_settings(bridge.settings, original_settings)
+                            elif scoped_allow or scoped_deny:
+                                remove_workspace_file_rules(
+                                    bridge.settings, scoped_allow, scoped_deny
+                                )
 
                     parsed = None
                     try:
