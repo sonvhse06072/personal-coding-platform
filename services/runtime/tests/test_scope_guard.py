@@ -64,3 +64,21 @@ def test_ordinary_frontend_files_do_not_create_protected_signal() -> None:
         "frontend/src/features/musician-profile/owner-profile-editor.tsx",
         "frontend/tests/action-bar.test.tsx",
     ]) == set()
+
+
+def test_drupal_config_schema_metadata_is_not_destructive_migration() -> None:
+    signals = changed_path_protected_signals([
+        "web/modules/custom/cho_nhac_show/config/schema/cho_nhac_show.schema.yml",
+    ])
+
+    assert "destructive_migration" not in signals
+
+
+def test_real_migration_and_schema_paths_remain_protected() -> None:
+    for path in (
+        "database/migrations/20261003_add_index.sql",
+        "web/modules/custom/demo/migrations/UpdateThing.php",
+        "database/user_schema.sql",
+    ):
+        signals = changed_path_protected_signals([path])
+        assert "destructive_migration" in signals, path
