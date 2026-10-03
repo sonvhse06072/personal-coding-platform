@@ -303,7 +303,7 @@ projects:
             - path: infra/staging/DEC-025-PRE-BETA-HARDENING.md
       pilot-v1-2026-10-03-dec033:
         status: approved
-        source_commit: 7003c1f72c02a3daea3312449fca6fd57bbc76bc
+        source_commit: 132c2ef767b595833677e9672d655872e07ba9b7
         authority:
           - path: AGENTS.md
             authority: human_owner_protected
