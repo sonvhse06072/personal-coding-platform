@@ -1,4 +1,5 @@
 import asyncio
+import json
 from pathlib import Path
 
 import httpx
@@ -217,3 +218,90 @@ def test_flash_medium_omits_stale_reasoning_effort(monkeypatch, tmp_path: Path):
     assert payloads
     assert payloads[0]["model"] == "gemini-3.8-flash-medium"
     assert "effort" not in payloads[0]
+
+
+def test_antigravity_stream_persists_only_completed_response(monkeypatch, tmp_path: Path):
+    events: list[dict] = []
+
+    class FakeStreamResponse:
+        status_code = 200
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        def raise_for_status(self):
+            return None
+
+        async def aiter_lines(self):
+            rows = [
+                {"event": "init", "model": "claude-sonnet-4-6"},
+                {
+                    "event": "step_update",
+                    "step_update": {
+                        "step_type": "agent_response",
+                        "state": "ACTIVE",
+                        "text_delta": "huma",
+                    },
+                },
+                {
+                    "event": "step_update",
+                    "step_update": {
+                        "step_type": "agent_response",
+                        "state": "ACTIVE",
+                        "text_delta": "n_decision",
+                    },
+                },
+                {
+                    "event": "result",
+                    "result": {
+                        "status": "SUCCESS",
+                        "response": "human_decision",
+                        "usage": {"input_tokens": 10, "output_tokens": 2},
+                    },
+                },
+                {
+                    "bridge_event": "result",
+                    "returncode": 0,
+                    "stderr": "",
+                    "timed_out": False,
+                },
+            ]
+            for row in rows:
+                yield json.dumps(row)
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return None
+
+        def stream(self, *args, **kwargs):
+            return FakeStreamResponse()
+
+    monkeypatch.setenv("ANTIGRAVITY_BRIDGE_TOKEN", "secret")
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+    monkeypatch.setattr("app.adapters.antigravity.emit_developer_event", events.append)
+
+    run = asyncio.run(
+        AntigravityAdapter("claude-sonnet-4-6").run(
+            workspace=tmp_path,
+            prompt="evaluate",
+            mode="evaluate",
+            timeout=30,
+        )
+    )
+
+    assert run.returncode == 0
+    assert run.output == "human_decision"
+    messages = [event for event in events if event and event.get("event_type") == "developer_message"]
+    assert len(messages) == 1
+    assert messages[0]["data"]["text"] == "human_decision"
+    assert "huma" not in [event.get("data", {}).get("text") for event in events]
+    assert "n_decision" not in [event.get("data", {}).get("text") for event in events]
