@@ -122,6 +122,10 @@ models:
     adapter: antigravity_host
     model: gemini-3.8-flash-medium
     supports_reasoning_effort: false
+    legacy_ignored_reasoning_efforts:
+    - low
+    - medium
+    - high
     tier: balanced
     cost_class: free
     quota_group: antigravity_gemini
