@@ -13,7 +13,7 @@ from .baseline import ProjectBaseline, SourceReference
 
 ProfileName = Literal["fast", "standard", "complex", "critical"]
 RiskLevel = Literal["routine", "standard", "high", "critical"]
-VerificationPhase = Literal["targeted_tests", "static_analysis", "frontend_quality", "full_tests"]
+VerificationPhase = Literal["targeted_tests", "static_analysis", "frontend_quality", "visual_quality", "full_tests"]
 BudgetMode = Literal["legacy_hard", "adaptive"]
 
 _ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$"
@@ -112,14 +112,16 @@ class WorkOrderVerification(BaseModel):
             "Use an empty list only when no safe intermediate check exists."
         ),
     )
-    required_phases: list[VerificationPhase] = Field(min_length=1, max_length=3)
+    required_phases: list[VerificationPhase] = Field(min_length=1, max_length=4)
+    visual_routes: list[str] = Field(default_factory=list, max_length=8)
 
     @model_validator(mode="before")
     @classmethod
-    def legacy_intermediate_phases(cls, value: Any) -> Any:
-        if isinstance(value, dict) and "intermediate_phases" not in value:
+    def legacy_verification_fields(cls, value: Any) -> Any:
+        if isinstance(value, dict):
             updated = dict(value)
-            updated["intermediate_phases"] = []
+            updated.setdefault("intermediate_phases", [])
+            updated.setdefault("visual_routes", [])
             return updated
         return value
 
@@ -131,6 +133,42 @@ class WorkOrderVerification(BaseModel):
             if value not in result:
                 result.append(value)
         return result
+
+
+    @field_validator("visual_routes")
+    @classmethod
+    def validate_visual_routes(cls, values: list[str]) -> list[str]:
+        result: list[str] = []
+        for value in values:
+            route = value.strip()
+            if (
+                not route.startswith("/")
+                or route.startswith("//")
+                or "://" in route
+                or "?" in route
+                or "#" in route
+                or len(route) > 240
+            ):
+                raise ValueError(
+                    "visual_routes must be bounded local absolute paths without query or fragment"
+                )
+            if route not in result:
+                result.append(route)
+        return result
+
+    @model_validator(mode="after")
+    def validate_visual_contract(self) -> "WorkOrderVerification":
+        all_phases = list(self.intermediate_phases) + list(self.required_phases)
+        if "visual_quality" in self.intermediate_phases:
+            raise ValueError("visual_quality is a final evidence phase, not an intermediate repair phase")
+        if "visual_quality" in all_phases:
+            if "frontend_quality" not in self.required_phases:
+                raise ValueError("visual_quality requires frontend_quality as a required phase")
+            if not self.visual_routes:
+                raise ValueError("visual_quality requires at least one visual_routes path")
+        elif self.visual_routes:
+            raise ValueError("visual_routes may be set only when visual_quality is required")
+        return self
 
 
 class WorkOrder(BaseModel):
