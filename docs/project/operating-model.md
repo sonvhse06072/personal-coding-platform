@@ -378,6 +378,21 @@ Verification should be layered:
 
 Layering is an efficiency mechanism, not a way to weaken final acceptance. Model review does not replace deterministic tests/static analysis.
 
+For user-facing frontend WorkOrders, an approved project may expose a final
+`visual_quality` phase after `frontend_quality`. The WorkOrder must declare
+bounded local `visual_routes`; Runtime owns preview lifecycle and writes the
+ephemeral evidence request outside the tracked worktree. The project collector
+may capture bounded screenshots plus deterministic browser evidence such as HTTP
+status, console/page errors, failed request paths, DOM landmarks and horizontal
+overflow.
+
+Screenshot capture alone is not pixel-level review. Evidence records whether an
+image was actually consumed by a multimodal reviewer. When
+`image_reviewed=false`, evaluators may use deterministic browser/DOM/network
+evidence but must not claim color, spacing, typography, aesthetic or composition
+findings from the screenshot. Preview/evidence failure is a normal enforcing
+verification failure and returns to the same developer repair loop.
+
 When a selected model-agent invocation cannot provide a verification surface
 that a project-owned Runtime/DDEV phase requires, Runtime may tell that agent not
 to retry the impossible in-agent check and to continue supported deterministic
