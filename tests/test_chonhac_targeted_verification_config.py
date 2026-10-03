@@ -14,7 +14,8 @@ def test_chonhac_targeted_verification_follows_changed_custom_modules() -> None:
     joined = "\n".join(commands[1:])
 
     assert "git diff --name-only HEAD -- web/modules/custom" in joined
-    assert 'cut -d/ -f4' in joined
+    assert "awk -F/" in joined
+    assert "{print $4}" in joined
     assert "for module in $modules" in joined
     assert "for layer in Unit Kernel Functional" in joined
     assert 'web/modules/custom/$module/tests/src/$layer' in joined
@@ -23,3 +24,4 @@ def test_chonhac_targeted_verification_follows_changed_custom_modules() -> None:
     assert "cho_nhac_show/tests" not in joined
     assert "cho_nhac_profile/tests" not in joined
     assert "cho_nhac_event/tests" not in joined
+    assert "|| true" not in joined
