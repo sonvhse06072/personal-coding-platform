@@ -179,6 +179,7 @@ def test_chonhac_frontend_quality_installs_playwright_browser_for_runtime_user()
         "targeted_tests": {"requires": ["php_runtime"]},
         "static_analysis": {"requires": ["php_runtime"]},
         "frontend_quality": {"requires": ["local_listener"]},
+        "visual_quality": {"requires": ["local_listener"]},
     }
     assert ddev["auto_required_phases"] == [
         {"phase": "frontend_quality", "path_prefixes": ["frontend/"]},
