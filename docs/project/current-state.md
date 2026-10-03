@@ -4,8 +4,8 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 live Runtime/GitHub evidence remain authoritative over chat history. Completed
 chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-10-04 after diagnosing the Chợ Nhạc PILOT-01 PR #67
-repair/no-effect and diverged-branch CI incidents.
+Last updated: 2026-10-04 after accepting and merging Chợ Nhạc PILOT-01 and
+closing the related PCP/CI incident chain.
 
 ## Resume order
 
@@ -25,12 +25,13 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP main currently runs Runtime `1.0.99`, ddev-executor `1.0.30`,
+- PCP main targets Runtime `1.0.100`, ddev-executor `1.0.30`,
   Antigravity host bridge `1.13` and model registry version `11`.
-- PCP #446 targets Runtime `1.0.100`: canonical WorkOrder diff identity is
-  source-commit-relative across Runtime-created commits, while `no_effect`
-  remains scoped to whether one executor invocation changed that cumulative
-  diff hash.
+- PCP #446 / PR #447 is complete at
+  `645200e1f0e1ea1902569f471a53d5b90699ece6`: canonical WorkOrder diff
+  identity is source-commit-relative across Runtime-created commits,
+  `no_effect` is turn-local, and reviewer/PM response-only semantic turns are
+  not mislabeled as no-effect.
 - #438 targeted-verification shell repair is complete through PR #439 at
   `841890e60e486d6e4e823b9919e9e79de6cbf6a0`.
 - #440 Antigravity Developer Activity coalescing is complete through PR #442 at
@@ -122,66 +123,50 @@ the live product repository must remain at that commit.
 Current implementation evidence:
 
 - DEC-033 remains the canonical controlled-pilot execution decision.
-- Active plan: `pm-5cd9ec06f74b4feba4db5a1507ab35f0`.
-- Current WorkOrder: `GH-63-PILOT-01`.
-- Preserved direct job: `c02defa348fc5b19a0bd021e2697571e`.
-- Current branch: `ai/c02defa348fc`.
-- Latest published checkpoint: 39 /
-  `wo:blocked:001560a3cf097e489a0f737b6cdb5fd25765e57b0f8e56c897166f933e1f0c3d`.
-- Current state: blocked at `provider_failure_without_fallback` after the
-  previously approved false-positive `destructive_migration` Human gate.
-- Chợ Nhạc PR #67 is open on branch `ai/c02defa348fc` with three material
-  Runtime-created commits; verified head is
+- Historical generated plan:
+  `pm-5cd9ec06f74b4feba4db5a1507ab35f0`.
+- PILOT-01 / GH #61 is accepted and merged.
+- Chợ Nhạc PR #67 merged as
+  `aa8e68dd9aea6740de446151eb97615931de9b40`.
+- Exact product head validated before merge:
   `88dd4f60dbe95c41c6e7ce8fc5bb3c7ba8a098ba`.
-- The three PR CI runs 61/62/63 all fail before Composer/tests/PHPCS at the same
-  documentation-authority check. PR #67 is diverged: merge-base
-  `ea7d19e9e9d10cc2c279318b90d696c24e72cb18`, current base
-  `aa51045dacf5afe41c0d7ce3564c7303cd56847d`. The checker compares current
-  base directly to head and therefore reports protected files changed only on
-  the main-side history.
-- Codex quota telemetry is authoritative/healthy, but `codex_terra` and
-  `codex_luna` carry model-level `no_effect` exclusions from repair turns.
-  PCP #446 addresses the diff-identity ambiguity without erasing those durable
-  historical markers.
-- Progress remains 0/8 completed; PILOT-02..PILOT-08 are untouched/pending.
-- The earlier `pm_reassessment_failed` / Flash Medium effort incident is
-  repaired at the platform layer and is no longer the current blocker.
-- Checkpoint-39 activity identified the current failure as a PCP verification
-  wrapper defect rather than a Chợ Nhạc product/test defect: `ddev drush cr`
-  passes, then the changed-module runner fails before PHPUnit with
-  `modules: unbound variable`.
-- PCP #438 repairs the nested DDEV shell boundary by using raw argv execution
-  while preserving working-tree changed-module detection relative to `HEAD`.
-  Do not resume PILOT-01 until the accepted #438 fix is present in the locally
-  running platform and the old wrapper fingerprint can no longer execute.
-- Dashboard activity authority for the job remains the job Activity view backed
-  by `/v1/dashboard/jobs/{job_id}/events`; authenticated `JobView` intentionally
-  omits internal checkpoint/progress/activity details.
-- Do not reroute merely because the job is blocked. Preserve the same
-  job/workspace/counters and recover only after the platform verifier is fixed.
-- Chat PM has approved PILOT-01 scope but **generated PILOT-02..PILOT-08 must not
-  be released unchanged**. After PILOT-01 is accepted/merged, create a successor
-  ProjectBaseline pinned to the then-current governed Chợ Nhạc main (including
-  the accepted PILOT-01 and current verification/visual tooling), then create
-  one successor supervised plan for the seven remaining slices using the
+- Current-base CI run 69 passed documentation authority, Composer,
+  isolated PostgreSQL 17 Unit/Kernel/Functional verification, PHPCS and the
+  controlled self-repair probe.
+- Final PILOT-01 product diff remained 16 files / +223 / -56, within #61's
+  <=25-file budget and without Event/payment/deployment scope expansion.
+- Preserved historical direct job:
+  `c02defa348fc5b19a0bd021e2697571e`.
+- Preserve that job/workspace/counters as incident/work evidence; do not spend
+  further model quota attempting to complete an already-merged product diff.
+- Chợ Nhạc #68/#69 fixed PR documentation-authority range semantics by using
+  merge-base-to-head while preserving the fail-closed checker.
+- Chợ Nhạc #70/#71 restored PostgreSQL-backed repository CI after one-time
+  PostgreSQL 17 provisioning on the self-hosted Chonhac-CI host. Repository CI
+  still does not gain Docker/DDEV authority and uses isolated per-job clusters.
+- Generated PILOT-02..PILOT-08 remain untouched/pending and must **not** be
+  released from the old plan.
+- Create a successor ProjectBaseline pinned to governed Chợ Nhạc main
+  `aa8e68dd9aea6740de446151eb97615931de9b40` (or a later explicitly reviewed
+  governance-only main if one is intentionally included), then create one
+  successor supervised plan for exactly the seven remaining slices using the
   replan contract in Chợ Nhạc #63.
-- Frontend-heavy successor WorkOrders should use the newly available
-  `frontend_quality -> visual_quality` contract with concrete bounded routes
-  only when those routes are renderable by the WorkOrder.
+- Frontend-heavy successor WorkOrders should use
+  `frontend_quality -> visual_quality` with concrete bounded routes only when
+  those routes are renderable by the WorkOrder.
 
 Historical DEC-025 and GH-42 execution are retired. Do not recreate, reroute or
 resume them.
 
 ## Active PCP follow-up work
 
-PCP #446 is the single focused active Runtime repair: separate cumulative
-WorkOrder diff identity from turn-local `no_effect` detection across
-Runtime-created commits.
+There are currently **no open PCP implementation issues** for the PILOT-01
+incident chain.
 
-The earlier PILOT-01 incident repairs #438/#439, #440/#442 and #441/#443 are
-completed. The #146 efficiency umbrella and its final children #400/#406/#421
-remain closed. The PR #67 documentation-authority false positive is a distinct
-Chợ Nhạc CI/governance-range incident and must not be hidden by model retries.
+The focused repairs #438/#439, #440/#442, #441/#443 and #446/#447 are
+completed. Chợ Nhạc CI incidents #68/#69 and #70/#71 are also resolved. New
+platform work should start only from new durable evidence rather than replaying
+these fingerprints.
 
 ## Recently completed reusable work
 
@@ -235,25 +220,19 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Keep PILOT-01 blocked on the same job/workspace/branch/counters while PCP
-   #446 is reviewed; do not create a replacement job or clear `no_effect`
-   model history manually.
-2. Complete #446 with exact-head PCP CI and roll Runtime `1.0.100` locally only
+1. Roll local PCP to main
+   `645200e1f0e1ea1902569f471a53d5b90699ece6` / Runtime `1.0.100` only
    while no executor/model process is active.
-3. Do not retry/reroute Chợ Nhạc merely because Antigravity Claude quota is
-   exhausted. The current PR CI blocker is the unchanged documentation-authority
-   failure, not missing product code.
-4. Resolve the PR #67 diverged-branch authority range through a governed path.
-   `tools/check-document-authority.php` and `.github/workflows/ci.yml` are
-   Human-Owner-protected; do not weaken or bypass that gate.
-5. Once PR #67 receives green current-base CI, review the exact 16-file PR diff
-   and merge only if the existing WorkOrder/security/release-gate contract still
-   matches.
-6. After PILOT-01 is accepted/merged, stop at the supervised checkpoint. Do
-   **not** continue generated PILOT-02.
-7. Create/activate a successor Chợ Nhạc ProjectBaseline pinned to the governed
-   post-PILOT-01 main, then intake one supervised successor plan for exactly the
-   seven remaining slices using #63's replan contract.
-8. Keep staging/production, public recruitment legal approval, Availability
+2. Do **not** resume, reroute or continue the historical PILOT-01 job merely to
+   make Runtime state look completed; the product diff is already merged and
+   the job is preserved as incident/work evidence.
+3. Do **not** release generated PILOT-02 from plan
+   `pm-5cd9ec06f74b4feba4db5a1507ab35f0`.
+4. Reconcile/supersede the old generated continuation through the supported
+   orchestration path without deleting history.
+5. Create and activate a successor Chợ Nhạc ProjectBaseline pinned to governed
+   post-PILOT-01 main, then intake one supervised successor plan for exactly
+   the seven remaining slices from #48/#49/#50/#56/#57/#58/#59.
+6. Keep staging/production, public recruitment legal approval, Availability
    salvage, Professional Reviews, Band and payment/ticket commerce outside this
    pilot path.
