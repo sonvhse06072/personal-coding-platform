@@ -181,11 +181,11 @@ class StreamingBridge(legacy.Bridge):
                 if not workspace.is_dir() or not bridge.workspace_allowed(workspace):
                     return self.send_json(403, {"error": "workspace_not_allowed"})
                 trusted_requested = bool(payload.get("trusted_local_developer", False))
-                trusted_local = bool(
-                    trusted_requested
-                    and bridge.direct_workspace is not None
-                    and workspace == bridge.direct_workspace
-                    and str(payload.get("mode") or "") in {"execute", "repair"}
+                trusted_local = legacy.trusted_local_request_allowed(
+                    requested=trusted_requested,
+                    workspace=workspace,
+                    direct_workspace=bridge.direct_workspace,
+                    mode=str(payload.get("mode") or ""),
                 )
                 if trusted_requested and not trusted_local:
                     return self.send_json(403, {"error": "trusted_local_developer_not_allowed"})
@@ -229,6 +229,7 @@ class StreamingBridge(legacy.Bridge):
                 proc: subprocess.Popen | None = None
                 scoped_allow: set[str] = set()
                 scoped_deny: set[str] = set()
+                original_settings: dict | None = None
                 safe_stream_failure: str | None = None
                 try:
                     with bridge._agy_lock:
