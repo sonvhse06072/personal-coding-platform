@@ -117,6 +117,36 @@ def agent_lifecycle_event(
     }
 
 
+def agent_response_event(
+    *,
+    adapter: str,
+    model: str | None,
+    mode: str,
+    text: Any,
+    workspace: Path,
+    provider: str | None = None,
+) -> dict[str, Any] | None:
+    """Emit one bounded public response after an agent turn completes.
+
+    Streaming token/text deltas are transport details, not durable activity
+    events. Persist only the completed public response so Dashboard activity
+    remains readable and does not split words across rows.
+    """
+    bounded = _redact(text, limit=_MAX_TEXT, workspace=workspace).strip()
+    if not bounded:
+        return None
+    data = _base_data(mode=mode, adapter=adapter, model=model, provider=provider)
+    data["status"] = "response_completed"
+    data["text"] = bounded
+    return {
+        "event_type": "developer_message",
+        "phase": "execution",
+        "level": "info",
+        "message": "Developer update",
+        "data": data,
+    }
+
+
 def _safe_paths(item: dict[str, Any], workspace: Path) -> list[str]:
     candidates: list[Any] = []
     if item.get("path"):
@@ -308,11 +338,10 @@ def _antigravity_public_event(
         if step_type == "user_input":
             return None
         if step_type == "agent_response":
-            text = _redact(step.get("text_delta"), limit=_MAX_TEXT, workspace=workspace).strip()
-            if not text:
-                return None
-            data["text"] = text
-            return {"event_type": "developer_message", "phase": "execution", "level": "info", "message": "Developer update", "data": data}
+            # Antigravity emits transport-level text deltas that may split a
+            # single word across many events. The adapter emits one completed
+            # bounded response from the terminal result instead.
+            return None
         if step_type == "tool":
             tool_info = step.get("tool_info") if isinstance(step.get("tool_info"), dict) else {}
             tool = str(step.get("tool_name") or tool_info.get("name") or "tool")[:120]

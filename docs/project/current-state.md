@@ -25,8 +25,14 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP main after PR #437 targets Runtime `1.0.97`, ddev-executor `1.0.30`,
+- PCP main after #438/#439 targets Runtime `1.0.98`, ddev-executor `1.0.30`,
   Antigravity host bridge `1.13` and model registry version `11`.
+- #438 targeted-verification shell repair is complete through PR #439 at
+  `841890e60e486d6e4e823b9919e9e79de6cbf6a0`.
+- #440 removes transport-level Antigravity response deltas from durable
+  Developer Activity and emits one bounded/redacted completed response instead.
+- #441 is the focused follow-up for the false `destructive_migration` signal
+  caused by treating Drupal `config/schema/*.schema.yml` metadata as a migration.
 - #400 repository-CI parity is complete. Chợ Nhạc PR #64 merged at
   `af1e24a60fc43cae0c417dc312e7a7839f284b6b`; protected workflow changes are
   authorized by DEC-034 and use bounded changed-module Unit/Kernel/Functional
@@ -114,9 +120,15 @@ Current implementation evidence:
 - Current branch: `ai/c02defa348fc`.
 - Latest published checkpoint: 39 /
   `wo:blocked:001560a3cf097e489a0f737b6cdb5fd25765e57b0f8e56c897166f933e1f0c3d`.
-- Current block reason: `repeated_deterministic_verification_failure`.
-- Latest verification: failed in `targeted_tests`.
-- Latest review verdict: fail.
+- Current state: `waiting_human` after successful recovery from the old
+  deterministic verifier block.
+- Latest verification: passed in `targeted_tests`, `static_analysis`, and
+  `frontend_quality`.
+- Latest independent review verdict: pass with zero findings.
+- Current PM decision trigger: `destructive_migration`, diagnosed as a
+  path-classifier false positive from
+  `web/modules/custom/cho_nhac_show/config/schema/cho_nhac_show.schema.yml`;
+  developer/reviewer evidence found no destructive schema/data migration.
 - Progress remains 0/8 completed; PILOT-02..PILOT-08 are untouched/pending.
 - The earlier `pm_reassessment_failed` / Flash Medium effort incident is
   repaired at the platform layer and is no longer the current blocker.
@@ -148,12 +160,14 @@ resume them.
 
 ## Active PCP follow-up work
 
-PCP #438 is the only focused active platform repair: fix Chợ Nhạc targeted
-verification shell quoting exposed by PILOT-01 checkpoint 39.
+PCP #440 and #441 are the focused active platform follow-ups exposed by the
+same PILOT-01 recovery:
+- #440 — coalesce Antigravity response deltas in Developer Activity;
+- #441 — prevent false destructive-migration classification for schema metadata.
 
-The #146 efficiency umbrella and its final active children #400/#406/#421 are
-completed. Natural project work remains the calibration source; #438 is a
-bounded incident-derived repair, not a reopened umbrella.
+#438/#439 is completed. The #146 efficiency umbrella and its final children
+#400/#406/#421 remain closed; these are bounded incident-derived repairs, not a
+reopened umbrella.
 
 ## Recently completed reusable work
 

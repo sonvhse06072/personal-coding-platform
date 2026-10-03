@@ -10,7 +10,12 @@ from pathlib import Path
 import httpx
 
 from .base import AgentAdapter, AgentRun, classify_provider_failure
-from ..developer_stream import agent_lifecycle_event, agent_public_event, emit_developer_event
+from ..developer_stream import (
+    agent_lifecycle_event,
+    agent_public_event,
+    agent_response_event,
+    emit_developer_event,
+)
 from ..developer_permissions import trusted_local_developer_enabled
 
 
@@ -266,6 +271,16 @@ class AntigravityAdapter(AgentAdapter):
                 failure_kind = "provider_unavailable" if error_text else None
                 failure_message = error_text or stderr or raw
 
+        emit_developer_event(
+            agent_response_event(
+                adapter=self.name,
+                provider=self.provider,
+                model=self.model,
+                mode=mode,
+                text=output,
+                workspace=workspace,
+            )
+        )
         emit_developer_event(
             agent_lifecycle_event(
                 adapter=self.name,

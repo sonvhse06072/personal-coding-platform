@@ -3,6 +3,7 @@ from pathlib import Path
 
 from app.developer_stream import (
     agent_public_event,
+    agent_response_event,
     codex_public_event,
     provider_for_adapter,
     runtime_activity_event,
@@ -148,7 +149,7 @@ def test_opencode_tool_activity_is_bounded_and_redacted(tmp_path: Path):
     assert event["data"]["provider"] == "openrouter"
 
 
-def test_antigravity_drops_user_input_and_exposes_agent_response(tmp_path: Path):
+def test_antigravity_drops_prompt_and_transport_response_deltas(tmp_path: Path):
     prompt_event = agent_public_event(
         {"event": "step_update", "step_update": {"step_type": "user_input", "text_delta": "SECRET PROMPT"}},
         workspace=tmp_path,
@@ -159,18 +160,37 @@ def test_antigravity_drops_user_input_and_exposes_agent_response(tmp_path: Path)
     )
     assert prompt_event is None
 
-    response = agent_public_event(
-        {"event": "step_update", "step_update": {"step_type": "agent_response", "state": "ACTIVE", "text_delta": "Reviewing deterministic evidence."}},
+    response_delta = agent_public_event(
+        {"event": "step_update", "step_update": {"step_type": "agent_response", "state": "ACTIVE", "text_delta": "huma"}},
         workspace=tmp_path,
         mode="evaluate",
         adapter="antigravity_host",
         provider="google_antigravity",
         model="auto",
     )
+    assert response_delta is None
+
+
+def test_completed_agent_response_is_single_bounded_redacted_activity(tmp_path: Path):
+    secret = "sk-abcdefghijklmnopqrstuvwxyz123456"
+    response = agent_response_event(
+        adapter="antigravity_host",
+        provider="google_antigravity",
+        model="claude-sonnet-4-6",
+        mode="evaluate",
+        text=f"human_decision for {tmp_path} API_KEY={secret}",
+        workspace=tmp_path,
+    )
+
     assert response is not None
+    encoded = json.dumps(response)
     assert response["event_type"] == "developer_message"
+    assert response["data"]["status"] == "response_completed"
     assert response["data"]["provider"] == "google_antigravity"
     assert response["data"]["role"] == "evaluator"
+    assert str(tmp_path) not in encoded
+    assert secret not in encoded
+    assert "API_KEY=<redacted>" in encoded
 
 
 def test_runtime_activity_is_sanitized(tmp_path: Path):
