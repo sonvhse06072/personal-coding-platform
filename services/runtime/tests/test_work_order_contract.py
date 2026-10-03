@@ -488,3 +488,147 @@ def test_work_order_accepts_frontend_quality_phase_when_configured(
         "frontend_quality",
     ]
 
+
+
+def test_visual_quality_contract_requires_frontend_quality_and_routes() -> None:
+    with pytest.raises(ValidationError, match="requires frontend_quality"):
+        WorkOrder.model_validate(
+            work_order(
+                verification={
+                    "required_phases": ["targeted_tests", "visual_quality"],
+                    "visual_routes": ["/artist/demo"],
+                }
+            )
+        )
+
+    with pytest.raises(ValidationError, match="at least one visual_routes"):
+        WorkOrder.model_validate(
+            work_order(
+                verification={
+                    "required_phases": [
+                        "targeted_tests",
+                        "frontend_quality",
+                        "visual_quality",
+                    ],
+                    "visual_routes": [],
+                }
+            )
+        )
+
+    with pytest.raises(ValidationError, match="must run before visual_quality"):
+        WorkOrder.model_validate(
+            work_order(
+                verification={
+                    "required_phases": [
+                        "targeted_tests",
+                        "visual_quality",
+                        "frontend_quality",
+                    ],
+                    "visual_routes": ["/artist/demo"],
+                }
+            )
+        )
+
+    contract = WorkOrder.model_validate(
+        work_order(
+            verification={
+                "required_phases": [
+                    "targeted_tests",
+                    "frontend_quality",
+                    "visual_quality",
+                ],
+                "visual_routes": ["/artist/demo", "/events"],
+            }
+        )
+    )
+    assert contract.verification.visual_routes == ["/artist/demo", "/events"]
+
+
+@pytest.mark.parametrize(
+    "route",
+    [
+        "artist/demo",
+        "//evil.example",
+        "https://evil.example/path",
+        "/artist/demo?token=secret",
+        "/artist/demo#fragment",
+    ],
+)
+def test_visual_routes_reject_nonlocal_or_unbounded_url_forms(route: str) -> None:
+    with pytest.raises(ValidationError, match="visual_routes"):
+        WorkOrder.model_validate(
+            work_order(
+                verification={
+                    "required_phases": [
+                        "targeted_tests",
+                        "frontend_quality",
+                        "visual_quality",
+                    ],
+                    "visual_routes": [route],
+                }
+            )
+        )
+
+
+def test_visual_quality_requires_direct_preview_project_capability(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    configure(monkeypatch, tmp_path)
+    projects = project_config_doc()
+    demo = projects["projects"]["demo"]
+    demo["ddev"]["frontend_quality"] = ["frontend-quality"]
+    demo["ddev"]["visual_quality"] = ["visual-quality"]
+    projects_file = tmp_path / "projects.yml"
+    projects_file.write_text(yaml.safe_dump(projects, sort_keys=False), encoding="utf-8")
+    clear_config_cache()
+
+    storage = CaptureStorage()
+    engine = RuntimeEngine(storage)
+    contract = work_order(
+        verification={
+            "required_phases": [
+                "targeted_tests",
+                "frontend_quality",
+                "visual_quality",
+            ],
+            "visual_routes": ["/artist/demo"],
+        }
+    )
+
+    with pytest.raises(ValueError, match="direct workspace"):
+        engine.create_job(
+            JobCreateRequest(
+                project_id="demo",
+                work_order=contract,
+                auto_run=False,
+            ).model_dump(mode="json")
+        )
+
+    projects["projects"]["demo"]["runtime"] = {
+        "workspace_mode": "direct",
+        "exclusive_project_lease": True,
+    }
+    projects["projects"]["demo"]["preview"] = {
+        "frontend": {"enabled": True},
+        "visual_evidence": {
+            "internal_base_url": "http://127.0.0.1:3100",
+            "viewports": [390, 1024],
+        },
+    }
+    projects_file.write_text(yaml.safe_dump(projects, sort_keys=False), encoding="utf-8")
+    clear_config_cache()
+
+    storage = CaptureStorage()
+    engine = RuntimeEngine(storage)
+    job_id = engine.create_job(
+        JobCreateRequest(
+            project_id="demo",
+            work_order=contract,
+            auto_run=False,
+        ).model_dump(mode="json")
+    )
+
+    assert storage.rows[job_id]["checkpoint"]["work_order"]["verification"][
+        "visual_routes"
+    ] == ["/artist/demo"]
