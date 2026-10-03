@@ -160,3 +160,24 @@ def test_diff_state_explicit_invalid_base_fails_closed(tmp_path):
 
     with pytest.raises(RuntimeError, match="Invalid diff base reference"):
         diff_state(repo, 100000, base_ref="definitely-not-a-commit")
+
+
+def test_cumulative_diff_hash_still_detects_turn_local_effect_after_commit(tmp_path):
+    repo = make_repo(tmp_path)
+    source_commit = git(repo, "rev-parse", "HEAD")
+
+    (repo / "feature.txt").write_text("first delivered state\n")
+    assert commit_changes(repo, "AI: first delivery")
+
+    turn_start = diff_state(repo, 100000, base_ref=source_commit)
+    unchanged = diff_state(repo, 100000, base_ref=source_commit)
+
+    assert turn_start["changed_file_count"] == 1
+    assert unchanged["diff_hash"] == turn_start["diff_hash"]
+
+    (repo / "feature.txt").write_text("repair state\n")
+    repaired = diff_state(repo, 100000, base_ref=source_commit)
+
+    assert repaired["changed_file_count"] == 1
+    assert repaired["diff_hash"] != turn_start["diff_hash"]
+    assert "repair state" in repaired["diff"]
