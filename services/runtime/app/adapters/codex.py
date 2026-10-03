@@ -11,7 +11,6 @@ from .base import (
     classify_provider_failure,
 )
 from ..developer_stream import agent_lifecycle_event, agent_public_event, emit_developer_event
-from ..developer_permissions import trusted_local_developer_enabled
 from ..shell import CommandResult, CommandTimeoutError, run_command
 
 
@@ -36,19 +35,12 @@ class CodexAdapter(AgentAdapter):
         return super().invocation_capabilities(mode)
 
     async def run(self, *, workspace: Path, prompt: str, mode: str, timeout: int) -> AgentRun:
-        trusted_local = trusted_local_developer_enabled(workspace, mode)
-        sandbox = (
-            "read-only"
-            if mode in {"plan", "evaluate"}
-            else "danger-full-access"
-            if trusted_local
-            else "workspace-write"
-        )
-        # Runtime is non-interactive: approval prompts have no valid human response
-        # channel. Plan/evaluate remain read-only. A project may explicitly opt an
-        # exact direct workspace into trusted-local execute/repair; that mode uses
-        # Codex full filesystem/network access inside the Runtime container while
-        # keeping PCP/GitHub/deploy credentials outside the agent boundary.
+        sandbox = "read-only" if mode in {"plan", "evaluate"} else "workspace-write"
+        # Runtime is non-interactive: a Codex approval prompt has no valid human
+        # response channel. Make the policy explicit instead of inheriting mounted
+        # user configuration. This does not broaden the sandbox; commands that need
+        # more permission fail closed. Execute/repair also pins workspace network
+        # access off so user config cannot silently widen that boundary.
         argv = [
             "codex",
             "exec",
