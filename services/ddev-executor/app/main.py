@@ -27,7 +27,7 @@ from .github_delivery import (
 from .pm_bridge_github import router as pm_bridge_github_router
 
 
-Phase = Literal["preflight", "targeted_tests", "static_analysis", "frontend_quality", "full_tests", "cleanup"]
+Phase = Literal["preflight", "targeted_tests", "static_analysis", "frontend_quality", "visual_quality", "full_tests", "cleanup"]
 _BRANCH_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,199}$")
 
 
@@ -1206,7 +1206,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-DDEV_EXECUTOR_VERSION = "1.0.29"
+DDEV_EXECUTOR_VERSION = "1.0.30"
 
 app = FastAPI(title="Constrained DDEV/Git Executor", version=DDEV_EXECUTOR_VERSION)
 app.include_router(pm_bridge_github_router)
