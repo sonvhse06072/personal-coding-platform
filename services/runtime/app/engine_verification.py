@@ -524,7 +524,18 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         row = self.storage.get(job_id) or {}
         checkpoint = row.get("checkpoint") or {}
         work_order = work_order_snapshot(checkpoint.get("work_order"))
-        if work_order is None or not work_order.verification.intermediate_phases:
+        modern_required = (
+            set(work_order.verification.required_phases)
+            if work_order is not None
+            else set()
+        )
+        uses_layered_only_phase = bool(
+            modern_required.intersection({"frontend_quality", "visual_quality"})
+        )
+        if work_order is None or (
+            not work_order.verification.intermediate_phases
+            and not uses_layered_only_phase
+        ):
             result = await super()._verify(
                 job_id,
                 project_id,
