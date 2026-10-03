@@ -5,7 +5,9 @@ from app.config import clear_config_cache
 
 
 EXPECTED_COMMIT = "aa8e68dd9aea6740de446151eb97615931de9b40"
-EXPECTED_REVISION = "pilot-v1-2026-10-04-dec033-r2"
+EXPECTED_REVISION = "pilot-v1-2026-10-04-dec033-r3"
+PREVIOUS_R2_COMMIT = "aa8e68dd9aea6740de446151eb97615931de9b40"
+PREVIOUS_R2_REVISION = "pilot-v1-2026-10-04-dec033-r2"
 PREVIOUS_R1_COMMIT = "132c2ef767b595833677e9672d655872e07ba9b7"
 PREVIOUS_R1_REVISION = "pilot-v1-2026-10-03-dec033-r1"
 PREVIOUS_PILOT_COMMIT = "132c2ef767b595833677e9672d655872e07ba9b7"
@@ -54,6 +56,7 @@ def test_chonhac_active_baseline_resolves_to_dec033_controlled_pilot() -> None:
             {"path": "docs/21-responsive-mobile-review.md", "section": None},
             {"path": "docs/22-shared-component-contract.md", "section": None},
             {"path": "docs/27-event-network-successor-reconciliation.md", "section": None},
+            {"path": "docs/26-local-demo-workflow.md", "section": None},
         ],
         "architecture_constraints": [
             {"path": "docs/06-architecture.md", "section": None},
@@ -70,6 +73,7 @@ def test_chonhac_active_baseline_resolves_to_dec033_controlled_pilot() -> None:
             {"path": "docs/21-responsive-mobile-review.md", "section": None},
             {"path": "docs/22-shared-component-contract.md", "section": None},
             {"path": "docs/27-event-network-successor-reconciliation.md", "section": None},
+            {"path": "docs/26-local-demo-workflow.md", "section": None},
         ],
         "security_policy": [
             {"path": "docs/13-permissions-access-matrix.md", "section": None},
@@ -90,6 +94,9 @@ def test_chonhac_active_baseline_resolves_to_dec033_controlled_pilot() -> None:
     requirement_paths = [reference.path for reference in baseline.references.requirements]
     assert "docs/14-cho-nhac-profile-implementation-plan.md" in requirement_paths
     assert "docs/15-account-email-verification-producer-plan.md" in requirement_paths
+    assert "docs/26-local-demo-workflow.md" in requirement_paths
+    quality_paths = [reference.path for reference in baseline.references.quality_policy]
+    assert "docs/26-local-demo-workflow.md" in quality_paths
 
     authority = {rule.path: rule.authority for rule in baseline.authority}
     assert authority["docs/11-decisions.md"] == "human_owner_protected"
@@ -101,6 +108,25 @@ def test_chonhac_active_baseline_resolves_to_dec033_controlled_pilot() -> None:
 
     clear_config_cache()
 
+
+
+def test_previous_r2_pilot_baseline_remains_explicitly_resolvable() -> None:
+    clear_config_cache()
+    baseline = resolve_project_baseline("chonhac", PREVIOUS_R2_REVISION)
+
+    assert baseline is not None
+    assert baseline.project_id == "chonhac"
+    assert baseline.revision == PREVIOUS_R2_REVISION
+    assert baseline.status == "approved"
+    assert baseline.source_commit == PREVIOUS_R2_COMMIT
+
+    requirement_paths = [reference.path for reference in baseline.references.requirements]
+    quality_paths = [reference.path for reference in baseline.references.quality_policy]
+    assert "docs/26-local-demo-workflow.md" not in requirement_paths
+    assert "docs/26-local-demo-workflow.md" not in quality_paths
+    assert len(baseline.authority) == 38
+
+    clear_config_cache()
 
 
 def test_previous_r1_pilot_baseline_remains_explicitly_resolvable() -> None:
