@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
+from .incident_learning import incident_learning_candidate
+
 
 _RESOURCE_COUNTERS = {
     "max_model_calls": "model_calls",
@@ -163,6 +165,8 @@ def task_telemetry_snapshot(row: dict[str, Any]) -> dict[str, Any]:
     else:
         task_outcome = "blocked"
 
+    incident = incident_learning_candidate(row)
+
     return {
         "job_id": str(row.get("id") or ""),
         "project_id": str(row.get("project_id") or ""),
@@ -206,6 +210,10 @@ def task_telemetry_snapshot(row: dict[str, Any]) -> dict[str, Any]:
         "quota_failures": quota_failures,
         "delivery_retries": int(progress.get("delivery_retry_attempts", 0) or 0),
         "infrastructure_retries": int(progress.get("infrastructure_retry_attempts", 0) or 0),
+        "incident_learning": {
+            "candidate": incident,
+            "candidate_count": 1 if incident else 0,
+        },
     }
 
 
