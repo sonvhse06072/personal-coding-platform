@@ -37,7 +37,6 @@ def test_valid_codex_and_new_frontier_effort_are_accepted() -> None:
         ("codex_luna", "low"),
         ("codex_terra", "medium"),
         ("codex_sol", "high"),
-        ("antigravity_free", "low"),
         ("antigravity_flash_high", "medium"),
         ("antigravity_gemini_pro", "high"),
     ],
@@ -50,13 +49,12 @@ def test_historical_low_medium_high_choices_remain_valid(
 
 
 def test_unsupported_antigravity_and_claude_efforts_fail_closed() -> None:
-    with pytest.raises(ModelCapabilityError, match="unsupported"):
-        validate_model_choice(choice("antigravity_free", "max"))
-    with pytest.raises(ModelCapabilityError, match="unsupported"):
-        validate_model_choice(choice("antigravity_claude_sonnet", "low"))
-    assert not validate_model_choice(
-        choice("antigravity_claude_sonnet", None)
-    ).supports_explicit_effort
+    for model_id in ("antigravity_free", "antigravity_claude_sonnet"):
+        with pytest.raises(ModelCapabilityError, match="unsupported"):
+            validate_model_choice(choice(model_id, "low"))
+        assert not validate_model_choice(
+            choice(model_id, None)
+        ).supports_explicit_effort
 
 
 def test_unknown_model_adapter_and_upstream_mismatches_fail_closed() -> None:
@@ -109,13 +107,12 @@ def test_registry_declares_bounded_antigravity_and_full_codex_capabilities() -> 
     models = models_doc()["models"]
     for model_id in ("codex_luna", "codex_terra", "codex_sol", "frontier_codex"):
         assert reasoning_capability(model_id, models[model_id]).allowed_efforts[-1] == "max"
-    for model_id in (
-        "antigravity_free",
-        "antigravity_flash_high",
-        "antigravity_gemini_pro",
-    ):
+    for model_id in ("antigravity_flash_high", "antigravity_gemini_pro"):
         assert reasoning_capability(model_id, models[model_id]).allowed_efforts == (
             "low",
             "medium",
             "high",
         )
+    assert reasoning_capability(
+        "antigravity_free", models["antigravity_free"]
+    ).allowed_efforts == ()
