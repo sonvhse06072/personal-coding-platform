@@ -113,7 +113,7 @@ class WorkOrderVerification(BaseModel):
         ),
     )
     required_phases: list[VerificationPhase] = Field(min_length=1, max_length=4)
-    visual_routes: list[str] = Field(default_factory=list, max_length=8)
+    visual_routes: list[str] = Field(default_factory=list, max_length=4)
 
     @model_validator(mode="before")
     @classmethod
