@@ -25,14 +25,16 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP main after #438/#439 targets Runtime `1.0.98`, ddev-executor `1.0.30`,
+- PCP main after PR #442 targets Runtime `1.0.99`, ddev-executor `1.0.30`,
   Antigravity host bridge `1.13` and model registry version `11`.
 - #438 targeted-verification shell repair is complete through PR #439 at
   `841890e60e486d6e4e823b9919e9e79de6cbf6a0`.
-- #440 removes transport-level Antigravity response deltas from durable
-  Developer Activity and emits one bounded/redacted completed response instead.
-- #441 is the focused follow-up for the false `destructive_migration` signal
-  caused by treating Drupal `config/schema/*.schema.yml` metadata as a migration.
+- #440 Antigravity Developer Activity coalescing is complete through PR #442 at
+  `c2ee43c35042a58883d2f739c5efba7b528bd4db`: transport-level response
+  deltas are not persisted; Runtime emits one bounded/redacted completed response.
+- #441 narrows the `destructive_migration` path heuristic so Drupal
+  `config/schema/*.schema.yml` metadata is not treated as a destructive
+  database/content migration while true migration/schema paths remain protected.
 - #400 repository-CI parity is complete. Chợ Nhạc PR #64 merged at
   `af1e24a60fc43cae0c417dc312e7a7839f284b6b`; protected workflow changes are
   authorized by DEC-034 and use bounded changed-module Unit/Kernel/Functional
@@ -160,14 +162,12 @@ resume them.
 
 ## Active PCP follow-up work
 
-PCP #440 and #441 are the focused active platform follow-ups exposed by the
-same PILOT-01 recovery:
-- #440 — coalesce Antigravity response deltas in Developer Activity;
-- #441 — prevent false destructive-migration classification for schema metadata.
+PCP #441 is the remaining focused active platform repair exposed by PILOT-01:
+prevent false destructive-migration classification for Drupal config-schema
+metadata. #440/#442 and #438/#439 are completed.
 
-#438/#439 is completed. The #146 efficiency umbrella and its final children
-#400/#406/#421 remain closed; these are bounded incident-derived repairs, not a
-reopened umbrella.
+The #146 efficiency umbrella and its final children #400/#406/#421 remain
+closed; these are bounded incident-derived repairs, not a reopened umbrella.
 
 ## Recently completed reusable work
 
@@ -221,32 +221,30 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Keep PILOT-01 blocked while updating the platform; no engineering worker
-   should be active during rollout.
-2. Fast-forward local PCP main to include:
-   - #436 / `cf34010e18cc0580a965098456872127fee1953a`;
-   - #437 / `7b1cd6ee050440ae624a242678246f5252189195`.
-3. Restart PCP once and verify:
-   - Runtime `1.0.97`;
+1. Keep PILOT-01 at its preserved `waiting_human` checkpoint while #441 is
+   merged and rolled into the local platform; do not reroute, recreate the job,
+   or release generated PILOT-02.
+2. Fast-forward local PCP `main` after #441 and restart PCP once. Verify:
+   - Runtime `1.0.99`;
    - ddev-executor `1.0.30`;
    - Antigravity bridge `1.13`;
    - model registry `11`.
-4. Fast-forward local Chợ Nhạc `main` only when the direct job/workspace is not
-   being mutated. Do **not** reset/clean/stash the preserved PILOT-01 branch.
-   Chợ Nhạc main now contains CI parity + visual collector/redaction tooling,
-   but the current persisted PILOT-01 contract is not retroactively changed to
-   require visual evidence.
-5. Complete PCP #438 and roll its accepted configuration into the local
-   platform while PILOT-01 remains blocked.
-6. Re-enter PILOT-01 using the same job/workspace/counters only after confirming
-   the old non-raw targeted-test wrapper is no longer active. Do not reroute or
-   create a replacement job merely to escape the consumed counters.
-7. After PILOT-01 passes verification/review and is merged, stop at the
-   supervised checkpoint. Do **not** continue generated PILOT-02.
-8. Create/activate a successor Chợ Nhạc ProjectBaseline pinned to the governed
+3. Confirm the running scope classifier no longer reports
+   `destructive_migration` for
+   `web/modules/custom/cho_nhac_show/config/schema/cho_nhac_show.schema.yml`.
+4. The existing durable Human decision was created before #441 and does not
+   rewrite itself on rollout. Resolve it only against the exact unchanged
+   PILOT-01 diff/decision key. An approval, if the Human Owner chooses it, must
+   explicitly record that this is clearance of the diagnosed classifier false
+   positive and is **not** authorization for destructive migration/data writes.
+5. After the exact decision is resolved, allow the same job/workspace/counters
+   to continue through delivery and exact-head Chợ Nhạc CI. Do not reroute or
+   reset provider state.
+6. When PILOT-01 is accepted/merged, stop at the supervised checkpoint. Do
+   **not** continue generated PILOT-02.
+7. Create/activate a successor Chợ Nhạc ProjectBaseline pinned to the governed
    post-PILOT-01 main, then intake one supervised successor plan for exactly the
    seven remaining slices using #63's replan contract.
-9. Keep staging/production, public recruitment legal approval, Availability
+8. Keep staging/production, public recruitment legal approval, Availability
    salvage, Professional Reviews, Band and payment/ticket commerce outside this
    pilot path.
-
