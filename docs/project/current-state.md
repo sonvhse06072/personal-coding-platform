@@ -25,12 +25,11 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP main targets Runtime `1.0.102` after #453/#454. PCP #455 targets
-  ddev-executor `1.0.31` so read-only isolated planning can materialize the
-  exact approved baseline commit from trusted local source refs even when a
-  direct project is parked on an historical AI branch and local `main` is
-  stale. Antigravity host bridge remains `1.13`, model registry version
-  `11`.
+- PCP main targets Runtime `1.0.102` and ddev-executor `1.0.31` after
+  #453/#454 and #455/#456. PCP #457 targets Runtime `1.0.103` so PM-generated
+  visual evidence routes must be concrete local paths rather than route
+  templates such as `/events/[slug]` or `/{public_slug}`. Antigravity host
+  bridge remains `1.13`, model registry version `11`.
 - PCP #446 / PR #447 is complete at
   `645200e1f0e1ea1902569f471a53d5b90699ece6`: canonical WorkOrder diff
   identity is source-commit-relative across Runtime-created commits,
@@ -170,16 +169,15 @@ resume them.
 
 ## Active PCP follow-up work
 
-PCP #455 is the single focused active executor repair. The failed successor
-plan proved its exact r2 source commit existed in the direct Chợ Nhạc object
-store only through `refs/remotes/origin/main`; local `main` remained at the
-historical fork point while the worktree stayed on the preserved PILOT-01 AI
-branch. A normal local clone therefore omitted the baseline commit and checkout
-failed with `reference is not a tree`.
+PCP #457 is the single focused active Runtime validation repair. Successor plan
+`pm-095d6aea0fe94901bbf692fa7d113fc2` reached the initial supervised hold
+with zero jobs, but PM review found template `visual_routes` and a missing
+visual-quality requirement for the verified-performance UI slice. The initial
+hold prevented any execution.
 
-PCP #453/#454 is complete and now preserves bounded workspace error detail.
-PCP #451/#452 is also complete: new supervised plans hold before their first
-WorkOrder launch.
+PCP #455/#456 is complete and isolated PM planning now materializes the exact
+approved baseline from trusted local source refs without moving the direct
+project worktree. PCP #453/#454 and #451/#452 are also complete.
 
 ## Recently completed reusable work
 
@@ -233,21 +231,18 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Complete PCP #455 with exact-head CI and roll local PCP to Runtime
-   `1.0.102` + ddev-executor `1.0.31` only while no executor/model process
-   is active.
-2. Re-run the isolated workspace probe for r2 while leaving the direct Chợ Nhạc
-   source worktree on historical branch `ai/c02defa348fc`; the probe must
-   succeed without moving local `main`, source HEAD or index.
-3. Preserve failed plan `pm-9a3d224d78904bf0bb057c03abb9ddb9` as planning
-   evidence; do not retry it in place.
-4. Do **not** resume, reroute or continue historical PILOT-01 and do **not**
-   release generated PILOT-02.
-5. After workspace bootstrap passes, submit one new supervised successor intake
-   for exactly #48/#49/#56/#57/#58/#50/#59 using r2. Confirm initial
-   `supervised_hold` with zero child jobs before release.
-6. After exact replacement WorkOrder identities exist, supersede old
-   PILOT-01..PILOT-08 through the supported orchestration API.
+1. Complete PCP #457 with exact-head CI and roll local PCP to Runtime
+   `1.0.103` while retaining ddev-executor `1.0.31`.
+2. Keep plan `pm-095d6aea0fe94901bbf692fa7d113fc2` at its initial
+   `supervised_hold`; do not release or mutate its child WorkOrders.
+3. Create one replacement supervised successor plan for exactly
+   #48/#49/#56/#57/#58/#50/#59 using r2, with concrete deterministic fixture
+   routes for every visual-quality phase. The #50 verified-performance UI slice
+   must also require `visual_quality`.
+4. Review the replacement plan at generation-1 hold with zero child jobs.
+5. Only after it passes PM review, supersede the held `pm-095d...` plan and
+   the historical PILOT-01..PILOT-08 orchestration through the supported API.
+6. Release only AP-MVP-01 from the reviewed replacement plan.
 7. Keep staging/production, public recruitment legal approval, Availability
    salvage, Professional Reviews, Band and payment/ticket commerce outside this
    pilot path.
