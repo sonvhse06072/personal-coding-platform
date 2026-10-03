@@ -159,16 +159,28 @@ def execution_prompt(
     collaboration_context: dict[str, Any] | None = None,
     preview_context: dict[str, Any] | None = None,
     capability_context: dict[str, Any] | None = None,
+    trusted_local_developer: bool = False,
 ) -> str:
     strategy = route["strategy"]
-    lines = [
-        "You are executing a bounded coding job inside an isolated git workspace.",
-        "The repository is the source of truth. Read existing requirements, architecture docs, tests and implementation before changing code.",
-        "Do not commit, push, merge, deploy, modify git remotes, or run Docker/DDEV. The runtime owns those actions.",
-        "Do not request sandbox bypass or unsandboxed execution. Use built-in file tools and sandboxed/read-only Git commands only; if a command is denied, continue without it.",
-        "Do not broaden scope. If you discover desirable unrelated work, mention it in your final note but do not implement it.",
-        "Stop when the requested behavior is implemented. The runtime will run deterministic verification afterward.",
-    ]
+    if trusted_local_developer:
+        lines = [
+            "You are executing a bounded coding job in an exact Human-Owner-approved trusted local project workspace.",
+            "The repository is the source of truth. Read existing requirements, architecture docs, tests and implementation before changing code.",
+            "Use the local development environment directly when it helps finish the WorkOrder faster. You may run DDEV, Drupal/PHP tools, Node tooling, network-dependent package/test commands and local preview checks available to this workspace.",
+            "Run focused authoritative tests yourself during implementation/repair when practical instead of deferring obvious failures to the later Runtime verification pass.",
+            "Do not commit, push, merge, deploy, modify git remotes, alter PCP control-plane configuration, or change ProjectBaseline authority. Runtime/PM owns delivery and control-plane actions.",
+            "Do not broaden scope. If you discover desirable unrelated work, mention it in your final note but do not implement it.",
+            "Stop when the requested behavior and focused verification are complete. Runtime still owns final deterministic acceptance.",
+        ]
+    else:
+        lines = [
+            "You are executing a bounded coding job inside an isolated git workspace.",
+            "The repository is the source of truth. Read existing requirements, architecture docs, tests and implementation before changing code.",
+            "Do not commit, push, merge, deploy, modify git remotes, or run Docker/DDEV. The runtime owns those actions.",
+            "Do not request sandbox bypass or unsandboxed execution. Use built-in file tools and sandboxed/read-only Git commands only; if a command is denied, continue without it.",
+            "Do not broaden scope. If you discover desirable unrelated work, mention it in your final note but do not implement it.",
+            "Stop when the requested behavior is implemented. The runtime will run deterministic verification afterward.",
+        ]
     lines += _contract_lines(work_order=work_order, baseline=baseline)
     lines += _capability_boundary_lines(capability_context, evaluator=False)
     canonical_description = str(task.get("description") or "")
