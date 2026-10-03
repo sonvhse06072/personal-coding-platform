@@ -199,3 +199,22 @@ def test_chonhac_frontend_quality_installs_playwright_browser_for_runtime_user()
         "playwright install --with-deps chromium" not in command
         for command in commands
     )
+
+
+def test_chonhac_visual_quality_is_local_bounded_and_after_frontend_quality():
+    doc = yaml.safe_load((ROOT / "config/projects.yml").read_text())
+    project = doc["projects"]["chonhac"]
+    preview = project["preview"]
+    ddev = project["ddev"]
+
+    assert project["runtime"]["workspace_mode"] == "direct"
+    assert project["runtime"]["exclusive_project_lease"] is True
+    assert preview["frontend"]["enabled"] is True
+    assert preview["visual_evidence"]["internal_base_url"] == "http://127.0.0.1:3100"
+    assert preview["visual_evidence"]["viewports"] == [360, 390, 430, 768, 1024, 1440]
+    assert ddev["visual_quality"] == [
+        "ddev exec bash -lc 'cd frontend && npm run test:visual'"
+    ]
+    assert ddev["verification_phase_capabilities"]["visual_quality"]["requires"] == [
+        "local_listener"
+    ]
