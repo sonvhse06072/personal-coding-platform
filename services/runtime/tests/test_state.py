@@ -190,3 +190,55 @@ def test_validate_workspace_requires_exact_job_directory(tmp_path: Path):
     (other / ".git").mkdir(parents=True)
     with pytest.raises(RuntimeError):
         validate_workspace(root, "job12345", other)
+
+
+def test_pending_reviewer_finding_survives_pm_reassessment_failure_on_resume() -> None:
+    checkpoint = {
+        "work_order": {"id": "GH-63-PILOT-01"},
+        "pending_review_findings": {
+            "diff_hash": "dec031-diff",
+            "findings": [
+                {
+                    "id": "DEC031-CACHE-01",
+                    "severity": "high",
+                    "category": "security",
+                    "message": "Propagate the gate config cacheability.",
+                    "evidence_refs": ["ShowPositionAccessControlHandler.php"],
+                }
+            ],
+        },
+        "last_review_report": {
+            "verdict": "fail",
+            "summary": "DEC-031 gate cache invalidation is incomplete.",
+        },
+    }
+
+    failure = review_repair_prompt_failure(
+        checkpoint,
+        'invalid model selection: --effort is not supported for model "gemini-3.8-flash-medium"',
+    )
+
+    assert failure is not None
+    assert failure.startswith("PCP_REVIEW_FINDINGS: ")
+    assert "DEC031-CACHE-01" in failure
+    assert "GH-63-PILOT-01" in failure
+    assert "sha256:dec031-diff" in failure
+    assert "LATEST_OPERATIONAL_CONTEXT" in failure
+    assert "invalid model selection" in failure
+
+
+def test_pending_pm_review_repair_still_takes_priority_over_reviewer_findings() -> None:
+    checkpoint = {
+        "pending_review_repair": {"message": "PCP_PM_REVIEW_REPAIR: exact delivered repair"},
+        "pending_review_findings": {
+            "diff_hash": "review-diff",
+            "findings": [{"id": "F-1", "message": "older reviewer finding"}],
+        },
+    }
+
+    failure = review_repair_prompt_failure(checkpoint, "provider temporarily unavailable")
+
+    assert failure is not None
+    assert failure.startswith("PCP_PM_REVIEW_REPAIR: exact delivered repair")
+    assert "LATEST_OPERATIONAL_CONTEXT" in failure
+    assert "older reviewer finding" not in failure
