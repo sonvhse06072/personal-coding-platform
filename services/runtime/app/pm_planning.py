@@ -44,6 +44,25 @@ DecisionCategory = Literal[
 ]
 
 
+_PROFILE_RANK = {"fast": 0, "standard": 1, "complex": 2, "critical": 3}
+_PM_RISK_PROFILE_FLOOR = {
+    "routine": "fast",
+    "standard": "standard",
+    "high": "complex",
+    "critical": "critical",
+}
+_PM_FLAG_PROFILE_FLOOR = {
+    "security_sensitive": "complex",
+    "schema_change": "complex",
+    "authentication_change": "critical",
+    "authorization_change": "critical",
+    "production_write": "critical",
+    "destructive_migration": "critical",
+    "branch_protection_change": "critical",
+    "secret_management_change": "critical",
+}
+
+
 class PMTicket(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -204,6 +223,25 @@ def _validate_decision_references(
                 )
 
 
+def _required_pm_work_order_profile(work_order: WorkOrder) -> str:
+    required = _PM_RISK_PROFILE_FLOOR[work_order.risk.level]
+    for flag in work_order.risk.flags:
+        candidate = _PM_FLAG_PROFILE_FLOOR.get(flag)
+        if candidate is not None and _PROFILE_RANK[candidate] > _PROFILE_RANK[required]:
+            required = candidate
+    return required
+
+
+def _validate_pm_work_order_profile_budget(work_order: WorkOrder) -> None:
+    required = _required_pm_work_order_profile(work_order)
+    actual = work_order.budget.max_profile
+    if _PROFILE_RANK[actual] < _PROFILE_RANK[required]:
+        raise ValueError(
+            f"WorkOrder {work_order.id!r} budget.max_profile {actual!r} is below "
+            f"its PM execution-risk floor {required!r}"
+        )
+
+
 def _validate_dependency_graph(work_orders: list[WorkOrder]) -> list[str]:
     by_id = {work_order.id: work_order for work_order in work_orders}
     if len(by_id) != len(work_orders):
@@ -259,6 +297,7 @@ def validate_plan_proposal(
             raise ValueError(
                 f"WorkOrder {work_order.id!r} must set parent_ticket to {ticket.id!r}"
             )
+        _validate_pm_work_order_profile_budget(work_order)
         validate_work_order_against_baseline(work_order, baseline, project)
 
     ready_ids = _validate_dependency_graph(proposal.work_orders)
