@@ -328,6 +328,64 @@ class PlanOrchestratorStore:
                             timestamp,
                         ),
                     )
+
+                # New supervised plans are held before generation-zero launch so
+                # their decomposition can be reviewed before any executor job,
+                # workspace mutation or project lease is created. Historical
+                # generation-zero plans retain their existing semantics because
+                # only newly registered plans receive this checkpoint.
+                if (
+                    plan_execution_mode(plan) == "supervised"
+                    and not plan.get("decision_boundaries")
+                    and work_orders
+                ):
+                    states = {
+                        str(work_order["id"]): "pending"
+                        for work_order in work_orders
+                    }
+                    ready = sorted(dependency_ready_work_order_ids(plan, states))
+                    if ready:
+                        checkpoint = self._append_checkpoint(
+                            conn,
+                            checkpoint_key=f"plan:supervision-initial:{row['id']}",
+                            plan_id=str(row["id"]),
+                            work_order_id=ready[0],
+                            kind="supervision_initial",
+                            state="pending",
+                            evidence={"ready_work_order_ids": ready},
+                        )
+                        generation = 1
+                        continuation_key = build_continuation_key(
+                            plan_id=str(row["id"]),
+                            generation=generation,
+                            checkpoint_id=int(checkpoint["id"]),
+                            checkpoint_key=str(checkpoint["checkpoint_key"]),
+                            ready_work_order_ids=ready,
+                        )
+                        conn.execute(
+                            """UPDATE cp_plan_orchestrations
+                            SET status='supervised_hold',
+                                supervision_generation=%s,
+                                supervision_state='held',
+                                supervision_checkpoint_id=%s,
+                                supervision_checkpoint_key=%s,
+                                supervision_checkpoint_work_order_id=%s,
+                                supervision_ready_work_order_ids=%s::jsonb,
+                                supervision_continuation_key=%s,
+                                supervision_released_at=NULL,
+                                updated_at=%s
+                            WHERE plan_id=%s""",
+                            (
+                                generation,
+                                checkpoint["id"],
+                                checkpoint["checkpoint_key"],
+                                checkpoint["work_order_id"],
+                                json.dumps(ready),
+                                continuation_key,
+                                timestamp,
+                                row["id"],
+                            ),
+                        )
                 registered.append(str(row["id"]))
             conn.commit()
         return registered
@@ -712,19 +770,36 @@ class PlanOrchestratorStore:
                 raise PlanContinuationConflict("ExecutionPlan is not at the current supervised hold")
 
             rows = list(conn.execute(
-                """SELECT work_order_id,state FROM cp_plan_work_orders
+                """SELECT work_order_id,state,job_id FROM cp_plan_work_orders
                 WHERE plan_id=%s AND lifecycle='active'
                 ORDER BY sequence_no,work_order_id""",
                 (plan_id,),
             ).fetchall())
             states = {str(row["work_order_id"]): str(row["state"]) for row in rows}
             terminal = self._terminal_checkpoint(conn, plan_id)
+
+            held_checkpoint = terminal
+            if terminal is None and generation == 1:
+                initial = conn.execute(
+                    """SELECT * FROM cp_plan_work_order_checkpoints
+                    WHERE plan_id=%s AND id=%s AND checkpoint_key=%s
+                      AND kind='supervision_initial' AND state='pending'
+                    LIMIT 1""",
+                    (plan_id, checkpoint_id, checkpoint_key),
+                ).fetchone()
+                if (
+                    initial is not None
+                    and all(str(row["state"]) == "pending" for row in rows)
+                    and all(row.get("job_id") is None for row in rows)
+                ):
+                    held_checkpoint = dict(initial)
+
             if (
                 any(state in _BUSY_WORK_ORDER_STATES | {"blocked"} for state in states.values())
                 or sorted(dependency_ready_work_order_ids(plan, states)) != ready
-                or terminal is None
-                or terminal.get("id") != checkpoint_id
-                or terminal.get("checkpoint_key") != checkpoint_key
+                or held_checkpoint is None
+                or held_checkpoint.get("id") != checkpoint_id
+                or held_checkpoint.get("checkpoint_key") != checkpoint_key
             ):
                 raise PlanContinuationConflict("Durable plan state no longer matches the held continuation")
             self._mark_supervision_released(conn, plan_id=plan_id, generation=generation)
