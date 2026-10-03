@@ -311,6 +311,7 @@ def evaluator_prompt(
         "If the pack is insufficient for one concrete finding, use the permitted read-only repository access just in time and retrieve only the smallest relevant context.",
         "PASS only when the authoritative Task Contract/WorkOrder, scope, deterministic evidence, correctness, security, regressions and required tests are satisfactory.",
         "FAIL only for concise actionable findings that can change code/tests/decision; avoid style-only or speculative findings.",
+        "When REVIEW_EVIDENCE_PACK contains visual_quality evidence, treat route/viewport/HTTP/DOM/console/network data as deterministic browser evidence. Screenshot path/hash proves capture only. If image_reviewed=false, do not make pixel-level, aesthetic, spacing, color, typography, or visual-composition claims from the screenshot.",
     ]
     lines += _capability_boundary_lines(capability_context, evaluator=True)
     lines += [
