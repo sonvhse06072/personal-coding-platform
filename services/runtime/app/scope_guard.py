@@ -68,6 +68,11 @@ _PRODUCTION_PATH_TERMS = {
 }
 
 
+def _is_drupal_config_schema_metadata(path: str, name: str) -> bool:
+    """Return True for Drupal config-schema metadata, not DB/data migrations."""
+    return "/config/schema/" in f"/{path}" and name.endswith(".schema.yml")
+
+
 def normalize_changed_paths(raw_paths: Iterable[Any]) -> list[str]:
     paths: list[str] = []
     for raw in raw_paths:
@@ -145,7 +150,11 @@ def changed_path_protected_signals(
         if _SECURITY_PATH_TERMS & (parts | stem_parts):
             signals.add("security_boundary_change")
 
-        if "migration" in parts or "migrations" in parts or "schema" in stem_parts:
+        schema_filename_signal = (
+            "schema" in stem_parts
+            and not _is_drupal_config_schema_metadata(path, name)
+        )
+        if "migration" in parts or "migrations" in parts or schema_filename_signal:
             signals.add("destructive_migration")
 
         if _PRODUCTION_PATH_TERMS & (parts | stem_parts):
