@@ -209,8 +209,7 @@ class StreamingBridge(legacy.Bridge):
                     effort=effort,
                     timeout=timeout,
                     output_format="stream-json",
-                    sandbox=not trusted_local,
-                    dangerously_skip_permissions=trusted_local,
+                    sandbox=True,
                 )
                 env = os.environ.copy()
                 env["NO_COLOR"] = "1"
@@ -233,6 +232,11 @@ class StreamingBridge(legacy.Bridge):
                 safe_stream_failure: str | None = None
                 try:
                     with bridge._agy_lock:
+                        original_settings = (
+                            legacy.apply_trusted_local_ddev_permission(bridge.settings)
+                            if trusted_local
+                            else None
+                        )
                         if bridge.consume_cancelled(run_id):
                             return self._write_ndjson({
                                 "bridge_event": "result",
@@ -328,7 +332,9 @@ class StreamingBridge(legacy.Bridge):
                 finally:
                     if proc is not None:
                         bridge.unregister_run(run_id)
-                    if scoped_allow or scoped_deny:
+                    if original_settings is not None:
+                        legacy.restore_settings(bridge.settings, original_settings)
+                    elif scoped_allow or scoped_deny:
                         legacy.remove_workspace_file_rules(
                             bridge.settings, scoped_allow, scoped_deny
                         )
