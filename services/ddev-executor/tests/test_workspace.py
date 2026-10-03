@@ -898,14 +898,19 @@ def test_direct_planning_clone_materializes_baseline_from_remote_tracking_ref(
     assert workspace == (workspaces / "plan-remote-ref-123").resolve()
     assert run("git", "rev-parse", "HEAD", cwd=workspace) == remote_head
     assert run("git", "remote", cwd=workspace) == ""
-    assert run(
-        "git",
-        "show-ref",
-        "--verify",
-        "--quiet",
-        "refs/pcp/materialized-source",
-        cwd=workspace,
-    ) == ""
+    assert subprocess.run(
+        [
+            "git",
+            "-C",
+            str(workspace),
+            "show-ref",
+            "--verify",
+            "--quiet",
+            "refs/pcp/materialized-source",
+        ],
+        text=True,
+        capture_output=True,
+    ).returncode != 0
 
     # Planning materialization must not move or modify the direct source repo.
     assert run("git", "branch", "--show-current", cwd=source) == "ai/historical-job"
