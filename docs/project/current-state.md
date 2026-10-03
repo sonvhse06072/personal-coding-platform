@@ -25,10 +25,11 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP main currently targets Runtime `1.0.100`; PCP #451 targets Runtime
-  `1.0.101` so newly registered supervised plans hold before their first
-  WorkOrder launch. ddev-executor remains `1.0.30`, Antigravity host bridge
-  `1.13`, model registry version `11`.
+- PCP main targets Runtime `1.0.101` after #451/#452. PCP #453 targets
+  Runtime `1.0.102` so workspace-creation failures preserve bounded
+  ddev-executor detail instead of collapsing to a generic HTTPStatusError.
+  ddev-executor remains `1.0.30`, Antigravity host bridge `1.13`, model
+  registry version `11`.
 - PCP #446 / PR #447 is complete at
   `645200e1f0e1ea1902569f471a53d5b90699ece6`: canonical WorkOrder diff
   identity is source-commit-relative across Runtime-created commits,
@@ -168,12 +169,15 @@ resume them.
 
 ## Active PCP follow-up work
 
-PCP #451 is the single focused active Runtime repair required before successor
-pilot intake: newly registered `execution_mode=supervised` plans must create a
-durable initial supervision hold before any WorkOrder job is created/enqueued.
+PCP #453 is the single focused active Runtime observability repair. Natural
+successor-plan evidence showed that PM planning failed before the Product
+Manager model call because ddev-executor returned HTTP 422 while creating the
+read-only isolated planning workspace, but Runtime discarded the executor
+`detail`.
 
-The PILOT-01 incident repairs #438/#439, #440/#442, #441/#443 and #446/#447 are
-completed. Chợ Nhạc CI incidents #68/#69 and #70/#71 are also resolved.
+PCP #451/#452 is complete: new supervised plans hold before their first
+WorkOrder launch. The PILOT-01 incident repairs #438/#439, #440/#442,
+#441/#443 and #446/#447 are also complete.
 
 ## Recently completed reusable work
 
@@ -227,22 +231,22 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Complete PCP #451 with exact-head CI, merge, then roll local PCP to Runtime
-   `1.0.101` only while no executor/model process is active.
-2. Verify active Chợ Nhạc baseline remains
-   `pilot-v1-2026-10-04-dec033-r2` at
-   `aa8e68dd9aea6740de446151eb97615931de9b40`.
-3. Do **not** resume, reroute or continue the historical PILOT-01 job merely to
-   make Runtime state look completed; preserve it as incident/work evidence.
-4. Do **not** release generated PILOT-02 from plan
-   `pm-5cd9ec06f74b4feba4db5a1507ab35f0`.
-5. Intake one supervised successor plan for exactly #48/#49/#56/#57/#58/#50/#59
-   using r2. Confirm the new plan is at initial `supervised_hold` with zero
-   WorkOrder jobs before reviewing/releasing it.
-6. After the successor plan exists and exact replacement WorkOrder identities
-   are known, supersede the old PILOT-01..PILOT-08 orchestration through the
-   supported API; link PILOT-02..08 to their replacements and retire PILOT-01
-   without replacement because it is already merged.
+1. Complete PCP #453 with exact-head CI and roll local PCP to Runtime
+   `1.0.102` only while no executor/model process is active.
+2. Diagnose the failed successor plan
+   `pm-9a3d224d78904bf0bb057c03abb9ddb9` at the workspace boundary before
+   retrying planning. It selected `codex_terra` correctly but failed before
+   model invocation with ddev-executor HTTP 422.
+3. Verify local Chợ Nhạc direct repo can resolve baseline source
+   `aa8e68dd9aea6740de446151eb97615931de9b40`; if it is stale, reconcile the
+   clean local base branch without touching preserved historical job state.
+4. Do **not** resume, reroute or continue the historical PILOT-01 job and do
+   **not** release generated PILOT-02.
+5. Only after workspace bootstrap is repaired, intake one supervised successor
+   plan for exactly #48/#49/#56/#57/#58/#50/#59 using r2. Confirm initial
+   `supervised_hold` with zero child jobs before release.
+6. After exact replacement WorkOrder identities exist, supersede the old
+   PILOT-01..PILOT-08 orchestration through the supported API.
 7. Keep staging/production, public recruitment legal approval, Availability
    salvage, Professional Reviews, Band and payment/ticket commerce outside this
    pilot path.
