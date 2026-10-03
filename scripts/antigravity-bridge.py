@@ -62,6 +62,7 @@ def build_run_command(
     timeout: int,
     output_format: str,
     sandbox: bool = True,
+    dangerously_skip_permissions: bool = False,
 ) -> list[str]:
     cmd = [
         agy_bin,
@@ -70,6 +71,8 @@ def build_run_command(
     ]
     if sandbox:
         cmd.append("--sandbox")
+    if dangerously_skip_permissions:
+        cmd.append("--dangerously-skip-permissions")
     if effort in _REASONING_EFFORTS:
         cmd.extend(["--effort", effort])
     cmd.extend(["--print-timeout", f"{timeout}s"])
@@ -120,44 +123,6 @@ def _write_settings(path: Path, data: dict) -> None:
     tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.chmod(tmp, 0o600)
     tmp.replace(path)
-
-
-TRUSTED_LOCAL_REMOVED_DENY_RULES = {
-    "command(ddev)",
-    "unsandboxed(ddev)",
-}
-
-
-def apply_trusted_local_developer_settings(path: Path) -> dict:
-    """Temporarily widen one local developer run, returning exact prior settings."""
-
-    original = _read_settings(path)
-    data = json.loads(json.dumps(original))
-    data["enableTerminalSandbox"] = False
-    data["toolPermission"] = "always-proceed"
-    data["artifactReviewPolicy"] = "always-proceed"
-    # File tools remain workspace-scoped. Unsandboxed terminal execution is enough
-    # for DDEV/PHP/Node/network work without exposing arbitrary host files.
-    data["allowNonWorkspaceAccess"] = False
-
-    allow, deny, ask = _permission_lists(data)
-    data["permissions"]["deny"] = [
-        rule for rule in deny if rule not in TRUSTED_LOCAL_REMOVED_DENY_RULES
-    ]
-    if "command(ddev)" not in allow:
-        allow.append("command(ddev)")
-    # Explicit command(*) Ask would override the DDEV allow rule. In trusted-local
-    # execute/repair, toolPermission=always-proceed is the intended fallback.
-    data["permissions"]["ask"] = [
-        rule for rule in ask if rule != "command(*)"
-    ]
-
-    _write_settings(path, data)
-    return original
-
-
-def restore_settings(path: Path, original: dict) -> None:
-    _write_settings(path, original)
 
 
 def _permission_lists(data: dict) -> tuple[list[str], list[str], list[str]]:
@@ -441,6 +406,7 @@ class Bridge:
                         timeout=timeout,
                         output_format="json",
                         sandbox=not trusted_local,
+                        dangerously_skip_permissions=trusted_local,
                     )
 
                     env = os.environ.copy()
@@ -449,26 +415,19 @@ class Bridge:
                     # settings.json is global to the signed-in host account. One run
                     # at a time receives absolute grants for only its isolated clone.
                     with bridge._agy_lock:
-                        original_settings = None
-                        scoped_allow: set[str] = set()
-                        scoped_deny: set[str] = set()
+                        if bridge.consume_cancelled(run_id):
+                            return self.send_json(200, {
+                                "run_id": run_id,
+                                "returncode": 130,
+                                "stdout": "",
+                                "stderr": "Antigravity run cancelled before start",
+                                "payload": None,
+                            })
+                        scoped_allow, scoped_deny = add_workspace_file_rules(
+                            bridge.settings, workspace
+                        )
+                        proc = None
                         try:
-                            if trusted_local:
-                                original_settings = apply_trusted_local_developer_settings(
-                                    bridge.settings
-                                )
-                            if bridge.consume_cancelled(run_id):
-                                return self.send_json(200, {
-                                    "run_id": run_id,
-                                    "returncode": 130,
-                                    "stdout": "",
-                                    "stderr": "Antigravity run cancelled before start",
-                                    "payload": None,
-                                })
-                            scoped_allow, scoped_deny = add_workspace_file_rules(
-                                bridge.settings, workspace
-                            )
-                            proc = None
                             if bridge.consume_cancelled(run_id):
                                 return self.send_json(200, {
                                     "run_id": run_id,
@@ -502,12 +461,9 @@ class Bridge:
                             finally:
                                 bridge.unregister_run(run_id)
                         finally:
-                            if original_settings is not None:
-                                restore_settings(bridge.settings, original_settings)
-                            elif scoped_allow or scoped_deny:
-                                remove_workspace_file_rules(
-                                    bridge.settings, scoped_allow, scoped_deny
-                                )
+                            remove_workspace_file_rules(
+                                bridge.settings, scoped_allow, scoped_deny
+                            )
 
                     parsed = None
                     try:
