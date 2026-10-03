@@ -4,8 +4,8 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 live Runtime/GitHub evidence remain authoritative over chat history. Completed
 chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-10-02 after GH-42 WO-02 platform-blocker diagnosis and
-bounded source-continuity repair preparation.
+Last updated: 2026-10-03 after Chợ Nhạc DEC-033 pilot reset, unified
+ProjectBaseline activation and trusted-local developer rollout preparation.
 
 ## Resume order
 
@@ -25,14 +25,19 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP source after #419 targets Runtime `1.0.93` while ddev-executor remains
-  `1.0.29`: it includes #399 PHP-runtime capability advertising, #415
-  source-relative PM-reassessment snapshot repair, and moves Chợ Nhạc
-  code-sensitive `drush cr` from preflight into targeted verification so a
-  preserved broken worktree can reach the normal developer repair loop.
-- The deployed local Runtime/service identities are time-sensitive. The current
-  live rollout is now Runtime `1.0.92` / ddev-executor `1.0.29`; the next
-  stable WO-03 blocker checkpoint should roll out #419 / Runtime `1.0.93`.
+- PCP main after PR #427 targets Runtime `1.0.94` and Antigravity host
+  bridge `1.13`; ddev-executor remains `1.0.29`.
+- Chợ Nhạc is the first project with
+  `runtime.developer_permission_mode: trusted_local`.
+- Trusted-local execution is deliberately narrow: exact direct Chợ Nhạc
+  workspace + `antigravity_host` + execute/repair only. The developer keeps the
+  normal terminal sandbox but receives a temporary `unsandboxed(ddev)` grant
+  so it can run authoritative Drupal/PHP/Node verification through DDEV.
+- Plan/evaluate, Codex/OpenCode, other projects/workspaces, direct Docker, sudo
+  and remote/destructive Git remain bounded. PM/Runtime still own scope,
+  deterministic final verification, review, merge and deploy gates.
+- PR #427 merged as `c5cf4af4eb9072854c967a4a21928c2a9aca0412`
+  after exact-head structure/Router/Runtime/ddev-executor CI passed.
 - PM-controlled merge is enabled for Chợ Nhạc routine/standard WorkOrders under
   the existing exact-head/verification/review/protected-boundary gates (#416).
   Developer agents never merge; complex/critical or unresolved protected
@@ -67,11 +72,15 @@ rollout/incident rationale belongs in `history/episodes.md`.
 
 ## Chợ Nhạc project state
 
-Approved ProjectBaseline for new PCP-managed Chợ Nhạc work:
+Approved ProjectBaseline for **new** PCP-managed Chợ Nhạc work:
 
-- active revision: `mvp-v1-2026-10-01-completion`;
+- active revision: `pilot-v1-2026-10-03-dec033`;
 - immutable baseline source:
-  `6038857e33d3717321a54e35743fa8b9dbeba8d2`;
+  `132c2ef767b595833677e9672d655872e07ba9b7`;
+- PCP baseline activation merged through PR #425 at
+  `ccdd1712ff8ea75a14a061b30122dc4988558630`;
+- pre-existing GH-42 plan/jobs keep their stored
+  `mvp-v1-2026-10-01-completion` baseline until explicitly superseded;
 - protected completion authority includes the current MVP contract,
   permissions/access matrix, business rules and architecture documents pinned
   by `config/project-baselines.yml`;
@@ -85,26 +94,24 @@ the live product repository must remain at that commit.
 
 Current implementation evidence:
 
-- Chợ Nhạc GH-42 is the active MVP implementation umbrella;
-- plan: `pm-c63bc4f63c084dd1ac4eed9cf80ec87a`;
+- DEC-033 is the canonical successor execution decision.
+- Chợ Nhạc #63 is the single controlled-pilot execution umbrella for new work.
+- The old GH-42 plan `pm-c63bc4f63c084dd1ac4eed9cf80ec87a` is preserved
+  history, not the successor pilot critical path.
 - WO-01 `GH-42-WO-01-show-domain-api` completed; PR #44 merged at
-  `e8ccde0f9854fa86a9fa37fe9504fb63c90a477f`;
+  `e8ccde0f9854fa86a9fa37fe9504fb63c90a477f`.
 - WO-02 `GH-42-WO-02-show-frontend` completed; PR #45 merged at
-  `dc8d60ae0c8ce913146e1c417d11ca37b20874ee`;
-- WO-03 `GH-42-WO-03-availability` is the active preserved WorkOrder, job
-  `c7011f370eb153acb7786b5a3e3cbff8`, currently blocked at
-  `pm_reassessment_failed`;
-- WO-03 deterministic static/targeted/full/frontend verification passed, while
-  independent review correctly requested bounded repairs for scheduling-hint
-  semantics, schedule-dependent cache invalidation and HTTP privacy/access
-  coverage;
-- #415 was rolled out successfully; the current blocker is a real Drupal
-  service-container failure in the preserved WO-03 diff:
-  `cho_nhac_profile.api_repository` references missing
-  `cho_nhac_availability.manager`;
-- PCP #419 moves `drush cr` out of preflight so this code defect can return to
-  the same-job developer repair loop instead of deadlocking before execution;
-- WO-04 through WO-08 remain dependency-ordered successors.
+  `dc8d60ae0c8ce913146e1c417d11ca37b20874ee`.
+- WO-03 `GH-42-WO-03-availability`, job
+  `c7011f370eb153acb7786b5a3e3cbff8`, remains blocked at
+  `pm_reassessment_failed`; its latest evaluator findings are bounded
+  Availability kernel/functional verification plus cleanup of one zero-test
+  frontend file.
+- Availability remains KEEP as Chợ Nhạc #62, but is outside the first pilot
+  critical path.
+- Before #63 intake: preserve WO-03 diff/evidence, cancel its Runtime job to
+  release the direct-project lease, supersede WO-03..WO-08, and keep WO-01/02
+  as completed historical checkpoints.
 
 Before acting on WO-02, verify the live WorkOrder/job/branch/lease rather than
 guessing an identity from WO-01.
@@ -208,21 +215,19 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Merge/roll out PCP #419 / Runtime `1.0.93` only while WO-03 remains stably
-   blocked and no engineering worker is active; preserve exact job/workspace/
-   source/diff/counters.
-2. Resume the exact WO-03 job with no reroute/provider reset/replacement.
-   Preflight should stop after DDEV start + Composer preparation and reach the
-   developer turn; mandatory `drush cr` then runs first in targeted
-   verification.
-3. Repair the current Chợ Nhạc service wiring inside WO-03 rather than masking
-   it: the already-enabled Profile module must not hard-require a concrete
-   Availability service before the new Availability module is enabled.
-4. Preserve the evaluator repairs AVL-001/002/003: no-row discovery has no hint,
-   schedule-filtered public cache state must invalidate on Availability/Booking
-   changes, and HTTP privacy/access boundaries need functional coverage.
-5. Chợ Nhạc routine/standard deliveries now use constrained PM-controlled merge;
-   Human Owner remains required for complex/critical or unresolved protected
-   decisions.
-6. Keep #400 bounded to repository-CI follow-up and #406 to reviewed
-   continuity/TaskOutcome/tiered-memory implementation.
+1. Roll local PCP to main containing PR #427 only while GH-42 WO-03 remains
+   stably blocked and no engineering worker is active.
+2. Verify deployed identities: Runtime `1.0.94`, Antigravity bridge `1.13`,
+   ddev-executor `1.0.29`.
+3. Preserve exact WO-03 status/diff/untracked-file evidence for Chợ Nhạc #62.
+4. Cancel exact job `c7011f370eb153acb7786b5a3e3cbff8` after preservation so
+   the direct-project lease can be restored/released; do not resume it again.
+5. Explicitly supersede GH-42 WO-03 through WO-08. Leave WO-01/WO-02 completed.
+6. Confirm the old plan has no ready active successor WorkOrder and close #42 as
+   superseded execution scope.
+7. Intake Chợ Nhạc #63 with planning profile `complex`, execution mode
+   `supervised`, and revision `pilot-v1-2026-10-03-dec033`.
+8. At each supervised WorkOrder checkpoint, Chat PM reviews durable evidence and
+   releases the next ready set; developers may use trusted-local DDEV internally.
+9. Keep staging/production and DEC-025 operator actions outside autonomous
+   developer authority.
