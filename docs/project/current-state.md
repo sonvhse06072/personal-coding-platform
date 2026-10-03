@@ -120,15 +120,19 @@ Current implementation evidence:
 - Progress remains 0/8 completed; PILOT-02..PILOT-08 are untouched/pending.
 - The earlier `pm_reassessment_failed` / Flash Medium effort incident is
   repaired at the platform layer and is no longer the current blocker.
-- The exact latest deterministic command/output must be inspected from the
-  Runtime Dashboard job activity before another repair/resume. Authenticated
-  `JobView` intentionally omits internal checkpoint/progress/activity details.
-- Dashboard activity authority for the job is the job Activity view backed by
-  `/v1/dashboard/jobs/{job_id}/events`; it requires the dashboard read session,
-  not the Runtime bearer token.
-- Do not reroute merely because the job is blocked. The current evidence points
-  to deterministic test failure, so identify the exact failing command/assertion
-  first and repair the same job/workspace when the fix is code-side.
+- Checkpoint-39 activity identified the current failure as a PCP verification
+  wrapper defect rather than a Chợ Nhạc product/test defect: `ddev drush cr`
+  passes, then the changed-module runner fails before PHPUnit with
+  `modules: unbound variable`.
+- PCP #438 repairs the nested DDEV shell boundary by using raw argv execution
+  while preserving working-tree changed-module detection relative to `HEAD`.
+  Do not resume PILOT-01 until the accepted #438 fix is present in the locally
+  running platform and the old wrapper fingerprint can no longer execute.
+- Dashboard activity authority for the job remains the job Activity view backed
+  by `/v1/dashboard/jobs/{job_id}/events`; authenticated `JobView` intentionally
+  omits internal checkpoint/progress/activity details.
+- Do not reroute merely because the job is blocked. Preserve the same
+  job/workspace/counters and recover only after the platform verifier is fixed.
 - Chat PM has approved PILOT-01 scope but **generated PILOT-02..PILOT-08 must not
   be released unchanged**. After PILOT-01 is accepted/merged, create a successor
   ProjectBaseline pinned to the then-current governed Chợ Nhạc main (including
@@ -144,12 +148,12 @@ resume them.
 
 ## Active PCP follow-up work
 
-There are currently **no open PCP implementation issues**.
+PCP #438 is the only focused active platform repair: fix Chợ Nhạc targeted
+verification shell quoting exposed by PILOT-01 checkpoint 39.
 
 The #146 efficiency umbrella and its final active children #400/#406/#421 are
-completed. Natural project work is now the calibration source. Open a focused
-successor issue only when durable Runtime/GitHub evidence identifies a concrete
-regression, missing invariant or bounded improvement.
+completed. Natural project work remains the calibration source; #438 is a
+bounded incident-derived repair, not a reopened umbrella.
 
 ## Recently completed reusable work
 
@@ -218,14 +222,11 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
    Chợ Nhạc main now contains CI parity + visual collector/redaction tooling,
    but the current persisted PILOT-01 contract is not retroactively changed to
    require visual evidence.
-5. Before any new PILOT-01 repair/resume, inspect exact latest activity for job
-   `c02defa348fc5b19a0bd021e2697571e` in the Runtime Dashboard. Capture the
-   failing `targeted_tests` command and bounded output associated with
-   checkpoint 39.
-6. Diagnose the deterministic failure before spending another model/test cycle.
-   If it is a code/test defect within PILOT-01, repair the same job/workspace;
-   do not reroute or create a replacement job. If it is a platform verification
-   defect, open/fix one focused PCP issue first.
+5. Complete PCP #438 and roll its accepted configuration into the local
+   platform while PILOT-01 remains blocked.
+6. Re-enter PILOT-01 using the same job/workspace/counters only after confirming
+   the old non-raw targeted-test wrapper is no longer active. Do not reroute or
+   create a replacement job merely to escape the consumed counters.
 7. After PILOT-01 passes verification/review and is merged, stop at the
    supervised checkpoint. Do **not** continue generated PILOT-02.
 8. Create/activate a successor Chợ Nhạc ProjectBaseline pinned to the governed
