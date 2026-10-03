@@ -48,7 +48,7 @@ def test_bridge_keeps_explicit_supported_effort() -> None:
     assert cmd[cmd.index("--effort") + 1] == "low"
 
 
-def test_bridge_trusted_local_run_disables_sandbox_and_skips_permissions() -> None:
+def test_bridge_trusted_local_run_keeps_terminal_sandbox() -> None:
     module = load_bridge()
 
     cmd = module.build_run_command(
@@ -58,12 +58,51 @@ def test_bridge_trusted_local_run_disables_sandbox_and_skips_permissions() -> No
         effort="medium",
         timeout=60,
         output_format="stream-json",
-        sandbox=False,
-        dangerously_skip_permissions=True,
+        sandbox=True,
     )
 
-    assert "--sandbox" not in cmd
-    assert "--dangerously-skip-permissions" in cmd
+    assert "--sandbox" in cmd
+    assert "--dangerously-skip-permissions" not in cmd
+
+
+def test_bridge_trusted_local_permission_grants_only_ddev(tmp_path: Path) -> None:
+    module = load_bridge()
+    settings = tmp_path / "settings.json"
+    original = {
+        "enableTerminalSandbox": True,
+        "toolPermission": "proceed-in-sandbox",
+        "artifactReviewPolicy": "always-proceed",
+        "allowNonWorkspaceAccess": False,
+        "enableTelemetry": False,
+        "permissions": {
+            "allow": ["unsandboxed(git status)"],
+            "deny": [
+                "command(ddev)",
+                "unsandboxed(ddev)",
+                "command(docker)",
+                "unsandboxed(docker)",
+                "command(sudo)",
+                "unsandboxed(sudo)",
+            ],
+            "ask": ["command(*)"],
+        },
+    }
+    import json
+    settings.write_text(json.dumps(original), encoding="utf-8")
+
+    snapshot = module.apply_trusted_local_ddev_permission(settings)
+    active = json.loads(settings.read_text(encoding="utf-8"))
+
+    assert snapshot == original
+    assert "unsandboxed(ddev)" in active["permissions"]["allow"]
+    assert "command(ddev)" not in active["permissions"]["deny"]
+    assert "unsandboxed(ddev)" not in active["permissions"]["deny"]
+    assert "command(docker)" in active["permissions"]["deny"]
+    assert "command(sudo)" in active["permissions"]["deny"]
+    assert active["permissions"]["ask"] == ["command(*)"]
+
+    module.restore_settings(settings, snapshot)
+    assert json.loads(settings.read_text(encoding="utf-8")) == original
 
 
 def test_bridge_bounded_run_keeps_sandbox_and_permissions() -> None:
