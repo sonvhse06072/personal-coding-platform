@@ -161,7 +161,7 @@ def test_antigravity_trusted_local_payload_is_execute_repair_only(monkeypatch, t
     monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
     monkeypatch.setattr(
         "app.adapters.antigravity.trusted_local_developer_enabled",
-        lambda workspace, mode: mode in {"execute", "repair"},
+        lambda workspace, mode, adapter=None: mode in {"execute", "repair"} and adapter == "antigravity_host",
     )
 
     asyncio.run(
