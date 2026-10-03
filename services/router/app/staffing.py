@@ -5,6 +5,7 @@ from typing import Any
 from .engine_adaptive import RouterEngine as BudgetRouterEngine
 from .model_capabilities import (
     ReasoningCapability,
+    legacy_ignored_reasoning_efforts,
     next_supported_effort,
     reasoning_capability,
 )
@@ -183,6 +184,15 @@ class RouterEngine(BudgetRouterEngine):
         if choice is None or choice.reasoning_effort is None:
             return capability
         if choice.reasoning_effort not in capability.allowed_efforts:
+            model = self.models.get(choice.id) or {}
+            legacy_ignored = legacy_ignored_reasoning_efforts(choice.id, model)
+            if choice.reasoning_effort in legacy_ignored:
+                ignored = choice.reasoning_effort
+                choice.reasoning_effort = None
+                marker = f"ignored_legacy_reasoning_effort={ignored}"
+                if marker not in choice.reasons:
+                    choice.reasons.append(marker)
+                return capability
             raise RuntimeError(
                 f"Reasoning effort {choice.reasoning_effort!r} is unsupported "
                 f"for PCP model {choice.id!r}"
