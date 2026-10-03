@@ -4,8 +4,8 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 live Runtime/GitHub evidence remain authoritative over chat history. Completed
 chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-10-03 after Chợ Nhạc PILOT-01 blocker diagnosis and PCP
-anti-loop/model-capability verification repairs through Runtime 1.0.95.
+Last updated: 2026-10-03 after completing PCP efficiency children #400/#406/#421
+and the latest Chợ Nhạc PILOT-01 deterministic-verification block.
 
 ## Resume order
 
@@ -25,57 +25,53 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP main after PR #435 targets Runtime `1.0.95`, Antigravity host
-  bridge `1.13` and model registry version `11`; ddev-executor remains
-  `1.0.29`.
-- PR #431 exposes configured `frontend_quality` to PM WorkOrder planning so
-  frontend-heavy slices can require typecheck/lint/unit/build/Chromium evidence.
-- PR #433 makes Chợ Nhạc targeted Drupal verification change-aware: Runtime
-  runs Unit/Kernel/Functional tests for changed custom modules instead of
-  hard-coding Show tests.
-- PR #435 corrects `gemini-3.8-flash-medium` as a no-explicit-effort model,
-  preserves legacy registry-v10 low/medium/high choices as ignored metadata,
-  omits stale effort at the Antigravity adapter, and preserves actionable
-  reviewer findings across PM/provider failures on resume.
-- Chợ Nhạc is the first project with
-  `runtime.developer_permission_mode: trusted_local`.
-- Trusted-local execution is deliberately narrow: exact direct Chợ Nhạc
-  workspace + `antigravity_host` + execute/repair only. The developer keeps the
-  normal terminal sandbox but receives a temporary `unsandboxed(ddev)` grant
-  so it can run authoritative Drupal/PHP/Node verification through DDEV.
-- Plan/evaluate, Codex/OpenCode, other projects/workspaces, direct Docker, sudo
-  and remote/destructive Git remain bounded. PM/Runtime still own scope,
-  deterministic final verification, review, merge and deploy gates.
-- PR #427 merged as `c5cf4af4eb9072854c967a4a21928c2a9aca0412`
-  after exact-head structure/Router/Runtime/ddev-executor CI passed.
-- PM-controlled merge is enabled for Chợ Nhạc routine/standard WorkOrders under
-  the existing exact-head/verification/review/protected-boundary gates (#416).
-  Developer agents never merge; complex/critical or unresolved protected
-  decisions remain Human Owner gates.
-- Exact-diff baseline-covered protected authorization is implemented for the
-  bounded `security_boundary_change` case. It does not authorize new auth,
-  credential transport, trust-boundary, production, destructive-data, scope or
-  governance changes.
-- Bounded collaboration now supports adaptive-budget consultations, same-worker
-  continuation after a resolved consultation, recheck of an eligible resolved
-  round, max-round PM handoff context preservation and compatibility hydration
-  for older handoffs.
-- Approval output contracts remain strict: an approval action has no unresolved
-  blocking risk; non-blocking caveats belong in PM summary/developer guidance,
-  not `unresolved_risks`.
-- Healthy-progress non-blocking remains mandatory. Static profile/task counters
-  alone are not Human Owner stop reasons while work is making meaningful
-  progress inside the approved resource envelope.
-- Direct workspace + exclusive Chợ Nhạc engineering lease + job-owned live
-  preview and project-level Current-site preview remain the accepted local
-  workspace model.
-- Tiered Context & Memory Architecture is implemented with deterministic
-  T0/T1 pinning and bounded T2/T3 retrieval. Vector/hybrid RAG remains deferred
-  until a measured retrieval gap exists.
-- Human Owner approved the #406 Incident Learning Loop / PM advisory-triage
-  direction. The design is approved but implementation is not yet complete.
-  It must extend existing TaskOutcome/continuity/tiered-memory mechanisms rather
-  than add an always-on retrospective agent.
+- PCP main after PR #437 targets Runtime `1.0.97`, ddev-executor `1.0.30`,
+  Antigravity host bridge `1.13` and model registry version `11`.
+- #400 repository-CI parity is complete. Chợ Nhạc PR #64 merged at
+  `af1e24a60fc43cae0c417dc312e7a7839f284b6b`; protected workflow changes are
+  authorized by DEC-034 and use bounded changed-module Unit/Kernel/Functional
+  verification without requiring Docker/DDEV privilege on the self-hosted
+  repository runner.
+- #406 incident learning is complete through PCP PR #436 at
+  `cf34010e18cc0580a965098456872127fee1953a`. Runtime creates stable,
+  deterministic, model-free incident candidates only for repeated/expensive/
+  platform anomalies and carries bounded references through telemetry,
+  continuity and PM evidence.
+- #421 visual-preview evidence is complete through:
+  - Chợ Nhạc collector PR #65:
+    `f81e0ca86fdc9471854cfb702c43f5902e416a50`;
+  - Chợ Nhạc evidence-redaction PR #66:
+    `aa51045dacf5afe41c0d7ce3564c7303cd56847d`;
+  - PCP PR #437:
+    `7b1cd6ee050440ae624a242678246f5252189195`.
+- `visual_quality` is a bounded final verification phase after
+  `frontend_quality`. It requires a direct workspace, exclusive lease,
+  enabled frontend preview and 1..4 local `visual_routes`; Runtime owns preview
+  lifecycle and ephemeral evidence requests.
+- Chợ Nhạc visual evidence uses viewports 360/390/430/768/1024/1440 and captures
+  route/viewport, HTTP/navigation, console/page errors, failed request paths,
+  DOM landmarks, horizontal overflow and local screenshot hashes. Textual
+  evidence redacts common secrets and strips embedded URL query/fragment data.
+- Screenshot capture alone is not represented as multimodal review.
+  `image_reviewed=false` forbids pixel-level/aesthetic claims by a text-only
+  evaluator.
+- PM planning can require configured `frontend_quality` and `visual_quality`
+  phases for material user-facing UI WorkOrders.
+- Chợ Nhạc targeted Runtime verification follows changed custom Drupal modules
+  and runs their Unit/Kernel/Functional suites instead of hard-coding Show.
+- `gemini-3.8-flash-medium` is correctly modeled as no-explicit-effort while
+  registry-v10 persisted effort metadata remains backward-compatible for
+  blocked-job recovery.
+- Chợ Nhạc remains the first trusted-local project: exact direct workspace +
+  `antigravity_host` + execute/repair may use bounded DDEV; plan/evaluate,
+  Codex/OpenCode, direct Docker, sudo, remote/destructive Git, merge and deploy
+  remain outside developer authority.
+- PM-controlled merge remains enabled for Chợ Nhạc routine/standard WorkOrders
+  under exact-head CI/review/protected-boundary gates. Developer agents never
+  merge; production is never implied.
+- The #146 efficiency implementation program is complete. Future efficiency
+  work starts from natural telemetry/incident evidence in focused issues rather
+  than keeping a perpetual umbrella or creating synthetic tasks.
 
 For executable details, inspect code/tests on current `main`. Historical
 rollout/incident rationale belongs in `history/episodes.md`.
@@ -111,106 +107,49 @@ the live product repository must remain at that commit.
 
 Current implementation evidence:
 
-- DEC-033 is the canonical successor execution decision.
-- Chợ Nhạc #63 is the controlled-pilot execution umbrella.
-- The old GH-42 plan `pm-c63bc4f63c084dd1ac4eed9cf80ec87a` is retired
-  history. WO-01/WO-02 remain completed evidence; WO-03 evidence was preserved
-  under #62, its Runtime job was cancelled, and WO-03..WO-08 were superseded.
-- First #63 intake plan `pm-1c670cfa6e1542579b9d4aefc70e4eb0` failed only
-  because the original DEC-033 baseline omitted a legitimate protected Profile
-  reference. Pilot baseline r1 repaired that omission.
-- Active #63 plan:
-  `pm-5cd9ec06f74b4feba4db5a1507ab35f0`.
+- DEC-033 remains the canonical controlled-pilot execution decision.
+- Active plan: `pm-5cd9ec06f74b4feba4db5a1507ab35f0`.
 - Current WorkOrder: `GH-63-PILOT-01`.
-- Current preserved job:
-  `c02defa348fc5b19a0bd021e2697571e`.
-- PILOT-01 deterministic verification passed targeted_tests, static_analysis
-  and frontend_quality. Independent review produced one bounded actionable
-  finding: `DEC031-CACHE-01`, requiring the mutable DEC-031 gate's config
-  cacheability to propagate through generic ShowPosition access.
-- The job then blocked at `pm_reassessment_failed` because PCP registry v10
-  incorrectly invoked `gemini-3.8-flash-medium --effort low`, which the host
-  CLI does not support. This was a platform failure, not a Chợ Nhạc code or
-  provider-quota failure.
-- PCP #434 / PR #435 merged at
-  `e9da10dc03cf25fb3861b804dab485112474a2d8`. Runtime 1.0.95 can consume the
-  persisted v10 choice, omit unsupported effort, and reconstruct the persisted
-  reviewer finding as the primary developer repair instruction.
-- Recovery for PILOT-01 is therefore **same job, same workspace, reroute=false**.
-  Do not create a replacement job and do not clear the reviewer finding.
-- Diagnostic caveat: authenticated `GET /v1/jobs/{job_id}` returns the bounded
-  `JobView` and intentionally omits internal `checkpoint` and `progress`.
-  Null jq lookups under `.checkpoint` are therefore not evidence that durable
-  reviewer findings were lost; Runtime resume consumes the internal stored
-  checkpoint directly.
-- Chat PM reviewed the generated eight-WorkOrder plan. PILOT-01 is approved to
-  continue; generated PILOT-02..PILOT-08 must not be released unchanged after
-  the first supervised checkpoint because their child-issue detail, working
-  file targets and frontend verification contracts are under-specified.
-- #63 now contains the governed successor replan contract for exactly the seven
-  remaining semantic slices. Replan only after PILOT-01 is accepted/merged.
+- Preserved direct job: `c02defa348fc5b19a0bd021e2697571e`.
+- Current branch: `ai/c02defa348fc`.
+- Latest published checkpoint: 39 /
+  `wo:blocked:001560a3cf097e489a0f737b6cdb5fd25765e57b0f8e56c897166f933e1f0c3d`.
+- Current block reason: `repeated_deterministic_verification_failure`.
+- Latest verification: failed in `targeted_tests`.
+- Latest review verdict: fail.
+- Progress remains 0/8 completed; PILOT-02..PILOT-08 are untouched/pending.
+- The earlier `pm_reassessment_failed` / Flash Medium effort incident is
+  repaired at the platform layer and is no longer the current blocker.
+- The exact latest deterministic command/output must be inspected from the
+  Runtime Dashboard job activity before another repair/resume. Authenticated
+  `JobView` intentionally omits internal checkpoint/progress/activity details.
+- Dashboard activity authority for the job is the job Activity view backed by
+  `/v1/dashboard/jobs/{job_id}/events`; it requires the dashboard read session,
+  not the Runtime bearer token.
+- Do not reroute merely because the job is blocked. The current evidence points
+  to deterministic test failure, so identify the exact failing command/assertion
+  first and repair the same job/workspace when the fix is code-side.
+- Chat PM has approved PILOT-01 scope but **generated PILOT-02..PILOT-08 must not
+  be released unchanged**. After PILOT-01 is accepted/merged, create a successor
+  ProjectBaseline pinned to the then-current governed Chợ Nhạc main (including
+  the accepted PILOT-01 and current verification/visual tooling), then create
+  one successor supervised plan for the seven remaining slices using the
+  replan contract in Chợ Nhạc #63.
+- Frontend-heavy successor WorkOrders should use the newly available
+  `frontend_quality -> visual_quality` contract with concrete bounded routes
+  only when those routes are renderable by the WorkOrder.
 
 Historical DEC-025 and GH-42 execution are retired. Do not recreate, reroute or
 resume them.
 
 ## Active PCP follow-up work
 
-### #400 — Chợ Nhạc repository-CI backend verification parity
+There are currently **no open PCP implementation issues**.
 
-Status: open.
-
-Runtime-side gap is resolved by #432 / PR #433: targeted verification now follows
-changed custom Drupal modules and runs their Unit/Kernel/Functional suites in
-DDEV.
-
-Remaining work is repository CI only. Chợ Nhạc PR CI and exact-SHA CI still run
-custom Unit tests + PHPCS but do not run custom Kernel/Functional suites.
-Align repository CI with Runtime without forcing an unnecessarily broad full
-Drupal suite on every PR.
-
-### #406 — incident learning loop and PM advisory triage
-
-Status: Human Owner-approved direction; implementation pending.
-
-Use one bounded deterministic incident candidate for recurring/expensive/
-platform failures and one PM classification at a meaningful checkpoint. Prefer
-executable prevention over prose.
-
-The GH-63 PILOT-01 incident is current natural evidence:
-- frontend verification planning omission (#430/#431);
-- hard-coded targeted Drupal verification (#432/#433);
-- Flash Medium effort capability mismatch + reviewer-context recovery
-  (#434/#435).
-
-Do not write that incident to Tier-3 history until PILOT-01 reaches a stable
-resolved checkpoint.
-
-### #421 — automatic visual-preview evidence loop
-
-Status: open.
-
-`frontend_quality` is now PM-plannable (#430/#431), but visual evidence is
-still not a first-class verification artifact.
-
-Future work should layer bounded `visual_quality` / preview evidence after
-deterministic frontend quality, keep preview lifecycle Runtime-owned, and use
-natural frontend-heavy WorkOrders as dogfood.
-
-Chợ Nhạc trusted-local developers may use the explicitly authorized DDEV path;
-direct Docker remains denied and developer agents do not own preview evidence
-authority.
-
-### #146 — efficiency initiative
-
-Status: umbrella ongoing.
-
-Substantial infrastructure is implemented. Current active children are:
-- #400 repository-CI parity;
-- #406 incident learning / PM advisory triage;
-- #421 visual-preview evidence.
-
-Use natural project evidence. Do not create synthetic work merely to collect
-samples.
+The #146 efficiency umbrella and its final active children #400/#406/#421 are
+completed. Natural project work is now the calibration source. Open a focused
+successor issue only when durable Runtime/GitHub evidence identifies a concrete
+regression, missing invariant or bounded improvement.
 
 ## Recently completed reusable work
 
@@ -228,7 +167,11 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 - trusted-local Chợ Nhạc developer execution (#426 / PR #427);
 - frontend_quality exposure to PM planning (#430 / PR #431);
 - changed-module Drupal targeted verification (#432 / PR #433);
-- Flash Medium capability / reviewer-context recovery (#434 / PR #435).
+- Flash Medium capability / reviewer-context recovery (#434 / PR #435);
+- Chợ Nhạc repository-CI parity (#400; Chợ Nhạc PR #64 / DEC-034);
+- deterministic incident-learning candidate / PM triage (#406 / PR #436);
+- automatic visual-preview evidence loop (#421 / PR #437) plus Chợ Nhạc
+  collector/redaction PRs #65/#66.
 
 ## Global operational gates
 
@@ -260,26 +203,35 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. While PILOT-01 remains stably blocked and no engineering worker is active,
-   fast-forward local PCP main to include:
-   - PR #431 / `0d1aacf6a864fa8314fb375de7ba515b51670c18`;
-   - PR #433 / `834b3cf96cc0498685481f5306978f6c726074a1`;
-   - PR #435 / `e9da10dc03cf25fb3861b804dab485112474a2d8`.
-2. Restart PCP services at this stable blocker and verify Runtime `1.0.95`,
-   Antigravity bridge `1.13`, ddev-executor `1.0.29`, and model registry
-   `11`.
-3. Resume exact job `c02defa348fc5b19a0bd021e2697571e` with
-   `reroute=false` and `reset_transient_provider_failures=false`.
-4. The first developer repair instruction must retain
-   `DEC031-CACHE-01`; the former `--effort low` error is operational context
-   only.
-5. Let the same job repair the gate cacheable dependency, rerun deterministic
-   verification/review/PM reassessment and deliver normally.
-6. Review exact diff/evidence and merge PILOT-01 only if all gates pass.
-7. At the resulting supervised hold, **do not continue generated PILOT-02**.
-   Create one successor supervised plan for the seven remaining slices using
-   the replan contract in Chợ Nhạc #63; once ready, supersede pending
-   PILOT-02..PILOT-08 from the old plan.
-8. Keep staging/production, public recruitment legal approval, Availability
-   salvage, Reviews, Band and payment/ticket commerce outside this pilot path.
+1. Keep PILOT-01 blocked while updating the platform; no engineering worker
+   should be active during rollout.
+2. Fast-forward local PCP main to include:
+   - #436 / `cf34010e18cc0580a965098456872127fee1953a`;
+   - #437 / `7b1cd6ee050440ae624a242678246f5252189195`.
+3. Restart PCP once and verify:
+   - Runtime `1.0.97`;
+   - ddev-executor `1.0.30`;
+   - Antigravity bridge `1.13`;
+   - model registry `11`.
+4. Fast-forward local Chợ Nhạc `main` only when the direct job/workspace is not
+   being mutated. Do **not** reset/clean/stash the preserved PILOT-01 branch.
+   Chợ Nhạc main now contains CI parity + visual collector/redaction tooling,
+   but the current persisted PILOT-01 contract is not retroactively changed to
+   require visual evidence.
+5. Before any new PILOT-01 repair/resume, inspect exact latest activity for job
+   `c02defa348fc5b19a0bd021e2697571e` in the Runtime Dashboard. Capture the
+   failing `targeted_tests` command and bounded output associated with
+   checkpoint 39.
+6. Diagnose the deterministic failure before spending another model/test cycle.
+   If it is a code/test defect within PILOT-01, repair the same job/workspace;
+   do not reroute or create a replacement job. If it is a platform verification
+   defect, open/fix one focused PCP issue first.
+7. After PILOT-01 passes verification/review and is merged, stop at the
+   supervised checkpoint. Do **not** continue generated PILOT-02.
+8. Create/activate a successor Chợ Nhạc ProjectBaseline pinned to the governed
+   post-PILOT-01 main, then intake one supervised successor plan for exactly the
+   seven remaining slices using #63's replan contract.
+9. Keep staging/production, public recruitment legal approval, Availability
+   salvage, Professional Reviews, Band and payment/ticket commerce outside this
+   pilot path.
 
