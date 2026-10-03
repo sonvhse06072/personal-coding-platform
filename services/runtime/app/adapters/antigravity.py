@@ -11,6 +11,7 @@ import httpx
 
 from .base import AgentAdapter, AgentRun, classify_provider_failure
 from ..developer_stream import agent_lifecycle_event, agent_public_event, emit_developer_event
+from ..developer_permissions import trusted_local_developer_enabled
 
 
 _PERMISSION_DENIED_PATTERNS = (
@@ -116,6 +117,7 @@ class AntigravityAdapter(AgentAdapter):
             "model": self.model or "auto",
             "mode": mode,
             "timeout": timeout,
+            "trusted_local_developer": trusted_local_developer_enabled(workspace, mode),
         }
         if effort is not None:
             payload["effort"] = effort
