@@ -24,6 +24,7 @@ from .pm_reassessment import (
     validate_baseline_covered_protected_approval,
 )
 from .prompts import evaluator_prompt, execution_prompt, planning_prompt
+from .developer_permissions import trusted_local_developer_enabled
 from .repo import analyze_repo, commit_changes, diff_state
 from .review_repair_churn import record_observation as record_review_repair_churn_observation
 from .review import (
@@ -549,6 +550,10 @@ class RuntimeEngine(RuntimeEngineCore):
                         adapter,
                         mode="execute",
                         project=project,
+                    ),
+                    trusted_local_developer=trusted_local_developer_enabled(
+                        workspace,
+                        "execute",
                     ),
                 ),
                 mode="execute",
