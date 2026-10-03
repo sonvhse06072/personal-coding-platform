@@ -19,7 +19,7 @@ def safe_settings() -> dict:
         "enableTelemetry": False,
         "permissions": {
             "allow": ["unsandboxed(git status)"],
-            "deny": ["command(docker)"],
+            "deny": ["command(ddev)", "unsandboxed(ddev)", "command(docker)"],
             "ask": [],
         },
     }
@@ -162,3 +162,40 @@ def test_wrapper_fails_closed_without_real_agy(tmp_path: Path):
 
     assert completed.returncode == 127
     assert "ANTIGRAVITY_REAL_AGY_BIN" in completed.stderr
+
+
+def test_wrapper_removes_temporary_trusted_ddev_grant(tmp_path: Path):
+    workspace = tmp_path / "workspaces" / "job-trusted"
+    workspace.mkdir(parents=True)
+    settings = tmp_path / "settings.json"
+    data = safe_settings()
+    data["permissions"]["allow"].append("unsandboxed(ddev)")
+    data["permissions"]["deny"] = [
+        rule
+        for rule in data["permissions"]["deny"]
+        if rule not in {"command(ddev)", "unsandboxed(ddev)"}
+    ]
+    settings.write_text(json.dumps(data), encoding="utf-8")
+
+    fake_agy = tmp_path / "agy"
+    fake_agy.write_text("#!/usr/bin/env bash\nexit 0\n", encoding="utf-8")
+    fake_agy.chmod(0o700)
+
+    completed = subprocess.run(
+        ["bash", str(WRAPPER), "-p", "hello", "--sandbox"],
+        cwd=workspace,
+        env={
+            **os.environ,
+            "ANTIGRAVITY_REAL_AGY_BIN": str(fake_agy),
+            "ANTIGRAVITY_SETTINGS_PATH": str(settings),
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    restored = json.loads(settings.read_text(encoding="utf-8"))
+    assert "unsandboxed(ddev)" not in restored["permissions"]["allow"]
+    assert "command(ddev)" in restored["permissions"]["deny"]
+    assert "unsandboxed(ddev)" in restored["permissions"]["deny"]
