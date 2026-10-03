@@ -358,10 +358,9 @@ def diff_state(
         capture_output=True,
     )
     if resolved.returncode != 0:
+        detail = resolved.stderr.strip() or resolved.stdout.strip() or "unresolvable"
         raise RuntimeError(
-            resolved.stderr.strip()
-            or resolved.stdout.strip()
-            or f"Invalid diff base reference: {requested_base}"
+            f"Invalid diff base reference {requested_base!r}: {detail}"
         )
     diff_base = resolved.stdout.strip()
 
