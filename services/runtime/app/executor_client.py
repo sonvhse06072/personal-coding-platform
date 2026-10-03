@@ -89,7 +89,7 @@ class DdevExecutorClient:
                 },
                 headers=self.headers,
             )
-            response.raise_for_status()
+            _raise_for_status_with_detail(response)
             return response.json()
 
     async def publish_branch(
