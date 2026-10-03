@@ -78,3 +78,31 @@ def test_proposal_explicitly_denies_direct_durable_policy_writes() -> None:
     assert value["authority"]["mutable_target"] == "docs/project/current-state.md"
     assert value["authority"]["direct_durable_policy_write_allowed"] is False
     assert value["authority"]["application_path"] == "normal_git_branch_pr_authority"
+
+
+def test_continuity_carries_only_bounded_incident_candidate() -> None:
+    row = {
+        "id": "job-incident",
+        "project_id": "project-a",
+        "status": "blocked",
+        "branch": "ai/job-incident",
+        "checkpoint": {"work_order": {"id": "WO-incident"}},
+        "result": {"reason": "repeated_deterministic_verification_failure"},
+    }
+    candidate = {
+        "id": "incident:abc",
+        "signals": ["verification_retry_anomaly"],
+        "evidence_refs": ["runtime:job:job-incident"],
+    }
+
+    value = continuity_proposal(
+        row,
+        event_type="job_blocked",
+        telemetry={
+            "task_outcome": "blocked",
+            "incident_learning": {"candidate": candidate},
+        },
+    )
+
+    assert value["incident_learning"]["candidate"] == candidate
+    assert "raw_log" not in str(value["incident_learning"])
