@@ -479,13 +479,18 @@ def _run_engine(
     (workspace / "README.md").write_text("baseline\n", encoding="utf-8")
     subprocess.run(["git", "add", "README.md"], cwd=workspace, check=True)
     subprocess.run(["git", "commit", "-qm", "baseline"], cwd=workspace, check=True)
+    source_commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"],
+        cwd=workspace,
+        text=True,
+    ).strip()
 
     storage = EngineStorage(
         {
             "id": job_id,
             "project_id": "demo",
             "status": "queued",
-            "source_commit": "a" * 40,
+            "source_commit": source_commit,
             "workspace": str(workspace),
             "branch": f"ai/{job_id}",
             "task": {"title": "Capability integration", "description": "Bounded change"},
@@ -596,6 +601,11 @@ def _run_invalid_engine_choice(monkeypatch, tmp_path: Path, phase: str):
     (workspace / "README.md").write_text("baseline\n", encoding="utf-8")
     subprocess.run(["git", "add", "README.md"], cwd=workspace, check=True)
     subprocess.run(["git", "commit", "-qm", "baseline"], cwd=workspace, check=True)
+    source_commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"],
+        cwd=workspace,
+        text=True,
+    ).strip()
 
     route = _engine_route("codex_cli", "opencode")
     if phase == "planner":
@@ -613,7 +623,7 @@ def _run_invalid_engine_choice(monkeypatch, tmp_path: Path, phase: str):
             "id": job_id,
             "project_id": "demo",
             "status": "queued",
-            "source_commit": "a" * 40,
+            "source_commit": source_commit,
             "workspace": str(workspace),
             "branch": f"ai/{job_id}",
             "task": {"title": "Capability rejection", "description": "Do not invoke"},
