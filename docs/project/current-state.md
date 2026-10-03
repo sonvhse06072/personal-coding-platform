@@ -4,8 +4,8 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 live Runtime/GitHub evidence remain authoritative over chat history. Completed
 chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-10-03 after completing PCP efficiency children #400/#406/#421
-and the latest Chợ Nhạc PILOT-01 deterministic-verification block.
+Last updated: 2026-10-04 after completing PCP #440/#441 and reaching the
+Chợ Nhạc PILOT-01 preserved Human-decision checkpoint.
 
 ## Resume order
 
@@ -32,9 +32,11 @@ lessons are indexed in `history/episodes.md`.
 - #440 Antigravity Developer Activity coalescing is complete through PR #442 at
   `c2ee43c35042a58883d2f739c5efba7b528bd4db`: transport-level response
   deltas are not persisted; Runtime emits one bounded/redacted completed response.
-- #441 narrows the `destructive_migration` path heuristic so Drupal
-  `config/schema/*.schema.yml` metadata is not treated as a destructive
-  database/content migration while true migration/schema paths remain protected.
+- #441 is complete through PR #443 at
+  `38454b56adf02459a197dbc5ccbde024462d964d`; the
+  `destructive_migration` path heuristic no longer treats Drupal
+  `config/schema/*.schema.yml` metadata as a destructive database/content
+  migration while true migration/schema paths remain protected.
 - #400 repository-CI parity is complete. Chợ Nhạc PR #64 merged at
   `af1e24a60fc43cae0c417dc312e7a7839f284b6b`; protected workflow changes are
   authorized by DEC-034 and use bounded changed-module Unit/Kernel/Functional
@@ -162,12 +164,12 @@ resume them.
 
 ## Active PCP follow-up work
 
-PCP #441 is the remaining focused active platform repair exposed by PILOT-01:
-prevent false destructive-migration classification for Drupal config-schema
-metadata. #440/#442 and #438/#439 are completed.
+There are currently **no open PCP implementation issues**.
 
-The #146 efficiency umbrella and its final children #400/#406/#421 remain
-closed; these are bounded incident-derived repairs, not a reopened umbrella.
+The focused PILOT-01 incident repairs #438/#439, #440/#442 and #441/#443 are
+completed. The #146 efficiency umbrella and its final children #400/#406/#421
+remain closed. Open a new focused issue only from new durable evidence; do not
+reopen the umbrella or replay these repaired fingerprints.
 
 ## Recently completed reusable work
 
