@@ -411,3 +411,39 @@ def test_decomposition_never_invents_work_orders_for_scope_or_decisions(monkeypa
     row = asyncio.run(planner.create_plan(request))
     assert row["status"] == ("out_of_scope" if scope == "out_of_scope" else "human_decision")
     assert row["plan"]["work_orders"] == row["plan"]["ready_work_order_ids"] == []
+
+
+def test_available_verification_phases_includes_configured_frontend_quality():
+    project = {
+        "ddev": {
+            "enabled": True,
+            "targeted_tests": ["targeted"],
+            "static_analysis": ["static"],
+            "frontend_quality": ["frontend"],
+            "full_tests": [],
+        }
+    }
+
+    assert pm_planning._available_verification_phases(project) == [
+        "targeted_tests",
+        "static_analysis",
+        "frontend_quality",
+    ]
+
+
+def test_available_verification_phases_omits_unconfigured_frontend_quality():
+    project = {
+        "ddev": {
+            "enabled": True,
+            "targeted_tests": ["targeted"],
+            "static_analysis": ["static"],
+            "frontend_quality": [],
+            "full_tests": ["full"],
+        }
+    }
+
+    assert pm_planning._available_verification_phases(project) == [
+        "targeted_tests",
+        "static_analysis",
+        "full_tests",
+    ]
