@@ -558,6 +558,9 @@ def test_visual_quality_contract_requires_frontend_quality_and_routes() -> None:
         "https://evil.example/path",
         "/artist/demo?token=secret",
         "/artist/demo#fragment",
+        "/events/[slug]",
+        "/{public_slug}",
+        "/studio/events/{uuid}",
     ],
 )
 def test_visual_routes_reject_nonlocal_or_unbounded_url_forms(route: str) -> None:
