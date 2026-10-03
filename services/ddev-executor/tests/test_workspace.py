@@ -853,6 +853,75 @@ def test_direct_project_can_request_disposable_isolated_planning_workspace(tmp_p
 
 
 
+def test_direct_planning_clone_materializes_baseline_from_remote_tracking_ref(
+    tmp_path, monkeypatch,
+):
+    source, remote, workspaces = configure_direct(
+        monkeypatch, tmp_path, allow_push=False
+    )
+    stale_main = run("git", "rev-parse", "main", cwd=source)
+    run("git", "checkout", "-b", "ai/historical-job", cwd=source)
+    historical_head = run("git", "rev-parse", "HEAD", cwd=source)
+
+    remote_head = _advance_remote_main(
+        remote,
+        tmp_path,
+        filename="POST_PILOT.txt",
+        content="governed successor baseline\n",
+    )
+    run(
+        "git",
+        "fetch",
+        "origin",
+        "refs/heads/main:refs/remotes/origin/main",
+        cwd=source,
+    )
+
+    assert run("git", "branch", "--show-current", cwd=source) == "ai/historical-job"
+    assert run("git", "rev-parse", "HEAD", cwd=source) == historical_head
+    assert run("git", "rev-parse", "main", cwd=source) == stale_main
+    assert run("git", "rev-parse", "origin/main", cwd=source) == remote_head
+    run("git", "cat-file", "-e", remote_head + "^{commit}", cwd=source)
+
+    result = create_workspace(
+        WorkspaceRequest(
+            job_id="plan-remote-ref-123",
+            project_id="demo",
+            ref=remote_head,
+            workspace_mode="isolated_clone",
+        )
+    )
+    workspace = Path(result["workspace"])
+
+    assert result["source_commit"] == remote_head
+    assert result["workspace_mode"] == "isolated_clone_no_remote"
+    assert workspace == (workspaces / "plan-remote-ref-123").resolve()
+    assert run("git", "rev-parse", "HEAD", cwd=workspace) == remote_head
+    assert run("git", "remote", cwd=workspace) == ""
+    assert run(
+        "git",
+        "show-ref",
+        "--verify",
+        "--quiet",
+        "refs/pcp/materialized-source",
+        cwd=workspace,
+    ) == ""
+
+    # Planning materialization must not move or modify the direct source repo.
+    assert run("git", "branch", "--show-current", cwd=source) == "ai/historical-job"
+    assert run("git", "rev-parse", "HEAD", cwd=source) == historical_head
+    assert run("git", "rev-parse", "main", cwd=source) == stale_main
+    assert run("git", "rev-parse", "origin/main", cwd=source) == remote_head
+    assert run("git", "status", "--porcelain", cwd=source) == ""
+
+    removed = remove_workspace(
+        job_id="plan-remote-ref-123",
+        project_id="demo",
+        workspace=str(workspace),
+    )
+    assert removed["removed"] is True
+
+
 def configure_direct_preview(monkeypatch, tmp_path: Path):
     source, remote, workspaces = configure_direct(
         monkeypatch,
