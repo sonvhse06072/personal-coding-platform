@@ -4,7 +4,7 @@ from app.baseline import resolve_project_baseline
 from app.config import clear_config_cache
 
 
-EXPECTED_COMMIT = "7003c1f72c02a3daea3312449fca6fd57bbc76bc"
+EXPECTED_COMMIT = "132c2ef767b595833677e9672d655872e07ba9b7"
 EXPECTED_REVISION = "pilot-v1-2026-10-03-dec033"
 PREVIOUS_COMPLETION_COMMIT = "6038857e33d3717321a54e35743fa8b9dbeba8d2"
 PREVIOUS_COMPLETION_REVISION = "mvp-v1-2026-10-01-completion"
