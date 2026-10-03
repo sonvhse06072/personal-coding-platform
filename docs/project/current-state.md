@@ -98,13 +98,18 @@ rollout/incident rationale belongs in `history/episodes.md`.
 
 Approved ProjectBaseline for **new** PCP-managed Chợ Nhạc work:
 
-- active revision: `pilot-v1-2026-10-04-dec033-r2`;
+- active revision: `pilot-v1-2026-10-04-dec033-r3`;
 - immutable baseline source:
   `aa8e68dd9aea6740de446151eb97615931de9b40`;
+- r3 is the narrow planning-authority correction tracked by PCP #459. It keeps
+  the exact r2 source/authority and adds the already-authorized local-only
+  `docs/26-local-demo-workflow.md` to `requirements` and `quality_policy`
+  references so PM WorkOrders may cite the DEC-030 fixture/purge contract;
+- r2 remains immutable at
+  `aa8e68dd9aea6740de446151eb97615931de9b40` and explicitly resolvable;
 - r2 is the post-PILOT-01 successor baseline authorized by the #63 replan
-  boundary and tracked by PCP #449. It preserves the exact r1
-  authority/reference categories while pinning the governed Chợ Nhạc main that
-  includes PILOT-01 plus DEC-035/DEC-036 CI governance repairs;
+  boundary and preserves r1 authority/reference categories while pinning the
+  governed Chợ Nhạc main that includes PILOT-01 plus CI governance repairs;
 - r1 remains immutable at
   `132c2ef767b595833677e9672d655872e07ba9b7` and explicitly resolvable;
 - r1 was activated by PCP PR #429 at
@@ -231,18 +236,19 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Complete PCP #457 with exact-head CI and roll local PCP to Runtime
-   `1.0.103` while retaining ddev-executor `1.0.31`.
+1. Complete PCP #459 with exact-head CI and activate
+   `pilot-v1-2026-10-04-dec033-r3` at the unchanged Chợ Nhạc source
+   `aa8e68dd9aea6740de446151eb97615931de9b40`.
 2. Keep plan `pm-095d6aea0fe94901bbf692fa7d113fc2` at its initial
    `supervised_hold`; do not release or mutate its child WorkOrders.
-3. Create one replacement supervised successor plan for exactly
-   #48/#49/#56/#57/#58/#50/#59 using r2, with concrete deterministic fixture
-   routes for every visual-quality phase. The #50 verified-performance UI slice
-   must also require `visual_quality`.
-4. Review the replacement plan at generation-1 hold with zero child jobs.
-5. Only after it passes PM review, supersede the held `pm-095d...` plan and
+3. Preserve failed replacement attempt
+   `pm-e773f87782f44b9790edb81b5f430b52` as evidence; it failed after PM
+   output because docs/26 was authoritative but absent from r2 references.
+4. Create one fresh supervised successor plan for exactly
+   #48/#49/#56/#57/#58/#50/#59 using r3, with concrete deterministic fixture
+   routes for every visual-quality phase and visual_quality for #50.
+5. Review the replacement plan at generation-1 hold with zero child jobs.
+6. Only after it passes PM review, supersede the held `pm-095d...` plan and
    the historical PILOT-01..PILOT-08 orchestration through the supported API.
-6. Release only AP-MVP-01 from the reviewed replacement plan.
-7. Keep staging/production, public recruitment legal approval, Availability
-   salvage, Professional Reviews, Band and payment/ticket commerce outside this
-   pilot path.
+7. Release only AP-MVP-01 from the reviewed replacement plan; keep all excluded
+   product/deployment lanes outside this pilot path.
