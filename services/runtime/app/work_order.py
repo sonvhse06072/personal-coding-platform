@@ -147,10 +147,12 @@ class WorkOrderVerification(BaseModel):
                 or "://" in route
                 or "?" in route
                 or "#" in route
+                or any(token in route for token in ("{", "}", "[", "]"))
                 or len(route) > 240
             ):
                 raise ValueError(
-                    "visual_routes must be bounded local absolute paths without query or fragment"
+                    "visual_routes must be concrete bounded local absolute paths "
+                    "without query, fragment, or route-template placeholders"
                 )
             if route not in result:
                 result.append(route)
