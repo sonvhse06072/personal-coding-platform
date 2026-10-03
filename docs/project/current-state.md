@@ -155,41 +155,62 @@ resume them.
 
 ## Active PCP follow-up work
 
-### #399 — advertise unavailable PHP runtime to coding agents
+### #400 — Chợ Nhạc repository-CI backend verification parity
 
-Status: implemented in source; rollout pending a stable checkpoint.
+Status: open.
 
-Container-backed Codex/OpenCode invocations now advertise `php_runtime=false`
-through the existing invocation-capability contract. Project verification
-metadata maps PHP-dependent phases to Runtime/DDEV ownership, and developer /
-evaluator prompts forbid repeated impossible PHP/PHPCS/PHPUnit/PHPStan attempts
-without treating skipped checks as PASS. Antigravity host capability remains
-unchanged pending separate host-runtime evidence.
+Runtime-side gap is resolved by #432 / PR #433: targeted verification now follows
+changed custom Drupal modules and runs their Unit/Kernel/Functional suites in
+DDEV.
 
-### #400 — Chợ Nhạc authoritative Kernel verification follow-up
-
-Status: open for remaining repository-CI alignment.
-
-Runtime/DDEV verification for the live Show Kernel target was corrected during
-WO-01. Repository GitHub CI still needs an explicitly governed decision/update
-if broader Kernel coverage is to become a protected workflow requirement.
-Do not infer GitHub-CI coverage from Runtime verification or vice versa.
+Remaining work is repository CI only. Chợ Nhạc PR CI and exact-SHA CI still run
+custom Unit tests + PHPCS but do not run custom Kernel/Functional suites.
+Align repository CI with Runtime without forcing an unnecessarily broad full
+Drupal suite on every PR.
 
 ### #406 — incident learning loop and PM advisory triage
 
-Status: Human Owner-approved design direction; implementation pending.
+Status: Human Owner-approved direction; implementation pending.
 
 Use one bounded deterministic incident candidate for recurring/expensive/
 platform failures and one PM classification at a meaningful checkpoint. Prefer
-executable prevention over prose. Promote only reusable conclusions through the
-existing T1/T2/T3/T4 memory lifecycle.
+executable prevention over prose.
+
+The GH-63 PILOT-01 incident is current natural evidence:
+- frontend verification planning omission (#430/#431);
+- hard-coded targeted Drupal verification (#432/#433);
+- Flash Medium effort capability mismatch + reviewer-context recovery
+  (#434/#435).
+
+Do not write that incident to Tier-3 history until PILOT-01 reaches a stable
+resolved checkpoint.
+
+### #421 — automatic visual-preview evidence loop
+
+Status: open.
+
+`frontend_quality` is now PM-plannable (#430/#431), but visual evidence is
+still not a first-class verification artifact.
+
+Future work should layer bounded `visual_quality` / preview evidence after
+deterministic frontend quality, keep preview lifecycle Runtime-owned, and use
+natural frontend-heavy WorkOrders as dogfood.
+
+Chợ Nhạc trusted-local developers may use the explicitly authorized DDEV path;
+direct Docker remains denied and developer agents do not own preview evidence
+authority.
 
 ### #146 — efficiency initiative
 
-Status: calibration/watch.
+Status: umbrella ongoing.
+
+Substantial infrastructure is implemented. Current active children are:
+- #400 repository-CI parity;
+- #406 incident learning / PM advisory triage;
+- #421 visual-preview evidence.
 
 Use natural project evidence. Do not create synthetic work merely to collect
-samples. Open narrow child issues for concrete recurring efficiency defects.
+samples.
 
 ## Recently completed reusable work
 
@@ -202,7 +223,12 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 - PM approval-output contract correction (#401 / PR #402);
 - deterministic verification/Kernel DB/retry-loop hardening
   (#404 / PR #405);
-- Chợ Nhạc GH-42 WO-01 / PR #44.
+- Chợ Nhạc GH-42 WO-01 / PR #44;
+- PHP-runtime capability advertisement (#399);
+- trusted-local Chợ Nhạc developer execution (#426 / PR #427);
+- frontend_quality exposure to PM planning (#430 / PR #431);
+- changed-module Drupal targeted verification (#432 / PR #433);
+- Flash Medium capability / reviewer-context recovery (#434 / PR #435).
 
 ## Global operational gates
 
