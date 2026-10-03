@@ -61,30 +61,27 @@ def test_registry_capabilities_are_per_model_and_canonically_ordered() -> None:
             "xhigh",
             "max",
         )
-    for model_id in (
-        "antigravity_free",
-        "antigravity_flash_high",
-        "antigravity_gemini_pro",
-    ):
+    for model_id in ("antigravity_flash_high", "antigravity_gemini_pro"):
         assert reasoning_capability(model_id, models[model_id]).allowed_efforts == (
             "low",
             "medium",
             "high",
         )
     assert reasoning_capability(
+        "antigravity_free", models["antigravity_free"]
+    ).allowed_efforts == ()
+    assert reasoning_capability(
         "antigravity_claude_sonnet",
         models["antigravity_claude_sonnet"],
     ).allowed_efforts == ()
 
 
-def test_antigravity_rejects_xhigh_and_claude_omits_effort() -> None:
+def test_non_effort_antigravity_models_omit_configured_effort() -> None:
     engine = make_engine()
-    with pytest.raises(RuntimeError, match="unsupported"):
-        engine._apply_reasoning(choice("antigravity_free", effort=None), "xhigh")
-
-    claude = choice("antigravity_claude_sonnet", effort=None)
-    engine._apply_reasoning(claude, "high")
-    assert claude.reasoning_effort is None
+    for model_id in ("antigravity_free", "antigravity_claude_sonnet"):
+        selected = choice(model_id, effort=None)
+        engine._apply_reasoning(selected, "high")
+        assert selected.reasoning_effort is None
 
 
 def test_same_model_escalation_respects_capability_and_route_ceiling() -> None:
@@ -95,15 +92,15 @@ def test_same_model_escalation_respects_capability_and_route_ceiling() -> None:
     assert boosted.reasoning_effort == "high"
     assert engine._next_reasoning_choice(boosted, "high") is None
 
-    antigravity = choice("antigravity_free", effort="high")
+    antigravity = choice("antigravity_free", effort=None)
     assert engine._next_reasoning_choice(antigravity, "max") is None
 
 
-def test_failover_choice_is_revalidated_against_new_model() -> None:
+def test_failover_choice_respects_new_model_without_effort_support() -> None:
     engine = make_engine()
     new_model = choice("antigravity_free", effort=None)
-    with pytest.raises(RuntimeError, match="unsupported"):
-        engine._apply_reasoning(new_model, "max")
+    engine._apply_reasoning(new_model, "max")
+    assert new_model.reasoning_effort is None
 
 
 def test_reassessment_model_failover_revalidates_profile_effort() -> None:
@@ -214,3 +211,25 @@ def test_automatic_policy_ceilings_remain_low_medium_high_only() -> None:
         for effort in (config.get("reasoning_effort") or {}).values()
     }
     assert configured == {"low", "medium", "high"}
+
+
+def test_staffing_flash_medium_omits_effort() -> None:
+    engine = make_engine()
+    request = StaffingRequest(
+        request_id="pm-flash-medium-no-effort",
+        project_id="default",
+        role="product_manager",
+        profile="standard",
+        provider_state={
+            "antigravity_gemini_pro": {"available": False},
+            "codex_terra": {"available": False},
+            "antigravity_claude_sonnet": {"available": False},
+            "codex_sol": {"available": False},
+        },
+    )
+
+    result = engine.staff(request)
+
+    assert result.choice.id == "antigravity_free"
+    assert result.choice.model == "gemini-3.8-flash-medium"
+    assert result.choice.reasoning_effort is None
