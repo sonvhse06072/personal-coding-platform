@@ -174,15 +174,14 @@ resume them.
 
 ## Active PCP follow-up work
 
-PCP #457 is the single focused active Runtime validation repair. Successor plan
-`pm-095d6aea0fe94901bbf692fa7d113fc2` reached the initial supervised hold
-with zero jobs, but PM review found template `visual_routes` and a missing
-visual-quality requirement for the verified-performance UI slice. The initial
-hold prevented any execution.
+PCP #461 is the single focused active Runtime planning-validation repair. The
+reviewed r3 successor plan `pm-a72e960c0f3b458897831cff3fb51a30` reached
+initial supervision with zero jobs and passed structural/visual checks, but PM
+review found all seven WorkOrders capped at `max_profile=standard`. Its two
+critical-risk WorkOrders would deterministically route to `critical` and then
+fail the Runtime WorkOrder cap before executor launch.
 
-PCP #455/#456 is complete and isolated PM planning now materializes the exact
-approved baseline from trusted local source refs without moving the direct
-project worktree. PCP #453/#454 and #451/#452 are also complete.
+PCP #457/#458, #455/#456, #453/#454 and #451/#452 are complete.
 
 ## Recently completed reusable work
 
@@ -236,19 +235,19 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Complete PCP #459 with exact-head CI and activate
-   `pilot-v1-2026-10-04-dec033-r3` at the unchanged Chợ Nhạc source
-   `aa8e68dd9aea6740de446151eb97615931de9b40`.
-2. Keep plan `pm-095d6aea0fe94901bbf692fa7d113fc2` at its initial
-   `supervised_hold`; do not release or mutate its child WorkOrders.
-3. Preserve failed replacement attempt
-   `pm-e773f87782f44b9790edb81b5f430b52` as evidence; it failed after PM
-   output because docs/26 was authoritative but absent from r2 references.
-4. Create one fresh supervised successor plan for exactly
-   #48/#49/#56/#57/#58/#50/#59 using r3, with concrete deterministic fixture
-   routes for every visual-quality phase and visual_quality for #50.
-5. Review the replacement plan at generation-1 hold with zero child jobs.
-6. Only after it passes PM review, supersede the held `pm-095d...` plan and
-   the historical PILOT-01..PILOT-08 orchestration through the supported API.
-7. Release only AP-MVP-01 from the reviewed replacement plan; keep all excluded
+1. Complete PCP #461 with exact-head CI and roll local PCP to Runtime
+   `1.0.104`.
+2. Keep `pm-a72e960c0f3b458897831cff3fb51a30` and
+   `pm-095d6aea0fe94901bbf692fa7d113fc2` at initial supervised hold with zero
+   child jobs; do not release either.
+3. Preserve failed `pm-e773f87782f44b9790edb81b5f430b52` as evidence.
+4. Create one fresh r3 supervised successor plan for exactly
+   #48/#49/#56/#57/#58/#50/#59. Require high-risk WorkOrders to permit at least
+   complex profile, critical-risk WorkOrders critical profile, concrete visual
+   fixture routes, visual_quality for #50, and canonical protected risk flags
+   for schema/security/authorization/API changes.
+5. Review it at generation-1 hold with zero child jobs.
+6. Only after it passes PM review, supersede both held rejected successor plans
+   and the historical PILOT-01..08 orchestration via supported API.
+7. Release only AP-MVP-01 from the reviewed replacement plan; keep excluded
    product/deployment lanes outside this pilot path.
