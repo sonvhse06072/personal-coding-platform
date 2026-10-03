@@ -61,13 +61,15 @@ def build_run_command(
     effort: str | None,
     timeout: int,
     output_format: str,
+    sandbox: bool = True,
 ) -> list[str]:
     cmd = [
         agy_bin,
         "-p", prompt,
         "--output-format", output_format,
-        "--sandbox",
     ]
+    if sandbox:
+        cmd.append("--sandbox")
     if effort in _REASONING_EFFORTS:
         cmd.extend(["--effort", effort])
     cmd.extend(["--print-timeout", f"{timeout}s"])
@@ -118,6 +120,44 @@ def _write_settings(path: Path, data: dict) -> None:
     tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.chmod(tmp, 0o600)
     tmp.replace(path)
+
+
+TRUSTED_LOCAL_REMOVED_DENY_RULES = {
+    "command(ddev)",
+    "unsandboxed(ddev)",
+}
+
+
+def apply_trusted_local_developer_settings(path: Path) -> dict:
+    """Temporarily widen one local developer run, returning exact prior settings."""
+
+    original = _read_settings(path)
+    data = json.loads(json.dumps(original))
+    data["enableTerminalSandbox"] = False
+    data["toolPermission"] = "always-proceed"
+    data["artifactReviewPolicy"] = "always-proceed"
+    # File tools remain workspace-scoped. Unsandboxed terminal execution is enough
+    # for DDEV/PHP/Node/network work without exposing arbitrary host files.
+    data["allowNonWorkspaceAccess"] = False
+
+    allow, deny, ask = _permission_lists(data)
+    data["permissions"]["deny"] = [
+        rule for rule in deny if rule not in TRUSTED_LOCAL_REMOVED_DENY_RULES
+    ]
+    if "command(ddev)" not in allow:
+        allow.append("command(ddev)")
+    # Explicit command(*) Ask would override the DDEV allow rule. In trusted-local
+    # execute/repair, toolPermission=always-proceed is the intended fallback.
+    data["permissions"]["ask"] = [
+        rule for rule in ask if rule != "command(*)"
+    ]
+
+    _write_settings(path, data)
+    return original
+
+
+def restore_settings(path: Path, original: dict) -> None:
+    _write_settings(path, original)
 
 
 def _permission_lists(data: dict) -> tuple[list[str], list[str], list[str]]:
