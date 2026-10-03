@@ -619,7 +619,11 @@ class RuntimeEngine(RuntimeEngineCore):
                 last_failure = f"Agent command failed ({run.returncode}):\n{run.stderr}\n{run.output}"[-30000:]
             self.storage.update(job_id, status="verifying", progress=progress)
 
-            diff = diff_state(workspace, max_diff)
+            diff = diff_state(
+                workspace,
+                max_diff,
+                base_ref=source_commit,
+            )
             progress["changed_files"] = diff["changed_file_count"]
             progress["material_change_present"] = diff["changed_file_count"] > 0
             progress["diff_hashes"].append(diff["diff_hash"])
