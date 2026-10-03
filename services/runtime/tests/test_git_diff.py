@@ -1,6 +1,8 @@
 from pathlib import Path
 import subprocess
 
+import pytest
+
 from app.repo import commit_changes, diff_state
 
 
@@ -131,3 +133,30 @@ def test_diff_state_preserves_tracked_deletion(tmp_path):
     assert state["changed_files"] == ["tracked.txt"]
     assert "deleted file mode" in state["diff"]
     assert "tracked.txt" in state["diff"]
+
+
+def test_diff_state_keeps_committed_workorder_change_relative_to_source(tmp_path):
+    repo = make_repo(tmp_path)
+    source_commit = git(repo, "rev-parse", "HEAD")
+
+    (repo / "feature.txt").write_text("material work\n")
+    committed = commit_changes(repo, "AI: material work")
+    assert committed
+
+    # HEAD-relative state is clean after delivery, but the WorkOrder still has
+    # a material cumulative diff relative to its pinned source commit.
+    assert diff_state(repo, 100000)["changed_file_count"] == 0
+
+    cumulative = diff_state(repo, 100000, base_ref=source_commit)
+
+    assert cumulative["changed_files"] == ["feature.txt"]
+    assert cumulative["changed_file_count"] == 1
+    assert "feature.txt" in cumulative["diff"]
+    assert "material work" in cumulative["diff"]
+
+
+def test_diff_state_explicit_invalid_base_fails_closed(tmp_path):
+    repo = make_repo(tmp_path)
+
+    with pytest.raises(RuntimeError, match="Invalid diff base reference"):
+        diff_state(repo, 100000, base_ref="definitely-not-a-commit")
