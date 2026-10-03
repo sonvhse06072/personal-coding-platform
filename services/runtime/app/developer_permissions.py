@@ -8,7 +8,12 @@ from .config import expand_env, projects_doc
 TRUSTED_LOCAL_MODE = "trusted_local"
 
 
-def trusted_local_developer_enabled(workspace: Path, mode: str) -> bool:
+def trusted_local_developer_enabled(
+    workspace: Path,
+    mode: str,
+    *,
+    adapter: str | None = None,
+) -> bool:
     """Return whether one exact direct project authorizes trusted local execution.
 
     This is intentionally project-scoped and execute/repair-only. Planning and
@@ -17,6 +22,8 @@ def trusted_local_developer_enabled(workspace: Path, mode: str) -> bool:
     """
 
     if mode not in {"execute", "repair"}:
+        return False
+    if adapter is not None and adapter != "antigravity_host":
         return False
 
     try:
