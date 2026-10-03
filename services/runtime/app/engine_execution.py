@@ -14,6 +14,7 @@ from .config import project_config
 from .engine_core import RuntimeEngineCore
 from .evidence_packs import developer_repair_evidence_pack, pm_evidence_pack
 from .fingerprint import failure_fingerprint
+from .incident_learning import incident_learning_candidate
 from .model_capabilities import validate_model_choice
 from .preview import ProjectPreviewManager, ready_preview_context
 from .pm_reassessment import (
@@ -1302,6 +1303,19 @@ class RuntimeEngine(RuntimeEngineCore):
                         else checkpoint.get("last_review_report")
                     )
                     work_order = checkpoint.get("work_order") or {}
+                    incident_candidate = incident_learning_candidate(
+                        {
+                            **job,
+                            "status": "completed",
+                            "checkpoint": checkpoint,
+                            "progress": progress,
+                            "result": {
+                                "status": "accepted",
+                                "verification": verification,
+                                "review": review_summary,
+                            },
+                        }
+                    )
                     pm_pack = pm_evidence_pack(
                         work_order_ref=str(work_order.get("id") or "legacy-task"),
                         outcome="accepted",
@@ -1309,6 +1323,9 @@ class RuntimeEngine(RuntimeEngineCore):
                         review_summary=review_summary if isinstance(review_summary, dict) else None,
                         unresolved_risks=[],
                         protected_decision_flags=list(progress.get("important_decision_flags") or []),
+                        incident_learning={"candidate": incident_candidate}
+                        if incident_candidate
+                        else {},
                         baseline_covered_protected_authorizations=[
                             item
                             for item in (
