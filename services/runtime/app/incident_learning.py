@@ -11,7 +11,6 @@ _PLATFORM_BLOCK_REASONS = {
     "collaboration_failed",
     "repeated_deterministic_verification_failure",
     "evaluator_protocol_failure_without_fallback",
-    "provider_failure_without_fallback",
 }
 _MIN_REPAIR_CHURN = 4
 _MIN_VERIFICATION_RETRIES = 2
