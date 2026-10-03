@@ -46,3 +46,37 @@ def test_bridge_keeps_explicit_supported_effort() -> None:
     )
 
     assert cmd[cmd.index("--effort") + 1] == "low"
+
+
+def test_bridge_trusted_local_run_disables_sandbox_and_skips_permissions() -> None:
+    module = load_bridge()
+
+    cmd = module.build_run_command(
+        "/usr/bin/agy",
+        prompt="implement",
+        model="gemini-3.8-flash-medium",
+        effort="medium",
+        timeout=60,
+        output_format="stream-json",
+        sandbox=False,
+        dangerously_skip_permissions=True,
+    )
+
+    assert "--sandbox" not in cmd
+    assert "--dangerously-skip-permissions" in cmd
+
+
+def test_bridge_bounded_run_keeps_sandbox_and_permissions() -> None:
+    module = load_bridge()
+
+    cmd = module.build_run_command(
+        "/usr/bin/agy",
+        prompt="inspect",
+        model="gemini-3.8-flash-medium",
+        effort=None,
+        timeout=60,
+        output_format="json",
+    )
+
+    assert "--sandbox" in cmd
+    assert "--dangerously-skip-permissions" not in cmd
