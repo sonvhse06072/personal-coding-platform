@@ -554,6 +554,7 @@ class RuntimeEngine(RuntimeEngineCore):
                     trusted_local_developer=trusted_local_developer_enabled(
                         workspace,
                         "execute",
+                        adapter=str(executor_choice.get("adapter") or ""),
                     ),
                 ),
                 mode="execute",
