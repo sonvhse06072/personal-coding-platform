@@ -5,7 +5,8 @@ from app.config import clear_config_cache
 
 
 EXPECTED_COMMIT = "132c2ef767b595833677e9672d655872e07ba9b7"
-EXPECTED_REVISION = "pilot-v1-2026-10-03-dec033"
+EXPECTED_REVISION = "pilot-v1-2026-10-03-dec033-r1"
+PREVIOUS_PILOT_REVISION = "pilot-v1-2026-10-03-dec033"
 PREVIOUS_COMPLETION_COMMIT = "6038857e33d3717321a54e35743fa8b9dbeba8d2"
 PREVIOUS_COMPLETION_REVISION = "mvp-v1-2026-10-01-completion"
 PREVIOUS_GOVERNED_COMMIT = "8383b0004ee649cb3ac0fef1e68f9ca40718005b"
@@ -41,6 +42,8 @@ def test_chonhac_active_baseline_resolves_to_dec033_controlled_pilot() -> None:
             {"path": "docs/05-data-model.md", "section": None},
             {"path": "docs/07-api-contracts.md", "section": None},
             {"path": "docs/08-ux-notes.md", "section": None},
+            {"path": "docs/14-cho-nhac-profile-implementation-plan.md", "section": None},
+            {"path": "docs/15-account-email-verification-producer-plan.md", "section": None},
             {"path": "docs/17-design-language.md", "section": None},
             {"path": "docs/18-design-execution-plan.md", "section": None},
             {"path": "docs/19-information-architecture-sitemap.md", "section": None},
@@ -81,6 +84,10 @@ def test_chonhac_active_baseline_resolves_to_dec033_controlled_pilot() -> None:
         ],
     }
 
+    requirement_paths = [reference.path for reference in baseline.references.requirements]
+    assert "docs/14-cho-nhac-profile-implementation-plan.md" in requirement_paths
+    assert "docs/15-account-email-verification-producer-plan.md" in requirement_paths
+
     authority = {rule.path: rule.authority for rule in baseline.authority}
     assert authority["docs/11-decisions.md"] == "human_owner_protected"
     assert authority["docs/27-event-network-successor-reconciliation.md"] == "human_owner_protected"
@@ -91,6 +98,23 @@ def test_chonhac_active_baseline_resolves_to_dec033_controlled_pilot() -> None:
 
     clear_config_cache()
 
+
+
+def test_previous_dec033_pilot_baseline_remains_explicitly_resolvable() -> None:
+    clear_config_cache()
+    baseline = resolve_project_baseline("chonhac", PREVIOUS_PILOT_REVISION)
+
+    assert baseline is not None
+    assert baseline.project_id == "chonhac"
+    assert baseline.revision == PREVIOUS_PILOT_REVISION
+    assert baseline.status == "approved"
+    assert baseline.source_commit == EXPECTED_COMMIT
+
+    requirement_paths = [reference.path for reference in baseline.references.requirements]
+    assert "docs/14-cho-nhac-profile-implementation-plan.md" not in requirement_paths
+    assert "docs/15-account-email-verification-producer-plan.md" not in requirement_paths
+
+    clear_config_cache()
 
 def test_previous_completion_baseline_remains_explicitly_resolvable() -> None:
     clear_config_cache()
