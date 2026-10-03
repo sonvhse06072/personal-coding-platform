@@ -205,6 +205,24 @@ def orchestrator(work_orders, tracked_rows):
     return PlanOrchestrator(storage, engine, store=store), storage, engine, store
 
 
+def test_supervised_hold_never_launches_first_pending_work_order():
+    first = work_order("WO-1")
+    second = work_order("WO-2", dependencies=["WO-1"])
+    service, storage, engine, store = orchestrator(
+        [first, second],
+        [tracked("WO-1", 0), tracked("WO-2", 1)],
+    )
+    store.plan["plan"]["execution_mode"] = "supervised"
+    store.plan_status = "supervised_hold"
+
+    result = asyncio.run(service.tick())
+
+    assert result["launched"] is None
+    assert engine.created == []
+    assert engine.enqueued == []
+    assert [row["state"] for row in store.tracked] == ["pending", "pending"]
+
+
 def test_tick_launches_only_first_dependency_ready_work_order_and_is_idempotent():
     first = work_order("WO-1")
     second = work_order("WO-2", dependencies=["WO-1"])
