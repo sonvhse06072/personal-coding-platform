@@ -4,8 +4,8 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 live Runtime/GitHub evidence remain authoritative over chat history. Completed
 chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-10-03 after Chợ Nhạc DEC-033 pilot reset, unified
-ProjectBaseline activation and trusted-local developer rollout preparation.
+Last updated: 2026-10-03 after Chợ Nhạc PILOT-01 blocker diagnosis and PCP
+anti-loop/model-capability verification repairs through Runtime 1.0.95.
 
 ## Resume order
 
@@ -25,8 +25,18 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP main after PR #427 targets Runtime `1.0.94` and Antigravity host
-  bridge `1.13`; ddev-executor remains `1.0.29`.
+- PCP main after PR #435 targets Runtime `1.0.95`, Antigravity host
+  bridge `1.13` and model registry version `11`; ddev-executor remains
+  `1.0.29`.
+- PR #431 exposes configured `frontend_quality` to PM WorkOrder planning so
+  frontend-heavy slices can require typecheck/lint/unit/build/Chromium evidence.
+- PR #433 makes Chợ Nhạc targeted Drupal verification change-aware: Runtime
+  runs Unit/Kernel/Functional tests for changed custom modules instead of
+  hard-coding Show tests.
+- PR #435 corrects `gemini-3.8-flash-medium` as a no-explicit-effort model,
+  preserves legacy registry-v10 low/medium/high choices as ignored metadata,
+  omits stale effort at the Antigravity adapter, and preserves actionable
+  reviewer findings across PM/provider failures on resume.
 - Chợ Nhạc is the first project with
   `runtime.developer_permission_mode: trusted_local`.
 - Trusted-local execution is deliberately narrow: exact direct Chợ Nhạc
@@ -102,49 +112,41 @@ the live product repository must remain at that commit.
 Current implementation evidence:
 
 - DEC-033 is the canonical successor execution decision.
-- Chợ Nhạc #63 is the single controlled-pilot execution umbrella for new work.
-- The old GH-42 plan `pm-c63bc4f63c084dd1ac4eed9cf80ec87a` is preserved
-  history, not the successor pilot critical path.
-- WO-01 `GH-42-WO-01-show-domain-api` completed; PR #44 merged at
-  `e8ccde0f9854fa86a9fa37fe9504fb63c90a477f`.
-- WO-02 `GH-42-WO-02-show-frontend` completed; PR #45 merged at
-  `dc8d60ae0c8ce913146e1c417d11ca37b20874ee`.
-- WO-03 `GH-42-WO-03-availability`, job
-  `c7011f370eb153acb7786b5a3e3cbff8`, remains blocked at
-  `pm_reassessment_failed`; its latest evaluator findings are bounded
-  Availability kernel/functional verification plus cleanup of one zero-test
-  frontend file.
-- Availability remains KEEP as Chợ Nhạc #62, but is outside the first pilot
-  critical path.
-- The old #42 WO-03 diff/evidence was preserved, its Runtime job cancelled, and
-  WO-03..WO-08 superseded before #63 intake.
-- First #63 canonical intake correctly classified to planning but plan
-  `pm-1c670cfa6e1542579b9d4aefc70e4eb0` failed validation because the original
-  pilot baseline omitted protected `docs/14` from its references allowlist.
-- Do not resume that failed plan. Reload r1 locally and submit one fresh #63
-  canonical intake with `planning_profile=complex` and
-  `execution_mode=supervised`.
+- Chợ Nhạc #63 is the controlled-pilot execution umbrella.
+- The old GH-42 plan `pm-c63bc4f63c084dd1ac4eed9cf80ec87a` is retired
+  history. WO-01/WO-02 remain completed evidence; WO-03 evidence was preserved
+  under #62, its Runtime job was cancelled, and WO-03..WO-08 were superseded.
+- First #63 intake plan `pm-1c670cfa6e1542579b9d4aefc70e4eb0` failed only
+  because the original DEC-033 baseline omitted a legitimate protected Profile
+  reference. Pilot baseline r1 repaired that omission.
+- Active #63 plan:
+  `pm-5cd9ec06f74b4feba4db5a1507ab35f0`.
+- Current WorkOrder: `GH-63-PILOT-01`.
+- Current preserved job:
+  `c02defa348fc5b19a0bd021e2697571e`.
+- PILOT-01 deterministic verification passed targeted_tests, static_analysis
+  and frontend_quality. Independent review produced one bounded actionable
+  finding: `DEC031-CACHE-01`, requiring the mutable DEC-031 gate's config
+  cacheability to propagate through generic ShowPosition access.
+- The job then blocked at `pm_reassessment_failed` because PCP registry v10
+  incorrectly invoked `gemini-3.8-flash-medium --effort low`, which the host
+  CLI does not support. This was a platform failure, not a Chợ Nhạc code or
+  provider-quota failure.
+- PCP #434 / PR #435 merged at
+  `e9da10dc03cf25fb3861b804dab485112474a2d8`. Runtime 1.0.95 can consume the
+  persisted v10 choice, omit unsupported effort, and reconstruct the persisted
+  reviewer finding as the primary developer repair instruction.
+- Recovery for PILOT-01 is therefore **same job, same workspace, reroute=false**.
+  Do not create a replacement job and do not clear the reviewer finding.
+- Chat PM reviewed the generated eight-WorkOrder plan. PILOT-01 is approved to
+  continue; generated PILOT-02..PILOT-08 must not be released unchanged after
+  the first supervised checkpoint because their child-issue detail, working
+  file targets and frontend verification contracts are under-specified.
+- #63 now contains the governed successor replan contract for exactly the seven
+  remaining semantic slices. Replan only after PILOT-01 is accepted/merged.
 
-Before acting on WO-02, verify the live WorkOrder/job/branch/lease rather than
-guessing an identity from WO-01.
-
-WO-02 frontend guardrails:
-
-- scope is public Show discovery/detail plus Booker Show management/create/edit;
-- do not add Apply/Invite/Availability behavior before the corresponding later
-  vertical slices are active;
-- reuse the approved Drupal authenticated-session + CSRF boundary; do not invent
-  a sign-in route, token transport or new auth mechanism;
-- frontend renders server DTO/state and submits actions; it does not derive
-  authorization, capacity or lifecycle transitions locally;
-- `frontend/` changes require the configured Node 24 frontend-quality phase:
-  typecheck, lint, unit tests, build and Playwright/browser verification;
-- if backend-only verification becomes repeatedly expensive for a frontend-only
-  diff, treat that as evidence for layered-verification calibration rather than
-  weakening required final evidence ad hoc.
-
-Historical DEC-025 PCP orchestration remains retired. Do not recreate, reroute
-or resume it.
+Historical DEC-025 and GH-42 execution are retired. Do not recreate, reroute or
+resume them.
 
 ## Active PCP follow-up work
 
@@ -227,19 +229,26 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Roll local PCP to main containing PR #427 only while GH-42 WO-03 remains
-   stably blocked and no engineering worker is active.
-2. Verify deployed identities: Runtime `1.0.94`, Antigravity bridge `1.13`,
-   ddev-executor `1.0.29`.
-3. Preserve exact WO-03 status/diff/untracked-file evidence for Chợ Nhạc #62.
-4. Cancel exact job `c7011f370eb153acb7786b5a3e3cbff8` after preservation so
-   the direct-project lease can be restored/released; do not resume it again.
-5. Explicitly supersede GH-42 WO-03 through WO-08. Leave WO-01/WO-02 completed.
-6. Confirm the old plan has no ready active successor WorkOrder and close #42 as
-   superseded execution scope.
-7. Intake Chợ Nhạc #63 with planning profile `complex`, execution mode
-   `supervised`, and revision `pilot-v1-2026-10-03-dec033`.
-8. At each supervised WorkOrder checkpoint, Chat PM reviews durable evidence and
-   releases the next ready set; developers may use trusted-local DDEV internally.
-9. Keep staging/production and DEC-025 operator actions outside autonomous
-   developer authority.
+1. While PILOT-01 remains stably blocked and no engineering worker is active,
+   fast-forward local PCP main to include:
+   - PR #431 / `0d1aacf6a864fa8314fb375de7ba515b51670c18`;
+   - PR #433 / `834b3cf96cc0498685481f5306978f6c726074a1`;
+   - PR #435 / `e9da10dc03cf25fb3861b804dab485112474a2d8`.
+2. Restart PCP services at this stable blocker and verify Runtime `1.0.95`,
+   Antigravity bridge `1.13`, ddev-executor `1.0.29`, and model registry
+   `11`.
+3. Resume exact job `c02defa348fc5b19a0bd021e2697571e` with
+   `reroute=false` and `reset_transient_provider_failures=false`.
+4. The first developer repair instruction must retain
+   `DEC031-CACHE-01`; the former `--effort low` error is operational context
+   only.
+5. Let the same job repair the gate cacheable dependency, rerun deterministic
+   verification/review/PM reassessment and deliver normally.
+6. Review exact diff/evidence and merge PILOT-01 only if all gates pass.
+7. At the resulting supervised hold, **do not continue generated PILOT-02**.
+   Create one successor supervised plan for the seven remaining slices using
+   the replan contract in Chợ Nhạc #63; once ready, supersede pending
+   PILOT-02..PILOT-08 from the old plan.
+8. Keep staging/production, public recruitment legal approval, Availability
+   salvage, Reviews, Band and payment/ticket commerce outside this pilot path.
+
