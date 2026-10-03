@@ -56,10 +56,13 @@ def write_visual_request(
     if base_url not in {"http://127.0.0.1:3100", "http://localhost:3100"}:
         raise RuntimeError("Visual evidence internal_base_url must use the local preview listener")
 
+    if not routes or len(routes) > 4:
+        raise RuntimeError("Visual evidence routes must contain 1..4 local paths")
+
     payload = {
         "version": 1,
         "base_url": base_url,
-        "routes": routes[:8],
+        "routes": routes,
         "viewports": normalized_viewports,
     }
     path = visual_request_path(workspace)
@@ -160,7 +163,7 @@ def extract_visual_evidence(phase_result: dict[str, Any]) -> dict[str, Any] | No
         "image_reviewed": bool(raw.get("image_reviewed", False)),
         "passed": bool(raw.get("passed", False)),
         "artifact_count": len(artifacts),
-        "routes": [_clip(item, 240) for item in (raw.get("routes") or [])[:8]],
+        "routes": [_clip(item, 240) for item in (raw.get("routes") or [])[:4]],
         "viewports": [int(item) for item in (raw.get("viewports") or [])[:6]],
         "artifacts": artifacts,
     }
