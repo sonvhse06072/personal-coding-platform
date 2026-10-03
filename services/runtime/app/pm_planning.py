@@ -360,6 +360,7 @@ def _planning_prompt(
             "Use logical team roles only. Never name a model/provider as requested_role.",
             "Every WorkOrder must set parent_ticket exactly to the input ticket id and baseline_revision exactly to the governing revision.",
             "Every WorkOrder source_references path must come from the governing baseline. Use only deterministic verification phases listed as available.",
+            "For PM-generated WorkOrders, budget.max_profile is an execution upper bound, not merely a cost hint. It must be at least fast for routine risk, standard for standard risk, complex for high risk, and critical for critical risk; canonical protected risk flags may raise that floor.",
             "When visual_quality is available and a WorkOrder materially changes a user-facing frontend/UI surface, require frontend_quality before visual_quality and provide bounded visual_routes for concrete local routes that the WorkOrder can actually render. visual_quality supplements rather than replaces deterministic frontend/browser functional checks. Do not invent fixture-dependent routes that the current WorkOrder cannot make available.",
             "Keep WorkOrders small, dependency-aware, and independently verifiable. Optimize for a personal, budget-conscious team; do not create unnecessary tasks or parallelism.",
             (
