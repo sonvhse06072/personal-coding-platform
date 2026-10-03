@@ -13,9 +13,15 @@ from .collaboration import (
 )
 from .developer_stream import runtime_activity_event
 from .engine_execution import RuntimeEngine as ExecutionRuntimeEngine
+from .preview import PreviewManager
 from .repo import diff_state
 from .review_repair_churn import ReviewRepairChurnPaused
 from .shell import run_command
+from .visual_evidence import (
+    extract_visual_evidence,
+    remove_visual_request,
+    write_visual_request,
+)
 from .work_order import work_order_snapshot
 
 
@@ -518,7 +524,18 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         row = self.storage.get(job_id) or {}
         checkpoint = row.get("checkpoint") or {}
         work_order = work_order_snapshot(checkpoint.get("work_order"))
-        if work_order is None or not work_order.verification.intermediate_phases:
+        modern_required = (
+            set(work_order.verification.required_phases)
+            if work_order is not None
+            else set()
+        )
+        uses_layered_only_phase = bool(
+            modern_required.intersection({"frontend_quality", "visual_quality"})
+        )
+        if work_order is None or (
+            not work_order.verification.intermediate_phases
+            and not uses_layered_only_phase
+        ):
             result = await super()._verify(
                 job_id,
                 project_id,
@@ -608,22 +625,87 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 },
             )
 
-            phase_result = await self.ddev.phase(
-                job_id=job_id,
-                project_id=project_id,
-                workspace=str(workspace),
-                phase=phase,
-                timeout_seconds=self._remaining_seconds(strategy, started, 1200),
-            )
+            visual_request_written = False
+            if phase == "visual_quality":
+                manager = PreviewManager(self.storage, self.ddev)
+                preview_state = await manager.status(job_id)
+                if preview_state.get("status") != "ready":
+                    preview_state = await manager.start(job_id, "frontend")
+                if (
+                    preview_state.get("status") != "ready"
+                    or not preview_state.get("frontend_url")
+                ):
+                    annotated = {
+                        "passed": False,
+                        "phase": phase,
+                        "commands": [],
+                        "infrastructure": [],
+                        "verification_layer": layer,
+                        "required_for_final": phase in required_set,
+                        "visual_evidence": {
+                            "version": 1,
+                            "evidence_kind": "preview_start",
+                            "image_reviewed": False,
+                            "passed": False,
+                            "artifact_count": 0,
+                            "routes": list(work_order.verification.visual_routes),
+                            "viewports": [],
+                            "artifacts": [],
+                            "error": "job_owned_frontend_preview_not_ready",
+                        },
+                    }
+                    outputs.append(annotated)
+                    failures.append("visual_quality: job-owned frontend preview did not become ready")
+                    self._runtime_event(
+                        job_id,
+                        kind="verification_layer",
+                        message="Visual verification stopped because the job-owned frontend preview is not ready",
+                        phase="verification",
+                        status="failed:final:visual_quality",
+                        output={"attempt": attempt, "later_phases_skipped": True},
+                    )
+                    break
+                write_visual_request(
+                    workspace,
+                    routes=list(work_order.verification.visual_routes),
+                    project=project,
+                )
+                visual_request_written = True
+
+            try:
+                phase_result = await self.ddev.phase(
+                    job_id=job_id,
+                    project_id=project_id,
+                    workspace=str(workspace),
+                    phase=phase,
+                    timeout_seconds=self._remaining_seconds(strategy, started, 1200),
+                )
+            finally:
+                if visual_request_written:
+                    remove_visual_request(workspace)
+
             annotated = dict(phase_result)
             annotated["verification_layer"] = layer
             annotated["required_for_final"] = phase in required_set
+            if phase == "visual_quality":
+                try:
+                    visual_evidence = extract_visual_evidence(phase_result)
+                except RuntimeError as exc:
+                    visual_evidence = None
+                    annotated["visual_evidence_error"] = str(exc)
+                if visual_evidence is None:
+                    annotated["passed"] = False
+                    failures.append("visual_quality: bounded PCP visual evidence marker is missing or invalid")
+                else:
+                    annotated["visual_evidence"] = visual_evidence
+                    if not visual_evidence.get("passed", False):
+                        annotated["passed"] = False
             outputs.append(annotated)
             tool_calls += len(phase_result.get("commands", []))
             test_runs += len(phase_result.get("commands", []))
 
-            if not phase_result.get("passed", False):
-                failures.append(str(phase_result))
+            if not annotated.get("passed", False):
+                failures.append(str(annotated))
                 self._runtime_event(
                     job_id,
                     kind="verification_layer",

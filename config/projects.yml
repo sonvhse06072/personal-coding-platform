@@ -177,6 +177,15 @@ projects:
           https_port: 3100
         url: https://chonhac.ddev.site:3100
         api_origin_on_both: https://chonhac.ddev.site
+      visual_evidence:
+        internal_base_url: http://127.0.0.1:3100
+        viewports:
+          - 360
+          - 390
+          - 430
+          - 768
+          - 1024
+          - 1440
 
     ddev:
       enabled: true
@@ -195,6 +204,9 @@ projects:
           requires:
             - php_runtime
         frontend_quality:
+          requires:
+            - local_listener
+        visual_quality:
           requires:
             - local_listener
 
@@ -240,6 +252,10 @@ projects:
           ddev exec bash -lc 'cd frontend && npx playwright install chromium'
         - >-
           ddev exec bash -lc 'cd frontend && NEXT_TELEMETRY_DISABLED=1 npm run test:browser'
+
+      visual_quality:
+        - >-
+          ddev exec bash -lc 'cd frontend && npm run test:visual'
 
       full_tests: []
 

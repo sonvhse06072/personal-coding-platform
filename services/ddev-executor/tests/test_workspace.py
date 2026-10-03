@@ -1609,3 +1609,14 @@ def test_direct_workspace_return_to_base_refuses_branch_mismatch(tmp_path, monke
     assert exc.value.status_code == 409
     assert "branch changed outside the owning job" in str(exc.value.detail)
     assert run("git", "branch", "--show-current", cwd=source) == "human/manual"
+
+
+def test_phase_request_accepts_visual_quality() -> None:
+    request = PhaseRequest(
+        job_id="jobvisual123",
+        project_id="demo",
+        workspace="/tmp/demo",
+        phase="visual_quality",
+    )
+
+    assert request.phase == "visual_quality"

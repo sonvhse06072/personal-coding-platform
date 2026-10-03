@@ -75,6 +75,39 @@ def _compact_verification(verification: dict[str, Any]) -> dict[str, Any]:
                     "timed_out": bool(command.get("timed_out", False)),
                 }
             )
+        visual = item.get("visual_evidence")
+        visual_summary = None
+        if isinstance(visual, dict):
+            artifacts = []
+            for artifact in visual.get("artifacts") or []:
+                if not isinstance(artifact, dict):
+                    continue
+                artifacts.append(
+                    {
+                        "route": _clip(artifact.get("route"), 240),
+                        "viewport": dict(artifact.get("viewport") or {}),
+                        "status_code": artifact.get("status_code"),
+                        "navigation_error": _clip(artifact.get("navigation_error"), 500) or None,
+                        "console_errors": [_clip(value, 300) for value in (artifact.get("console_errors") or [])[:5]],
+                        "page_errors": [_clip(value, 300) for value in (artifact.get("page_errors") or [])[:5]],
+                        "failed_requests": list(artifact.get("failed_requests") or [])[:5],
+                        "dom": dict(artifact.get("dom") or {}),
+                        "screenshot": dict(artifact.get("screenshot") or {}),
+                        "passed": bool(artifact.get("passed", False)),
+                    }
+                )
+                if len(artifacts) >= 24:
+                    break
+            visual_summary = {
+                "version": visual.get("version"),
+                "evidence_kind": _clip(visual.get("evidence_kind"), 100),
+                "image_reviewed": bool(visual.get("image_reviewed", False)),
+                "passed": bool(visual.get("passed", False)),
+                "artifact_count": int(visual.get("artifact_count") or len(artifacts)),
+                "routes": list(visual.get("routes") or [])[:8],
+                "viewports": list(visual.get("viewports") or [])[:6],
+                "artifacts": artifacts,
+            }
         phases.append(
             {
                 "phase": item.get("phase"),
@@ -82,6 +115,7 @@ def _compact_verification(verification: dict[str, Any]) -> dict[str, Any]:
                 "verification_layer": item.get("verification_layer"),
                 "required_for_final": item.get("required_for_final"),
                 "commands": commands[:12],
+                "visual_evidence": visual_summary,
             }
         )
     return {

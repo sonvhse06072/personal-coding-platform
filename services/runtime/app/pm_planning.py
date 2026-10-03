@@ -293,6 +293,7 @@ def _available_verification_phases(project: dict[str, Any]) -> list[str]:
             "targeted_tests",
             "static_analysis",
             "frontend_quality",
+            "visual_quality",
             "full_tests",
         )
         if ddev.get(phase)
@@ -320,6 +321,7 @@ def _planning_prompt(
             "Use logical team roles only. Never name a model/provider as requested_role.",
             "Every WorkOrder must set parent_ticket exactly to the input ticket id and baseline_revision exactly to the governing revision.",
             "Every WorkOrder source_references path must come from the governing baseline. Use only deterministic verification phases listed as available.",
+            "When visual_quality is available and a WorkOrder materially changes a user-facing frontend/UI surface, require frontend_quality before visual_quality and provide bounded visual_routes for concrete local routes that the WorkOrder can actually render. visual_quality supplements rather than replaces deterministic frontend/browser functional checks. Do not invent fixture-dependent routes that the current WorkOrder cannot make available.",
             "Keep WorkOrders small, dependency-aware, and independently verifiable. Optimize for a personal, budget-conscious team; do not create unnecessary tasks or parallelism.",
             (
                 "DECOMPOSITION_REQUIRED: This materially non-trivial ticket must produce at least two coherent, independently verifiable WorkOrders when in scope with no decision boundaries. Split by semantic/dependency boundaries, never arbitrary file counts. Out-of-scope, ambiguous or human-decision results need no artificial WorkOrders."

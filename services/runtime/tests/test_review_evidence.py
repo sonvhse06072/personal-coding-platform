@@ -314,3 +314,80 @@ def test_protocol_invalid_review_is_telemetry_not_actionable_finding(monkeypatch
     assert progress["review_history"][-1]["protocol_valid"] is False
     assert progress["review_history"][-1]["finding_count"] == 0
 
+
+
+def test_visual_quality_evidence_is_compact_and_pixel_claims_are_bounded():
+    visual_verification = verification(full=False)
+    visual_verification["phases"].append(
+        {
+            "phase": "visual_quality",
+            "passed": True,
+            "verification_layer": "final",
+            "required_for_final": True,
+            "commands": [
+                {
+                    "command": "npm run test:visual",
+                    "returncode": 0,
+                    "stdout": "RAW_BROWSER_OUTPUT_SHOULD_NOT_PROPAGATE",
+                    "stderr": "",
+                }
+            ],
+            "visual_evidence": {
+                "version": 1,
+                "evidence_kind": "local_playwright_preview",
+                "image_reviewed": False,
+                "passed": True,
+                "artifact_count": 1,
+                "routes": ["/artist/demo"],
+                "viewports": [390],
+                "artifacts": [
+                    {
+                        "route": "/artist/demo",
+                        "viewport": {"width": 390, "height": 844},
+                        "status_code": 200,
+                        "navigation_error": None,
+                        "console_errors": [],
+                        "page_errors": [],
+                        "failed_requests": [],
+                        "dom": {
+                            "title": "Artist",
+                            "h1": ["Artist"],
+                            "links": 3,
+                            "buttons": 1,
+                            "main_landmarks": 1,
+                            "nav_landmarks": 1,
+                            "horizontal_overflow": False,
+                        },
+                        "screenshot": {
+                            "path": ".pcp-visual-evidence/artist-demo-390.png",
+                            "sha256": "b" * 64,
+                        },
+                        "passed": True,
+                    }
+                ],
+            },
+        }
+    )
+
+    pack = reviewer_evidence_pack(
+        task={"title": "Visual review", "description": "contract"},
+        diff="diff --git a/frontend/a.tsx b/frontend/a.tsx\n+change",
+        verification=visual_verification,
+        work_order={"id": "WO-VIS", "objective": "Visual review"},
+    )
+
+    visual = pack["verification"]["phases"][-1]["visual_evidence"]
+    assert visual["image_reviewed"] is False
+    assert visual["artifacts"][0]["route"] == "/artist/demo"
+    assert visual["artifacts"][0]["screenshot"]["sha256"] == "b" * 64
+    assert "RAW_BROWSER_OUTPUT_SHOULD_NOT_PROPAGATE" not in json.dumps(pack)
+
+    prompt = evaluator_prompt(
+        task={"title": "Visual review", "description": "contract"},
+        diff="diff --git a/frontend/a.tsx b/frontend/a.tsx\n+change",
+        verification=visual_verification,
+        work_order={"id": "WO-VIS", "objective": "Visual review"},
+        baseline={"revision": "v1", "source_commit": "abc"},
+    )
+    assert "Screenshot path/hash proves capture only" in prompt
+    assert "image_reviewed=false" in prompt
