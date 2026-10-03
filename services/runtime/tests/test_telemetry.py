@@ -226,3 +226,35 @@ def test_operational_summary_aggregates_required_efficiency_and_attention_metric
     assert summary["quota_failures"] == 2
     assert summary["provider_model_breakdown"][0]["tasks"] == 2
     assert summary["human_attention"]["human_interventions_per_task"] == 0.5
+
+
+def test_incident_learning_candidate_is_bounded_and_not_created_for_first_failure() -> None:
+    ordinary = completed_row()
+    ordinary["status"] = "blocked"
+    ordinary["result"] = {"reason": "targeted_tests_failed"}
+    ordinary["progress"]["repair_iterations"] = 1
+    ordinary["progress"]["verification_retry_attempts"] = 1
+    ordinary_snapshot = task_telemetry_snapshot(ordinary)
+
+    assert ordinary_snapshot["incident_learning"]["candidate"] is None
+    assert ordinary_snapshot["incident_learning"]["candidate_count"] == 0
+
+    repeated = completed_row()
+    repeated["status"] = "blocked"
+    repeated["result"] = {"reason": "repeated_deterministic_verification_failure"}
+    repeated["progress"]["repair_iterations"] = 5
+    repeated["progress"]["verification_retry_attempts"] = 3
+    repeated["progress"]["failure_fingerprints"] = ["same", "same", "other"]
+    first = task_telemetry_snapshot(repeated)
+    second = task_telemetry_snapshot(deepcopy(repeated))
+
+    candidate = first["incident_learning"]["candidate"]
+    assert candidate is not None
+    assert candidate["id"] == second["incident_learning"]["candidate"]["id"]
+    assert candidate["classification_required"] is True
+    assert "repeated_failure_fingerprint" in candidate["signals"]
+    assert "verification_retry_anomaly" in candidate["signals"]
+    assert "repair_churn" in candidate["signals"]
+    assert "platform_block:repeated_deterministic_verification_failure" in candidate["signals"]
+    assert candidate["pm_contract"]["raw_logs_embedded"] is False
+    assert first["incident_learning"]["candidate_count"] == 1

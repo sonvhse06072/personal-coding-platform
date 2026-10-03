@@ -459,6 +459,14 @@ it does not embed raw logs or trigger recursive retrospective agents. A reusable
 lesson should be promoted once at a meaningful checkpoint rather than repeated
 after every failed attempt.
 
+Runtime implements the candidate side deterministically. Ordinary first
+lint/test/provider failures produce no candidate. Repeated failure fingerprints,
+verification-retry anomalies, material repair/routing churn, source-advance
+recovery, or explicit platform/state-machine blockers may create one stable
+candidate per job/WorkOrder incident window. The candidate carries only compact
+signal/counter/evidence references and no raw logs. PM classification remains a
+checkpoint responsibility; candidate generation itself performs no model call.
+
 ## 11. ChangeProposal
 
 A ChangeProposal is the only normal path for an agent to request modification of the approved project frame.
