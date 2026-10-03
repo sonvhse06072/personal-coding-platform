@@ -439,13 +439,9 @@ class Bridge:
                     env["NO_COLOR"] = "1"
 
                     # settings.json is global to the signed-in host account. One run
-                    # at a time receives absolute grants for only its isolated clone.
+                    # at a time receives exact workspace grants; trusted-local runs
+                    # additionally receive one temporary unsandboxed DDEV grant.
                     with bridge._agy_lock:
-                        original_settings = (
-                            apply_trusted_local_ddev_permission(bridge.settings)
-                            if trusted_local
-                            else None
-                        )
                         if bridge.consume_cancelled(run_id):
                             return self.send_json(200, {
                                 "run_id": run_id,
@@ -454,6 +450,11 @@ class Bridge:
                                 "stderr": "Antigravity run cancelled before start",
                                 "payload": None,
                             })
+                        original_settings = (
+                            apply_trusted_local_ddev_permission(bridge.settings)
+                            if trusted_local
+                            else None
+                        )
                         scoped_allow, scoped_deny = add_workspace_file_rules(
                             bridge.settings, workspace
                         )
