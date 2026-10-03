@@ -18,6 +18,37 @@ class ReasoningCapability:
     allowed_efforts: tuple[str, ...]
 
 
+def legacy_ignored_reasoning_efforts(
+    model_id: str,
+    model: Mapping[str, Any],
+) -> tuple[str, ...]:
+    raw = model.get("legacy_ignored_reasoning_efforts")
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise ValueError(
+            f"Model {model_id!r} legacy_ignored_reasoning_efforts must be a list"
+        )
+    if any(not isinstance(item, str) or item not in _REASONING_EFFORT_SET for item in raw):
+        raise ValueError(
+            f"Model {model_id!r} legacy_ignored_reasoning_efforts contains an unknown value"
+        )
+    if len(set(raw)) != len(raw):
+        raise ValueError(
+            f"Model {model_id!r} legacy_ignored_reasoning_efforts contains duplicates"
+        )
+    ordered = tuple(item for item in REASONING_EFFORT_ORDER if item in raw)
+    if tuple(raw) != ordered:
+        raise ValueError(
+            f"Model {model_id!r} legacy_ignored_reasoning_efforts must follow canonical order"
+        )
+    if model.get("supports_reasoning_effort") is not False:
+        raise ValueError(
+            f"Model {model_id!r} legacy ignored efforts require supports_reasoning_effort=false"
+        )
+    return ordered
+
+
 def reasoning_capability(
     model_id: str,
     model: Mapping[str, Any],
@@ -67,6 +98,7 @@ def validate_model_registry(document: Mapping[str, Any]) -> None:
         if not isinstance(model_id, str) or not model_id or not isinstance(model, dict):
             raise ValueError("Model registry entries must be named objects")
         reasoning_capability(model_id, model)
+        legacy_ignored_reasoning_efforts(model_id, model)
 
 
 def validate_model_choice(
@@ -99,9 +131,11 @@ def validate_model_choice(
 
     capability = reasoning_capability(model_id, registered)
     if effort is not None and effort not in capability.allowed_efforts:
-        raise ModelCapabilityError(
-            f"Reasoning effort {effort!r} is unsupported for PCP model {model_id!r}"
-        )
+        legacy_ignored = legacy_ignored_reasoning_efforts(model_id, registered)
+        if effort not in legacy_ignored:
+            raise ModelCapabilityError(
+                f"Reasoning effort {effort!r} is unsupported for PCP model {model_id!r}"
+            )
     return capability
 
 
