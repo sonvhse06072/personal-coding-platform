@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.config import clear_config_cache, get_config
+from app.model_capabilities import reasoning_capability
 from app.schemas import StaffingRequest
 from app.staffing import RouterEngine
 
@@ -46,20 +47,26 @@ def test_product_manager_staffing_selects_only_pm_eligible_agent() -> None:
         "antigravity_claude_sonnet",
     }
     assert result.choice.id != "codex_sol"
-    assert result.choice.reasoning_effort == "low"
+    capability = reasoning_capability(result.choice.id, engine.models[result.choice.id])
+    assert result.choice.reasoning_effort == (
+        "low" if capability.supports_explicit_effort else None
+    )
     assert "product_manager" in engine.models[result.choice.id]["roles"]
     assert result.policy_version == 19
-    assert result.registry_version == 10
+    assert result.registry_version == 11
 
 
-def test_product_manager_staffing_respects_provider_availability_and_sets_antigravity_effort() -> None:
+def test_product_manager_staffing_respects_provider_availability_and_model_effort_capability() -> None:
     engine = make_engine()
     result = engine.staff(
         pm_request(provider_state={"provider:openai": {"available": False}})
     )
 
     assert result.choice.provider == "google_antigravity"
-    assert result.choice.reasoning_effort == "low"
+    capability = reasoning_capability(result.choice.id, engine.models[result.choice.id])
+    assert result.choice.reasoning_effort == (
+        "low" if capability.supports_explicit_effort else None
+    )
     assert result.choice.quota_group in {"antigravity_gemini", "antigravity_claude_gpt"}
 
 
