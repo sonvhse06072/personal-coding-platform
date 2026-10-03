@@ -25,8 +25,10 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP main targets Runtime `1.0.100`, ddev-executor `1.0.30`,
-  Antigravity host bridge `1.13` and model registry version `11`.
+- PCP main currently targets Runtime `1.0.100`; PCP #451 targets Runtime
+  `1.0.101` so newly registered supervised plans hold before their first
+  WorkOrder launch. ddev-executor remains `1.0.30`, Antigravity host bridge
+  `1.13`, model registry version `11`.
 - PCP #446 / PR #447 is complete at
   `645200e1f0e1ea1902569f471a53d5b90699ece6`: canonical WorkOrder diff
   identity is source-commit-relative across Runtime-created commits,
@@ -166,13 +168,12 @@ resume them.
 
 ## Active PCP follow-up work
 
-There are currently **no open PCP implementation issues** for the PILOT-01
-incident chain.
+PCP #451 is the single focused active Runtime repair required before successor
+pilot intake: newly registered `execution_mode=supervised` plans must create a
+durable initial supervision hold before any WorkOrder job is created/enqueued.
 
-The focused repairs #438/#439, #440/#442, #441/#443 and #446/#447 are
-completed. Chợ Nhạc CI incidents #68/#69 and #70/#71 are also resolved. New
-platform work should start only from new durable evidence rather than replaying
-these fingerprints.
+The PILOT-01 incident repairs #438/#439, #440/#442, #441/#443 and #446/#447 are
+completed. Chợ Nhạc CI incidents #68/#69 and #70/#71 are also resolved.
 
 ## Recently completed reusable work
 
@@ -226,18 +227,18 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Roll local PCP to current main / Runtime `1.0.100` only while no
-   executor/model process is active.
-2. Verify active Chợ Nhạc baseline resolves to
+1. Complete PCP #451 with exact-head CI, merge, then roll local PCP to Runtime
+   `1.0.101` only while no executor/model process is active.
+2. Verify active Chợ Nhạc baseline remains
    `pilot-v1-2026-10-04-dec033-r2` at
    `aa8e68dd9aea6740de446151eb97615931de9b40`.
 3. Do **not** resume, reroute or continue the historical PILOT-01 job merely to
-   make Runtime state look completed; the product diff is already merged and
-   the job is preserved as incident/work evidence.
+   make Runtime state look completed; preserve it as incident/work evidence.
 4. Do **not** release generated PILOT-02 from plan
    `pm-5cd9ec06f74b4feba4db5a1507ab35f0`.
-5. Intake one supervised successor plan for exactly the seven remaining slices
-   from #48/#49/#50/#56/#57/#58/#59 using r2.
+5. Intake one supervised successor plan for exactly #48/#49/#56/#57/#58/#50/#59
+   using r2. Confirm the new plan is at initial `supervised_hold` with zero
+   WorkOrder jobs before reviewing/releasing it.
 6. After the successor plan exists and exact replacement WorkOrder identities
    are known, supersede the old PILOT-01..PILOT-08 orchestration through the
    supported API; link PILOT-02..08 to their replacements and retire PILOT-01
