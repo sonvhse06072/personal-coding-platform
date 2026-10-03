@@ -78,6 +78,18 @@ def build_run_command(
     return cmd
 
 
+def trusted_local_request_allowed(
+    *,
+    requested: bool,
+    workspace: Path,
+    direct_workspace: Path | None,
+    mode: str,
+) -> bool:
+    if not requested or mode not in {"execute", "repair"} or direct_workspace is None:
+        return False
+    return workspace.resolve() == direct_workspace.resolve()
+
+
 def contained(path: Path, root: Path) -> bool:
     try:
         path.resolve().relative_to(root.resolve())
@@ -404,11 +416,11 @@ class Bridge:
                     if not workspace.is_dir() or not bridge.workspace_allowed(workspace):
                         return self.send_json(403, {"error": "workspace_not_allowed"})
                     trusted_requested = bool(payload.get("trusted_local_developer", False))
-                    trusted_local = bool(
-                        trusted_requested
-                        and bridge.direct_workspace is not None
-                        and workspace == bridge.direct_workspace
-                        and str(payload.get("mode") or "") in {"execute", "repair"}
+                    trusted_local = trusted_local_request_allowed(
+                        requested=trusted_requested,
+                        workspace=workspace,
+                        direct_workspace=bridge.direct_workspace,
+                        mode=str(payload.get("mode") or ""),
                     )
                     if trusted_requested and not trusted_local:
                         return self.send_json(403, {"error": "trusted_local_developer_not_allowed"})
