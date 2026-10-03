@@ -133,3 +133,47 @@ def test_antigravity_cancel_calls_host_bridge_cancel(monkeypatch, tmp_path: Path
     asyncio.run(scenario())
     assert len(cancelled_run_ids) == 1
     assert cancelled_run_ids[0]
+
+
+def test_antigravity_trusted_local_payload_is_execute_repair_only(monkeypatch, tmp_path: Path):
+    payloads: list[dict] = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+        def json(self):
+            return {
+                "returncode": 0,
+                "stderr": "",
+                "stdout": '{"status":"SUCCESS","response":"done","usage":{}}',
+                "payload": {"status": "SUCCESS", "response": "done", "usage": {}},
+            }
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): return None
+        async def post(self, *args, **kwargs):
+            payloads.append(dict(kwargs["json"]))
+            return FakeResponse()
+
+    monkeypatch.setenv("ANTIGRAVITY_BRIDGE_TOKEN", "secret")
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+    monkeypatch.setattr(
+        "app.adapters.antigravity.trusted_local_developer_enabled",
+        lambda workspace, mode, adapter=None: mode in {"execute", "repair"} and adapter == "antigravity_host",
+    )
+
+    asyncio.run(
+        AntigravityAdapter("auto").run(
+            workspace=tmp_path, prompt="implement", mode="execute", timeout=30
+        )
+    )
+    asyncio.run(
+        AntigravityAdapter("auto").run(
+            workspace=tmp_path, prompt="inspect", mode="evaluate", timeout=30
+        )
+    )
+
+    assert payloads[0]["trusted_local_developer"] is True
+    assert payloads[1]["trusted_local_developer"] is False

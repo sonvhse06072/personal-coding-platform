@@ -34,6 +34,20 @@ required = {
 for key, expected in required.items():
     data[key] = expected
 
+permissions = data.setdefault("permissions", {})
+if not isinstance(permissions, dict):
+    permissions = {}
+    data["permissions"] = permissions
+allow = permissions.get("allow")
+deny = permissions.get("deny")
+allow = list(allow) if isinstance(allow, list) else []
+deny = list(deny) if isinstance(deny, list) else []
+permissions["allow"] = [rule for rule in allow if rule != "unsandboxed(ddev)"]
+for rule in ("command(ddev)", "unsandboxed(ddev)"):
+    if rule not in deny:
+        deny.append(rule)
+permissions["deny"] = deny
+
 tmp = path.with_suffix(".tmp")
 tmp.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 os.chmod(tmp, 0o600)

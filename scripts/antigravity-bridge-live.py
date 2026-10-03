@@ -180,6 +180,15 @@ class StreamingBridge(legacy.Bridge):
                 workspace = Path(str(payload["workspace"])).resolve()
                 if not workspace.is_dir() or not bridge.workspace_allowed(workspace):
                     return self.send_json(403, {"error": "workspace_not_allowed"})
+                trusted_requested = bool(payload.get("trusted_local_developer", False))
+                trusted_local = legacy.trusted_local_request_allowed(
+                    requested=trusted_requested,
+                    workspace=workspace,
+                    direct_workspace=bridge.direct_workspace,
+                    mode=str(payload.get("mode") or ""),
+                )
+                if trusted_requested and not trusted_local:
+                    return self.send_json(403, {"error": "trusted_local_developer_not_allowed"})
                 prompt = str(payload.get("prompt") or "").strip()
                 if not prompt:
                     return self.send_json(400, {"error": "prompt_required"})
@@ -200,6 +209,7 @@ class StreamingBridge(legacy.Bridge):
                     effort=effort,
                     timeout=timeout,
                     output_format="stream-json",
+                    sandbox=True,
                 )
                 env = os.environ.copy()
                 env["NO_COLOR"] = "1"
@@ -219,9 +229,15 @@ class StreamingBridge(legacy.Bridge):
                 proc: subprocess.Popen | None = None
                 scoped_allow: set[str] = set()
                 scoped_deny: set[str] = set()
+                original_settings: dict | None = None
                 safe_stream_failure: str | None = None
                 try:
                     with bridge._agy_lock:
+                        original_settings = (
+                            legacy.apply_trusted_local_ddev_permission(bridge.settings)
+                            if trusted_local
+                            else None
+                        )
                         if bridge.consume_cancelled(run_id):
                             return self._write_ndjson({
                                 "bridge_event": "result",
@@ -317,7 +333,9 @@ class StreamingBridge(legacy.Bridge):
                 finally:
                     if proc is not None:
                         bridge.unregister_run(run_id)
-                    if scoped_allow or scoped_deny:
+                    if original_settings is not None:
+                        legacy.restore_settings(bridge.settings, original_settings)
+                    elif scoped_allow or scoped_deny:
                         legacy.remove_workspace_file_rules(
                             bridge.settings, scoped_allow, scoped_deny
                         )

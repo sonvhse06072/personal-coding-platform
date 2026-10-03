@@ -103,12 +103,25 @@ def project_config(project_id: str) -> dict[str, Any]:
             f"Project {project_id} has unsupported runtime.workspace_mode: {workspace_mode!r}"
         )
     exclusive_project_lease = bool(runtime.get("exclusive_project_lease", False))
+    developer_permission_mode = str(
+        runtime.get("developer_permission_mode") or "bounded"
+    ).strip()
+    if developer_permission_mode not in {"bounded", "trusted_local"}:
+        raise ValueError(
+            f"Project {project_id} has unsupported runtime.developer_permission_mode: "
+            f"{developer_permission_mode!r}"
+        )
     if workspace_mode == "direct" and not exclusive_project_lease:
         raise ValueError(
             f"Project {project_id} direct workspace mode requires exclusive_project_lease=true"
         )
+    if developer_permission_mode == "trusted_local" and workspace_mode != "direct":
+        raise ValueError(
+            f"Project {project_id} trusted_local developer permission requires workspace_mode=direct"
+        )
     runtime["workspace_mode"] = workspace_mode
     runtime["exclusive_project_lease"] = exclusive_project_lease
+    runtime["developer_permission_mode"] = developer_permission_mode
     cfg["runtime"] = runtime
     return cfg
 

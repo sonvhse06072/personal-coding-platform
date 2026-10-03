@@ -153,6 +153,7 @@ projects:
       branch_prefix: ai
       workspace_mode: direct
       exclusive_project_lease: true
+      developer_permission_mode: trusted_local
       max_diff_bytes: 750000
       keep_workspace_on_success: true
       keep_workspace_on_failure: true

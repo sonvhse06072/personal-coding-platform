@@ -61,19 +61,33 @@ def build_run_command(
     effort: str | None,
     timeout: int,
     output_format: str,
+    sandbox: bool = True,
 ) -> list[str]:
     cmd = [
         agy_bin,
         "-p", prompt,
         "--output-format", output_format,
-        "--sandbox",
     ]
+    if sandbox:
+        cmd.append("--sandbox")
     if effort in _REASONING_EFFORTS:
         cmd.extend(["--effort", effort])
     cmd.extend(["--print-timeout", f"{timeout}s"])
     if model and model != "auto":
         cmd.extend(["--model", model])
     return cmd
+
+
+def trusted_local_request_allowed(
+    *,
+    requested: bool,
+    workspace: Path,
+    direct_workspace: Path | None,
+    mode: str,
+) -> bool:
+    if not requested or mode not in {"execute", "repair"} or direct_workspace is None:
+        return False
+    return workspace.resolve() == direct_workspace.resolve()
 
 
 def contained(path: Path, root: Path) -> bool:
@@ -135,6 +149,36 @@ def _permission_lists(data: dict) -> tuple[list[str], list[str], list[str]]:
     permissions["deny"] = deny
     permissions["ask"] = ask
     return allow, deny, ask
+
+
+TRUSTED_LOCAL_DDEV_ALLOW_RULE = "unsandboxed(ddev)"
+TRUSTED_LOCAL_DDEV_DENY_RULES = {
+    "command(ddev)",
+    "unsandboxed(ddev)",
+}
+
+
+def apply_trusted_local_ddev_permission(path: Path) -> dict:
+    """Temporarily allow DDEV outside the terminal sandbox for one trusted run.
+
+    Returns the complete original settings object so the caller can restore it
+    exactly after the run. Other deny/ask rules remain unchanged.
+    """
+
+    original = _read_settings(path)
+    data = json.loads(json.dumps(original))
+    allow, deny, _ = _permission_lists(data)
+    data["permissions"]["deny"] = [
+        rule for rule in deny if rule not in TRUSTED_LOCAL_DDEV_DENY_RULES
+    ]
+    if TRUSTED_LOCAL_DDEV_ALLOW_RULE not in allow:
+        allow.append(TRUSTED_LOCAL_DDEV_ALLOW_RULE)
+    _write_settings(path, data)
+    return original
+
+
+def restore_settings(path: Path, original: dict) -> None:
+    _write_settings(path, original)
 
 
 def workspace_file_rules(workspace: Path) -> tuple[set[str], set[str]]:
@@ -371,6 +415,15 @@ class Bridge:
                     workspace = Path(str(payload["workspace"])).resolve()
                     if not workspace.is_dir() or not bridge.workspace_allowed(workspace):
                         return self.send_json(403, {"error": "workspace_not_allowed"})
+                    trusted_requested = bool(payload.get("trusted_local_developer", False))
+                    trusted_local = trusted_local_request_allowed(
+                        requested=trusted_requested,
+                        workspace=workspace,
+                        direct_workspace=bridge.direct_workspace,
+                        mode=str(payload.get("mode") or ""),
+                    )
+                    if trusted_requested and not trusted_local:
+                        return self.send_json(403, {"error": "trusted_local_developer_not_allowed"})
                     prompt = str(payload.get("prompt") or "").strip()
                     if not prompt:
                         return self.send_json(400, {"error": "prompt_required"})
@@ -391,13 +444,15 @@ class Bridge:
                         effort=effort,
                         timeout=timeout,
                         output_format="json",
+                        sandbox=True,
                     )
 
                     env = os.environ.copy()
                     env["NO_COLOR"] = "1"
 
                     # settings.json is global to the signed-in host account. One run
-                    # at a time receives absolute grants for only its isolated clone.
+                    # at a time receives exact workspace grants; trusted-local runs
+                    # additionally receive one temporary unsandboxed DDEV grant.
                     with bridge._agy_lock:
                         if bridge.consume_cancelled(run_id):
                             return self.send_json(200, {
@@ -407,6 +462,11 @@ class Bridge:
                                 "stderr": "Antigravity run cancelled before start",
                                 "payload": None,
                             })
+                        original_settings = (
+                            apply_trusted_local_ddev_permission(bridge.settings)
+                            if trusted_local
+                            else None
+                        )
                         scoped_allow, scoped_deny = add_workspace_file_rules(
                             bridge.settings, workspace
                         )
@@ -445,9 +505,12 @@ class Bridge:
                             finally:
                                 bridge.unregister_run(run_id)
                         finally:
-                            remove_workspace_file_rules(
-                                bridge.settings, scoped_allow, scoped_deny
-                            )
+                            if original_settings is not None:
+                                restore_settings(bridge.settings, original_settings)
+                            else:
+                                remove_workspace_file_rules(
+                                    bridge.settings, scoped_allow, scoped_deny
+                                )
 
                     parsed = None
                     try:
