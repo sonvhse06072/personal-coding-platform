@@ -74,9 +74,16 @@ rollout/incident rationale belongs in `history/episodes.md`.
 
 Approved ProjectBaseline for **new** PCP-managed Chợ Nhạc work:
 
-- active revision: `pilot-v1-2026-10-03-dec033`;
+- active revision: `pilot-v1-2026-10-03-dec033-r1`;
 - immutable baseline source:
   `132c2ef767b595833677e9672d655872e07ba9b7`;
+- r1 was activated by PCP PR #429 at
+  `95f4d8a5522112efa4ad0f7e710be0641a5d9159` after the first #63 planning
+  attempt exposed missing legitimate Profile source references;
+- r1 adds protected `docs/14-cho-nhac-profile-implementation-plan.md` and
+  `docs/15-account-email-verification-producer-plan.md` to requirements;
+- the original `pilot-v1-2026-10-03-dec033` revision remains immutable and
+  explicitly resolvable;
 - PCP baseline activation merged through PR #425 at
   `ccdd1712ff8ea75a14a061b30122dc4988558630`;
 - pre-existing GH-42 plan/jobs keep their stored
@@ -109,9 +116,14 @@ Current implementation evidence:
   frontend file.
 - Availability remains KEEP as Chợ Nhạc #62, but is outside the first pilot
   critical path.
-- Before #63 intake: preserve WO-03 diff/evidence, cancel its Runtime job to
-  release the direct-project lease, supersede WO-03..WO-08, and keep WO-01/02
-  as completed historical checkpoints.
+- The old #42 WO-03 diff/evidence was preserved, its Runtime job cancelled, and
+  WO-03..WO-08 superseded before #63 intake.
+- First #63 canonical intake correctly classified to planning but plan
+  `pm-1c670cfa6e1542579b9d4aefc70e4eb0` failed validation because the original
+  pilot baseline omitted protected `docs/14` from its references allowlist.
+- Do not resume that failed plan. Reload r1 locally and submit one fresh #63
+  canonical intake with `planning_profile=complex` and
+  `execution_mode=supervised`.
 
 Before acting on WO-02, verify the live WorkOrder/job/branch/lease rather than
 guessing an identity from WO-01.
