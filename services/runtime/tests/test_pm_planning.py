@@ -520,6 +520,18 @@ def test_available_verification_phases_includes_configured_visual_quality():
     ]
 
 
+def test_pm_planning_prompt_explains_max_profile_risk_floor():
+    prompt = pm_planning._planning_prompt(
+        ticket=pm_planning.PMTicket.model_validate(ticket()),
+        baseline=baseline(),
+        project=project_config(),
+    )
+
+    assert "budget.max_profile is an execution upper bound" in prompt
+    assert "complex for high risk" in prompt
+    assert "critical for critical risk" in prompt
+
+
 def test_visual_quality_planning_prompt_requires_routes_and_frontend_order():
     prompt = pm_planning._planning_prompt(
         ticket=pm_planning.PMTicket.model_validate(ticket()),
