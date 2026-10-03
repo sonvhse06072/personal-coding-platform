@@ -302,6 +302,20 @@ def validate_work_order_against_baseline(
                 f"WorkOrder requires verification phase {phase!r}, but the project has no commands configured"
             )
 
+    if "visual_quality" in phases:
+        runtime = project.get("runtime", {}) or {}
+        preview = project.get("preview", {}) or {}
+        frontend = preview.get("frontend", {}) or {}
+        visual = preview.get("visual_evidence", {}) or {}
+        if str(runtime.get("workspace_mode") or "isolated_clone") != "direct":
+            raise ValueError("visual_quality requires direct workspace execution")
+        if not bool(runtime.get("exclusive_project_lease", False)):
+            raise ValueError("visual_quality requires an exclusive direct-project lease")
+        if not bool(isinstance(frontend, dict) and frontend.get("enabled", False)):
+            raise ValueError("visual_quality requires an enabled frontend preview")
+        if not isinstance(visual, dict) or not visual.get("internal_base_url"):
+            raise ValueError("visual_quality requires preview.visual_evidence configuration")
+
 
 def canonical_task_from_work_order(work_order: WorkOrder) -> dict[str, Any]:
     contract = json.dumps(work_order.model_dump(mode="json"), ensure_ascii=False, sort_keys=True)
