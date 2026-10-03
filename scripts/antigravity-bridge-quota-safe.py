@@ -89,7 +89,7 @@ class SafeQuotaRefreshBridge(quota19.QuotaRefreshBridge):
         ParentHandler = super().handler()
 
         class Handler(ParentHandler):
-            server_version = "PersonalCodingAntigravityBridge/1.12"
+            server_version = "PersonalCodingAntigravityBridge/1.13"
 
             def do_GET(self):
                 if not self.authorized():
@@ -144,7 +144,7 @@ class SafeQuotaRefreshBridge(quota19.QuotaRefreshBridge):
                     return self.send_json(200 if safe else 503, {
                         "status": "ok" if safe else "degraded",
                         "service": "antigravity-host-bridge",
-                        "version": "1.12",
+                        "version": "1.13",
                         "agy": bridge.agy_bin,
                         "workspaces": str(bridge.workspaces),
                         "active_runs": active_runs,
@@ -199,7 +199,7 @@ def main() -> None:
     )
     server = ThreadingHTTPServer((args.host, args.port), bridge.handler())
     print(
-        f"Antigravity host bridge 1.12 listening on {args.host}:{args.port}; "
+        f"Antigravity host bridge 1.13 listening on {args.host}:{args.port}; "
         "safe_settings=true; streaming=true; quota=true; quota_cli_refresh=true; settings_restore=true",
         flush=True,
     )
