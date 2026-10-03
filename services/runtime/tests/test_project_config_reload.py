@@ -67,6 +67,7 @@ def test_project_config_defaults_to_isolated_clone(tmp_path, monkeypatch):
 
     assert runtime["workspace_mode"] == "isolated_clone"
     assert runtime["exclusive_project_lease"] is False
+    assert runtime["developer_permission_mode"] == "bounded"
 
 
 def test_project_config_accepts_direct_only_with_exclusive_lease(tmp_path, monkeypatch):
@@ -117,4 +118,45 @@ def test_project_config_rejects_unsafe_workspace_modes(
     monkeypatch.setenv("PROJECTS_FILE", str(registry))
 
     with pytest.raises(ValueError, match=expected):
+        config.project_config("demo")
+
+
+def test_project_config_accepts_trusted_local_permission_mode(tmp_path, monkeypatch):
+    registry = tmp_path / "projects.yml"
+    project_path = tmp_path / "demo"
+    project_path.mkdir()
+    registry.write_text(
+        "version: 1\n"
+        "projects:\n"
+        "  demo:\n"
+        f"    path: {project_path}\n"
+        "    runtime:\n"
+        "      workspace_mode: direct\n"
+        "      exclusive_project_lease: true\n"
+        "      developer_permission_mode: trusted_local\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PROJECTS_FILE", str(registry))
+
+    runtime = config.project_config("demo")["runtime"]
+
+    assert runtime["developer_permission_mode"] == "trusted_local"
+
+
+def test_project_config_rejects_unknown_developer_permission_mode(tmp_path, monkeypatch):
+    registry = tmp_path / "projects.yml"
+    project_path = tmp_path / "demo"
+    project_path.mkdir()
+    registry.write_text(
+        "version: 1\n"
+        "projects:\n"
+        "  demo:\n"
+        f"    path: {project_path}\n"
+        "    runtime:\n"
+        "      developer_permission_mode: root_everything\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PROJECTS_FILE", str(registry))
+
+    with pytest.raises(ValueError, match="unsupported runtime.developer_permission_mode"):
         config.project_config("demo")
