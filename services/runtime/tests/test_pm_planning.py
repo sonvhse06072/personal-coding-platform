@@ -308,6 +308,57 @@ def test_pm_rejects_dependency_cycle(monkeypatch, tmp_path):
     assert "dependency graph contains a cycle" in row["error"]
 
 
+@pytest.mark.parametrize(
+    ("risk_level", "max_profile", "status"),
+    [
+        ("high", "standard", "failed"),
+        ("high", "complex", "ready"),
+        ("critical", "standard", "failed"),
+        ("critical", "critical", "ready"),
+    ],
+)
+def test_pm_validates_work_order_max_profile_against_risk_floor(
+    monkeypatch, tmp_path, risk_level, max_profile, status,
+):
+    contract = work_order()
+    contract["risk"] = {"level": risk_level, "flags": []}
+    contract["budget"]["max_profile"] = max_profile
+    output = proposal(contract)
+    planner, request, *_ = configure(monkeypatch, tmp_path, output)
+
+    row = asyncio.run(planner.create_plan(request))
+
+    assert row["status"] == status
+    if status == "failed":
+        assert "budget.max_profile" in row["error"]
+        assert "execution-risk floor" in row["error"]
+
+
+@pytest.mark.parametrize(
+    ("flags", "max_profile", "status"),
+    [
+        (["schema_change"], "standard", "failed"),
+        (["schema_change"], "complex", "ready"),
+        (["authorization_change"], "complex", "failed"),
+        (["authorization_change"], "critical", "ready"),
+    ],
+)
+def test_pm_validates_work_order_max_profile_against_protected_flag_floor(
+    monkeypatch, tmp_path, flags, max_profile, status,
+):
+    contract = work_order()
+    contract["risk"] = {"level": "standard", "flags": flags}
+    contract["budget"]["max_profile"] = max_profile
+    output = proposal(contract)
+    planner, request, *_ = configure(monkeypatch, tmp_path, output)
+
+    row = asyncio.run(planner.create_plan(request))
+
+    assert row["status"] == status
+    if status == "failed":
+        assert "budget.max_profile" in row["error"]
+
+
 def test_pm_rejects_work_order_reference_outside_baseline(monkeypatch, tmp_path):
     output = proposal(work_order(source_path="docs/not-approved.md"))
     planner, request, *_ = configure(monkeypatch, tmp_path, output)
