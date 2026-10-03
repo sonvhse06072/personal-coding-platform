@@ -177,3 +177,43 @@ def test_antigravity_trusted_local_payload_is_execute_repair_only(monkeypatch, t
 
     assert payloads[0]["trusted_local_developer"] is True
     assert payloads[1]["trusted_local_developer"] is False
+
+
+def test_flash_medium_omits_stale_reasoning_effort(monkeypatch, tmp_path: Path):
+    payloads: list[dict] = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+        def json(self):
+            return {
+                "returncode": 0,
+                "stderr": "",
+                "stdout": '{"status":"SUCCESS","response":"done","usage":{}}',
+                "payload": {"status": "SUCCESS", "response": "done", "usage": {}},
+            }
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs): pass
+        async def __aenter__(self): return self
+        async def __aexit__(self, *args): return None
+        async def post(self, *args, **kwargs):
+            payloads.append(dict(kwargs["json"]))
+            return FakeResponse()
+
+    monkeypatch.setenv("ANTIGRAVITY_BRIDGE_TOKEN", "secret")
+    monkeypatch.setattr(httpx, "AsyncClient", FakeClient)
+
+    run = asyncio.run(
+        AntigravityAdapter("gemini-3.8-flash-medium", "low").run(
+            workspace=tmp_path,
+            prompt="evaluate",
+            mode="evaluate",
+            timeout=30,
+        )
+    )
+
+    assert run.returncode == 0
+    assert payloads
+    assert payloads[0]["model"] == "gemini-3.8-flash-medium"
+    assert "effort" not in payloads[0]
