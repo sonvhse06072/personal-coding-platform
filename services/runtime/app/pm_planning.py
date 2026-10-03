@@ -289,7 +289,12 @@ def _available_verification_phases(project: dict[str, Any]) -> list[str]:
         return []
     return [
         phase
-        for phase in ("targeted_tests", "static_analysis", "full_tests")
+        for phase in (
+            "targeted_tests",
+            "static_analysis",
+            "frontend_quality",
+            "full_tests",
+        )
         if ddev.get(phase)
     ]
 
