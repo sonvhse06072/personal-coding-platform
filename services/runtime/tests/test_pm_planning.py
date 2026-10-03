@@ -447,3 +447,44 @@ def test_available_verification_phases_omits_unconfigured_frontend_quality():
         "static_analysis",
         "full_tests",
     ]
+
+
+def test_available_verification_phases_includes_configured_visual_quality():
+    project = {
+        "ddev": {
+            "enabled": True,
+            "targeted_tests": ["targeted"],
+            "static_analysis": ["static"],
+            "frontend_quality": ["frontend"],
+            "visual_quality": ["visual"],
+            "full_tests": [],
+        }
+    }
+
+    assert pm_planning._available_verification_phases(project) == [
+        "targeted_tests",
+        "static_analysis",
+        "frontend_quality",
+        "visual_quality",
+    ]
+
+
+def test_visual_quality_planning_prompt_requires_routes_and_frontend_order():
+    prompt = pm_planning._planning_prompt(
+        ticket=pm_planning.PMTicket.model_validate(ticket()),
+        baseline=baseline(),
+        project={
+            "ddev": {
+                "enabled": True,
+                "targeted_tests": ["targeted"],
+                "static_analysis": ["static"],
+                "frontend_quality": ["frontend"],
+                "visual_quality": ["visual"],
+                "full_tests": [],
+            }
+        },
+    )
+
+    assert "visual_quality" in prompt
+    assert "visual_routes" in prompt
+    assert "require frontend_quality before visual_quality" in prompt
