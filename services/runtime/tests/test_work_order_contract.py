@@ -632,3 +632,297 @@ def test_visual_quality_requires_direct_preview_project_capability(
     assert storage.rows[job_id]["checkpoint"]["work_order"]["verification"][
         "visual_routes"
     ] == ["/artist/demo"]
+
+
+def test_visual_quality_runs_after_frontend_quality_with_job_preview(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    async def scenario():
+        workspace = tmp_path / "visual-workspace"
+        workspace.mkdir()
+        subprocess.run(
+            ["git", "init", "-b", "main", str(workspace)],
+            check=True,
+            capture_output=True,
+        )
+
+        contract = WorkOrder.model_validate(
+            work_order(
+                verification={
+                    "required_phases": [
+                        "targeted_tests",
+                        "frontend_quality",
+                        "visual_quality",
+                    ],
+                    "visual_routes": ["/artist/demo"],
+                },
+                budget={
+                    "max_profile": "standard",
+                    "max_model_calls": 5,
+                    "max_repair_iterations": 1,
+                    "max_wall_time_minutes": 20,
+                    "max_changed_files": 8,
+                },
+            )
+        )
+        storage = VerifyStorage()
+        storage.rows["job1"] = {
+            "id": "job1",
+            "project_id": "demo",
+            "checkpoint": {"work_order": contract.model_dump(mode="json")},
+        }
+
+        class VisualDdev:
+            def __init__(self) -> None:
+                self.phases: list[str] = []
+
+            async def phase(self, *, phase: str, workspace: str, **kwargs):
+                self.phases.append(phase)
+                stdout = ""
+                if phase == "visual_quality":
+                    request_path = Path(workspace) / ".git" / "pcp-visual-request.json"
+                    assert request_path.exists()
+                    request = json.loads(request_path.read_text(encoding="utf-8"))
+                    assert request["routes"] == ["/artist/demo"]
+                    marker = {
+                        "version": 1,
+                        "evidence_kind": "local_playwright_preview",
+                        "image_reviewed": False,
+                        "passed": True,
+                        "routes": ["/artist/demo"],
+                        "viewports": [390],
+                        "artifacts": [
+                            {
+                                "route": "/artist/demo",
+                                "viewport": {"width": 390, "height": 844},
+                                "status_code": 200,
+                                "console_errors": [],
+                                "page_errors": [],
+                                "failed_requests": [],
+                                "dom": {
+                                    "title": "Artist",
+                                    "h1": ["Artist"],
+                                    "links": 2,
+                                    "buttons": 1,
+                                    "main_landmarks": 1,
+                                    "nav_landmarks": 1,
+                                    "horizontal_overflow": False,
+                                },
+                                "screenshot": {
+                                    "path": ".pcp-visual-evidence/artist-demo-390.png",
+                                    "sha256": "a" * 64,
+                                },
+                                "passed": True,
+                            }
+                        ],
+                    }
+                    stdout = "PCP_VISUAL_EVIDENCE_JSON=" + json.dumps(marker)
+                return {
+                    "passed": True,
+                    "phase": phase,
+                    "commands": [
+                        {
+                            "command": phase,
+                            "returncode": 0,
+                            "stdout": stdout,
+                            "stderr": "",
+                        }
+                    ],
+                }
+
+        class FakePreviewManager:
+            def __init__(self, *args, **kwargs) -> None:
+                pass
+
+            async def status(self, job_id: str):
+                return {
+                    "status": "stopped",
+                    "supported": True,
+                    "frontend_url": None,
+                }
+
+            async def start(self, job_id: str, target: str):
+                assert job_id == "job1"
+                assert target == "frontend"
+                return {
+                    "status": "ready",
+                    "supported": True,
+                    "frontend_url": "https://demo.ddev.site:3100",
+                }
+
+        monkeypatch.setattr(
+            "app.engine_verification.PreviewManager",
+            FakePreviewManager,
+        )
+
+        engine = RuntimeEngine(storage)
+        engine.ddev = VisualDdev()
+        project = {
+            "runtime": {
+                "workspace_mode": "direct",
+                "exclusive_project_lease": True,
+            },
+            "preview": {
+                "frontend": {"enabled": True},
+                "visual_evidence": {
+                    "internal_base_url": "http://127.0.0.1:3100",
+                    "viewports": [390],
+                },
+            },
+            "ddev": {
+                "enabled": True,
+                "targeted_tests": ["targeted"],
+                "frontend_quality": ["frontend"],
+                "visual_quality": ["visual"],
+                "full_tests": [],
+            },
+        }
+        strategy = {
+            "profile": "standard",
+            "budget": {
+                "max_tool_calls": 20,
+                "max_test_runs": 20,
+                "max_wall_time_minutes": 20,
+            },
+        }
+        progress = {
+            "tool_calls": 0,
+            "test_runs": 0,
+            "verification_attempts": 0,
+        }
+
+        result = await engine._verify(
+            "job1",
+            "demo",
+            workspace,
+            project,
+            strategy,
+            time.monotonic(),
+            progress,
+        )
+
+        assert result["passed"] is True
+        assert engine.ddev.phases == [
+            "targeted_tests",
+            "frontend_quality",
+            "visual_quality",
+        ]
+        visual = result["phases"][-1]["visual_evidence"]
+        assert visual["passed"] is True
+        assert visual["image_reviewed"] is False
+        assert visual["artifacts"][0]["route"] == "/artist/demo"
+        assert not (workspace / ".git" / "pcp-visual-request.json").exists()
+
+    asyncio.run(scenario())
+
+
+def test_visual_quality_fails_without_bounded_evidence_marker(
+    monkeypatch,
+    tmp_path: Path,
+) -> None:
+    async def scenario():
+        workspace = tmp_path / "visual-workspace-missing"
+        workspace.mkdir()
+        subprocess.run(
+            ["git", "init", "-b", "main", str(workspace)],
+            check=True,
+            capture_output=True,
+        )
+        contract = WorkOrder.model_validate(
+            work_order(
+                verification={
+                    "required_phases": [
+                        "frontend_quality",
+                        "visual_quality",
+                    ],
+                    "visual_routes": ["/"],
+                }
+            )
+        )
+        storage = VerifyStorage()
+        storage.rows["job1"] = {
+            "id": "job1",
+            "project_id": "demo",
+            "checkpoint": {"work_order": contract.model_dump(mode="json")},
+        }
+
+        class NoMarkerDdev:
+            async def phase(self, *, phase: str, **kwargs):
+                return {
+                    "passed": True,
+                    "phase": phase,
+                    "commands": [
+                        {
+                            "command": phase,
+                            "returncode": 0,
+                            "stdout": "",
+                            "stderr": "",
+                        }
+                    ],
+                }
+
+        class ReadyPreviewManager:
+            def __init__(self, *args, **kwargs) -> None:
+                pass
+
+            async def status(self, job_id: str):
+                return {
+                    "status": "ready",
+                    "supported": True,
+                    "frontend_url": "https://demo.ddev.site:3100",
+                }
+
+        monkeypatch.setattr(
+            "app.engine_verification.PreviewManager",
+            ReadyPreviewManager,
+        )
+        engine = RuntimeEngine(storage)
+        engine.ddev = NoMarkerDdev()
+        project = {
+            "runtime": {
+                "workspace_mode": "direct",
+                "exclusive_project_lease": True,
+            },
+            "preview": {
+                "frontend": {"enabled": True},
+                "visual_evidence": {
+                    "internal_base_url": "http://127.0.0.1:3100",
+                    "viewports": [390],
+                },
+            },
+            "ddev": {
+                "enabled": True,
+                "frontend_quality": ["frontend"],
+                "visual_quality": ["visual"],
+                "full_tests": [],
+            },
+        }
+        result = await engine._verify(
+            "job1",
+            "demo",
+            workspace,
+            project,
+            {
+                "profile": "standard",
+                "budget": {
+                    "max_tool_calls": 20,
+                    "max_test_runs": 20,
+                    "max_wall_time_minutes": 20,
+                },
+            },
+            time.monotonic(),
+            {
+                "tool_calls": 0,
+                "test_runs": 0,
+                "verification_attempts": 0,
+            },
+        )
+
+        assert result["passed"] is False
+        assert "bounded PCP visual evidence marker is missing or invalid" in result[
+            "failure_text"
+        ]
+        assert not (workspace / ".git" / "pcp-visual-request.json").exists()
+
+    asyncio.run(scenario())
