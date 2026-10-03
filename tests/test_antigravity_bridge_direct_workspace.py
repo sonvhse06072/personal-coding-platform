@@ -60,3 +60,42 @@ def test_bridge_without_direct_repo_keeps_legacy_isolated_boundary(tmp_path):
 
     assert bridge.workspace_allowed(isolated) is True
     assert bridge.workspace_allowed(outside) is False
+
+
+def test_trusted_local_request_requires_exact_direct_workspace_and_execute_mode(tmp_path):
+    module = load_bridge()
+    direct = (tmp_path / "chonhac").resolve()
+    direct.mkdir()
+    sibling = (tmp_path / "other").resolve()
+    sibling.mkdir()
+
+    assert module.trusted_local_request_allowed(
+        requested=True,
+        workspace=direct,
+        direct_workspace=direct,
+        mode="execute",
+    ) is True
+    assert module.trusted_local_request_allowed(
+        requested=True,
+        workspace=direct,
+        direct_workspace=direct,
+        mode="repair",
+    ) is True
+    assert module.trusted_local_request_allowed(
+        requested=True,
+        workspace=direct,
+        direct_workspace=direct,
+        mode="evaluate",
+    ) is False
+    assert module.trusted_local_request_allowed(
+        requested=True,
+        workspace=sibling,
+        direct_workspace=direct,
+        mode="execute",
+    ) is False
+    assert module.trusted_local_request_allowed(
+        requested=False,
+        workspace=direct,
+        direct_workspace=direct,
+        mode="execute",
+    ) is False
