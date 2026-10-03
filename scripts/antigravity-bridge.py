@@ -62,7 +62,6 @@ def build_run_command(
     timeout: int,
     output_format: str,
     sandbox: bool = True,
-    dangerously_skip_permissions: bool = False,
 ) -> list[str]:
     cmd = [
         agy_bin,
@@ -71,8 +70,6 @@ def build_run_command(
     ]
     if sandbox:
         cmd.append("--sandbox")
-    if dangerously_skip_permissions:
-        cmd.append("--dangerously-skip-permissions")
     if effort in _REASONING_EFFORTS:
         cmd.extend(["--effort", effort])
     cmd.extend(["--print-timeout", f"{timeout}s"])
@@ -140,6 +137,36 @@ def _permission_lists(data: dict) -> tuple[list[str], list[str], list[str]]:
     permissions["deny"] = deny
     permissions["ask"] = ask
     return allow, deny, ask
+
+
+TRUSTED_LOCAL_DDEV_ALLOW_RULE = "unsandboxed(ddev)"
+TRUSTED_LOCAL_DDEV_DENY_RULES = {
+    "command(ddev)",
+    "unsandboxed(ddev)",
+}
+
+
+def apply_trusted_local_ddev_permission(path: Path) -> dict:
+    """Temporarily allow DDEV outside the terminal sandbox for one trusted run.
+
+    Returns the complete original settings object so the caller can restore it
+    exactly after the run. Other deny/ask rules remain unchanged.
+    """
+
+    original = _read_settings(path)
+    data = json.loads(json.dumps(original))
+    allow, deny, _ = _permission_lists(data)
+    data["permissions"]["deny"] = [
+        rule for rule in deny if rule not in TRUSTED_LOCAL_DDEV_DENY_RULES
+    ]
+    if TRUSTED_LOCAL_DDEV_ALLOW_RULE not in allow:
+        allow.append(TRUSTED_LOCAL_DDEV_ALLOW_RULE)
+    _write_settings(path, data)
+    return original
+
+
+def restore_settings(path: Path, original: dict) -> None:
+    _write_settings(path, original)
 
 
 def workspace_file_rules(workspace: Path) -> tuple[set[str], set[str]]:
@@ -405,8 +432,7 @@ class Bridge:
                         effort=effort,
                         timeout=timeout,
                         output_format="json",
-                        sandbox=not trusted_local,
-                        dangerously_skip_permissions=trusted_local,
+                        sandbox=True,
                     )
 
                     env = os.environ.copy()
@@ -415,6 +441,11 @@ class Bridge:
                     # settings.json is global to the signed-in host account. One run
                     # at a time receives absolute grants for only its isolated clone.
                     with bridge._agy_lock:
+                        original_settings = (
+                            apply_trusted_local_ddev_permission(bridge.settings)
+                            if trusted_local
+                            else None
+                        )
                         if bridge.consume_cancelled(run_id):
                             return self.send_json(200, {
                                 "run_id": run_id,
@@ -461,9 +492,12 @@ class Bridge:
                             finally:
                                 bridge.unregister_run(run_id)
                         finally:
-                            remove_workspace_file_rules(
-                                bridge.settings, scoped_allow, scoped_deny
-                            )
+                            if original_settings is not None:
+                                restore_settings(bridge.settings, original_settings)
+                            else:
+                                remove_workspace_file_rules(
+                                    bridge.settings, scoped_allow, scoped_deny
+                                )
 
                     parsed = None
                     try:
