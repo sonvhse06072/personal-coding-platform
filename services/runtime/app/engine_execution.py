@@ -517,6 +517,13 @@ class RuntimeEngine(RuntimeEngineCore):
                 )
                 return
 
+            turn_start_diff = diff_state(
+                workspace,
+                max_diff,
+                base_ref=source_commit,
+            )
+            turn_start_diff_hash = str(turn_start_diff.get("diff_hash") or "")
+
             validate_model_choice(executor_choice)
             progress["iteration"] += 1
             progress["model_calls"] += 1
@@ -661,10 +668,22 @@ class RuntimeEngine(RuntimeEngineCore):
             self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
 
             material_required = "material_change" in strategy.get("definition_of_done", {}).get("required", [])
-            if material_required and not progress["material_change_present"]:
-                last_failure = "Agent completed without producing the required material repository change."
+            turn_effect_present = str(diff.get("diff_hash") or "") != turn_start_diff_hash
+            if material_required and not turn_effect_present:
+                last_failure = (
+                    "Agent completed without changing the cumulative WorkOrder diff "
+                    "during this invocation."
+                )
                 progress["last_agent_failure_kind"] = progress.get("last_agent_failure_kind") or "no_effect"
-                fp = failure_fingerprint(last_failure + "\n" + (run.output or "")[-4000:])
+                fp = failure_fingerprint(
+                    last_failure
+                    + "\nstart_diff="
+                    + turn_start_diff_hash
+                    + "\nend_diff="
+                    + str(diff.get("diff_hash") or "")
+                    + "\n"
+                    + (run.output or "")[-4000:]
+                )
                 progress["failure_fingerprints"].append(fp)
                 progress["progress_markers"].append(f"no_effect:{executor_choice['id']}")
                 next_executor, reroute = await self._model_failover(
