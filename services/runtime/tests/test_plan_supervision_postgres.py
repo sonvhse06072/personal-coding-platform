@@ -147,9 +147,20 @@ def create_plan(
     return definitions
 
 
-def service_for(storage: Storage, store: PlanOrchestratorStore) -> tuple[PlanOrchestrator, FakeEngine]:
+def service_for(
+    storage: Storage,
+    store: PlanOrchestratorStore,
+    *,
+    release_initial: bool = True,
+) -> tuple[PlanOrchestrator, FakeEngine]:
     engine = FakeEngine(storage)
-    return PlanOrchestrator(storage, engine, store=store), engine
+    service = PlanOrchestrator(storage, engine, store=store)
+    if release_initial:
+        asyncio.run(service.tick())
+        progress = service.progress("plan-1")
+        if progress["supervision"].get("state") == "held":
+            asyncio.run(service.continue_plan(**continuation_payload(service)))
+    return service, engine
 
 
 def complete_job(storage: Storage, job_id: str, *, pr_number: int | None = None) -> None:
@@ -201,6 +212,53 @@ def assert_released_retry_is_read_only(
     assert store.checkpoints("plan-1") == before_checkpoints
     assert engine.created == before_created
     assert engine.enqueued == before_enqueued
+
+
+def test_supervised_plan_holds_before_first_job_and_exact_release_launches(supervision_db):
+    storage, store = supervision_db
+    create_plan(storage)
+    service, engine = service_for(storage, store, release_initial=False)
+
+    first = asyncio.run(service.tick())
+
+    assert first["launched"] is None
+    assert engine.created == []
+    assert engine.enqueued == []
+    assert [row["state"] for row in store.work_orders("plan-1")] == ["pending", "pending"]
+
+    progress = service.progress("plan-1")
+    supervision = progress["supervision"]
+    assert progress["state"] == "supervised_hold"
+    assert supervision["state"] == "held"
+    assert supervision["generation"] == 1
+    assert supervision["ready_work_order_ids"] == ["WO-1"]
+    assert progress["last_checkpoint"]["kind"] == "supervision_initial"
+    assert progress["last_checkpoint"]["state"] == "pending"
+
+    released = asyncio.run(service.continue_plan(**continuation_payload(service)))
+
+    assert released["idempotent"] is False
+    assert released["launched"]["work_order_id"] == "WO-1"
+    assert len(engine.created) == 1
+    assert len(engine.enqueued) == 1
+    assert store.work_orders("plan-1")[0]["state"] == "running"
+
+
+def test_initial_supervised_hold_rejects_mutated_ready_set(supervision_db):
+    storage, store = supervision_db
+    create_plan(storage)
+    service, engine = service_for(storage, store, release_initial=False)
+    asyncio.run(service.tick())
+    request = continuation_payload(service)
+    request["ready_work_order_ids"] = ["WO-1", "WO-X"]
+    request["continuation_key"] = build_continuation_key(**request)
+
+    with pytest.raises(PlanContinuationConflict):
+        store.release_supervision(**request)
+
+    assert engine.created == []
+    assert store.orchestration("plan-1")["status"] == "supervised_hold"
+    assert store.orchestration("plan-1")["supervision_state"] == "held"
 
 
 def test_operator_chain_holds_between_work_orders_and_retry_is_idempotent(supervision_db):
