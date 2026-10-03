@@ -34,6 +34,10 @@ def continuity_proposal(
             "provider_failures": (telemetry or {}).get("provider_failures"),
             "quota_failures": (telemetry or {}).get("quota_failures"),
         },
+        "incident_learning": {
+            "candidate": dict(((telemetry or {}).get("incident_learning") or {}).get("candidate") or {})
+            or None,
+        },
         "detail": dict(payload or {}),
         "authority": {
             "mutable_target": _ALLOWED_MUTABLE_PATH,
@@ -47,6 +51,14 @@ def render_managed_section(proposal: dict[str, Any]) -> str:
     """Render only the bounded mutable section allowed for continuity automation."""
     attention = proposal.get("attention") or {}
     telemetry = proposal.get("telemetry") or {}
+    incident = (proposal.get("incident_learning") or {}).get("candidate")
+    incident_line = (
+        "- Incident learning: "
+        f"candidate `{incident.get('id')}`; "
+        f"signals {', '.join(incident.get('signals') or [])}."
+        if isinstance(incident, dict)
+        else "- Incident learning: no candidate."
+    )
     lines = [
         MANAGED_START,
         "## Automated continuity snapshot",
@@ -68,6 +80,7 @@ def render_managed_section(proposal: dict[str, Any]) -> str:
             f"provider failures `{telemetry.get('provider_failures')}`, "
             f"quota failures `{telemetry.get('quota_failures')}`."
         ),
+        incident_line,
         "- This section is mutable execution state only. Durable architecture/policy changes still require their normal reviewed Git path.",
         MANAGED_END,
     ]
