@@ -95,13 +95,19 @@ rollout/incident rationale belongs in `history/episodes.md`.
 
 Approved ProjectBaseline for **new** PCP-managed Chợ Nhạc work:
 
-- active revision: `pilot-v1-2026-10-03-dec033-r1`;
+- active revision: `pilot-v1-2026-10-04-dec033-r2`;
 - immutable baseline source:
-  `132c2ef767b595833677e9672d655872e07ba9b7`;
+  `aa8e68dd9aea6740de446151eb97615931de9b40`;
+- r2 is the post-PILOT-01 successor baseline authorized by the #63 replan
+  boundary and tracked by PCP #449. It preserves the exact r1
+  authority/reference categories while pinning the governed Chợ Nhạc main that
+  includes PILOT-01 plus DEC-035/DEC-036 CI governance repairs;
+- r1 remains immutable at
+  `132c2ef767b595833677e9672d655872e07ba9b7` and explicitly resolvable;
 - r1 was activated by PCP PR #429 at
   `95f4d8a5522112efa4ad0f7e710be0641a5d9159` after the first #63 planning
   attempt exposed missing legitimate Profile source references;
-- r1 adds protected `docs/14-cho-nhac-profile-implementation-plan.md` and
+- r1 added protected `docs/14-cho-nhac-profile-implementation-plan.md` and
   `docs/15-account-email-verification-producer-plan.md` to requirements;
 - the original `pilot-v1-2026-10-03-dec033` revision remains immutable and
   explicitly resolvable;
@@ -220,19 +226,22 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Roll local PCP to main
-   `645200e1f0e1ea1902569f471a53d5b90699ece6` / Runtime `1.0.100` only
-   while no executor/model process is active.
-2. Do **not** resume, reroute or continue the historical PILOT-01 job merely to
+1. Roll local PCP to current main / Runtime `1.0.100` only while no
+   executor/model process is active.
+2. Verify active Chợ Nhạc baseline resolves to
+   `pilot-v1-2026-10-04-dec033-r2` at
+   `aa8e68dd9aea6740de446151eb97615931de9b40`.
+3. Do **not** resume, reroute or continue the historical PILOT-01 job merely to
    make Runtime state look completed; the product diff is already merged and
    the job is preserved as incident/work evidence.
-3. Do **not** release generated PILOT-02 from plan
+4. Do **not** release generated PILOT-02 from plan
    `pm-5cd9ec06f74b4feba4db5a1507ab35f0`.
-4. Reconcile/supersede the old generated continuation through the supported
-   orchestration path without deleting history.
-5. Create and activate a successor Chợ Nhạc ProjectBaseline pinned to governed
-   post-PILOT-01 main, then intake one supervised successor plan for exactly
-   the seven remaining slices from #48/#49/#50/#56/#57/#58/#59.
-6. Keep staging/production, public recruitment legal approval, Availability
+5. Intake one supervised successor plan for exactly the seven remaining slices
+   from #48/#49/#50/#56/#57/#58/#59 using r2.
+6. After the successor plan exists and exact replacement WorkOrder identities
+   are known, supersede the old PILOT-01..PILOT-08 orchestration through the
+   supported API; link PILOT-02..08 to their replacements and retire PILOT-01
+   without replacement because it is already merged.
+7. Keep staging/production, public recruitment legal approval, Availability
    salvage, Professional Reviews, Band and payment/ticket commerce outside this
    pilot path.

@@ -4,8 +4,11 @@ from app.baseline import resolve_project_baseline
 from app.config import clear_config_cache
 
 
-EXPECTED_COMMIT = "132c2ef767b595833677e9672d655872e07ba9b7"
-EXPECTED_REVISION = "pilot-v1-2026-10-03-dec033-r1"
+EXPECTED_COMMIT = "aa8e68dd9aea6740de446151eb97615931de9b40"
+EXPECTED_REVISION = "pilot-v1-2026-10-04-dec033-r2"
+PREVIOUS_R1_COMMIT = "132c2ef767b595833677e9672d655872e07ba9b7"
+PREVIOUS_R1_REVISION = "pilot-v1-2026-10-03-dec033-r1"
+PREVIOUS_PILOT_COMMIT = "132c2ef767b595833677e9672d655872e07ba9b7"
 PREVIOUS_PILOT_REVISION = "pilot-v1-2026-10-03-dec033"
 PREVIOUS_COMPLETION_COMMIT = "6038857e33d3717321a54e35743fa8b9dbeba8d2"
 PREVIOUS_COMPLETION_REVISION = "mvp-v1-2026-10-01-completion"
@@ -100,6 +103,24 @@ def test_chonhac_active_baseline_resolves_to_dec033_controlled_pilot() -> None:
 
 
 
+def test_previous_r1_pilot_baseline_remains_explicitly_resolvable() -> None:
+    clear_config_cache()
+    baseline = resolve_project_baseline("chonhac", PREVIOUS_R1_REVISION)
+
+    assert baseline is not None
+    assert baseline.project_id == "chonhac"
+    assert baseline.revision == PREVIOUS_R1_REVISION
+    assert baseline.status == "approved"
+    assert baseline.source_commit == PREVIOUS_R1_COMMIT
+
+    requirement_paths = [reference.path for reference in baseline.references.requirements]
+    assert "docs/14-cho-nhac-profile-implementation-plan.md" in requirement_paths
+    assert "docs/15-account-email-verification-producer-plan.md" in requirement_paths
+    assert len(baseline.authority) == 38
+
+    clear_config_cache()
+
+
 def test_previous_dec033_pilot_baseline_remains_explicitly_resolvable() -> None:
     clear_config_cache()
     baseline = resolve_project_baseline("chonhac", PREVIOUS_PILOT_REVISION)
@@ -108,7 +129,7 @@ def test_previous_dec033_pilot_baseline_remains_explicitly_resolvable() -> None:
     assert baseline.project_id == "chonhac"
     assert baseline.revision == PREVIOUS_PILOT_REVISION
     assert baseline.status == "approved"
-    assert baseline.source_commit == EXPECTED_COMMIT
+    assert baseline.source_commit == PREVIOUS_PILOT_COMMIT
 
     requirement_paths = [reference.path for reference in baseline.references.requirements]
     assert "docs/14-cho-nhac-profile-implementation-plan.md" not in requirement_paths
