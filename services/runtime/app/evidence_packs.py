@@ -208,6 +208,7 @@ def pm_evidence_pack(
     unresolved_risks: list[str] | None,
     protected_decision_flags: list[str] | None,
     baseline_covered_protected_authorizations: list[dict[str, Any]] | None = None,
+    incident_learning: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     return {
         "role": "product_manager",
@@ -241,6 +242,7 @@ def pm_evidence_pack(
             for item in (baseline_covered_protected_authorizations or [])[-8:]
             if isinstance(item, dict)
         ],
+        "incident_learning": dict(incident_learning or {}),
         "jit_retrieval": jit_retrieval_contract(),
     }
 
