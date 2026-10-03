@@ -160,3 +160,23 @@ def test_project_config_rejects_unknown_developer_permission_mode(tmp_path, monk
 
     with pytest.raises(ValueError, match="unsupported runtime.developer_permission_mode"):
         config.project_config("demo")
+
+
+def test_project_config_rejects_trusted_local_on_isolated_workspace(tmp_path, monkeypatch):
+    registry = tmp_path / "projects.yml"
+    project_path = tmp_path / "demo"
+    project_path.mkdir()
+    registry.write_text(
+        "version: 1\n"
+        "projects:\n"
+        "  demo:\n"
+        f"    path: {project_path}\n"
+        "    runtime:\n"
+        "      workspace_mode: isolated_clone\n"
+        "      developer_permission_mode: trusted_local\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PROJECTS_FILE", str(registry))
+
+    with pytest.raises(ValueError, match="trusted_local developer permission requires workspace_mode=direct"):
+        config.project_config("demo")
