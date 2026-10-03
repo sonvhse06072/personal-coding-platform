@@ -164,6 +164,8 @@ class WorkOrderVerification(BaseModel):
         if "visual_quality" in all_phases:
             if "frontend_quality" not in self.required_phases:
                 raise ValueError("visual_quality requires frontend_quality as a required phase")
+            if self.required_phases.index("frontend_quality") > self.required_phases.index("visual_quality"):
+                raise ValueError("frontend_quality must run before visual_quality")
             if not self.visual_routes:
                 raise ValueError("visual_quality requires at least one visual_routes path")
         elif self.visual_routes:
