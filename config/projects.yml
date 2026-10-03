@@ -207,7 +207,7 @@ projects:
         - >-
           ddev exec bash -lc 'set -euo pipefail;
           modules="$(git diff --name-only HEAD -- web/modules/custom |
-          grep -E "^web/modules/custom/[^/]+/" | cut -d/ -f4 | sort -u || true)";
+          awk -F/ '\''/^web\/modules\/custom\/[^/]+\// {print $4}'\'' | sort -u)";
           if [ -z "$modules" ]; then
             echo "No changed custom Drupal modules";
             exit 0;
