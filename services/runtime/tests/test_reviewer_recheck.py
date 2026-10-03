@@ -149,6 +149,11 @@ def _route() -> dict:
 
 
 def _row(workspace: Path, job_id: str) -> dict:
+    source_commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"],
+        cwd=workspace,
+        text=True,
+    ).strip()
     work_order = {
         "id": "WO-284",
         "objective": "Carry developer repair evidence into reviewer re-check",
@@ -160,7 +165,7 @@ def _row(workspace: Path, job_id: str) -> dict:
         "id": job_id,
         "project_id": "demo",
         "status": "queued",
-        "source_commit": "a" * 40,
+        "source_commit": source_commit,
         "workspace": str(workspace),
         "branch": f"ai/{job_id[:12]}",
         "task": {"title": "Reviewer re-check", "description": "Bounded Runtime regression"},
@@ -168,7 +173,7 @@ def _row(workspace: Path, job_id: str) -> dict:
         "route": _route(),
         "checkpoint": {
             "work_order": work_order,
-            "project_baseline": {"revision": "v1", "source_commit": "a" * 40},
+            "project_baseline": {"revision": "v1", "source_commit": source_commit},
             "provider_state": {},
             "workspace_mode": "isolated_clone",
         },

@@ -10,6 +10,7 @@ from app.state import (
     merge_progress,
     migrate_legacy_antigravity_quota_failure,
     review_repair_prompt_failure,
+    semantic_response_only_turn_allowed,
     validate_workspace,
 )
 
@@ -242,3 +243,53 @@ def test_pending_pm_review_repair_still_takes_priority_over_reviewer_findings() 
     assert failure.startswith("PCP_PM_REVIEW_REPAIR: exact delivered repair")
     assert "LATEST_OPERATIONAL_CONTEXT" in failure
     assert "older reviewer finding" not in failure
+
+
+def test_reviewer_semantic_rebuttal_may_be_response_only() -> None:
+    message = "PCP_REVIEW_FINDINGS: bounded evidence question"
+    checkpoint = {
+        "last_failure": message,
+        "failure_context": {
+            "version": 1,
+            "kind": "semantic_repair",
+            "source": "reviewer",
+            "message": message,
+            "diff_hash": "review-diff",
+        },
+        "pending_review_findings": {
+            "diff_hash": "review-diff",
+            "findings": [{"id": "F-1", "message": "Prove this with repository evidence"}],
+        },
+    }
+
+    assert semantic_response_only_turn_allowed(checkpoint) is True
+
+
+@pytest.mark.parametrize(
+    ("action", "allowed"),
+    [
+        ("request_developer_response", True),
+        ("request_repair", False),
+    ],
+)
+def test_pm_semantic_turn_distinguishes_response_from_repair(
+    action: str,
+    allowed: bool,
+) -> None:
+    message = "PCP_PM_REASSESSMENT: bounded PM instruction"
+    checkpoint = {
+        "last_failure": message,
+        "failure_context": {
+            "version": 1,
+            "kind": "semantic_repair",
+            "source": "pm_reassessment",
+            "message": message,
+            "diff_hash": "pm-diff",
+        },
+        "last_pm_reassessment": {
+            "diff_hash": "pm-diff",
+            "decision": {"action": action},
+        },
+    }
+
+    assert semantic_response_only_turn_allowed(checkpoint) is allowed

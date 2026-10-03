@@ -165,6 +165,35 @@ def _semantic_failure_context_is_current(
     return False
 
 
+def semantic_response_only_turn_allowed(
+    checkpoint: dict[str, Any],
+) -> bool:
+    """Return whether the current semantic turn may rebut without editing files.
+
+    Reviewer findings may be answered with bounded repository evidence and then
+    independently re-checked. PM may explicitly request a developer response.
+    Repair/revert/source-advance/human-rejection turns still require a material
+    repository effect when the WorkOrder requires one.
+    """
+    context = checkpoint.get("failure_context")
+    context = dict(context) if isinstance(context, dict) else {}
+    if not _semantic_failure_context_is_current(checkpoint, context):
+        return False
+
+    source = str(context.get("source") or "")
+    if source == "reviewer":
+        return True
+    if source == "pm_reassessment":
+        pm = checkpoint.get("last_pm_reassessment")
+        decision = (
+            dict(pm.get("decision") or {})
+            if isinstance(pm, dict)
+            else {}
+        )
+        return str(decision.get("action") or "") == "request_developer_response"
+    return False
+
+
 def _append_operational_context(
     message: str,
     current_failure: str | None,

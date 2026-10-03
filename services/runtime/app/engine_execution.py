@@ -42,6 +42,7 @@ from .state import (
     existing_repo_analysis,
     merge_progress,
     review_repair_prompt_failure,
+    semantic_response_only_turn_allowed,
     set_failure_context,
     validate_workspace,
 )
@@ -517,6 +518,13 @@ class RuntimeEngine(RuntimeEngineCore):
                 )
                 return
 
+            turn_start_diff = diff_state(
+                workspace,
+                max_diff,
+                base_ref=source_commit,
+            )
+            turn_start_diff_hash = str(turn_start_diff.get("diff_hash") or "")
+
             validate_model_choice(executor_choice)
             progress["iteration"] += 1
             progress["model_calls"] += 1
@@ -619,7 +627,11 @@ class RuntimeEngine(RuntimeEngineCore):
                 last_failure = f"Agent command failed ({run.returncode}):\n{run.stderr}\n{run.output}"[-30000:]
             self.storage.update(job_id, status="verifying", progress=progress)
 
-            diff = diff_state(workspace, max_diff)
+            diff = diff_state(
+                workspace,
+                max_diff,
+                base_ref=source_commit,
+            )
             progress["changed_files"] = diff["changed_file_count"]
             progress["material_change_present"] = diff["changed_file_count"] > 0
             progress["diff_hashes"].append(diff["diff_hash"])
@@ -657,10 +669,23 @@ class RuntimeEngine(RuntimeEngineCore):
             self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
 
             material_required = "material_change" in strategy.get("definition_of_done", {}).get("required", [])
-            if material_required and not progress["material_change_present"]:
-                last_failure = "Agent completed without producing the required material repository change."
+            turn_effect_present = str(diff.get("diff_hash") or "") != turn_start_diff_hash
+            response_only_allowed = semantic_response_only_turn_allowed(checkpoint)
+            if material_required and not turn_effect_present and not response_only_allowed:
+                last_failure = (
+                    "Agent completed without changing the cumulative WorkOrder diff "
+                    "during this invocation."
+                )
                 progress["last_agent_failure_kind"] = progress.get("last_agent_failure_kind") or "no_effect"
-                fp = failure_fingerprint(last_failure + "\n" + (run.output or "")[-4000:])
+                fp = failure_fingerprint(
+                    last_failure
+                    + "\nstart_diff="
+                    + turn_start_diff_hash
+                    + "\nend_diff="
+                    + str(diff.get("diff_hash") or "")
+                    + "\n"
+                    + (run.output or "")[-4000:]
+                )
                 progress["failure_fingerprints"].append(fp)
                 progress["progress_markers"].append(f"no_effect:{executor_choice['id']}")
                 next_executor, reroute = await self._model_failover(

@@ -313,7 +313,12 @@ def _status_entries(workspace: Path) -> list[tuple[str, str]]:
     return entries
 
 
-def diff_state(workspace: Path, max_bytes: int) -> dict[str, Any]:
+def diff_state(
+    workspace: Path,
+    max_bytes: int,
+    *,
+    base_ref: str | None = None,
+) -> dict[str, Any]:
     _drop_runtime_intent_to_add(workspace)
 
     proc = subprocess.run(
@@ -332,16 +337,43 @@ def diff_state(workspace: Path, max_bytes: int) -> dict[str, Any]:
             raise RuntimeError(add.stderr.strip() or "git add -N failed")
 
     # Canonical execution/review identity is the final working tree relative to
-    # the persisted source commit, not the mutable index relative to the working
-    # tree. This keeps staged, unstaged, and intent-to-add states equivalent when
-    # they produce the same final files.
+    # the persisted WorkOrder source commit. Generic callers retain HEAD-relative
+    # semantics by omitting base_ref. Resolve an explicit base first so invalid
+    # or option-like references fail closed instead of silently producing an
+    # empty diff.
+    requested_base = str(base_ref or "HEAD").strip()
+    if not requested_base:
+        raise RuntimeError("Diff base reference must not be blank")
+    resolved = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(workspace),
+            "rev-parse",
+            "--verify",
+            "--end-of-options",
+            f"{requested_base}^{{commit}}",
+        ],
+        text=True,
+        capture_output=True,
+    )
+    if resolved.returncode != 0:
+        detail = resolved.stderr.strip() or resolved.stdout.strip() or "unresolvable"
+        raise RuntimeError(
+            f"Invalid diff base reference {requested_base!r}: {detail}"
+        )
+    diff_base = resolved.stdout.strip()
+
+    # git diff <commit> compares that committed tree with the complete working
+    # tree, so already-committed WorkOrder changes, staged/unstaged edits and
+    # intent-to-add paths all share one cumulative identity.
     names = [
         name
-        for name in _git(workspace, "diff", "HEAD", "--name-only", check=False).splitlines()
+        for name in _git(workspace, "diff", diff_base, "--name-only", check=False).splitlines()
         if name
     ]
-    stat = _git(workspace, "diff", "HEAD", "--stat")
-    diff = _git(workspace, "diff", "HEAD", "--binary", check=False)
+    stat = _git(workspace, "diff", diff_base, "--stat")
+    diff = _git(workspace, "diff", diff_base, "--binary", check=False)
     truncated = len(diff.encode()) > max_bytes
     visible = diff.encode()[:max_bytes].decode("utf-8", errors="replace") if truncated else diff
     return {
