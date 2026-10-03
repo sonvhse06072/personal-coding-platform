@@ -25,11 +25,12 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP main targets Runtime `1.0.101` after #451/#452. PCP #453 targets
-  Runtime `1.0.102` so workspace-creation failures preserve bounded
-  ddev-executor detail instead of collapsing to a generic HTTPStatusError.
-  ddev-executor remains `1.0.30`, Antigravity host bridge `1.13`, model
-  registry version `11`.
+- PCP main targets Runtime `1.0.102` after #453/#454. PCP #455 targets
+  ddev-executor `1.0.31` so read-only isolated planning can materialize the
+  exact approved baseline commit from trusted local source refs even when a
+  direct project is parked on an historical AI branch and local `main` is
+  stale. Antigravity host bridge remains `1.13`, model registry version
+  `11`.
 - PCP #446 / PR #447 is complete at
   `645200e1f0e1ea1902569f471a53d5b90699ece6`: canonical WorkOrder diff
   identity is source-commit-relative across Runtime-created commits,
@@ -169,15 +170,16 @@ resume them.
 
 ## Active PCP follow-up work
 
-PCP #453 is the single focused active Runtime observability repair. Natural
-successor-plan evidence showed that PM planning failed before the Product
-Manager model call because ddev-executor returned HTTP 422 while creating the
-read-only isolated planning workspace, but Runtime discarded the executor
-`detail`.
+PCP #455 is the single focused active executor repair. The failed successor
+plan proved its exact r2 source commit existed in the direct Chợ Nhạc object
+store only through `refs/remotes/origin/main`; local `main` remained at the
+historical fork point while the worktree stayed on the preserved PILOT-01 AI
+branch. A normal local clone therefore omitted the baseline commit and checkout
+failed with `reference is not a tree`.
 
-PCP #451/#452 is complete: new supervised plans hold before their first
-WorkOrder launch. The PILOT-01 incident repairs #438/#439, #440/#442,
-#441/#443 and #446/#447 are also complete.
+PCP #453/#454 is complete and now preserves bounded workspace error detail.
+PCP #451/#452 is also complete: new supervised plans hold before their first
+WorkOrder launch.
 
 ## Recently completed reusable work
 
@@ -231,22 +233,21 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Complete PCP #453 with exact-head CI and roll local PCP to Runtime
-   `1.0.102` only while no executor/model process is active.
-2. Diagnose the failed successor plan
-   `pm-9a3d224d78904bf0bb057c03abb9ddb9` at the workspace boundary before
-   retrying planning. It selected `codex_terra` correctly but failed before
-   model invocation with ddev-executor HTTP 422.
-3. Verify local Chợ Nhạc direct repo can resolve baseline source
-   `aa8e68dd9aea6740de446151eb97615931de9b40`; if it is stale, reconcile the
-   clean local base branch without touching preserved historical job state.
-4. Do **not** resume, reroute or continue the historical PILOT-01 job and do
-   **not** release generated PILOT-02.
-5. Only after workspace bootstrap is repaired, intake one supervised successor
-   plan for exactly #48/#49/#56/#57/#58/#50/#59 using r2. Confirm initial
+1. Complete PCP #455 with exact-head CI and roll local PCP to Runtime
+   `1.0.102` + ddev-executor `1.0.31` only while no executor/model process
+   is active.
+2. Re-run the isolated workspace probe for r2 while leaving the direct Chợ Nhạc
+   source worktree on historical branch `ai/c02defa348fc`; the probe must
+   succeed without moving local `main`, source HEAD or index.
+3. Preserve failed plan `pm-9a3d224d78904bf0bb057c03abb9ddb9` as planning
+   evidence; do not retry it in place.
+4. Do **not** resume, reroute or continue historical PILOT-01 and do **not**
+   release generated PILOT-02.
+5. After workspace bootstrap passes, submit one new supervised successor intake
+   for exactly #48/#49/#56/#57/#58/#50/#59 using r2. Confirm initial
    `supervised_hold` with zero child jobs before release.
-6. After exact replacement WorkOrder identities exist, supersede the old
-   PILOT-01..PILOT-08 orchestration through the supported API.
+6. After exact replacement WorkOrder identities exist, supersede old
+   PILOT-01..PILOT-08 through the supported orchestration API.
 7. Keep staging/production, public recruitment legal approval, Availability
    salvage, Professional Reviews, Band and payment/ticket commerce outside this
    pilot path.
