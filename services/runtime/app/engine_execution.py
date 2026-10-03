@@ -42,6 +42,7 @@ from .state import (
     existing_repo_analysis,
     merge_progress,
     review_repair_prompt_failure,
+    semantic_response_only_turn_allowed,
     set_failure_context,
     validate_workspace,
 )
@@ -669,7 +670,8 @@ class RuntimeEngine(RuntimeEngineCore):
 
             material_required = "material_change" in strategy.get("definition_of_done", {}).get("required", [])
             turn_effect_present = str(diff.get("diff_hash") or "") != turn_start_diff_hash
-            if material_required and not turn_effect_present:
+            response_only_allowed = semantic_response_only_turn_allowed(checkpoint)
+            if material_required and not turn_effect_present and not response_only_allowed:
                 last_failure = (
                     "Agent completed without changing the cumulative WorkOrder diff "
                     "during this invocation."
