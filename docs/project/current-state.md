@@ -138,6 +138,11 @@ Current implementation evidence:
   reviewer finding as the primary developer repair instruction.
 - Recovery for PILOT-01 is therefore **same job, same workspace, reroute=false**.
   Do not create a replacement job and do not clear the reviewer finding.
+- Diagnostic caveat: authenticated `GET /v1/jobs/{job_id}` returns the bounded
+  `JobView` and intentionally omits internal `checkpoint` and `progress`.
+  Null jq lookups under `.checkpoint` are therefore not evidence that durable
+  reviewer findings were lost; Runtime resume consumes the internal stored
+  checkpoint directly.
 - Chat PM reviewed the generated eight-WorkOrder plan. PILOT-01 is approved to
   continue; generated PILOT-02..PILOT-08 must not be released unchanged after
   the first supervised checkpoint because their child-issue detail, working
