@@ -25,11 +25,12 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP main targets Runtime `1.0.102` and ddev-executor `1.0.31` after
-  #453/#454 and #455/#456. PCP #457 targets Runtime `1.0.103` so PM-generated
-  visual evidence routes must be concrete local paths rather than route
-  templates such as `/events/[slug]` or `/{public_slug}`. Antigravity host
-  bridge remains `1.13`, model registry version `11`.
+- PCP main targets Runtime `1.0.104` and ddev-executor `1.0.31`. PCP #463
+  targets Runtime `1.0.105` so PM planning receives an explicit
+  `AUTHORIZED_SOURCE_REFERENCE_PATHS` allowlist derived only from
+  `ProjectBaseline.references`; authority-only repository paths cannot be
+  emitted as WorkOrder/decision source references. Antigravity host bridge
+  remains `1.13`, model registry version `11`.
 - PCP #446 / PR #447 is complete at
   `645200e1f0e1ea1902569f471a53d5b90699ece6`: canonical WorkOrder diff
   identity is source-commit-relative across Runtime-created commits,
@@ -174,14 +175,17 @@ resume them.
 
 ## Active PCP follow-up work
 
-PCP #461 is the single focused active Runtime planning-validation repair. The
-reviewed r3 successor plan `pm-a72e960c0f3b458897831cff3fb51a30` reached
-initial supervision with zero jobs and passed structural/visual checks, but PM
-review found all seven WorkOrders capped at `max_profile=standard`. Its two
-critical-risk WorkOrders would deterministically route to `critical` and then
-fail the Runtime WorkOrder cap before executor launch.
+PCP #463 is the single focused active Runtime planning-contract repair.
+Successor attempt `pm-d2947a399ecb44de9e96d174bd4c2d48` failed after PM
+output because it cited authority-only `docs/12-launch-metrics.md`, which r3
+intentionally does not authorize as a WorkOrder source reference. Audit showed
+11 r3 authority-only paths; promoting them opportunistically would blur the
+execution authority boundary. The planner prompt must instead expose the exact
+reference-path allowlist before another successor planning call.
 
-PCP #457/#458, #455/#456, #453/#454 and #451/#452 are complete.
+PCP #461/#462 is complete at Runtime `1.0.104`: new PM plans reject
+`max_profile` below their risk/protected-flag floor. PCP #457/#458,
+#455/#456, #453/#454 and #451/#452 are also complete.
 
 ## Recently completed reusable work
 
@@ -235,19 +239,20 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Complete PCP #461 with exact-head CI and roll local PCP to Runtime
-   `1.0.104`.
-2. Keep `pm-a72e960c0f3b458897831cff3fb51a30` and
-   `pm-095d6aea0fe94901bbf692fa7d113fc2` at initial supervised hold with zero
-   child jobs; do not release either.
-3. Preserve failed `pm-e773f87782f44b9790edb81b5f430b52` as evidence.
+1. Complete PCP #463 with exact-head CI and roll local PCP to Runtime
+   `1.0.105`; keep baseline r3 unchanged.
+2. Preserve failed `pm-d2947a399ecb44de9e96d174bd4c2d48`,
+   `pm-905e112cd77e443a995bff55ac16eaff` and
+   `pm-e773f87782f44b9790edb81b5f430b52` as planning evidence.
+3. Keep held successor plans `pm-ac6a52e6019947adab8744a7ada72011`,
+   `pm-a72e960c0f3b458897831cff3fb51a30` and
+   `pm-095d6aea0fe94901bbf692fa7d113fc2` unreleased with zero child jobs.
 4. Create one fresh r3 supervised successor plan for exactly
-   #48/#49/#56/#57/#58/#50/#59. Require high-risk WorkOrders to permit at least
-   complex profile, critical-risk WorkOrders critical profile, concrete visual
-   fixture routes, visual_quality for #50, and canonical protected risk flags
-   for schema/security/authorization/API changes.
+   #48/#49/#56/#57/#58/#50/#59 using only the explicit authorized source
+   reference allowlist, approved profile floors/risk flags, concrete visual
+   routes, and EventParticipation-only live verified-performance provider.
 5. Review it at generation-1 hold with zero child jobs.
-6. Only after it passes PM review, supersede both held rejected successor plans
-   and the historical PILOT-01..08 orchestration via supported API.
+6. Only after it passes PM review, supersede rejected held successor plans and
+   the historical PILOT-01..08 orchestration through the supported API.
 7. Release only AP-MVP-01 from the reviewed replacement plan; keep excluded
    product/deployment lanes outside this pilot path.
