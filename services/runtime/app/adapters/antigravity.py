@@ -117,7 +117,7 @@ class AntigravityAdapter(AgentAdapter):
             "model": self.model or "auto",
             "mode": mode,
             "timeout": timeout,
-            "trusted_local_developer": trusted_local_developer_enabled(workspace, mode),
+            "trusted_local_developer": trusted_local_developer_enabled(workspace, mode, adapter=self.name),
         }
         if effort is not None:
             payload["effort"] = effort
