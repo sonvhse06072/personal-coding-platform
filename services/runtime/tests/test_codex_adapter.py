@@ -329,3 +329,73 @@ def test_codex_timeout_returns_structured_failure_and_removes_last_message_file(
         if event["event_type"] == "developer_step"
     ]
     assert lifecycle == ["started", "failed"]
+
+
+def test_codex_trusted_local_execute_uses_full_access(monkeypatch, tmp_path: Path):
+    captured: dict[str, object] = {}
+
+    async def fake_run_command(argv, *, cwd, timeout, on_stdout_line=None):
+        captured["argv"] = argv
+        output_index = argv.index("--output-last-message")
+        Path(argv[output_index + 1]).write_text("done", encoding="utf-8")
+        return CommandResult(
+            argv=argv,
+            returncode=0,
+            stdout=_event({"type": "turn.completed", "usage": {}}),
+            stderr="",
+        )
+
+    monkeypatch.setattr(
+        "app.adapters.codex.trusted_local_developer_enabled",
+        lambda workspace, mode: mode in {"execute", "repair"},
+    )
+    monkeypatch.setattr("app.adapters.codex.run_command", fake_run_command)
+
+    run = asyncio.run(
+        CodexAdapter("gpt-5.6-sol").run(
+            workspace=tmp_path,
+            prompt="implement",
+            mode="execute",
+            timeout=30,
+        )
+    )
+
+    assert run.returncode == 0
+    argv = captured["argv"]
+    assert argv[argv.index("--sandbox") + 1] == "danger-full-access"
+    assert 'approval_policy="never"' in argv
+    assert "sandbox_workspace_write.network_access=false" not in argv
+
+
+def test_codex_trusted_local_does_not_broaden_plan(monkeypatch, tmp_path: Path):
+    captured: dict[str, object] = {}
+
+    async def fake_run_command(argv, *, cwd, timeout, on_stdout_line=None):
+        captured["argv"] = argv
+        output_index = argv.index("--output-last-message")
+        Path(argv[output_index + 1]).write_text("{}", encoding="utf-8")
+        return CommandResult(
+            argv=argv,
+            returncode=0,
+            stdout=_event({"type": "turn.completed", "usage": {}}),
+            stderr="",
+        )
+
+    monkeypatch.setattr(
+        "app.adapters.codex.trusted_local_developer_enabled",
+        lambda workspace, mode: mode in {"execute", "repair"},
+    )
+    monkeypatch.setattr("app.adapters.codex.run_command", fake_run_command)
+
+    asyncio.run(
+        CodexAdapter("gpt-5.6-sol").run(
+            workspace=tmp_path,
+            prompt="plan",
+            mode="plan",
+            timeout=30,
+        )
+    )
+
+    argv = captured["argv"]
+    assert argv[argv.index("--sandbox") + 1] == "read-only"
+    assert "danger-full-access" not in argv
