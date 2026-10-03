@@ -48,13 +48,18 @@ def test_historical_low_medium_high_choices_remain_valid(
     validate_model_choice(choice(model_id, effort))
 
 
-def test_unsupported_antigravity_and_claude_efforts_fail_closed() -> None:
-    for model_id in ("antigravity_free", "antigravity_claude_sonnet"):
-        with pytest.raises(ModelCapabilityError, match="unsupported"):
-            validate_model_choice(choice(model_id, "low"))
-        assert not validate_model_choice(
-            choice(model_id, None)
-        ).supports_explicit_effort
+def test_flash_medium_accepts_only_legacy_ignored_efforts_and_claude_stays_strict() -> None:
+    assert not validate_model_choice(
+        choice("antigravity_free", "low")
+    ).supports_explicit_effort
+    with pytest.raises(ModelCapabilityError, match="unsupported"):
+        validate_model_choice(choice("antigravity_free", "xhigh"))
+
+    with pytest.raises(ModelCapabilityError, match="unsupported"):
+        validate_model_choice(choice("antigravity_claude_sonnet", "low"))
+    assert not validate_model_choice(
+        choice("antigravity_claude_sonnet", None)
+    ).supports_explicit_effort
 
 
 def test_unknown_model_adapter_and_upstream_mismatches_fail_closed() -> None:
@@ -116,3 +121,13 @@ def test_registry_declares_bounded_antigravity_and_full_codex_capabilities() -> 
     assert reasoning_capability(
         "antigravity_free", models["antigravity_free"]
     ).allowed_efforts == ()
+
+
+def test_legacy_ignored_reasoning_metadata_is_validated() -> None:
+    document = deepcopy(models_doc())
+    document["models"]["antigravity_free"]["legacy_ignored_reasoning_efforts"] = [
+        "low",
+        "unknown",
+    ]
+    with pytest.raises(ValueError, match="unknown value"):
+        validate_model_registry(document)
