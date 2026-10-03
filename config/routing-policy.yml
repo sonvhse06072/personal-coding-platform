@@ -170,11 +170,11 @@ profiles:
     - executor
     - standard_executor
     preferred_executor_ids:
-    - openrouter_qwen3_coder_free
     - antigravity_free
-    - codex_terra
     - antigravity_flash_high
+    - codex_terra
     - antigravity_gemini_pro
+    - openrouter_qwen3_coder_free
     - codex_luna
     max_input_tokens: 800000
     max_output_tokens: 120000
