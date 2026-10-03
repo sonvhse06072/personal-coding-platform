@@ -15,7 +15,8 @@ def test_chonhac_targeted_verification_follows_changed_custom_modules() -> None:
 
     assert "git diff --name-only HEAD -- web/modules/custom" in joined
     assert "awk -F/" in joined
-    assert "{print $4}" in joined
+    assert "{print \\$4}" in joined
+    assert "ddev exec --raw -- bash -lc" in joined
     assert "for module in $modules" in joined
     assert "for layer in Unit Kernel Functional" in joined
     assert 'web/modules/custom/$module/tests/src/$layer' in joined

@@ -1,4 +1,7 @@
+import os
 from pathlib import Path
+import subprocess
+
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -47,6 +50,11 @@ def test_chonhac_targeted_tests_execute_phpunit_and_static_analysis_executes_php
     assert len(targeted) == 2
     assert targeted[0] == "ddev drush cr"
     targeted_runner = targeted[1]
+    assert targeted_runner.startswith("ddev exec --raw -- bash -lc 'set -euo pipefail;")
+    assert "ddev exec bash -lc" not in targeted_runner
+    assert 'modules="$(git diff --name-only HEAD -- web/modules/custom |' in targeted_runner
+    assert 'if [ -z "$modules" ]' in targeted_runner
+    assert '\\"$modules\\"' not in targeted_runner
     assert "git diff --name-only HEAD -- web/modules/custom" in targeted_runner
     assert "for module in $modules" in targeted_runner
     assert "for layer in Unit Kernel Functional" in targeted_runner
@@ -57,6 +65,67 @@ def test_chonhac_targeted_tests_execute_phpunit_and_static_analysis_executes_php
     assert static == ["ddev exec vendor/bin/phpcs web/modules/custom"]
     assert all("|| true" not in command for command in targeted + static)
 
+
+
+def test_chonhac_targeted_runner_preserves_variables_through_raw_ddev(tmp_path):
+    doc = yaml.safe_load((ROOT / "config/projects.yml").read_text())
+    runner = doc["projects"]["chonhac"]["ddev"]["targeted_tests"][1]
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    fake_ddev = bin_dir / "ddev"
+    fake_ddev.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+[[ "$1" == "exec" ]]
+shift
+[[ "$1" == "--raw" ]]
+shift
+[[ "$1" == "--" ]]
+shift
+exec "$@"
+""",
+        encoding="utf-8",
+    )
+    fake_ddev.chmod(0o755)
+
+    repo = tmp_path / "repo"
+    test_dir = repo / "web/modules/custom/demo/tests/src/Unit"
+    test_dir.mkdir(parents=True)
+    test_file = test_dir / "DemoTest.php"
+    test_file.write_text("<?php\n// baseline\n", encoding="utf-8")
+
+    phpunit = repo / "vendor/bin/phpunit"
+    phpunit.parent.mkdir(parents=True)
+    phpunit.write_text(
+        "#!/usr/bin/env bash\nprintf 'PHPUNIT:%s\\n' \"$*\"\n",
+        encoding="utf-8",
+    )
+    phpunit.chmod(0o755)
+
+    subprocess.run(["git", "init", "-b", "main"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.email", "pcp-test@example.invalid"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "PCP Test"], cwd=repo, check=True)
+    subprocess.run(["git", "add", "."], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-m", "baseline"], cwd=repo, check=True, capture_output=True)
+    test_file.write_text("<?php\n// changed\n", encoding="utf-8")
+
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}"}
+    result = subprocess.run(
+        ["bash", "-lc", f'PATH="{bin_dir}:$PATH"; {runner}'],
+        cwd=repo,
+        env=env,
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Running targeted tests for demo" in result.stdout
+    assert (
+        "PHPUNIT:-c web/core/phpunit.xml.dist "
+        "web/modules/custom/demo/tests/src/Unit/DemoTest.php"
+    ) in result.stdout
 
 def test_service_homes_are_prepared_for_ddev_uid():
     compose = (ROOT / ".ddev/docker-compose.platform.yaml").read_text()
