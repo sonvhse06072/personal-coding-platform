@@ -647,6 +647,15 @@ def test_execution_plan_view_reads_historical_template_routes_without_execution_
         WorkOrder.model_validate(snapshot)
     with pytest.raises(ValidationError, match="visual_routes"):
         WorkOrder.model_validate(snapshot.model_dump(mode="json"))
+    with pytest.raises(ValidationError, match="visual_routes"):
+        pm_planning.PMPlanProposal.model_validate(
+            {
+                "scope_assessment": "in_scope",
+                "summary": "Replay must remain strict.",
+                "work_orders": [snapshot.model_dump(mode="json")],
+                "decision_boundaries": [],
+            }
+        )
 
 
 @pytest.mark.parametrize(
