@@ -230,6 +230,7 @@ def test_staffing_flash_medium_omits_effort() -> None:
         profile="standard",
         provider_state={
             "antigravity_gemini_pro": {"available": False},
+            "codex_gpt6_sol": {"available": False},
             "codex_terra": {"available": False},
             "antigravity_claude_sonnet": {"available": False},
             "codex_sol": {"available": False},
