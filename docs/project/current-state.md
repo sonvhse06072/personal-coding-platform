@@ -4,9 +4,9 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 fresh Runtime/GitHub evidence remain authoritative over chat history. This file
 is an index, not authority to change the approved baseline or protected scope.
 
-Last updated: 2026-10-05 theo owner release-helper v2 audit lúc
-`2026-10-04T17:56:22.670521+00:00` (00:56:22 ngày 05/10, giờ Việt Nam).
-Control inventory đã qua; quota-observation gate STOP trước /continue.
+Last updated: 2026-10-05 theo owner release-helper v3 audit lúc
+`2026-10-04T18:11:07.668846+00:00` (01:11:07 ngày 05/10, giờ Việt Nam).
+Control inventory đã qua; helper quota-contract gate được sửa trong v4; chưa /continue.
 
 ## Resume order
 
@@ -148,33 +148,39 @@ artifact does not include the exact later routing input or selected role/model,
 so do not claim a particular model was chosen or that all provider quota is gone.
 Collector `status=ok` and `last_success_at` do not renew upstream `captured_at`.
 
-Use `chonhac_release_ap_mvp_01_once_v3.py`. It retains v2's completed-row/job
-consistency checks and IDs on control-inventory failure. It adds a bounded call
-to the installed `ActiveQuotaTelemetryService.refresh()` once in the initial
-preflight, after health/history/control gates and source-identity checks. This is
-normal telemetry collection, not an availability/profile override. It writes
-standard quota snapshot/collector-result records; it is NOT a read-only helper
-mode. It does not call service.start(), store.init(), background polling or a
-model. The inner release preflight does not refresh again; `--collect` remains
-read-only and never refreshes or posts continuation.
+Owner release-helper v3 at `2026-10-04T18:11:07.668846+00:00` ran one
+standard quota refresh with zero helper model calls, passed the global control
+inventory, and still stopped before `/continue`. Router selected `codex_terra`
+for planner/executor with fresh observed `quota:codex_chatgpt_plus` pressure
+0.16. Evaluator was `openrouter_qwen3_coder_free`; v3 stopped only because
+`quota:openrouter_free` was unobserved. Candidate remained held and no marker/
+child job was created by that STOP.
 
-The source-pinned collector retains provider observation timestamps, TTLs,
-false availability and reserve policy. A successful refresh may still return
-stale/absent provider observations and never implies permission to release.
-V3 reports before/after quota scope IDs, timestamps and all three Router-selected
-roles even when capacity validation stops. It never substitutes Codex, invents a
-quota observation, treats an expired window as recovered, or relaxes a gate.
-The final quota recheck also retains the failing role/key; any failure keeps
-continuation uncalled. No additional historical audit/inventory/cancel script is
-needed; the bounded release helper rechecks its prerequisites.
+That last gate was stricter than checked-in Runtime/Router semantics. The
+OpenRouter free registry contract explicitly states
+`free_tier.authoritative_remaining_available: false`: PCP has no authoritative
+remaining-quota observation to demand for that selected model. Router defaults a
+missing ProviderState to healthy/available; an actual provider failure is recorded
+durably and routed through bounded provider failover. Do not infer unlimited
+OpenRouter capacity from this: it only means absence of an impossible
+authoritative remaining-quota signal is not itself a pre-release blocker.
 
-Helper SHA256: `6d59b3d55acf79229d1e0b8c4b257b9467b2c81d3b28c6042896ac853c0f13cb`.
-142 unittest passed: 115 retained regressions plus 27 new quota/service/reporting
-cases. Provider/DB/Router I/O was mocked; the uploaded quota timestamps were used
-as a fixture, but synthetic role choices are not claimed as observed choices.
-No v3 execution, live refresh or release has been observed in this PM step.
-The original marker path, exact generation/continuation, all contract/budget/
-review gates and later-generation exclusion remain unchanged.
+Use `chonhac_release_ap_mvp_01_once_v4.py`. V4 preserves v3's one standard
+quota refresh, exact completed-plan proofs, generation/continuation identity,
+contract/budget/review validation, reserve policy, marker and no-later-generation
+boundary. Selected models still require fresh observed quota unless their exact
+checked-in model contract says authoritative remaining allowance is unavailable.
+Any explicit observed unavailable/unhealthy/stale/reserve state still blocks,
+including for OpenRouter. Model/quota-group mismatches fail closed. No provider
+is forced and no Runtime/provider policy is changed.
+
+V4 SHA256:
+`fb5e2085e18da668624c44c7bf43de60cc3646be9cc6e03c007ae612488e1444`.
+19 focused v4 regressions PASS, including the exact v3 role selection projection,
+missing Codex observation/refused reserve, explicit OpenRouter unavailable
+enforcement and unchanged mutation surface. These are mocked/helper checks, not
+WSL release evidence. Decision/evidence is also in Chợ Nhạc #63 comment
+`5982969505`. No extra historical audit/inventory/cancel is required.
 
 Before that single control-plane request:
 
