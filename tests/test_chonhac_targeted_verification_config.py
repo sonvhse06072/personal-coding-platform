@@ -17,6 +17,12 @@ def test_chonhac_targeted_verification_follows_changed_custom_modules() -> None:
     assert "awk -F/" in joined
     assert "{print \\$4}" in joined
     assert "ddev exec --raw -- bash -lc" in joined
+    assert 'export BROWSERTEST_OUTPUT_DIRECTORY="/tmp/pcp-chonhac-browser-output-$(id -u)"' in joined
+    assert 'mkdir -p "$BROWSERTEST_OUTPUT_DIRECTORY"' in joined
+    assert 'chmod 700 "$BROWSERTEST_OUTPUT_DIRECTORY"' in joined
+    assert '[ ! -w "$BROWSERTEST_OUTPUT_DIRECTORY" ]' in joined
+    assert "chmod 777" not in joined
+    assert "ddev exec -u root" not in joined
     assert "for module in $modules" in joined
     assert "for layer in Unit Kernel Functional" in joined
     assert 'web/modules/custom/$module/tests/src/$layer' in joined
