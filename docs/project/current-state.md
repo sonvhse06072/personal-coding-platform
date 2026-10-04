@@ -4,8 +4,8 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 live Runtime/GitHub evidence remain authoritative over chat history. Completed
 chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-10-04 sau khi merge PCP #466 / PR #468; source main
-Runtime 1.0.106 đã xanh CI, local vẫn cần rollout/acceptance riêng.
+Last updated: 2026-10-04 theo owner rollout v3 PASS; local Runtime 1.0.106
+đã xác minh. Bước hiện tại là successor planning review, chưa release execution.
 
 ## Resume order
 
@@ -30,28 +30,35 @@ lessons are indexed in `history/episodes.md`.
   Exact head `66f9a38d2fe01762054cd6a1f1e6e3b0008cae1a` có workflow tests
   run `37199654326` PASS ở structure, Runtime, Router và ddev-executor.
   Read response dùng non-executable `ExecutionPlanSnapshot*` models; shared
-  WorkOrder/PM proposal validators vẫn strict. Local activation chưa được suy từ
-  GitHub merge; snapshot gần nhất của owner vẫn là Runtime `1.0.105`.
+  WorkOrder/PM proposal validators vẫn strict.
+- Owner rollout v3 PASS xác nhận local PCP main
+  `e7fb6d364f109a2ddee979d3a040367b03d87f73` clean, Runtime `1.0.106`,
+  Router/executor healthy, executor `1.0.31`, active engineering jobs và executor
+  active_jobs đều 0 tại lần kiểm tra. Output không có observed_at; không gán
+  timestamp mới cho lần chạy. Không cần rollout/restart #466 lần nữa.
+- Historical GET `pm-095d6aea0fe94901bbf692fa7d113fc2` trả 200, giữ đủ
+  7 template routes; strict WorkOrder/PM proposal replay trong process bị từ
+  chối. Digest v3 `7d49d87afd3c165eff72bf3f97e3f36f9465465bd992879546db4e3a2b376f32`
+  giống nhau trước build, trước restart và sau acceptance. Không so digest này
+  với probe khác khi chưa thống nhất serialization; không gọi in-process replay
+  probe là HTTP POST replay test.
+- Lease lịch sử vẫn active generation 9, owner
+  `c02defa348fc5b19a0bd021e2697571e` blocked, preview absent; record lease
+  và Chợ Nhạc worktree không đổi qua restart. Bảo toàn ownership không đồng
+  nghĩa giải phóng lease cho successor job. Không cancel/cleanup để vượt gate.
 - PCP #463 đã hoàn thành qua PR #464, merge commit
-  `0706cd119ebf2dcac9481b28799e5d835b2518ff`; Runtime trong source là
-  `1.0.105`, ddev-executor vẫn `1.0.31`. Exact PR head
-  `ecda44f5138a3c1d3817e5b2d9bc49ded20b4b97` có workflow `tests`
-  run `37159249321` PASS ở cả Router, Runtime, ddev-executor và structure tests.
-- PM prompt đã có `AUTHORIZED_SOURCE_REFERENCE_PATHS`, sort/deduplicate từ
-  đúng `ProjectBaseline.references`. WorkOrder và DecisionBoundary chỉ được
-  cite tập này; authority-only paths không được tự nâng thành references.
-  Validator fail-closed được giữ nguyên. Không triển khai lại #463.
-- Owner snapshot `2026-10-04T10:58:19.945738+00:00` xác nhận Runtime
-  `1.0.105` healthy, Router/executor ok, executor `1.0.31`; r3/source và
-  exact sorted/deduplicated 27-path prompt allowlist PASS. Local PCP main
-  `0706cd119ebf2dcac9481b28799e5d835b2518ff` clean; docs-only PR #465 đã
-  merge trên GitHub tại `d73412a44dde17ea4562648182cc6a7aed8e5f1f`.
-  Không cần rollout lại #464 chỉ vì local chưa có docs commit #465.
-- Active engineering jobs = 0 trước/sau snapshot, không phải atomic idle/lease
-  clearance. Quota snapshot giữ nguyên Codex available=true/pressure=0.16,
-  Gemini true/0.99912, Claude-GPT false/1.0; freshness/reserve cần đọc mới trước
-  model call. Bridge `1.13` và registry `11` là checkpoint cũ, chưa đọc lại ở
-  snapshot này. HTTP 500 riêng historical plan được theo dõi ở #466 bên dưới.
+  `0706cd119ebf2dcac9481b28799e5d835b2518ff`; Runtime của bản sửa đó là
+  `1.0.105`. Exact PR head `ecda44f5138a3c1d3817e5b2d9bc49ded20b4b97`
+  có workflow `tests` run `37159249321` PASS ở cả bốn nhóm.
+- PM prompt có `AUTHORIZED_SOURCE_REFERENCE_PATHS`, sort/deduplicate từ đúng
+  `ProjectBaseline.references`. WorkOrder/DecisionBoundary chỉ được cite tập
+  này; authority-only paths không tự thành references. Validator fail-closed
+  giữ nguyên. Rollout v3 xác nhận r3/source, 27 reference paths, docs/12 absent
+  và docs/26 present; exact prompt allowlist đã được kiểm tra ở snapshot trước.
+- Rollout v3 không thu quota mới. Các số Codex/Gemini/Claude trong snapshot cũ
+  không là điều kiện cho model call mới; phải đọc telemetry/freshness và giữ
+  nguyên available=false/reserve policy. Bridge `1.13` và registry `11` cũng
+  chưa được đọc lại phiên bản trong output rollout này.
 - PCP #446 / PR #447 is complete at
   `645200e1f0e1ea1902569f471a53d5b90699ece6`: canonical WorkOrder diff
   identity is source-commit-relative across Runtime-created commits,
@@ -185,9 +192,7 @@ Current implementation evidence:
 - Baseline successor r3 đã tồn tại và giữ nguyên source
   `aa8e68dd9aea6740de446151eb97615931de9b40`. Không tạo r4 hoặc thêm
   `docs/12-launch-metrics.md` vào references để hợp thức hóa output của model.
-  Sau local preflight và rà soát contract tổng thể, mới chuẩn bị một successor
-  supervised plan đúng bảy phần còn lại theo Chợ Nhạc #63.
-- Frontend-heavy successor WorkOrders should use
+- Frontend-heavy successor WorkOrders use
   `frontend_quality -> visual_quality` with concrete bounded routes only when
   those routes are renderable by the WorkOrder.
 
@@ -196,48 +201,46 @@ resume them.
 
 ## Active PCP follow-up work
 
-PCP #466 đã đóng completed qua PR #468; source fix ở Runtime
-`1.0.106`. Owner probe trước sửa
-`2026-10-04T11:11:26.098002+00:00` là evidence nguyên nhân: 7 historical
-template `visual_routes` trong 4 WorkOrders làm GET plan trả 500, còn
-orchestration và persisted record vẫn nguyên.
+PCP #466 source repair và local activation đã được PM chấp nhận theo owner
+rollout v3 PASS. Evidence acceptance nằm ở comment #466
+`5981132981`; không mở lại diagnostic/restart để xác nhận điều đã đủ chứng cứ.
 
-Bản sửa tách read response sang non-executable `ExecutionPlanSnapshot*` models.
-Historical template routes được giữ để audit; một bản sao validation trong RAM
-thay chỉ template route local an toàn bằng sentinel rồi chạy strict
-`WorkOrder` validation, nên malformed data khác và parent invariants vẫn
-fail-closed. Object/dict/PM-proposal replay của snapshot vẫn bị strict validator
-từ chối. Exact-head CI và PM review đã PASS trước merge.
+Bước hiện tại: rà/chốt một canonical supervised successor intake cho đúng
+#48/#49/#56/#57/#58/#50/#59. Đã đọc live bodies của bảy issue, #63 replan và
+comments liên quan, cùng DEC-033 mapping trong baseline docs/27. #56 có nhãn
+cũ giao provider cho EE-0-04; đã sửa tham chiếu thành AP-MVP-03 #50, analytics
+vẫn riêng #59. Không sửa product authority/baseline vì lỗi nhãn này.
 
-Local Runtime chưa được xác minh ở `1.0.106`; không coi source merge là rollout.
-Không mutate historical record/orchestration hoặc release rejected plans trong
-bước activation.
+Chi tiết review, dependencies, budgets, routes và fixture ownership:
+`pilot-successor-review-2026-10-04.md`. Đây là execution preparation/evidence,
+không phải nguồn mới được tự thêm vào ProjectBaseline.references.
 
 Successor attempt `pm-d2947a399ecb44de9e96d174bd4c2d48` được giữ làm evidence:
 planner đã cite `docs/12-launch-metrics.md`, một authority-only path không
-thuộc r3 references. Bài học: phân loại `authority` không đồng nghĩa quyền cite
-trong `source_references`; sửa prompt và giữ validator fail-closed, không mở
-rộng baseline theo từng output sai. `usage=null` không chứng minh model chưa
-được gọi.
+thuộc r3 references. Authority classification không đồng nghĩa quyền cite.
+`usage=null` không chứng minh model chưa được gọi.
 
 PCP #461/#462 is complete at Runtime `1.0.104`: new PM plans reject
 `max_profile` below their risk/protected-flag floor. PCP #457/#458,
 #455/#456, #453/#454 and #451/#452 are also complete.
 
-Local plan state tại owner snapshot 10:58:19 UTC, không phải bảo đảm về sau:
+Local state tại owner rollout v3, không phải bảo đảm về sau:
 
 - `pm-095d6aea0fe94901bbf692fa7d113fc2`,
   `pm-a72e960c0f3b458897831cff3fb51a30` và
-  `pm-ac6a52e6019947adab8744a7ada72011` đều có orchestration active,
-  supervised_hold, generation 1, held; mỗi plan đúng 7 pending WorkOrders,
-  mọi job_id null, ready set chỉ AP-MVP-01. Không release các rejected plans.
-- Historical plan `pm-5cd9ec06f74b4feba4db5a1507ab35f0` vẫn blocked,
-  generation 0; PILOT-01 gắn job `c02defa348fc5b19a0bd021e2697571e`,
-  PILOT-02..08 pending và chưa có job. Chợ Nhạc worktree clean trên
-  `ai/c02defa348fc` tại `88dd4f60dbe95c41c6e7ce8fc5bb3c7ba8a098ba`.
-- Các failed planning attempts giữ nguyên làm evidence. Không xóa plan,
-  reset counters/history, sửa SQL, resume historical job hoặc tạo replacement
-  chỉ để né blocker.
+  `pm-ac6a52e6019947adab8744a7ada72011` vẫn active, supervised_hold,
+  generation 1, held; mỗi plan đúng 7 pending WorkOrders, mọi job_id null,
+  ready set chỉ AP-MVP-01. Không release các rejected plans.
+- Historical job `c02defa348fc5b19a0bd021e2697571e` vẫn blocked, lease
+  active generation 9; Chợ Nhạc clean trên `ai/c02defa348fc` tại
+  `88dd4f60dbe95c41c6e7ce8fc5bb3c7ba8a098ba`. Rollout không thu lại toàn bộ
+  orchestration của historical plan `pm-5cd9ec06f74b4feba4db5a1507ab35f0`;
+  trạng thái blocked/generation 0 của plan là snapshot trước, cần GET mới
+  trước reconciliation.
+- Failed planning attempts giữ nguyên làm evidence. Không xóa plan, reset
+  counters/history, sửa SQL, resume historical job hoặc tạo replacement chỉ
+  để né blocker. Fresh successor planning có semantic scope bảy phần đã duyệt,
+  không phải replay PILOT-01 hay giả lập hoàn tất historical job.
 
 ## Recently completed reusable work
 
@@ -259,7 +262,8 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 - Chợ Nhạc repository-CI parity (#400; Chợ Nhạc PR #64 / DEC-034);
 - deterministic incident-learning candidate / PM triage (#406 / PR #436);
 - automatic visual-preview evidence loop (#421 / PR #437) plus Chợ Nhạc
-  collector/redaction PRs #65/#66.
+  collector/redaction PRs #65/#66;
+- historical ExecutionPlan read compatibility (#466 / PR #468).
 
 ## Global operational gates
 
@@ -288,31 +292,28 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 - PM merge evaluation must stop when the final exact diff introduces a genuine
   Human Owner decision boundary, even if earlier versions of the diff were
   approved.
+- Operator helper tests must exercise collector -> gate with real-shaped
+  snapshots, absent fields, false booleans and refusal-before-mutation. Syntax
+  checks alone did not catch the v2 missing-field bug.
 
 ## Immediate next safe actions
 
-1. Chạy fresh local idle/lease/worktree/health gates rồi rollout PCP source main
-   chứa Runtime 1.0.106; không checkout/reset/clean Chợ Nhạc và không restart
-   khi còn engineering work hoặc lease không rõ.
-2. Sau rollout, xác minh GET historical plan = 200, 7 template routes giữ nguyên,
-   persisted record digest/history không đổi, current/new WorkOrder validation
-   vẫn reject template routes, và ba rejected orchestrations vẫn held/zero jobs.
-3. Giữ nguyên mọi historical/rejected/failed plan. Không gọi continue/operator/
-   supersede trước khi có replacement được PM duyệt và mapping rõ ràng.
-4. Trước một fresh intake, đọc live #48/#49/#56/#57/#58/#50/#59 cùng source r3
-   liên quan; rà đồng thời source allowlist, acceptance, exact IDs/dependencies,
-   risk/profile floors, budgets, concrete routes và fixture ownership. #50 chỉ
-   triển khai EventParticipation live provider, không Booking/Marketplace
-   provider hoặc Booking queries; Selected Performances phải có visual_quality.
-5. Replacement phải có đúng bảy developer WorkOrders tuần tự, adaptive budget,
-   execution_mode supervised. Review cả nội dung product contract, không chỉ
-   JSON/status=ready. Xác minh generation-1 supervised_hold, active/held,
-   đúng bảy pending WorkOrders, mọi job_id null và chỉ AP-MVP-01 ready.
-6. Chỉ sau PM approval mới reconcile bằng supported supersession API với exact
-   mapping; PILOT-01 retire không replacement vì product đã merge. Không đổi
-   job history/counters/workspace; failed attempts không có orchestration chỉ
-   giữ evidence. Kiểm tra project lease qua supported control path.
-7. Sau reconciliation hợp lệ, chỉ release exact generation 1 cho AP-MVP-01;
-   các WO sau tiếp tục supervised hold. Không mở scope marketplace recruitment,
-   Professional Reviews, Availability salvage, payment, staging/production seed
-   hoặc deployment.
+1. Không rollout lại #466. Đọc fresh health/active work/quota và exact stored
+   lease/orchestration trước một planning request; giữ nguyên historical owner.
+2. Prevalidate request và draft bảy WorkOrders bằng schemas/validator đang chạy,
+   source allowlist, risk/profile, dependencies, budgets và visual contracts.
+   Canonical POST /v1/intake phải supervised/bounded_direct=false; không có
+   direct job hoặc client-controlled execution bypass. Nếu request/response
+   bất định thì giữ attempt evidence, không gửi lặp để đoán.
+3. Fresh plan chỉ để PM review tại generation-1 supervised_hold, active/held,
+   đúng 7 pending WorkOrders, mọi job_id null và chỉ AP-MVP-01 ready. Structural
+   PASS không thay review objective/scope/AC/constraints/provider/fixtures.
+4. Chỉ sau PM approval mới reconcile historical/rejected plans bằng supported
+   supersession API với exact mapping; PILOT-01 retire không replacement vì
+   product đã merge. Failed attempts không có orchestration chỉ giữ evidence.
+5. Trước xử lý lease phải review supported lifecycle và side effects: cancel
+   có thể restore direct worktree về base. Không coi việc bảo toàn qua restart
+   là quyền cancel/clear lease hay checkout Chợ Nhạc. Không sửa SQL/history.
+6. Chỉ sau reconciliation và lease gate hợp lệ mới release exact generation 1
+   cho AP-MVP-01; các WO sau giữ supervised checkpoints. Không mở recruitment,
+   Reviews, Availability salvage, payment, staging/production seed/deployment.
