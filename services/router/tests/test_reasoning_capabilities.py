@@ -53,7 +53,15 @@ def test_reasoning_schema_rejects_unknown_value() -> None:
 def test_registry_capabilities_are_per_model_and_canonically_ordered() -> None:
     models = get_config()["models"]["models"]
     assert REASONING_EFFORT_ORDER == ("low", "medium", "high", "xhigh", "max")
-    for model_id in ("codex_luna", "codex_terra", "codex_sol", "frontier_codex"):
+    for model_id in (
+        "codex_gpt6_luna",
+        "codex_gpt6_sol",
+        "codex_gpt61_sol",
+        "codex_luna",
+        "codex_terra",
+        "codex_sol",
+        "frontier_codex",
+    ):
         assert reasoning_capability(model_id, models[model_id]).allowed_efforts == (
             "low",
             "medium",
@@ -137,7 +145,7 @@ def test_reassessment_model_failover_revalidates_profile_effort() -> None:
 def test_staffing_fails_closed_when_profile_effort_is_not_supported() -> None:
     engine = make_engine()
     engine.models = deepcopy(engine.models)
-    engine.models["codex_terra"]["reasoning_efforts"] = ["medium", "high"]
+    engine.models["codex_gpt6_sol"]["reasoning_efforts"] = ["medium", "high"]
     request = StaffingRequest(
         request_id="pm-capability-mismatch",
         project_id="default",
@@ -145,6 +153,7 @@ def test_staffing_fails_closed_when_profile_effort_is_not_supported() -> None:
         profile="standard",
         provider_state={
             "provider:google_antigravity": {"available": False},
+            "codex_gpt6_sol": {"available": False},
             "codex_sol": {"available": False},
         },
     )
@@ -195,7 +204,7 @@ def test_frontier_codex_stays_manual_only() -> None:
 
 def test_automatic_policy_ceilings_remain_low_medium_high_only() -> None:
     policy = get_config()["policy"]
-    assert policy["version"] == 19
+    assert policy["version"] == 20
     assert {
         profile: config.get("reasoning_ceiling", {}).get("executor")
         for profile, config in policy["profiles"].items()
