@@ -4,8 +4,8 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 live Runtime/GitHub evidence remain authoritative over chat history. Completed
 chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-10-04 sau khi mở PCP PR #468 cho bounded repair #466;
-source target Runtime 1.0.106, local vẫn chưa rollout bản sửa lỗi đọc lịch sử.
+Last updated: 2026-10-04 sau khi merge PCP #466 / PR #468; source main
+Runtime 1.0.106 đã xanh CI, local vẫn cần rollout/acceptance riêng.
 
 ## Resume order
 
@@ -25,6 +25,13 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
+- PCP #466 / PR #468 đã merge tại
+  `6fcf5b79a35921ebd887736138b0279222e93224`; source Runtime là `1.0.106`.
+  Exact head `66f9a38d2fe01762054cd6a1f1e6e3b0008cae1a` có workflow tests
+  run `37199654326` PASS ở structure, Runtime, Router và ddev-executor.
+  Read response dùng non-executable `ExecutionPlanSnapshot*` models; shared
+  WorkOrder/PM proposal validators vẫn strict. Local activation chưa được suy từ
+  GitHub merge; snapshot gần nhất của owner vẫn là Runtime `1.0.105`.
 - PCP #463 đã hoàn thành qua PR #464, merge commit
   `0706cd119ebf2dcac9481b28799e5d835b2518ff`; Runtime trong source là
   `1.0.105`, ddev-executor vẫn `1.0.31`. Exact PR head
@@ -189,27 +196,22 @@ resume them.
 
 ## Active PCP follow-up work
 
-PCP #466 đang được triển khai qua PR #468:
-`PCP-466-historical-plan-read-compatibility`. Owner probe
-`2026-10-04T11:11:26.098002+00:00` đã xác nhận
-`TEMPLATE_READ_REGRESSION_CONFIRMED_IN_PROCESS`: GET historical
-ExecutionPlan `pm-095d6aea0fe94901bbf692fa7d113fc2` trả HTTP 500 trên
-Runtime 1.0.105 vì 7 template `visual_routes` trong 4 WorkOrders, trong khi
-orchestration vẫn đọc được và record không đổi.
+PCP #466 đã đóng completed qua PR #468; source fix ở Runtime
+`1.0.106`. Owner probe trước sửa
+`2026-10-04T11:11:26.098002+00:00` là evidence nguyên nhân: 7 historical
+template `visual_routes` trong 4 WorkOrders làm GET plan trả 500, còn
+orchestration và persisted record vẫn nguyên.
 
-PR #468 target Runtime `1.0.106` và tách read response sang các
-`ExecutionPlanSnapshot*` model không phải `WorkOrder`. Snapshot giữ nguyên
-template route để audit, nhưng mọi invariant khác được kiểm tra bằng strict
-`WorkOrder` trên bản sao validation trong RAM; chỉ template route local an
-toàn mới được thay sentinel trong bản sao đó. Shared executable WorkOrder và PM
-proposal validator không nới lỏng, nên replay snapshot vẫn phải fail. Regression
-bao phủ API serialization, object/dict replay denial, failed plan null, 404 và
-các malformed payload không liên quan.
+Bản sửa tách read response sang non-executable `ExecutionPlanSnapshot*` models.
+Historical template routes được giữ để audit; một bản sao validation trong RAM
+thay chỉ template route local an toàn bằng sentinel rồi chạy strict
+`WorkOrder` validation, nên malformed data khác và parent invariants vẫn
+fail-closed. Object/dict/PM-proposal replay của snapshot vẫn bị strict validator
+từ chối. Exact-head CI và PM review đã PASS trước merge.
 
-PR #468 chưa được coi hoàn tất trước exact-head required CI + PM exact-diff
-review. Local Runtime vẫn là `1.0.105` cho đến rollout riêng sau merge; không
-restart/rebuild, mutate historical plans hoặc release rejected plans chỉ để thử
-bản sửa.
+Local Runtime chưa được xác minh ở `1.0.106`; không coi source merge là rollout.
+Không mutate historical record/orchestration hoặc release rejected plans trong
+bước activation.
 
 Successor attempt `pm-d2947a399ecb44de9e96d174bd4c2d48` được giữ làm evidence:
 planner đã cite `docs/12-launch-metrics.md`, một authority-only path không
@@ -289,12 +291,12 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Review exact diff của PR #468 và required CI trên exact head; chỉ merge khi
-   read compatibility giữ historical evidence mà executable WorkOrder/PM
-   proposal vẫn fail-closed cho template routes và malformed data khác.
-2. Sau merge, chạy fresh local idle/lease/worktree gates rồi rollout Runtime
-   1.0.106. Xác minh GET historical plan = 200, template routes giữ nguyên,
-   record digest/history không đổi và rejected orchestration vẫn held/zero jobs.
+1. Chạy fresh local idle/lease/worktree/health gates rồi rollout PCP source main
+   chứa Runtime 1.0.106; không checkout/reset/clean Chợ Nhạc và không restart
+   khi còn engineering work hoặc lease không rõ.
+2. Sau rollout, xác minh GET historical plan = 200, 7 template routes giữ nguyên,
+   persisted record digest/history không đổi, current/new WorkOrder validation
+   vẫn reject template routes, và ba rejected orchestrations vẫn held/zero jobs.
 3. Giữ nguyên mọi historical/rejected/failed plan. Không gọi continue/operator/
    supersede trước khi có replacement được PM duyệt và mapping rõ ràng.
 4. Trước một fresh intake, đọc live #48/#49/#56/#57/#58/#50/#59 cùng source r3
