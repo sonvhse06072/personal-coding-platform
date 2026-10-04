@@ -115,6 +115,13 @@ def test_reassessment_model_failover_revalidates_profile_effort() -> None:
     engine = make_engine()
     engine.models = deepcopy(engine.models)
     engine.models["codex_gpt6_sol"]["reasoning_efforts"] = ["high"]
+    for model_id in (
+        "codex_gpt6_luna",
+        "codex_luna",
+        "codex_terra",
+        "codex_sol",
+    ):
+        engine.models[model_id]["roles"] = []
     route = engine.route(
         complex_request(
             provider_state={
