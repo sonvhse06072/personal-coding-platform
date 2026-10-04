@@ -4,9 +4,8 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 fresh Runtime/GitHub evidence remain authoritative over chat history. This file
 is an index, not authority to change the approved baseline or protected scope.
 
-Last updated: 2026-10-05 theo owner release-helper v3 audit lúc
-`2026-10-04T18:11:07.668846+00:00` (01:11:07 ngày 05/10, giờ Việt Nam).
-Control inventory đã qua; helper quota-contract gate được sửa trong v4; chưa /continue.
+Last updated: 2026-10-05 theo owner release-helper v4 audit lúc
+`2026-10-04T18:20:13.259778+00:00`. V4 chưa POST /continue; một bounded no-POST recovery v5 đã được chuẩn bị.
 
 ## Resume order
 
@@ -181,6 +180,10 @@ missing Codex observation/refused reserve, explicit OpenRouter unavailable
 enforcement and unchanged mutation surface. These are mocked/helper checks, not
 WSL release evidence. Decision/evidence is also in Chợ Nhạc #63 comment
 `5982969505`. No extra historical audit/inventory/cancel is required.
+
+Owner v4 subsequently passed its full outer preflight and created the original durable attempt marker, but the inner release audit stopped **before POST**. Its structured result proves `continue_post_attempted=false`, `continue_post_acknowledged=false`, and `runtime_may_execute_models_after_release=false`. The sole failure was an exact health mismatch: Runtime `/health` reported `degraded` / executor `down` while the direct executor health probe in the same audit was `ok`, version `1.0.31`, active_jobs=0; active engineering jobs also remained 0. Git stayed clean on Chợ Nhạc `main@aa8e68dd...`. V4 result SHA256: `bef0672fa55df1eafea56cc7c41629a1b9b1779f56e6b45be3bd29712ceb6845`.
+
+Do **not** delete the v4 attempt marker and do not rerun `--release-once`. Use only the evidence-pinned recovery helper `chonhac_release_ap_mvp_01_resume_v5.py`. V5 requires the exact v4 result hash plus exact original marker identity, creates a second O_EXCL resume marker, and re-runs all release gates. It treats only the observed Runtime-executor mismatch as retryable health noise, and even then requires two consecutive fully healthy/idle samples; router failure, executor failure, active work, version drift, quota/reserve/policy failure remain blocking. V5 SHA256: `e9eac8cfedff283ccb2aaf2f1ae3562d9243e6d88df65e53edd4eec4263a8e65`; 15 focused helper checks PASS. No WSL v5 execution has been observed yet.
 
 Before that single control-plane request:
 
