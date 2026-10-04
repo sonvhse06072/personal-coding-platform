@@ -4,8 +4,8 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 live Runtime/GitHub evidence remain authoritative over chat history. Completed
 chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-10-04 sau read-only reconciliation inventory 15:59:00 UTC;
-exact supersession mapping đã được PM duyệt, chưa mutate lease/release execution.
+Last updated: 2026-10-04 sau supersession reconciliation PASS 16:20:55 UTC;
+historical/rejected orchestration đã retire, lease gate còn lại, candidate chưa release.
 
 ## Resume order
 
@@ -227,20 +227,26 @@ Contract preparation/fixture ownership:
 `pilot-successor-review-2026-10-04.md`.
 Hai file là execution evidence, không tự thêm vào ProjectBaseline.references.
 
-Read-only inventory 2026-10-04T15:59:00.003639+00:00 đã đọc đủ candidate,
-historical và ba rejected plans cùng historical job/lease, không model call hoặc
-mutating API. Candidate vẫn generation-1 supervised_hold/held, 7 pending, zero
-jobs. Historical plan vẫn blocked; lease generation 9 thuộc blocked job
-`c02defa348fc5b19a0bd021e2697571e`, preview absent. Git/storage digests không
-đổi trước-sau.
+Supersession reconciliation 2026-10-04T16:20:55.930831+00:00 đã PASS
+toàn bộ 29 exact mutations qua supported WorkOrder supersession endpoint, zero
+model calls. Ba rejected plans và historical orchestration hiện
+`lifecycle=superseded`; historical PILOT-02..08 giữ exact mapping, PILOT-01
+retire không replacement. Candidate `pm-b0748be27f8446a0813c2d1fe7d697fd`
+vẫn active / supervised_hold / generation 1 / held, ready chỉ AP-MVP-01 và
+không có child job.
 
-Exact mapping được PM duyệt và ghi tại Chợ Nhạc #63 comment `5981877208`:
-PILOT-02..08 lần lượt map sang AP-MVP-01, AP-MVP-02, EE-0-01, EE-0-02, EE-0-03,
-AP-MVP-03, EE-0-04; PILOT-01 retire không replacement vì product đã merge.
-Ba rejected seven-WO plans map same-ID sang candidate same-ID. Historical source
-phải retire PILOT-02..08 trước và blocked PILOT-01 cuối để giữ blocker trong mọi
-trạng thái trung gian. Supersession chỉ đổi orchestration lifecycle/attention,
-không release lease hoặc sửa job/counters/workspace.
+Historical job `c02defa348fc5b19a0bd021e2697571e` vẫn blocked; progress,
+checkpoint và result evidence hash không đổi qua reconciliation. Lease vẫn active
+generation 9, preview absent, Chợ Nhạc worktree vẫn clean trên
+`ai/c02defa348fc` @ `88dd4f60dbe95c41c6e7ce8fc5bb3c7ba8a098ba`.
+Acceptance được ghi tại Chợ Nhạc #63 comment `5982052595`.
+
+Lease gate kế tiếp dùng đúng supported job cancel path. Source/test contract:
+cancel đổi historical job sang terminal `cancelled`, retire preview nếu có,
+return clean direct workspace về configured base branch, rồi release exact lease
+chỉ khi preview + workspace restore thành công. Đây là lifecycle mutation riêng,
+không phải supersession/release candidate; cần hậu kiểm progress/result evidence,
+direct-base-restore checkpoint, actual Git branch/head và released lease.
 
 Successor attempt `pm-d2947a399ecb44de9e96d174bd4c2d48` được giữ làm evidence:
 planner đã cite `docs/12-launch-metrics.md`, một authority-only path không
@@ -325,15 +331,16 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Không restart/replan/POST lại. Candidate `pm-b0748be...` tiếp tục held.
-2. Chạy bounded supersession-only reconciliation theo exact mapping đã duyệt,
-   với fresh preflight/digest checks và per-step verification. Không cancel,
-   cleanup, lease clear, orchestrator tick hoặc continue/release trong cùng bước.
-3. Historical plan phải retire PILOT-02..08 trước, blocked PILOT-01 cuối. Ba
-   rejected plans retire same-ID → candidate same-ID. Mọi source job/counters/
-   result/workspace evidence phải giữ nguyên; candidate phải giữ held/zero jobs.
-4. Sau supersession PASS mới review lease lifecycle riêng. Supported cancel có
-   thể restore direct worktree về base, nên không được suy tự động từ mapping.
-5. Chỉ khi lease gate được chấp nhận và workspace/source state đã xác minh mới
-   release exact generation 1 của AP-MVP-01. Implementation vẫn chịu independent
-   review, protected-diff và exact-head CI gates.
+1. Không restart/replan/supersede lại. Candidate tiếp tục held.
+2. Chạy bounded historical-job cancel/lease-release gate với fresh health/idle,
+   exact job/lease/evidence và clean direct-workspace checks. Không cleanup,
+   source advance, orchestrator tick, plan continue hoặc candidate release trong
+   cùng helper.
+3. Hậu kiểm historical job `cancelled`; progress/result giữ nguyên; checkpoint
+   chỉ được thay đổi theo expected direct-base-restore evidence; actual Chợ Nhạc
+   worktree phải clean trên configured `main`; lease phải released.
+4. Nếu restore/release fail, giữ candidate held và không bypass lease bằng SQL
+   hoặc manual checkout/reset/clean.
+5. Chỉ sau lease-gate PASS mới đọc fresh quota/hold/branch rồi release exact
+   generation 1 của AP-MVP-01. Implementation vẫn chịu independent review,
+   protected-diff và exact-head CI gates.
