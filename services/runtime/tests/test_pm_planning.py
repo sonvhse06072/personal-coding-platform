@@ -3,10 +3,12 @@ from __future__ import annotations
 import asyncio
 import json
 import subprocess
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from app import pm_planning
 from app.adapters.base import AgentRun
@@ -17,6 +19,7 @@ from app.baseline import (
     SourceReference,
 )
 from app.pm_planning import ExecutionPlanDocument, PMPlanCreateRequest, PMPlanner
+from app.work_order import WorkOrder
 
 
 class FakeStorage:
@@ -587,3 +590,154 @@ def test_visual_quality_planning_prompt_requires_routes_and_frontend_order():
     assert "visual_quality" in prompt
     assert "visual_routes" in prompt
     assert "require frontend_quality before visual_quality" in prompt
+
+
+def _historical_template_work_order() -> dict:
+    contract = work_order("WO-HIST")
+    contract["verification"] = {
+        "required_phases": [
+            "targeted_tests",
+            "frontend_quality",
+            "visual_quality",
+        ],
+        "visual_routes": ["/events/[slug]"],
+    }
+    return contract
+
+
+def _execution_plan_row(plan: dict | None, *, status: str = "ready") -> dict:
+    timestamp = datetime.now(timezone.utc)
+    return {
+        "id": "pm-historical",
+        "project_id": "demo",
+        "status": status,
+        "baseline_revision": "v1",
+        "baseline_source_commit": "a" * 40,
+        "ticket": ticket(),
+        "staffing": None,
+        "plan": plan,
+        "usage": {"model_calls": 1},
+        "error": None if plan is not None else "historical planning failure",
+        "created_at": timestamp,
+        "updated_at": timestamp,
+    }
+
+
+def test_execution_plan_view_reads_current_plan_normally():
+    plan = {
+        "scope_assessment": "in_scope",
+        "summary": "Current persisted plan.",
+        "work_orders": [work_order("WO-CURRENT")],
+        "decision_boundaries": [],
+        "ready_work_order_ids": ["WO-CURRENT"],
+        "execution_mode": "supervised",
+    }
+
+    view = pm_planning.execution_plan_view(_execution_plan_row(plan))
+
+    assert view.plan is not None
+    assert view.plan.work_orders[0].id == "WO-CURRENT"
+    assert view.plan.work_orders[0].verification.visual_routes == []
+
+
+def test_execution_plan_view_reads_historical_template_routes_without_execution_reuse():
+    plan = {
+        "scope_assessment": "in_scope",
+        "summary": "Persisted historical plan.",
+        "work_orders": [_historical_template_work_order()],
+        "decision_boundaries": [],
+        "ready_work_order_ids": ["WO-HIST"],
+        "execution_mode": "supervised",
+    }
+    row = _execution_plan_row(plan)
+    before = deepcopy(row)
+
+    view = pm_planning.execution_plan_view(row)
+
+    assert view.plan is not None
+    snapshot = view.plan.work_orders[0]
+    assert snapshot.verification.visual_routes == ["/events/[slug]"]
+    assert not isinstance(snapshot, WorkOrder)
+    assert row == before
+
+    with pytest.raises(ValidationError):
+        WorkOrder.model_validate(snapshot)
+    with pytest.raises(ValidationError, match="visual_routes"):
+        WorkOrder.model_validate(snapshot.model_dump(mode="json"))
+    with pytest.raises(ValidationError, match="visual_routes"):
+        pm_planning.PMPlanProposal.model_validate(
+            {
+                "scope_assessment": "in_scope",
+                "summary": "Replay must remain strict.",
+                "work_orders": [snapshot.model_dump(mode="json")],
+                "decision_boundaries": [],
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        ("nonlocal", None),
+        ("query", None),
+        ("fragment", None),
+        ("wrong_type", None),
+        ("too_many", None),
+        ("phase_order", "frontend_quality must run before visual_quality"),
+        ("self_dependency", "WorkOrder cannot depend on itself"),
+        ("duplicate_acceptance", "Acceptance criterion ids must be unique"),
+        ("scope_contradiction", "WorkOrder scope is contradictory"),
+    ],
+)
+def test_execution_plan_snapshot_rejects_unrelated_malformed_work_order(case, expected):
+    contract = _historical_template_work_order()
+
+    if case == "nonlocal":
+        contract["verification"]["visual_routes"] = ["https://evil.example/events/[slug]"]
+    elif case == "query":
+        contract["verification"]["visual_routes"] = ["/events/[slug]?token=secret"]
+    elif case == "fragment":
+        contract["verification"]["visual_routes"] = ["/events/[slug]#section"]
+    elif case == "wrong_type":
+        contract["verification"]["visual_routes"] = "/events/[slug]"
+    elif case == "too_many":
+        contract["verification"]["visual_routes"] = [
+            f"/events/[slug-{index}]" for index in range(5)
+        ]
+    elif case == "phase_order":
+        contract["verification"]["required_phases"] = [
+            "targeted_tests",
+            "visual_quality",
+            "frontend_quality",
+        ]
+    elif case == "self_dependency":
+        contract["dependencies"] = [contract["id"]]
+    elif case == "duplicate_acceptance":
+        contract["acceptance_criteria"].append(deepcopy(contract["acceptance_criteria"][0]))
+    elif case == "scope_contradiction":
+        contract["out_of_scope"] = [contract["in_scope"][0]]
+
+    row = _execution_plan_row(
+        {
+            "scope_assessment": "in_scope",
+            "summary": "Malformed persisted plan.",
+            "work_orders": [contract],
+            "decision_boundaries": [],
+            "ready_work_order_ids": ["WO-HIST"],
+            "execution_mode": "supervised",
+        }
+    )
+
+    with pytest.raises(ValidationError) as exc_info:
+        pm_planning.execution_plan_view(row)
+
+    if expected is not None:
+        assert expected in str(exc_info.value)
+
+
+def test_execution_plan_view_preserves_failed_plan_without_payload():
+    view = pm_planning.execution_plan_view(_execution_plan_row(None, status="failed"))
+
+    assert view.status == "failed"
+    assert view.plan is None
+    assert view.error == "historical planning failure"

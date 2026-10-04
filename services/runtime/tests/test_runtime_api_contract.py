@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 import pytest
 from fastapi import HTTPException
+from fastapi.encoders import jsonable_encoder
 
 from app import main
 from app.main import WorkOrderSupersessionRequest, auth
@@ -181,3 +182,90 @@ def test_runtime_auth_accepts_only_the_configured_bearer_token(monkeypatch):
         auth("Bearer wrong-secret")
     assert invalid.value.status_code == 401
     assert invalid.value.detail == "Invalid bearer token"
+
+
+def _historical_execution_plan_row() -> dict:
+    timestamp = datetime.now(timezone.utc)
+    return {
+        "id": "pm-historical",
+        "project_id": "demo",
+        "status": "ready",
+        "baseline_revision": "v1",
+        "baseline_source_commit": "a" * 40,
+        "ticket": {
+            "id": "T-100",
+            "title": "Historical plan",
+            "description": "Persisted before concrete visual-route enforcement.",
+        },
+        "staffing": None,
+        "plan": {
+            "scope_assessment": "in_scope",
+            "summary": "Historical persisted plan.",
+            "work_orders": [
+                {
+                    "id": "WO-HIST",
+                    "parent_ticket": "T-100",
+                    "objective": "Historical bounded work",
+                    "baseline_revision": "v1",
+                    "source_references": [{"path": "docs/scope.md"}],
+                    "in_scope": ["historical bounded work"],
+                    "out_of_scope": ["unrelated work"],
+                    "acceptance_criteria": [
+                        {"id": "AC-1", "description": "Historical acceptance"}
+                    ],
+                    "constraints": ["Preserve history"],
+                    "requested_role": "developer",
+                    "verification": {
+                        "required_phases": [
+                            "targeted_tests",
+                            "frontend_quality",
+                            "visual_quality",
+                        ],
+                        "visual_routes": ["/events/[slug]"],
+                    },
+                    "risk": {"level": "standard", "flags": []},
+                    "budget": {
+                        "max_profile": "standard",
+                        "max_model_calls": 4,
+                        "max_repair_iterations": 1,
+                        "max_wall_time_minutes": 20,
+                        "max_changed_files": 8,
+                    },
+                    "dependencies": [],
+                }
+            ],
+            "decision_boundaries": [],
+            "ready_work_order_ids": ["WO-HIST"],
+            "execution_mode": "supervised",
+        },
+        "usage": {"model_calls": 1},
+        "error": None,
+        "created_at": timestamp,
+        "updated_at": timestamp,
+    }
+
+
+def test_get_execution_plan_serializes_historical_template_routes(monkeypatch):
+    row = _historical_execution_plan_row()
+    monkeypatch.setattr(main.storage, "get_execution_plan", lambda plan_id: row)
+
+    result = main.get_execution_plan("pm-historical")
+    payload = jsonable_encoder(result)
+
+    assert payload["id"] == "pm-historical"
+    assert payload["plan"]["work_orders"][0]["verification"]["visual_routes"] == [
+        "/events/[slug]"
+    ]
+    assert row["plan"]["work_orders"][0]["verification"]["visual_routes"] == [
+        "/events/[slug]"
+    ]
+
+
+def test_get_execution_plan_keeps_missing_plan_404(monkeypatch):
+    monkeypatch.setattr(main.storage, "get_execution_plan", lambda plan_id: None)
+
+    with pytest.raises(HTTPException) as exc_info:
+        main.get_execution_plan("missing-plan")
+
+    assert exc_info.value.status_code == 404
+    assert exc_info.value.detail == "ExecutionPlan not found"
