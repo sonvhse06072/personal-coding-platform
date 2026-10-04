@@ -101,6 +101,30 @@ def test_unknown_model_adapter_and_upstream_mismatches_fail_closed() -> None:
         validate_model_choice(upstream_mismatch)
 
 
+
+
+def test_legacy_codex_logical_ids_keep_historical_upstreams() -> None:
+    models = models_doc()["models"]
+
+    assert models["codex_luna"]["model"] == "gpt-5.6-luna"
+    assert models["codex_terra"]["model"] == "gpt-5.6-terra"
+    assert models["codex_sol"]["model"] == "gpt-5.6-sol"
+    assert models["frontier_codex"]["model"] == "gpt-6-astra"
+    assert models["frontier_codex"]["roles"] == ["frontier_escalation"]
+    assert {
+        models[model_id]["quota_group"]
+        for model_id in (
+            "codex_gpt6_luna",
+            "codex_gpt6_sol",
+            "codex_gpt61_sol",
+            "codex_luna",
+            "codex_terra",
+            "codex_sol",
+            "frontier_codex",
+        )
+    } == {"codex_chatgpt_plus"}
+
+
 def test_non_reasoning_adapter_rejects_an_explicit_effort() -> None:
     validate_model_choice(choice("openrouter_qwen3_coder_free", None))
     with pytest.raises(ModelCapabilityError, match="unsupported"):
