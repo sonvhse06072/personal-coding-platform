@@ -623,6 +623,23 @@ def _execution_plan_row(plan: dict | None, *, status: str = "ready") -> dict:
     }
 
 
+def test_execution_plan_view_reads_current_plan_normally():
+    plan = {
+        "scope_assessment": "in_scope",
+        "summary": "Current persisted plan.",
+        "work_orders": [work_order("WO-CURRENT")],
+        "decision_boundaries": [],
+        "ready_work_order_ids": ["WO-CURRENT"],
+        "execution_mode": "supervised",
+    }
+
+    view = pm_planning.execution_plan_view(_execution_plan_row(plan))
+
+    assert view.plan is not None
+    assert view.plan.work_orders[0].id == "WO-CURRENT"
+    assert view.plan.work_orders[0].verification.visual_routes == []
+
+
 def test_execution_plan_view_reads_historical_template_routes_without_execution_reuse():
     plan = {
         "scope_assessment": "in_scope",
