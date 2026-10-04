@@ -4,8 +4,8 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 live Runtime/GitHub evidence remain authoritative over chat history. Completed
 chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-10-04 after accepting and merging Chợ Nhạc PILOT-01 and
-closing the related PCP/CI incident chain.
+Last updated: 2026-10-04 sau khi đối chiếu live PCP #463/#464; trạng thái
+GitHub đã xác minh, rollout và orchestration local cần evidence mới.
 
 ## Resume order
 
@@ -25,12 +25,20 @@ lessons are indexed in `history/episodes.md`.
 
 ## Current platform snapshot
 
-- PCP main targets Runtime `1.0.104` and ddev-executor `1.0.31`. PCP #463
-  targets Runtime `1.0.105` so PM planning receives an explicit
-  `AUTHORIZED_SOURCE_REFERENCE_PATHS` allowlist derived only from
-  `ProjectBaseline.references`; authority-only repository paths cannot be
-  emitted as WorkOrder/decision source references. Antigravity host bridge
-  remains `1.13`, model registry version `11`.
+- PCP #463 đã hoàn thành qua PR #464, merge commit
+  `0706cd119ebf2dcac9481b28799e5d835b2518ff`; Runtime trong source là
+  `1.0.105`, ddev-executor vẫn `1.0.31`. Exact PR head
+  `ecda44f5138a3c1d3817e5b2d9bc49ded20b4b97` có workflow `tests`
+  run `37159249321` PASS ở cả Router, Runtime, ddev-executor và structure tests.
+- PM prompt đã có `AUTHORIZED_SOURCE_REFERENCE_PATHS`, sort/deduplicate từ
+  đúng `ProjectBaseline.references`. WorkOrder và DecisionBoundary chỉ được
+  cite tập này; authority-only paths không được tự nâng thành references.
+  Validator fail-closed được giữ nguyên. Không triển khai lại #463.
+- Owner từng xác nhận local Runtime `1.0.104`, ddev-executor `1.0.31`, baseline
+  r3 và `FINAL_REPLAN_PLATFORM_CHECK=PASS`. Đây là snapshot trước #464, không
+  phải xác nhận rollout `1.0.105`. Chưa có evidence local mới trong phiên
+  đối chiếu này. Antigravity host bridge vẫn `1.13`, model registry version `11`
+  theo checkpoint trước; đọc health/telemetry mới trước thao tác.
 - PCP #446 / PR #447 is complete at
   `645200e1f0e1ea1902569f471a53d5b90699ece6`: canonical WorkOrder diff
   identity is source-commit-relative across Runtime-created commits,
@@ -161,11 +169,11 @@ Current implementation evidence:
   still does not gain Docker/DDEV authority and uses isolated per-job clusters.
 - Generated PILOT-02..PILOT-08 remain untouched/pending and must **not** be
   released from the old plan.
-- Create a successor ProjectBaseline pinned to governed Chợ Nhạc main
-  `aa8e68dd9aea6740de446151eb97615931de9b40` (or a later explicitly reviewed
-  governance-only main if one is intentionally included), then create one
-  successor supervised plan for exactly the seven remaining slices using the
-  replan contract in Chợ Nhạc #63.
+- Baseline successor r3 đã tồn tại và giữ nguyên source
+  `aa8e68dd9aea6740de446151eb97615931de9b40`. Không tạo r4 hoặc thêm
+  `docs/12-launch-metrics.md` vào references để hợp thức hóa output của model.
+  Sau local preflight và rà soát contract tổng thể, mới chuẩn bị một successor
+  supervised plan đúng bảy phần còn lại theo Chợ Nhạc #63.
 - Frontend-heavy successor WorkOrders should use
   `frontend_quality -> visual_quality` with concrete bounded routes only when
   those routes are renderable by the WorkOrder.
@@ -175,17 +183,33 @@ resume them.
 
 ## Active PCP follow-up work
 
-PCP #463 is the single focused active Runtime planning-contract repair.
-Successor attempt `pm-d2947a399ecb44de9e96d174bd4c2d48` failed after PM
-output because it cited authority-only `docs/12-launch-metrics.md`, which r3
-intentionally does not authorize as a WorkOrder source reference. Audit showed
-11 r3 authority-only paths; promoting them opportunistically would blur the
-execution authority boundary. The planner prompt must instead expose the exact
-reference-path allowlist before another successor planning call.
+Không còn implementation đang dở cho #463: PR #464 đã merge và issue đã đóng.
+Công việc còn lại là local rollout/preflight và rà soát một successor contract
+đầy đủ trước khi tiêu thêm planning quota; không mở lại vòng sửa code khi chưa
+có lỗi mới được chứng minh.
+
+Successor attempt `pm-d2947a399ecb44de9e96d174bd4c2d48` được giữ làm evidence:
+planner đã cite `docs/12-launch-metrics.md`, một authority-only path không
+thuộc r3 references. Bài học: phân loại `authority` không đồng nghĩa quyền cite
+trong `source_references`; sửa prompt và giữ validator fail-closed, không mở
+rộng baseline theo từng output sai. `usage=null` không chứng minh model chưa
+được gọi.
 
 PCP #461/#462 is complete at Runtime `1.0.104`: new PM plans reject
 `max_profile` below their risk/protected-flag floor. PCP #457/#458,
 #455/#456, #453/#454 and #451/#452 are also complete.
+
+Local plan state phải được đọc mới, không suy từ GitHub merge:
+
+- `pm-095d6aea0fe94901bbf692fa7d113fc2` và
+  `pm-a72e960c0f3b458897831cff3fb51a30` từng được xác nhận initial hold,
+  zero child jobs ở checkpoint trước; không release.
+- `pm-ac6a52e6019947adab8744a7ada72011` từng trả `ready` nhưng bị PM reject
+  vì live Booking contributions. Script cũ lỗi trước khi in orchestration;
+  chưa xác minh held/zero jobs. Không release, đọc GET orchestration mới.
+- Các failed planning attempts giữ nguyên làm evidence. Không xóa plan,
+  reset counters/history, sửa SQL, resume historical job hoặc tạo replacement
+  chỉ để né blocker.
 
 ## Recently completed reusable work
 
@@ -239,20 +263,30 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Complete PCP #463 with exact-head CI and roll local PCP to Runtime
-   `1.0.105`; keep baseline r3 unchanged.
-2. Preserve failed `pm-d2947a399ecb44de9e96d174bd4c2d48`,
-   `pm-905e112cd77e443a995bff55ac16eaff` and
-   `pm-e773f87782f44b9790edb81b5f430b52` as planning evidence.
-3. Keep held successor plans `pm-ac6a52e6019947adab8744a7ada72011`,
-   `pm-a72e960c0f3b458897831cff3fb51a30` and
-   `pm-095d6aea0fe94901bbf692fa7d113fc2` unreleased with zero child jobs.
-4. Create one fresh r3 supervised successor plan for exactly
-   #48/#49/#56/#57/#58/#50/#59 using only the explicit authorized source
-   reference allowlist, approved profile floors/risk flags, concrete visual
-   routes, and EventParticipation-only live verified-performance provider.
-5. Review it at generation-1 hold with zero child jobs.
-6. Only after it passes PM review, supersede rejected held successor plans and
-   the historical PILOT-01..08 orchestration through the supported API.
-7. Release only AP-MVP-01 from the reviewed replacement plan; keep excluded
-   product/deployment lanes outside this pilot path.
+1. Chạy local preflight chỉ đọc: branch/HEAD/dirty state của PCP và Chợ Nhạc,
+   Runtime/executor health, active engineering count, quota và orchestration
+   của historical/rejected plans. Nếu thiếu/malformed evidence thì dừng;
+   không mặc định `false` thành `true` trong jq.
+2. Chỉ rollout PCP đến source đã review chứa #464 khi local idle và worktree
+   phù hợp đã được xác minh. Không checkout/reset/clean `/home/sonvh/chonhac`,
+   không restart khi còn engineering work. Xác minh Runtime `1.0.105`, executor
+   `1.0.31`, r3/source và prompt allowlist thực tế sau rollout.
+3. Giữ nguyên mọi historical/rejected/failed plan. Không gọi continue/operator/
+   supersede trước khi có replacement được PM duyệt và mapping rõ ràng.
+4. Trước một fresh intake, đọc live #48/#49/#56/#57/#58/#50/#59 cùng source r3
+   liên quan; rà đồng thời source allowlist, acceptance, exact IDs/dependencies,
+   risk/profile floors, budgets, concrete routes và fixture ownership. #50 chỉ
+   triển khai EventParticipation live provider, không Booking/Marketplace
+   provider hoặc Booking queries; Selected Performances phải có visual_quality.
+5. Replacement phải có đúng bảy developer WorkOrders tuần tự, adaptive budget,
+   execution_mode supervised. Review cả nội dung product contract, không chỉ
+   JSON/status=ready. Xác minh generation-1 supervised_hold, active/held,
+   đúng bảy pending WorkOrders, mọi job_id null và chỉ AP-MVP-01 ready.
+6. Chỉ sau PM approval mới reconcile bằng supported supersession API với exact
+   mapping; PILOT-01 retire không replacement vì product đã merge. Không đổi
+   job history/counters/workspace; failed attempts không có orchestration chỉ
+   giữ evidence. Kiểm tra project lease qua supported control path.
+7. Sau reconciliation hợp lệ, chỉ release exact generation 1 cho AP-MVP-01;
+   các WO sau tiếp tục supervised hold. Không mở scope marketplace recruitment,
+   Professional Reviews, Availability salvage, payment, staging/production seed
+   hoặc deployment.
