@@ -4,8 +4,8 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 fresh Runtime/GitHub evidence remain authoritative over chat history. This file
 is an index, not authority to change the approved baseline or protected scope.
 
-Last updated: 2026-10-05 theo owner release-helper v4 audit lúc
-`2026-10-04T18:20:13.259778+00:00`. V4 chưa POST /continue; một bounded no-POST recovery v5 đã được chuẩn bị.
+Last updated: 2026-10-05 theo owner v5 release recovery lúc
+`2026-10-04T18:31:55.449578+00:00`. Generation 1 đã release; AP-MVP-01 đang execution.
 
 ## Resume order
 
@@ -90,7 +90,7 @@ Acceptance and conditional next action are recorded in Chợ Nhạc #63 comment
 probes. The old audit's pop-both-fields comparison was invalid for a field that
 already existed and was overwritten; its STOP did not imply rollback.
 
-## Approved candidate — held, not yet released
+## Approved candidate — generation 1 released
 
 Plan: `pm-b0748be27f8446a0813c2d1fe7d697fd`.
 Content approval: #63 comment `5981710459`;
@@ -98,14 +98,20 @@ review details: `pilot-successor-pm-review-b0748be-2026-10-04.md`;
 contract/fixture ownership: `pilot-successor-review-2026-10-04.md`.
 These are execution evidence, not added ProjectBaseline references.
 
-The owner audit v2 confirms unchanged plan digest
-`f667ffe9d27fc3824f550089cf09269b0cfa7ccc58654d8c9e8a30e91ac7ab7d`,
-active `supervised_hold`, generation 1, held, checkpoint 45, seven exact pending
-agent rows and zero child jobs. Ready set contains only
-`AP-MVP-01-artist-profile-data-curation`.
-Checkpoint key: `plan:supervision-initial:pm-b0748be27f8446a0813c2d1fe7d697fd`.
-The exact continuation identity must be verified from Runtime immediately before
-using the supported `/continue` endpoint; a held/readable plan is not execution.
+Plan digest remains
+`f667ffe9d27fc3824f550089cf09269b0cfa7ccc58654d8c9e8a30e91ac7ab7d`.
+Owner v5 evidence shows generation 1 / checkpoint 45 was released through the
+supported `/continue` endpoint with exact continuation key
+`plan:continue:eb370313ac975fc2b6d9331b73cde0ebbd944bf0d54ade8f12eb7805e9722fe3`.
+Runtime acknowledged `status=released`, `idempotent=false`, and launched only
+`AP-MVP-01-artist-profile-data-curation` as deterministic child job
+`6b89482673ea5d2a92cc46b6ba7acf84`.
+
+Immediate observation after release: plan `executing`, lifecycle active,
+generation 1 supervision state `released`; AP-MVP-01 row `running` with the
+exact child job; the other six successor rows remain pending with no job IDs.
+The first child-job observation was `status=routing`; later Runtime progress
+must be read fresh rather than inferred from this launch snapshot.
 
 The seven sequential WorkOrders / issues / adaptive file targets are:
 
@@ -123,95 +129,45 @@ before visual_quality and only EventParticipation as a live pilot provider.
 No Booking provider/query/contribution, public recruitment, Reviews, Band domain,
 Audience identity/feedback, payment or staging/production seed/deployment.
 
-## Next exact release gate
+## Generation-1 execution — active
 
-PM accepts historical lease retirement and conditionally authorizes only the
-candidate's generation 1 / checkpoint 45 / ready AP-MVP-01. No `/continue` has
-been called by PM in this handoff. This does not authorize later generations.
+The historical reconciliation/lease gate and generation-1 release gate are
+complete. Do **not** rerun v1-v5 release helpers, delete either durable attempt
+marker, repeat cancel/alignment/supersession/intake, or manually create another
+AP-MVP-01 job.
 
-Owner control inventory at `2026-10-04T17:44:58.825827+00:00` confirms all six
-v1 competing-plan flags were false positives: four validation-fixture plans and
-two Chợ Nhạc plans have completed orchestration and nine completed WorkOrders,
-no pending rows. Runtime `active_plans()` excludes completed orchestration even
-when the immutable proposal remains ready and lifecycle remains active. Do not
-supersede, cancel or edit these completed history records. Exact IDs/evidence and
-helper review are recorded in Chợ Nhạc #63 comment `5982766542`.
+The successful v5 recovery was valid only because pinned v4 evidence proved the
+prior attempt had `continue_post_attempted=false`. V5 preserved the original
+marker, created a second O_EXCL recovery marker, re-ran all generation-1 gates,
+and observed healthy Runtime/router/executor with zero active engineering jobs
+before POST. Planner/executor deterministic preview used `codex_terra` with
+fresh observed Codex quota pressure 0.16. Evaluator preview used
+`openrouter_qwen3_coder_free`; its checked-in registry explicitly declares no
+authoritative remaining-quota telemetry. No provider was forced and the standard
+Router/failover policy remains authoritative.
 
-Owner release-helper v2 at `2026-10-04T17:56:22.670521+00:00` passed the control
-inventory (17 plans, no competing plan, no candidate job), then stopped with
-`SELECTED_ROLE_QUOTA_UNOBSERVED` at deterministic Router/WorkOrder-budget
-validation. `continue_subprocess_started=false`; this attempt did not release.
-The audit's provider_state contained only `quota:codex_chatgpt_plus` at pressure
-0.16. Antigravity snapshots expired at 17:56:15/16 UTC, before that audit. The
-artifact does not include the exact later routing input or selected role/model,
-so do not claim a particular model was chosen or that all provider quota is gone.
-Collector `status=ok` and `last_success_at` do not renew upstream `captured_at`.
+Accepted continuation result:
+- plan `pm-b0748be27f8446a0813c2d1fe7d697fd`;
+- exact generation 1 / checkpoint 45 continuation;
+- WorkOrder `AP-MVP-01-artist-profile-data-curation`;
+- child job `6b89482673ea5d2a92cc46b6ba7acf84`;
+- continue acknowledged, `idempotent=false`;
+- six later WorkOrders still pending and unauthorized.
 
-Owner release-helper v3 at `2026-10-04T18:11:07.668846+00:00` ran one
-standard quota refresh with zero helper model calls, passed the global control
-inventory, and still stopped before `/continue`. Router selected `codex_terra`
-for planner/executor with fresh observed `quota:codex_chatgpt_plus` pressure
-0.16. Evaluator was `openrouter_qwen3_coder_free`; v3 stopped only because
-`quota:openrouter_free` was unobserved. Candidate remained held and no marker/
-child job was created by that STOP.
+Release acceptance is recorded in Chợ Nhạc #63 comment `5983110319` and #48
+comment `5983110686`.
 
-That last gate was stricter than checked-in Runtime/Router semantics. The
-OpenRouter free registry contract explicitly states
-`free_tier.authoritative_remaining_available: false`: PCP has no authoritative
-remaining-quota observation to demand for that selected model. Router defaults a
-missing ProviderState to healthy/available; an actual provider failure is recorded
-durably and routed through bounded provider failover. Do not infer unlimited
-OpenRouter capacity from this: it only means absence of an impossible
-authoritative remaining-quota signal is not itself a pre-release blocker.
+Next PM behavior is the normal supervised execution flow, not another release:
+read the exact live job/orchestration before any mutation; preserve the direct
+workspace while engineering is active; review implementation evidence, exact
+diff/head and required verification; require exact-head CI; then take the
+generation-1 supervised checkpoint decision. Generation 2 remains unauthorized
+until generation 1 reaches that checkpoint and PM review accepts it.
 
-Use `chonhac_release_ap_mvp_01_once_v4.py`. V4 preserves v3's one standard
-quota refresh, exact completed-plan proofs, generation/continuation identity,
-contract/budget/review validation, reserve policy, marker and no-later-generation
-boundary. Selected models still require fresh observed quota unless their exact
-checked-in model contract says authoritative remaining allowance is unavailable.
-Any explicit observed unavailable/unhealthy/stale/reserve state still blocks,
-including for OpenRouter. Model/quota-group mismatches fail closed. No provider
-is forced and no Runtime/provider policy is changed.
-
-V4 SHA256:
-`fb5e2085e18da668624c44c7bf43de60cc3646be9cc6e03c007ae612488e1444`.
-19 focused v4 regressions PASS, including the exact v3 role selection projection,
-missing Codex observation/refused reserve, explicit OpenRouter unavailable
-enforcement and unchanged mutation surface. These are mocked/helper checks, not
-WSL release evidence. Decision/evidence is also in Chợ Nhạc #63 comment
-`5982969505`. No extra historical audit/inventory/cancel is required.
-
-Owner v4 subsequently passed its full outer preflight and created the original durable attempt marker, but the inner release audit stopped **before POST**. Its structured result proves `continue_post_attempted=false`, `continue_post_acknowledged=false`, and `runtime_may_execute_models_after_release=false`. The sole failure was an exact health mismatch: Runtime `/health` reported `degraded` / executor `down` while the direct executor health probe in the same audit was `ok`, version `1.0.31`, active_jobs=0; active engineering jobs also remained 0. Git stayed clean on Chợ Nhạc `main@aa8e68dd...`. V4 result SHA256: `bef0672fa55df1eafea56cc7c41629a1b9b1779f56e6b45be3bd29712ceb6845`.
-
-Do **not** delete the v4 attempt marker and do not rerun `--release-once`. Use only the evidence-pinned recovery helper `chonhac_release_ap_mvp_01_resume_v5.py`. V5 requires the exact v4 result hash plus exact original marker identity, creates a second O_EXCL resume marker, and re-runs all release gates. It treats only the observed Runtime-executor mismatch as retryable health noise, and even then requires two consecutive fully healthy/idle samples; router failure, executor failure, active work, version drift, quota/reserve/policy failure remain blocking. V5 SHA256: `e9eac8cfedff283ccb2aaf2f1ae3562d9243e6d88df65e53edd4eec4263a8e65`; 15 focused helper checks PASS. No WSL v5 execution has been observed yet.
-
-Before that single control-plane request:
-
-- recheck the proven historical/plan evidence, exact candidate digest/hold,
-  current Git and remote base, healthy idle Runtime/executor and released lease;
-- inspect other plans so the `/continue` endpoint's internal global tick does not
-  unexpectedly select another runnable plan; read-only checks are not a global
-  atomic lock against concurrent operators;
-- validate all seven contracts against installed baseline/project capabilities;
-- use a deterministic Router evaluation for AP-MVP-01 with fresh quota and the
-  canonical WorkOrder task/repository hints; apply the actual WorkOrder budget
-  policy rather than hand-editing profile/risk/provider choices;
-- keep false availability, reserve threshold and review policy intact. The owner
-  snapshot had Codex pressure 0.16, Gemini 0.99912 and Claude/GPT 1.0 unavailable,
-  but it must not be reused as current capacity. Older quota windows are not
-  evidence of present capacity. Router may report preferred reviewer independence
-  unavailable under its existing fallback policy; never label that cross-provider
-  independence as satisfied.
-
-Use one durable pre-request attempt marker. A marker alone does not prove a POST
-occurred; a timeout does not prove no mutation. Preserve structured failures and
-use read-only collect after uncertainty, never delete the marker/repeat intake.
-The supported `/continue` may launch a real child job and consume model quota.
-Runtime owns that launch/routing/workspace; the helper must not create a job or
-write a lease directly. Verify only the deterministic AP-MVP-01 child identity.
-After release, a new AI checkout and dirty worktree may be legitimate progress;
-do not apply pre-release clean-main assumptions to running implementation.
-
+The v4/v5 markers are historical anti-replay evidence and must remain untouched.
+A dirty/new AI branch after the running job enters workspace execution may be
+legitimate progress; do not reset/stash/clean merely to recreate the launch
+snapshot.
 ## Active separate platform follow-up
 
 PCP #474: fix `_quiesce_stable_manual_job` detection of persisted orchestrated
