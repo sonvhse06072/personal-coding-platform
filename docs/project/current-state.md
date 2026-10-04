@@ -4,9 +4,9 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 fresh Runtime/GitHub evidence remain authoritative over chat history. This file
 is an index, not authority to change the approved baseline or protected scope.
 
-Last updated: 2026-10-05 theo owner control inventory lúc
-`2026-10-04T17:44:58.825827+00:00` (00:44:58 ngày 05/10, giờ Việt Nam).
-Sáu completed plans bị helper v1 báo nhầm; candidate vẫn held, chưa release.
+Last updated: 2026-10-05 theo owner release-helper v2 audit lúc
+`2026-10-04T17:56:22.670521+00:00` (00:56:22 ngày 05/10, giờ Việt Nam).
+Control inventory đã qua; quota-observation gate STOP trước /continue.
 
 ## Resume order
 
@@ -138,23 +138,43 @@ when the immutable proposal remains ready and lifecycle remains active. Do not
 supersede, cancel or edit these completed history records. Exact IDs/evidence and
 helper review are recorded in Chợ Nhạc #63 comment `5982766542`.
 
-The same inventory confirms candidate job absent, generation 1/checkpoint 45
-held, released historical lease, unchanged Git and no attempt marker. These are
-snapshot facts, not a current global lock or quota/Router acceptance.
+Owner release-helper v2 at `2026-10-04T17:56:22.670521+00:00` passed the control
+inventory (17 plans, no competing plan, no candidate job), then stopped with
+`SELECTED_ROLE_QUOTA_UNOBSERVED` at deterministic Router/WorkOrder-budget
+validation. `continue_subprocess_started=false`; this attempt did not release.
+The audit's provider_state contained only `quota:codex_chatgpt_plus` at pressure
+0.16. Antigravity snapshots expired at 17:56:15/16 UTC, before that audit. The
+artifact does not include the exact later routing input or selected role/model,
+so do not claim a particular model was chosen or that all provider quota is gone.
+Collector `status=ok` and `last_success_at` do not renew upstream `captured_at`.
 
-Use `chonhac_release_ap_mvp_01_once_v2.py`, not the v1 release helper. V2 requires
-consistent completed rows/jobs before classifying completed plans as ineligible;
-real competitors and missing/contradictory evidence remain blockers. Both initial
-and immediate control checks retain IDs/metadata in STOP output. The collector
-uses read-only/repeatable-read transactions and includes active orchestrations
-and human-decision proposals. Only the deterministic child job's GET is added to
-the read allowlist for post-release observation/collect; mutation scope is unchanged.
-Helper SHA256: `1f4063d6f702db0bbce0268412bda5a38194666a4442275b53d53a8812dbf1d8`.
-115 unittest passed (81 retained, 34 added), including owner inventory projection
-and mocked collector/preflight/one-shot/GET paths. Not WSL execution evidence.
-The original attempt-marker path, exact continuation, all quota/reserve/budget/
-review gates and later-generation exclusion remain unchanged. No separate repeat
-inventory/audit/cancel is needed; the release helper rechecks fresh prerequisites.
+Use `chonhac_release_ap_mvp_01_once_v3.py`. It retains v2's completed-row/job
+consistency checks and IDs on control-inventory failure. It adds a bounded call
+to the installed `ActiveQuotaTelemetryService.refresh()` once in the initial
+preflight, after health/history/control gates and source-identity checks. This is
+normal telemetry collection, not an availability/profile override. It writes
+standard quota snapshot/collector-result records; it is NOT a read-only helper
+mode. It does not call service.start(), store.init(), background polling or a
+model. The inner release preflight does not refresh again; `--collect` remains
+read-only and never refreshes or posts continuation.
+
+The source-pinned collector retains provider observation timestamps, TTLs,
+false availability and reserve policy. A successful refresh may still return
+stale/absent provider observations and never implies permission to release.
+V3 reports before/after quota scope IDs, timestamps and all three Router-selected
+roles even when capacity validation stops. It never substitutes Codex, invents a
+quota observation, treats an expired window as recovered, or relaxes a gate.
+The final quota recheck also retains the failing role/key; any failure keeps
+continuation uncalled. No additional historical audit/inventory/cancel script is
+needed; the bounded release helper rechecks its prerequisites.
+
+Helper SHA256: `6d59b3d55acf79229d1e0b8c4b257b9467b2c81d3b28c6042896ac853c0f13cb`.
+142 unittest passed: 115 retained regressions plus 27 new quota/service/reporting
+cases. Provider/DB/Router I/O was mocked; the uploaded quota timestamps were used
+as a fixture, but synthetic role choices are not claimed as observed choices.
+No v3 execution, live refresh or release has been observed in this PM step.
+The original marker path, exact generation/continuation, all contract/budget/
+review gates and later-generation exclusion remain unchanged.
 
 Before that single control-plane request:
 
