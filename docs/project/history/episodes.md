@@ -362,6 +362,40 @@ Open follow-ups:
 Status: historical incident/lesson. Live GH-42 state belongs in T1 and Runtime;
 open follow-ups remain current work, not proof that WO-01 itself is incomplete.
 
+## 2026-10 — historical ExecutionPlan read compatibility
+
+### Persisted audit snapshot versus current execution validator — #466 / PR #468
+
+Outcome: source repair merged at
+`6fcf5b79a35921ebd887736138b0279222e93224`; local activation evidence remains
+a T1 concern.
+
+Durable lesson:
+- persisted plans are audit evidence and may legitimately predate stricter
+  execution-time validation introduced later;
+- read compatibility must not be implemented by weakening the executable
+  `WorkOrder` validator or rewriting historical rows;
+- a read/response model should remain a non-executable type, preserve historical
+  values, and validate unrelated current invariants on an isolated copy;
+- a snapshot that can be read must still fail when replayed through current
+  planning/execution authority;
+- field-level compatibility handling must not hide parent-level invariant
+  failures such as self-dependency, duplicate acceptance IDs or contradictory
+  scope.
+
+Evidence:
+- issue #466;
+- PR #468;
+- exact implementation head
+  `66f9a38d2fe01762054cd6a1f1e6e3b0008cae1a`;
+- required workflow run `37199654326` passed structure, Runtime, Router and
+  ddev-executor tests before merge;
+- owner diagnostic classified the original incident as
+  `TEMPLATE_READ_REGRESSION_CONFIRMED_IN_PROCESS` without mutating the record.
+
+Status: source implementation complete. Local Runtime rollout/acceptance and
+time-sensitive orchestration state belong in T1 rather than this episode.
+
 ## Retrieval guidance
 
 Use this file when the current task asks:
