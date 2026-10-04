@@ -4,9 +4,9 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 fresh Runtime/GitHub evidence remain authoritative over chat history. This file
 is an index, not authority to change the approved baseline or protected scope.
 
-Last updated: 2026-10-05 theo owner audit v2 lúc
-`2026-10-04T17:12:54.536590+00:00` (00:12:54 ngày 05/10, giờ Việt Nam).
-Historical lease retirement đã được PM chấp nhận; candidate chưa release.
+Last updated: 2026-10-05 theo owner control inventory lúc
+`2026-10-04T17:44:58.825827+00:00` (00:44:58 ngày 05/10, giờ Việt Nam).
+Sáu completed plans bị helper v1 báo nhầm; candidate vẫn held, chưa release.
 
 ## Resume order
 
@@ -129,6 +129,32 @@ Audience identity/feedback, payment or staging/production seed/deployment.
 PM accepts historical lease retirement and conditionally authorizes only the
 candidate's generation 1 / checkpoint 45 / ready AP-MVP-01. No `/continue` has
 been called by PM in this handoff. This does not authorize later generations.
+
+Owner control inventory at `2026-10-04T17:44:58.825827+00:00` confirms all six
+v1 competing-plan flags were false positives: four validation-fixture plans and
+two Chợ Nhạc plans have completed orchestration and nine completed WorkOrders,
+no pending rows. Runtime `active_plans()` excludes completed orchestration even
+when the immutable proposal remains ready and lifecycle remains active. Do not
+supersede, cancel or edit these completed history records. Exact IDs/evidence and
+helper review are recorded in Chợ Nhạc #63 comment `5982766542`.
+
+The same inventory confirms candidate job absent, generation 1/checkpoint 45
+held, released historical lease, unchanged Git and no attempt marker. These are
+snapshot facts, not a current global lock or quota/Router acceptance.
+
+Use `chonhac_release_ap_mvp_01_once_v2.py`, not the v1 release helper. V2 requires
+consistent completed rows/jobs before classifying completed plans as ineligible;
+real competitors and missing/contradictory evidence remain blockers. Both initial
+and immediate control checks retain IDs/metadata in STOP output. The collector
+uses read-only/repeatable-read transactions and includes active orchestrations
+and human-decision proposals. Only the deterministic child job's GET is added to
+the read allowlist for post-release observation/collect; mutation scope is unchanged.
+Helper SHA256: `1f4063d6f702db0bbce0268412bda5a38194666a4442275b53d53a8812dbf1d8`.
+115 unittest passed (81 retained, 34 added), including owner inventory projection
+and mocked collector/preflight/one-shot/GET paths. Not WSL execution evidence.
+The original attempt-marker path, exact continuation, all quota/reserve/budget/
+review gates and later-generation exclusion remain unchanged. No separate repeat
+inventory/audit/cancel is needed; the release helper rechecks fresh prerequisites.
 
 Before that single control-plane request:
 
