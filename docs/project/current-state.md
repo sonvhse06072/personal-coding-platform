@@ -4,8 +4,8 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 live Runtime/GitHub evidence remain authoritative over chat history. Completed
 chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-10-04 theo owner probe 11:11:26 UTC; nguyên nhân #466 đã
-xác nhận, chưa có implementation commit hoặc rollout bản sửa lỗi đọc lịch sử.
+Last updated: 2026-10-04 sau khi mở PCP PR #468 cho bounded repair #466;
+source target Runtime 1.0.106, local vẫn chưa rollout bản sửa lỗi đọc lịch sử.
 
 ## Resume order
 
@@ -189,32 +189,27 @@ resume them.
 
 ## Active PCP follow-up work
 
-PCP #466 đã xác nhận nguyên nhân và đang chờ implementation:
-`PCP-466-historical-plan-read-compatibility`. GET historical ExecutionPlan
-`pm-095d6aea0fe94901bbf692fa7d113fc2` trả HTTP 500 trên Runtime 1.0.105,
-trong khi GET orchestration vẫn đọc được. #463/#464 đã rollout thành công;
-không triển khai hoặc restart lại để thử giải quyết lỗi đọc lịch sử.
+PCP #466 đang được triển khai qua PR #468:
+`PCP-466-historical-plan-read-compatibility`. Owner probe
+`2026-10-04T11:11:26.098002+00:00` đã xác nhận
+`TEMPLATE_READ_REGRESSION_CONFIRMED_IN_PROCESS`: GET historical
+ExecutionPlan `pm-095d6aea0fe94901bbf692fa7d113fc2` trả HTTP 500 trên
+Runtime 1.0.105 vì 7 template `visual_routes` trong 4 WorkOrders, trong khi
+orchestration vẫn đọc được và record không đổi.
 
-Owner probe `2026-10-04T11:11:26.098002+00:00` xác nhận
-`TEMPLATE_READ_REGRESSION_CONFIRMED_IN_PROCESS`: bốn ValidationError tại
-`work_orders[1|3|4|6].verification.visual_routes`, tổng cộng 7 template routes.
-Source blob identities khớp bản đã review. Control chỉ thay template routes
-trong RAM trả `READ_MAPPER_OK`; original object và persisted record không đổi.
-Record digest và source identities đầy đủ được lưu ở issue #466.
+PR #468 target Runtime `1.0.106` và tách read response sang các
+`ExecutionPlanSnapshot*` model không phải `WorkOrder`. Snapshot giữ nguyên
+template route để audit, nhưng mọi invariant khác được kiểm tra bằng strict
+`WorkOrder` trên bản sao validation trong RAM; chỉ template route local an
+toàn mới được thay sentinel trong bản sao đó. Shared executable WorkOrder và PM
+proposal validator không nới lỏng, nên replay snapshot vẫn phải fail. Regression
+bao phủ API serialization, object/dict replay denial, failed plan null, 404 và
+các malformed payload không liên quan.
 
-Đường lỗi là `execution_plan_view` áp `ExecutionPlanDocument.model_validate`
-với constraint mới của #457/#458 lên historical snapshot. Không cần chạy lại
-probe để xác nhận nguyên nhân này. Đây không phải bằng chứng DB corruption,
-provider failure hoặc quota exhaustion. Bài học: khả năng đọc/audit snapshot
-không đồng nghĩa snapshot đạt điều kiện execution hiện hành.
-
-Lần ghi code sửa shared validator qua connector bị safety check của công cụ
-chặn; đã đọc lại PR #467 và xác nhận chưa có code commit. Không lặp payload
-hoặc đổi đường ghi để vượt chặn. #467 chỉ cập nhật tài liệu, không đóng #466.
-Contract sửa #466 ưu tiên read/response model riêng không trở thành executable
-WorkOrder; giữ nguyên shared validators và execution gates. Regression phải
-kiểm tra HTTP serialization/replay denial, object reuse nếu có, bảo toàn record
-và unrelated malformed data, kể cả parent invariants bị field error che khuất.
+PR #468 chưa được coi hoàn tất trước exact-head required CI + PM exact-diff
+review. Local Runtime vẫn là `1.0.105` cho đến rollout riêng sau merge; không
+restart/rebuild, mutate historical plans hoặc release rejected plans chỉ để thử
+bản sửa.
 
 Successor attempt `pm-d2947a399ecb44de9e96d174bd4c2d48` được giữ làm evidence:
 planner đã cite `docs/12-launch-metrics.md`, một authority-only path không
@@ -294,13 +289,12 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Thực hiện bounded repair #466 theo contract đã cập nhật; không lặp diagnostic
-   đã đủ evidence, không nới shared validator hoặc dùng read compatibility để
-   tạo execution authority. Không có implementation nào được coi là hoàn tất
-   chỉ vì tài liệu hoặc PR #467 đã cập nhật.
-2. Kiểm chứng historical HTTP read giữ nguyên evidence, new intake/execution
-   vẫn từ chối template routes, unrelated malformed data vẫn bị chặn. CI exact
-   head và PM review trước merge; chỉ rollout bản sửa sau fresh local gates.
+1. Review exact diff của PR #468 và required CI trên exact head; chỉ merge khi
+   read compatibility giữ historical evidence mà executable WorkOrder/PM
+   proposal vẫn fail-closed cho template routes và malformed data khác.
+2. Sau merge, chạy fresh local idle/lease/worktree gates rồi rollout Runtime
+   1.0.106. Xác minh GET historical plan = 200, template routes giữ nguyên,
+   record digest/history không đổi và rejected orchestration vẫn held/zero jobs.
 3. Giữ nguyên mọi historical/rejected/failed plan. Không gọi continue/operator/
    supersede trước khi có replacement được PM duyệt và mapping rõ ràng.
 4. Trước một fresh intake, đọc live #48/#49/#56/#57/#58/#50/#59 cùng source r3
