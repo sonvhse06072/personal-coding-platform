@@ -38,14 +38,16 @@ def test_models_endpoint_exposes_per_model_reasoning_capabilities():
 
     assert response.status_code == 200
     data = response.json()
-    assert data["version"] == 11
-    assert data["models"]["codex_terra"]["reasoning_efforts"] == [
+    assert data["version"] == 12
+    assert data["models"]["codex_gpt61_sol"]["model"] == "gpt-6.1-sol"
+    assert data["models"]["codex_gpt61_sol"]["reasoning_efforts"] == [
         "low",
         "medium",
         "high",
         "xhigh",
         "max",
     ]
+    assert data["models"]["codex_terra"]["model"] == "gpt-5.6-terra"
     assert data["models"]["antigravity_free"]["reasoning_efforts"] == []
     assert data["models"]["antigravity_claude_sonnet"]["reasoning_efforts"] == []
 
