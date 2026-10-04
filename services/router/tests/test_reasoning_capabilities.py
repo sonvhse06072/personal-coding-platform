@@ -114,25 +114,19 @@ def test_failover_choice_respects_new_model_without_effort_support() -> None:
 def test_reassessment_model_failover_revalidates_profile_effort() -> None:
     engine = make_engine()
     engine.models = deepcopy(engine.models)
-    engine.models["codex_gpt6_sol"]["reasoning_efforts"] = ["high"]
-    for model_id in (
-        "codex_gpt6_luna",
-        "codex_luna",
-        "codex_terra",
-        "codex_sol",
-    ):
-        engine.models[model_id]["roles"] = []
-    route = engine.route(
-        complex_request(
-            provider_state={
-                "provider:google_antigravity": {
-                    "healthy": False,
-                    "available": False,
-                }
-            }
-        )
-    )
-    assert route.strategy.executor.id == "codex_gpt61_sol"
+    engine.models["codex_sol"]["reasoning_efforts"] = ["high"]
+    provider_state = {
+        "provider:google_antigravity": {
+            "healthy": False,
+            "available": False,
+        },
+        "codex_gpt61_sol": {
+            "healthy": False,
+            "available": False,
+        },
+    }
+    route = engine.route(complex_request(provider_state=provider_state))
+    assert route.strategy.executor.id == "codex_gpt6_sol"
     route.strategy.executor.reasoning_effort = "high"
 
     with pytest.raises(RuntimeError, match="unsupported"):
@@ -145,6 +139,7 @@ def test_reassessment_model_failover_revalidates_profile_effort() -> None:
                     agent_succeeded=False,
                     last_agent_failure_kind="no_effect",
                 ),
+                provider_state=provider_state,
             )
         )
 
