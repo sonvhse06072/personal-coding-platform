@@ -470,6 +470,9 @@ def test_provider_level_unavailable_excludes_same_provider_models():
     })
     result = eng.route(req)
     assert result.strategy.executor.provider != "openai"
+    assert "codex_gpt6_luna" in result.rejected_candidates
+    assert "codex_gpt6_sol" in result.rejected_candidates
+    assert "codex_gpt61_sol" in result.rejected_candidates
     assert "codex_luna" in result.rejected_candidates
     assert "codex_terra" in result.rejected_candidates
     assert "codex_sol" in result.rejected_candidates
