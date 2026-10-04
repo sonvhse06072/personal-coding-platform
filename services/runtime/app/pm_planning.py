@@ -18,7 +18,14 @@ from .schemas import RepoHints, SemanticSignals
 from .shell import run_command
 from .storage import Storage
 from .usage import estimated_cost_usd, normalize_usage
-from .work_order import WorkOrder, validate_work_order_against_baseline
+from .work_order import (
+    AcceptanceCriterion,
+    VerificationPhase,
+    WorkOrder,
+    WorkOrderBudget,
+    WorkOrderRisk,
+    validate_work_order_against_baseline,
+)
 
 
 PlanStatus = Literal[
@@ -168,6 +175,108 @@ class ExecutionPlanDocument(BaseModel):
     execution_mode: PlanExecutionMode = "autonomous"
 
 
+_HISTORICAL_TEMPLATE_ROUTE_SENTINEL = "/__pcp_historical_template_route__"
+
+
+class ExecutionPlanSnapshotVerification(BaseModel):
+    """Read-only verification snapshot for persisted plans.
+
+    Historical plans may contain route-template placeholders that were accepted
+    before Runtime 1.0.103. The snapshot preserves those exact strings for audit
+    reads, while ExecutionPlanSnapshotWorkOrder validates every other current
+    WorkOrder invariant against a private validation copy.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    intermediate_phases: list[VerificationPhase] = Field(default_factory=list, max_length=3)
+    required_phases: list[VerificationPhase] = Field(min_length=1, max_length=4)
+    visual_routes: list[str] = Field(default_factory=list, max_length=4)
+
+    @model_validator(mode="before")
+    @classmethod
+    def legacy_verification_fields(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            updated = dict(value)
+            updated.setdefault("intermediate_phases", [])
+            updated.setdefault("visual_routes", [])
+            return updated
+        return value
+
+
+class ExecutionPlanSnapshotWorkOrder(BaseModel):
+    """Non-executable WorkOrder-shaped snapshot used only by read responses."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(
+        min_length=1,
+        max_length=100,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$",
+    )
+    parent_initiative: str | None = Field(default=None, max_length=200)
+    parent_ticket: str | None = Field(default=None, max_length=200)
+    objective: str = Field(min_length=1, max_length=5000)
+    baseline_revision: str = Field(
+        min_length=1,
+        max_length=100,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$",
+    )
+    source_references: list[SourceReference] = Field(min_length=1, max_length=50)
+    in_scope: list[str] = Field(min_length=1, max_length=50)
+    out_of_scope: list[str] = Field(min_length=1, max_length=50)
+    acceptance_criteria: list[AcceptanceCriterion] = Field(min_length=1, max_length=50)
+    constraints: list[str] = Field(default_factory=list, max_length=50)
+    requested_role: str = Field(
+        default="developer",
+        min_length=2,
+        max_length=80,
+        pattern=r"^[a-z][a-z0-9_]{1,79}$",
+    )
+    verification: ExecutionPlanSnapshotVerification
+    risk: WorkOrderRisk = Field(default_factory=WorkOrderRisk)
+    budget: WorkOrderBudget
+    dependencies: list[str] = Field(default_factory=list, max_length=50)
+
+    @model_validator(mode="after")
+    def validate_non_template_invariants(self) -> "ExecutionPlanSnapshotWorkOrder":
+        payload = self.model_dump(mode="json")
+        routes = payload["verification"]["visual_routes"]
+        for index, raw_route in enumerate(routes):
+            route = raw_route.strip()
+            if not any(token in route for token in ("{", "}", "[", "]")):
+                continue
+            if (
+                not route.startswith("/")
+                or route.startswith("//")
+                or "://" in route
+                or "?" in route
+                or "#" in route
+                or len(route) > 240
+            ):
+                continue
+            routes[index] = f"{_HISTORICAL_TEMPLATE_ROUTE_SENTINEL}/{index}"
+
+        # This is a throw-away validation copy only. Strict executable WorkOrder
+        # validation still rejects the original template route if the snapshot is
+        # replayed through a planning or execution path.
+        WorkOrder.model_validate(payload)
+        return self
+
+
+class ExecutionPlanSnapshotDocument(BaseModel):
+    """Read-only persisted plan representation; never execution authority."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    scope_assessment: ScopeAssessment
+    summary: str
+    work_orders: list[ExecutionPlanSnapshotWorkOrder]
+    decision_boundaries: list[DecisionBoundary]
+    ready_work_order_ids: list[str]
+    execution_mode: PlanExecutionMode = "autonomous"
+
+
 class ExecutionPlanView(BaseModel):
     id: str
     project_id: str
@@ -176,7 +285,7 @@ class ExecutionPlanView(BaseModel):
     baseline_source_commit: str
     ticket: PMTicket
     staffing: dict[str, Any] | None = None
-    plan: ExecutionPlanDocument | None = None
+    plan: ExecutionPlanSnapshotDocument | None = None
     usage: dict[str, Any] | None = None
     error: str | None = None
     created_at: str
@@ -193,7 +302,7 @@ def execution_plan_view(row: dict[str, Any]) -> ExecutionPlanView:
         baseline_source_commit=row["baseline_source_commit"],
         ticket=PMTicket.model_validate(row["ticket"]),
         staffing=row.get("staffing"),
-        plan=ExecutionPlanDocument.model_validate(plan) if plan else None,
+        plan=ExecutionPlanSnapshotDocument.model_validate(plan) if plan else None,
         usage=row.get("usage"),
         error=row.get("error"),
         created_at=row["created_at"].isoformat(),
