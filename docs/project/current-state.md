@@ -4,8 +4,8 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 live Runtime/GitHub evidence remain authoritative over chat history. Completed
 chronology belongs in Tier-3 history, not here.
 
-Last updated: 2026-10-04 sau khi đối chiếu live PCP #463/#464; trạng thái
-GitHub đã xác minh, rollout và orchestration local cần evidence mới.
+Last updated: 2026-10-04 theo owner probe 11:11:26 UTC; nguyên nhân #466 đã
+xác nhận, chưa có implementation commit hoặc rollout bản sửa lỗi đọc lịch sử.
 
 ## Resume order
 
@@ -34,11 +34,17 @@ lessons are indexed in `history/episodes.md`.
   đúng `ProjectBaseline.references`. WorkOrder và DecisionBoundary chỉ được
   cite tập này; authority-only paths không được tự nâng thành references.
   Validator fail-closed được giữ nguyên. Không triển khai lại #463.
-- Owner từng xác nhận local Runtime `1.0.104`, ddev-executor `1.0.31`, baseline
-  r3 và `FINAL_REPLAN_PLATFORM_CHECK=PASS`. Đây là snapshot trước #464, không
-  phải xác nhận rollout `1.0.105`. Chưa có evidence local mới trong phiên
-  đối chiếu này. Antigravity host bridge vẫn `1.13`, model registry version `11`
-  theo checkpoint trước; đọc health/telemetry mới trước thao tác.
+- Owner snapshot `2026-10-04T10:58:19.945738+00:00` xác nhận Runtime
+  `1.0.105` healthy, Router/executor ok, executor `1.0.31`; r3/source và
+  exact sorted/deduplicated 27-path prompt allowlist PASS. Local PCP main
+  `0706cd119ebf2dcac9481b28799e5d835b2518ff` clean; docs-only PR #465 đã
+  merge trên GitHub tại `d73412a44dde17ea4562648182cc6a7aed8e5f1f`.
+  Không cần rollout lại #464 chỉ vì local chưa có docs commit #465.
+- Active engineering jobs = 0 trước/sau snapshot, không phải atomic idle/lease
+  clearance. Quota snapshot giữ nguyên Codex available=true/pressure=0.16,
+  Gemini true/0.99912, Claude-GPT false/1.0; freshness/reserve cần đọc mới trước
+  model call. Bridge `1.13` và registry `11` là checkpoint cũ, chưa đọc lại ở
+  snapshot này. HTTP 500 riêng historical plan được theo dõi ở #466 bên dưới.
 - PCP #446 / PR #447 is complete at
   `645200e1f0e1ea1902569f471a53d5b90699ece6`: canonical WorkOrder diff
   identity is source-commit-relative across Runtime-created commits,
@@ -183,10 +189,32 @@ resume them.
 
 ## Active PCP follow-up work
 
-Không còn implementation đang dở cho #463: PR #464 đã merge và issue đã đóng.
-Công việc còn lại là local rollout/preflight và rà soát một successor contract
-đầy đủ trước khi tiêu thêm planning quota; không mở lại vòng sửa code khi chưa
-có lỗi mới được chứng minh.
+PCP #466 đã xác nhận nguyên nhân và đang chờ implementation:
+`PCP-466-historical-plan-read-compatibility`. GET historical ExecutionPlan
+`pm-095d6aea0fe94901bbf692fa7d113fc2` trả HTTP 500 trên Runtime 1.0.105,
+trong khi GET orchestration vẫn đọc được. #463/#464 đã rollout thành công;
+không triển khai hoặc restart lại để thử giải quyết lỗi đọc lịch sử.
+
+Owner probe `2026-10-04T11:11:26.098002+00:00` xác nhận
+`TEMPLATE_READ_REGRESSION_CONFIRMED_IN_PROCESS`: bốn ValidationError tại
+`work_orders[1|3|4|6].verification.visual_routes`, tổng cộng 7 template routes.
+Source blob identities khớp bản đã review. Control chỉ thay template routes
+trong RAM trả `READ_MAPPER_OK`; original object và persisted record không đổi.
+Record digest và source identities đầy đủ được lưu ở issue #466.
+
+Đường lỗi là `execution_plan_view` áp `ExecutionPlanDocument.model_validate`
+với constraint mới của #457/#458 lên historical snapshot. Không cần chạy lại
+probe để xác nhận nguyên nhân này. Đây không phải bằng chứng DB corruption,
+provider failure hoặc quota exhaustion. Bài học: khả năng đọc/audit snapshot
+không đồng nghĩa snapshot đạt điều kiện execution hiện hành.
+
+Lần ghi code sửa shared validator qua connector bị safety check của công cụ
+chặn; đã đọc lại PR #467 và xác nhận chưa có code commit. Không lặp payload
+hoặc đổi đường ghi để vượt chặn. #467 chỉ cập nhật tài liệu, không đóng #466.
+Contract sửa #466 ưu tiên read/response model riêng không trở thành executable
+WorkOrder; giữ nguyên shared validators và execution gates. Regression phải
+kiểm tra HTTP serialization/replay denial, object reuse nếu có, bảo toàn record
+và unrelated malformed data, kể cả parent invariants bị field error che khuất.
 
 Successor attempt `pm-d2947a399ecb44de9e96d174bd4c2d48` được giữ làm evidence:
 planner đã cite `docs/12-launch-metrics.md`, một authority-only path không
@@ -199,14 +227,17 @@ PCP #461/#462 is complete at Runtime `1.0.104`: new PM plans reject
 `max_profile` below their risk/protected-flag floor. PCP #457/#458,
 #455/#456, #453/#454 and #451/#452 are also complete.
 
-Local plan state phải được đọc mới, không suy từ GitHub merge:
+Local plan state tại owner snapshot 10:58:19 UTC, không phải bảo đảm về sau:
 
-- `pm-095d6aea0fe94901bbf692fa7d113fc2` và
-  `pm-a72e960c0f3b458897831cff3fb51a30` từng được xác nhận initial hold,
-  zero child jobs ở checkpoint trước; không release.
-- `pm-ac6a52e6019947adab8744a7ada72011` từng trả `ready` nhưng bị PM reject
-  vì live Booking contributions. Script cũ lỗi trước khi in orchestration;
-  chưa xác minh held/zero jobs. Không release, đọc GET orchestration mới.
+- `pm-095d6aea0fe94901bbf692fa7d113fc2`,
+  `pm-a72e960c0f3b458897831cff3fb51a30` và
+  `pm-ac6a52e6019947adab8744a7ada72011` đều có orchestration active,
+  supervised_hold, generation 1, held; mỗi plan đúng 7 pending WorkOrders,
+  mọi job_id null, ready set chỉ AP-MVP-01. Không release các rejected plans.
+- Historical plan `pm-5cd9ec06f74b4feba4db5a1507ab35f0` vẫn blocked,
+  generation 0; PILOT-01 gắn job `c02defa348fc5b19a0bd021e2697571e`,
+  PILOT-02..08 pending và chưa có job. Chợ Nhạc worktree clean trên
+  `ai/c02defa348fc` tại `88dd4f60dbe95c41c6e7ce8fc5bb3c7ba8a098ba`.
 - Các failed planning attempts giữ nguyên làm evidence. Không xóa plan,
   reset counters/history, sửa SQL, resume historical job hoặc tạo replacement
   chỉ để né blocker.
@@ -263,14 +294,13 @@ examples now belong in `history/episodes.md` and GitHub/Runtime history:
 
 ## Immediate next safe actions
 
-1. Chạy local preflight chỉ đọc: branch/HEAD/dirty state của PCP và Chợ Nhạc,
-   Runtime/executor health, active engineering count, quota và orchestration
-   của historical/rejected plans. Nếu thiếu/malformed evidence thì dừng;
-   không mặc định `false` thành `true` trong jq.
-2. Chỉ rollout PCP đến source đã review chứa #464 khi local idle và worktree
-   phù hợp đã được xác minh. Không checkout/reset/clean `/home/sonvh/chonhac`,
-   không restart khi còn engineering work. Xác minh Runtime `1.0.105`, executor
-   `1.0.31`, r3/source và prompt allowlist thực tế sau rollout.
+1. Thực hiện bounded repair #466 theo contract đã cập nhật; không lặp diagnostic
+   đã đủ evidence, không nới shared validator hoặc dùng read compatibility để
+   tạo execution authority. Không có implementation nào được coi là hoàn tất
+   chỉ vì tài liệu hoặc PR #467 đã cập nhật.
+2. Kiểm chứng historical HTTP read giữ nguyên evidence, new intake/execution
+   vẫn từ chối template routes, unrelated malformed data vẫn bị chặn. CI exact
+   head và PM review trước merge; chỉ rollout bản sửa sau fresh local gates.
 3. Giữ nguyên mọi historical/rejected/failed plan. Không gọi continue/operator/
    supersede trước khi có replacement được PM duyệt và mapping rõ ràng.
 4. Trước một fresh intake, đọc live #48/#49/#56/#57/#58/#50/#59 cùng source r3
