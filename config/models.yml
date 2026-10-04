@@ -433,6 +433,12 @@ models:
     tier: strong
     cost_class: subscription
     quota_group: codex_chatgpt_plus
+    # Preserve Terra as a historical/current fallback without letting the older
+    # balanced model outrank GPT-6 Luna in the fast profile.
+    allowed_profiles:
+    - standard
+    - complex
+    - critical
     roles:
     - explore
     - executor
