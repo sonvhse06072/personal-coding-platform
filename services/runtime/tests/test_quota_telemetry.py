@@ -45,6 +45,34 @@ def test_codex_multi_bucket_maps_model_and_windows():
     assert by_window["secondary"]["metadata"]["window_duration_mins"] == 10080
 
 
+
+
+def test_current_codex_generation_slugs_keep_shared_subscription_quota_group():
+    collector = PolicyCodexQuotaCollector(ttl_seconds=600)
+
+    for slug in ("gpt-6-luna", "gpt-6-sol", "gpt-6.1-sol"):
+        snapshots = collector.normalize(
+            {
+                "ordinaryUsageAllowed": True,
+                "rateLimitsByLimitId": {
+                    slug: {
+                        "normalModelSlug": slug,
+                        "primary": {
+                            "usedPercent": 25,
+                            "resetsAt": 1789428000,
+                        },
+                        "secondary": None,
+                    }
+                },
+            }
+        )
+
+        assert len(snapshots) == 1
+        assert snapshots[0]["state_key"] == "quota:codex_chatgpt_plus"
+        assert snapshots[0]["metadata"]["normal_model_slug"] == slug
+        assert snapshots[0]["remaining_percent"] == 75.0
+
+
 def test_codex_account_bucket_is_codex_quota_not_generic_openai_health():
     collector = PolicyCodexQuotaCollector()
     snapshots = collector.normalize(
