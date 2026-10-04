@@ -114,7 +114,7 @@ def test_failover_choice_respects_new_model_without_effort_support() -> None:
 def test_reassessment_model_failover_revalidates_profile_effort() -> None:
     engine = make_engine()
     engine.models = deepcopy(engine.models)
-    engine.models["codex_sol"]["reasoning_efforts"] = ["high"]
+    engine.models["codex_gpt6_sol"]["reasoning_efforts"] = ["high"]
     route = engine.route(
         complex_request(
             provider_state={
@@ -125,7 +125,7 @@ def test_reassessment_model_failover_revalidates_profile_effort() -> None:
             }
         )
     )
-    assert route.strategy.executor.id == "codex_terra"
+    assert route.strategy.executor.id == "codex_gpt61_sol"
     route.strategy.executor.reasoning_effort = "high"
 
     with pytest.raises(RuntimeError, match="unsupported"):
@@ -153,7 +153,6 @@ def test_staffing_fails_closed_when_profile_effort_is_not_supported() -> None:
         profile="standard",
         provider_state={
             "provider:google_antigravity": {"available": False},
-            "codex_gpt6_sol": {"available": False},
             "codex_sol": {"available": False},
         },
     )
