@@ -1,4 +1,4 @@
-version: 11
+version: 12
 models:
   groq_free:
     kind: llm
@@ -262,6 +262,127 @@ models:
       enterprise_data_guarantee: false
       telemetry_opt_out_required: true
       zero_retention_supported: false
+
+  codex_gpt6_luna:
+    # Current fast Codex generation. PCP intentionally routes only explicit
+    # low..max effort even though upstream also supports none.
+    kind: agent
+    provider: openai
+    adapter: codex_cli
+    model: gpt-6-luna
+    reasoning_efforts:
+    - low
+    - medium
+    - high
+    - xhigh
+    - max
+    tier: balanced
+    cost_class: ultra_low
+    quota_group: codex_chatgpt_plus
+    allowed_profiles:
+    - fast
+    - standard
+    - complex
+    roles:
+    - explore
+    - executor
+    - repair
+    - test_writer
+    capabilities:
+      coding: 8
+      reasoning: 8
+      debugging: 7
+      planning: 7
+      review: 7
+      structured_output: 9
+      repo_exploration: 8
+    base_success: 0.87
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: true
+
+  codex_gpt6_sol:
+    # Previous GPT-6 workhorse retained as a current-generation fallback.
+    kind: agent
+    provider: openai
+    adapter: codex_cli
+    model: gpt-6-sol
+    reasoning_efforts:
+    - low
+    - medium
+    - high
+    - xhigh
+    - max
+    tier: strong
+    cost_class: subscription
+    quota_group: codex_chatgpt_plus
+    allowed_profiles:
+    - standard
+    - complex
+    roles:
+    - explore
+    - executor
+    - repair
+    - test_writer
+    - debugger
+    - planner
+    - reviewer
+    - product_manager
+    capabilities:
+      coding: 9
+      reasoning: 9
+      debugging: 9
+      planning: 9
+      review: 8
+      structured_output: 9
+      repo_exploration: 9
+    base_success: 0.91
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: true
+
+  codex_gpt61_sol:
+    # Current Codex workhorse for complex coding/professional work. Astra stays
+    # frontier/manual; this model does not inherit critical_executor authority.
+    kind: agent
+    provider: openai
+    adapter: codex_cli
+    model: gpt-6.1-sol
+    reasoning_efforts:
+    - low
+    - medium
+    - high
+    - xhigh
+    - max
+    tier: premium
+    cost_class: subscription
+    quota_group: codex_chatgpt_plus
+    allowed_profiles:
+    - complex
+    roles:
+    - explore
+    - executor
+    - repair
+    - test_writer
+    - debugger
+    - planner
+    - reviewer
+    - product_manager
+    capabilities:
+      coding: 9
+      reasoning: 10
+      debugging: 9
+      planning: 10
+      review: 9
+      structured_output: 9
+      repo_exploration: 10
+    base_success: 0.94
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: true
 
   codex_luna:
     # `codex_chatgpt_plus` is a durable legacy key. It denotes the shared
