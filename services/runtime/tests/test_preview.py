@@ -484,6 +484,53 @@ def test_project_preview_handoff_requires_exact_job_lease_and_stops_idle_owner(m
         asyncio.run(manager.handoff_to_job("chonhac", "another-job"))
 
 
+def test_project_preview_handoff_retries_one_nonbusy_partial_stop_failure(monkeypatch):
+    configure_project(monkeypatch)
+    storage = FakeStorage(lease=True)
+
+    class PartialStopDdev(FakeDdev):
+        def __init__(self):
+            super().__init__()
+            self.stop_attempts = 0
+
+        async def preview_stop(self, **payload):
+            self.stops.append(deepcopy(payload))
+            self.stop_attempts += 1
+            if self.stop_attempts == 1:
+                raise RuntimeError("preview topology reconciliation failed")
+            return {"status": "stopped"}
+
+    ddev = PartialStopDdev()
+    manager = ProjectPreviewManager(storage, ddev)
+
+    asyncio.run(manager.handoff_to_job("chonhac", storage.job["id"]))
+
+    assert ddev.stop_attempts == 2
+    assert len(ddev.stops) == 2
+    assert all(item["job_id"].startswith("project-preview-") for item in ddev.stops)
+
+
+def test_project_preview_handoff_still_fails_after_second_nonbusy_error(monkeypatch):
+    configure_project(monkeypatch)
+    storage = FakeStorage(lease=True)
+
+    class PersistentFailureDdev(FakeDdev):
+        async def preview_stop(self, **payload):
+            self.stops.append(deepcopy(payload))
+            raise RuntimeError("preview topology reconciliation failed")
+
+    ddev = PersistentFailureDdev()
+    manager = ProjectPreviewManager(storage, ddev)
+
+    with pytest.raises(
+        RuntimeError,
+        match="Idle project preview could not be retired before direct job handoff",
+    ):
+        asyncio.run(manager.handoff_to_job("chonhac", storage.job["id"]))
+
+    assert len(ddev.stops) == 2
+
+
 def test_project_preview_status_hides_idle_controls_when_job_owns_lease(monkeypatch):
     configure_project(monkeypatch)
     storage = FakeStorage(lease=True)
