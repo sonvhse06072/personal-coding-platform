@@ -180,6 +180,38 @@ removal. #474 does not require restarting/replanning this accepted successor.
 Do not generalize that safety conclusion to isolated-workspace cleanup. The
 issue still requires a bounded implementation and real-shaped regressions.
 
+## Active DDEV direct-workspace recovery — PCP #493
+
+Chợ Nhạc AP-MVP-02 exposed a deterministic DDEV bootstrap failure after the
+planner recovered successfully. The preserved direct workspace remained clean
+and its existing Chợ Nhạc web/database containers remained healthy, but every
+Runtime verification phase unconditionally ran `ddev start -y` first.
+
+Bounded diagnosis ruled out project Dockerfile/build-context correctness and
+current registry metadata resolution. The dedicated `pcp-builder`
+(`docker-container`) can build both project targets from cache, but PostgreSQL
+local-image export stalls in the `type=docker` tar-transfer path. The default
+Docker builder can export, tag and unpack both images but the multi-target build
+still fails to return before the bounded timeout. `DOCKER_BUILDKIT=0` also
+timed out and is not an accepted fallback. Do not increase timeouts, prune
+builders/images, replace the preserved AP-MVP-02 job, or bypass Runtime state.
+
+Repair branch `ai/493-reuse-running-direct-ddev` scopes a safer direct-workspace
+path behind `ddev.reuse_running_direct_ddev`. When enabled, a non-frontend
+phase may reuse an already-running direct DDEV project only when the tracked
+`.ddev` configuration has no uncommitted changes and `ddev exec true`
+succeeds within a short readiness bound. A failed readiness probe or dirty
+`.ddev` tree falls back to the existing fail-closed `ddev start -y` path.
+`frontend_quality` still forces startup/reconciliation because it may write a
+managed DDEV Node override. Chợ Nhạc preflight no longer duplicates
+`ddev start -y` as a configured command because infrastructure startup/reuse is
+owned by the executor phase wrapper.
+
+This recovery does not relax isolated-workspace resume semantics and does not
+remove the dedicated PCP builder from Router/Runtime/ddev-executor platform
+image builds. CI and zero-active-work rollout evidence are required before
+resuming the exact AP-MVP-02 job.
+
 ## Standing execution / quality boundaries
 
 - Normal flow: bounded issue/WorkOrder -> implementation/evidence -> deterministic
