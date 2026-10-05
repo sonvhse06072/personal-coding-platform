@@ -56,6 +56,12 @@ def test_chonhac_targeted_tests_execute_phpunit_and_static_analysis_executes_php
     assert 'if [ -z "$modules" ]' in targeted_runner
     assert '\\"$modules\\"' not in targeted_runner
     assert "git diff --name-only HEAD -- web/modules/custom" in targeted_runner
+    assert 'export BROWSERTEST_OUTPUT_DIRECTORY="/tmp/pcp-chonhac-browser-output-$(id -u)"' in targeted_runner
+    assert 'mkdir -p "$BROWSERTEST_OUTPUT_DIRECTORY"' in targeted_runner
+    assert 'chmod 700 "$BROWSERTEST_OUTPUT_DIRECTORY"' in targeted_runner
+    assert '[ ! -w "$BROWSERTEST_OUTPUT_DIRECTORY" ]' in targeted_runner
+    assert "chmod 777" not in targeted_runner
+    assert "ddev exec -u root" not in targeted_runner
     assert "for module in $modules" in targeted_runner
     assert "for layer in Unit Kernel Functional" in targeted_runner
     assert 'web/modules/custom/$module/tests/src/$layer' in targeted_runner
@@ -98,7 +104,9 @@ exec "$@"
     phpunit = repo / "vendor/bin/phpunit"
     phpunit.parent.mkdir(parents=True)
     phpunit.write_text(
-        "#!/usr/bin/env bash\nprintf 'PHPUNIT:%s\\n' \"$*\"\n",
+        "#!/usr/bin/env bash\n"
+        "printf 'BROWSER_OUTPUT:%s\\n' \"$BROWSERTEST_OUTPUT_DIRECTORY\"\n"
+        "printf 'PHPUNIT:%s\\n' \"$*\"\n",
         encoding="utf-8",
     )
     phpunit.chmod(0o755)
@@ -126,6 +134,16 @@ exec "$@"
         "PHPUNIT:-c web/core/phpunit.xml.dist "
         "web/modules/custom/demo/tests/src/Unit/DemoTest.php"
     ) in result.stdout
+    browser_line = next(
+        line for line in result.stdout.splitlines()
+        if line.startswith("BROWSER_OUTPUT:")
+    )
+    browser_output = Path(browser_line.removeprefix("BROWSER_OUTPUT:"))
+    assert browser_output.parent == Path("/tmp")
+    assert browser_output.name.startswith("pcp-chonhac-browser-output-")
+    assert browser_output.is_dir()
+    assert os.access(browser_output, os.W_OK)
+    assert browser_output.stat().st_mode & 0o777 == 0o700
 
 def test_service_homes_are_prepared_for_ddev_uid():
     compose = (ROOT / ".ddev/docker-compose.platform.yaml").read_text()
