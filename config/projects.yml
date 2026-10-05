@@ -218,6 +218,13 @@ projects:
         - ddev drush cr
         - >-
           ddev exec --raw -- bash -lc 'set -euo pipefail;
+          export BROWSERTEST_OUTPUT_DIRECTORY="/tmp/pcp-chonhac-browser-output-$(id -u)";
+          mkdir -p "$BROWSERTEST_OUTPUT_DIRECTORY";
+          chmod 700 "$BROWSERTEST_OUTPUT_DIRECTORY";
+          if [ ! -d "$BROWSERTEST_OUTPUT_DIRECTORY" ] || [ ! -w "$BROWSERTEST_OUTPUT_DIRECTORY" ]; then
+            echo "BROWSERTEST_OUTPUT_DIRECTORY is not writable: $BROWSERTEST_OUTPUT_DIRECTORY" >&2;
+            exit 1;
+          fi;
           modules="$(git diff --name-only HEAD -- web/modules/custom |
           awk -F/ "/^web\/modules\/custom\/[^/]+\// {print \$4}" | sort -u)";
           if [ -z "$modules" ]; then
