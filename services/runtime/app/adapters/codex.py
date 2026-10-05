@@ -49,6 +49,12 @@ class CodexAdapter(AgentAdapter):
             sandbox,
             "--config",
             'approval_policy="never"',
+            "--config",
+            "features.memories=false",
+            "--config",
+            "memories.use_memories=false",
+            "--config",
+            "memories.generate_memories=false",
         ]
         if sandbox == "workspace-write":
             argv += ["--config", "sandbox_workspace_write.network_access=false"]
