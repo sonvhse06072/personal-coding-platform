@@ -698,10 +698,20 @@ class ProjectPreviewManager:
             except Exception as exc:
                 last_error = exc
                 lower = str(exc).lower()
-                if "active process" not in lower and "busy" not in lower:
-                    break
-                if attempt < 59:
-                    await asyncio.sleep(1)
+                busy = "active process" in lower or "busy" in lower
+                if busy:
+                    if attempt < 59:
+                        await asyncio.sleep(1)
+                    continue
+                # ddev-executor stop_preview may have already stopped the
+                # PCP-owned daemon and removed its preview override before the
+                # final topology reconciliation fails. One immediate retry is
+                # safe and idempotent: if retirement already completed it
+                # observes no managed override; if the failure is persistent,
+                # the second non-busy failure still stops here.
+                if attempt == 0:
+                    continue
+                break
         raise RuntimeError("Idle project preview could not be retired before direct job handoff") from last_error
 
 
