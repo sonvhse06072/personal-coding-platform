@@ -190,6 +190,7 @@ projects:
     ddev:
       enabled: true
       workspace_nodejs_version: "24"
+      reuse_running_direct_ddev: true
 
       auto_required_phases:
         - phase: frontend_quality
@@ -211,7 +212,6 @@ projects:
             - local_listener
 
       preflight:
-        - ddev start -y
         - ddev composer install --no-interaction
 
       targeted_tests:

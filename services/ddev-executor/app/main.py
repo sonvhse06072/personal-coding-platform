@@ -1295,7 +1295,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-DDEV_EXECUTOR_VERSION = "1.0.31"
+DDEV_EXECUTOR_VERSION = "1.0.32"
 
 app = FastAPI(title="Constrained DDEV/Git Executor", version=DDEV_EXECUTOR_VERSION)
 app.include_router(pm_bridge_github_router)
@@ -2271,38 +2271,80 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
     )
 
     if payload.phase != "cleanup":
-        returncode, stdout, stderr, timed_out = run_tracked(
-            payload.job_id,
-            ["ddev", "start", "-y"],
-            cwd=workspace,
-            timeout=min(timeout, 600),
-            env=_ddev_subprocess_env(),
+        workspace_mode = _workspace_instance_mode(
+            cfg,
+            job_id=payload.job_id,
+            path=workspace,
         )
-        infrastructure.append(
-            CommandOutput(
-                command="ddev start -y",
-                returncode=returncode,
-                stdout=stdout[-12000:],
-                stderr=stderr[-12000:],
-                timed_out=timed_out,
-            )
+        reuse_running_direct_ddev = bool(
+            (cfg.get("ddev") or {}).get("reuse_running_direct_ddev", False)
         )
-        if returncode != 0:
-            if (
-                _workspace_instance_mode(
-                    cfg,
-                    job_id=payload.job_id,
-                    path=workspace,
-                ) == "direct"
-                and payload.phase == "frontend_quality"
-            ):
-                _remove_managed_direct_node_override(workspace)
-            return PhaseResponse(
-                passed=False,
-                phase=payload.phase,
-                commands=[],
-                infrastructure=infrastructure,
+        direct_ddev_config_dirty = bool(
+            git(
+                workspace,
+                "status",
+                "--porcelain",
+                "--",
+                ".ddev",
+                check=False,
+            ).strip()
+        )
+        reused_running_direct_ddev = False
+
+        if (
+            workspace_mode == "direct"
+            and reuse_running_direct_ddev
+            and payload.phase != "frontend_quality"
+            and not direct_ddev_config_dirty
+        ):
+            probe_timeout = max(1, min(timeout, 30))
+            returncode, stdout, stderr, timed_out = run_tracked(
+                payload.job_id,
+                ["ddev", "exec", "true"],
+                cwd=workspace,
+                timeout=probe_timeout,
+                env=_ddev_subprocess_env(),
             )
+            infrastructure.append(
+                CommandOutput(
+                    command="ddev exec true",
+                    returncode=returncode,
+                    stdout=stdout[-12000:],
+                    stderr=stderr[-12000:],
+                    timed_out=timed_out,
+                )
+            )
+            reused_running_direct_ddev = returncode == 0
+
+        if not reused_running_direct_ddev:
+            returncode, stdout, stderr, timed_out = run_tracked(
+                payload.job_id,
+                ["ddev", "start", "-y"],
+                cwd=workspace,
+                timeout=min(timeout, 600),
+                env=_ddev_subprocess_env(),
+            )
+            infrastructure.append(
+                CommandOutput(
+                    command="ddev start -y",
+                    returncode=returncode,
+                    stdout=stdout[-12000:],
+                    stderr=stderr[-12000:],
+                    timed_out=timed_out,
+                )
+            )
+            if returncode != 0:
+                if (
+                    workspace_mode == "direct"
+                    and payload.phase == "frontend_quality"
+                ):
+                    _remove_managed_direct_node_override(workspace)
+                return PhaseResponse(
+                    passed=False,
+                    phase=payload.phase,
+                    commands=[],
+                    infrastructure=infrastructure,
+                )
 
     for command in commands:
         returncode, stdout, stderr, timed_out = run_tracked(
