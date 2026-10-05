@@ -20,14 +20,6 @@ _ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$"
 _ROLE_PATTERN = r"^[a-z][a-z0-9_]{1,79}$"
 _PROFILE_RANK = {"fast": 0, "standard": 1, "complex": 2, "critical": 3}
 _RISK_SCORE = {"routine": 20, "standard": 40, "high": 70, "critical": 90}
-_ROUTER_SEMANTIC_DEFAULTS = {
-    "ambiguity": 25,
-    "architecture_impact": 10,
-    "verification_difficulty": 25,
-    "context_requirement": 30,
-    "novelty": 25,
-    "reasoning_requirement": 40,
-}
 _VERIFICATION_ROUTING_FLOORS: dict[VerificationPhase, dict[str, int]] = {
     "targeted_tests": {},
     "static_analysis": {
@@ -364,24 +356,21 @@ def routing_semantic_from_work_order(work_order: WorkOrder) -> dict[str, int]:
     the final profile/model decision.
     """
 
-    semantic = {
-        **_ROUTER_SEMANTIC_DEFAULTS,
-        "risk": _RISK_SCORE[work_order.risk.level],
-    }
+    semantic = {"risk": _RISK_SCORE[work_order.risk.level]}
     phases = dict.fromkeys(
         list(work_order.verification.intermediate_phases)
         + list(work_order.verification.required_phases)
     )
     for phase in phases:
         for dimension, floor in _VERIFICATION_ROUTING_FLOORS[phase].items():
-            semantic[dimension] = max(semantic[dimension], floor)
+            semantic[dimension] = max(int(semantic.get(dimension, 0)), floor)
 
     contract_context = 30
     contract_context += min(20, len(work_order.source_references) * 3)
     contract_context += min(15, len(work_order.dependencies) * 5)
     contract_context += min(15, len(work_order.in_scope) * 2)
     semantic["context_requirement"] = max(
-        semantic["context_requirement"],
+        int(semantic.get("context_requirement", 0)),
         min(80, contract_context),
     )
     return semantic
@@ -414,14 +403,15 @@ def rehydrate_task_from_work_order(
     current = current_task or {}
     semantic = current.get("semantic")
     if isinstance(semantic, dict):
-        merged_semantic = dict(canonical["semantic"])
-        for dimension in _ROUTER_SEMANTIC_DEFAULTS:
-            observed = semantic.get(dimension)
+        merged_semantic = dict(semantic)
+        for dimension, floor in canonical["semantic"].items():
+            if dimension == "risk":
+                continue
+            observed = merged_semantic.get(dimension)
             if isinstance(observed, int) and not isinstance(observed, bool):
-                merged_semantic[dimension] = max(
-                    merged_semantic[dimension],
-                    observed,
-                )
+                merged_semantic[dimension] = max(floor, observed)
+            else:
+                merged_semantic[dimension] = floor
         # WorkOrder risk remains authoritative and is never reduced/raised by a
         # stale analyzer snapshot.
         merged_semantic["risk"] = canonical["semantic"]["risk"]
