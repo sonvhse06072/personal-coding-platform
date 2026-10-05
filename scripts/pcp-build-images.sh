@@ -9,7 +9,19 @@ ROUTER_IMAGE="personal-coding-platform-router:local"
 RUNTIME_IMAGE="personal-coding-platform-coding-runtime:local"
 EXECUTOR_IMAGE="personal-coding-platform-ddev-executor:local"
 
-CODEX_VERSION="${CODEX_VERSION:-latest}"
+TOOL_VERSIONS_FILE="${PCP_TOOL_VERSIONS_FILE:-$ROOT/config/tool-versions.env}"
+[[ -f "$TOOL_VERSIONS_FILE" ]] || {
+  echo "Missing tool-version contract: $TOOL_VERSIONS_FILE" >&2
+  exit 20
+}
+PINNED_CODEX_VERSION="$(
+  awk -F= '$1 == "CODEX_VERSION" {print $2; exit}' "$TOOL_VERSIONS_FILE"
+)"
+[[ "$PINNED_CODEX_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9.]+)?$ ]] || {
+  echo "Invalid pinned CODEX_VERSION in $TOOL_VERSIONS_FILE" >&2
+  exit 20
+}
+CODEX_VERSION="${CODEX_VERSION:-$PINNED_CODEX_VERSION}"
 OPENCODE_VERSION="${OPENCODE_VERSION:-latest}"
 DDEV_UID="${DDEV_UID:-$(id -u)}"
 DDEV_GID="${DDEV_GID:-$(id -g)}"
@@ -67,6 +79,8 @@ for image in "$ROUTER_IMAGE" "$RUNTIME_IMAGE" "$EXECUTOR_IMAGE"; do
 done
 
 echo "PCP_IMAGE_BUILD=PASS"
+echo "PCP_CODEX_VERSION=$CODEX_VERSION"
+echo "PCP_CODEX_PINNED_VERSION=$PINNED_CODEX_VERSION"
 echo "PCP_BUILDER=$BUILDER"
 echo "PCP_BUILDER_DRIVER=$builder_driver"
 echo "PCP_BUILDX_CONFIG=$BUILDX_STATE"
