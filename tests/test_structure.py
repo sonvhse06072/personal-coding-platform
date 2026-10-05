@@ -62,8 +62,8 @@ def test_chonhac_targeted_tests_execute_phpunit_and_static_analysis_executes_php
     static = ddev["static_analysis"]
 
     preflight = ddev["preflight"]
+    assert ddev["reuse_running_direct_ddev"] is True
     assert preflight == [
-        "ddev start -y",
         "ddev composer install --no-interaction",
     ]
     assert len(targeted) == 2
