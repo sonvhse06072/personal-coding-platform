@@ -1,13 +1,30 @@
+import os
 from pathlib import Path
 
 import yaml
 
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+def projects_file() -> Path:
+    configured = os.getenv("PROJECTS_FILE")
+    if configured:
+        path = Path(configured)
+        if path.is_file():
+            return path
+        raise RuntimeError(f"PROJECTS_FILE does not exist: {path}")
+
+    for parent in Path(__file__).resolve().parents:
+        candidate = parent / "config" / "projects.yml"
+        if candidate.is_file():
+            return candidate
+
+    raise RuntimeError("Unable to locate config/projects.yml")
+
+
+PROJECTS_FILE = projects_file()
 
 
 def test_chonhac_targeted_verification_follows_changed_module_test_layers() -> None:
-    data = yaml.safe_load((REPO_ROOT / "config" / "projects.yml").read_text(encoding="utf-8"))
+    data = yaml.safe_load(PROJECTS_FILE.read_text(encoding="utf-8"))
     chonhac = data["projects"]["chonhac"]
     ddev = chonhac["ddev"]
 
@@ -28,3 +45,23 @@ def test_chonhac_targeted_verification_follows_changed_module_test_layers() -> N
         "vendor/bin/phpcs web/modules/custom" in command
         for command in ddev["static_analysis"]
     )
+
+
+def test_projects_file_prefers_runtime_mount(monkeypatch, tmp_path) -> None:
+    mounted = tmp_path / "projects.yml"
+    mounted.write_text("projects: {}\n", encoding="utf-8")
+    monkeypatch.setenv("PROJECTS_FILE", str(mounted))
+
+    assert projects_file() == mounted
+
+
+def test_projects_file_fails_closed_for_missing_explicit_mount(monkeypatch, tmp_path) -> None:
+    missing = tmp_path / "missing.yml"
+    monkeypatch.setenv("PROJECTS_FILE", str(missing))
+
+    try:
+        projects_file()
+    except RuntimeError as exc:
+        assert "PROJECTS_FILE does not exist" in str(exc)
+    else:
+        raise AssertionError("Missing explicit PROJECTS_FILE was accepted")
