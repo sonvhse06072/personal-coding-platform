@@ -7,6 +7,23 @@ import pytest
 from app.shell import CommandTimeoutError, run_command
 
 
+def test_run_command_closes_stdin_for_noninteractive_subprocess(tmp_path: Path):
+    result = asyncio.run(
+        run_command(
+            [
+                sys.executable,
+                "-c",
+                "import sys; data=sys.stdin.read(); print(repr(data), flush=True)",
+            ],
+            cwd=tmp_path,
+            timeout=5,
+        )
+    )
+
+    assert result.returncode == 0
+    assert result.stdout == "''\n"
+
+
 def test_run_command_streams_lines_before_return(tmp_path: Path):
     seen: list[str] = []
 

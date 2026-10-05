@@ -17,6 +17,9 @@ def _event(payload: dict) -> str:
 def _assert_bounded_unattended_policy(argv: list[str], *, sandbox: str) -> None:
     assert argv[argv.index("--sandbox") + 1] == sandbox
     assert 'approval_policy="never"' in argv
+    assert "features.memories=false" in argv
+    assert "memories.use_memories=false" in argv
+    assert "memories.generate_memories=false" in argv
     assert "danger-full-access" not in argv
     assert "--dangerously-bypass-approvals-and-sandbox" not in argv
 
