@@ -423,6 +423,29 @@ def test_canonical_contract_is_present_in_all_agent_prompt_types() -> None:
         assert '"required_phases": ["targeted_tests", "static_analysis"]' in prompt
 
 
+def test_visual_quality_projects_router_complex_semantic_floor() -> None:
+    contract = WorkOrder.model_validate(
+        work_order(
+            verification={
+                "required_phases": [
+                    "targeted_tests",
+                    "frontend_quality",
+                    "visual_quality",
+                ],
+                "visual_routes": ["/artist/demo"],
+            }
+        )
+    )
+
+    semantic = canonical_task_from_work_order(contract)["semantic"]
+
+    assert semantic["risk"] == 40
+    assert semantic["verification_difficulty"] == 60
+    assert semantic["reasoning_requirement"] == 80
+    assert semantic["context_requirement"] >= 60
+    assert semantic["novelty"] == 50
+
+
 def test_checkpoint_and_job_view_preserve_contract_identity() -> None:
     contract = WorkOrder.model_validate(work_order())
     timestamp = datetime(2026, 9, 13, tzinfo=timezone.utc)

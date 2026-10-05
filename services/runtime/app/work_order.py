@@ -20,6 +20,33 @@ _ID_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$"
 _ROLE_PATTERN = r"^[a-z][a-z0-9_]{1,79}$"
 _PROFILE_RANK = {"fast": 0, "standard": 1, "complex": 2, "critical": 3}
 _RISK_SCORE = {"routine": 20, "standard": 40, "high": 70, "critical": 90}
+_VERIFICATION_ROUTING_FLOORS: dict[VerificationPhase, dict[str, int]] = {
+    "targeted_tests": {},
+    "static_analysis": {
+        "verification_difficulty": 40,
+        "reasoning_requirement": 45,
+    },
+    "full_tests": {
+        "verification_difficulty": 55,
+        "context_requirement": 45,
+        "reasoning_requirement": 55,
+    },
+    "frontend_quality": {
+        "verification_difficulty": 55,
+        "context_requirement": 55,
+        "novelty": 40,
+        "reasoning_requirement": 65,
+    },
+    # Router already promotes reasoning>=80 plus verification>=60 to complex.
+    # Visual browser evidence needs that topology even when the task has no
+    # schema/security flags and otherwise resembles an existing frontend.
+    "visual_quality": {
+        "verification_difficulty": 60,
+        "context_requirement": 60,
+        "novelty": 50,
+        "reasoning_requirement": 80,
+    },
+}
 _PROVIDER_ROLE_WORDS = {
     "openai", "codex", "claude", "anthropic", "deepseek", "antigravity", "groq", "openrouter"
 }
@@ -319,6 +346,36 @@ def validate_work_order_against_baseline(
             raise ValueError("visual_quality requires preview.visual_evidence configuration")
 
 
+def routing_semantic_from_work_order(work_order: WorkOrder) -> dict[str, int]:
+    """Project structured WorkOrder complexity into Router semantic signals.
+
+    WorkOrders are already authoritative contracts, so this deliberately uses
+    schema fields rather than keyword inference from objective/scope prose.
+    Verification phases establish minimum execution/verification demands while
+    bounded contract shape contributes context. Router remains the authority for
+    the final profile/model decision.
+    """
+
+    semantic = {"risk": _RISK_SCORE[work_order.risk.level]}
+    phases = dict.fromkeys(
+        list(work_order.verification.intermediate_phases)
+        + list(work_order.verification.required_phases)
+    )
+    for phase in phases:
+        for dimension, floor in _VERIFICATION_ROUTING_FLOORS[phase].items():
+            semantic[dimension] = max(int(semantic.get(dimension, 0)), floor)
+
+    contract_context = 30
+    contract_context += min(20, len(work_order.source_references) * 3)
+    contract_context += min(15, len(work_order.dependencies) * 5)
+    contract_context += min(15, len(work_order.in_scope) * 2)
+    semantic["context_requirement"] = max(
+        int(semantic.get("context_requirement", 0)),
+        min(80, contract_context),
+    )
+    return semantic
+
+
 def canonical_task_from_work_order(work_order: WorkOrder) -> dict[str, Any]:
     contract = json.dumps(work_order.model_dump(mode="json"), ensure_ascii=False, sort_keys=True)
     description = (
@@ -332,7 +389,7 @@ def canonical_task_from_work_order(work_order: WorkOrder) -> dict[str, Any]:
         "description": description,
         "task_type": work_order.requested_role,
         "flags": list(work_order.risk.flags),
-        "semantic": {"risk": _RISK_SCORE[work_order.risk.level]},
+        "semantic": routing_semantic_from_work_order(work_order),
     }
 
 
@@ -347,6 +404,16 @@ def rehydrate_task_from_work_order(
     semantic = current.get("semantic")
     if isinstance(semantic, dict):
         merged_semantic = dict(semantic)
+        for dimension, floor in canonical["semantic"].items():
+            if dimension == "risk":
+                continue
+            observed = merged_semantic.get(dimension)
+            if isinstance(observed, int) and not isinstance(observed, bool):
+                merged_semantic[dimension] = max(floor, observed)
+            else:
+                merged_semantic[dimension] = floor
+        # WorkOrder risk remains authoritative and is never reduced/raised by a
+        # stale analyzer snapshot.
         merged_semantic["risk"] = canonical["semantic"]["risk"]
         canonical["semantic"] = merged_semantic
     flags = list(canonical.get("flags") or [])

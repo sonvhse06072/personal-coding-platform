@@ -76,6 +76,42 @@ def test_restore_rehydrates_authoritative_contract_but_keeps_analyzer_signals() 
     assert restored["flags"] == ["material_change_required", "security_boundary_change"]
 
 
+def test_restore_keeps_work_order_semantic_floor_and_higher_analyzer_signal() -> None:
+    work_order = WorkOrder.model_validate(
+        contract(
+            verification={
+                "required_phases": [
+                    "targeted_tests",
+                    "frontend_quality",
+                    "visual_quality",
+                ],
+                "visual_routes": ["/artist/demo"],
+            }
+        )
+    )
+    storage = Storage(
+        {
+            "id": "job-routing-floor",
+            "checkpoint": {"work_order": work_order.model_dump(mode="json")},
+            "task": {
+                "title": "temporary",
+                "semantic": {
+                    "reasoning_requirement": 10,
+                    "verification_difficulty": 88,
+                },
+            },
+        }
+    )
+    engine = RuntimeEngine(storage)
+
+    engine._restore_work_order_task("job-routing-floor")
+
+    semantic = storage.rows["job-routing-floor"]["task"]["semantic"]
+    assert semantic["reasoning_requirement"] == 80
+    assert semantic["verification_difficulty"] == 88
+    assert semantic["risk"] == 40
+
+
 def test_dependency_ids_and_scope_must_be_unambiguous() -> None:
     with pytest.raises(ValidationError, match="Invalid WorkOrder dependency id"):
         WorkOrder.model_validate(contract(dependencies=["not a valid id"]))
