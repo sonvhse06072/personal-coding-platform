@@ -5,6 +5,14 @@ set -euo pipefail
 printf "%-22s %s\n" "antigravity-bridge" "$(bash ./scripts/with-host-secrets.sh ./scripts/antigravity-bridge.sh status 2>/dev/null || true)"
 printf "%-22s %s\n" "router" "$(ddev exec -s router curl -fsS http://127.0.0.1:8090/health 2>/dev/null || echo DOWN)"
 printf "%-22s %s\n" "coding-runtime" "$(ddev exec -s coding-runtime curl -fsS http://127.0.0.1:8787/health 2>/dev/null || echo DOWN)"
+expected_codex="$(awk -F= '$1 == "CODEX_VERSION" {print $2; exit}' ./config/tool-versions.env 2>/dev/null || true)"
+actual_codex="$(ddev exec -s coding-runtime codex --version 2>/dev/null || true)"
+if [[ -n "$expected_codex" && "$actual_codex" == "codex-cli $expected_codex" ]]; then
+  codex_status="$actual_codex (pinned)"
+else
+  codex_status="${actual_codex:-DOWN} (expected ${expected_codex:-unknown})"
+fi
+printf "%-22s %s\n" "codex-cli" "$codex_status"
 printf "%-22s %s\n" "ddev-executor" "$(ddev exec -s ddev-executor curl -fsS http://127.0.0.1:8790/health 2>/dev/null || echo DOWN)"
 printf "%-22s %s\n" "n8n" "$(ddev exec -s n8n node -e 'fetch(\"http://127.0.0.1:5678/healthz\").then(async r=>{if(!r.ok)process.exit(1);console.log(await r.text())}).catch(()=>process.exit(1))' 2>/dev/null || echo DOWN)"
 printf "%-22s %s\n" "credential-boundary" "$(bash ./scripts/service-secret-status.sh 2>/dev/null || echo DOWN)"

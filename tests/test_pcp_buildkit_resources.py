@@ -75,6 +75,49 @@ fi
         assert expected in joined
 
 
+def test_build_helper_uses_checked_in_codex_pin_by_default(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "docker.log"
+    write_executable(
+        bin_dir / "docker",
+        """#!/usr/bin/env bash
+set -eu
+printf '%s\\n' "$*" >> "$DOCKER_LOG"
+if [[ "$1 $2" == "buildx inspect" ]]; then
+  printf 'Name:          pcp-builder\\nDriver:        docker-container\\nStatus:           running\\n'
+elif [[ "$1 $2" == "image inspect" ]]; then
+  exit 0
+fi
+""",
+    )
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "DOCKER_LOG": str(log),
+        "PCP_BUILDX_CONFIG": str(tmp_path / "buildx"),
+        "OPENCODE_VERSION": "opencode-test",
+        "DDEV_UID": "1234",
+        "DDEV_GID": "5678",
+        "DDEV_EXECUTOR_VERSION": "v1.25.4-test",
+        "DDEV_EXECUTOR_BUILDX_VERSION": "v0.37.0-test",
+    }
+    env.pop("CODEX_VERSION", None)
+
+    result = subprocess.run(["bash", str(BUILD)], env=env, text=True, capture_output=True)
+
+    assert result.returncode == 0, result.stderr
+    assert "PCP_CODEX_VERSION=0.160.0" in result.stdout
+    assert "PCP_CODEX_PINNED_VERSION=0.160.0" in result.stdout
+    calls = log.read_text(encoding="utf-8").splitlines()
+    runtime_builds = [
+        call for call in calls
+        if call.startswith("buildx build ") and "services/runtime" in call
+    ]
+    assert len(runtime_builds) == 1
+    assert "CODEX_VERSION=0.160.0" in runtime_builds[0]
+
+
 def test_gc_refuses_active_work_hidden_behind_500_newer_terminal_jobs(tmp_path: Path) -> None:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()

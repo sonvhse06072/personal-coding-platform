@@ -1,6 +1,6 @@
 FROM node:22-bookworm-slim
 
-ARG CODEX_VERSION=latest
+ARG CODEX_VERSION
 ARG OPENCODE_VERSION=latest
 ARG DDEV_UID=1000
 ARG DDEV_GID=1000
@@ -9,9 +9,12 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends python3 python3-pip python3-venv git ripgrep jq curl ca-certificates openssh-client \
     && rm -rf /var/lib/apt/lists/*
 
-RUN npm install -g \
+RUN test -n "${CODEX_VERSION}" \
+    && npm install -g \
     @openai/codex@${CODEX_VERSION} \
     opencode-ai@${OPENCODE_VERSION}
+
+LABEL org.opencontainers.image.pcp.codex-version="${CODEX_VERSION}"
 
 # The service runs as the host DDEV UID/GID. Prepare a writable HOME for
 # OpenCode/Codex caches. Antigravity runs natively on WSL through the host bridge

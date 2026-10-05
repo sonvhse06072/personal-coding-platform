@@ -292,6 +292,27 @@ Responsibilities:
 
 Runtime should handle routine test/lint/repair mechanics, healthy continuation, mechanical static-counter headroom, and non-material resource growth without invoking PM or Human Owner for every iteration. Semantic working-envelope crossings that can indicate a change in implementation shape—such as changed-file scope growth—are PM reassessment checkpoints, not automatic Human Owner gates. A routine owner `continue`/budget-extension action whose only reason is an underestimated but healthy task remains a platform defect, not the target operating model.
 
+### Runtime coding-CLI toolchain pinning
+
+Subscription-backed coding CLIs that execute inside PCP Runtime are part of the
+reproducible execution environment, not an ambient host dependency. Their normal
+build contract must use checked-in concrete versions rather than floating
+`latest` tags. A host CLI upgrade does not upgrade the Runtime image.
+
+For Codex specifically:
+
+- `config/tool-versions.env` is the authoritative normal-build pin;
+- `scripts/pcp-build-images.sh` passes that exact version into the Runtime image;
+- `platform-status` exposes the running Codex version against the pin;
+- `platform-test` fails closed when the running Runtime Codex binary does not
+  match the checked-in pin.
+
+An explicit `CODEX_VERSION` override may be used for bounded local diagnosis,
+but it is not accepted release evidence until the checked-in pin is updated,
+tests pass, and the resulting Runtime image reports the same version. This
+prevents Docker/BuildKit caching of a literal `@latest` install step from
+silently leaving Runtime on an older Codex binary.
+
 ## 6. Developer / Specialist role
 
 A Developer receives a WorkOrder/Task Contract rather than an unconstrained natural-language request.
