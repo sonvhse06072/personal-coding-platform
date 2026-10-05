@@ -1,4 +1,4 @@
-version: 19
+version: 20
 complexity_weights:
   scope: 0.18
   dependency_depth: 0.1
@@ -139,6 +139,7 @@ profiles:
     preferred_executor_ids:
     - openrouter_qwen3_coder_free
     - antigravity_free
+    - codex_gpt6_luna
     - codex_luna
     - codex_terra
     max_input_tokens: 250000
@@ -172,6 +173,8 @@ profiles:
     preferred_executor_ids:
     - openrouter_qwen3_coder_free
     - antigravity_free
+    - codex_gpt6_luna
+    - codex_gpt6_sol
     - codex_terra
     - antigravity_flash_high
     - antigravity_gemini_pro
@@ -210,14 +213,18 @@ profiles:
     evaluator_roles:
     - reviewer
     preferred_planner_ids:
+    - codex_gpt61_sol
     - antigravity_gemini_pro
+    - codex_gpt6_sol
     - codex_terra
     - antigravity_claude_sonnet
     - antigravity_flash_high
     - codex_sol
     - antigravity_free
     preferred_executor_ids:
+    - codex_gpt61_sol
     - antigravity_free
+    - codex_gpt6_sol
     - codex_terra
     - antigravity_flash_high
     - antigravity_gemini_pro
@@ -227,7 +234,9 @@ profiles:
     - antigravity_claude_sonnet
     - openrouter_qwen3_coder_free
     - antigravity_gemini_pro
+    - codex_gpt6_sol
     - codex_terra
+    - codex_gpt61_sol
     - antigravity_flash_high
     - antigravity_free
     max_input_tokens: 2000000
@@ -284,7 +293,9 @@ staffing_roles:
     - complex
     - critical
     preferred_ids:
+    - codex_gpt61_sol
     - antigravity_gemini_pro
+    - codex_gpt6_sol
     - codex_terra
     - antigravity_claude_sonnet
     - codex_sol

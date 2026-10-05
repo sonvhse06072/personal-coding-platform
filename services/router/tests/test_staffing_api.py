@@ -29,10 +29,10 @@ def test_staffing_endpoint_returns_router_selected_pm_agent() -> None:
     data = response.json()
     assert data["request_id"] == "pm-api-1"
     assert data["role"] == "product_manager"
-    assert data["choice"]["id"] == "codex_terra"
+    assert data["choice"]["id"] == "codex_gpt6_sol"
     assert data["choice"]["reasoning_effort"] == "low"
-    assert data["policy_version"] == 19
-    assert data["registry_version"] == 11
+    assert data["policy_version"] == 20
+    assert data["registry_version"] == 12
 
 
 def test_staffing_endpoint_rejects_unknown_role() -> None:

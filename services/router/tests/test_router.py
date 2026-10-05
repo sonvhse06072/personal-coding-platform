@@ -110,7 +110,14 @@ def test_standard_is_autonomous_and_does_not_default_to_sol():
     )
     result = make_engine().route(req)
     assert result.strategy.profile == "standard"
-    assert result.strategy.executor.id in {"antigravity_free", OPENROUTER_FREE, "codex_luna", "codex_terra"}
+    assert result.strategy.executor.id in {
+        "antigravity_free",
+        OPENROUTER_FREE,
+        "codex_gpt6_luna",
+        "codex_gpt6_sol",
+        "codex_luna",
+        "codex_terra",
+    }
     assert result.strategy.executor.id != "codex_sol"
     assert result.strategy.human_decision.required is False
     assert result.strategy.permissions["commit"] is True
@@ -171,7 +178,13 @@ def test_evaluator_provider_failure_has_degraded_but_eligible_fallback():
     # With only two configured coding providers, losing the independent evaluator
     # may force a same-provider reviewer. That is preferable to blocking while
     # still preserving a separate evaluation turn and model policy.
-    assert rerouted.strategy.evaluator.id in {"antigravity_free", OPENROUTER_FREE, "codex_terra"}
+    assert rerouted.strategy.evaluator.id in {
+        "antigravity_free",
+        OPENROUTER_FREE,
+        "codex_gpt6_sol",
+        "codex_gpt61_sol",
+        "codex_terra",
+    }
 
 
 def test_reassess_raises_reasoning_before_changing_codex_model():
@@ -179,7 +192,7 @@ def test_reassess_raises_reasoning_before_changing_codex_model():
     route = eng.route(complex_request(provider_state={
         "provider:google_antigravity": {"healthy": False, "available": False}
     }))
-    assert route.strategy.executor.id == "codex_terra"
+    assert route.strategy.executor.id == "codex_gpt61_sol"
     assert route.strategy.executor.reasoning_effort == "medium"
 
     result = eng.reassess(ReassessRequest(
@@ -194,9 +207,43 @@ def test_reassess_raises_reasoning_before_changing_codex_model():
 
     assert result.action == "escalate"
     assert result.next_executor is not None
-    assert result.next_executor.id == "codex_terra"
+    assert result.next_executor.id == "codex_gpt61_sol"
     assert result.next_executor.reasoning_effort == "high"
     assert "reasoning_effort_escalation" in result.signals
+
+
+
+
+def test_current_codex_generation_is_preferred_for_new_work() -> None:
+    engine = make_engine()
+
+    fast = engine.route(base_request(provider_state={
+        "provider:google_antigravity": {"healthy": False, "available": False},
+        "provider:openrouter": {"healthy": False, "available": False},
+    }))
+    assert fast.strategy.profile == "fast"
+    assert fast.strategy.executor.id == "codex_gpt6_luna"
+    assert fast.strategy.executor.model == "gpt-6-luna"
+
+    complex_route = engine.route(complex_request(provider_state={
+        "provider:google_antigravity": {"healthy": False, "available": False},
+    }))
+    assert complex_route.strategy.profile == "complex"
+    assert complex_route.strategy.planner is not None
+    assert complex_route.strategy.planner.id == "codex_gpt61_sol"
+    assert complex_route.strategy.executor.id == "codex_gpt61_sol"
+    assert complex_route.strategy.executor.model == "gpt-6.1-sol"
+
+
+def test_legacy_codex_models_remain_eligible_fallbacks() -> None:
+    result = make_engine().route(complex_request(provider_state={
+        "provider:google_antigravity": {"healthy": False, "available": False},
+        "codex_gpt61_sol": {"healthy": False, "available": False},
+        "codex_gpt6_sol": {"healthy": False, "available": False},
+    }))
+
+    assert result.strategy.executor.id == "codex_terra"
+    assert result.strategy.executor.model == "gpt-5.6-terra"
 
 
 def test_auth_change_is_critical_and_human_decision():
@@ -423,6 +470,9 @@ def test_provider_level_unavailable_excludes_same_provider_models():
     })
     result = eng.route(req)
     assert result.strategy.executor.provider != "openai"
+    assert "codex_gpt6_luna" in result.rejected_candidates
+    assert "codex_gpt6_sol" in result.rejected_candidates
+    assert "codex_gpt61_sol" in result.rejected_candidates
     assert "codex_luna" in result.rejected_candidates
     assert "codex_terra" in result.rejected_candidates
     assert "codex_sol" in result.rejected_candidates

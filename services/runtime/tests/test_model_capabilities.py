@@ -48,6 +48,28 @@ def test_historical_low_medium_high_choices_remain_valid(
     validate_model_choice(choice(model_id, effort))
 
 
+
+
+@pytest.mark.parametrize(
+    ("model_id", "upstream", "effort"),
+    [
+        ("codex_gpt6_luna", "gpt-6-luna", "low"),
+        ("codex_gpt6_sol", "gpt-6-sol", "medium"),
+        ("codex_gpt61_sol", "gpt-6.1-sol", "high"),
+    ],
+)
+def test_current_codex_generation_choices_are_registry_valid(
+    model_id: str,
+    upstream: str,
+    effort: str,
+) -> None:
+    selected = choice(model_id, effort)
+    assert selected["model"] == upstream
+    capability = validate_model_choice(selected)
+    assert capability.supports_explicit_effort is True
+    assert capability.allowed_efforts[-1] == "max"
+
+
 def test_flash_medium_accepts_only_legacy_ignored_efforts_and_claude_stays_strict() -> None:
     assert not validate_model_choice(
         choice("antigravity_free", "low")
@@ -77,6 +99,30 @@ def test_unknown_model_adapter_and_upstream_mismatches_fail_closed() -> None:
     upstream_mismatch["model"] = "gpt-6-astra"
     with pytest.raises(ModelCapabilityError, match="Upstream model mismatch"):
         validate_model_choice(upstream_mismatch)
+
+
+
+
+def test_legacy_codex_logical_ids_keep_historical_upstreams() -> None:
+    models = models_doc()["models"]
+
+    assert models["codex_luna"]["model"] == "gpt-5.6-luna"
+    assert models["codex_terra"]["model"] == "gpt-5.6-terra"
+    assert models["codex_sol"]["model"] == "gpt-5.6-sol"
+    assert models["frontier_codex"]["model"] == "gpt-6-astra"
+    assert models["frontier_codex"]["roles"] == ["frontier_escalation"]
+    assert {
+        models[model_id]["quota_group"]
+        for model_id in (
+            "codex_gpt6_luna",
+            "codex_gpt6_sol",
+            "codex_gpt61_sol",
+            "codex_luna",
+            "codex_terra",
+            "codex_sol",
+            "frontier_codex",
+        )
+    } == {"codex_chatgpt_plus"}
 
 
 def test_non_reasoning_adapter_rejects_an_explicit_effort() -> None:
@@ -110,7 +156,15 @@ def test_malformed_registry_reasoning_metadata_is_rejected(
 
 def test_registry_declares_bounded_antigravity_and_full_codex_capabilities() -> None:
     models = models_doc()["models"]
-    for model_id in ("codex_luna", "codex_terra", "codex_sol", "frontier_codex"):
+    for model_id in (
+        "codex_gpt6_luna",
+        "codex_gpt6_sol",
+        "codex_gpt61_sol",
+        "codex_luna",
+        "codex_terra",
+        "codex_sol",
+        "frontier_codex",
+    ):
         assert reasoning_capability(model_id, models[model_id]).allowed_efforts[-1] == "max"
     for model_id in ("antigravity_flash_high", "antigravity_gemini_pro"):
         assert reasoning_capability(model_id, models[model_id]).allowed_efforts == (

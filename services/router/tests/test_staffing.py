@@ -41,6 +41,7 @@ def test_product_manager_staffing_selects_only_pm_eligible_agent() -> None:
     assert result.role == "product_manager"
     assert result.profile == "standard"
     assert result.choice.id in {
+        "codex_gpt6_sol",
         "codex_terra",
         "antigravity_free",
         "antigravity_gemini_pro",
@@ -52,8 +53,8 @@ def test_product_manager_staffing_selects_only_pm_eligible_agent() -> None:
         "low" if capability.supports_explicit_effort else None
     )
     assert "product_manager" in engine.models[result.choice.id]["roles"]
-    assert result.policy_version == 19
-    assert result.registry_version == 11
+    assert result.policy_version == 20
+    assert result.registry_version == 12
 
 
 def test_product_manager_staffing_respects_provider_availability_and_model_effort_capability() -> None:
@@ -70,7 +71,7 @@ def test_product_manager_staffing_respects_provider_availability_and_model_effor
     assert result.choice.quota_group in {"antigravity_gemini", "antigravity_claude_gpt"}
 
 
-def test_product_manager_staffing_can_fall_back_to_sol_when_antigravity_quota_is_unavailable() -> None:
+def test_product_manager_staffing_prefers_current_gpt6_sol_when_antigravity_is_unavailable() -> None:
     engine = make_engine()
     result = engine.staff(
         pm_request(
@@ -82,7 +83,8 @@ def test_product_manager_staffing_can_fall_back_to_sol_when_antigravity_quota_is
         )
     )
 
-    assert result.choice.id == "codex_sol"
+    assert result.choice.id == "codex_gpt6_sol"
+    assert result.choice.model == "gpt-6-sol"
     assert result.choice.reasoning_effort == "low"
 
 

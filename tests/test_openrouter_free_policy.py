@@ -23,7 +23,7 @@ def test_openrouter_free_uses_one_explicit_effectiveness_first_model() -> None:
     models = models_doc["models"]
     model = models[MODEL_ID]
 
-    assert models_doc["version"] == 11
+    assert models_doc["version"] == 12
     assert all(item.get("model") != "openrouter/free" for item in models.values())
     assert model["kind"] == "agent"
     assert model["provider"] == "openrouter"
@@ -56,7 +56,7 @@ def test_openrouter_free_is_preferred_for_routine_work_and_excluded_from_critica
     _, policy = documents()
     profiles = policy["profiles"]
 
-    assert policy["version"] == 19
+    assert policy["version"] == 20
     assert policy["scoring"]["quota_near_exhaustion_threshold"] == 0.99
     assert policy["telemetry_calibration"]["minimum_sample_size"] == 5
     assert policy["anti_loop"]["review_repair_max_repair_cycles"] == 6

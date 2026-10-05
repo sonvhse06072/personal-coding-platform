@@ -50,7 +50,7 @@ def test_registry_exposes_explicit_antigravity_models_and_quota_groups():
     cfg = get_config()["models"]
     models = cfg["models"]
 
-    assert cfg["version"] == 11
+    assert cfg["version"] == 12
     assert models["antigravity_free"]["model"] == "gemini-3.8-flash-medium"
     assert models["antigravity_flash_high"]["model"] == "gemini-3.8-flash-high"
     assert models["antigravity_gemini_pro"]["model"] == "gemini-3.1-pro-high"
@@ -74,13 +74,29 @@ def test_shared_legacy_codex_quota_key_suppresses_all_codex_models():
     _, rejected = engine.select_model(
         role="executor",
         role_names=["executor", "critical_executor", "frontier_escalation"],
-        preferred_ids=["codex_luna", "codex_terra", "codex_sol", "frontier_codex"],
+        preferred_ids=[
+            "codex_gpt6_luna",
+            "codex_gpt6_sol",
+            "codex_gpt61_sol",
+            "codex_luna",
+            "codex_terra",
+            "codex_sol",
+            "frontier_codex",
+        ],
         request=request,
         dimensions=dimensions,
         profile="critical",
     )
 
-    for model_id in ("codex_luna", "codex_terra", "codex_sol", "frontier_codex"):
+    for model_id in (
+        "codex_gpt6_luna",
+        "codex_gpt6_sol",
+        "codex_gpt61_sol",
+        "codex_luna",
+        "codex_terra",
+        "codex_sol",
+        "frontier_codex",
+    ):
         assert "provider/model unavailable" in rejected[model_id]
 
 
