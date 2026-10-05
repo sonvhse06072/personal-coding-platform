@@ -818,6 +818,156 @@ def test_direct_phase_uses_normal_ddev_identity_without_pcp_override(tmp_path, m
     assert not (ddev / "config.coding-platform.yaml").exists()
 
 
+def test_direct_phase_reuses_ready_running_ddev_when_opted_in(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct(
+        monkeypatch, tmp_path, allow_push=False
+    )
+    ddev = source / ".ddev"
+    ddev.mkdir()
+    (ddev / "config.yaml").write_text("name: demo\ntype: drupal11\n")
+    run("git", "add", ".ddev/config.yaml", cwd=source)
+    run("git", "commit", "-m", "add ddev", cwd=source)
+    run("git", "push", "origin", "main", cwd=source)
+
+    projects_file = tmp_path / "projects.yml"
+    data = yaml.safe_load(projects_file.read_text())
+    data["projects"]["demo"]["ddev"] = {
+        "enabled": True,
+        "reuse_running_direct_ddev": True,
+        "targeted_tests": ["ddev exec echo ok"],
+    }
+    projects_file.write_text(yaml.safe_dump(data))
+
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobdirectreuse", project_id="demo")
+    )
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append((list(argv), timeout))
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+
+    response = phase(
+        PhaseRequest(
+            job_id="jobdirectreuse",
+            project_id="demo",
+            workspace=created["workspace"],
+            phase="targeted_tests",
+        )
+    )
+
+    assert response.passed is True
+    assert calls[0][0] == ["ddev", "exec", "true"]
+    assert calls[0][1] == 30
+    assert calls[1][0] == ["bash", "-lc", "ddev exec echo ok"]
+    assert len(response.infrastructure) == 1
+    assert response.infrastructure[0].command == "ddev exec true"
+    assert response.infrastructure[0].returncode == 0
+
+
+def test_direct_phase_falls_back_to_start_when_readiness_probe_fails(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct(
+        monkeypatch, tmp_path, allow_push=False
+    )
+    ddev = source / ".ddev"
+    ddev.mkdir()
+    (ddev / "config.yaml").write_text("name: demo\ntype: drupal11\n")
+    run("git", "add", ".ddev/config.yaml", cwd=source)
+    run("git", "commit", "-m", "add ddev", cwd=source)
+    run("git", "push", "origin", "main", cwd=source)
+
+    projects_file = tmp_path / "projects.yml"
+    data = yaml.safe_load(projects_file.read_text())
+    data["projects"]["demo"]["ddev"] = {
+        "enabled": True,
+        "reuse_running_direct_ddev": True,
+        "targeted_tests": ["ddev exec echo ok"],
+    }
+    projects_file.write_text(yaml.safe_dump(data))
+
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobdirectfallback", project_id="demo")
+    )
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append(list(argv))
+        if list(argv) == ["ddev", "exec", "true"]:
+            return 1, "", "not running", False
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+
+    response = phase(
+        PhaseRequest(
+            job_id="jobdirectfallback",
+            project_id="demo",
+            workspace=created["workspace"],
+            phase="targeted_tests",
+        )
+    )
+
+    assert response.passed is True
+    assert calls[0] == ["ddev", "exec", "true"]
+    assert calls[1] == ["ddev", "start", "-y"]
+    assert calls[2] == ["bash", "-lc", "ddev exec echo ok"]
+    assert [item.command for item in response.infrastructure] == [
+        "ddev exec true",
+        "ddev start -y",
+    ]
+
+
+def test_direct_phase_starts_when_ddev_config_is_dirty(tmp_path, monkeypatch):
+    source, _remote, _workspaces = configure_direct(
+        monkeypatch, tmp_path, allow_push=False
+    )
+    ddev = source / ".ddev"
+    ddev.mkdir()
+    config = ddev / "config.yaml"
+    config.write_text("name: demo\ntype: drupal11\n")
+    run("git", "add", ".ddev/config.yaml", cwd=source)
+    run("git", "commit", "-m", "add ddev", cwd=source)
+    run("git", "push", "origin", "main", cwd=source)
+
+    projects_file = tmp_path / "projects.yml"
+    data = yaml.safe_load(projects_file.read_text())
+    data["projects"]["demo"]["ddev"] = {
+        "enabled": True,
+        "reuse_running_direct_ddev": True,
+        "targeted_tests": ["ddev exec echo ok"],
+    }
+    projects_file.write_text(yaml.safe_dump(data))
+
+    created = create_workspace(
+        WorkspaceRequest(job_id="jobdirectdirty", project_id="demo")
+    )
+    config.write_text("name: demo\ntype: drupal11\nphp_version: 8.4\n")
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append(list(argv))
+        return 0, "ok\n", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+
+    response = phase(
+        PhaseRequest(
+            job_id="jobdirectdirty",
+            project_id="demo",
+            workspace=created["workspace"],
+            phase="targeted_tests",
+        )
+    )
+
+    assert response.passed is True
+    assert calls[0] == ["ddev", "start", "-y"]
+    assert calls[1] == ["bash", "-lc", "ddev exec echo ok"]
+    assert len(response.infrastructure) == 1
+    assert response.infrastructure[0].command == "ddev start -y"
+
+
 
 def test_direct_project_can_request_disposable_isolated_planning_workspace(tmp_path, monkeypatch):
     source, _remote, workspaces = configure_direct(
