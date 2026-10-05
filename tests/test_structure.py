@@ -14,6 +14,7 @@ def test_required_platform_files_exist():
         ".ddev/.env.ddev-executor.local.example", ".ddev/.env.n8n.local.example",
         ".ddev/.env.host.local.example",
         "config/models.yml", "config/routing-policy.yml", "config/projects.yml",
+        "config/tool-versions.env",
         "services/router/app/main.py", "services/runtime/app/main.py", "services/ddev-executor/app/main.py",
         "services/ddev-executor/app/github_delivery.py",
         "scripts/pcp-build-images.sh", "scripts/pcp-resource-inventory.sh",
@@ -21,6 +22,24 @@ def test_required_platform_files_exist():
     ]
     for item in required:
         assert (ROOT / item).exists(), item
+
+
+def test_codex_toolchain_version_is_pinned_and_enforced():
+    pin = (ROOT / "config/tool-versions.env").read_text(encoding="utf-8").strip()
+    build = (ROOT / "scripts/pcp-build-images.sh").read_text(encoding="utf-8")
+    runtime = (ROOT / "services/runtime/Dockerfile").read_text(encoding="utf-8")
+    status = (ROOT / ".ddev/commands/host/platform-status").read_text(encoding="utf-8")
+    platform_test = (ROOT / ".ddev/commands/host/platform-test").read_text(encoding="utf-8")
+
+    assert pin == "CODEX_VERSION=0.160.0"
+    assert 'CODEX_VERSION="${CODEX_VERSION:-latest}"' not in build
+    assert 'CODEX_VERSION="${CODEX_VERSION:-$PINNED_CODEX_VERSION}"' in build
+    assert "ARG CODEX_VERSION=latest" not in runtime
+    assert "ARG CODEX_VERSION\n" in runtime
+    assert 'org.opencontainers.image.pcp.codex-version="${CODEX_VERSION}"' in runtime
+    assert '"codex-cli"' in status
+    assert "expected_codex" in status
+    assert "Codex CLI version mismatch" in platform_test
 
 
 def test_projects_yaml_parses():
