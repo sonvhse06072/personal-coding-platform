@@ -710,6 +710,9 @@ class RuntimeEngine(RuntimeEngineCore):
             path_signals = changed_path_protected_signals(
                 diff.get("changed_files") or [],
                 checkpoint,
+                dependency_manifest_changes=diff.get(
+                    "dependency_manifest_changes"
+                ),
             )
             # important_decision_flags describes the current diff, not
             # historical diffs. Decision history is persisted separately in

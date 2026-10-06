@@ -82,3 +82,36 @@ def test_real_migration_and_schema_paths_remain_protected() -> None:
     ):
         signals = changed_path_protected_signals([path])
         assert "destructive_migration" in signals, path
+
+
+def test_package_json_script_only_change_is_not_dependency_addition_with_semantic_evidence() -> None:
+    signals = changed_path_protected_signals(
+        ["frontend/package.json"],
+        dependency_manifest_changes=[],
+    )
+
+    assert "major_dependency_addition" not in signals
+
+
+def test_package_json_dependency_change_remains_protected() -> None:
+    signals = changed_path_protected_signals(
+        ["frontend/package.json"],
+        dependency_manifest_changes=["frontend/package.json"],
+    )
+
+    assert "major_dependency_addition" in signals
+
+
+def test_legacy_package_json_without_semantic_evidence_remains_fail_closed() -> None:
+    signals = changed_path_protected_signals(["frontend/package.json"])
+
+    assert "major_dependency_addition" in signals
+
+
+def test_lockfile_remains_protected_even_when_semantic_list_is_empty() -> None:
+    signals = changed_path_protected_signals(
+        ["frontend/package-lock.json"],
+        dependency_manifest_changes=[],
+    )
+
+    assert "major_dependency_addition" in signals

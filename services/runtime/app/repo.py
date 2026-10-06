@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import subprocess
+import tomllib
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +18,168 @@ CHANGE_VERBS = (
 
 
 _RUNTIME_UNTRACKED_EXACT_EXCLUDES = {".ddev/config.coding-platform.yaml"}
+
+_STRUCTURED_DEPENDENCY_MANIFESTS = {
+    "package.json",
+    "composer.json",
+    "pyproject.toml",
+    "cargo.toml",
+}
+
+_ALWAYS_MATERIAL_DEPENDENCY_MANIFESTS = {
+    "package-lock.json",
+    "pnpm-lock.yaml",
+    "yarn.lock",
+    "composer.lock",
+    "poetry.lock",
+    "pipfile",
+    "pipfile.lock",
+    "go.mod",
+    "go.sum",
+    "cargo.lock",
+    "gemfile",
+    "gemfile.lock",
+    "dockerfile",
+    "docker-compose.yml",
+    "docker-compose.yaml",
+    "compose.yml",
+    "compose.yaml",
+}
+
+
+def _read_base_file(workspace: Path, base: str, path: str) -> bytes | None:
+    proc = subprocess.run(
+        ["git", "-C", str(workspace), "show", f"{base}:{path}"],
+        capture_output=True,
+    )
+    if proc.returncode != 0:
+        return None
+    return proc.stdout
+
+
+def _read_working_file(workspace: Path, path: str) -> bytes | None:
+    target = workspace / path
+    if not target.is_file():
+        return None
+    return target.read_bytes()
+
+
+def _package_dependency_surface(document: dict[str, Any]) -> dict[str, Any]:
+    keys = (
+        "dependencies",
+        "devDependencies",
+        "peerDependencies",
+        "optionalDependencies",
+        "bundledDependencies",
+        "bundleDependencies",
+        "overrides",
+        "resolutions",
+    )
+    return {key: document.get(key) for key in keys if key in document}
+
+
+def _composer_dependency_surface(document: dict[str, Any]) -> dict[str, Any]:
+    keys = ("require", "require-dev", "repositories")
+    return {key: document.get(key) for key in keys if key in document}
+
+
+def _collect_named_dependency_tables(
+    value: Any,
+    *,
+    path: tuple[str, ...] = (),
+) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    if not isinstance(value, dict):
+        return out
+    for key, child in value.items():
+        next_path = (*path, str(key))
+        normalized = str(key).lower()
+        if normalized in {
+            "dependencies",
+            "dev-dependencies",
+            "build-dependencies",
+            "optional-dependencies",
+        }:
+            out[".".join(next_path)] = child
+        if isinstance(child, dict):
+            out.update(_collect_named_dependency_tables(child, path=next_path))
+    return out
+
+
+def _pyproject_dependency_surface(document: dict[str, Any]) -> dict[str, Any]:
+    surface = _collect_named_dependency_tables(document)
+    build_system = document.get("build-system")
+    if isinstance(build_system, dict) and "requires" in build_system:
+        surface["build-system.requires"] = build_system.get("requires")
+    return surface
+
+
+def _cargo_dependency_surface(document: dict[str, Any]) -> dict[str, Any]:
+    return _collect_named_dependency_tables(document)
+
+
+def _structured_dependency_surface(name: str, raw: bytes) -> dict[str, Any]:
+    if name in {"package.json", "composer.json"}:
+        document = json.loads(raw.decode("utf-8"))
+    elif name in {"pyproject.toml", "cargo.toml"}:
+        document = tomllib.loads(raw.decode("utf-8"))
+    else:
+        raise ValueError(f"Unsupported structured dependency manifest: {name}")
+    if not isinstance(document, dict):
+        raise ValueError(f"Dependency manifest is not an object: {name}")
+    if name == "package.json":
+        return _package_dependency_surface(document)
+    if name == "composer.json":
+        return _composer_dependency_surface(document)
+    if name == "pyproject.toml":
+        return _pyproject_dependency_surface(document)
+    return _cargo_dependency_surface(document)
+
+
+def dependency_manifest_changes(
+    workspace: Path,
+    base: str,
+    changed_paths: list[str],
+) -> list[str]:
+    """Return changed paths whose dependency graph surface actually changed.
+
+    Structured manifests are compared semantically against the exact diff base.
+    Lockfiles and other dependency/runtime manifests remain fail-closed: any
+    change to those paths is treated as material.
+    """
+    changes: list[str] = []
+    for raw_path in changed_paths:
+        path = str(raw_path).replace("\\", "/")
+        name = Path(path).name.lower()
+
+        if (
+            name in _ALWAYS_MATERIAL_DEPENDENCY_MANIFESTS
+            or (name.startswith("requirements") and name.endswith(".txt"))
+            or path.lower().startswith(("helm/", "charts/", "k8s/", "kubernetes/"))
+        ):
+            changes.append(path.lower())
+            continue
+
+        if name not in _STRUCTURED_DEPENDENCY_MANIFESTS:
+            continue
+
+        before = _read_base_file(workspace, base, path)
+        after = _read_working_file(workspace, path)
+        if before is None or after is None:
+            changes.append(path.lower())
+            continue
+
+        try:
+            before_surface = _structured_dependency_surface(name, before)
+            after_surface = _structured_dependency_surface(name, after)
+        except (UnicodeDecodeError, json.JSONDecodeError, tomllib.TOMLDecodeError, ValueError):
+            changes.append(path.lower())
+            continue
+
+        if before_surface != after_surface:
+            changes.append(path.lower())
+
+    return list(dict.fromkeys(changes))
 
 
 def _is_python_bytecode(path: str) -> bool:
@@ -376,9 +540,15 @@ def diff_state(
     diff = _git(workspace, "diff", diff_base, "--binary", check=False)
     truncated = len(diff.encode()) > max_bytes
     visible = diff.encode()[:max_bytes].decode("utf-8", errors="replace") if truncated else diff
+    dependency_changes = dependency_manifest_changes(
+        workspace,
+        diff_base,
+        names,
+    )
     return {
         "changed_files": names,
         "changed_file_count": len(names),
+        "dependency_manifest_changes": dependency_changes,
         "diff_stat": stat,
         "diff": visible,
         "diff_truncated": truncated,
