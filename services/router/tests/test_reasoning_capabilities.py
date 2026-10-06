@@ -69,24 +69,28 @@ def test_registry_capabilities_are_per_model_and_canonically_ordered() -> None:
             "xhigh",
             "max",
         )
-    for model_id in ("antigravity_flash_high", "antigravity_gemini_pro"):
-        assert reasoning_capability(model_id, models[model_id]).allowed_efforts == (
-            "low",
-            "medium",
-            "high",
-        )
     assert reasoning_capability(
-        "antigravity_free", models["antigravity_free"]
-    ).allowed_efforts == ()
-    assert reasoning_capability(
+        "antigravity_gemini_pro", models["antigravity_gemini_pro"]
+    ).allowed_efforts == (
+        "low",
+        "medium",
+        "high",
+    )
+    for model_id in (
+        "antigravity_free",
+        "antigravity_flash_high",
         "antigravity_claude_sonnet",
-        models["antigravity_claude_sonnet"],
-    ).allowed_efforts == ()
+    ):
+        assert reasoning_capability(model_id, models[model_id]).allowed_efforts == ()
 
 
 def test_non_effort_antigravity_models_omit_configured_effort() -> None:
     engine = make_engine()
-    for model_id in ("antigravity_free", "antigravity_claude_sonnet"):
+    for model_id in (
+        "antigravity_free",
+        "antigravity_flash_high",
+        "antigravity_claude_sonnet",
+    ):
         selected = choice(model_id, effort=None)
         engine._apply_reasoning(selected, "high")
         assert selected.reasoning_effort is None
@@ -221,6 +225,17 @@ def test_automatic_policy_ceilings_remain_low_medium_high_only() -> None:
         for effort in (config.get("reasoning_effort") or {}).values()
     }
     assert configured == {"low", "medium", "high"}
+
+
+def test_persisted_flash_high_effort_is_normalized_for_reassessment() -> None:
+    engine = make_engine()
+    stale = choice("antigravity_flash_high", effort="medium")
+
+    capability = engine._validate_reasoning_choice(stale)
+
+    assert capability.supports_explicit_effort is False
+    assert stale.reasoning_effort is None
+    assert "ignored_legacy_reasoning_effort=medium" in stale.reasons
 
 
 def test_staffing_flash_medium_omits_effort() -> None:
