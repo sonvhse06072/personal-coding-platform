@@ -269,6 +269,7 @@ class RuntimeEngine(_RuntimeEngine):
         *,
         reset_transient_provider_failures: bool = False,
         reroute: bool = False,
+        verification_only_after_pm_handoff: bool = False,
         _allow_failed_orchestrated_resume: bool = False,
         _require_changed_file_headroom: bool = False,
     ) -> dict[str, Any]:
@@ -292,6 +293,66 @@ class RuntimeEngine(_RuntimeEngine):
             raise RuntimeError(f"Job cannot be resumed from status={row['status']}")
 
         checkpoint = checkpoint_from_row(row)
+        if verification_only_after_pm_handoff:
+            if row["status"] != "blocked":
+                raise RuntimeError(
+                    "Verification-only PM-handoff resume requires a blocked job"
+                )
+            if reroute or reset_transient_provider_failures:
+                raise RuntimeError(
+                    "Verification-only PM-handoff resume cannot reroute or reset provider state"
+                )
+
+            result = dict(row.get("result") or {})
+            reason = str(result.get("reason") or "")
+            if reason not in {
+                "collaboration_pm_handoff",
+                "material_change_missing_without_model_fallback",
+            }:
+                raise RuntimeError(
+                    "Verification-only PM-handoff resume requires the exact collaboration recovery state"
+                )
+
+            collaboration = checkpoint.get("collaboration_context")
+            collaboration = (
+                dict(collaboration) if isinstance(collaboration, dict) else {}
+            )
+            thread_id = str(collaboration.get("thread_id") or "").strip()
+            try:
+                round_number = int(collaboration.get("round") or 0)
+            except (TypeError, ValueError):
+                round_number = 0
+            pm_handoff = collaboration.get("pm_handoff")
+            if (
+                str(collaboration.get("status") or "") != "pm_handoff"
+                or not thread_id
+                or round_number < 1
+                or not isinstance(pm_handoff, dict)
+            ):
+                raise RuntimeError(
+                    "Verification-only PM-handoff resume requires a durable PM-handoff context"
+                )
+
+            progress = dict(row.get("progress") or {})
+            if (
+                reason == "material_change_missing_without_model_fallback"
+                and str(progress.get("last_agent_failure_kind") or "") != "no_effect"
+            ):
+                raise RuntimeError(
+                    "Verification-only PM-handoff recovery requires a no-effect block"
+                )
+
+            checkpoint["verification_only_resume"] = {
+                "thread_id": thread_id,
+                "round": round_number,
+                "source_reason": reason,
+                "remaining_turns": 1,
+            }
+            checkpoint["last_failure"] = (
+                "PCP_COLLABORATION_CONTEXT: "
+                + json.dumps(collaboration, ensure_ascii=False, sort_keys=True)
+            )
+
         if reset_transient_provider_failures:
             checkpoint = clear_transient_provider_failures(checkpoint)
 
