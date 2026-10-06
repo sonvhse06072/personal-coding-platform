@@ -392,6 +392,12 @@ class PlanOrchestratorStore:
         return registered
 
     def active_plans(self) -> list[dict[str, Any]]:
+        """Return non-completed plans that still require reconciliation.
+
+        Blocked plans remain non-launchable, but must stay observable here so a
+        same-child state transition that already completed outside the parent
+        loop can be reconciled from exact durable delivery evidence.
+        """
         self.ensure()
         with self.storage.connect() as conn:
             return list(
@@ -401,7 +407,7 @@ class PlanOrchestratorStore:
                     FROM cp_plan_orchestrations o
                     JOIN cp_execution_plans p ON p.id=o.plan_id
                     WHERE o.lifecycle='active'
-                      AND o.status NOT IN ('completed', 'blocked')
+                      AND o.status <> 'completed'
                     ORDER BY o.created_at, o.plan_id"""
                 ).fetchall()
             )
