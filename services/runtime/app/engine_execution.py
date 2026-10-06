@@ -51,6 +51,24 @@ from .work_order_checkpoints import orchestrator_launch, verification_checkpoint
 _VALID_WORKSPACE_MODES = {"direct", "isolated_clone"}
 
 
+def reusable_passed_review(
+    checkpoint: dict[str, Any],
+    verification: dict[str, Any],
+    *,
+    diff_hash: str,
+) -> bool:
+    marker = checkpoint.get("reuse_passed_review_once")
+    review = checkpoint.get("last_review_report")
+    return bool(
+        isinstance(marker, dict)
+        and verification.get("passed") is True
+        and str(marker.get("diff_hash") or "") == str(diff_hash or "")
+        and isinstance(review, dict)
+        and str(review.get("verdict") or "") == "pass"
+        and review.get("protocol_valid") is not False
+    )
+
+
 def effective_workspace_mode(
     job: dict[str, Any],
     checkpoint: dict[str, Any],
@@ -824,18 +842,12 @@ class RuntimeEngine(RuntimeEngineCore):
             else:
                 run_review = bool(strategy.get("evaluator"))
 
-            reuse_review = False
-            reuse_marker = checkpoint.get("reuse_passed_review_once")
-            if isinstance(reuse_marker, dict):
-                prior_review = checkpoint.get("last_review_report")
-                reuse_review = bool(
-                    verification["passed"]
-                    and str(reuse_marker.get("diff_hash") or "")
-                    == str(diff.get("diff_hash") or "")
-                    and isinstance(prior_review, dict)
-                    and str(prior_review.get("verdict") or "") == "pass"
-                    and prior_review.get("protocol_valid") is not False
-                )
+            reuse_review = reusable_passed_review(
+                checkpoint,
+                verification,
+                diff_hash=str(diff.get("diff_hash") or ""),
+            )
+            if isinstance(checkpoint.get("reuse_passed_review_once"), dict):
                 if reuse_review:
                     run_review = False
                 else:
