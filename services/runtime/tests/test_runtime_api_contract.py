@@ -11,9 +11,51 @@ from app.schemas import HumanDecisionRequest, JobRunRequest, ReviewRepairRequest
 
 
 def test_run_request_defaults_to_preserving_provider_failures():
-    assert JobRunRequest().reset_transient_provider_failures is False
+    request = JobRunRequest()
+    assert request.reset_transient_provider_failures is False
+    assert request.verification_only_after_pm_handoff is False
     assert "allow_failed" not in JobRunRequest.model_fields
     assert "allow_failed_orchestrated_resume" not in JobRunRequest.model_fields
+
+
+def test_run_api_forwards_explicit_pm_handoff_verification_only(monkeypatch):
+    calls = []
+
+    async def resume(job_id, **fields):
+        calls.append((job_id, fields))
+        timestamp = datetime.now(timezone.utc)
+        return {
+            "id": job_id,
+            "project_id": "demo",
+            "status": "queued",
+            "source_commit": "a" * 40,
+            "route": {},
+            "checkpoint": {},
+            "result": {"reason": "material_change_missing_without_model_fallback"},
+            "error": None,
+            "created_at": timestamp,
+            "updated_at": timestamp,
+        }
+
+    monkeypatch.setattr(main.engine, "resume", resume)
+    monkeypatch.setattr(main, "prepare_orchestrated_job_resume", lambda *args: None)
+    monkeypatch.setattr(main, "reopen_orchestrated_job", lambda *args: None)
+
+    payload = JobRunRequest(verification_only_after_pm_handoff=True)
+    result = asyncio.run(main.run_job("job12345", payload))
+
+    assert result.status == "queued"
+    assert calls == [
+        (
+            "job12345",
+            {
+                "reset_transient_provider_failures": False,
+                "reroute": False,
+                "verification_only_after_pm_handoff": True,
+                "_allow_failed_orchestrated_resume": False,
+            },
+        )
+    ]
 
 
 def test_human_decision_request_is_explicit():
