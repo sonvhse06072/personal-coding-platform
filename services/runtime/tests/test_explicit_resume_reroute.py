@@ -309,6 +309,124 @@ def test_verification_only_evaluator_recovery_fails_closed_without_exact_evidenc
     assert engine.queue.empty()
 
 
+def test_verification_only_pm_reassessment_staffing_recovery_is_narrow() -> None:
+    original = pm_handoff_row(reason="pm_reassessment_failed")
+    original["result"].update({
+        "last_failure": (
+            "Client error '422 Unprocessable Content' for url "
+            "'http://router:8090/v1/staff'"
+        ),
+        "diff": {"diff_hash": "exact-pass-diff"},
+    })
+    original["checkpoint"]["last_verification_summary"] = {
+        "passed": True,
+        "phases": [{"phase": "full_tests", "passed": True}],
+    }
+    original["checkpoint"]["last_review_report"] = {
+        "verdict": "pass",
+        "summary": "accepted",
+        "protocol_valid": True,
+    }
+    original["checkpoint"]["provider_state"] = {
+        "provider:google_antigravity": {
+            "healthy": False,
+            "available": False,
+            "failure_kind": "provider_unavailable",
+        },
+        "quota:openrouter_free": {
+            "healthy": False,
+            "available": False,
+            "failure_kind": "rate_limited",
+        },
+        "codex_gpt6_sol": {"healthy": False, "available": False},
+    }
+    original["progress"]["review_history"] = [
+        {
+            "verdict": "pass",
+            "protocol_valid": True,
+            "model": "antigravity_flash_high",
+            "provider": "google_antigravity",
+        }
+    ]
+    storage = Storage(original)
+    engine = RuntimeEngine(storage)
+
+    updated = asyncio.run(
+        engine.resume(
+            "job-resume",
+            verification_only_after_pm_handoff=True,
+        )
+    )
+
+    state = updated["checkpoint"]["provider_state"]
+    assert "provider:google_antigravity" not in state
+    assert "quota:openrouter_free" in state
+    assert "codex_gpt6_sol" in state
+    assert updated["checkpoint"]["reuse_passed_review_once"] == {
+        "diff_hash": "exact-pass-diff",
+        "model": "antigravity_flash_high",
+        "provider": "google_antigravity",
+        "source_reason": "pm_reassessment_failed",
+    }
+    assert updated["checkpoint"]["verification_only_resume"] == {
+        "thread_id": "ct-pm-handoff",
+        "round": 2,
+        "source_reason": "pm_reassessment_failed",
+        "remaining_turns": 1,
+    }
+    assert engine.queue.get_nowait() == "job-resume"
+
+
+@pytest.mark.parametrize(
+    ("last_failure", "review"),
+    [
+        (
+            "router temporarily unavailable",
+            {"verdict": "pass", "protocol_valid": True},
+        ),
+        (
+            "Client error '422' for url 'http://router:8090/v1/staff'",
+            {"verdict": "fail", "protocol_valid": True},
+        ),
+    ],
+)
+def test_verification_only_pm_reassessment_staffing_recovery_fails_closed(
+    last_failure: str,
+    review: dict,
+) -> None:
+    original = pm_handoff_row(reason="pm_reassessment_failed")
+    original["result"].update({
+        "last_failure": last_failure,
+        "diff": {"diff_hash": "exact-pass-diff"},
+    })
+    original["checkpoint"]["last_verification_summary"] = {"passed": True}
+    original["checkpoint"]["last_review_report"] = review
+    original["checkpoint"]["provider_state"] = {
+        "provider:google_antigravity": {"healthy": False, "available": False},
+    }
+    original["progress"]["review_history"] = [
+        {
+            "verdict": "pass",
+            "protocol_valid": True,
+            "model": "antigravity_flash_high",
+            "provider": "google_antigravity",
+        }
+    ]
+    storage = Storage(original)
+    engine = RuntimeEngine(storage)
+
+    with pytest.raises(RuntimeError, match="PM reassessment recovery requires"):
+        asyncio.run(
+            engine.resume(
+                "job-resume",
+                verification_only_after_pm_handoff=True,
+            )
+        )
+
+    assert storage.get("job-resume")["status"] == "blocked"
+    assert engine.queue.empty()
+
+
 def test_verification_only_pm_handoff_resume_rejects_unrelated_block() -> None:
     original = blocked_row()
     original["result"] = {"reason": "preflight_failed"}
