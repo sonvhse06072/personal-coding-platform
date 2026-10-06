@@ -302,6 +302,48 @@ checkpoint proves `last_verification_summary.passed=true` and retains an exact
 durable evaluator choice. This avoids inventing an application edit or rerouting
 the WorkOrder merely to retry an evaluator after a platform capability repair.
 
+## Provider success rehabilitation + PM staffing recovery — PCP #502
+
+AP-MVP-02 exposed a durable health-state contradiction after the evaluator
+successfully completed on Google Antigravity. The checkpoint still retained a
+provider-wide `provider:google_antigravity=unavailable` marker from an older
+pre-fix evaluator failure. PM reassessment forwarded that stale state to Router
+staffing, leaving no eligible Product Manager candidate and producing HTTP 422
+from `/v1/staff`.
+
+Runtime now treats a successful planner/executor/evaluator invocation as
+authoritative evidence only for the exact provider/model that just succeeded:
+
+- remove a stale `provider:<provider>` marker for that provider;
+- remove a stale model-id health marker for that exact model;
+- preserve unrelated quota-group markers and unrelated model/provider failures;
+- retain a bounded rehabilitation audit in the checkpoint.
+
+For an already-blocked `pm_reassessment_failed` job, the existing explicit
+verification-only PM-handoff recovery is extended only when all of these are
+durably true:
+
+- deterministic verification passed;
+- independent review passed with a valid protocol;
+- the blocked result retains the exact diff hash;
+- the failure is an HTTP 422 from Router `/v1/staff`;
+- PM-handoff collaboration context is still exact;
+- review history identifies the successful reviewer provider/model;
+- a stale health marker contradicted by that successful review is actually
+  present.
+
+That recovery removes only the contradicted provider/model marker. It does not
+use the broad transient-provider reset and therefore does not clear unrelated
+quota state.
+
+To reduce repeated model work, the prior independent-review PASS may be reused
+once when the resumed run produces the same exact diff hash and deterministic
+verification passes again. Any diff change, verification failure, prior-review
+failure or invalid review protocol disables reuse and returns to ordinary
+review behavior.
+
+Runtime version: `1.0.114`.
+
 ## Standing execution / quality boundaries
 
 - Normal flow: bounded issue/WorkOrder -> implementation/evidence -> deterministic
