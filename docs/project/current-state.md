@@ -400,6 +400,39 @@ PM-controlled merge without an avoidable owner loop.
 
 Runtime version: `1.0.116`.
 
+## Completed-child blocked-parent reconciliation — PCP #508
+
+EE-0-01 exposed a durable parent/child mismatch after a preserved Runtime job
+recovered and completed successfully while its supervised WorkOrder remained at
+an earlier blocked checkpoint. The child had deterministic verification PASS,
+independent review PASS, accepted PM protected-scope reassessment, finalized
+GitHub delivery and exact-head CI PASS, but the blocked plan was excluded from
+the normal reconciliation loop.
+
+Runtime now treats blocked plans as reconciliation-visible but still
+non-launchable. A blocked agent WorkOrder may recover to `awaiting_merge` only
+when its exact same durable child currently proves all finalized-delivery
+bindings:
+
+- child status is `completed` and result status is `accepted`;
+- `delivery_finalized=true`;
+- delivery and CI states are successful;
+- a verified commit is present;
+- delivery PR number is present;
+- PR head exactly matches the verified commit;
+- PR head branch exactly matches the child branch;
+- CI commit, when present, exactly matches the verified commit.
+
+The recovery appends an immutable `recovered_accepted` checkpoint and carries
+the preserved PR identity forward. It does not merge by itself. Existing PM
+merge eligibility remains authoritative immediately afterward.
+
+Missing or mismatched evidence remains blocked. Blocked plans remain excluded
+from launch in `_launch_one()`, so reconciliation visibility does not create
+new engineering execution authority.
+
+Runtime version: `1.0.117`.
+
 ## Standing execution / quality boundaries
 
 - Normal flow: bounded issue/WorkOrder -> implementation/evidence -> deterministic
