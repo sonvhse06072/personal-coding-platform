@@ -342,4 +342,188 @@ def evaluate_pm_merge(
     )
 
 
-__all__ = ["MergeEligibility", "evaluate_pm_merge"]
+def evaluate_standalone_pm_merge(
+    *,
+    project: dict[str, Any],
+    job: dict[str, Any],
+    pr: dict[str, Any],
+    pr_number: int,
+    current_ci: dict[str, Any],
+) -> MergeEligibility:
+    """Evaluate exact-head PM merge authority for one canonical direct job."""
+
+    blockers: list[str] = []
+    human_blockers: list[str] = []
+    autonomy = _dict(project.get("autonomy"))
+    pm_merge_enabled = _pm_merge_enabled(autonomy)
+    manual_only = not pm_merge_enabled
+
+    result = _dict(job.get("result"))
+    checkpoint = _dict(job.get("checkpoint"))
+    canonical_intake = _dict(checkpoint.get("canonical_intake"))
+    route = _dict(result.get("route") or job.get("route"))
+    strategy = _dict(route.get("strategy"))
+    progress = _dict(result.get("progress") or job.get("progress"))
+    delivery = _dict(result.get("delivery"))
+    delivery_pr = _dict(delivery.get("pull_request"))
+    persisted_ci = _dict(delivery.get("ci"))
+    verification = _dict(result.get("verification"))
+    pm_evidence = _dict(result.get("pm_evidence"))
+    review = _dict(result.get("review"))
+    review_policy = _dict(strategy.get("review_policy"))
+
+    expected_head = str(result.get("commit") or "").strip() or None
+    source_commit = str(job.get("source_commit") or "").strip() or None
+    branch = str(job.get("branch") or "").strip()
+    expected_base = str(project.get("base_branch") or "main")
+
+    if str(job.get("status") or "") != "completed":
+        blockers.append("job_not_completed")
+    if bool(job.get("dry_run", False)):
+        blockers.append("dry_run_not_mergeable")
+    if (
+        canonical_intake.get("mode") != "direct"
+        or canonical_intake.get("bounded_direct") is not True
+    ):
+        blockers.append("canonical_bounded_direct_intake_required")
+    if result.get("status") != "accepted":
+        blockers.append("job_result_not_accepted")
+    if not expected_head:
+        blockers.append("missing_verified_commit")
+    if not source_commit:
+        blockers.append("missing_source_commit")
+    if not branch:
+        blockers.append("missing_job_branch")
+    if int(pr.get("number") or 0) != int(pr_number):
+        blockers.append("pull_request_identity_mismatch")
+
+    if not bool(progress.get("required_checks_passed")):
+        blockers.append("required_checks_not_passed")
+    if not bool(verification.get("passed")):
+        blockers.append("deterministic_verification_not_passed")
+    if bool(progress.get("unexpected_scope")):
+        blockers.append("unexpected_scope")
+    if pm_evidence.get("unresolved_risks"):
+        blockers.append("pm_evidence_has_unresolved_risks")
+    if pm_evidence.get("protected_decision_flags"):
+        human_blockers.append("pm_evidence_has_protected_decision_flags")
+
+    if not bool(result.get("delivery_finalized")):
+        blockers.append("delivery_not_finalized")
+    if str(delivery.get("state") or "") not in {"ci_success", "ci_none"}:
+        blockers.append("delivery_state_not_mergeable")
+    if (
+        expected_head
+        and persisted_ci.get("commit")
+        and str(persisted_ci.get("commit")) != expected_head
+    ):
+        blockers.append("persisted_ci_commit_mismatch")
+    if (
+        str(current_ci.get("state") or "") != "success"
+        or not expected_head
+        or str(current_ci.get("commit") or "") != expected_head
+    ):
+        blockers.append("fresh_exact_head_ci_not_successful")
+
+    if not delivery_pr:
+        blockers.append("delivery_pr_missing")
+    else:
+        if int(delivery_pr.get("number") or 0) != int(pr_number):
+            blockers.append("delivery_pr_number_mismatch")
+        if expected_head and str(delivery_pr.get("head") or "") != expected_head:
+            blockers.append("delivery_pr_head_mismatch")
+        if str(delivery_pr.get("head_ref") or "") != branch:
+            blockers.append("delivery_pr_branch_mismatch")
+
+    if str(pr.get("state") or "") != "open" or bool(pr.get("merged")):
+        blockers.append("pull_request_not_open_unmerged")
+    if expected_head and str(pr.get("head") or "") != expected_head:
+        blockers.append("pull_request_head_mismatch")
+    if str(pr.get("head_ref") or "") != branch:
+        blockers.append("pull_request_branch_mismatch")
+    if str(pr.get("base_ref") or "") != expected_base:
+        blockers.append("pull_request_base_mismatch")
+
+    if checkpoint.get("pending_decision"):
+        human_blockers.append("unresolved_job_human_decision")
+
+    route_decision = _dict(strategy.get("human_decision"))
+    approved_route = _approved_route_triggers(job, route)
+    if route_decision.get("required") and not approved_route:
+        human_blockers.append("route_human_decision_not_durably_approved")
+
+    protected = _protected_signals(job)
+    accepted_diff = _dict(result.get("diff"))
+    baseline_covered_protected = baseline_covered_protected_authorized_signals(
+        checkpoint,
+        diff_hash=str(accepted_diff.get("diff_hash") or ""),
+        current_signals=protected,
+        baseline_revision=str(
+            (checkpoint.get("project_baseline") or {}).get("revision") or ""
+        ),
+    )
+    approved_protected = protected & (
+        approved_route | baseline_covered_protected
+    )
+    unapproved_protected = protected - approved_protected
+    if unapproved_protected:
+        human_blockers.append("protected_change_without_matching_owner_approval")
+
+    if review_policy.get("required"):
+        if str(review.get("verdict") or "") != "pass":
+            blockers.append("required_independent_review_not_passed")
+        if (
+            review_policy.get("independent")
+            and review_policy.get("independence_satisfied") is False
+        ):
+            blockers.append("required_review_independence_not_satisfied")
+    elif review_policy.get("conditional_on_strong_evidence"):
+        verdict = str(review.get("verdict") or "")
+        skipped = (
+            verdict == "skipped"
+            and int(progress.get("review_skipped_strong_evidence", 0) or 0) > 0
+        )
+        if verdict != "pass" and not skipped:
+            blockers.append("conditional_review_has_no_pass_or_strong_evidence_skip")
+
+    all_blockers = tuple(dict.fromkeys(blockers + human_blockers))
+    return MergeEligibility(
+        eligible=bool(pm_merge_enabled and not all_blockers),
+        manual_only=manual_only,
+        requires_human=bool(human_blockers),
+        blockers=all_blockers,
+        protected_signals=tuple(sorted(protected)),
+        approved_protected_signals=tuple(sorted(approved_protected)),
+        expected_head=expected_head,
+        source_commit=source_commit,
+        pr_number=int(pr_number),
+        work_order_id=None,
+        evidence={
+            "job_id": job.get("id"),
+            "pr_number": int(pr_number),
+            "expected_head": expected_head,
+            "source_commit": source_commit,
+            "branch": branch,
+            "base_branch": expected_base,
+            "delivery_state": delivery.get("state"),
+            "persisted_ci_state": persisted_ci.get("state"),
+            "fresh_ci_state": current_ci.get("state"),
+            "verification_passed": verification.get("passed"),
+            "required_checks_passed": progress.get("required_checks_passed"),
+            "review_verdict": review.get("verdict"),
+            "review_required": bool(review_policy.get("required")),
+            "pm_merge_enabled": pm_merge_enabled,
+            "changed_files": _changed_paths(job),
+            "baseline_authority_changes": _baseline_authority_changes(job),
+            "baseline_covered_pm_authorized_protected_signals": sorted(
+                baseline_covered_protected
+            ),
+            "canonical_bounded_direct": (
+                canonical_intake.get("mode") == "direct"
+                and canonical_intake.get("bounded_direct") is True
+            ),
+        },
+    )
+
+
+__all__ = ["MergeEligibility", "evaluate_pm_merge", "evaluate_standalone_pm_merge"]
