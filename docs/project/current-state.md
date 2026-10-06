@@ -372,6 +372,34 @@ without an exact diff change.
 
 Runtime version: `1.0.115`.
 
+## PM merge authority follows protected decisions, not risk labels — PCP #506
+
+AP-MVP-02 completed every deterministic, independent-review and exact-head CI
+gate with no unresolved protected signal, but still entered manual merge because
+the merge evaluator treated every WorkOrder above `standard` risk as a Human
+Owner decision. That contradicted the operating contract: risk level determines
+routing/profile/verification rigor, while Human Owner involvement is reserved
+for unresolved protected decisions.
+
+The merge policy now separates those concerns:
+
+- `autonomy.allow_pm_merge` is the explicit project-level PM merge authority;
+- legacy `allow_auto_merge_low_risk` remains a backward-compatible fallback
+  when the new key is absent;
+- Chợ Nhạc explicitly sets `allow_pm_merge: true`;
+- `high` and `critical` risk levels remain durable merge evidence but do not,
+  by themselves, create a Human Owner merge blocker;
+- unresolved plan/job decisions, protected signals without matching durable
+  approval, PM protected-decision evidence, verification/review/CI failures,
+  PR/head/base mismatches and project merge opt-out remain fail-closed;
+- production deployment authority is unchanged.
+
+This allows a high/critical WorkOrder whose stricter engineering gates are all
+green and whose protected decisions are already resolved to complete through
+PM-controlled merge without an avoidable owner loop.
+
+Runtime version: `1.0.116`.
+
 ## Standing execution / quality boundaries
 
 - Normal flow: bounded issue/WorkOrder -> implementation/evidence -> deterministic
