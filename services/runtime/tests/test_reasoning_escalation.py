@@ -39,16 +39,11 @@ def test_next_reasoning_choice_increases_same_codex_model_to_ceiling():
     assert current["reasoning_effort"] == "medium"
 
 
-def test_antigravity_reasoning_effort_can_escalate_without_changing_model():
+def test_flash_high_fixed_effort_is_not_escalated():
     current = _choice(adapter="antigravity_host", effort="medium")
     strategy = {"reasoning_ceiling": {"executor": "high"}}
 
-    boosted = RuntimeEngine._next_reasoning_choice(current, strategy)
-
-    assert boosted is not None
-    assert boosted["id"] == "antigravity_flash_high"
-    assert boosted["model"] == "gemini-3.8-flash-high"
-    assert boosted["reasoning_effort"] == "high"
+    assert RuntimeEngine._next_reasoning_choice(current, strategy) is None
 
 
 def test_next_reasoning_choice_stops_at_ceiling():
