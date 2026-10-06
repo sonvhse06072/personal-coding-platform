@@ -100,3 +100,29 @@ def test_delegated_design_and_mutable_paths_do_not_create_owner_gate() -> None:
         "docs/history/episodes.md": "evidence_history",
     }
     assert "project_baseline_authority_change" not in _path_protected_signals(job)
+
+
+def test_merge_gate_accepts_script_only_package_json_semantic_evidence() -> None:
+    job = {
+        "result": {
+            "diff": {
+                "changed_files": ["frontend/package.json"],
+                "dependency_manifest_changes": [],
+            }
+        }
+    }
+
+    assert "major_dependency_addition" not in _path_protected_signals(job)
+
+
+def test_merge_gate_keeps_real_package_dependency_change_protected() -> None:
+    job = {
+        "result": {
+            "diff": {
+                "changed_files": ["frontend/package.json"],
+                "dependency_manifest_changes": ["frontend/package.json"],
+            }
+        }
+    }
+
+    assert "major_dependency_addition" in _path_protected_signals(job)
