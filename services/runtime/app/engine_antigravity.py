@@ -39,6 +39,7 @@ class RuntimeEngine(BaseRuntimeEngine):
         *,
         reset_transient_provider_failures: bool = False,
         reroute: bool = False,
+        verification_only_after_pm_handoff: bool = False,
         _allow_failed_orchestrated_resume: bool = False,
         _require_changed_file_headroom: bool = False,
     ) -> dict[str, Any]:
@@ -61,6 +62,7 @@ class RuntimeEngine(BaseRuntimeEngine):
             job_id,
             reset_transient_provider_failures=reset_transient_provider_failures,
             reroute=reroute,
+            verification_only_after_pm_handoff=verification_only_after_pm_handoff,
             _allow_failed_orchestrated_resume=_allow_failed_orchestrated_resume,
             _require_changed_file_headroom=_require_changed_file_headroom,
         )

@@ -175,6 +175,25 @@ def semantic_response_only_turn_allowed(
     Repair/revert/source-advance/human-rejection turns still require a material
     repository effect when the WorkOrder requires one.
     """
+    verification_only = checkpoint.get("verification_only_resume")
+    collaboration = checkpoint.get("collaboration_context")
+    if isinstance(verification_only, dict) and isinstance(collaboration, dict):
+        try:
+            marker_round = int(verification_only.get("round") or 0)
+            collaboration_round = int(collaboration.get("round") or 0)
+            remaining_turns = int(verification_only.get("remaining_turns") or 0)
+        except (TypeError, ValueError):
+            marker_round = collaboration_round = remaining_turns = 0
+        if (
+            remaining_turns == 1
+            and str(collaboration.get("status") or "") == "pm_handoff"
+            and str(verification_only.get("thread_id") or "")
+            == str(collaboration.get("thread_id") or "")
+            and marker_round > 0
+            and marker_round == collaboration_round
+        ):
+            return True
+
     context = checkpoint.get("failure_context")
     context = dict(context) if isinstance(context, dict) else {}
     if not _semantic_failure_context_is_current(checkpoint, context):

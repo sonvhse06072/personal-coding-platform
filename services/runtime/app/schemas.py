@@ -83,6 +83,7 @@ class JobCreateRequest(BaseModel):
 class JobRunRequest(BaseModel):
     reset_transient_provider_failures: bool = False
     reroute: bool = False
+    verification_only_after_pm_handoff: bool = False
 
 
 class JobSourceAdvanceRequest(BaseModel):

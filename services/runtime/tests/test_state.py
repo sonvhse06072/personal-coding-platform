@@ -245,6 +245,46 @@ def test_pending_pm_review_repair_still_takes_priority_over_reviewer_findings() 
     assert "older reviewer finding" not in failure
 
 
+def test_pm_handoff_verification_resume_may_be_response_only() -> None:
+    checkpoint = {
+        "collaboration_context": {
+            "thread_id": "ct-pm-handoff",
+            "status": "pm_handoff",
+            "round": 2,
+        },
+        "verification_only_resume": {
+            "thread_id": "ct-pm-handoff",
+            "round": 2,
+            "remaining_turns": 1,
+        },
+    }
+
+    assert semantic_response_only_turn_allowed(checkpoint) is True
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        {"thread_id": "ct-other", "round": 2, "remaining_turns": 1},
+        {"thread_id": "ct-pm-handoff", "round": 1, "remaining_turns": 1},
+        {"thread_id": "ct-pm-handoff", "round": 2, "remaining_turns": 0},
+    ],
+)
+def test_pm_handoff_verification_resume_fails_closed_when_binding_mismatches(
+    marker: dict,
+) -> None:
+    checkpoint = {
+        "collaboration_context": {
+            "thread_id": "ct-pm-handoff",
+            "status": "pm_handoff",
+            "round": 2,
+        },
+        "verification_only_resume": marker,
+    }
+
+    assert semantic_response_only_turn_allowed(checkpoint) is False
+
+
 def test_reviewer_semantic_rebuttal_may_be_response_only() -> None:
     message = "PCP_REVIEW_FINDINGS: bounded evidence question"
     checkpoint = {

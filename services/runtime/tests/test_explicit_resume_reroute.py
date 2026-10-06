@@ -183,6 +183,96 @@ def test_orchestrated_failed_reroute_preserves_job_state_but_replaces_route_choi
     assert engine.queue.get_nowait() == "job-resume"
 
 
+def pm_handoff_row(*, reason: str = "material_change_missing_without_model_fallback") -> dict:
+    value = blocked_row()
+    value["result"] = {"reason": reason}
+    value["progress"]["last_agent_failure_kind"] = "no_effect"
+    value["checkpoint"]["collaboration_context"] = {
+        "thread_id": "ct-pm-handoff",
+        "role": "test_engineer",
+        "status": "pm_handoff",
+        "round": 2,
+        "recommendation": "No code-side repair remains; run Runtime verification.",
+        "risks": [],
+        "suggested_tests": ["Run targeted verification."],
+        "unresolved": True,
+        "previous_failure": None,
+        "pm_handoff": {"trace_hash": "trace-pm-handoff"},
+    }
+    return value
+
+
+def test_verification_only_pm_handoff_resume_preserves_job_and_arms_one_turn() -> None:
+    original = pm_handoff_row()
+    storage = Storage(original)
+    engine = RuntimeEngine(storage)
+
+    updated = asyncio.run(
+        engine.resume(
+            "job-resume",
+            verification_only_after_pm_handoff=True,
+        )
+    )
+
+    assert updated["status"] == "queued"
+    assert updated["workspace"] == original["workspace"]
+    assert updated["source_commit"] == original["source_commit"]
+    assert updated["progress"] == original["progress"]
+    assert updated["route"] == original["route"]
+    assert updated["checkpoint"]["verification_only_resume"] == {
+        "thread_id": "ct-pm-handoff",
+        "round": 2,
+        "source_reason": "material_change_missing_without_model_fallback",
+        "remaining_turns": 1,
+    }
+    assert updated["checkpoint"]["last_failure"].startswith(
+        "PCP_COLLABORATION_CONTEXT: "
+    )
+    assert engine.queue.get_nowait() == "job-resume"
+
+
+def test_verification_only_pm_handoff_resume_rejects_unrelated_block() -> None:
+    storage = Storage(blocked_row())
+    engine = RuntimeEngine(storage)
+
+    with pytest.raises(RuntimeError, match="exact collaboration recovery state"):
+        asyncio.run(
+            engine.resume(
+                "job-resume",
+                verification_only_after_pm_handoff=True,
+            )
+        )
+
+    assert storage.get("job-resume")["status"] == "blocked"
+    assert engine.queue.empty()
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"reroute": True},
+        {"reset_transient_provider_failures": True},
+    ],
+)
+def test_verification_only_pm_handoff_resume_cannot_reroute_or_reset(
+    kwargs: dict,
+) -> None:
+    storage = Storage(pm_handoff_row())
+    engine = RuntimeEngine(storage)
+
+    with pytest.raises(RuntimeError, match="cannot reroute or reset"):
+        asyncio.run(
+            engine.resume(
+                "job-resume",
+                verification_only_after_pm_handoff=True,
+                **kwargs,
+            )
+        )
+
+    assert storage.get("job-resume")["status"] == "blocked"
+    assert engine.queue.empty()
+
+
 @pytest.mark.parametrize(
     ("failure", "context", "durable"),
     [
