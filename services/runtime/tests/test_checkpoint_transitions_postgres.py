@@ -174,6 +174,44 @@ def test_postgres_success_retires_attention_in_same_commit(atomic_store):
     assert len(store.checkpoints("plan-1")) == 1
 
 
+def test_postgres_recovered_accepted_retires_blocked_attention_in_same_commit(atomic_store):
+    store = atomic_store
+    payload = request(
+        store,
+        kind="recovered_accepted",
+        source="blocked",
+        target="awaiting_merge",
+    )
+    store.emit_notification(
+        dedupe_key="blocked-attention",
+        event_type="work_order_blocked",
+        severity="error",
+        project_id="demo",
+        ticket_id="GH-508",
+        plan_id="plan-1",
+        work_order_id="WO-1",
+        summary="blocked gate",
+        github_url=None,
+        payload={"attention_state": "blocked"},
+    )
+    with store.storage.connect() as conn:
+        conn.execute(
+            "INSERT INTO cp_control_actions VALUES ('blocked-action','plan-1','WO-1','pending',now())"
+        )
+
+    checkpoint = store.transition_work_order(**payload)
+
+    assert checkpoint["kind"] == "recovered_accepted"
+    assert checkpoint["state"] == "awaiting_merge"
+    with store.storage.connect() as conn:
+        assert conn.execute(
+            "SELECT status FROM cp_notification_outbox WHERE dedupe_key='blocked-attention'"
+        ).fetchone()["status"] == "superseded"
+        assert conn.execute(
+            "SELECT status FROM cp_control_actions WHERE id='blocked-action'"
+        ).fetchone()["status"] == "cancelled"
+
+
 def test_postgres_new_block_episode_after_recovery_has_new_durable_key(atomic_store):
     store = atomic_store
     store.update_work_order("plan-1", "WO-1", state="running", job_id="job-1")
