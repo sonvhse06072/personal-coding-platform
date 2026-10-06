@@ -309,6 +309,7 @@ class RuntimeEngine(_RuntimeEngine):
                 "collaboration_pm_handoff",
                 "material_change_missing_without_model_fallback",
                 "evaluator_provider_failure_without_fallback",
+                "pm_reassessment_failed",
             }:
                 raise RuntimeError(
                     "Verification-only PM-handoff resume requires the exact collaboration recovery state"
@@ -356,6 +357,82 @@ class RuntimeEngine(_RuntimeEngine):
                         "Verification-only evaluator recovery requires passed "
                         "deterministic verification and a durable evaluator choice"
                     )
+
+            if reason == "pm_reassessment_failed":
+                verification = checkpoint.get("last_verification_summary")
+                review = checkpoint.get("last_review_report")
+                last_failure = str(result.get("last_failure") or "")
+                diff = result.get("diff")
+                diff = dict(diff) if isinstance(diff, dict) else {}
+                diff_hash = str(diff.get("diff_hash") or "").strip()
+                if (
+                    not isinstance(verification, dict)
+                    or verification.get("passed") is not True
+                    or not isinstance(review, dict)
+                    or str(review.get("verdict") or "") != "pass"
+                    or review.get("protocol_valid") is False
+                    or not diff_hash
+                    or "/v1/staff" not in last_failure
+                    or "422" not in last_failure
+                ):
+                    raise RuntimeError(
+                        "Verification-only PM reassessment recovery requires "
+                        "passed deterministic verification, a passed independent "
+                        "review, the exact blocked diff, and a Router staffing 422"
+                    )
+
+                review_history = [
+                    dict(item)
+                    for item in (progress.get("review_history") or [])
+                    if isinstance(item, dict)
+                ]
+                successful_review = next(
+                    (
+                        item
+                        for item in reversed(review_history)
+                        if str(item.get("verdict") or "") == "pass"
+                        and item.get("protocol_valid") is not False
+                        and str(item.get("model") or "").strip()
+                        and str(item.get("provider") or "").strip()
+                    ),
+                    None,
+                )
+                if successful_review is None:
+                    raise RuntimeError(
+                        "Verification-only PM reassessment recovery requires "
+                        "durable successful reviewer identity"
+                    )
+
+                provider_state = dict(checkpoint.get("provider_state") or {})
+                removed_health = self._rehabilitate_successful_choice(
+                    provider_state,
+                    {
+                        "id": str(successful_review.get("model") or ""),
+                        "provider": str(successful_review.get("provider") or ""),
+                    },
+                )
+                if not removed_health:
+                    raise RuntimeError(
+                        "Verification-only PM reassessment recovery found no "
+                        "stale provider/model health contradicted by the passed review"
+                    )
+                checkpoint["provider_state"] = provider_state
+                checkpoint["reuse_passed_review_once"] = {
+                    "diff_hash": diff_hash,
+                    "model": str(successful_review.get("model") or ""),
+                    "provider": str(successful_review.get("provider") or ""),
+                    "source_reason": reason,
+                }
+                rehabilitations = list(
+                    checkpoint.get("provider_success_rehabilitations") or []
+                )
+                rehabilitations.append({
+                    "stage": "pm_reassessment_recovery",
+                    "model": str(successful_review.get("model") or ""),
+                    "provider": str(successful_review.get("provider") or ""),
+                    "removed_keys": removed_health,
+                })
+                checkpoint["provider_success_rehabilitations"] = rehabilitations[-20:]
 
             checkpoint["verification_only_resume"] = {
                 "thread_id": thread_id,

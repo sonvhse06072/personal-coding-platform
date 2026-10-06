@@ -945,6 +945,24 @@ class RuntimeEngineCore:
         provider_state[model_id] = state
 
     @staticmethod
+    def _rehabilitate_successful_choice(
+        provider_state: dict[str, Any],
+        choice: dict[str, Any],
+    ) -> list[str]:
+        """Remove only stale health markers contradicted by one successful run."""
+        removed: list[str] = []
+        provider = str(choice.get("provider") or "").strip()
+        model_id = str(choice.get("id") or "").strip()
+        for key in (
+            f"provider:{provider}" if provider else "",
+            model_id,
+        ):
+            if key and key in provider_state:
+                provider_state.pop(key, None)
+                removed.append(key)
+        return removed
+
+    @staticmethod
     def _record_agent_attempt(progress: dict[str, Any], choice: dict[str, Any], run: Any) -> None:
         attempts = progress.setdefault("agent_attempts", [])
         attempts.append({

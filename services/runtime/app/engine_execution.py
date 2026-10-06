@@ -51,6 +51,37 @@ from .work_order_checkpoints import orchestrator_launch, verification_checkpoint
 _VALID_WORKSPACE_MODES = {"direct", "isolated_clone"}
 
 
+def reusable_passed_review(
+    checkpoint: dict[str, Any],
+    verification: dict[str, Any],
+    *,
+    diff_hash: str,
+) -> bool:
+    marker = checkpoint.get("reuse_passed_review_once")
+    review = checkpoint.get("last_review_report")
+    return bool(
+        isinstance(marker, dict)
+        and verification.get("passed") is True
+        and str(marker.get("diff_hash") or "") == str(diff_hash or "")
+        and isinstance(review, dict)
+        and str(review.get("verdict") or "") == "pass"
+        and review.get("protocol_valid") is not False
+    )
+
+
+def invalidate_review_reuse_on_verification_failure(
+    checkpoint: dict[str, Any],
+    verification: dict[str, Any],
+) -> bool:
+    if (
+        isinstance(checkpoint.get("reuse_passed_review_once"), dict)
+        and verification.get("passed") is not True
+    ):
+        checkpoint.pop("reuse_passed_review_once", None)
+        return True
+    return False
+
+
 def effective_workspace_mode(
     job: dict[str, Any],
     checkpoint: dict[str, Any],
@@ -453,6 +484,22 @@ class RuntimeEngine(RuntimeEngineCore):
                         last_failure=result.stderr or result.output,
                     )
                     return
+                removed_health = self._rehabilitate_successful_choice(
+                    provider_state,
+                    choice,
+                )
+                if removed_health:
+                    checkpoint["provider_state"] = provider_state
+                    history = list(
+                        checkpoint.get("provider_success_rehabilitations") or []
+                    )
+                    history.append({
+                        "stage": "planner",
+                        "model": str(choice.get("id") or ""),
+                        "provider": str(choice.get("provider") or ""),
+                        "removed_keys": removed_health,
+                    })
+                    checkpoint["provider_success_rehabilitations"] = history[-20:]
                 plan = result.output[-20000:]
                 checkpoint["plan"] = plan
                 checkpoint.pop("planner_choice", None)
@@ -625,7 +672,29 @@ class RuntimeEngine(RuntimeEngineCore):
 
             if run.returncode != 0:
                 last_failure = f"Agent command failed ({run.returncode}):\n{run.stderr}\n{run.output}"[-30000:]
-            self.storage.update(job_id, status="verifying", progress=progress)
+            else:
+                removed_health = self._rehabilitate_successful_choice(
+                    provider_state,
+                    executor_choice,
+                )
+                if removed_health:
+                    checkpoint["provider_state"] = provider_state
+                    history = list(
+                        checkpoint.get("provider_success_rehabilitations") or []
+                    )
+                    history.append({
+                        "stage": "executor",
+                        "model": str(executor_choice.get("id") or ""),
+                        "provider": str(executor_choice.get("provider") or ""),
+                        "removed_keys": removed_health,
+                    })
+                    checkpoint["provider_success_rehabilitations"] = history[-20:]
+            self.storage.update(
+                job_id,
+                status="verifying",
+                progress=progress,
+                checkpoint=checkpoint,
+            )
 
             diff = diff_state(
                 workspace,
@@ -730,6 +799,10 @@ class RuntimeEngine(RuntimeEngineCore):
             verification_summary = verification_checkpoint_summary(verification)
             if verification_summary is not None:
                 checkpoint["last_verification_summary"] = verification_summary
+            invalidate_review_reuse_on_verification_failure(
+                checkpoint,
+                verification,
+            )
             record_review_repair_churn_observation(
                 checkpoint,
                 verification=verification,
@@ -785,6 +858,17 @@ class RuntimeEngine(RuntimeEngineCore):
                 )
             else:
                 run_review = bool(strategy.get("evaluator"))
+
+            reuse_review = reusable_passed_review(
+                checkpoint,
+                verification,
+                diff_hash=str(diff.get("diff_hash") or ""),
+            )
+            if isinstance(checkpoint.get("reuse_passed_review_once"), dict):
+                if reuse_review:
+                    run_review = False
+                else:
+                    checkpoint.pop("reuse_passed_review_once", None)
 
             if verification["passed"] and strategy.get("evaluator") and run_review:
                 choice = dict(checkpoint.get("evaluator_choice") or strategy["evaluator"])
@@ -863,6 +947,24 @@ class RuntimeEngine(RuntimeEngineCore):
                             diff=diff,
                         )
                         return
+                    if evaluation.returncode == 0:
+                        removed_health = self._rehabilitate_successful_choice(
+                            provider_state,
+                            choice,
+                        )
+                        if removed_health:
+                            checkpoint["provider_state"] = provider_state
+                            history = list(
+                                checkpoint.get("provider_success_rehabilitations")
+                                or []
+                            )
+                            history.append({
+                                "stage": "evaluator",
+                                "model": str(choice.get("id") or ""),
+                                "provider": str(choice.get("provider") or ""),
+                                "removed_keys": removed_health,
+                            })
+                            checkpoint["provider_success_rehabilitations"] = history[-20:]
                     evaluator_output = evaluation.output[-20000:]
                     review_report = parse_review_output(evaluator_output)
                     record_review_telemetry(
@@ -920,21 +1022,32 @@ class RuntimeEngine(RuntimeEngineCore):
                     self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
                     break
             elif verification["passed"] and strategy.get("evaluator") and not run_review:
-                progress["review_skipped_strong_evidence"] = int(
-                    progress.get("review_skipped_strong_evidence", 0)
-                ) + 1
-                checkpoint["last_review_report"] = {
-                    "verdict": "skipped",
-                    "summary": "Model review skipped by policy because deterministic evidence is strong",
-                    "finding_count": 0,
-                    "findings": [],
-                    "jit_context_used": False,
-                }
-                record_review_repair_churn_observation(
-                    checkpoint,
-                    review=checkpoint["last_review_report"],
-                )
-                self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
+                if reuse_review:
+                    progress["review_reused_after_pm_staffing_failure"] = int(
+                        progress.get("review_reused_after_pm_staffing_failure", 0)
+                    ) + 1
+                    checkpoint.pop("reuse_passed_review_once", None)
+                    self.storage.update(
+                        job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                    )
+                else:
+                    progress["review_skipped_strong_evidence"] = int(
+                        progress.get("review_skipped_strong_evidence", 0)
+                    ) + 1
+                    checkpoint["last_review_report"] = {
+                        "verdict": "skipped",
+                        "summary": "Model review skipped by policy because deterministic evidence is strong",
+                        "finding_count": 0,
+                        "findings": [],
+                        "jit_context_used": False,
+                    }
+                    record_review_repair_churn_observation(
+                        checkpoint,
+                        review=checkpoint["last_review_report"],
+                    )
+                    self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
 
             progress["required_checks_passed"] = verification["passed"] and evaluator_ok and not progress["unexpected_scope"]
 
