@@ -69,6 +69,19 @@ def reusable_passed_review(
     )
 
 
+def invalidate_review_reuse_on_verification_failure(
+    checkpoint: dict[str, Any],
+    verification: dict[str, Any],
+) -> bool:
+    if (
+        isinstance(checkpoint.get("reuse_passed_review_once"), dict)
+        and verification.get("passed") is not True
+    ):
+        checkpoint.pop("reuse_passed_review_once", None)
+        return True
+    return False
+
+
 def effective_workspace_mode(
     job: dict[str, Any],
     checkpoint: dict[str, Any],
@@ -786,11 +799,10 @@ class RuntimeEngine(RuntimeEngineCore):
             verification_summary = verification_checkpoint_summary(verification)
             if verification_summary is not None:
                 checkpoint["last_verification_summary"] = verification_summary
-            if (
-                isinstance(checkpoint.get("reuse_passed_review_once"), dict)
-                and verification.get("passed") is not True
-            ):
-                checkpoint.pop("reuse_passed_review_once", None)
+            invalidate_review_reuse_on_verification_failure(
+                checkpoint,
+                verification,
+            )
             record_review_repair_churn_observation(
                 checkpoint,
                 verification=verification,
