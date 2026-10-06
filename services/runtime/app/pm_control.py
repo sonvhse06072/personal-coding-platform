@@ -66,6 +66,13 @@ class PMControlEnvelope(BaseModel):
     generation: int | None = Field(default=None, ge=1)
     blocker_generation: str | None = Field(default=None, min_length=1, max_length=200)
     control_action_id: str | None = Field(default=None, min_length=8, max_length=200)
+    recovery_action_type: Literal[
+        "pm_scope_reassess",
+        "resume_same",
+        "retry_delivery",
+        "recheck_ci",
+        "recheck_orchestration",
+    ] | None = None
 
     decision_key: str | None = Field(default=None, min_length=1, max_length=500)
     decision: Literal["approve", "reject"] | None = None
@@ -152,7 +159,12 @@ class PMControlEnvelope(BaseModel):
         elif self.action == "review_repair":
             require("job_id", "expected_commit", "finding")
         elif self.action in {"recheck_blocker", "resume_same_job"}:
-            require("job_id", "blocker_generation", "control_action_id")
+            require("job_id", "blocker_generation")
+            if bool(self.control_action_id) == bool(self.recovery_action_type):
+                raise ValueError(
+                    f"{self.action} requires exactly one of "
+                    "control_action_id or recovery_action_type"
+                )
         elif self.action == "merge_standalone_job":
             require(
                 "job_id",
@@ -205,6 +217,7 @@ class PMControlEnvelope(BaseModel):
             "generation": self.generation,
             "blocker_generation": self.blocker_generation,
             "control_action_id": self.control_action_id,
+            "recovery_action_type": self.recovery_action_type,
             "expected_commit": self.expected_commit,
             "source_commit": self.source_commit,
             "expected_head": self.expected_head,
