@@ -402,3 +402,109 @@ def test_control_rejects_extra_fields_and_missing_target(monkeypatch):
     assert service.control_events.rows[("demo", 201)]["status"] == "rejected"
     assert service.control_events.rows[("demo", 202)]["status"] == "rejected"
     assert github.issue_calls == []
+
+
+def test_control_rejects_wrong_project_and_oversized_body(monkeypatch):
+    wrong_project = control_comment(
+        comment_id=203,
+        envelope={
+            "schema_version": 1,
+            "project_id": "other-project",
+            "action": "request_diagnostics",
+            "job_id": "job-0001",
+            "diagnostic_collectors": ["job"],
+        },
+    )
+    oversized = control_comment(comment_id=204)
+    oversized["body"] = CONTROL_MARKER + "\n" + ("x" * 65536)
+
+    service, storage, _, github = configure(
+        monkeypatch,
+        comments=[wrong_project, oversized],
+    )
+
+    result = asyncio.run(service.poll_project("demo"))
+
+    assert storage.plans == {}
+    assert result["controls_accepted"] == []
+    assert {item["comment_id"] for item in result["controls_rejected"]} == {
+        203,
+        204,
+    }
+    assert "must match the polled project" in next(
+        item["error"]
+        for item in result["controls_rejected"]
+        if item["comment_id"] == 203
+    )
+    assert "exceeds 64 KiB" in next(
+        item["error"]
+        for item in result["controls_rejected"]
+        if item["comment_id"] == 204
+    )
+    assert github.issue_calls == []
+
+
+def test_control_rejects_closed_issue_and_pull_request(monkeypatch):
+    closed_service, closed_storage, _, _ = configure(
+        monkeypatch,
+        comments=[control_comment(comment_id=205)],
+        issue={
+            "title": "Closed control issue",
+            "body": "closed",
+            "state": "closed",
+            "html_url": "https://github.com/example/chonhac/issues/4",
+            "is_pull_request": False,
+        },
+    )
+    closed = asyncio.run(closed_service.poll_project("demo"))
+
+    assert closed_storage.plans == {}
+    assert closed["controls_accepted"] == []
+    assert "open GitHub issues" in closed["controls_rejected"][0]["error"]
+
+    pr_service, pr_storage, _, _ = configure(
+        monkeypatch,
+        comments=[control_comment(comment_id=206)],
+        issue={
+            "title": "PR conversation",
+            "body": "pr",
+            "state": "open",
+            "html_url": "https://github.com/example/chonhac/pull/4",
+            "is_pull_request": True,
+        },
+    )
+    pull = asyncio.run(pr_service.poll_project("demo"))
+
+    assert pr_storage.plans == {}
+    assert pull["controls_accepted"] == []
+    assert "not pull requests" in pull["controls_rejected"][0]["error"]
+
+
+def test_control_rejects_duplicate_control_marker(monkeypatch):
+    duplicated = control_comment(comment_id=207)
+    duplicated["body"] = (
+        CONTROL_MARKER
+        + "\n"
+        + CONTROL_MARKER
+        + "\n"
+        + json.dumps(
+            {
+                "schema_version": 1,
+                "project_id": "demo",
+                "action": "request_diagnostics",
+                "job_id": "job-0001",
+                "diagnostic_collectors": ["job"],
+            }
+        )
+    )
+
+    service, storage, _, github = configure(
+        monkeypatch,
+        comments=[duplicated],
+    )
+    result = asyncio.run(service.poll_project("demo"))
+
+    assert storage.plans == {}
+    assert result["controls_accepted"] == []
+    assert "exactly one versioned control marker" in result["controls_rejected"][0]["error"]
+    assert github.issue_calls == []
