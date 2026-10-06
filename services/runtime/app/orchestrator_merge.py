@@ -38,7 +38,10 @@ class PlanOrchestrator(CorePlanOrchestrator):
         except (KeyError, ValueError):
             return {
                 "base_branch": "main",
-                "autonomy": {"allow_auto_merge_low_risk": False},
+                "autonomy": {
+                    "allow_pm_merge": False,
+                    "allow_auto_merge_low_risk": False,
+                },
             }
 
     async def start(self) -> None:
