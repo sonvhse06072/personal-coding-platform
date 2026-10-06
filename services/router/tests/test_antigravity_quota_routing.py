@@ -50,7 +50,7 @@ def test_registry_exposes_explicit_antigravity_models_and_quota_groups():
     cfg = get_config()["models"]
     models = cfg["models"]
 
-    assert cfg["version"] == 12
+    assert cfg["version"] == 13
     assert models["antigravity_free"]["model"] == "gemini-3.8-flash-medium"
     assert models["antigravity_flash_high"]["model"] == "gemini-3.8-flash-high"
     assert models["antigravity_gemini_pro"]["model"] == "gemini-3.1-pro-high"
@@ -60,7 +60,9 @@ def test_registry_exposes_explicit_antigravity_models_and_quota_groups():
     assert models["antigravity_claude_sonnet"]["quota_group"] == "antigravity_claude_gpt"
     assert models["antigravity_claude_sonnet"]["supports_reasoning_effort"] is False
     assert models["antigravity_free"]["supports_reasoning_effort"] is False
+    assert models["antigravity_flash_high"]["supports_reasoning_effort"] is False
     assert "reasoning_efforts" not in models["antigravity_free"]
+    assert "reasoning_efforts" not in models["antigravity_flash_high"]
     assert "reasoning_efforts" not in models["antigravity_claude_sonnet"]
 
 
