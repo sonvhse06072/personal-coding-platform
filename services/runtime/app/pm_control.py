@@ -23,12 +23,23 @@ CREATE TABLE IF NOT EXISTS cp_pm_control_events (
   action TEXT NOT NULL,
   status TEXT NOT NULL,
   target_identity JSONB NOT NULL DEFAULT '{}'::jsonb,
+  result JSONB,
   error TEXT,
   created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL,
   PRIMARY KEY (project_id, comment_id)
 );
 CREATE INDEX IF NOT EXISTS cp_pm_control_events_project_idx
   ON cp_pm_control_events(project_id, created_at DESC);
+ALTER TABLE cp_pm_control_events
+  ADD COLUMN IF NOT EXISTS result JSONB;
+ALTER TABLE cp_pm_control_events
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
+UPDATE cp_pm_control_events
+  SET updated_at=created_at
+  WHERE updated_at IS NULL;
+ALTER TABLE cp_pm_control_events
+  ALTER COLUMN updated_at SET NOT NULL;
 """
 
 
@@ -54,6 +65,7 @@ class PMControlEnvelope(BaseModel):
     plan_id: str | None = Field(default=None, min_length=1, max_length=200)
     generation: int | None = Field(default=None, ge=1)
     blocker_generation: str | None = Field(default=None, min_length=1, max_length=200)
+    control_action_id: str | None = Field(default=None, min_length=8, max_length=200)
 
     decision_key: str | None = Field(default=None, min_length=1, max_length=500)
     decision: Literal["approve", "reject"] | None = None
@@ -135,7 +147,7 @@ class PMControlEnvelope(BaseModel):
         elif self.action == "review_repair":
             require("job_id", "expected_commit", "finding")
         elif self.action in {"recheck_blocker", "resume_same_job"}:
-            require("job_id", "blocker_generation")
+            require("job_id", "blocker_generation", "control_action_id")
         elif self.action == "merge_standalone_job":
             require(
                 "job_id",
@@ -172,6 +184,7 @@ class PMControlEnvelope(BaseModel):
             "plan_id": self.plan_id,
             "generation": self.generation,
             "blocker_generation": self.blocker_generation,
+            "control_action_id": self.control_action_id,
             "expected_commit": self.expected_commit,
             "source_commit": self.source_commit,
             "expected_head": self.expected_head,
@@ -248,6 +261,66 @@ class PMControlEventStore:
                 (project_id, comment_id),
             ).fetchone()
 
+    def claim(self, project_id: str, comment_id: int) -> dict[str, Any]:
+        self.ensure()
+        timestamp = now()
+        with self.storage.connect() as conn:
+            current = conn.execute(
+                """SELECT * FROM cp_pm_control_events
+                WHERE project_id=%s AND comment_id=%s FOR UPDATE""",
+                (project_id, comment_id),
+            ).fetchone()
+            if current is None:
+                raise RuntimeError("PM control event does not exist")
+            if str(current.get("status") or "") != "accepted_pending_dispatch":
+                raise RuntimeError(
+                    f"PM control event is not dispatchable (status={current.get('status')})"
+                )
+            claimed = conn.execute(
+                """UPDATE cp_pm_control_events
+                SET status='dispatching', updated_at=%s
+                WHERE project_id=%s AND comment_id=%s
+                  AND status='accepted_pending_dispatch'
+                RETURNING *""",
+                (timestamp, project_id, comment_id),
+            ).fetchone()
+            conn.commit()
+        if claimed is None:
+            raise RuntimeError("PM control event could not be claimed")
+        return dict(claimed)
+
+    def finish(
+        self,
+        *,
+        project_id: str,
+        comment_id: int,
+        status: str,
+        result: dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> dict[str, Any]:
+        if status not in {"executed", "failed", "uncertain", "unsupported_action_dispatch"}:
+            raise ValueError("Unsupported PM control terminal status")
+        self.ensure()
+        with self.storage.connect() as conn:
+            row = conn.execute(
+                """UPDATE cp_pm_control_events
+                SET status=%s, result=%s::jsonb, error=%s, updated_at=%s
+                WHERE project_id=%s AND comment_id=%s AND status='dispatching'
+                RETURNING *""",
+                (
+                    status,
+                    json.dumps(result or {}, ensure_ascii=False, sort_keys=True),
+                    error,
+                    now(),
+                    project_id,
+                    comment_id,
+                ),
+            ).fetchone()
+            conn.commit()
+        if row is None:
+            raise RuntimeError("PM control event terminal transition rejected")
+        return dict(row)
+
     def record(
         self,
         *,
@@ -269,8 +342,8 @@ class PMControlEventStore:
                 """INSERT INTO cp_pm_control_events
                 (project_id, comment_id, repository, issue_number, author,
                  comment_url, body_sha256, action, status, target_identity,
-                 error, created_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s)
+                 result, error, created_at, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,NULL,%s,%s,%s)
                 ON CONFLICT (project_id, comment_id) DO NOTHING""",
                 (
                     project_id,
@@ -288,6 +361,7 @@ class PMControlEventStore:
                         sort_keys=True,
                     ),
                     error,
+                    now(),
                     now(),
                 ),
             )
