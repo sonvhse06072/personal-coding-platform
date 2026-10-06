@@ -46,6 +46,22 @@ class FakeControlEvents:
             dict(row),
         )
 
+    def claim(self, project_id, comment_id):
+        row = self.rows[(project_id, comment_id)]
+        if row["status"] != "accepted_pending_dispatch":
+            raise RuntimeError("not dispatchable")
+        row["status"] = "dispatching"
+        return dict(row)
+
+    def finish(self, *, project_id, comment_id, status, result=None, error=None):
+        row = self.rows[(project_id, comment_id)]
+        if row["status"] != "dispatching":
+            raise RuntimeError("terminal transition rejected")
+        row["status"] = status
+        row["result"] = result or {}
+        row["error"] = error
+        return dict(row)
+
 
 class FakeGitHub:
     def __init__(self, comments, issue):
@@ -166,7 +182,7 @@ def control_comment(
     }
 
 
-def configure(monkeypatch, *, comments=None, issue=None):
+def configure(monkeypatch, *, comments=None, issue=None, control_dispatcher=None):
     monkeypatch.setattr(
         pm_bridge,
         "bridge_project_config",
@@ -198,6 +214,7 @@ def configure(monkeypatch, *, comments=None, issue=None):
             github=github,
             events=events,
             control_events=control_events,
+            control_dispatcher=control_dispatcher,
         ),
         storage,
         events,
@@ -508,3 +525,61 @@ def test_control_rejects_duplicate_control_marker(monkeypatch):
     assert result["controls_accepted"] == []
     assert "exactly one versioned control marker" in result["controls_rejected"][0]["error"]
     assert github.issue_calls == []
+
+
+def test_control_dispatcher_claims_once_and_records_terminal_result(monkeypatch):
+    async def dispatcher(envelope, *, comment_id, issue_number):
+        assert envelope.action == "request_diagnostics"
+        assert comment_id == 200
+        assert issue_number == 4
+        return "unsupported_action_dispatch", {
+            "status": "pending_future_slice",
+            "action": envelope.action,
+        }
+
+    service, storage, _, _ = configure(
+        monkeypatch,
+        comments=[control_comment()],
+        control_dispatcher=dispatcher,
+    )
+
+    first = asyncio.run(service.poll_project("demo"))
+    second = asyncio.run(service.poll_project("demo"))
+
+    assert storage.plans == {}
+    assert first["controls_dispatched"] == [
+        {
+            "comment_id": 200,
+            "action": "request_diagnostics",
+            "status": "unsupported_action_dispatch",
+            "result": {
+                "status": "pending_future_slice",
+                "action": "request_diagnostics",
+            },
+        }
+    ]
+    assert service.control_events.rows[("demo", 200)]["status"] == "unsupported_action_dispatch"
+    assert second["controls_skipped"] == [200]
+
+
+def test_control_dispatch_failure_is_terminal_and_not_replayed(monkeypatch):
+    calls = []
+
+    async def dispatcher(envelope, *, comment_id, issue_number):
+        calls.append(comment_id)
+        raise RuntimeError("stale target")
+
+    service, _, _, _ = configure(
+        monkeypatch,
+        comments=[control_comment()],
+        control_dispatcher=dispatcher,
+    )
+
+    first = asyncio.run(service.poll_project("demo"))
+    second = asyncio.run(service.poll_project("demo"))
+
+    assert calls == [200]
+    assert first["controls_failed"][0]["comment_id"] == 200
+    assert "stale target" in first["controls_failed"][0]["error"]
+    assert service.control_events.rows[("demo", 200)]["status"] == "failed"
+    assert second["controls_skipped"] == [200]
