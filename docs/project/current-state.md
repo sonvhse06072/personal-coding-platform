@@ -295,6 +295,13 @@ This correction does not change the upstream model, model role, quota group,
 provider routing priority or AP-MVP-02 source/workspace. It does not generalize
 the same rule to `gemini-3.1-pro-high` without direct compatibility evidence.
 
+Because this incident occurred only after deterministic verification had
+already passed, the existing explicit PM-handoff verification-only recovery may
+also be armed for `evaluator_provider_failure_without_fallback` when the
+checkpoint proves `last_verification_summary.passed=true` and retains an exact
+durable evaluator choice. This avoids inventing an application edit or rerouting
+the WorkOrder merely to retry an evaluator after a platform capability repair.
+
 ## Standing execution / quality boundaries
 
 - Normal flow: bounded issue/WorkOrder -> implementation/evidence -> deterministic
