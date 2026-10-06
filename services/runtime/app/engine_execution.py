@@ -453,6 +453,22 @@ class RuntimeEngine(RuntimeEngineCore):
                         last_failure=result.stderr or result.output,
                     )
                     return
+                removed_health = self._rehabilitate_successful_choice(
+                    provider_state,
+                    choice,
+                )
+                if removed_health:
+                    checkpoint["provider_state"] = provider_state
+                    history = list(
+                        checkpoint.get("provider_success_rehabilitations") or []
+                    )
+                    history.append({
+                        "stage": "planner",
+                        "model": str(choice.get("id") or ""),
+                        "provider": str(choice.get("provider") or ""),
+                        "removed_keys": removed_health,
+                    })
+                    checkpoint["provider_success_rehabilitations"] = history[-20:]
                 plan = result.output[-20000:]
                 checkpoint["plan"] = plan
                 checkpoint.pop("planner_choice", None)
@@ -625,7 +641,29 @@ class RuntimeEngine(RuntimeEngineCore):
 
             if run.returncode != 0:
                 last_failure = f"Agent command failed ({run.returncode}):\n{run.stderr}\n{run.output}"[-30000:]
-            self.storage.update(job_id, status="verifying", progress=progress)
+            else:
+                removed_health = self._rehabilitate_successful_choice(
+                    provider_state,
+                    executor_choice,
+                )
+                if removed_health:
+                    checkpoint["provider_state"] = provider_state
+                    history = list(
+                        checkpoint.get("provider_success_rehabilitations") or []
+                    )
+                    history.append({
+                        "stage": "executor",
+                        "model": str(executor_choice.get("id") or ""),
+                        "provider": str(executor_choice.get("provider") or ""),
+                        "removed_keys": removed_health,
+                    })
+                    checkpoint["provider_success_rehabilitations"] = history[-20:]
+            self.storage.update(
+                job_id,
+                status="verifying",
+                progress=progress,
+                checkpoint=checkpoint,
+            )
 
             diff = diff_state(
                 workspace,
@@ -863,6 +901,24 @@ class RuntimeEngine(RuntimeEngineCore):
                             diff=diff,
                         )
                         return
+                    if evaluation.returncode == 0:
+                        removed_health = self._rehabilitate_successful_choice(
+                            provider_state,
+                            choice,
+                        )
+                        if removed_health:
+                            checkpoint["provider_state"] = provider_state
+                            history = list(
+                                checkpoint.get("provider_success_rehabilitations")
+                                or []
+                            )
+                            history.append({
+                                "stage": "evaluator",
+                                "model": str(choice.get("id") or ""),
+                                "provider": str(choice.get("provider") or ""),
+                                "removed_keys": removed_health,
+                            })
+                            checkpoint["provider_success_rehabilitations"] = history[-20:]
                     evaluator_output = evaluation.output[-20000:]
                     review_report = parse_review_output(evaluator_output)
                     record_review_telemetry(
