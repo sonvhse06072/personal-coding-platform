@@ -1720,6 +1720,7 @@ class PlanOrchestrator:
                         and not persisted_ci_success
                         and delivery.get("state") == "ci_none"
                         and ci.get("state") == "none"
+                        and ci_commit == verified_commit
                     ):
                         expected_base = ""
                         try:
