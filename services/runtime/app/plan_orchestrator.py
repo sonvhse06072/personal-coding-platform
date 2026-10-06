@@ -1695,17 +1695,59 @@ class PlanOrchestrator:
                     verified_commit = str(result.get("commit") or "").strip()
                     branch = str(job.get("branch") or "").strip()
                     pr_number = pr.get("number")
+                    try:
+                        normalized_pr_number = int(pr_number) if pr_number else None
+                    except (TypeError, ValueError):
+                        normalized_pr_number = None
                     ci_commit = str(ci.get("commit") or "").strip()
-                    exact_completed_delivery = bool(
+                    exact_delivery_binding = bool(
                         result.get("status") == "accepted"
                         and result.get("delivery_finalized") is True
-                        and delivery.get("state") == "ci_success"
-                        and ci.get("state") == "success"
                         and verified_commit
-                        and pr_number
+                        and branch
+                        and normalized_pr_number
                         and str(pr.get("head") or "") == verified_commit
                         and str(pr.get("head_ref") or "") == branch
                         and (not ci_commit or ci_commit == verified_commit)
+                    )
+                    persisted_ci_success = bool(
+                        delivery.get("state") == "ci_success"
+                        and ci.get("state") == "success"
+                    )
+                    fresh_ci_success = False
+                    if (
+                        exact_delivery_binding
+                        and not persisted_ci_success
+                        and delivery.get("state") == "ci_none"
+                        and ci.get("state") == "none"
+                    ):
+                        try:
+                            project = project_config(str(plan["project_id"]))
+                            expected_base = str(project.get("base_branch") or "main")
+                            current_pr = await self.engine.ddev.github_pull_request(
+                                project_id=str(plan["project_id"]),
+                                pr_number=int(normalized_pr_number),
+                            )
+                            current_ci = await self.engine.ddev.github_ci(
+                                project_id=str(plan["project_id"]),
+                                commit=verified_commit,
+                            )
+                        except Exception:
+                            current_pr = {}
+                            current_ci = {}
+                        fresh_ci_success = bool(
+                            int(current_pr.get("number") or 0) == normalized_pr_number
+                            and str(current_pr.get("state") or "") == "open"
+                            and not bool(current_pr.get("merged"))
+                            and str(current_pr.get("head") or "") == verified_commit
+                            and str(current_pr.get("head_ref") or "") == branch
+                            and str(current_pr.get("base_ref") or "") == expected_base
+                            and str(current_ci.get("state") or "") == "success"
+                            and str(current_ci.get("commit") or "") == verified_commit
+                        )
+                    exact_completed_delivery = bool(
+                        exact_delivery_binding
+                        and (persisted_ci_success or fresh_ci_success)
                     )
                     if exact_completed_delivery:
                         detail = dict(tracked.get("detail") or {})
@@ -1713,13 +1755,18 @@ class PlanOrchestrator:
                             "job_id": job_id,
                             "recovered_from_blocked": True,
                             "recovery_reason": "same_child_completed_finalized_delivery",
+                            "recovery_ci_source": (
+                                "persisted_delivery"
+                                if persisted_ci_success
+                                else "fresh_github_exact_head"
+                            ),
                         })
                         self._checkpoint_transition(
                             tracked,
                             kind="recovered_accepted",
                             job=job,
                             state="awaiting_merge",
-                            pr_number=int(pr_number),
+                            pr_number=int(normalized_pr_number),
                             pr_url=pr.get("url"),
                             detail=detail,
                         )
