@@ -1721,6 +1721,7 @@ class PlanOrchestrator:
                         and delivery.get("state") == "ci_none"
                         and ci.get("state") == "none"
                     ):
+                        expected_base = ""
                         try:
                             project = project_config(str(plan["project_id"]))
                             expected_base = str(project.get("base_branch") or "main")
