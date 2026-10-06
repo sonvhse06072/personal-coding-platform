@@ -110,33 +110,51 @@ class PMControlDispatcher:
 
         if action in {"recheck_blocker", "resume_same_job"}:
             self._job(envelope)
-            control_action = self.controls.get_action(
-                str(envelope.control_action_id)
-            )
-            if control_action is None:
-                raise RuntimeError("Unknown durable control action")
-            underlying = str(control_action.get("action_type") or "")
             allowed = (
                 _RECHECK_ACTION_TYPES
                 if action == "recheck_blocker"
                 else _RESUME_ACTION_TYPES
             )
-            if underlying not in allowed:
-                raise RuntimeError(
-                    f"{action} cannot execute action_type={underlying}"
+            if envelope.control_action_id:
+                control_action = self.controls.get_action(
+                    str(envelope.control_action_id)
                 )
-            result = await self.controls.execute_remote(
-                str(envelope.control_action_id),
-                expected_job_id=str(envelope.job_id),
-                expected_generation=str(envelope.blocker_generation),
-            )
+                if control_action is None:
+                    raise RuntimeError("Unknown durable control action")
+                underlying = str(control_action.get("action_type") or "")
+                if underlying not in allowed:
+                    raise RuntimeError(
+                        f"{action} cannot execute action_type={underlying}"
+                    )
+                result = await self.controls.execute_remote(
+                    str(envelope.control_action_id),
+                    expected_job_id=str(envelope.job_id),
+                    expected_generation=str(envelope.blocker_generation),
+                )
+                control_identity = {
+                    "control_action_id": envelope.control_action_id,
+                }
+            else:
+                underlying = str(envelope.recovery_action_type or "")
+                if underlying not in allowed:
+                    raise RuntimeError(
+                        f"{action} cannot execute standalone action_type={underlying}"
+                    )
+                result = await self.controls.execute_standalone_remote(
+                    str(envelope.job_id),
+                    expected_generation=str(envelope.blocker_generation),
+                    action_type=underlying,
+                )
+                control_identity = {
+                    "recovery_action_type": underlying,
+                }
             return (
                 "executed",
                 {
                     "status": "executed",
                     "action": action,
                     "underlying_action_type": underlying,
-                    "control_action_id": envelope.control_action_id,
+                    **control_identity,
                     "result": result,
                 },
             )
