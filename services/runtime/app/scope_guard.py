@@ -19,20 +19,22 @@ _SCOPE_PATHS = {
     "docs/project/requirements.md",
     "docs/project/project-plan.md",
 }
-_DEPENDENCY_MANIFESTS = {
-    "composer.json",
-    "composer.lock",
+_SEMANTIC_DEPENDENCY_MANIFESTS = {
     "package.json",
+    "composer.json",
+    "pyproject.toml",
+    "cargo.toml",
+}
+_ALWAYS_PROTECTED_DEPENDENCY_MANIFESTS = {
+    "composer.lock",
     "package-lock.json",
     "pnpm-lock.yaml",
     "yarn.lock",
-    "pyproject.toml",
     "poetry.lock",
     "pipfile",
     "pipfile.lock",
     "go.mod",
     "go.sum",
-    "cargo.toml",
     "cargo.lock",
     "gemfile",
     "gemfile.lock",
@@ -115,6 +117,8 @@ def baseline_authority_changes(
 def changed_path_protected_signals(
     paths: Iterable[str],
     checkpoint: dict[str, Any] | None = None,
+    *,
+    dependency_manifest_changes: Iterable[str] | None = None,
 ) -> set[str]:
     """Classify actual changed paths into protected decision signals.
 
@@ -124,6 +128,11 @@ def changed_path_protected_signals(
     """
 
     normalized_paths = normalize_changed_paths(paths)
+    semantic_dependency_changes = (
+        set(normalize_changed_paths(dependency_manifest_changes))
+        if dependency_manifest_changes is not None
+        else None
+    )
     signals: set[str] = set()
     authority = baseline_authority_changes(normalized_paths, checkpoint)
     if "human_owner_protected" in set(authority.values()):
@@ -140,11 +149,23 @@ def changed_path_protected_signals(
         if path in _SCOPE_PATHS:
             signals.add("scope_change")
 
-        if (
-            name in _DEPENDENCY_MANIFESTS
+        dependency_signal = False
+        if name in _SEMANTIC_DEPENDENCY_MANIFESTS:
+            # Legacy/durable results created before semantic dependency evidence
+            # remain fail-closed. New Runtime diffs pass the exact set whose
+            # dependency graph surface actually changed.
+            dependency_signal = (
+                semantic_dependency_changes is None
+                or path in semantic_dependency_changes
+            )
+        elif (
+            name in _ALWAYS_PROTECTED_DEPENDENCY_MANIFESTS
             or (name.startswith("requirements") and name.endswith(".txt"))
             or path.startswith(("helm/", "charts/", "k8s/", "kubernetes/"))
         ):
+            dependency_signal = True
+
+        if dependency_signal:
             signals.add("major_dependency_addition")
 
         if _SECURITY_PATH_TERMS & (parts | stem_parts):
