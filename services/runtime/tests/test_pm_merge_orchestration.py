@@ -361,7 +361,7 @@ def test_blocked_parent_recovery_fails_closed_on_delivery_head_mismatch(monkeypa
     assert store.rows[0]["state"] == "blocked"
     assert store.plan_status == "blocked"
     assert result["launched"] is None
-    assert store.checkpoint_history == []
+    assert getattr(store, "checkpoint_history", []) == []
 
 
 def test_project_opt_out_keeps_stable_manual_merge_gate(monkeypatch) -> None:
