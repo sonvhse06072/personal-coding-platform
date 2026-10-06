@@ -92,7 +92,12 @@ class PMControlEnvelope(BaseModel):
     finding: str | None = Field(default=None, min_length=1, max_length=8000)
     references: list[str] = Field(default_factory=list, max_length=12)
 
-    continuation_key: str | None = Field(default=None, min_length=1, max_length=500)
+    continuation_key: str | None = Field(
+        default=None,
+        min_length=78,
+        max_length=78,
+        pattern=r"^plan:continue:[0-9a-f]{64}$",
+    )
     checkpoint_id: int | None = Field(default=None, ge=1)
     checkpoint_key: str | None = Field(default=None, min_length=1, max_length=500)
     ready_work_order_ids: list[str] = Field(default_factory=list, max_length=30)
@@ -170,6 +175,21 @@ class PMControlEnvelope(BaseModel):
             )
         elif self.action == "direct_intake":
             require("baseline_revision", "expected_remote_main_sha")
+
+        if self.ready_work_order_ids:
+            if any(
+                not item
+                or item != item.strip()
+                or len(item) > 200
+                for item in self.ready_work_order_ids
+            ):
+                raise ValueError(
+                    "ready_work_order_ids must contain exact non-empty ids <= 200 characters"
+                )
+            if self.ready_work_order_ids != sorted(set(self.ready_work_order_ids)):
+                raise ValueError(
+                    "ready_work_order_ids must be unique and sorted"
+                )
 
         for reference in self.references:
             if not reference.strip() or len(reference) > 500:
