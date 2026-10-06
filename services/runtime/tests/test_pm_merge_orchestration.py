@@ -402,6 +402,7 @@ def test_blocked_parent_ci_none_recovers_from_fresh_exact_head_ci_then_pm_merges
 @pytest.mark.parametrize(
     "case",
     [
+        "pr_number",
         "pr_head",
         "pr_branch",
         "pr_base",
@@ -422,7 +423,9 @@ def test_blocked_parent_ci_none_live_recovery_fails_closed(case, monkeypatch) ->
     )
     store.plan_status = "blocked"
 
-    if case == "pr_head":
+    if case == "pr_number":
+        engine.ddev.pr_overrides["number"] = 8
+    elif case == "pr_head":
         engine.ddev.pr_overrides["head"] = "d" * 40
     elif case == "pr_branch":
         engine.ddev.pr_overrides["head_ref"] = "ai/other"
