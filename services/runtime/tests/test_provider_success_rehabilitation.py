@@ -1,5 +1,8 @@
 from app.engine_core import RuntimeEngineCore
-from app.engine_execution import reusable_passed_review
+from app.engine_execution import (
+    invalidate_review_reuse_on_verification_failure,
+    reusable_passed_review,
+)
 
 
 def test_success_rehabilitation_removes_only_exact_provider_and_model_markers() -> None:
@@ -92,3 +95,30 @@ def test_reusable_passed_review_rejects_failed_or_invalid_prior_review() -> None
             {"passed": True},
             diff_hash="same-diff",
         )
+
+
+def test_verification_failure_consumes_reuse_marker() -> None:
+    checkpoint = {
+        "reuse_passed_review_once": {
+            "diff_hash": "same-diff",
+            "model": "antigravity_flash_high",
+            "provider": "google_antigravity",
+        },
+        "last_review_report": {
+            "verdict": "pass",
+            "protocol_valid": True,
+        },
+    }
+
+    assert invalidate_review_reuse_on_verification_failure(
+        checkpoint,
+        {"passed": False},
+    )
+    assert "reuse_passed_review_once" not in checkpoint
+
+    checkpoint["reuse_passed_review_once"] = {"diff_hash": "same-diff"}
+    assert not invalidate_review_reuse_on_verification_failure(
+        checkpoint,
+        {"passed": True},
+    )
+    assert "reuse_passed_review_once" in checkpoint
