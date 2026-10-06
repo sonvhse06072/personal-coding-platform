@@ -165,6 +165,7 @@ class FakeControls:
             }
         }
         self.executed = []
+        self.standalone_executed = []
 
     def get_action(self, action_id):
         value = self.actions.get(action_id)
@@ -184,6 +185,22 @@ class FakeControls:
             "status": "executed",
             "action_id": action_id,
             "job_id": expected_job_id,
+        }
+
+    async def execute_standalone_remote(
+        self,
+        job_id,
+        *,
+        expected_generation,
+        action_type,
+    ):
+        self.standalone_executed.append(
+            (job_id, expected_generation, action_type)
+        )
+        return {
+            "status": "executed",
+            "job_id": job_id,
+            "action_type": action_type,
         }
 
 
@@ -306,6 +323,53 @@ def test_remote_resume_requires_runtime_issued_action_type_and_generation():
                 comment_id=13,
                 issue_number=77,
             )
+        )
+
+
+
+def test_remote_resume_supports_standalone_exact_generation_action():
+    dispatch, _, _, orchestrator = dispatcher()
+
+    status, result = asyncio.run(
+        dispatch.dispatch(
+            envelope(
+                "resume_same_job",
+                job_id="job-12345678",
+                blocker_generation="standalone-generation-1",
+                recovery_action_type="pm_scope_reassess",
+            ),
+            comment_id=131,
+            issue_number=77,
+        )
+    )
+
+    assert status == "executed"
+    assert result["underlying_action_type"] == "pm_scope_reassess"
+    assert result["recovery_action_type"] == "pm_scope_reassess"
+    assert orchestrator.controls.standalone_executed == [
+        (
+            "job-12345678",
+            "standalone-generation-1",
+            "pm_scope_reassess",
+        )
+    ]
+
+
+def test_remote_recovery_envelope_requires_exactly_one_action_identity():
+    with pytest.raises(ValueError, match="exactly one"):
+        envelope(
+            "resume_same_job",
+            job_id="job-12345678",
+            blocker_generation="generation-1",
+        )
+
+    with pytest.raises(ValueError, match="exactly one"):
+        envelope(
+            "resume_same_job",
+            job_id="job-12345678",
+            blocker_generation="generation-1",
+            control_action_id="control-12345678",
+            recovery_action_type="resume_same",
         )
 
 
