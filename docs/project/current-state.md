@@ -212,6 +212,28 @@ remove the dedicated PCP builder from Router/Runtime/ddev-executor platform
 image builds. CI and zero-active-work rollout evidence are required before
 resuming the exact AP-MVP-02 job.
 
+## PM-handoff verification-only recovery — PCP #495
+
+AP-MVP-02 exposed a contract mismatch after a bounded collaboration exhausted
+its two rounds and handed an unresolved design question to PM. The execution
+prompt correctly tells a resumed developer not to invent a repository edit when
+PM has resolved the decision and no code-side repair remains, but the ordinary
+per-invocation material-change guard still treated that safe no-effect turn as a
+failure.
+
+The repair is explicit and single-use rather than a global relaxation. A caller
+must set `verification_only_after_pm_handoff=true` on the existing blocked job.
+Runtime accepts it only for a durable `pm_handoff` collaboration context bound
+to the exact thread and round, forbids provider reset/reroute in the same
+request, and arms one verification-only turn. That marker is consumed on the
+next executor turn whether or not the developer changes files. All ordinary
+no-effect turns remain fail-closed.
+
+This recovery preserves the same job, workspace, route, cumulative diff and
+usage counters. It does not reopen collaboration, reset budget telemetry or
+authorize a new product/design decision. The owner/PM must resolve the actual
+handoff decision outside Runtime before using the flag.
+
 ## Standing execution / quality boundaries
 
 - Normal flow: bounded issue/WorkOrder -> implementation/evidence -> deterministic
