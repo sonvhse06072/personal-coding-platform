@@ -309,7 +309,7 @@ def test_high_risk_eligible_pr_merges_without_owner_gate(monkeypatch) -> None:
         [first],
         monkeypatch,
     )
-    storage.rows["job-12345678"]["checkpoint"]["work_order"]["risk"]["level"] = "high"
+    storage.jobs["job-12345678"]["checkpoint"]["work_order"]["risk"]["level"] = "high"
 
     asyncio.run(svc.tick())
 
