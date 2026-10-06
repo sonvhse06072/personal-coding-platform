@@ -285,6 +285,7 @@ def test_verification_only_pm_handoff_resume_allows_evaluator_provider_recovery(
         },
         {
             "last_verification_summary": {"passed": True},
+            "evaluator_choice": None,
         },
     ],
 )
@@ -309,7 +310,9 @@ def test_verification_only_evaluator_recovery_fails_closed_without_exact_evidenc
 
 
 def test_verification_only_pm_handoff_resume_rejects_unrelated_block() -> None:
-    storage = Storage(blocked_row())
+    original = blocked_row()
+    original["result"] = {"reason": "preflight_failed"}
+    storage = Storage(original)
     engine = RuntimeEngine(storage)
 
     with pytest.raises(RuntimeError, match="exact collaboration recovery state"):
