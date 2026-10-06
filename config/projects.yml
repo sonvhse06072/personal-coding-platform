@@ -146,6 +146,7 @@ projects:
       allow_commit: true
       allow_push_ai_branch: true
       allow_create_pr: true
+      allow_pm_merge: true
       allow_auto_merge_low_risk: true
       allow_production_deploy: false
 

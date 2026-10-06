@@ -261,7 +261,11 @@ def service(rows, jobs, work_orders, monkeypatch, *, allow_auto=True):
         "project_config",
         lambda project_id: {
             "base_branch": "main",
-            "autonomy": {"allow_auto_merge_low_risk": allow_auto, "allow_production_deploy": False},
+            "autonomy": {
+                "allow_pm_merge": allow_auto,
+                "allow_auto_merge_low_risk": allow_auto,
+                "allow_production_deploy": False,
+            },
         },
     )
     return orchestrator, storage, engine, store
@@ -294,6 +298,25 @@ def test_eligible_pr_merges_once_then_unlocks_dependency(monkeypatch) -> None:
     audit = next(iter(svc.merge_audit.records.values()))
     assert audit["status"] == "merged"
     assert storage.continuity[0]["event_type"] == "pr_merged"
+
+
+def test_high_risk_eligible_pr_merges_without_owner_gate(monkeypatch) -> None:
+    first = work_order("WO-1")
+    first["risk"]["level"] = "high"
+    svc, storage, engine, store = service(
+        [tracked("WO-1", 0, state="awaiting_merge", job_id="job-12345678", pr_number=7)],
+        {"job-12345678": accepted_job()},
+        [first],
+        monkeypatch,
+    )
+    storage.jobs["job-12345678"]["checkpoint"]["work_order"]["risk"]["level"] = "high"
+
+    asyncio.run(svc.tick())
+
+    assert engine.ddev.merge_calls == 1
+    assert store.rows[0]["state"] == "completed"
+    assert store.rows[0]["detail"]["pm_merge"]["requires_human"] is False
+    assert store.rows[0]["detail"]["pm_merge"]["evidence"]["risk_level"] == "high"
 
 
 def test_project_opt_out_keeps_stable_manual_merge_gate(monkeypatch) -> None:

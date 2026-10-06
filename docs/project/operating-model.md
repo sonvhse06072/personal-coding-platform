@@ -724,3 +724,17 @@ Default consultation properties:
 - compact conclusion/recommendation persisted as a CollaborationThread artifact target rather than an unbounded transcript.
 
 The detailed policy and implementation order are authoritative in `efficiency-model.md` and parent initiative #146.
+
+## PM-controlled merge authority
+
+For projects with `autonomy.allow_pm_merge=true`, PM may merge an exact
+delivered PR after deterministic verification, required independent review and
+exact-head CI all pass, provided no unresolved protected decision remains.
+
+Risk level alone is not a Human Owner merge decision. `high` and `critical`
+risk continue to raise execution/profile/verification rigor, but owner merge is
+required only when durable protected-decision evidence or another explicit
+merge blocker remains.
+
+Production deployment is separate authority and is never implied by PM merge.
+

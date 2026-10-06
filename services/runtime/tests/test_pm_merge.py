@@ -12,7 +12,11 @@ SOURCE = "a" * 40
 def context() -> tuple[dict, dict, dict, dict, dict]:
     project = {
         "base_branch": "main",
-        "autonomy": {"allow_auto_merge_low_risk": True, "allow_production_deploy": False},
+        "autonomy": {
+            "allow_pm_merge": True,
+            "allow_auto_merge_low_risk": True,
+            "allow_production_deploy": False,
+        },
     }
     plan = {"plan_id": "plan-1", "project_id": "default", "plan": {"decision_boundaries": []}}
     tracked = {
@@ -106,7 +110,7 @@ def evaluate(values):
     return evaluate_pm_merge(project=project, plan=plan, tracked=tracked, job=job, pr=pr)
 
 
-def test_low_risk_exact_green_evidence_is_pm_merge_eligible() -> None:
+def test_exact_green_evidence_is_pm_merge_eligible() -> None:
     result = evaluate(context())
     assert result.eligible is True
     assert result.manual_only is False
@@ -119,7 +123,7 @@ def test_low_risk_exact_green_evidence_is_pm_merge_eligible() -> None:
 def test_project_opt_out_preserves_manual_merge_gate() -> None:
     values = list(context())
     values[0] = deepcopy(values[0])
-    values[0]["autonomy"]["allow_auto_merge_low_risk"] = False
+    values[0]["autonomy"]["allow_pm_merge"] = False
     result = evaluate(tuple(values))
     assert result.eligible is False
     assert result.manual_only is True
@@ -213,20 +217,59 @@ def test_baseline_covered_security_authorization_is_invalidated_by_diff_change()
     assert "protected_change_without_matching_owner_approval" in result.blockers
 
 
-def test_high_risk_and_pending_decision_never_use_low_risk_auto_merge() -> None:
+def test_high_and_critical_risk_are_pm_merge_eligible_when_all_gates_are_green() -> None:
+    for risk_level in ("high", "critical"):
+        values = list(context())
+        values[3] = deepcopy(values[3])
+        values[3]["checkpoint"]["work_order"]["risk"]["level"] = risk_level
+
+        result = evaluate(tuple(values))
+
+        assert result.eligible is True
+        assert result.requires_human is False
+        assert result.blockers == ()
+        assert result.evidence["risk_level"] == risk_level
+
+
+def test_pending_decision_still_requires_human_at_any_risk_level() -> None:
+    values = list(context())
+    values[3] = deepcopy(values[3])
+    values[3]["checkpoint"]["work_order"]["risk"]["level"] = "critical"
+    values[3]["checkpoint"]["pending_decision"] = {"key": "x"}
+
+    result = evaluate(tuple(values))
+
+    assert result.eligible is False
+    assert result.requires_human is True
+    assert "unresolved_job_human_decision" in result.blockers
+
+
+def test_high_risk_protected_change_still_requires_matching_owner_approval() -> None:
     values = list(context())
     values[3] = deepcopy(values[3])
     values[3]["checkpoint"]["work_order"]["risk"]["level"] = "high"
-    result = evaluate(tuple(values))
-    assert result.requires_human is True
-    assert "work_order_risk_not_low" in result.blockers
+    values[3]["repo_analysis"]["security_sensitive"] = True
 
-    values = list(context())
-    values[3] = deepcopy(values[3])
-    values[3]["checkpoint"]["pending_decision"] = {"key": "x"}
     result = evaluate(tuple(values))
+
+    assert result.eligible is False
     assert result.requires_human is True
-    assert "unresolved_job_human_decision" in result.blockers
+    assert "protected_change_without_matching_owner_approval" in result.blockers
+
+
+def test_legacy_auto_merge_key_remains_backward_compatible() -> None:
+    values = list(context())
+    values[0] = deepcopy(values[0])
+    values[0]["autonomy"].pop("allow_pm_merge")
+    values[0]["autonomy"]["allow_auto_merge_low_risk"] = True
+    values[3] = deepcopy(values[3])
+    values[3]["checkpoint"]["work_order"]["risk"]["level"] = "critical"
+
+    result = evaluate(tuple(values))
+
+    assert result.eligible is True
+    assert result.manual_only is False
+    assert result.evidence["pm_merge_enabled"] is True
 
 
 def test_fast_review_may_skip_only_with_durable_strong_evidence_marker() -> None:

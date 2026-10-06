@@ -61,6 +61,13 @@ def _dict(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
 
+def _pm_merge_enabled(autonomy: dict[str, Any]) -> bool:
+    """Return project PM-merge authority with legacy config compatibility."""
+    if "allow_pm_merge" in autonomy:
+        return bool(autonomy.get("allow_pm_merge"))
+    return bool(autonomy.get("allow_auto_merge_low_risk", False))
+
+
 def _changed_paths(job: dict[str, Any]) -> list[str]:
     result = _dict(job.get("result"))
     diff = _dict(result.get("diff"))
@@ -146,7 +153,8 @@ def evaluate_pm_merge(
     blockers: list[str] = []
     human_blockers: list[str] = []
     autonomy = _dict(project.get("autonomy"))
-    manual_only = not bool(autonomy.get("allow_auto_merge_low_risk", False))
+    pm_merge_enabled = _pm_merge_enabled(autonomy)
+    manual_only = not pm_merge_enabled
 
     plan_doc = _dict(plan.get("plan"))
     if plan_doc.get("decision_boundaries"):
@@ -230,9 +238,10 @@ def evaluate_pm_merge(
     if str(pr.get("base_ref") or "") != expected_base:
         blockers.append("pull_request_base_mismatch")
 
+    # WorkOrder risk level controls routing/profile/verification policy, but it
+    # is not itself a Human Owner decision. Merge authority is determined by
+    # explicit protected/unresolved decision evidence below.
     risk_level = str(_dict(work_order.get("risk")).get("level") or "standard")
-    if risk_level not in {"routine", "standard"}:
-        human_blockers.append("work_order_risk_not_low")
 
     if checkpoint.get("pending_decision"):
         human_blockers.append("unresolved_job_human_decision")
@@ -288,6 +297,7 @@ def evaluate_pm_merge(
         "review_verdict": review.get("verdict"),
         "review_required": bool(review_policy.get("required")),
         "risk_level": risk_level,
+        "pm_merge_enabled": pm_merge_enabled,
         "changed_files": _changed_paths(job),
         "baseline_authority_changes": _baseline_authority_changes(job),
         "baseline_covered_pm_authorized_protected_signals": sorted(
