@@ -786,6 +786,11 @@ class RuntimeEngine(RuntimeEngineCore):
             verification_summary = verification_checkpoint_summary(verification)
             if verification_summary is not None:
                 checkpoint["last_verification_summary"] = verification_summary
+            if (
+                isinstance(checkpoint.get("reuse_passed_review_once"), dict)
+                and verification.get("passed") is not True
+            ):
+                checkpoint.pop("reuse_passed_review_once", None)
             record_review_repair_churn_observation(
                 checkpoint,
                 verification=verification,
