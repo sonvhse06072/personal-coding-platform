@@ -251,6 +251,26 @@ Regression coverage uses a Storage-shaped row with WorkOrder identity only
 inside the checkpoint plus the canonical launch marker; no top-level
 `work_order_id` test-only field remains.
 
+## Chợ Nhạc visual-runtime prerequisite — PCP #498
+
+AP-MVP-02 reached the Runtime-owned `visual_quality` phase and the locked
+Playwright Chromium executable failed to launch because the active DDEV web
+container was missing `libnspr4.so`. The existing `frontend_quality` phase
+already uses the repository-local Playwright CLI as root to install Chromium OS
+dependencies, but that installation is imperative container state and is not a
+durable guarantee for a later visual phase after container/image recreation.
+
+The bounded repair makes `visual_quality` self-contained: immediately before
+`npm run test:visual`, Runtime executes the same local
+`npx playwright install-deps chromium` command as root inside the active DDEV
+web container. This intentionally does not reintroduce a hard-coded
+`webimage_extra_packages` list in the application repository and does not
+change application code or Playwright versions.
+
+The visual test remains the second command in the phase, so dependency
+provisioning must succeed before capture begins. Ordinary DDEV/Runtime phase
+timeouts and fail-closed command handling remain unchanged.
+
 ## Standing execution / quality boundaries
 
 - Normal flow: bounded issue/WorkOrder -> implementation/evidence -> deterministic
