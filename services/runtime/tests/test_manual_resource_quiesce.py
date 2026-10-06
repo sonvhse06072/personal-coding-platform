@@ -2,6 +2,7 @@ import asyncio
 
 import app.engine_core as engine_core
 from app.engine_core import RuntimeEngineCore
+from app.work_order_checkpoints import launch_identity
 
 
 class FakeStorage:
@@ -52,22 +53,21 @@ class FakeDdev:
         return True
 
 
-def row(status, *, work_order_id=None):
+def row(status, *, checkpoint=None):
     return {
         "id": "job-manual-1",
         "project_id": "demo",
         "status": status,
         "workspace": "/tmp/workspaces/job-manual-1",
-        "checkpoint": {},
-        "work_order_id": work_order_id,
+        "checkpoint": dict(checkpoint or {}),
     }
 
 
-def engine(monkeypatch, status, *, work_order_id=None, fail=False):
+def engine(monkeypatch, status, *, checkpoint=None, fail=False):
     storage = FakeStorage({
         "job-manual-1": row(
             status,
-            work_order_id=work_order_id,
+            checkpoint=checkpoint,
         )
     })
     runtime = RuntimeEngineCore(storage)
@@ -117,16 +117,57 @@ def test_completed_manual_job_releases_data(monkeypatch):
 
 
 def test_orchestrated_job_is_left_to_plan_orchestrator(monkeypatch):
+    identity = launch_identity("plan-1", "WO-1")
+    checkpoint = {
+        "work_order": {"id": "WO-1"},
+        "orchestrator_launch": {**identity, "state": "launched"},
+    }
+    storage = FakeStorage({
+        identity["job_id"]: {
+            "id": identity["job_id"],
+            "project_id": "demo",
+            "status": "blocked",
+            "workspace": f"/tmp/workspaces/{identity['job_id']}",
+            "checkpoint": checkpoint,
+        }
+    })
+    runtime = RuntimeEngineCore(storage)
+    runtime.ddev = FakeDdev()
+    monkeypatch.setattr(
+        engine_core,
+        "project_config",
+        lambda project_id: {"ddev": {"enabled": True}},
+    )
+
+    asyncio.run(runtime._quiesce_stable_manual_job(identity["job_id"]))
+
+    assert runtime.ddev.calls == []
+    assert storage.rows[identity["job_id"]]["checkpoint"] == checkpoint
+
+
+def test_standalone_work_order_without_orchestrator_launch_still_quiesces(monkeypatch):
     runtime, storage = engine(
         monkeypatch,
         "blocked",
-        work_order_id="WO-1",
+        checkpoint={"work_order": {"id": "WO-STANDALONE"}},
     )
 
     asyncio.run(runtime._quiesce_stable_manual_job("job-manual-1"))
 
-    assert runtime.ddev.calls == []
-    assert storage.rows["job-manual-1"]["checkpoint"] == {}
+    assert runtime.ddev.calls == [{
+        "job_id": "job-manual-1",
+        "project_id": "demo",
+        "workspace": "/tmp/workspaces/job-manual-1",
+        "remove_data": False,
+    }]
+    assert storage.rows["job-manual-1"]["checkpoint"]["work_order"] == {
+        "id": "WO-STANDALONE"
+    }
+    assert storage.rows["job-manual-1"]["checkpoint"]["resource_quiesce"] == {
+        "quiesced": True,
+        "data_removed": False,
+        "status": "blocked",
+    }
 
 
 def test_cleanup_failure_is_recorded_without_changing_primary_status(monkeypatch):
