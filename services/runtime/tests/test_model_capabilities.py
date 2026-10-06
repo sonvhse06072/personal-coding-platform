@@ -70,12 +70,16 @@ def test_current_codex_generation_choices_are_registry_valid(
     assert capability.allowed_efforts[-1] == "max"
 
 
-def test_flash_medium_accepts_only_legacy_ignored_efforts_and_claude_stays_strict() -> None:
-    assert not validate_model_choice(
-        choice("antigravity_free", "low")
-    ).supports_explicit_effort
-    with pytest.raises(ModelCapabilityError, match="unsupported"):
-        validate_model_choice(choice("antigravity_free", "xhigh"))
+def test_fixed_effort_antigravity_models_accept_only_legacy_ignored_efforts() -> None:
+    for model_id in ("antigravity_free", "antigravity_flash_high"):
+        assert not validate_model_choice(
+            choice(model_id, "low")
+        ).supports_explicit_effort
+        assert not validate_model_choice(
+            choice(model_id, "medium")
+        ).supports_explicit_effort
+        with pytest.raises(ModelCapabilityError, match="unsupported"):
+            validate_model_choice(choice(model_id, "xhigh"))
 
     with pytest.raises(ModelCapabilityError, match="unsupported"):
         validate_model_choice(choice("antigravity_claude_sonnet", "low"))
@@ -166,15 +170,15 @@ def test_registry_declares_bounded_antigravity_and_full_codex_capabilities() -> 
         "frontier_codex",
     ):
         assert reasoning_capability(model_id, models[model_id]).allowed_efforts[-1] == "max"
-    for model_id in ("antigravity_flash_high", "antigravity_gemini_pro"):
-        assert reasoning_capability(model_id, models[model_id]).allowed_efforts == (
-            "low",
-            "medium",
-            "high",
-        )
     assert reasoning_capability(
-        "antigravity_free", models["antigravity_free"]
-    ).allowed_efforts == ()
+        "antigravity_gemini_pro", models["antigravity_gemini_pro"]
+    ).allowed_efforts == (
+        "low",
+        "medium",
+        "high",
+    )
+    for model_id in ("antigravity_free", "antigravity_flash_high"):
+        assert reasoning_capability(model_id, models[model_id]).allowed_efforts == ()
 
 
 def test_legacy_ignored_reasoning_metadata_is_validated() -> None:
