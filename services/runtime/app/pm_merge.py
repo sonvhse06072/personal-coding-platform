@@ -73,10 +73,21 @@ def _baseline_authority_changes(job: dict[str, Any]) -> dict[str, str]:
 
 
 def _path_protected_signals(job: dict[str, Any]) -> set[str]:
-    """Infer protected decision classes from actual accepted diff paths."""
+    """Infer protected decision classes from actual accepted diff evidence."""
 
     checkpoint = _dict(job.get("checkpoint"))
-    return changed_path_protected_signals(_changed_paths(job), checkpoint)
+    result = _dict(job.get("result"))
+    diff = _dict(result.get("diff"))
+    dependency_changes = diff.get("dependency_manifest_changes")
+    return changed_path_protected_signals(
+        _changed_paths(job),
+        checkpoint,
+        dependency_manifest_changes=(
+            dependency_changes
+            if isinstance(dependency_changes, list)
+            else None
+        ),
+    )
 
 
 def _protected_signals(job: dict[str, Any]) -> set[str]:
