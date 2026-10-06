@@ -6,6 +6,7 @@ from copy import deepcopy
 import pytest
 
 import app.orchestrator_merge as merge_module
+import app.plan_orchestrator as core_module
 from app.orchestrator_merge import PlanOrchestrator
 from checkpoint_fakes import CheckpointTransitions
 
@@ -286,18 +287,16 @@ def service(rows, jobs, work_orders, monkeypatch, *, allow_auto=True):
     store = FakeStore(plan_row(work_orders), rows)
     orchestrator = PlanOrchestrator(storage, engine, store=store)
     orchestrator.merge_audit = FakeAudit()
-    monkeypatch.setattr(
-        merge_module,
-        "project_config",
-        lambda project_id: {
-            "base_branch": "main",
-            "autonomy": {
-                "allow_pm_merge": allow_auto,
-                "allow_auto_merge_low_risk": allow_auto,
-                "allow_production_deploy": False,
-            },
+    config = lambda project_id: {
+        "base_branch": "main",
+        "autonomy": {
+            "allow_pm_merge": allow_auto,
+            "allow_auto_merge_low_risk": allow_auto,
+            "allow_production_deploy": False,
         },
-    )
+    }
+    monkeypatch.setattr(merge_module, "project_config", config)
+    monkeypatch.setattr(core_module, "project_config", config)
     return orchestrator, storage, engine, store
 
 
