@@ -23,12 +23,18 @@ CREATE TABLE IF NOT EXISTS cp_pm_control_events (
   action TEXT NOT NULL,
   status TEXT NOT NULL,
   target_identity JSONB NOT NULL DEFAULT '{}'::jsonb,
+  result JSONB NOT NULL DEFAULT '{}'::jsonb,
   error TEXT,
   created_at TIMESTAMPTZ NOT NULL,
+  updated_at TIMESTAMPTZ,
   PRIMARY KEY (project_id, comment_id)
 );
 CREATE INDEX IF NOT EXISTS cp_pm_control_events_project_idx
   ON cp_pm_control_events(project_id, created_at DESC);
+ALTER TABLE cp_pm_control_events
+  ADD COLUMN IF NOT EXISTS result JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE cp_pm_control_events
+  ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
 """
 
 
@@ -269,8 +275,8 @@ class PMControlEventStore:
                 """INSERT INTO cp_pm_control_events
                 (project_id, comment_id, repository, issue_number, author,
                  comment_url, body_sha256, action, status, target_identity,
-                 error, created_at)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,%s,%s)
+                 result, error, created_at, updated_at)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,'{}'::jsonb,%s,%s,%s)
                 ON CONFLICT (project_id, comment_id) DO NOTHING""",
                 (
                     project_id,
@@ -289,6 +295,57 @@ class PMControlEventStore:
                     ),
                     error,
                     now(),
+                    now(),
                 ),
             )
             conn.commit()
+
+    def claim_dispatch(self, project_id: str, comment_id: int) -> bool:
+        """Atomically consume one accepted command for at-most-once dispatch."""
+        self.ensure()
+        with self.storage.connect() as conn:
+            row = conn.execute(
+                """UPDATE cp_pm_control_events
+                SET status='dispatching', updated_at=%s
+                WHERE project_id=%s AND comment_id=%s
+                  AND status='accepted_pending_dispatch'
+                RETURNING comment_id""",
+                (now(), project_id, comment_id),
+            ).fetchone()
+            conn.commit()
+        return row is not None
+
+    def finish_dispatch(
+        self,
+        *,
+        project_id: str,
+        comment_id: int,
+        status: Literal["dispatched", "dispatch_rejected", "dispatch_failed"],
+        result: dict[str, Any] | None = None,
+        error: str | None = None,
+    ) -> bool:
+        """Persist one terminal dispatch outcome without replaying mutation."""
+        self.ensure()
+        with self.storage.connect() as conn:
+            row = conn.execute(
+                """UPDATE cp_pm_control_events
+                SET status=%s, result=%s::jsonb, error=%s, updated_at=%s
+                WHERE project_id=%s AND comment_id=%s
+                  AND status='dispatching'
+                RETURNING comment_id""",
+                (
+                    status,
+                    json.dumps(
+                        result or {},
+                        ensure_ascii=False,
+                        sort_keys=True,
+                        default=str,
+                    ),
+                    error,
+                    now(),
+                    project_id,
+                    comment_id,
+                ),
+            ).fetchone()
+            conn.commit()
+        return row is not None
