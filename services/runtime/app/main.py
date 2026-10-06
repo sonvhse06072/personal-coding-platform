@@ -183,7 +183,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-RUNTIME_VERSION = "1.0.110"
+RUNTIME_VERSION = "1.0.111"
 
 app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan=lifespan)
 app.include_router(pm_bridge_router)
@@ -596,6 +596,7 @@ async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
             job_id,
             reset_transient_provider_failures=request.reset_transient_provider_failures,
             reroute=request.reroute,
+            verification_only_after_pm_handoff=request.verification_only_after_pm_handoff,
             _allow_failed_orchestrated_resume=bool(
                 orchestration_resume and orchestration_resume.get("reopen")
             ),
