@@ -1031,3 +1031,72 @@ def test_failed_control_action_is_not_rearmed_after_state_drift():
 
     assert row["status"] == "failed"
     assert row["state_fingerprint"] == "old-state"
+
+
+def test_remote_control_executes_only_exact_routine_action_generation(monkeypatch):
+    controls, _ = service()
+    calls = []
+
+    monkeypatch.setattr(
+        controls,
+        "get_action",
+        lambda action_id: {
+            "action_id": action_id,
+            "action_type": "pm_scope_reassess",
+            "job_id": "job-1",
+            "generation_fingerprint": "generation-1",
+        },
+    )
+
+    async def execute_authorized(action_id):
+        calls.append(action_id)
+        return {"status": "executed", "action_id": action_id}
+
+    monkeypatch.setattr(controls, "_execute_authorized", execute_authorized)
+
+    result = asyncio.run(
+        controls.execute_remote(
+            "action-12345678",
+            expected_job_id="job-1",
+            expected_generation="generation-1",
+        )
+    )
+
+    assert result["status"] == "executed"
+    assert calls == ["action-12345678"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("job_id", "job-other", "job identity mismatch"),
+        ("generation_fingerprint", "generation-other", "generation mismatch"),
+        ("action_type", "budget_extend", "cannot execute action_type"),
+        ("action_type", "provider_quota_reset", "cannot execute action_type"),
+        ("action_type", "reroute_provider", "cannot execute action_type"),
+    ],
+)
+def test_remote_control_rejects_stale_or_nonroutine_actions(
+    monkeypatch,
+    field,
+    value,
+    message,
+):
+    controls, _ = service()
+    action = {
+        "action_id": "action-12345678",
+        "action_type": "resume_same",
+        "job_id": "job-1",
+        "generation_fingerprint": "generation-1",
+    }
+    action[field] = value
+    monkeypatch.setattr(controls, "get_action", lambda action_id: action)
+
+    with pytest.raises(RuntimeError, match=message):
+        asyncio.run(
+            controls.execute_remote(
+                "action-12345678",
+                expected_job_id="job-1",
+                expected_generation="generation-1",
+            )
+        )
