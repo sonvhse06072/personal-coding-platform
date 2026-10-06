@@ -137,7 +137,9 @@ class RuntimeEngineCore:
         can remain running forever.
         """
         row = self.storage.get(job_id)
-        if not row or row.get("work_order_id"):
+        if not row:
+            return
+        if orchestrator_launch(row) is not None:
             return
         status = str(row.get("status") or "")
         if status not in STABLE:
