@@ -824,6 +824,23 @@ class RuntimeEngine(RuntimeEngineCore):
             else:
                 run_review = bool(strategy.get("evaluator"))
 
+            reuse_review = False
+            reuse_marker = checkpoint.get("reuse_passed_review_once")
+            if isinstance(reuse_marker, dict):
+                prior_review = checkpoint.get("last_review_report")
+                reuse_review = bool(
+                    verification["passed"]
+                    and str(reuse_marker.get("diff_hash") or "")
+                    == str(diff.get("diff_hash") or "")
+                    and isinstance(prior_review, dict)
+                    and str(prior_review.get("verdict") or "") == "pass"
+                    and prior_review.get("protocol_valid") is not False
+                )
+                if reuse_review:
+                    run_review = False
+                else:
+                    checkpoint.pop("reuse_passed_review_once", None)
+
             if verification["passed"] and strategy.get("evaluator") and run_review:
                 choice = dict(checkpoint.get("evaluator_choice") or strategy["evaluator"])
                 while True:
@@ -976,21 +993,32 @@ class RuntimeEngine(RuntimeEngineCore):
                     self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
                     break
             elif verification["passed"] and strategy.get("evaluator") and not run_review:
-                progress["review_skipped_strong_evidence"] = int(
-                    progress.get("review_skipped_strong_evidence", 0)
-                ) + 1
-                checkpoint["last_review_report"] = {
-                    "verdict": "skipped",
-                    "summary": "Model review skipped by policy because deterministic evidence is strong",
-                    "finding_count": 0,
-                    "findings": [],
-                    "jit_context_used": False,
-                }
-                record_review_repair_churn_observation(
-                    checkpoint,
-                    review=checkpoint["last_review_report"],
-                )
-                self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
+                if reuse_review:
+                    progress["review_reused_after_pm_staffing_failure"] = int(
+                        progress.get("review_reused_after_pm_staffing_failure", 0)
+                    ) + 1
+                    checkpoint.pop("reuse_passed_review_once", None)
+                    self.storage.update(
+                        job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                    )
+                else:
+                    progress["review_skipped_strong_evidence"] = int(
+                        progress.get("review_skipped_strong_evidence", 0)
+                    ) + 1
+                    checkpoint["last_review_report"] = {
+                        "verdict": "skipped",
+                        "summary": "Model review skipped by policy because deterministic evidence is strong",
+                        "finding_count": 0,
+                        "findings": [],
+                        "jit_context_used": False,
+                    }
+                    record_review_repair_churn_observation(
+                        checkpoint,
+                        review=checkpoint["last_review_report"],
+                    )
+                    self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
 
             progress["required_checks_passed"] = verification["passed"] and evaluator_ok and not progress["unexpected_scope"]
 
