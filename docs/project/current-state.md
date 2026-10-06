@@ -344,6 +344,34 @@ review behavior.
 
 Runtime version: `1.0.114`.
 
+## Semantic dependency protected signals — PCP #504
+
+AP-MVP-02 exposed a false protected boundary after Runtime correctly reached
+deterministic verification and independent review PASS. The current diff still
+touches `frontend/package.json`, but only to change `test:browser` and
+`test:visual` script commands. No dependency declaration changes. Historical
+scope-guard behavior classified every dependency-manifest path as
+`major_dependency_addition`, so this script-only edit incorrectly forced the
+same Human/PM dependency gate as a real package addition.
+
+Runtime diff evidence now records `dependency_manifest_changes` against the
+exact persisted source commit:
+
+- `package.json`, `composer.json`, `pyproject.toml`, and `Cargo.toml`
+  are compared semantically on their dependency surfaces;
+- unrelated script/metadata changes in those structured manifests do not create
+  `major_dependency_addition`;
+- actual dependency additions/removals/version changes still do;
+- lockfiles, requirements files, Pipfile/Gemfile, Docker/Compose and
+  Helm/Kubernetes dependency surfaces remain fail-closed on any change;
+- missing semantic evidence on legacy/durable results remains fail-closed.
+
+Runtime execution and PM merge eligibility consume the same durable semantic
+evidence, so a protected signal cannot disappear between execution and merge
+without an exact diff change.
+
+Runtime version: `1.0.115`.
+
 ## Standing execution / quality boundaries
 
 - Normal flow: bounded issue/WorkOrder -> implementation/evidence -> deterministic
