@@ -85,7 +85,7 @@ def test_antigravity_omits_effort_when_router_leaves_it_unset(monkeypatch, tmp_p
     assert "effort" not in captured
 
 
-def test_flash_high_keeps_supported_router_reasoning_effort(monkeypatch, tmp_path: Path):
+def test_flash_high_omits_legacy_router_reasoning_effort(monkeypatch, tmp_path: Path):
     captured = {}
 
     class FakeClient:
@@ -116,4 +116,4 @@ def test_flash_high_keeps_supported_router_reasoning_effort(monkeypatch, tmp_pat
 
     assert run.returncode == 0
     assert captured["model"] == "gemini-3.8-flash-high"
-    assert captured["effort"] == "medium"
+    assert "effort" not in captured

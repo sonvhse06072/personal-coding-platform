@@ -271,6 +271,37 @@ The visual test remains the second command in the phase, so dependency
 provisioning must succeed before capture begins. Ordinary DDEV/Runtime phase
 timeouts and fail-closed command handling remain unchanged.
 
+## Flash High fixed-effort compatibility — PCP #500
+
+AP-MVP-02 completed deterministic verification and then exposed a model-registry
+mismatch in the evaluator. PCP selected logical model
+`antigravity_flash_high`, upstream `gemini-3.8-flash-high`, with persisted
+`reasoning_effort=medium`. The Antigravity CLI rejected the invocation because
+the explicit model preset already encodes the effort level and conflicts with
+`--effort=medium`.
+
+The bounded repair follows the same compatibility pattern already used for
+`gemini-3.8-flash-medium`:
+
+- `antigravity_flash_high` declares `supports_reasoning_effort: false`;
+- historical `low/medium/high` values remain accepted as
+  `legacy_ignored_reasoning_efforts` so durable routes can resume;
+- fresh Router choices omit explicit effort;
+- Runtime's Antigravity adapter omits the effort payload even when a preserved
+  pre-fix evaluator choice still carries one;
+- registry version advances to 13 and Runtime advances to 1.0.113.
+
+This correction does not change the upstream model, model role, quota group,
+provider routing priority or AP-MVP-02 source/workspace. It does not generalize
+the same rule to `gemini-3.1-pro-high` without direct compatibility evidence.
+
+Because this incident occurred only after deterministic verification had
+already passed, the existing explicit PM-handoff verification-only recovery may
+also be armed for `evaluator_provider_failure_without_fallback` when the
+checkpoint proves `last_verification_summary.passed=true` and retains an exact
+durable evaluator choice. This avoids inventing an application edit or rerouting
+the WorkOrder merely to retry an evaluator after a platform capability repair.
+
 ## Standing execution / quality boundaries
 
 - Normal flow: bounded issue/WorkOrder -> implementation/evidence -> deterministic

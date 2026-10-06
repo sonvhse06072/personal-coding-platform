@@ -25,7 +25,10 @@ _PERMISSION_DENIED_PATTERNS = (
     "was auto-denied",
 )
 _REASONING_EFFORTS = {"low", "medium", "high"}
-_NO_EXPLICIT_EFFORT_MODELS = {"gemini-3.8-flash-medium"}
+_NO_EXPLICIT_EFFORT_MODELS = {
+    "gemini-3.8-flash-medium",
+    "gemini-3.8-flash-high",
+}
 
 
 def _bridge_config() -> tuple[str, str]:

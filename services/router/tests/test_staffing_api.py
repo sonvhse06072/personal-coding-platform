@@ -32,7 +32,7 @@ def test_staffing_endpoint_returns_router_selected_pm_agent() -> None:
     assert data["choice"]["id"] == "codex_gpt6_sol"
     assert data["choice"]["reasoning_effort"] == "low"
     assert data["policy_version"] == 20
-    assert data["registry_version"] == 12
+    assert data["registry_version"] == 13
 
 
 def test_staffing_endpoint_rejects_unknown_role() -> None:

@@ -231,8 +231,88 @@ def test_verification_only_pm_handoff_resume_preserves_job_and_arms_one_turn() -
     assert engine.queue.get_nowait() == "job-resume"
 
 
+def test_verification_only_pm_handoff_resume_allows_evaluator_provider_recovery() -> None:
+    original = pm_handoff_row(reason="evaluator_provider_failure_without_fallback")
+    original["checkpoint"]["last_verification_summary"] = {
+        "passed": True,
+        "phases": [
+            {"phase": "visual_quality", "passed": True},
+            {"phase": "full_tests", "passed": True},
+        ],
+    }
+    original["checkpoint"]["evaluator_choice"] = {
+        "id": "antigravity_flash_high",
+        "provider": "google_antigravity",
+        "adapter": "antigravity_host",
+        "model": "gemini-3.8-flash-high",
+        "reasoning_effort": "medium",
+    }
+    storage = Storage(original)
+    engine = RuntimeEngine(storage)
+
+    updated = asyncio.run(
+        engine.resume(
+            "job-resume",
+            verification_only_after_pm_handoff=True,
+        )
+    )
+
+    assert updated["status"] == "queued"
+    assert updated["progress"] == original["progress"]
+    assert updated["route"] == original["route"]
+    assert updated["checkpoint"]["evaluator_choice"] == original["checkpoint"]["evaluator_choice"]
+    assert updated["checkpoint"]["verification_only_resume"] == {
+        "thread_id": "ct-pm-handoff",
+        "round": 2,
+        "source_reason": "evaluator_provider_failure_without_fallback",
+        "remaining_turns": 1,
+    }
+    assert engine.queue.get_nowait() == "job-resume"
+
+
+@pytest.mark.parametrize(
+    "checkpoint_update",
+    [
+        {
+            "last_verification_summary": {"passed": False},
+            "evaluator_choice": {
+                "id": "antigravity_flash_high",
+                "provider": "google_antigravity",
+                "adapter": "antigravity_host",
+                "model": "gemini-3.8-flash-high",
+                "reasoning_effort": "medium",
+            },
+        },
+        {
+            "last_verification_summary": {"passed": True},
+            "evaluator_choice": None,
+        },
+    ],
+)
+def test_verification_only_evaluator_recovery_fails_closed_without_exact_evidence(
+    checkpoint_update: dict,
+) -> None:
+    original = pm_handoff_row(reason="evaluator_provider_failure_without_fallback")
+    original["checkpoint"].update(deepcopy(checkpoint_update))
+    storage = Storage(original)
+    engine = RuntimeEngine(storage)
+
+    with pytest.raises(RuntimeError, match="passed deterministic verification"):
+        asyncio.run(
+            engine.resume(
+                "job-resume",
+                verification_only_after_pm_handoff=True,
+            )
+        )
+
+    assert storage.get("job-resume")["status"] == "blocked"
+    assert engine.queue.empty()
+
+
 def test_verification_only_pm_handoff_resume_rejects_unrelated_block() -> None:
-    storage = Storage(blocked_row())
+    original = blocked_row()
+    original["result"] = {"reason": "preflight_failed"}
+    storage = Storage(original)
     engine = RuntimeEngine(storage)
 
     with pytest.raises(RuntimeError, match="exact collaboration recovery state"):

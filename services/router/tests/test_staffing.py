@@ -54,7 +54,7 @@ def test_product_manager_staffing_selects_only_pm_eligible_agent() -> None:
     )
     assert "product_manager" in engine.models[result.choice.id]["roles"]
     assert result.policy_version == 20
-    assert result.registry_version == 12
+    assert result.registry_version == 13
 
 
 def test_product_manager_staffing_respects_provider_availability_and_model_effort_capability() -> None:
