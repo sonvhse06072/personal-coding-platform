@@ -320,8 +320,12 @@ def test_chonhac_visual_quality_is_local_bounded_and_after_frontend_quality():
     assert preview["visual_evidence"]["internal_base_url"] == "http://127.0.0.1:3100"
     assert preview["visual_evidence"]["viewports"] == [360, 390, 430, 768, 1024, 1440]
     assert ddev["visual_quality"] == [
-        "ddev exec bash -lc 'cd frontend && npm run test:visual'"
+        "ddev exec -u root bash -lc 'cd /var/www/html/frontend && npx playwright install-deps chromium'",
+        "ddev exec bash -lc 'cd frontend && npm run test:visual'",
     ]
+    assert "playwright install-deps chromium" in ddev["visual_quality"][0]
+    assert "ddev exec -u root" in ddev["visual_quality"][0]
+    assert "npm run test:visual" in ddev["visual_quality"][1]
     assert ddev["verification_phase_capabilities"]["visual_quality"]["requires"] == [
         "local_listener"
     ]
