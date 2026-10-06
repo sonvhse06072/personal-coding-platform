@@ -364,6 +364,125 @@ def test_blocked_parent_recovery_fails_closed_on_delivery_head_mismatch(monkeypa
     assert getattr(store, "checkpoint_history", []) == []
 
 
+@pytest.mark.parametrize(
+    "case",
+    [
+        "result_status",
+        "delivery_finalized",
+        "delivery_state",
+        "ci_state",
+        "ci_commit",
+        "branch",
+        "verified_commit",
+        "pr_number",
+    ],
+)
+def test_blocked_parent_recovery_requires_exact_finalized_delivery(case, monkeypatch) -> None:
+    job = accepted_job()
+    if case == "result_status":
+        job["result"]["status"] = "rejected"
+    elif case == "delivery_finalized":
+        job["result"]["delivery_finalized"] = False
+    elif case == "delivery_state":
+        job["result"]["delivery"]["state"] = "ci_failed"
+    elif case == "ci_state":
+        job["result"]["delivery"]["ci"]["state"] = "failure"
+    elif case == "ci_commit":
+        job["result"]["delivery"]["ci"]["commit"] = "c" * 40
+    elif case == "branch":
+        job["result"]["delivery"]["pull_request"]["head_ref"] = "ai/other-child"
+    elif case == "verified_commit":
+        job["result"]["commit"] = ""
+    elif case == "pr_number":
+        job["result"]["delivery"]["pull_request"]["number"] = None
+    else:
+        raise AssertionError(f"unknown case: {case}")
+
+    svc, storage, engine, store = service(
+        [tracked("WO-1", 0, state="blocked", job_id="job-12345678")],
+        {"job-12345678": job},
+        [work_order("WO-1")],
+        monkeypatch,
+    )
+    store.plan_status = "blocked"
+
+    result = asyncio.run(svc.tick())
+
+    assert engine.ddev.merge_calls == 0
+    assert store.rows[0]["state"] == "blocked"
+    assert store.plan_status == "blocked"
+    assert result["launched"] is None
+    assert getattr(store, "checkpoint_history", []) == []
+
+
+def test_blocked_parent_recovery_moves_plan_out_of_blocked_before_manual_merge_gate(monkeypatch) -> None:
+    svc, storage, engine, store = service(
+        [tracked("WO-1", 0, state="blocked", job_id="job-12345678")],
+        {"job-12345678": accepted_job()},
+        [work_order("WO-1")],
+        monkeypatch,
+        allow_auto=False,
+    )
+    store.plan_status = "blocked"
+
+    result = asyncio.run(svc.tick())
+
+    assert engine.ddev.merge_calls == 0
+    assert store.rows[0]["state"] == "awaiting_merge"
+    assert store.rows[0]["pr_number"] == 7
+    assert store.rows[0]["pr_url"] is None
+    assert store.plan_status == "waiting_merge"
+    assert result["launched"] is None
+    assert [item["kind"] for item in store.checkpoint_history] == ["recovered_accepted"]
+
+
+def test_blocked_plan_never_launches_another_pending_child(monkeypatch) -> None:
+    job = accepted_job()
+    job["result"]["delivery_finalized"] = False
+    svc, storage, engine, store = service(
+        [
+            tracked("WO-1", 0, state="blocked", job_id="job-12345678"),
+            tracked("WO-2", 1),
+        ],
+        {"job-12345678": job},
+        [work_order("WO-1"), work_order("WO-2")],
+        monkeypatch,
+    )
+    store.plan_status = "blocked"
+
+    result = asyncio.run(svc.tick())
+
+    assert result["launched"] is None
+    assert engine.created == []
+    assert engine.enqueued == []
+    assert store.rows[0]["state"] == "blocked"
+    assert store.rows[1]["state"] == "pending"
+    assert store.plan_status == "blocked"
+
+
+def test_blocked_parent_recovery_is_idempotent_across_repeated_ticks(monkeypatch) -> None:
+    svc, storage, engine, store = service(
+        [tracked("WO-1", 0, state="blocked", job_id="job-12345678")],
+        {"job-12345678": accepted_job()},
+        [work_order("WO-1")],
+        monkeypatch,
+    )
+    store.plan_status = "blocked"
+
+    first = asyncio.run(svc.tick())
+    second = asyncio.run(svc.tick())
+
+    assert first["launched"] is None
+    assert second["launched"] is None
+    assert engine.ddev.merge_calls == 1
+    assert store.rows[0]["state"] == "completed"
+    assert store.plan_status == "completed"
+    assert [item["kind"] for item in store.checkpoint_history] == [
+        "recovered_accepted",
+        "merged",
+    ]
+
+
 def test_project_opt_out_keeps_stable_manual_merge_gate(monkeypatch) -> None:
     svc, storage, engine, store = service(
         [tracked("WO-1", 0, state="awaiting_merge", job_id="job-12345678", pr_number=7)],
