@@ -57,6 +57,13 @@ _REMOTE_ROUTINE_ACTION_TYPES = frozenset({
     "recheck_orchestration",
 })
 
+_REMOTE_STANDALONE_ACTION_TYPES = frozenset({
+    "pm_scope_reassess",
+    "resume_same",
+    "retry_delivery",
+    "recheck_ci",
+})
+
 # Explicit owner extensions may exceed a Router-selected/WorkOrder ceiling, but
 # never these platform hard maxima. Consumed counters are never reset.
 _BUDGET_EXTENSION_SPECS: dict[str, dict[str, Any]] = {
@@ -182,6 +189,34 @@ class ControlActionService:
             "action_specs": advisory.get("action_specs") or [],
         }
         encoded = json.dumps(snapshot, sort_keys=True, separators=(",", ":"), default=str)
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+    def standalone_attention_generation_fingerprint(
+        self,
+        job: dict[str, Any],
+        advisory: dict[str, Any],
+    ) -> str:
+        """Bind one standalone blocker action to the exact durable direct-job state."""
+        snapshot = {
+            "job_id": job.get("id"),
+            "project_id": job.get("project_id"),
+            "job_status": job.get("status"),
+            "job_updated_at": self._iso(job.get("updated_at")),
+            "source_commit": job.get("source_commit"),
+            "branch": job.get("branch"),
+            "route": job.get("route") or {},
+            "progress": job.get("progress") or {},
+            "checkpoint": job.get("checkpoint") or {},
+            "job_result": job.get("result") or {},
+            "advisory_reason": advisory.get("reason"),
+            "action_specs": advisory.get("action_specs") or [],
+        }
+        encoded = json.dumps(
+            snapshot,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        )
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
     def supersede_pending_actions(
