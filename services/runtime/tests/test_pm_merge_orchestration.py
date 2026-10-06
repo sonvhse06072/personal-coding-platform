@@ -138,7 +138,7 @@ class FakeStore(CheckpointTransitions):
         return []
 
     def active_plans(self):
-        if self.plan_status in {"completed", "blocked"}:
+        if self.plan_status == "completed":
             return []
         value = deepcopy(self.plan)
         value["status"] = self.plan_status
@@ -317,6 +317,51 @@ def test_high_risk_eligible_pr_merges_without_owner_gate(monkeypatch) -> None:
     assert store.rows[0]["state"] == "completed"
     assert store.rows[0]["detail"]["pm_merge"]["requires_human"] is False
     assert store.rows[0]["detail"]["pm_merge"]["evidence"]["risk_level"] == "high"
+
+
+def test_blocked_parent_reconciles_same_completed_delivery_then_pm_merges(monkeypatch) -> None:
+    svc, storage, engine, store = service(
+        [tracked("WO-1", 0, state="blocked", job_id="job-12345678")],
+        {"job-12345678": accepted_job()},
+        [work_order("WO-1")],
+        monkeypatch,
+    )
+    store.plan_status = "blocked"
+
+    result = asyncio.run(svc.tick())
+
+    assert engine.ddev.merge_calls == 1
+    assert store.rows[0]["state"] == "completed"
+    assert store.plan_status == "completed"
+    assert result["launched"] is None
+    assert [item["kind"] for item in store.checkpoint_history] == [
+        "recovered_accepted",
+        "merged",
+    ]
+    recovered = store.checkpoint_history[0]
+    assert recovered["state"] == "awaiting_merge"
+    assert recovered["evidence"]["produced_commit"] == HEAD
+    assert store.rows[0]["detail"]["recovered_from_blocked"] is True
+
+
+def test_blocked_parent_recovery_fails_closed_on_delivery_head_mismatch(monkeypatch) -> None:
+    job = accepted_job()
+    job["result"]["delivery"]["pull_request"]["head"] = "d" * 40
+    svc, storage, engine, store = service(
+        [tracked("WO-1", 0, state="blocked", job_id="job-12345678")],
+        {"job-12345678": job},
+        [work_order("WO-1")],
+        monkeypatch,
+    )
+    store.plan_status = "blocked"
+
+    result = asyncio.run(svc.tick())
+
+    assert engine.ddev.merge_calls == 0
+    assert store.rows[0]["state"] == "blocked"
+    assert store.plan_status == "blocked"
+    assert result["launched"] is None
+    assert getattr(store, "checkpoint_history", []) == []
 
 
 def test_project_opt_out_keeps_stable_manual_merge_gate(monkeypatch) -> None:

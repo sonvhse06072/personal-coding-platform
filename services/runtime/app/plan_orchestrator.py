@@ -170,6 +170,7 @@ _CHECKPOINT_TRANSITIONS = {
     "completed": ({"running", "waiting_human"}, "completed"),
     "merged": ({"awaiting_merge"}, "completed"),
     "blocked": ({"pending", "running", "waiting_human", "awaiting_merge"}, "blocked"),
+    "recovered_accepted": ({"blocked"}, "awaiting_merge"),
     "repair_reopened": ({"awaiting_merge"}, "running"),
 }
 _OWNER_ATTENTION_EVENT_TYPES = {
@@ -391,6 +392,12 @@ class PlanOrchestratorStore:
         return registered
 
     def active_plans(self) -> list[dict[str, Any]]:
+        """Return non-completed plans that still require reconciliation.
+
+        Blocked plans remain non-launchable, but must stay observable here so a
+        same-child state transition that already completed outside the parent
+        loop can be reconciled from exact durable delivery evidence.
+        """
         self.ensure()
         with self.storage.connect() as conn:
             return list(
@@ -400,7 +407,7 @@ class PlanOrchestratorStore:
                     FROM cp_plan_orchestrations o
                     JOIN cp_execution_plans p ON p.id=o.plan_id
                     WHERE o.lifecycle='active'
-                      AND o.status NOT IN ('completed', 'blocked')
+                      AND o.status <> 'completed'
                     ORDER BY o.created_at, o.plan_id"""
                 ).fetchall()
             )
@@ -1677,6 +1684,46 @@ class PlanOrchestrator:
             work_order_id = str(tracked["work_order_id"])
             state = str(tracked["state"])
             job_id = tracked.get("job_id")
+
+            if state == "blocked" and job_id:
+                job = self.storage.get(str(job_id))
+                if job is not None and str(job.get("status") or "") == "completed":
+                    result = dict(job.get("result") or {})
+                    delivery = dict(result.get("delivery") or {})
+                    ci = dict(delivery.get("ci") or {})
+                    pr = dict(delivery.get("pull_request") or {})
+                    verified_commit = str(result.get("commit") or "").strip()
+                    branch = str(job.get("branch") or "").strip()
+                    pr_number = pr.get("number")
+                    ci_commit = str(ci.get("commit") or "").strip()
+                    exact_completed_delivery = bool(
+                        result.get("status") == "accepted"
+                        and result.get("delivery_finalized") is True
+                        and delivery.get("state") == "ci_success"
+                        and ci.get("state") == "success"
+                        and verified_commit
+                        and pr_number
+                        and str(pr.get("head") or "") == verified_commit
+                        and str(pr.get("head_ref") or "") == branch
+                        and (not ci_commit or ci_commit == verified_commit)
+                    )
+                    if exact_completed_delivery:
+                        detail = dict(tracked.get("detail") or {})
+                        detail.update({
+                            "job_id": job_id,
+                            "recovered_from_blocked": True,
+                            "recovery_reason": "same_child_completed_finalized_delivery",
+                        })
+                        self._checkpoint_transition(
+                            tracked,
+                            kind="recovered_accepted",
+                            job=job,
+                            state="awaiting_merge",
+                            pr_number=int(pr_number),
+                            pr_url=pr.get("url"),
+                            detail=detail,
+                        )
+                        continue
 
             if state in {"running", "waiting_human"} and job_id:
                 job = self.storage.get(str(job_id))
