@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from copy import deepcopy
 
+import pytest
+
 import app.orchestrator_merge as merge_module
 from app.orchestrator_merge import PlanOrchestrator
 from checkpoint_fakes import CheckpointTransitions
