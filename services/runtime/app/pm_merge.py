@@ -227,6 +227,7 @@ def evaluate_pm_merge(
         str(delivery.get("state") or "") == "ci_none"
         and str(ci.get("state") or "") == "none"
         and expected_head
+        and str(ci.get("commit") or "") == expected_head
         and str(live_ci.get("state") or "") == "success"
         and str(live_ci.get("commit") or "") == expected_head
     )
