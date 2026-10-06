@@ -166,6 +166,30 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 project_id=str(plan["project_id"]),
                 pr_number=int(pr_number),
             )
+            current_ci = None
+            result = dict(job.get("result") or {})
+            delivery = dict(result.get("delivery") or {})
+            persisted_ci = dict(delivery.get("ci") or {})
+            if (
+                delivery.get("state") == "ci_none"
+                and persisted_ci.get("state") == "none"
+            ):
+                expected_head = str(result.get("commit") or "").strip()
+                if expected_head:
+                    try:
+                        current_ci = await self.engine.ddev.github_ci(
+                            project_id=str(plan["project_id"]),
+                            commit=expected_head,
+                        )
+                    except Exception:
+                        # A read failure grants no merge authority. Preserve the
+                        # merge gate so a later poll may obtain current CI.
+                        continue
+                    if str(current_ci.get("state") or "") in {"none", "pending"}:
+                        # CI may have appeared after the delivery discovery
+                        # window. Do not turn an incomplete observation into a
+                        # permanent orchestration block.
+                        continue
             project = self._project_merge_config(str(plan["project_id"]))
             eligibility = evaluate_pm_merge(
                 project=project,
@@ -173,6 +197,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 tracked=tracked,
                 job=job,
                 pr=pr,
+                current_ci=current_ci,
             )
             decision = eligibility.model_dump()
 

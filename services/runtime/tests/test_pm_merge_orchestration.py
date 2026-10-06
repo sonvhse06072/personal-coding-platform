@@ -6,6 +6,7 @@ from copy import deepcopy
 import pytest
 
 import app.orchestrator_merge as merge_module
+import app.plan_orchestrator as core_module
 from app.orchestrator_merge import PlanOrchestrator
 from checkpoint_fakes import CheckpointTransitions
 
@@ -111,6 +112,13 @@ def accepted_job(work_order_id="WO-1", *, security=False) -> dict:
     }
 
 
+def ci_none_job(work_order_id="WO-1", *, security=False) -> dict:
+    job = accepted_job(work_order_id, security=security)
+    job["result"]["delivery"]["state"] = "ci_none"
+    job["result"]["delivery"]["ci"]["state"] = "none"
+    return job
+
+
 class FakeStorage:
     def __init__(self, jobs):
         self.jobs = jobs
@@ -171,9 +179,17 @@ class FakeDdev:
     def __init__(self):
         self.merged = False
         self.merge_calls = 0
+        self.ci_calls = 0
+        self.ci_state = "success"
+        self.ci_commit = HEAD
+        self.pr_overrides = {}
+        self.pr_error = False
+        self.ci_error = False
 
     async def github_pull_request(self, *, project_id, pr_number):
-        return {
+        if self.pr_error:
+            raise RuntimeError("injected PR read failure")
+        value = {
             "project_id": project_id,
             "repository": "acme/demo",
             "number": pr_number,
@@ -184,6 +200,19 @@ class FakeDdev:
             "head": HEAD,
             "head_ref": "ai/job-123456",
             "base_ref": "main",
+        }
+        value.update(deepcopy(self.pr_overrides))
+        return value
+
+    async def github_ci(self, *, project_id, commit):
+        self.ci_calls += 1
+        if self.ci_error:
+            raise RuntimeError("injected CI read failure")
+        return {
+            "project_id": project_id,
+            "repository": "acme/demo",
+            "state": self.ci_state,
+            "commit": self.ci_commit,
         }
 
     async def github_merge_pull_request(self, **payload):
@@ -258,18 +287,18 @@ def service(rows, jobs, work_orders, monkeypatch, *, allow_auto=True):
     store = FakeStore(plan_row(work_orders), rows)
     orchestrator = PlanOrchestrator(storage, engine, store=store)
     orchestrator.merge_audit = FakeAudit()
-    monkeypatch.setattr(
-        merge_module,
-        "project_config",
-        lambda project_id: {
+    def config(project_id):
+        return {
             "base_branch": "main",
             "autonomy": {
                 "allow_pm_merge": allow_auto,
                 "allow_auto_merge_low_risk": allow_auto,
                 "allow_production_deploy": False,
             },
-        },
-    )
+        }
+
+    monkeypatch.setattr(merge_module, "project_config", config)
+    monkeypatch.setattr(core_module, "project_config", config)
     return orchestrator, storage, engine, store
 
 
@@ -344,6 +373,116 @@ def test_blocked_parent_reconciles_same_completed_delivery_then_pm_merges(monkey
     assert recovered["state"] == "awaiting_merge"
     assert recovered["evidence"]["produced_commit"] == HEAD
     assert store.rows[0]["detail"]["recovered_from_blocked"] is True
+
+
+def test_blocked_parent_ci_none_recovers_from_fresh_exact_head_ci_then_pm_merges(monkeypatch) -> None:
+    svc, storage, engine, store = service(
+        [tracked("WO-1", 0, state="blocked", job_id="job-12345678")],
+        {"job-12345678": ci_none_job()},
+        [work_order("WO-1")],
+        monkeypatch,
+    )
+    store.plan_status = "blocked"
+
+    result = asyncio.run(svc.tick())
+
+    assert result["launched"] is None
+    assert engine.ddev.merge_calls == 1
+    assert engine.ddev.ci_calls == 2
+    assert store.rows[0]["state"] == "completed"
+    assert store.plan_status == "completed"
+    assert [item["kind"] for item in store.checkpoint_history] == [
+        "recovered_accepted",
+        "merged",
+    ]
+    assert store.checkpoint_history[0]["evidence"]["produced_commit"] == HEAD
+    assert store.rows[0]["detail"]["recovery_ci_source"] == "fresh_github_exact_head"
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "pr_number",
+        "pr_head",
+        "pr_branch",
+        "pr_base",
+        "pr_closed",
+        "pr_merged",
+        "ci_pending",
+        "persisted_ci_missing",
+        "ci_commit",
+        "pr_error",
+        "ci_error",
+    ],
+)
+def test_blocked_parent_ci_none_live_recovery_fails_closed(case, monkeypatch) -> None:
+    svc, storage, engine, store = service(
+        [tracked("WO-1", 0, state="blocked", job_id="job-12345678")],
+        {"job-12345678": ci_none_job()},
+        [work_order("WO-1")],
+        monkeypatch,
+    )
+    store.plan_status = "blocked"
+
+    if case == "pr_number":
+        engine.ddev.pr_overrides["number"] = 8
+    elif case == "pr_head":
+        engine.ddev.pr_overrides["head"] = "d" * 40
+    elif case == "pr_branch":
+        engine.ddev.pr_overrides["head_ref"] = "ai/other"
+    elif case == "pr_base":
+        engine.ddev.pr_overrides["base_ref"] = "develop"
+    elif case == "pr_closed":
+        engine.ddev.pr_overrides["state"] = "closed"
+    elif case == "pr_merged":
+        engine.ddev.pr_overrides["merged"] = True
+    elif case == "ci_pending":
+        engine.ddev.ci_state = "pending"
+    elif case == "persisted_ci_missing":
+        storage.jobs["job-12345678"]["result"]["delivery"]["ci"]["commit"] = None
+    elif case == "ci_commit":
+        engine.ddev.ci_commit = "c" * 40
+    elif case == "pr_error":
+        engine.ddev.pr_error = True
+    elif case == "ci_error":
+        engine.ddev.ci_error = True
+    else:
+        raise AssertionError(f"unknown case: {case}")
+
+    result = asyncio.run(svc.tick())
+
+    assert result["launched"] is None
+    assert engine.ddev.merge_calls == 0
+    assert store.rows[0]["state"] == "blocked"
+    assert store.plan_status == "blocked"
+    assert getattr(store, "checkpoint_history", []) == []
+
+
+def test_ci_none_awaiting_merge_waits_for_late_ci_without_permanent_block(monkeypatch) -> None:
+    svc, storage, engine, store = service(
+        [tracked("WO-1", 0, state="awaiting_merge", job_id="job-12345678", pr_number=7)],
+        {"job-12345678": ci_none_job()},
+        [work_order("WO-1")],
+        monkeypatch,
+    )
+    store.plan_status = "waiting_merge"
+    engine.ddev.ci_state = "pending"
+
+    first = asyncio.run(svc.tick())
+
+    assert first["launched"] is None
+    assert engine.ddev.merge_calls == 0
+    assert store.rows[0]["state"] == "awaiting_merge"
+    assert store.plan_status == "waiting_merge"
+    assert getattr(store, "checkpoint_history", []) == []
+
+    engine.ddev.ci_state = "success"
+    second = asyncio.run(svc.tick())
+
+    assert second["launched"] is None
+    assert engine.ddev.merge_calls == 1
+    assert store.rows[0]["state"] == "completed"
+    assert store.plan_status == "completed"
 
 
 def test_blocked_parent_recovery_fails_closed_on_delivery_head_mismatch(monkeypatch) -> None:

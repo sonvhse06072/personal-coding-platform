@@ -143,12 +143,19 @@ def evaluate_pm_merge(
     tracked: dict[str, Any],
     job: dict[str, Any],
     pr: dict[str, Any],
+    current_ci: dict[str, Any] | None = None,
 ) -> MergeEligibility:
-    """Evaluate PM merge authority from durable evidence only.
+    """Evaluate PM merge authority from durable evidence plus bounded live CI.
 
     This function performs no GitHub mutation and does not infer approval from a
     successful implementation. Protected decisions require the exact durable
     Runtime approval key; otherwise the merge stays behind a Human Owner gate.
+
+    A finalized delivery that persisted `ci_none` may use a fresh exact-head
+    GitHub CI observation supplied by orchestration. That compatibility path is
+    accepted only when the persisted CI commit and fresh CI commit both bind to
+    the verified commit; the merge boundary independently re-reads CI again
+    immediately before mutation.
     """
     blockers: list[str] = []
     human_blockers: list[str] = []
@@ -212,13 +219,29 @@ def evaluate_pm_merge(
 
     if not bool(result.get("delivery_finalized")):
         blockers.append("delivery_not_finalized")
-    if str(delivery.get("state") or "") != "ci_success":
-        blockers.append("ci_not_successful")
     ci = _dict(delivery.get("ci"))
-    if str(ci.get("state") or "") != "success":
-        blockers.append("current_delivery_ci_evidence_not_success")
+    live_ci = _dict(current_ci)
     if expected_head and ci.get("commit") and str(ci.get("commit")) != expected_head:
         blockers.append("ci_commit_mismatch")
+    fresh_ci_success = bool(
+        str(delivery.get("state") or "") == "ci_none"
+        and str(ci.get("state") or "") == "none"
+        and expected_head
+        and str(ci.get("commit") or "") == expected_head
+        and str(live_ci.get("state") or "") == "success"
+        and str(live_ci.get("commit") or "") == expected_head
+    )
+    if str(delivery.get("state") or "") != "ci_success" and not fresh_ci_success:
+        blockers.append("ci_not_successful")
+    if str(ci.get("state") or "") != "success" and not fresh_ci_success:
+        blockers.append("current_delivery_ci_evidence_not_success")
+    if (
+        live_ci
+        and expected_head
+        and live_ci.get("commit")
+        and str(live_ci.get("commit")) != expected_head
+    ):
+        blockers.append("current_github_ci_commit_mismatch")
 
     if delivery_pr:
         if pr_number and int(delivery_pr.get("number") or 0) != pr_number:
