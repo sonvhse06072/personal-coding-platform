@@ -47,10 +47,11 @@ def test_projects_yaml_parses():
     assert "default" in doc["projects"]
 
 
-def test_chonhac_enables_constrained_pm_merge_without_production_deploy():
+def test_chonhac_enables_pm_merge_without_production_deploy():
     doc = yaml.safe_load((ROOT / "config/projects.yml").read_text())
     autonomy = doc["projects"]["chonhac"]["autonomy"]
 
+    assert autonomy["allow_pm_merge"] is True
     assert autonomy["allow_auto_merge_low_risk"] is True
     assert autonomy["allow_production_deploy"] is False
 
