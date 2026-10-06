@@ -1736,8 +1736,12 @@ class PlanOrchestrator:
                         except Exception:
                             current_pr = {}
                             current_ci = {}
+                        try:
+                            current_pr_number = int(current_pr.get("number") or 0)
+                        except (TypeError, ValueError):
+                            current_pr_number = None
                         fresh_ci_success = bool(
-                            int(current_pr.get("number") or 0) == normalized_pr_number
+                            current_pr_number == normalized_pr_number
                             and str(current_pr.get("state") or "") == "open"
                             and not bool(current_pr.get("merged"))
                             and str(current_pr.get("head") or "") == verified_commit
