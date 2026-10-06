@@ -234,6 +234,23 @@ usage counters. It does not reopen collaboration, reset budget telemetry or
 authorize a new product/design decision. The owner/PM must resolve the actual
 handoff decision outside Runtime before using the flag.
 
+## Orchestrated stable-job quiesce classification — PCP #474
+
+A historical Chợ Nhạc lease-retirement audit exposed that
+`_quiesce_stable_manual_job()` classified orchestration using a nonexistent
+top-level `cp_jobs.work_order_id` field. Persisted orchestration identity is
+owned by the durable `checkpoint.orchestrator_launch` reservation.
+
+The bounded repair uses the existing validated `orchestrator_launch(job)`
+predicate before any manual workspace quiesce. A genuinely orchestrated stable
+job is left to PlanOrchestrator resource handling, while standalone/manual jobs
+— including a standalone WorkOrder that has `checkpoint.work_order` but no
+orchestrator launch reservation — retain existing quiesce behavior.
+
+Regression coverage uses a Storage-shaped row with WorkOrder identity only
+inside the checkpoint plus the canonical launch marker; no top-level
+`work_order_id` test-only field remains.
+
 ## Standing execution / quality boundaries
 
 - Normal flow: bounded issue/WorkOrder -> implementation/evidence -> deterministic
