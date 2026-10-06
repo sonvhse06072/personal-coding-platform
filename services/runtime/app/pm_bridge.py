@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .baseline import resolve_project_baseline
 from .config import _default_config_file, project_config
+from .pm_control import CONTROL_MARKER, PMControlEventStore, parse_pm_control_comment
 from .pm_planning import (
     PMPlanProposal,
     PMTicket,
@@ -232,10 +233,12 @@ class PMBridgeService:
         *,
         github: PMBridgeGitHubClient | None = None,
         events: PMBridgeEventStore | None = None,
+        control_events: PMControlEventStore | None = None,
     ) -> None:
         self.storage = storage
         self.github = github or PMBridgeGitHubClient()
         self.events = events or PMBridgeEventStore(storage)
+        self.control_events = control_events or PMControlEventStore(storage)
         self._lock = asyncio.Lock()
 
     async def poll_project(self, project_id: str) -> dict[str, Any]:
@@ -255,36 +258,137 @@ class PMBridgeService:
                 "accepted": [],
                 "rejected": [],
                 "skipped": [],
+                "controls_accepted": [],
+                "controls_rejected": [],
+                "controls_skipped": [],
             }
+
             for comment in reversed(comments):
                 body = str(comment.get("body") or "")
                 marker = cfg["marker"]
-                if marker not in body:
+                has_plan = marker in body
+                has_control = CONTROL_MARKER in body
+                if not has_plan and not has_control:
                     continue
+
                 comment_id = int(comment["id"])
+                issue_number = int(comment["issue_number"])
+                author = str(comment.get("author") or "")
+                comment_url = comment.get("html_url")
+                body_sha256 = hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+                if has_control:
+                    existing_control = self.control_events.get(
+                        project_id,
+                        comment_id,
+                    )
+                    if existing_control is not None:
+                        result["controls_skipped"].append(comment_id)
+                        continue
+
+                    action = "invalid"
+                    target_identity: dict[str, Any] = {}
+                    try:
+                        if author not in set(cfg["allowed_authors"]):
+                            raise ValueError(
+                                f"GitHub author {author!r} is not allowed to submit PM controls"
+                            )
+                        envelope = parse_pm_control_comment(body)
+                        action = envelope.action
+                        target_identity = envelope.target_identity()
+                        if envelope.project_id != project_id:
+                            raise ValueError(
+                                "PM control project_id must match the polled project"
+                            )
+
+                        issue = await self.github.issue(
+                            project_id=project_id,
+                            issue_number=issue_number,
+                        )
+                        if issue.get("is_pull_request"):
+                            raise ValueError(
+                                "PM control comments must belong to GitHub issues, not pull requests"
+                            )
+                        if str(issue.get("state") or "") != "open":
+                            raise ValueError(
+                                "PM control only accepts commands on open GitHub issues"
+                            )
+
+                        self.control_events.record(
+                            project_id=project_id,
+                            comment_id=comment_id,
+                            repository=repository,
+                            issue_number=issue_number,
+                            author=author,
+                            comment_url=comment_url,
+                            body_sha256=body_sha256,
+                            action=action,
+                            status="accepted_pending_dispatch",
+                            target_identity=target_identity,
+                            error=None,
+                        )
+                        result["controls_accepted"].append(
+                            {
+                                "comment_id": comment_id,
+                                "action": action,
+                                "status": "accepted_pending_dispatch",
+                                "target_identity": target_identity,
+                            }
+                        )
+                    except Exception as exc:
+                        error = f"{type(exc).__name__}: {exc}"[-12000:]
+                        self.control_events.record(
+                            project_id=project_id,
+                            comment_id=comment_id,
+                            repository=repository,
+                            issue_number=issue_number,
+                            author=author,
+                            comment_url=comment_url,
+                            body_sha256=body_sha256,
+                            action=action,
+                            status="rejected",
+                            target_identity=target_identity,
+                            error=error,
+                        )
+                        result["controls_rejected"].append(
+                            {"comment_id": comment_id, "error": error}
+                        )
+                    continue
+
                 existing = self.events.get(project_id, comment_id)
                 if existing is not None:
                     result["skipped"].append(comment_id)
                     continue
 
-                issue_number = int(comment["issue_number"])
-                author = str(comment.get("author") or "")
-                comment_url = comment.get("html_url")
-                body_sha256 = hashlib.sha256(body.encode("utf-8")).hexdigest()
                 plan_id: str | None = None
                 try:
                     if author not in set(cfg["allowed_authors"]):
-                        raise ValueError(f"GitHub author {author!r} is not allowed to submit PM plans")
+                        raise ValueError(
+                            f"GitHub author {author!r} is not allowed to submit PM plans"
+                        )
                     envelope = parse_pm_bridge_comment(body, marker=marker)
-                    baseline = resolve_project_baseline(project_id, envelope.baseline_revision)
+                    baseline = resolve_project_baseline(
+                        project_id,
+                        envelope.baseline_revision,
+                    )
                     if baseline is None:
-                        raise ValueError("External PM plan requires an approved ProjectBaseline")
+                        raise ValueError(
+                            "External PM plan requires an approved ProjectBaseline"
+                        )
 
-                    issue = await self.github.issue(project_id=project_id, issue_number=issue_number)
+                    issue = await self.github.issue(
+                        project_id=project_id,
+                        issue_number=issue_number,
+                    )
                     if issue.get("is_pull_request"):
-                        raise ValueError("PM bridge comments must belong to GitHub issues, not pull requests")
+                        raise ValueError(
+                            "PM bridge comments must belong to GitHub issues, not pull requests"
+                        )
                     if str(issue.get("state") or "") != "open":
-                        raise ValueError("PM bridge only accepts plans for open GitHub issues")
+                        raise ValueError(
+                            "PM bridge only accepts plans for open GitHub issues"
+                        )
+
                     ticket = PMTicket(
                         id=f"GH-{issue_number}",
                         title=str(issue.get("title") or ""),
@@ -299,6 +403,7 @@ class PMBridgeService:
                     status = execution_plan_status(plan)
                     plan_id = f"pm-gh-{comment_id}"
                     existing_plan = self.storage.get_execution_plan(plan_id)
+
                     if existing_plan is None:
                         self.storage.create_execution_plan(
                             {
@@ -319,16 +424,21 @@ class PMBridgeService:
                                     "comment_url": comment_url,
                                 },
                                 "plan": plan.model_dump(mode="json"),
-                                "usage": {"model_calls": 0, "external_pm": True},
+                                "usage": {
+                                    "model_calls": 0,
+                                    "external_pm": True,
+                                },
                                 "error": None,
                             }
                         )
-                    else:
-                        if (
-                            existing_plan["project_id"] != project_id
-                            or existing_plan["baseline_revision"] != baseline.revision
-                        ):
-                            raise RuntimeError("Deterministic external PM plan id collides with different plan metadata")
+                    elif (
+                        existing_plan["project_id"] != project_id
+                        or existing_plan["baseline_revision"] != baseline.revision
+                    ):
+                        raise RuntimeError(
+                            "Deterministic external PM plan id collides with different plan metadata"
+                        )
+
                     self.events.record(
                         project_id=project_id,
                         comment_id=comment_id,
@@ -341,7 +451,13 @@ class PMBridgeService:
                         plan_id=plan_id,
                         error=None,
                     )
-                    result["accepted"].append({"comment_id": comment_id, "plan_id": plan_id, "status": status})
+                    result["accepted"].append(
+                        {
+                            "comment_id": comment_id,
+                            "plan_id": plan_id,
+                            "status": status,
+                        }
+                    )
                 except Exception as exc:
                     error = f"{type(exc).__name__}: {exc}"[-12000:]
                     self.events.record(
@@ -356,7 +472,10 @@ class PMBridgeService:
                         plan_id=plan_id,
                         error=error,
                     )
-                    result["rejected"].append({"comment_id": comment_id, "error": error})
+                    result["rejected"].append(
+                        {"comment_id": comment_id, "error": error}
+                    )
+
             return result
 
 
