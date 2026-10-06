@@ -308,6 +308,7 @@ class RuntimeEngine(_RuntimeEngine):
             if reason not in {
                 "collaboration_pm_handoff",
                 "material_change_missing_without_model_fallback",
+                "evaluator_provider_failure_without_fallback",
             }:
                 raise RuntimeError(
                     "Verification-only PM-handoff resume requires the exact collaboration recovery state"
@@ -341,6 +342,20 @@ class RuntimeEngine(_RuntimeEngine):
                 raise RuntimeError(
                     "Verification-only PM-handoff recovery requires a no-effect block"
                 )
+
+            if reason == "evaluator_provider_failure_without_fallback":
+                verification = checkpoint.get("last_verification_summary")
+                evaluator_choice = checkpoint.get("evaluator_choice")
+                if (
+                    not isinstance(verification, dict)
+                    or verification.get("passed") is not True
+                    or not isinstance(evaluator_choice, dict)
+                    or not str(evaluator_choice.get("id") or "").strip()
+                ):
+                    raise RuntimeError(
+                        "Verification-only evaluator recovery requires passed "
+                        "deterministic verification and a durable evaluator choice"
+                    )
 
             checkpoint["verification_only_resume"] = {
                 "thread_id": thread_id,
