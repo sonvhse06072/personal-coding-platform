@@ -671,6 +671,11 @@ class RuntimeEngine(RuntimeEngineCore):
             material_required = "material_change" in strategy.get("definition_of_done", {}).get("required", [])
             turn_effect_present = str(diff.get("diff_hash") or "") != turn_start_diff_hash
             response_only_allowed = semantic_response_only_turn_allowed(checkpoint)
+            if isinstance(checkpoint.get("verification_only_resume"), dict):
+                # Verification-only PM-handoff authorization is single-use even
+                # when the developer makes a material change in this turn.
+                checkpoint.pop("verification_only_resume", None)
+                self.storage.update(job_id, checkpoint=checkpoint)
             if material_required and not turn_effect_present and not response_only_allowed:
                 last_failure = (
                     "Agent completed without changing the cumulative WorkOrder diff "
