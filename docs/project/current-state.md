@@ -433,6 +433,37 @@ new engineering execution authority.
 
 Runtime version: `1.0.117`.
 
+### Late exact-head CI reconciliation — Runtime 1.0.118
+
+Live rollout of 1.0.117 proved the preserved EE-0-01 child could be fully
+accepted and delivery-finalized while its persisted delivery snapshot remained
+`ci_none`: the PR had been created on the exact verified head, but GitHub
+Actions completed only after Runtime's bounded CI discovery window. The later
+exact-head CI was green, yet blocked-parent recovery rejected the stale
+`ci_none` snapshot and PM merge eligibility would have rejected it again.
+
+Runtime 1.0.118 keeps the durable accepted result immutable and adds one bounded
+compatibility path:
+
+- only finalized `accepted` children with persisted `delivery.state=ci_none`
+  and `ci.state=none` are eligible for the late-CI path;
+- persisted PR number/head/branch and CI commit still bind to the verified
+  commit;
+- Runtime re-reads the exact PR and requires it to remain open, unmerged, on the
+  same verified head, job branch and configured base branch;
+- Runtime re-reads CI for that exact verified commit and requires `success`
+  with the same commit identity;
+- missing, pending, mismatched or unavailable live evidence grants no recovery
+  or merge authority;
+- PM merge eligibility accepts that fresh exact-head CI observation only for the
+  persisted `ci_none` case, and the privileged merge boundary independently
+  re-reads PR state, ancestry and CI immediately before mutation.
+
+This does not rewrite job result history, resume or replace the completed child,
+or weaken the normal `ci_success` path.
+
+Runtime version: `1.0.118`.
+
 ## Standing execution / quality boundaries
 
 - Normal flow: bounded issue/WorkOrder -> implementation/evidence -> deterministic
