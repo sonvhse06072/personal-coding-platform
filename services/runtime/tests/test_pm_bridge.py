@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from app import pm_bridge
 from app.baseline import BaselineReferences, ProjectBaseline, SourceReference
 from app.pm_bridge import DEFAULT_MARKER, PMBridgeService
+from app.pm_control import CONTROL_MARKER
 
 
 class FakeStorage:
@@ -30,6 +31,20 @@ class FakeEvents:
 
     def record(self, **row):
         self.rows.setdefault((row["project_id"], row["comment_id"]), dict(row))
+
+
+class FakeControlEvents:
+    def __init__(self):
+        self.rows = {}
+
+    def get(self, project_id, comment_id):
+        return self.rows.get((project_id, comment_id))
+
+    def record(self, **row):
+        self.rows.setdefault(
+            (row["project_id"], row["comment_id"]),
+            dict(row),
+        )
 
 
 class FakeGitHub:
@@ -125,6 +140,32 @@ def comment(comment_id=100, *, author="owner", payload=None):
     }
 
 
+
+def control_comment(
+    comment_id=200,
+    *,
+    author="owner",
+    envelope=None,
+):
+    payload = envelope or {
+        "schema_version": 1,
+        "project_id": "demo",
+        "action": "request_diagnostics",
+        "job_id": "job-0001",
+        "diagnostic_collectors": ["job", "runtime_health"],
+    }
+    return {
+        "id": comment_id,
+        "issue_number": 4,
+        "author": author,
+        "body": CONTROL_MARKER + "\n" + json.dumps(payload),
+        "html_url": (
+            "https://github.com/example/chonhac/issues/4"
+            f"#issuecomment-{comment_id}"
+        ),
+    }
+
+
 def configure(monkeypatch, *, comments=None, issue=None):
     monkeypatch.setattr(
         pm_bridge,
@@ -140,6 +181,7 @@ def configure(monkeypatch, *, comments=None, issue=None):
     monkeypatch.setattr(pm_bridge, "resolve_project_baseline", lambda project_id, revision=None: baseline())
     storage = FakeStorage()
     events = FakeEvents()
+    control_events = FakeControlEvents()
     github = FakeGitHub(
         comments or [comment()],
         issue or {
@@ -150,7 +192,17 @@ def configure(monkeypatch, *, comments=None, issue=None):
             "is_pull_request": False,
         },
     )
-    return PMBridgeService(storage, github=github, events=events), storage, events, github
+    return (
+        PMBridgeService(
+            storage,
+            github=github,
+            events=events,
+            control_events=control_events,
+        ),
+        storage,
+        events,
+        github,
+    )
 
 
 def test_bridge_accepts_valid_plan_and_uses_canonical_github_ticket(monkeypatch):
@@ -223,3 +275,236 @@ def test_bridge_rejects_plan_that_rebinds_parent_ticket(monkeypatch):
     assert storage.plans == {}
     assert "must set parent_ticket to 'GH-4'" in result["rejected"][0]["error"]
     assert events.rows[("demo", 100)]["status"] == "rejected"
+
+
+def test_control_accepts_valid_command_without_mutating_plan(monkeypatch):
+    service, storage, _, github = configure(
+        monkeypatch,
+        comments=[control_comment()],
+    )
+
+    result = asyncio.run(service.poll_project("demo"))
+
+    assert storage.plans == {}
+    assert result["accepted"] == []
+    assert result["controls_accepted"] == [
+        {
+            "comment_id": 200,
+            "action": "request_diagnostics",
+            "status": "accepted_pending_dispatch",
+            "target_identity": {"job_id": "job-0001"},
+        }
+    ]
+    row = service.control_events.rows[("demo", 200)]
+    assert row["status"] == "accepted_pending_dispatch"
+    assert row["action"] == "request_diagnostics"
+    assert row["target_identity"] == {"job_id": "job-0001"}
+    assert github.issue_calls == [("demo", 4)]
+
+
+def test_control_rejects_unauthorized_author_before_issue_read(monkeypatch):
+    service, storage, _, github = configure(
+        monkeypatch,
+        comments=[control_comment(author="intruder")],
+    )
+
+    result = asyncio.run(service.poll_project("demo"))
+
+    assert storage.plans == {}
+    assert result["controls_accepted"] == []
+    assert result["controls_rejected"][0]["comment_id"] == 200
+    assert "not allowed" in result["controls_rejected"][0]["error"]
+    assert service.control_events.rows[("demo", 200)]["status"] == "rejected"
+    assert github.issue_calls == []
+
+
+def test_control_comment_is_consumed_once(monkeypatch):
+    service, storage, _, _ = configure(
+        monkeypatch,
+        comments=[control_comment()],
+    )
+
+    first = asyncio.run(service.poll_project("demo"))
+    second = asyncio.run(service.poll_project("demo"))
+
+    assert storage.plans == {}
+    assert first["controls_accepted"][0]["comment_id"] == 200
+    assert second["controls_accepted"] == []
+    assert second["controls_skipped"] == [200]
+    assert len(service.control_events.rows) == 1
+
+
+def test_control_rejects_mixed_plan_and_control_markers(monkeypatch):
+    mixed = control_comment()
+    mixed["body"] = (
+        DEFAULT_MARKER
+        + "\n"
+        + CONTROL_MARKER
+        + "\n"
+        + json.dumps(
+            {
+                "schema_version": 1,
+                "project_id": "demo",
+                "action": "request_diagnostics",
+                "job_id": "job-0001",
+                "diagnostic_collectors": ["job"],
+            }
+        )
+    )
+    service, storage, _, github = configure(
+        monkeypatch,
+        comments=[mixed],
+    )
+
+    result = asyncio.run(service.poll_project("demo"))
+
+    assert storage.plans == {}
+    assert result["controls_accepted"] == []
+    assert "cannot mix plan and control markers" in result["controls_rejected"][0]["error"]
+    assert service.control_events.rows[("demo", 200)]["status"] == "rejected"
+    assert github.issue_calls == []
+
+
+def test_control_rejects_extra_fields_and_missing_target(monkeypatch):
+    extra = control_comment(
+        comment_id=201,
+        envelope={
+            "schema_version": 1,
+            "project_id": "demo",
+            "action": "request_diagnostics",
+            "job_id": "job-0001",
+            "diagnostic_collectors": ["job"],
+            "shell": "rm -rf /",
+        },
+    )
+    missing = control_comment(
+        comment_id=202,
+        envelope={
+            "schema_version": 1,
+            "project_id": "demo",
+            "action": "request_diagnostics",
+            "diagnostic_collectors": ["job"],
+        },
+    )
+    service, storage, _, github = configure(
+        monkeypatch,
+        comments=[extra, missing],
+    )
+
+    result = asyncio.run(service.poll_project("demo"))
+
+    assert storage.plans == {}
+    assert result["controls_accepted"] == []
+    assert {item["comment_id"] for item in result["controls_rejected"]} == {
+        201,
+        202,
+    }
+    assert service.control_events.rows[("demo", 201)]["status"] == "rejected"
+    assert service.control_events.rows[("demo", 202)]["status"] == "rejected"
+    assert github.issue_calls == []
+
+
+def test_control_rejects_wrong_project_and_oversized_body(monkeypatch):
+    wrong_project = control_comment(
+        comment_id=203,
+        envelope={
+            "schema_version": 1,
+            "project_id": "other-project",
+            "action": "request_diagnostics",
+            "job_id": "job-0001",
+            "diagnostic_collectors": ["job"],
+        },
+    )
+    oversized = control_comment(comment_id=204)
+    oversized["body"] = CONTROL_MARKER + "\n" + ("x" * 65536)
+
+    service, storage, _, github = configure(
+        monkeypatch,
+        comments=[wrong_project, oversized],
+    )
+
+    result = asyncio.run(service.poll_project("demo"))
+
+    assert storage.plans == {}
+    assert result["controls_accepted"] == []
+    assert {item["comment_id"] for item in result["controls_rejected"]} == {
+        203,
+        204,
+    }
+    assert "must match the polled project" in next(
+        item["error"]
+        for item in result["controls_rejected"]
+        if item["comment_id"] == 203
+    )
+    assert "exceeds 64 KiB" in next(
+        item["error"]
+        for item in result["controls_rejected"]
+        if item["comment_id"] == 204
+    )
+    assert github.issue_calls == []
+
+
+def test_control_rejects_closed_issue_and_pull_request(monkeypatch):
+    closed_service, closed_storage, _, _ = configure(
+        monkeypatch,
+        comments=[control_comment(comment_id=205)],
+        issue={
+            "title": "Closed control issue",
+            "body": "closed",
+            "state": "closed",
+            "html_url": "https://github.com/example/chonhac/issues/4",
+            "is_pull_request": False,
+        },
+    )
+    closed = asyncio.run(closed_service.poll_project("demo"))
+
+    assert closed_storage.plans == {}
+    assert closed["controls_accepted"] == []
+    assert "open GitHub issues" in closed["controls_rejected"][0]["error"]
+
+    pr_service, pr_storage, _, _ = configure(
+        monkeypatch,
+        comments=[control_comment(comment_id=206)],
+        issue={
+            "title": "PR conversation",
+            "body": "pr",
+            "state": "open",
+            "html_url": "https://github.com/example/chonhac/pull/4",
+            "is_pull_request": True,
+        },
+    )
+    pull = asyncio.run(pr_service.poll_project("demo"))
+
+    assert pr_storage.plans == {}
+    assert pull["controls_accepted"] == []
+    assert "not pull requests" in pull["controls_rejected"][0]["error"]
+
+
+def test_control_rejects_duplicate_control_marker(monkeypatch):
+    duplicated = control_comment(comment_id=207)
+    duplicated["body"] = (
+        CONTROL_MARKER
+        + "\n"
+        + CONTROL_MARKER
+        + "\n"
+        + json.dumps(
+            {
+                "schema_version": 1,
+                "project_id": "demo",
+                "action": "request_diagnostics",
+                "job_id": "job-0001",
+                "diagnostic_collectors": ["job"],
+            }
+        )
+    )
+
+    service, storage, _, github = configure(
+        monkeypatch,
+        comments=[duplicated],
+    )
+    result = asyncio.run(service.poll_project("demo"))
+
+    assert storage.plans == {}
+    assert result["controls_accepted"] == []
+    assert "exactly one versioned control marker" in result["controls_rejected"][0]["error"]
+    assert github.issue_calls == []
