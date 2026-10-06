@@ -409,6 +409,7 @@ def test_blocked_parent_ci_none_recovers_from_fresh_exact_head_ci_then_pm_merges
         "pr_closed",
         "pr_merged",
         "ci_pending",
+        "persisted_ci_missing",
         "ci_commit",
         "pr_error",
         "ci_error",
@@ -437,6 +438,8 @@ def test_blocked_parent_ci_none_live_recovery_fails_closed(case, monkeypatch) ->
         engine.ddev.pr_overrides["merged"] = True
     elif case == "ci_pending":
         engine.ddev.ci_state = "pending"
+    elif case == "persisted_ci_missing":
+        storage.jobs["job-12345678"]["result"]["delivery"]["ci"]["commit"] = None
     elif case == "ci_commit":
         engine.ddev.ci_commit = "c" * 40
     elif case == "pr_error":
