@@ -262,6 +262,8 @@ projects:
 
       visual_quality:
         - >-
+          ddev exec -u root bash -lc 'cd /var/www/html/frontend && npx playwright install-deps chromium'
+        - >-
           ddev exec bash -lc 'cd frontend && npm run test:visual'
 
       full_tests: []
