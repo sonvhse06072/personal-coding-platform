@@ -18,6 +18,7 @@ from .collaboration import (
 from .baseline import resolve_project_baseline
 from .intake import IntakeRequest, IntakeResponse, DirectIntakeResponse, PlanningIntakeResponse
 from .intake_policy import classify_intake
+from .job_status_publisher import JobStatusPublisher
 from .dashboard import _require_session, create_dashboard_router
 from .engine_telemetry import RuntimeEngine
 from .orchestrator_notifications import PlanOrchestrator
@@ -127,6 +128,11 @@ plan_orchestrator = PlanOrchestrator(storage, engine, progress_handoffs=progress
 pm_control_dispatcher = PMControlDispatcher(storage, engine, plan_orchestrator)
 configure_control_dispatcher(pm_control_dispatcher.dispatch)
 progress_publisher = PlanProgressPublisher(progress_handoffs, engine.ddev)
+job_status_publisher = JobStatusPublisher(
+    storage,
+    engine.ddev,
+    plan_orchestrator.controls,
+)
 preview_manager = PreviewManager(storage, engine.ddev)
 project_preview_manager = ProjectPreviewManager(storage, engine.ddev)
 
@@ -180,13 +186,15 @@ async def lifespan(app: FastAPI):
     await engine.start()
     await plan_orchestrator.start()
     await progress_publisher.start()
+    await job_status_publisher.start()
     yield
+    await job_status_publisher.stop()
     await progress_publisher.stop()
     await plan_orchestrator.stop()
     await engine.stop()
 
 
-RUNTIME_VERSION = "1.0.120"
+RUNTIME_VERSION = "1.0.121"
 
 app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan=lifespan)
 app.include_router(pm_bridge_router)
