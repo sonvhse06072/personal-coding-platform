@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
+from types import SimpleNamespace
 
 import pytest
 
@@ -82,16 +83,21 @@ def direct_job():
 class FakeStorage:
     def __init__(self):
         self.jobs = {"job-12345678": direct_job()}
+        self.lease = None
 
     def get(self, job_id):
         row = self.jobs.get(job_id)
         return deepcopy(row) if row is not None else None
+
+    def project_lease(self, project_id):
+        return deepcopy(self.lease)
 
 
 class FakeDdev:
     def __init__(self):
         self.merged = False
         self.merge_calls = []
+        self.sync_calls = []
 
     async def github_pull_request(self, *, project_id, pr_number):
         return {
@@ -113,12 +119,36 @@ class FakeDdev:
         self.merged = True
         return {"merged": True, "merge_commit_sha": "c" * 40}
 
+    async def github_issue(self, *, project_id, issue_number):
+        return {
+            "project_id": project_id,
+            "repository": "owner/demo",
+            "number": issue_number,
+            "title": "Remote bounded fix",
+            "body": "Implement the exact bounded repair.",
+            "state": "open",
+            "is_pull_request": False,
+        }
+
+    async def sync_direct_base(self, *, project_id, expected_remote_head):
+        self.sync_calls.append((project_id, expected_remote_head))
+        return {
+            "project_id": project_id,
+            "head": expected_remote_head,
+            "remote_head": expected_remote_head,
+            "clean": True,
+            "fast_forwarded": True,
+        }
+
 
 class FakeEngine:
-    def __init__(self):
+    def __init__(self, storage):
+        self.storage = storage
         self.ddev = FakeDdev()
         self.decisions = []
         self.repairs = []
+        self.created = []
+        self.enqueued = []
 
     async def resolve_human_decision(
         self,
@@ -152,6 +182,37 @@ class FakeEngine:
             }
         )
         return {"id": job_id, "status": "queued"}
+
+
+    def create_job(
+        self,
+        payload,
+        *,
+        _intake_decision=None,
+        _remote_binding=None,
+    ):
+        job_id = "newjob12345678"
+        self.created.append(
+            {
+                "payload": deepcopy(payload),
+                "decision": _intake_decision.model_dump(mode="json"),
+                "binding": deepcopy(_remote_binding),
+            }
+        )
+        self.storage.jobs[job_id] = {
+            "id": job_id,
+            "project_id": payload["project_id"],
+            "status": "queued",
+            "source_commit": payload.get("source_commit"),
+            "checkpoint": {
+                "canonical_intake": _intake_decision.model_dump(mode="json"),
+                "github_pm_binding": deepcopy(_remote_binding),
+            },
+        }
+        return job_id
+
+    async def enqueue(self, job_id):
+        self.enqueued.append(job_id)
 
 
 class FakeControls:
@@ -229,7 +290,7 @@ class FakeOrchestrator:
 
 def dispatcher():
     storage = FakeStorage()
-    engine = FakeEngine()
+    engine = FakeEngine(storage)
     orchestrator = FakeOrchestrator()
     return PMControlDispatcher(storage, engine, orchestrator), storage, engine, orchestrator
 
@@ -500,3 +561,167 @@ def test_future_slice_actions_are_explicitly_non_mutating():
 
     assert status == "unsupported_action_dispatch"
     assert result["status"] == "pending_future_slice"
+
+
+def remote_direct_envelope(**overrides):
+    values = {
+        "baseline_revision": "v1",
+        "expected_remote_main_sha": SOURCE,
+        "intake_semantic": {
+            "ambiguity": 10,
+            "architecture_impact": 10,
+            "verification_difficulty": 20,
+            "risk": 20,
+            "context_requirement": 20,
+            "novelty": 10,
+            "reasoning_requirement": 20,
+        },
+        "intake_repo_hints": {
+            "estimated_files": 4,
+            "affected_components": 1,
+            "dependency_depth": 0,
+            "tests_available": True,
+            "existing_pattern": True,
+            "historical_churn": 5,
+            "schema_change": False,
+            "security_sensitive": False,
+            "authentication_change": False,
+            "authorization_change": False,
+            "external_api": False,
+            "production_write": False,
+            "destructive_migration": False,
+        },
+    }
+    values.update(overrides)
+    return envelope("direct_intake", **values)
+
+
+def test_remote_direct_intake_syncs_exact_source_and_binds_github_issue(
+    monkeypatch,
+):
+    dispatch, storage, engine, _ = dispatcher()
+    monkeypatch.setattr(
+        pm_control_dispatch,
+        "project_config",
+        lambda project_id: {
+            "base_branch": "main",
+            "runtime": {
+                "workspace_mode": "direct",
+                "exclusive_project_lease": True,
+            },
+        },
+    )
+    monkeypatch.setattr(
+        pm_control_dispatch,
+        "resolve_project_baseline",
+        lambda project_id, revision: SimpleNamespace(revision="v1"),
+    )
+
+    status, result = asyncio.run(
+        dispatch.dispatch(
+            remote_direct_envelope(),
+            comment_id=555,
+            issue_number=77,
+        )
+    )
+
+    assert status == "executed"
+    assert result["job_id"] == "newjob12345678"
+    assert result["source_commit"] == SOURCE
+    assert result["classification"]["mode"] == "direct"
+    assert engine.ddev.sync_calls == [("demo", SOURCE)]
+    assert engine.enqueued == ["newjob12345678"]
+    created = engine.created[0]
+    assert created["payload"]["source_commit"] == SOURCE
+    assert created["binding"] == {
+        "transport": "github_pm_control",
+        "repository": "owner/demo",
+        "issue_number": 77,
+        "control_comment_id": 555,
+    }
+    assert storage.jobs["newjob12345678"]["checkpoint"]["github_pm_binding"][
+        "issue_number"
+    ] == 77
+
+
+def test_remote_direct_intake_active_lease_blocks_before_source_sync(
+    monkeypatch,
+):
+    dispatch, storage, engine, _ = dispatcher()
+    storage.lease = {"state": "active", "owner_job_id": "existing-job"}
+    monkeypatch.setattr(
+        pm_control_dispatch,
+        "project_config",
+        lambda project_id: {
+            "runtime": {
+                "workspace_mode": "direct",
+                "exclusive_project_lease": True,
+            },
+        },
+    )
+    monkeypatch.setattr(
+        pm_control_dispatch,
+        "resolve_project_baseline",
+        lambda project_id, revision: SimpleNamespace(revision="v1"),
+    )
+
+    with pytest.raises(RuntimeError, match="active project lease"):
+        asyncio.run(
+            dispatch.dispatch(
+                remote_direct_envelope(),
+                comment_id=556,
+                issue_number=77,
+            )
+        )
+
+    assert engine.ddev.sync_calls == []
+    assert engine.created == []
+
+
+def test_remote_direct_intake_planning_classification_blocks_before_sync(
+    monkeypatch,
+):
+    dispatch, _, engine, _ = dispatcher()
+    monkeypatch.setattr(
+        pm_control_dispatch,
+        "project_config",
+        lambda project_id: {
+            "runtime": {
+                "workspace_mode": "direct",
+                "exclusive_project_lease": True,
+            },
+        },
+    )
+    monkeypatch.setattr(
+        pm_control_dispatch,
+        "resolve_project_baseline",
+        lambda project_id, revision: SimpleNamespace(revision="v1"),
+    )
+
+    with pytest.raises(RuntimeError, match="classifier requires planning"):
+        asyncio.run(
+            dispatch.dispatch(
+                remote_direct_envelope(
+                    intake_repo_hints={
+                        "estimated_files": 4,
+                        "affected_components": 1,
+                        "dependency_depth": 0,
+                        "tests_available": True,
+                        "existing_pattern": True,
+                        "historical_churn": 5,
+                        "schema_change": True,
+                        "security_sensitive": False,
+                        "authentication_change": False,
+                        "authorization_change": False,
+                        "external_api": False,
+                        "production_write": False,
+                        "destructive_migration": False,
+                    }
+                ),
+                comment_id=557,
+                issue_number=77,
+            )
+        )
+
+    assert engine.ddev.sync_calls == []
+    assert engine.created == []
