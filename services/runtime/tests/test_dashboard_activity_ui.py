@@ -71,3 +71,13 @@ def test_dashboard_exposes_standalone_job_observability_without_synthetic_work_o
     assert "currentStandalone" in DASHBOARD_HTML
     assert "selectedStandalone" in DASHBOARD_HTML
     assert "/v1/dashboard/jobs/" in DASHBOARD_HTML
+
+
+def test_dashboard_clears_stale_activity_when_no_current_job():
+    assert (
+        "if(!j){$('#jobMeta').textContent='No active job';"
+        "$('#jobStatus').innerHTML='';$('#metrics').innerHTML='';"
+        "$('#models').innerHTML='';consoleEvents=[];lastSeq=0;"
+        "renderConsole();connectStream(null);return}"
+        in DASHBOARD_HTML
+    )
