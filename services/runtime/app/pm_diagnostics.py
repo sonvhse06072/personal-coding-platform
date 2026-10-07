@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from .activity import public_event
+from .work_order_checkpoints import verification_checkpoint_summary
 
 
 _BODY_MAX_BYTES = 10 * 1024
@@ -23,6 +25,81 @@ def _bounded_list(values: Any, *, limit: int = 12, item_limit: int = 300) -> lis
     return [_text(value, item_limit) for value in values[:limit]]
 
 
+
+
+_SAFE_IDENTITY = re.compile(r"^[A-Za-z0-9._:/+-]{1,200}$")
+
+
+def _safe_identity(value: Any, limit: int = 200) -> str | None:
+    if not isinstance(value, str) or not value:
+        return None
+    text = value[:limit]
+    return text if _SAFE_IDENTITY.fullmatch(text) else None
+
+
+def _failure_evidence(
+    checkpoint: dict[str, Any],
+    progress: dict[str, Any],
+) -> dict[str, Any]:
+    evidence: dict[str, Any] = {}
+
+    summary = verification_checkpoint_summary(
+        checkpoint.get("last_verification_summary")
+    )
+    if summary is not None:
+        evidence["last_verification_summary"] = summary
+
+    streak = checkpoint.get("deterministic_verification_failure_streak")
+    streak = dict(streak) if isinstance(streak, dict) else {}
+    if streak:
+        safe_streak: dict[str, Any] = {}
+        for key in ("count", "limit", "verification_attempt"):
+            value = streak.get(key)
+            if type(value) is int and 0 <= value <= 2**63 - 1:
+                safe_streak[key] = value
+        for key in ("signature", "diff_hash"):
+            value = _safe_identity(streak.get(key))
+            if value is not None:
+                safe_streak[key] = value
+        phases = [
+            value
+            for raw in (streak.get("failing_phases") or [])[:16]
+            if (value := _safe_identity(raw, 80)) is not None
+        ]
+        if phases:
+            safe_streak["failing_phases"] = phases
+        if safe_streak:
+            evidence["deterministic_verification_failure_streak"] = safe_streak
+
+    context = checkpoint.get("failure_context")
+    context = dict(context) if isinstance(context, dict) else {}
+    if context:
+        safe_context: dict[str, Any] = {}
+        version = context.get("version")
+        if type(version) is int and 0 <= version <= 100:
+            safe_context["version"] = version
+        for key in ("kind", "source", "diff_hash", "decision_key"):
+            value = _safe_identity(context.get(key), 500 if key == "decision_key" else 200)
+            if value is not None:
+                safe_context[key] = value
+        if safe_context:
+            evidence["failure_context"] = safe_context
+
+    fingerprints = [
+        value
+        for raw in (progress.get("failure_fingerprints") or [])[-4:]
+        if (value := _safe_identity(raw, 200)) is not None
+    ]
+    if fingerprints:
+        evidence["recent_failure_fingerprints"] = fingerprints
+
+    failure_kind = _safe_identity(progress.get("last_agent_failure_kind"), 120)
+    if failure_kind is not None:
+        evidence["last_agent_failure_kind"] = failure_kind
+
+    return evidence
+
+
 def _job_summary(job: dict[str, Any]) -> dict[str, Any]:
     result = dict(job.get("result") or {})
     delivery = dict(result.get("delivery") or {})
@@ -36,6 +113,7 @@ def _job_summary(job: dict[str, Any]) -> dict[str, Any]:
     progress = dict(job.get("progress") or {})
     pending_decision = dict(checkpoint.get("pending_decision") or {})
     decision = dict(pending_decision.get("decision") or {})
+    failure_evidence = _failure_evidence(checkpoint, progress)
 
     return {
         "id": job.get("id"),
@@ -60,6 +138,7 @@ def _job_summary(job: dict[str, Any]) -> dict[str, Any]:
         "pr_head_ref": pr.get("head_ref"),
         "ci_state": ci.get("state"),
         "ci_commit": ci.get("commit"),
+        "failure_evidence": failure_evidence or None,
         "pending_decision": (
             {
                 "key": pending_decision.get("key"),
