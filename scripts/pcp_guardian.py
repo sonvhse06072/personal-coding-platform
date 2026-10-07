@@ -1,0 +1,847 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import argparse
+import fcntl
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+_ALLOWED_CONFIG_KEYS = {
+    "schema_version",
+    "repository",
+    "allowed_actor",
+    "control_issue_number",
+    "default_branch",
+    "pcp_root",
+    "marker",
+    "max_comment_bytes",
+    "state_dir",
+}
+_ALLOWED_ACTIONS = {"status_snapshot", "rollout_pcp_exact_main"}
+_SHA40 = re.compile(r"^[0-9a-f]{40}$")
+
+
+def utcnow() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _bounded(value: Any, limit: int = 500) -> str:
+    return " ".join(str(value or "").split())[:limit]
+
+
+def load_config(path: Path) -> dict[str, Any]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict) or set(raw) != _ALLOWED_CONFIG_KEYS:
+        raise ValueError("Guardian config keys are not exact")
+    if raw.get("schema_version") != 1:
+        raise ValueError("Unsupported Guardian config schema")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", str(raw["repository"])):
+        raise ValueError("Invalid Guardian repository")
+    if not re.fullmatch(r"[A-Za-z0-9-]{1,100}", str(raw["allowed_actor"])):
+        raise ValueError("Invalid Guardian actor")
+    if type(raw["control_issue_number"]) is not int or raw["control_issue_number"] < 1:
+        raise ValueError("Invalid Guardian control issue")
+    if str(raw["default_branch"]) != "main":
+        raise ValueError("Guardian v1 supports only reviewed main default branch")
+    if str(raw["marker"]) != "<!-- coding-platform:pcp-guardian:v1 -->":
+        raise ValueError("Unsupported Guardian marker")
+    if type(raw["max_comment_bytes"]) is not int or not 1024 <= raw["max_comment_bytes"] <= 65536:
+        raise ValueError("Invalid Guardian comment bound")
+    root = Path(os.path.expanduser(str(raw["pcp_root"]))).resolve()
+    state_dir = Path(os.path.expanduser(str(raw["state_dir"]))).resolve()
+    raw["pcp_root"] = str(root)
+    raw["state_dir"] = str(state_dir)
+    return raw
+
+
+def load_event(path: Path) -> dict[str, Any]:
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("Guardian event must be an object")
+    return raw
+
+
+def parse_command(event: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    if str(event.get("action") or "") != "created":
+        raise ValueError("Guardian accepts created comments only")
+
+    repository = event.get("repository") or {}
+    if str(repository.get("full_name") or "") != config["repository"]:
+        raise ValueError("Guardian repository identity mismatch")
+
+    issue = event.get("issue") or {}
+    if type(issue.get("number")) is not int or issue["number"] != config["control_issue_number"]:
+        raise ValueError("Guardian control issue identity mismatch")
+    if issue.get("pull_request"):
+        raise ValueError("Guardian commands are not accepted on pull requests")
+    if str(issue.get("state") or "") != "open":
+        raise ValueError("Guardian control issue must remain open")
+
+    comment = event.get("comment") or {}
+    comment_id = comment.get("id")
+    if type(comment_id) is not int or comment_id < 1:
+        raise ValueError("Guardian comment id is invalid")
+    actor = (comment.get("user") or {}).get("login")
+    if str(actor or "") != config["allowed_actor"]:
+        raise ValueError("Guardian comment author is not allowed")
+
+    body = str(comment.get("body") or "")
+    if len(body.encode("utf-8")) > config["max_comment_bytes"]:
+        raise ValueError("Guardian command exceeds byte bound")
+    marker = config["marker"]
+    if body.count(marker) != 1:
+        raise ValueError("Guardian command must contain exactly one versioned marker")
+    payload = body.split(marker, 1)[1].strip()
+    if not payload:
+        raise ValueError("Guardian marker must be followed by one JSON object")
+
+    fence = chr(96) * 3
+    if payload.startswith(fence):
+        lines = payload.splitlines()
+        if (
+            len(lines) < 3
+            or lines[0].strip() not in {fence, fence + "json"}
+            or lines[-1].strip() != fence
+        ):
+            raise ValueError("Guardian fenced payload is incomplete")
+        payload = "\n".join(lines[1:-1]).strip()
+
+    try:
+        command = json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise ValueError("Guardian payload must be one JSON object") from exc
+    if not isinstance(command, dict):
+        raise ValueError("Guardian payload must be an object")
+    action = str(command.get("action") or "")
+    if command.get("schema_version") != 1 or action not in _ALLOWED_ACTIONS:
+        raise ValueError("Unsupported Guardian action/schema")
+
+    expected_keys = {"schema_version", "action"}
+    if action == "rollout_pcp_exact_main":
+        expected_keys.add("expected_main_sha")
+    if set(command) != expected_keys:
+        raise ValueError("Guardian action fields are not exact")
+    if action == "rollout_pcp_exact_main":
+        sha = str(command.get("expected_main_sha") or "")
+        if not _SHA40.fullmatch(sha):
+            raise ValueError("Guardian rollout requires exact lowercase 40-hex SHA")
+
+    return {
+        **command,
+        "comment_id": comment_id,
+        "body_sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
+    }
+
+
+class GitHubClient:
+    def __init__(self, token: str, repository: str) -> None:
+        if not token:
+            raise RuntimeError("GITHUB_TOKEN is unavailable")
+        self.token = token
+        self.repository = repository
+        self.base = "https://api.github.com"
+
+    def request(self, method: str, path: str, payload: Any = None) -> Any:
+        body = None
+        if payload is not None:
+            body = json.dumps(payload).encode("utf-8")
+        request = urllib.request.Request(
+            self.base + path,
+            data=body,
+            method=method,
+            headers={
+                "Authorization": f"Bearer {self.token}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "Content-Type": "application/json",
+                "User-Agent": "pcp-guardian-v1",
+            },
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=20) as response:
+                raw = response.read()
+        except urllib.error.HTTPError as exc:
+            raise RuntimeError(f"GitHub API HTTP {exc.code}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError("GitHub API unavailable") from exc
+        return json.loads(raw.decode("utf-8")) if raw else {}
+
+    def default_head(self, branch: str) -> str:
+        raw = self.request(
+            "GET",
+            f"/repos/{self.repository}/git/ref/heads/{branch}",
+        )
+        return str((raw.get("object") or {}).get("sha") or "")
+
+    def _result_marker(self, comment_id: int) -> str:
+        return f"<!-- PCP:GUARDIAN-RESULT:{comment_id} -->"
+
+    def upsert_result(
+        self,
+        *,
+        issue_number: int,
+        comment_id: int,
+        result: dict[str, Any],
+    ) -> None:
+        marker = self._result_marker(comment_id)
+        body = marker + "\n\n## PCP Guardian result\n\n"
+        body += f"Control comment: {comment_id}\n\n"
+        body += json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True)
+        if len(body.encode("utf-8")) > 60 * 1024:
+            raise RuntimeError("Guardian result comment exceeds safe bound")
+
+        matches: list[int] = []
+        for page in range(1, 6):
+            comments = self.request(
+                "GET",
+                f"/repos/{self.repository}/issues/{issue_number}/comments"
+                f"?per_page=100&page={page}",
+            )
+            if not isinstance(comments, list) or len(comments) > 100:
+                raise RuntimeError("Invalid Guardian result discovery response")
+            for raw in comments:
+                existing_body = raw.get("body")
+                if isinstance(existing_body, str) and marker in existing_body:
+                    number = raw.get("id")
+                    if type(number) is not int or number < 1:
+                        raise RuntimeError("Invalid Guardian result comment id")
+                    matches.append(number)
+            if len(matches) > 1:
+                raise RuntimeError("Multiple Guardian result markers")
+            if len(comments) < 100:
+                break
+        else:
+            raise RuntimeError("Guardian result discovery bound exhausted")
+
+        if matches:
+            number = matches[0]
+            self.request(
+                "PATCH",
+                f"/repos/{self.repository}/issues/comments/{number}",
+                {"body": body},
+            )
+        else:
+            created = self.request(
+                "POST",
+                f"/repos/{self.repository}/issues/{issue_number}/comments",
+                {"body": body},
+            )
+            number = created.get("id")
+            if type(number) is not int or number < 1:
+                raise RuntimeError("Guardian result create postcondition failed")
+
+        observed = self.request(
+            "GET",
+            f"/repos/{self.repository}/issues/comments/{number}",
+        )
+        if observed.get("body") != body:
+            raise RuntimeError("Guardian result comment postcondition mismatch")
+
+
+class AuditStore:
+    def __init__(self, directory: Path) -> None:
+        self.directory = directory
+        self.directory.mkdir(parents=True, exist_ok=True)
+        os.chmod(self.directory, 0o700)
+        self.lock_handle = None
+
+    def __enter__(self) -> "AuditStore":
+        lock = (self.directory / "operation.lock").open("a")
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            lock.close()
+            raise RuntimeError("Another Guardian action is already running") from exc
+        self.lock_handle = lock
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        if self.lock_handle is not None:
+            self.lock_handle.close()
+            self.lock_handle = None
+
+    def _path(self, comment_id: int) -> Path:
+        return self.directory / f"event-{comment_id}.json"
+
+    def read(self, comment_id: int) -> dict[str, Any] | None:
+        path = self._path(comment_id)
+        if not path.exists():
+            return None
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        return raw if isinstance(raw, dict) else None
+
+    def _write(self, comment_id: int, value: dict[str, Any]) -> None:
+        path = self._path(comment_id)
+        temp = path.with_suffix(".tmp")
+        temp.write_text(
+            json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        os.chmod(temp, 0o600)
+        temp.replace(path)
+
+    def claim(self, command: dict[str, Any]) -> tuple[bool, dict[str, Any]]:
+        comment_id = int(command["comment_id"])
+        existing = self.read(comment_id)
+        if existing is not None:
+            if existing.get("body_sha256") != command["body_sha256"]:
+                raise RuntimeError("Guardian comment identity was reused with changed content")
+            return False, existing
+        row = {
+            "schema_version": 1,
+            "comment_id": comment_id,
+            "body_sha256": command["body_sha256"],
+            "action": command["action"],
+            "expected_main_sha": command.get("expected_main_sha"),
+            "status": "dispatching",
+            "created_at": utcnow(),
+            "updated_at": utcnow(),
+            "result": None,
+        }
+        self._write(comment_id, row)
+        return True, row
+
+    def finish(
+        self,
+        command: dict[str, Any],
+        *,
+        status: str,
+        result: dict[str, Any],
+    ) -> dict[str, Any]:
+        row = self.read(int(command["comment_id"]))
+        if row is None or row.get("status") != "dispatching":
+            raise RuntimeError("Guardian audit terminal transition rejected")
+        row["status"] = status
+        row["result"] = result
+        row["updated_at"] = utcnow()
+        self._write(int(command["comment_id"]), row)
+        return row
+
+
+def _run(
+    args: list[str],
+    *,
+    cwd: Path | None = None,
+    timeout: int = 30,
+    check: bool = True,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
+    merged_env = os.environ.copy()
+    if env:
+        merged_env.update(env)
+    proc = subprocess.run(
+        args,
+        cwd=str(cwd) if cwd else None,
+        text=True,
+        capture_output=True,
+        timeout=timeout,
+        env=merged_env,
+    )
+    if check and proc.returncode != 0:
+        raise RuntimeError(
+            f"Command failed safely: {Path(args[0]).name} exit {proc.returncode}"
+        )
+    return proc
+
+
+def _json_command(
+    args: list[str],
+    *,
+    cwd: Path,
+    timeout: int = 30,
+) -> dict[str, Any]:
+    proc = _run(args, cwd=cwd, timeout=timeout)
+    try:
+        value = json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError("Health command returned invalid JSON") from exc
+    if not isinstance(value, dict):
+        raise RuntimeError("Health command returned non-object JSON")
+    return value
+
+
+def _canonical_origin(value: str) -> str | None:
+    value = value.strip()
+    patterns = [
+        r"^https://github\.com/([^/]+/[^/]+?)(?:\.git)?$",
+        r"^git@github\.com:([^/]+/[^/]+?)(?:\.git)?$",
+        r"^ssh://git@github\.com/([^/]+/[^/]+?)(?:\.git)?$",
+    ]
+    for pattern in patterns:
+        match = re.fullmatch(pattern, value)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _version_from_source(path: Path, variable: str) -> str:
+    text = path.read_text(encoding="utf-8")
+    match = re.search(
+        rf"^{re.escape(variable)}\s*=\s*[\"']([^\"']+)[\"']\s*$",
+        text,
+        flags=re.MULTILINE,
+    )
+    if not match:
+        raise RuntimeError(f"Target source lacks {variable}")
+    return match.group(1)
+
+
+class GuardianHost:
+    def __init__(self, config: dict[str, Any], checkout: Path) -> None:
+        self.config = config
+        self.root = Path(config["pcp_root"]).resolve()
+        self.checkout = checkout.resolve()
+
+    def _git(self, *args: str, check: bool = True) -> str:
+        return _run(
+            ["git", "-C", str(self.root), *args],
+            timeout=120,
+            check=check,
+            env={"GIT_TERMINAL_PROMPT": "0"},
+        ).stdout.strip()
+
+    def local_git(self) -> dict[str, Any]:
+        if not self.root.is_dir():
+            raise RuntimeError("Configured PCP root is unavailable")
+        origin = self._git("remote", "get-url", "origin")
+        origin_repo = _canonical_origin(origin)
+        if origin_repo != self.config["repository"]:
+            raise RuntimeError("Local PCP origin does not match Guardian repository")
+        return {
+            "branch": self._git("branch", "--show-current", check=False) or None,
+            "head": self._git("rev-parse", "HEAD"),
+            "clean": not bool(self._git("status", "--porcelain", check=False)),
+            "origin_repository": origin_repo,
+            "origin_main_cached": (
+                self._git(
+                    "rev-parse",
+                    f"refs/remotes/origin/{self.config['default_branch']}",
+                    check=False,
+                )
+                or None
+            ),
+        }
+
+    def _runtime_active_count(self) -> dict[str, Any]:
+        url = "https://personal-coding-platform.ddev.site:8788/v1/jobs/active-count"
+        shell = (
+            'curl -fsS --max-time 15 '
+            '-H "Authorization: Bearer $RUNTIME_API_TOKEN" "$1"'
+        )
+        proc = _run(
+            [
+                "bash",
+                str(self.root / "scripts/with-host-secrets.sh"),
+                "bash",
+                "-lc",
+                shell,
+                "_",
+                url,
+            ],
+            cwd=self.root,
+            timeout=30,
+        )
+        raw = json.loads(proc.stdout)
+        count = raw.get("active_engineering_jobs")
+        if type(count) is not int or count < 0:
+            raise RuntimeError("Runtime active count is invalid")
+        return {"active_engineering_jobs": count}
+
+    def _runtime_health(self) -> dict[str, Any]:
+        raw = _json_command(
+            [
+                "ddev",
+                "exec",
+                "-s",
+                "coding-runtime",
+                "curl",
+                "-fsS",
+                "http://127.0.0.1:8787/health",
+            ],
+            cwd=self.root,
+        )
+        return {
+            key: raw.get(key)
+            for key in ("status", "service", "version", "router", "executor")
+        }
+
+    def _router_health(self) -> dict[str, Any]:
+        raw = _json_command(
+            [
+                "ddev",
+                "exec",
+                "-s",
+                "router",
+                "curl",
+                "-fsS",
+                "http://127.0.0.1:8090/health",
+            ],
+            cwd=self.root,
+        )
+        return {
+            key: raw.get(key)
+            for key in ("status", "service", "version")
+            if raw.get(key) is not None
+        }
+
+    def _executor_health(self) -> dict[str, Any]:
+        raw = _json_command(
+            [
+                "ddev",
+                "exec",
+                "-s",
+                "ddev-executor",
+                "curl",
+                "-fsS",
+                "http://127.0.0.1:8790/health",
+            ],
+            cwd=self.root,
+        )
+        active = raw.get("active_jobs")
+        if type(active) is not int or active < 0:
+            raise RuntimeError("Executor active job count is invalid")
+        return {
+            "status": raw.get("status"),
+            "service": raw.get("service"),
+            "version": raw.get("version"),
+            "active_jobs": active,
+        }
+
+    def _antigravity_health(self) -> dict[str, Any]:
+        raw = _json_command(
+            [
+                "bash",
+                str(self.root / "scripts/with-host-secrets.sh"),
+                "bash",
+                str(self.root / "scripts/antigravity-bridge.sh"),
+                "status",
+            ],
+            cwd=self.root,
+        )
+        active = raw.get("active_runs")
+        pending = raw.get("pending_cancellations")
+        if type(active) is not int or type(pending) is not int:
+            raise RuntimeError("Antigravity activity counters are invalid")
+        return {
+            "status": raw.get("status"),
+            "service": raw.get("service"),
+            "version": raw.get("version"),
+            "active_runs": active,
+            "pending_cancellations": pending,
+            "safe_settings": raw.get("safe_settings"),
+        }
+
+    def _n8n_health(self) -> dict[str, Any]:
+        code = (
+            'fetch("http://127.0.0.1:5678/healthz")'
+            '.then(async r=>{if(!r.ok)process.exit(1);console.log("ok")})'
+            '.catch(()=>process.exit(1))'
+        )
+        proc = _run(
+            ["ddev", "exec", "-s", "n8n", "node", "-e", code],
+            cwd=self.root,
+            timeout=30,
+            check=False,
+        )
+        return {"ok": proc.returncode == 0 and proc.stdout.strip() == "ok"}
+
+    def _credential_boundary(self) -> dict[str, Any]:
+        proc = _run(
+            ["bash", str(self.root / "scripts/service-secret-status.sh")],
+            cwd=self.root,
+            timeout=30,
+            check=False,
+        )
+        return {"ok": proc.returncode == 0}
+
+    @staticmethod
+    def _probe(callable_obj) -> dict[str, Any]:
+        try:
+            value = callable_obj()
+            return {"reachable": True, **value}
+        except Exception as exc:
+            return {
+                "reachable": False,
+                "error_type": type(exc).__name__,
+            }
+
+    def snapshot(self) -> dict[str, Any]:
+        git_state = self._probe(self.local_git)
+        return {
+            "local_git": git_state,
+            "runtime": self._probe(self._runtime_health),
+            "active_engineering": self._probe(self._runtime_active_count),
+            "router": self._probe(self._router_health),
+            "executor": self._probe(self._executor_health),
+            "antigravity": self._probe(self._antigravity_health),
+            "n8n": self._probe(self._n8n_health),
+            "credential_boundary": self._probe(self._credential_boundary),
+        }
+
+    @staticmethod
+    def _require_quiescent(snapshot: dict[str, Any]) -> None:
+        active = snapshot["active_engineering"]
+        executor = snapshot["executor"]
+        antigravity = snapshot["antigravity"]
+        if not active.get("reachable"):
+            raise RuntimeError("Runtime active-work state is unavailable")
+        if active.get("active_engineering_jobs") != 0:
+            raise RuntimeError("Runtime has active engineering work")
+        if not executor.get("reachable") or executor.get("active_jobs") != 0:
+            raise RuntimeError("DDEV executor is not provably idle")
+        if (
+            not antigravity.get("reachable")
+            or antigravity.get("active_runs") != 0
+            or antigravity.get("pending_cancellations") != 0
+        ):
+            raise RuntimeError("Antigravity bridge is not provably idle")
+
+    def _checkout_head(self) -> str:
+        return _run(
+            ["git", "-C", str(self.checkout), "rev-parse", "HEAD"],
+            timeout=20,
+        ).stdout.strip()
+
+    def _target_versions(self) -> dict[str, str]:
+        return {
+            "runtime": _version_from_source(
+                self.checkout / "services/runtime/app/main.py",
+                "RUNTIME_VERSION",
+            ),
+            "executor": _version_from_source(
+                self.checkout / "services/ddev-executor/app/main.py",
+                "DDEV_EXECUTOR_VERSION",
+            ),
+        }
+
+    def rollout(self, expected_sha: str, github_head: str) -> dict[str, Any]:
+        if expected_sha != github_head:
+            raise RuntimeError("Guardian rollout SHA is stale against GitHub main")
+        if self._checkout_head() != expected_sha:
+            raise RuntimeError("Guardian workflow checkout is not exact expected main")
+
+        pre = self.snapshot()
+        self._require_quiescent(pre)
+        local = pre["local_git"]
+        if not local.get("reachable"):
+            raise RuntimeError("Local PCP git state is unavailable")
+        if local.get("branch") != self.config["default_branch"]:
+            raise RuntimeError("Local PCP is not on configured main branch")
+        if local.get("clean") is not True:
+            raise RuntimeError("Local PCP worktree is dirty")
+
+        old_head = str(local.get("head") or "")
+        _run(
+            [
+                "git",
+                "-C",
+                str(self.root),
+                "fetch",
+                "--no-tags",
+                "origin",
+                f"+refs/heads/{self.config['default_branch']}:"
+                f"refs/remotes/origin/{self.config['default_branch']}",
+            ],
+            timeout=180,
+            env={"GIT_TERMINAL_PROMPT": "0"},
+        )
+        remote_head = self._git(
+            "rev-parse",
+            f"refs/remotes/origin/{self.config['default_branch']}",
+        )
+        if remote_head != expected_sha:
+            raise RuntimeError("Fetched origin/main does not match expected SHA")
+        ancestry = _run(
+            [
+                "git",
+                "-C",
+                str(self.root),
+                "merge-base",
+                "--is-ancestor",
+                old_head,
+                expected_sha,
+            ],
+            check=False,
+        )
+        if ancestry.returncode != 0:
+            raise RuntimeError("Local PCP main cannot fast-forward to expected SHA")
+
+        if old_head != expected_sha:
+            _run(
+                [
+                    "git",
+                    "-C",
+                    str(self.root),
+                    "merge",
+                    "--ff-only",
+                    expected_sha,
+                ],
+                timeout=60,
+            )
+        updated = self.local_git()
+        if updated["head"] != expected_sha or updated["clean"] is not True:
+            raise RuntimeError("Local PCP ff-only postcondition failed")
+
+        target = self._target_versions()
+        _run(["ddev", "restart", "-y"], cwd=self.root, timeout=900)
+
+        post: dict[str, Any] | None = None
+        for _ in range(45):
+            post = self.snapshot()
+            runtime = post["runtime"]
+            executor = post["executor"]
+            antigravity = post["antigravity"]
+            if (
+                runtime.get("reachable")
+                and executor.get("reachable")
+                and antigravity.get("reachable")
+            ):
+                break
+            time.sleep(2)
+        assert post is not None
+
+        self._require_quiescent(post)
+        if post["runtime"].get("status") != "ok":
+            raise RuntimeError("Runtime is not healthy after rollout")
+        if post["runtime"].get("version") != target["runtime"]:
+            raise RuntimeError("Runtime version does not match target source")
+        if post["executor"].get("status") != "ok":
+            raise RuntimeError("DDEV executor is not healthy after rollout")
+        if post["executor"].get("version") != target["executor"]:
+            raise RuntimeError("DDEV executor version does not match target source")
+        if post["router"].get("reachable") is not True:
+            raise RuntimeError("Router is unavailable after rollout")
+        if post["n8n"].get("reachable") is not True or post["n8n"].get("ok") is not True:
+            raise RuntimeError("n8n is unavailable after rollout")
+        if (
+            post["credential_boundary"].get("reachable") is not True
+            or post["credential_boundary"].get("ok") is not True
+        ):
+            raise RuntimeError("Credential boundary check failed after rollout")
+        if post["local_git"].get("head") != expected_sha:
+            raise RuntimeError("Local PCP HEAD drifted after rollout")
+
+        return {
+            "status": "executed",
+            "expected_main_sha": expected_sha,
+            "old_head": old_head,
+            "new_head": expected_sha,
+            "target_versions": target,
+            "pre": pre,
+            "post": post,
+        }
+
+
+def execute_action(
+    command: dict[str, Any],
+    *,
+    config: dict[str, Any],
+    github: GitHubClient,
+    host: GuardianHost,
+) -> dict[str, Any]:
+    github_head = github.default_head(config["default_branch"])
+    if command["action"] == "status_snapshot":
+        return {
+            "status": "executed",
+            "action": "status_snapshot",
+            "github_main": github_head,
+            "snapshot": host.snapshot(),
+        }
+    if command["action"] == "rollout_pcp_exact_main":
+        return {
+            "action": "rollout_pcp_exact_main",
+            **host.rollout(str(command["expected_main_sha"]), github_head),
+        }
+    raise RuntimeError("Unsupported Guardian action")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--event", required=True)
+    parser.add_argument("--config", required=True)
+    args = parser.parse_args()
+
+    config = load_config(Path(args.config).resolve())
+    event = load_event(Path(args.event).resolve())
+    command = parse_command(event, config)
+    token = os.getenv("GITHUB_TOKEN", "").strip()
+    github = GitHubClient(token, config["repository"])
+    checkout = Path(os.getenv("GITHUB_WORKSPACE", os.getcwd())).resolve()
+    host = GuardianHost(config, checkout)
+    state_dir = Path(config["state_dir"])
+
+    with AuditStore(state_dir) as audit:
+        fresh, row = audit.claim(command)
+        if not fresh:
+            if row.get("status") == "dispatching":
+                replay = {
+                    "status": "uncertain",
+                    "action": row.get("action"),
+                    "comment_id": command["comment_id"],
+                    "message": (
+                        "Prior Guardian invocation did not reach terminal audit; "
+                        "mutation is not replayed."
+                    ),
+                }
+                github.upsert_result(
+                    issue_number=config["control_issue_number"],
+                    comment_id=command["comment_id"],
+                    result=replay,
+                )
+                return 20
+            stored = row.get("result")
+            if not isinstance(stored, dict):
+                stored = {
+                    "status": str(row.get("status") or "unknown"),
+                    "action": row.get("action"),
+                    "comment_id": command["comment_id"],
+                }
+            github.upsert_result(
+                issue_number=config["control_issue_number"],
+                comment_id=command["comment_id"],
+                result=stored,
+            )
+            return 0 if row.get("status") == "executed" else 20
+
+        try:
+            result = execute_action(
+                command,
+                config=config,
+                github=github,
+                host=host,
+            )
+        except Exception as exc:
+            result = {
+                "status": "failed",
+                "action": command["action"],
+                "comment_id": command["comment_id"],
+                "error_type": type(exc).__name__,
+                "message": _bounded(str(exc), 500),
+            }
+            terminal = "failed"
+        else:
+            result["comment_id"] = command["comment_id"]
+            terminal = "executed"
+
+        audit.finish(command, status=terminal, result=result)
+        github.upsert_result(
+            issue_number=config["control_issue_number"],
+            comment_id=command["comment_id"],
+            result=result,
+        )
+        return 0 if terminal == "executed" else 20
+
+
+if __name__ == "__main__":
+    sys.exit(main())
