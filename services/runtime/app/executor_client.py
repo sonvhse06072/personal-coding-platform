@@ -57,6 +57,34 @@ class DdevExecutorClient:
             response.raise_for_status()
             return response.json()
 
+    async def upsert_managed_comment(
+        self,
+        *,
+        project_id: str,
+        issue_number: int,
+        channel: str,
+        identity: str,
+        handoff_key: str,
+        body: str,
+        known_comment_id: int | None = None,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=120) as client:
+            response = await client.post(
+                f"{self.base}/v1/github/pm-bridge/managed-comment",
+                headers=self.headers,
+                json={
+                    "project_id": project_id,
+                    "issue_number": issue_number,
+                    "channel": channel,
+                    "identity": identity,
+                    "handoff_key": handoff_key,
+                    "body": body,
+                    "known_comment_id": known_comment_id,
+                },
+            )
+            _raise_for_status_with_detail(response)
+            return response.json()
+
     async def cancel(self, *, job_id: str) -> bool:
         try:
             async with httpx.AsyncClient(timeout=5) as client:
