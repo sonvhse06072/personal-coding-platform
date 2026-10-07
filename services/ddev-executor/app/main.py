@@ -1301,6 +1301,33 @@ app = FastAPI(title="Constrained DDEV/Git Executor", version=DDEV_EXECUTOR_VERSI
 app.include_router(pm_bridge_github_router)
 
 
+@app.get("/v1/project-state", dependencies=[Depends(auth)])
+def project_state(
+    project_id: str = Query(..., min_length=1, max_length=200),
+) -> dict[str, Any]:
+    cfg = project(project_id)
+    repo = _configured_project_path(cfg)
+    branch = git(repo, "branch", "--show-current", check=False)
+    head = git(repo, "rev-parse", "HEAD")
+    porcelain = git(repo, "status", "--porcelain", check=False)
+    base_branch = str(cfg.get("base_branch") or "main")
+    origin_base = git(
+        repo,
+        "rev-parse",
+        f"refs/remotes/origin/{base_branch}",
+        check=False,
+    )
+    return {
+        "project_id": project_id,
+        "workspace_mode": _workspace_mode(cfg),
+        "branch": branch or None,
+        "head": head,
+        "clean": not bool(porcelain.strip()),
+        "base_branch": base_branch,
+        "origin_base_head": origin_base or None,
+    }
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     result = subprocess.run(["ddev", "version"], text=True, capture_output=True)
