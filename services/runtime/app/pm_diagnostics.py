@@ -34,6 +34,8 @@ def _job_summary(job: dict[str, Any]) -> dict[str, Any]:
     checkpoint = dict(job.get("checkpoint") or {})
     baseline = dict(checkpoint.get("project_baseline") or {})
     progress = dict(job.get("progress") or {})
+    pending_decision = dict(checkpoint.get("pending_decision") or {})
+    decision = dict(pending_decision.get("decision") or {})
 
     return {
         "id": job.get("id"),
@@ -58,6 +60,24 @@ def _job_summary(job: dict[str, Any]) -> dict[str, Any]:
         "pr_head_ref": pr.get("head_ref"),
         "ci_state": ci.get("state"),
         "ci_commit": ci.get("commit"),
+        "pending_decision": (
+            {
+                "key": pending_decision.get("key"),
+                "source": pending_decision.get("source"),
+                "triggers": _bounded_list(
+                    decision.get("triggers"),
+                    limit=12,
+                    item_limit=120,
+                ),
+                "reason": (
+                    _text(decision.get("reason"), 600)
+                    if decision.get("reason")
+                    else None
+                ),
+            }
+            if pending_decision
+            else None
+        ),
         "progress": {
             key: progress.get(key)
             for key in (
@@ -216,25 +236,46 @@ class PMDiagnosticsService:
         if "attention" in collectors:
             if job is None:
                 raise RuntimeError("attention collector requires job_id")
-            if str(job.get("status") or "") in {"blocked", "interrupted"}:
+            checkpoint = dict(job.get("checkpoint") or {})
+            intake = dict(checkpoint.get("canonical_intake") or {})
+            canonical_direct = (
+                intake.get("mode") == "direct"
+                and intake.get("bounded_direct") is True
+            )
+            if (
+                canonical_direct
+                and str(job.get("status") or "") in {"blocked", "interrupted"}
+            ):
                 try:
-                    sections["attention"] = self.controls.standalone_remote_actions(
-                        str(job["id"])
+                    sections["attention"] = (
+                        self.controls.standalone_remote_actions(
+                            str(job["id"])
+                        )
                     )
                 except RuntimeError:
                     sections["attention"] = {
                         "job_id": job.get("id"),
                         "status": job.get("status"),
-                        "available_actions": [],
+                        "generation": None,
+                        "actions": [],
                         "note": (
                             "No standalone routine recovery action is currently available."
                         ),
                     }
+            elif not canonical_direct:
+                actions = self.controls.remote_pending_actions(
+                    str(job["id"])
+                )
+                sections["attention"] = {
+                    **actions,
+                    "status": job.get("status"),
+                }
             else:
                 sections["attention"] = {
                     "job_id": job.get("id"),
                     "status": job.get("status"),
-                    "available_actions": [],
+                    "generation": None,
+                    "actions": [],
                 }
 
         if "collaboration" in collectors:
