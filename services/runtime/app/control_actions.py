@@ -1254,8 +1254,12 @@ class ControlActionService:
                 str(streak.get("diff_hash") or "") != diff_hash
                 or streak_limit < 1
             ):
+                if requested_bypass:
+                    raise RuntimeError(
+                        "Blocked repair emergency telemetry requires exact current-diff failure evidence"
+                    )
                 raise RuntimeError(
-                    "Blocked repair emergency telemetry requires exact current-diff failure evidence"
+                    "Blocked repair emergency telemetry requires one fresh current-diff failure"
                 )
 
             current_gates: set[str] = set(emergency_dimensions)
