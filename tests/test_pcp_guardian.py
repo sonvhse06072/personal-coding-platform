@@ -392,20 +392,37 @@ def test_post_rollout_ready_requires_health_versions_and_mobile_control_plane():
 def test_guardian_token_is_scrubbed_from_subprocesses_by_default(
     monkeypatch,
 ):
-    monkeypatch.setenv("GITHUB_TOKEN", "super-secret-token")
-    probe = (
-        "import os; "
-        "print(os.environ.get('GITHUB_TOKEN', ''))"
-    )
+    secret_keys = {
+        "GITHUB_TOKEN": "github-secret",
+        "GH_TOKEN": "gh-secret",
+        "ACTIONS_RUNTIME_TOKEN": "runtime-secret",
+        "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "oidc-secret",
+        "ACTIONS_ID_TOKEN_REQUEST_URL": "https://token.example/request",
+    }
+    for key, value in secret_keys.items():
+        monkeypatch.setenv(key, value)
 
+    probe = (
+        "import json, os; "
+        "print(json.dumps({k: os.environ.get(k) for k in "
+        + repr(sorted(secret_keys))
+        + "}))"
+    )
     default = guardian._run([guardian.sys.executable, "-c", probe])
-    assert default.stdout.strip() == ""
+    observed = json.loads(default.stdout)
+    assert all(value is None for value in observed.values())
 
     scoped = guardian._run(
         [guardian.sys.executable, "-c", probe],
         env={"GITHUB_TOKEN": "scoped-token"},
     )
-    assert scoped.stdout.strip() == "scoped-token"
+    observed = json.loads(scoped.stdout)
+    assert observed["GITHUB_TOKEN"] == "scoped-token"
+    assert all(
+        value is None
+        for key, value in observed.items()
+        if key != "GITHUB_TOKEN"
+    )
 
 
 def test_git_fetch_askpass_contains_no_secret_and_is_private(
