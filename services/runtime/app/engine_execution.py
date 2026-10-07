@@ -279,7 +279,11 @@ class RuntimeEngine(RuntimeEngineCore):
                 ):
                     raise RuntimeError("Persisted direct workspace is missing its exact active project lease")
             else:
-                lease = self.storage.acquire_project_lease(str(job["project_id"]), job_id)
+                async with self.project_operation_lock(str(job["project_id"])):
+                    lease = self.storage.acquire_project_lease(
+                        str(job["project_id"]),
+                        job_id,
+                    )
                 try:
                     await ProjectPreviewManager(
                         self.storage,
