@@ -255,6 +255,25 @@ class PMControlDispatcher:
                 },
             )
 
+        if action == "repair_blocked_job":
+            self._job(envelope)
+            row = await self.controls.request_standalone_blocked_repair(
+                str(envelope.job_id),
+                expected_generation=str(envelope.blocker_generation),
+                finding=str(envelope.finding),
+                references=list(envelope.references),
+            )
+            return (
+                "executed",
+                {
+                    "status": "executed",
+                    "action": action,
+                    "job_id": row.get("id"),
+                    "job_status": row.get("status"),
+                    "blocker_generation": envelope.blocker_generation,
+                },
+            )
+
         if action in {"recheck_blocker", "resume_same_job"}:
             self._job(envelope)
             allowed = (
