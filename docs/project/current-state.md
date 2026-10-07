@@ -4,8 +4,8 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 fresh Runtime/GitHub evidence remain authoritative over chat history. This file
 is an index, not authority to change the approved baseline or protected scope.
 
-Last updated: 2026-10-07 after live GitHub reconciliation of remote PM control
-issues #512/#513 and natural Chợ Nhạc #77 dogfood evidence.
+Last updated: 2026-10-07 after Runtime 1.0.125 rollout, standalone Telegram
+attention repair #543, and fresh Chợ Nhạc #77 blocker reconciliation.
 
 ## Resume order
 
@@ -17,47 +17,79 @@ issues #512/#513 and natural Chợ Nhạc #77 dogfood evidence.
 Memory-tier policy: `context-memory-architecture.md`.
 
 
-## Remote PM control reconciliation — 2026-10-07
+## Remote PM control and standalone-attention state — 2026-10-07
 
-GitHub live state is authoritative for this section.
+GitHub/Guardian live evidence is authoritative for this section.
 
-- GitHub PCP `main` is
-  `a9766d423ee5d75296e48dacc7caf947ed4db6fd` (merged PR #540).
-- The latest Runtime rollout proven live by the accepted same-job repair dogfood is
-  Runtime `1.0.123` at PCP source
-  `f11bde43bd572074c062b7111d4573d4a6aea2fb`. PR #540 targets Runtime
-  `1.0.124`, but its rollout/live #77 second-repair acceptance is not proven and
-  must not be inferred from the GitHub merge.
+- GitHub PCP `main` and local clean `main` are exactly
+  `672f0f123653b02a689837e435a244926bea6052` (merged PR #544).
+- Runtime `1.0.125` is live; ddev-executor `1.0.33`, Router `1.0.31`,
+  n8n, credential boundary and Antigravity `1.13` are healthy.
+- The #543 rollout pre/post snapshots proved active engineering jobs,
+  executor active jobs and Antigravity active runs remained `0 / 0 / 0`.
+- #543 / PR #544 fixes the historical #70/#71 acceptance gap where blocked
+  GitHub-bound standalone jobs published a managed GitHub status but never
+  materialized owner attention into the durable notification outbox consumed
+  by Telegram.
+  - standalone `blocked` now emits one sanitized
+    `standalone_job_blocked` generation into the existing outbox;
+  - exact blocker generation is used for dedupe when available;
+  - changed generations supersede pending/delivering older rows;
+  - leaving blocked state supersedes pending standalone attention;
+  - Telegram/outbox failure remains observability-only and cannot mutate job
+    execution or block GitHub status publication;
+  - no new Telegram callback/recovery authority was added. Existing standalone
+    PM recovery remains GitHub-bound.
+- PR #544 accepted head:
+  `5eb15314d084e0410e0dc9f98fcef2af82ce6c95`; exact-head CI #1052 was
+  4/4 PASS. Merge commit `672f0f123653b02a689837e435a244926bea6052`;
+  post-merge CI #1053 was also 4/4 PASS.
+- Actual handset receipt of a Telegram message is not exposed through the
+  GitHub/Guardian evidence path. Source/tests/outbox materialization and live
+  Runtime rollout are proven; do not invent a device-delivery claim.
+- #539 is closed completed. Runtime 1.0.124 live-proved the one-time
+  progress-qualified adaptive-emergency `repair_blocked_job` window on the
+  preserved Chợ Nhạc #77 job without replacement job, counter/provider reset,
+  budget extension or supervised generation release.
+- Chợ Nhạc #77 remains the same standalone durable job
+  `92abc7a33bd5438fbb6c2815e9ee3b33`, source
+  `5b36f8eab96ca0b0fdfa705e68399ef5f1c2614b`, branch
+  `ai/92abc7a33bd5`. Fresh diagnostic `6034628094` records:
+  - status/reason `blocked / reassessment_stopped`;
+  - blocker generation
+    `68bf27bd8673f6d4ac01b0bbc18df653f5635d12ecf334fa9da5dd0c81c113eb`;
+  - current diff
+    `b5ddaf49ec85dafb5b839b7e206e926be57d6cb0344dd5610864064344754fed`;
+  - `targeted_tests` FAIL and `static_analysis` PASS;
+  - deterministic failure streak 1/2 with a changed failure signature;
+  - no pending Human decision and `unexpected_scope=false`;
+  - no PR/delivery yet;
+  - supervised generation 4 remains held.
+- Do not issue a third blind repair for #77. The one-time #539 emergency window
+  has been consumed. Read new evidence and assess the existing policy/contract
+  before authorizing any further recovery.
 - RCTL-MVP source work is implemented and merged: #514 / RCTL-01, #515 /
-  RCTL-02, and #516 / RCTL-03. #515 child bookkeeping #518/#519/#520 is
-  reconciled closed because merged PR #521 already contains those capabilities.
-- #526 / PR #527 is reconciled closed after live #77 diagnostics proved bounded
-  deterministic failing-phase/streak evidence without raw stdout/stderr, command
-  strings, failure messages, or filesystem paths.
-- Draft PR #535 is closed without merge as stale/superseded by #536 / merged PR
-  #537, whose Guardian audit-identity and Runtime transport repair is live-proven.
-- #541 is closed not-planned: per-command verification evidence is optional
-  hardening, not a remaining #513 acceptance requirement.
-- #539 remains open but is explicitly **non-gating for #513**. Its one-time
-  adaptive-emergency repair allowance is already merged in PR #540; do not force
-  a rollout or another Chợ Nhạc #77 repair merely to close it.
-- #524 remains intentionally open as the persistent Guardian control/audit issue.
-- #513 remains open for **live acceptance only**, not new implementation. Natural
-  #77 dogfood has already proven remote observe -> sanitized diagnose -> bounded
-  same-job repair with preserved durable job/source/branch/workspace/counters.
-  Remaining proof is:
+  RCTL-02, and #516 / RCTL-03. Historical child bookkeeping
+  #518/#519/#520/#526 and stale PR #535 are reconciled closed; #541 is
+  closed not-planned.
+- #513 remains open for live acceptance only. Natural #77 dogfood has proven
+  remote observe -> sanitized diagnose -> bounded same-job recovery. Remaining
+  proof is:
   1. one natural eligible standalone delivery through `merge_standalone_job`
      with exact PR/head/CI and post-merge confirmation;
   2. one naturally authorized supervised hold through
      `continue_supervised_plan` with exact generation/checkpoint/continuation
      identity.
-- Next smallest WorkOrder is `RCTL-MVP-ACCEPT-01`: acceptance-only, zero PCP
-  source changes by default. Use natural eligible checkpoints; do not create a
-  replacement job, reset counters/providers, release Chợ Nhạc supervised
-  generation 4 merely to exercise an API, or open another PCP repair issue from
-  #77 unless an existing #513 acceptance capability itself is proven defective.
-- Close #513 only after both remaining live proofs. Reassess #512 / remaining
-  Guardian work only after that parent acceptance.
+- #524 remains intentionally open as the persistent Guardian control/audit
+  issue. #493 remains a real non-blocking cold/quiesced DDEV startup hardening
+  issue: current source still retains the fallback bounded `ddev start -y`
+  path; the direct-workspace reuse repair does not eliminate that residual.
+- Current open PCP engineering/parent tree is therefore #493, #512 and #513;
+  #524 is persistent operations/audit. There are no open PRs after #544.
+- Next #513 behavior remains acceptance-driven, not feature-driven: use natural
+  eligible checkpoints, do not create replacement jobs, reset counters/providers,
+  or release Chợ Nhạc generation 4 merely to exercise an API. Reassess #512
+  after #513 acceptance.
 
 The older execution sections below remain historical evidence for their named
 incidents. Re-read live GitHub, Runtime, local Git and active-job state before any
