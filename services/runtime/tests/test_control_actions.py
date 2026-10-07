@@ -1729,6 +1729,14 @@ def test_remote_blocked_repair_allows_progress_proven_adaptive_emergency_telemet
         after["result"]["previous_block"]["diff_hash"]
         == before["result"]["diff"]["diff_hash"]
     )
+    marker = after["checkpoint"]["remote_adaptive_emergency_repair"]
+    assert marker["blocker_generation"] == generation
+    assert marker["prior_diff_hash"] == (
+        before["checkpoint"]["failure_context"]["diff_hash"]
+    )
+    assert marker["current_diff_hash"] == before["result"]["diff"]["diff_hash"]
+    assert marker["dimensions"] == ["max_repair_iterations"]
+    assert marker["recorded_at"]
 
 
 @pytest.mark.parametrize(
@@ -1745,6 +1753,18 @@ def test_remote_blocked_repair_allows_progress_proven_adaptive_emergency_telemet
                 "budget_emergency_threshold_reached:max_changed_files"
             ),
             "unsupported emergency telemetry dimension",
+        ),
+        (
+            lambda job: job["checkpoint"].update(
+                remote_adaptive_emergency_repair={
+                    "blocker_generation": "old-generation",
+                    "prior_diff_hash": "a" * 64,
+                    "current_diff_hash": "b" * 64,
+                    "dimensions": ["max_repair_iterations"],
+                    "recorded_at": "2026-10-07T00:00:00+00:00",
+                }
+            ),
+            "emergency repair window was already used",
         ),
         (
             lambda job: job["checkpoint"]["failure_context"].update(
@@ -1796,3 +1816,96 @@ def test_remote_blocked_repair_rejects_unproven_adaptive_emergency_telemetry(
 
     assert engine.enqueued == []
     assert storage.get("job-1")["status"] == "blocked"
+
+
+@pytest.mark.parametrize(
+    "dimension",
+    ["max_input_tokens", "max_output_tokens"],
+)
+def test_remote_blocked_repair_allows_token_emergency_only_on_progress_proven_adaptive_route(
+    dimension,
+):
+    job = adaptive_emergency_repair_job()
+    job["result"]["reassess"]["signals"] = [
+        signal
+        for signal in job["result"]["reassess"]["signals"]
+        if not signal.startswith("budget_emergency_threshold_reached:")
+    ] + [f"budget_emergency_threshold_reached:{dimension}"]
+    controls, storage, engine = blocked_repair_service(job)
+    advisory = controls.blocked_advisory({}, job)
+    generation = controls.standalone_attention_generation_fingerprint(
+        job,
+        advisory,
+    )
+
+    result = asyncio.run(
+        controls.request_standalone_blocked_repair(
+            "job-1",
+            expected_generation=generation,
+            finding="Repair only the fresh targeted test failure.",
+        )
+    )
+
+    assert result["status"] == "queued"
+    assert engine.enqueued == ["job-1"]
+    assert storage.get("job-1")["checkpoint"][
+        "remote_adaptive_emergency_repair"
+    ]["dimensions"] == [dimension]
+
+
+def test_remote_blocked_repair_emergency_window_is_consumed_once():
+    job = adaptive_emergency_repair_job()
+    controls, storage, engine = blocked_repair_service(job)
+    advisory = controls.blocked_advisory({}, job)
+    generation = controls.standalone_attention_generation_fingerprint(
+        job,
+        advisory,
+    )
+
+    asyncio.run(
+        controls.request_standalone_blocked_repair(
+            "job-1",
+            expected_generation=generation,
+            finding="Use the one allowed adaptive emergency repair turn.",
+        )
+    )
+    assert engine.enqueued == ["job-1"]
+
+    reblocked = storage.get("job-1")
+    reblocked["status"] = "blocked"
+    reblocked["result"] = deepcopy(job["result"])
+    reblocked["result"]["diff"]["diff_hash"] = "e" * 64
+    reblocked["result"]["reassess"]["signals"] = list(
+        job["result"]["reassess"]["signals"]
+    )
+    reblocked["checkpoint"]["failure_context"] = {
+        "version": 1,
+        "kind": "semantic_repair",
+        "source": "pm_reassessment",
+        "message": "second repair context",
+        "diff_hash": job["result"]["diff"]["diff_hash"],
+    }
+    reblocked["checkpoint"]["deterministic_verification_failure_streak"] = {
+        "count": 1,
+        "limit": 2,
+        "verification_attempt": 12,
+        "signature": "fresh-signature",
+        "diff_hash": "e" * 64,
+        "failing_phases": ["targeted_tests"],
+    }
+    storage.jobs["job-1"] = deepcopy(reblocked)
+
+    advisory = controls.blocked_advisory({}, reblocked)
+    second_generation = controls.standalone_attention_generation_fingerprint(
+        reblocked,
+        advisory,
+    )
+    with pytest.raises(RuntimeError, match="emergency repair window was already used"):
+        asyncio.run(
+            controls.request_standalone_blocked_repair(
+                "job-1",
+                expected_generation=second_generation,
+                finding="This second emergency repair must not run.",
+            )
+        )
+    assert engine.enqueued == ["job-1"]
