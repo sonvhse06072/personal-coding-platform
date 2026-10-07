@@ -823,6 +823,106 @@ class ControlActionService:
             row = conn.execute("SELECT * FROM cp_control_actions WHERE action_id=%s", (action_id,)).fetchone()
             return dict(row) if row else None
 
+    def remote_pending_actions(
+        self,
+        job_id: str,
+    ) -> dict[str, Any]:
+        """Return exact-current routine controls for one orchestrated job.
+
+        This is a read-only projection. It never creates/rearms an action and it
+        refuses to choose between multiple current generations.
+        """
+        job_id = str(job_id or "").strip()
+        if not job_id:
+            raise RuntimeError("Remote pending action lookup requires job_id")
+        self.ensure()
+        timestamp = now()
+        with self.storage.connect() as conn:
+            rows = list(
+                conn.execute(
+                    """SELECT * FROM cp_control_actions
+                    WHERE job_id=%s
+                      AND status='pending'
+                      AND expires_at>%s
+                    ORDER BY created_at DESC, action_id""",
+                    (job_id, timestamp),
+                ).fetchall()
+            )
+
+        eligible: list[dict[str, Any]] = []
+        generations: set[str] = set()
+        for raw in rows:
+            action = dict(raw)
+            action_type = str(action.get("action_type") or "")
+            if action_type not in _REMOTE_ROUTINE_ACTION_TYPES:
+                continue
+            try:
+                plan, work_order, job = self._current_context(action)
+            except RuntimeError:
+                continue
+            if job is None or str(job.get("id") or "") != job_id:
+                continue
+            if str(work_order.get("lifecycle") or "active") != "active":
+                continue
+            current_fingerprint = self.state_fingerprint(
+                plan,
+                work_order,
+                job,
+            )
+            if not secrets.compare_digest(
+                current_fingerprint,
+                str(action.get("state_fingerprint") or ""),
+            ):
+                continue
+            generation = str(action.get("generation_fingerprint") or "")
+            if not generation:
+                continue
+            generations.add(generation)
+            eligible.append(action)
+
+        if len(generations) > 1:
+            raise RuntimeError(
+                "Multiple exact-current remote control generations are pending"
+            )
+        if not eligible:
+            return {
+                "job_id": job_id,
+                "generation": None,
+                "plan_id": None,
+                "work_order_id": None,
+                "actions": [],
+            }
+
+        generation = next(iter(generations))
+        plan_ids = {str(item.get("plan_id") or "") for item in eligible}
+        work_order_ids = {
+            str(item.get("work_order_id") or "")
+            for item in eligible
+        }
+        if len(plan_ids) != 1 or len(work_order_ids) != 1:
+            raise RuntimeError(
+                "Exact-current remote controls have inconsistent orchestration identity"
+            )
+        return {
+            "job_id": job_id,
+            "plan_id": next(iter(plan_ids)),
+            "work_order_id": next(iter(work_order_ids)),
+            "generation": generation,
+            "actions": [
+                {
+                    "control_action_id": str(item["action_id"]),
+                    "action_type": str(item["action_type"]),
+                }
+                for item in sorted(
+                    eligible,
+                    key=lambda item: (
+                        str(item.get("action_type") or ""),
+                        str(item.get("action_id") or ""),
+                    ),
+                )
+            ],
+        }
+
     @staticmethod
     def _expected_owner_identity() -> tuple[str, str]:
         return (
