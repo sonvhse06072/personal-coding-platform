@@ -1578,11 +1578,11 @@ def test_remote_blocked_repair_rejects_stale_or_protected_boundaries(
     mutate(job)
     controls, storage, engine = blocked_repair_service(job)
 
-    if job["status"] == "blocked":
-        view = controls.standalone_remote_actions("job-1")
-        generation = view["generation"]
-    else:
-        generation = "0" * 64
+    advisory = controls.blocked_advisory({}, job)
+    generation = controls.standalone_attention_generation_fingerprint(
+        job,
+        advisory,
+    )
 
     with pytest.raises(RuntimeError, match=match):
         asyncio.run(
