@@ -1425,9 +1425,14 @@ class RuntimeEngine(RuntimeEngineCore):
             if progress["required_checks_passed"]:
                 effective_route = self._effective_route(route, executor_choice)
                 while True:
+                    reassess_progress = self._progress_for_reassessment(
+                        job_id=job_id,
+                        checkpoint=checkpoint,
+                        progress=progress,
+                    )
                     reassess = await self.router.reassess({
                         "route": effective_route,
-                        "progress": progress,
+                        "progress": reassess_progress,
                         "provider_state": provider_state,
                     })
                     action = reassess["action"]
@@ -1590,10 +1595,14 @@ class RuntimeEngine(RuntimeEngineCore):
             self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
 
             effective_route = self._effective_route(route, executor_choice)
-            reassess_progress = progress
+            reassess_progress = self._progress_for_reassessment(
+                job_id=job_id,
+                checkpoint=checkpoint,
+                progress=progress,
+            )
             if not verification["passed"] and progress.get("important_decision_flags"):
                 reassess_progress = {
-                    **progress,
+                    **reassess_progress,
                     "important_decision_flags": [],
                 }
             reassess = await self.router.reassess({
