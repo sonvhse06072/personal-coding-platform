@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "repository": "sonvhse06072/personal-coding-platform",
+  "allowed_actor": "sonvhse06072",
+  "control_issue_number": 524,
+  "default_branch": "main",
+  "pcp_root": "/home/sonvh/personal-coding-platform-v1",
+  "marker": "<!-- coding-platform:pcp-guardian:v1 -->",
+  "max_comment_bytes": 16384,
+  "state_dir": "~/.coding-platform/guardian"
+}

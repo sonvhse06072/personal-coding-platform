@@ -1,0 +1,25 @@
+name: guardian-static
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/pcp_guardian.py'
+      - 'config/guardian.json'
+      - '.github/workflows/pcp-guardian.yml'
+      - '.github/workflows/guardian-static.yml'
+      - 'tests/test_pcp_guardian.py'
+
+permissions:
+  contents: read
+
+jobs:
+  guardian-static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: python -m pip install 'pytest>=8,<9'
+      - run: python -m pytest -q -p no:cacheprovider tests/test_pcp_guardian.py
