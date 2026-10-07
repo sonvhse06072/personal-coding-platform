@@ -762,6 +762,7 @@ class RuntimeEngine(_RuntimeEngine):
         self, payload: dict[str, Any], *,
         _orchestration: tuple[str, str] | None = None,
         _intake_decision: IntakeDecision | None = None,
+        _remote_binding: dict[str, Any] | None = None,
     ) -> str:
         """Create one job with its governing baseline/contract in the same write.
 
@@ -835,6 +836,35 @@ class RuntimeEngine(_RuntimeEngine):
             checkpoint["canonical_intake"] = {
                 **_intake_decision.model_dump(mode="json"),
                 "baseline_revision": baseline.revision,
+            }
+
+        if _remote_binding is not None:
+            if _intake_decision is None:
+                raise ValueError("Remote binding requires canonical intake")
+            binding = dict(_remote_binding)
+            allowed = {"transport", "repository", "issue_number", "control_comment_id"}
+            if set(binding) != allowed:
+                raise ValueError("Remote binding fields are not exact")
+            if binding.get("transport") != "github_pm_control":
+                raise ValueError("Unsupported remote binding transport")
+            repository = str(binding.get("repository") or "")
+            issue_number = binding.get("issue_number")
+            control_comment_id = binding.get("control_comment_id")
+            if (
+                not repository
+                or "/" not in repository
+                or len(repository) > 300
+                or type(issue_number) is not int
+                or issue_number <= 0
+                or type(control_comment_id) is not int
+                or control_comment_id <= 0
+            ):
+                raise ValueError("Invalid remote GitHub binding")
+            checkpoint["github_pm_binding"] = {
+                "transport": "github_pm_control",
+                "repository": repository,
+                "issue_number": issue_number,
+                "control_comment_id": control_comment_id,
             }
 
         self.storage.create({
