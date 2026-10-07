@@ -4,6 +4,7 @@ from typing import Any
 
 from .config import project_config
 from .pm_control import PMControlEnvelope
+from .pm_diagnostics import PMDiagnosticsService
 from .pm_merge import evaluate_standalone_pm_merge
 
 
@@ -23,6 +24,7 @@ class PMControlDispatcher:
         self.engine = engine
         self.orchestrator = orchestrator
         self.controls = orchestrator.controls
+        self.diagnostics = PMDiagnosticsService(storage, engine, orchestrator)
 
     def _job(self, envelope: PMControlEnvelope) -> dict[str, Any]:
         job_id = str(envelope.job_id or "")
@@ -53,13 +55,31 @@ class PMControlDispatcher:
     ) -> tuple[str, dict[str, Any]]:
         action = envelope.action
 
-        if action in {"request_diagnostics", "direct_intake"}:
+        if action == "request_diagnostics":
+            result = await self.diagnostics.collect_and_publish(
+                project_id=envelope.project_id,
+                issue_number=issue_number,
+                control_comment_id=comment_id,
+                job_id=envelope.job_id,
+                plan_id=envelope.plan_id,
+                collectors=list(envelope.diagnostic_collectors),
+            )
+            return (
+                "executed",
+                {
+                    "status": "executed",
+                    "action": action,
+                    **result,
+                },
+            )
+
+        if action == "direct_intake":
             return (
                 "unsupported_action_dispatch",
                 {
                     "status": "pending_future_slice",
                     "action": action,
-                    "message": "Action is parsed but not executable until RCTL-03.",
+                    "message": "Action is parsed but not executable until source-sync/direct-intake is implemented.",
                 },
             )
 
