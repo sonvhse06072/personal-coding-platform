@@ -27,6 +27,7 @@ from .review_repair_churn import (
     validate_epoch as validate_review_repair_churn_epoch,
 )
 from .router_client import RouterClient
+from .standalone_antiloop_epoch import effective_reassessment_progress
 from .state import (
     checkpoint_from_row,
     clear_transient_provider_failures,
@@ -703,6 +704,21 @@ class RuntimeEngineCore:
         updated = self.storage.get(job_id)
         assert updated is not None
         return updated
+
+    def _progress_for_reassessment(
+        self,
+        *,
+        job_id: str,
+        checkpoint: dict[str, Any],
+        progress: dict[str, Any],
+    ) -> dict[str, Any]:
+        effective, changed = effective_reassessment_progress(
+            checkpoint,
+            progress,
+        )
+        if changed:
+            self.storage.update(job_id, checkpoint=checkpoint)
+        return effective
 
     @staticmethod
     def _new_progress() -> dict[str, Any]:
