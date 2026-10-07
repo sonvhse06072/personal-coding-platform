@@ -32,7 +32,10 @@ _ALLOWED_ACTIONS = {
     "status_snapshot",
     "rollout_pcp_exact_main",
     "recover_antigravity_bridge",
+    "pm_bridge_snapshot",
+    "pm_bridge_poll_project_once",
 }
+_PM_BRIDGE_PROJECTS = frozenset({"chonhac"})
 _SUBPROCESS_SCRUB_ENV = frozenset({
     # Secrets/tokens must never leak into host or DDEV child processes.
     "GITHUB_TOKEN",
@@ -159,12 +162,23 @@ def parse_command(event: dict[str, Any], config: dict[str, Any]) -> dict[str, An
     expected_keys = {"schema_version", "action"}
     if action == "rollout_pcp_exact_main":
         expected_keys.add("expected_main_sha")
+    elif action == "pm_bridge_snapshot":
+        expected_keys.update({"project_id", "comment_id"})
+    elif action == "pm_bridge_poll_project_once":
+        expected_keys.add("project_id")
     if set(command) != expected_keys:
         raise ValueError("Guardian action fields are not exact")
     if action == "rollout_pcp_exact_main":
         sha = str(command.get("expected_main_sha") or "")
         if not _SHA40.fullmatch(sha):
             raise ValueError("Guardian rollout requires exact lowercase 40-hex SHA")
+    if action in {"pm_bridge_snapshot", "pm_bridge_poll_project_once"}:
+        if str(command.get("project_id") or "") not in _PM_BRIDGE_PROJECTS:
+            raise ValueError("Guardian PM Bridge project is not allow-listed")
+    if action == "pm_bridge_snapshot":
+        comment_id = command.get("comment_id")
+        if type(comment_id) is not int or not 1 <= comment_id <= 2**63 - 1:
+            raise ValueError("Guardian PM Bridge snapshot requires positive comment_id")
 
     return {
         **command,
@@ -535,6 +549,247 @@ class GuardianHost:
         return {
             key: raw.get(key)
             for key in ("status", "service", "version", "router", "executor")
+        }
+
+    def _runtime_pm_bridge_request(
+        self,
+        *,
+        method: str,
+        path: str,
+        payload: dict[str, Any] | None = None,
+        allow_404: bool = False,
+    ) -> dict[str, Any] | None:
+        if method not in {"GET", "POST"}:
+            raise RuntimeError("Unsupported fixed Runtime PM Bridge method")
+        if not path.startswith("/v1/pm-bridge/"):
+            raise RuntimeError("Unsupported fixed Runtime PM Bridge path")
+        body = json.dumps(payload or {}, separators=(",", ":"))
+        script = (
+            'set -eu; '
+            'tmp="$(mktemp)"; '
+            'trap \'rm -f "$tmp"\' EXIT; '
+            'if [ "$1" = "POST" ]; then '
+            'code="$(curl -sS --max-time 30 -o "$tmp" -w "%{http_code}" '
+            '-X POST -H "Authorization: Bearer $RUNTIME_API_TOKEN" '
+            '-H "Accept: application/json" '
+            '-H "Content-Type: application/json" '
+            '--data "$3" "http://127.0.0.1:8787$2")"; '
+            'else '
+            'code="$(curl -sS --max-time 30 -o "$tmp" -w "%{http_code}" '
+            '-X GET -H "Authorization: Bearer $RUNTIME_API_TOKEN" '
+            '-H "Accept: application/json" '
+            '"http://127.0.0.1:8787$2")"; '
+            'fi; '
+            'cat "$tmp"; printf "\n%s\n" "$code"'
+        )
+        proc = _run(
+            [
+                "ddev",
+                "exec",
+                "-s",
+                "coding-runtime",
+                "bash",
+                "-lc",
+                script,
+                "_",
+                method,
+                path,
+                body,
+            ],
+            cwd=self.root,
+            timeout=45,
+            check=False,
+        )
+        lines = proc.stdout.rstrip("\n").splitlines()
+        if not lines:
+            raise RuntimeError("Runtime PM Bridge returned no status")
+        try:
+            status_code = int(lines[-1])
+        except ValueError as exc:
+            raise RuntimeError("Runtime PM Bridge returned invalid HTTP status") from exc
+        raw_body = "\n".join(lines[:-1]).strip()
+        if status_code == 404 and allow_404:
+            return None
+        if not 200 <= status_code < 300:
+            raise RuntimeError(f"Runtime PM Bridge HTTP {status_code}")
+        try:
+            value = json.loads(raw_body) if raw_body else {}
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Runtime PM Bridge returned invalid JSON") from exc
+        if not isinstance(value, dict):
+            raise RuntimeError("Runtime PM Bridge returned non-object JSON")
+        return value
+
+    @staticmethod
+    def _sanitize_pm_control_event(
+        event: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        if event is None:
+            return {"state": "absent"}
+        target = event.get("target_identity")
+        target = dict(target) if isinstance(target, dict) else {}
+        allowed_target = {
+            key: target.get(key)
+            for key in (
+                "job_id",
+                "plan_id",
+                "generation",
+                "blocker_generation",
+                "control_action_id",
+                "recovery_action_type",
+                "expected_commit",
+                "source_commit",
+                "expected_head",
+                "branch",
+                "pr_number",
+                "base_branch",
+                "checkpoint_id",
+                "checkpoint_key",
+                "baseline_revision",
+                "expected_remote_main_sha",
+            )
+            if target.get(key) not in (None, "", [])
+        }
+        error = event.get("error")
+        return {
+            "state": "present",
+            "project_id": event.get("project_id"),
+            "comment_id": event.get("comment_id"),
+            "action": event.get("action"),
+            "status": event.get("status"),
+            "target_identity": allowed_target,
+            "error": _bounded(error, 500) if error else None,
+            "created_at": event.get("created_at"),
+            "updated_at": event.get("updated_at"),
+        }
+
+    @staticmethod
+    def _sanitize_pm_bridge_poll(raw: dict[str, Any]) -> dict[str, Any]:
+        def ids(name: str) -> list[int]:
+            values = raw.get(name)
+            if not isinstance(values, list):
+                return []
+            result: list[int] = []
+            for item in values[:100]:
+                value = item.get("comment_id") if isinstance(item, dict) else item
+                if type(value) is int and value > 0:
+                    result.append(value)
+            return result
+
+        dispatched: list[dict[str, Any]] = []
+        for item in (
+            raw.get("controls_dispatched")
+            if isinstance(raw.get("controls_dispatched"), list)
+            else []
+        )[:100]:
+            if not isinstance(item, dict):
+                continue
+            result = item.get("result")
+            result = dict(result) if isinstance(result, dict) else {}
+            dispatched.append({
+                "comment_id": item.get("comment_id"),
+                "action": item.get("action"),
+                "status": item.get("status"),
+                "result_status": result.get("status"),
+                "diagnostic_comment_id": result.get("comment_id"),
+            })
+
+        failed: list[dict[str, Any]] = []
+        for item in (
+            raw.get("controls_failed")
+            if isinstance(raw.get("controls_failed"), list)
+            else []
+        )[:100]:
+            if not isinstance(item, dict):
+                continue
+            failed.append({
+                "comment_id": item.get("comment_id"),
+                "action": item.get("action"),
+                "error": _bounded(item.get("error"), 500),
+            })
+
+        rejected: list[dict[str, Any]] = []
+        for item in (
+            raw.get("controls_rejected")
+            if isinstance(raw.get("controls_rejected"), list)
+            else []
+        )[:100]:
+            if not isinstance(item, dict):
+                continue
+            rejected.append({
+                "comment_id": item.get("comment_id"),
+                "error": _bounded(item.get("error"), 500),
+            })
+
+        return {
+            "project_id": raw.get("project_id"),
+            "repository": raw.get("repository"),
+            "scanned": raw.get("scanned"),
+            "controls_accepted": ids("controls_accepted"),
+            "controls_skipped": ids("controls_skipped"),
+            "controls_dispatched": dispatched,
+            "controls_failed": failed,
+            "controls_rejected": rejected,
+            "controls_uncertain": ids("controls_uncertain"),
+            "accepted_plan_ids": [
+                str(item.get("plan_id"))
+                for item in (
+                    raw.get("accepted")
+                    if isinstance(raw.get("accepted"), list)
+                    else []
+                )[:100]
+                if isinstance(item, dict) and item.get("plan_id")
+            ],
+        }
+
+    def pm_bridge_snapshot(
+        self,
+        *,
+        project_id: str,
+        comment_id: int,
+    ) -> dict[str, Any]:
+        if project_id not in _PM_BRIDGE_PROJECTS:
+            raise RuntimeError("PM Bridge project is not allow-listed")
+        runtime = self._runtime_health()
+        if runtime.get("status") != "ok":
+            raise RuntimeError("Runtime is not healthy for PM Bridge snapshot")
+        event = self._runtime_pm_bridge_request(
+            method="GET",
+            path=(
+                f"/v1/pm-bridge/control-events/"
+                f"{project_id}/{comment_id}"
+            ),
+            allow_404=True,
+        )
+        return {
+            "runtime": runtime,
+            "n8n": self._n8n_health(),
+            "control_event": self._sanitize_pm_control_event(event),
+        }
+
+    def pm_bridge_poll_project_once(
+        self,
+        *,
+        project_id: str,
+    ) -> dict[str, Any]:
+        if project_id not in _PM_BRIDGE_PROJECTS:
+            raise RuntimeError("PM Bridge project is not allow-listed")
+        runtime = self._runtime_health()
+        if runtime.get("status") != "ok":
+            raise RuntimeError("Runtime is not healthy for PM Bridge poll")
+        n8n = self._n8n_health()
+        if n8n.get("ok") is not True:
+            raise RuntimeError("n8n is not healthy for PM Bridge poll fallback")
+        raw = self._runtime_pm_bridge_request(
+            method="POST",
+            path="/v1/pm-bridge/poll",
+            payload={"project_id": project_id},
+        )
+        assert raw is not None
+        return {
+            "runtime": runtime,
+            "n8n": n8n,
+            "poll": self._sanitize_pm_bridge_poll(raw),
         }
 
     def _router_health(self) -> dict[str, Any]:
@@ -1017,6 +1272,25 @@ def execute_action(
             "action": "recover_antigravity_bridge",
             "github_main": github_head,
             **host.recover_antigravity_bridge(),
+        }
+    if command["action"] == "pm_bridge_snapshot":
+        return {
+            "status": "executed",
+            "action": "pm_bridge_snapshot",
+            "github_main": github_head,
+            **host.pm_bridge_snapshot(
+                project_id=str(command["project_id"]),
+                comment_id=int(command["comment_id"]),
+            ),
+        }
+    if command["action"] == "pm_bridge_poll_project_once":
+        return {
+            "status": "executed",
+            "action": "pm_bridge_poll_project_once",
+            "github_main": github_head,
+            **host.pm_bridge_poll_project_once(
+                project_id=str(command["project_id"]),
+            ),
         }
     raise RuntimeError("Unsupported Guardian action")
 
