@@ -127,7 +127,7 @@ def trusted_comment_identity(
 
 def parse_command(event: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
     identity = trusted_comment_identity(event, config)
-    comment_id = int(identity["comment_id"])
+    guardian_comment_id = int(identity["comment_id"])
     body = str(identity["body"])
     if len(body.encode("utf-8")) > config["max_comment_bytes"]:
         raise ValueError("Guardian command exceeds byte bound")
@@ -163,7 +163,7 @@ def parse_command(event: dict[str, Any], config: dict[str, Any]) -> dict[str, An
     if action == "rollout_pcp_exact_main":
         expected_keys.add("expected_main_sha")
     elif action == "pm_bridge_snapshot":
-        expected_keys.update({"project_id", "comment_id"})
+        expected_keys.update({"project_id", "target_comment_id"})
     elif action == "pm_bridge_poll_project_once":
         expected_keys.add("project_id")
     if set(command) != expected_keys:
@@ -176,13 +176,18 @@ def parse_command(event: dict[str, Any], config: dict[str, Any]) -> dict[str, An
         if str(command.get("project_id") or "") not in _PM_BRIDGE_PROJECTS:
             raise ValueError("Guardian PM Bridge project is not allow-listed")
     if action == "pm_bridge_snapshot":
-        comment_id = command.get("comment_id")
-        if type(comment_id) is not int or not 1 <= comment_id <= 2**63 - 1:
-            raise ValueError("Guardian PM Bridge snapshot requires positive comment_id")
+        target_comment_id = command.get("target_comment_id")
+        if (
+            type(target_comment_id) is not int
+            or not 1 <= target_comment_id <= 2**63 - 1
+        ):
+            raise ValueError(
+                "Guardian PM Bridge snapshot requires positive target_comment_id"
+            )
 
     return {
         **command,
-        "comment_id": comment_id,
+        "comment_id": guardian_comment_id,
         "body_sha256": identity["body_sha256"],
     }
 
@@ -559,35 +564,49 @@ class GuardianHost:
         payload: dict[str, Any] | None = None,
         allow_404: bool = False,
     ) -> dict[str, Any] | None:
-        if method not in {"GET", "POST"}:
+        snapshot_path = re.fullmatch(
+            r"/v1/pm-bridge/control-events/chonhac/[1-9][0-9]{0,18}",
+            path,
+        )
+        if method == "GET":
+            if snapshot_path is None or payload not in (None, {}):
+                raise RuntimeError(
+                    "Unsupported fixed Runtime PM Bridge GET contract"
+                )
+        elif method == "POST":
+            if (
+                path != "/v1/pm-bridge/poll"
+                or payload != {"project_id": "chonhac"}
+            ):
+                raise RuntimeError(
+                    "Unsupported fixed Runtime PM Bridge POST contract"
+                )
+        else:
             raise RuntimeError("Unsupported fixed Runtime PM Bridge method")
-        if not path.startswith("/v1/pm-bridge/"):
-            raise RuntimeError("Unsupported fixed Runtime PM Bridge path")
+
         body = json.dumps(payload or {}, separators=(",", ":"))
+        runtime_base = "https://personal-coding-platform.ddev.site:8788"
         script = (
             'set -eu; '
-            'tmp="$(mktemp)"; '
-            'trap \'rm -f "$tmp"\' EXIT; '
             'if [ "$1" = "POST" ]; then '
-            'code="$(curl -sS --max-time 30 -o "$tmp" -w "%{http_code}" '
-            '-X POST -H "Authorization: Bearer $RUNTIME_API_TOKEN" '
+            'curl -sS --max-time 30 -w "\\n%{http_code}\\n" '
+            '-X POST '
+            '-H "Authorization: Bearer $RUNTIME_API_TOKEN" '
             '-H "Accept: application/json" '
             '-H "Content-Type: application/json" '
-            '--data "$3" "http://127.0.0.1:8787$2")"; '
+            '--data "$3" "$4$2"; '
             'else '
-            'code="$(curl -sS --max-time 30 -o "$tmp" -w "%{http_code}" '
-            '-X GET -H "Authorization: Bearer $RUNTIME_API_TOKEN" '
+            'curl -sS --max-time 30 -w "\\n%{http_code}\\n" '
+            '-X GET '
+            '-H "Authorization: Bearer $RUNTIME_API_TOKEN" '
             '-H "Accept: application/json" '
-            '"http://127.0.0.1:8787$2")"; '
-            'fi; '
-            'cat "$tmp"; printf "\n%s\n" "$code"'
+            '"$4$2"; '
+            'fi'
         )
         proc = _run(
             [
-                "ddev",
-                "exec",
-                "-s",
-                "coding-runtime",
+                "bash",
+                str(self.root / "scripts/with-host-secrets.sh"),
                 "bash",
                 "-lc",
                 script,
@@ -595,19 +614,28 @@ class GuardianHost:
                 method,
                 path,
                 body,
+                runtime_base,
             ],
             cwd=self.root,
             timeout=45,
             check=False,
         )
+        if proc.returncode != 0:
+            raise RuntimeError(
+                f"Runtime PM Bridge transport failed (exit {proc.returncode})"
+            )
+
         lines = proc.stdout.rstrip("\n").splitlines()
         if not lines:
             raise RuntimeError("Runtime PM Bridge returned no status")
         try:
             status_code = int(lines[-1])
         except ValueError as exc:
-            raise RuntimeError("Runtime PM Bridge returned invalid HTTP status") from exc
+            raise RuntimeError(
+                "Runtime PM Bridge returned invalid HTTP status"
+            ) from exc
         raw_body = "\n".join(lines[:-1]).strip()
+
         if status_code == 404 and allow_404:
             return None
         if not 200 <= status_code < 300:
@@ -615,7 +643,9 @@ class GuardianHost:
         try:
             value = json.loads(raw_body) if raw_body else {}
         except json.JSONDecodeError as exc:
-            raise RuntimeError("Runtime PM Bridge returned invalid JSON") from exc
+            raise RuntimeError(
+                "Runtime PM Bridge returned invalid JSON"
+            ) from exc
         if not isinstance(value, dict):
             raise RuntimeError("Runtime PM Bridge returned non-object JSON")
         return value
@@ -746,7 +776,7 @@ class GuardianHost:
         self,
         *,
         project_id: str,
-        comment_id: int,
+        target_comment_id: int,
     ) -> dict[str, Any]:
         if project_id not in _PM_BRIDGE_PROJECTS:
             raise RuntimeError("PM Bridge project is not allow-listed")
@@ -757,7 +787,7 @@ class GuardianHost:
             method="GET",
             path=(
                 f"/v1/pm-bridge/control-events/"
-                f"{project_id}/{comment_id}"
+                f"{project_id}/{target_comment_id}"
             ),
             allow_404=True,
         )
@@ -1280,7 +1310,7 @@ def execute_action(
             "github_main": github_head,
             **host.pm_bridge_snapshot(
                 project_id=str(command["project_id"]),
-                comment_id=int(command["comment_id"]),
+                target_comment_id=int(command["target_comment_id"]),
             ),
         }
     if command["action"] == "pm_bridge_poll_project_once":
