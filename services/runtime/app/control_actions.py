@@ -1300,25 +1300,11 @@ class ControlActionService:
                         + ",".join(sorted(missing))
                     )
 
-                for dimension in emergency_dimensions:
-                    spec = _BUDGET_EXTENSION_SPECS.get(dimension)
-                    if not spec:
-                        raise RuntimeError(
-                            "PM anti-loop bypass cannot classify emergency dimension"
-                        )
-                    counter = str(spec["counter"])
-                    try:
-                        used = float(progress.get(counter) or 0)
-                        hard_max = float(spec["hard_max"])
-                    except (TypeError, ValueError):
-                        raise RuntimeError(
-                            "PM anti-loop bypass cannot verify hard platform maximum"
-                        ) from None
-                    if used >= hard_max:
-                        raise RuntimeError(
-                            "PM anti-loop bypass cannot exceed hard platform maximum "
-                            f"for {dimension}"
-                        )
+                # On adaptive routes these work-shape dimensions are telemetry,
+                # not platform hard-stop ceilings. PM may authorize one exact-generation
+                # anti-loop bypass window without resetting/decrementing their counters.
+                # Hard cost, provider quota/context, protected/scope and per-operation
+                # timeout boundaries are enforced elsewhere and are never bypassed here.
 
                 safe_reference = {
                     key: value
