@@ -358,7 +358,8 @@ class JobStatusPublisher:
 
     async def start(self) -> None:
         import asyncio
-        self.store.ensure()
+        # Publication is observability/control-plane transport only. A transient
+        # handoff-store failure must not make Runtime startup fail.
         self._task = asyncio.create_task(self._loop())
 
     async def stop(self) -> None:
