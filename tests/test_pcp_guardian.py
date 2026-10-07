@@ -387,3 +387,42 @@ def test_post_rollout_ready_requires_health_versions_and_mobile_control_plane():
         changed = json.loads(json.dumps(snapshot))
         changed[section][key] = value
         assert guardian.GuardianHost._post_rollout_ready(changed, target) is False
+
+
+def test_guardian_token_is_scrubbed_from_subprocesses_by_default(
+    monkeypatch,
+):
+    monkeypatch.setenv("GITHUB_TOKEN", "super-secret-token")
+    probe = (
+        "import os; "
+        "print(os.environ.get('GITHUB_TOKEN', ''))"
+    )
+
+    default = guardian._run([guardian.sys.executable, "-c", probe])
+    assert default.stdout.strip() == ""
+
+    scoped = guardian._run(
+        [guardian.sys.executable, "-c", probe],
+        env={"GITHUB_TOKEN": "scoped-token"},
+    )
+    assert scoped.stdout.strip() == "scoped-token"
+
+
+def test_git_fetch_askpass_contains_no_secret_and_is_private(
+    tmp_path,
+    monkeypatch,
+):
+    cfg = config(tmp_path)
+    monkeypatch.setenv("GITHUB_TOKEN", "super-secret-token")
+    host = guardian.GuardianHost(cfg, tmp_path)
+
+    askpass, env = host._github_fetch_auth()
+    try:
+        text = askpass.read_text(encoding="utf-8")
+        assert "super-secret-token" not in text
+        assert "$GITHUB_TOKEN" in text
+        assert env["GITHUB_TOKEN"] == "super-secret-token"
+        assert env["GIT_ASKPASS"] == str(askpass)
+        assert (askpass.stat().st_mode & 0o777) == 0o700
+    finally:
+        askpass.unlink(missing_ok=True)
