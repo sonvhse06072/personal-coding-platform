@@ -94,12 +94,16 @@ _PROVIDER_BLOCK_REASONS = {
 
 _ADAPTIVE_WORK_SHAPE_DIMENSIONS = {
     "max_model_calls",
+    "max_input_tokens",
+    "max_output_tokens",
     "max_tool_calls",
     "max_test_runs",
     "max_repair_iterations",
     "max_iterations",
     "max_wall_time_minutes",
 }
+
+_REMOTE_ADAPTIVE_EMERGENCY_REPAIR_KEY = "remote_adaptive_emergency_repair"
 
 
 
@@ -1176,6 +1180,10 @@ class ControlActionService:
                 raise RuntimeError(
                     "Blocked repair emergency telemetry requires adaptive route"
                 )
+            if checkpoint.get(_REMOTE_ADAPTIVE_EMERGENCY_REPAIR_KEY):
+                raise RuntimeError(
+                    "Blocked repair adaptive emergency repair window was already used"
+                )
 
             emergency_dimensions = [
                 item.split(":", 1)[1]
@@ -1226,6 +1234,14 @@ class ControlActionService:
                 raise RuntimeError(
                     "Blocked repair emergency telemetry requires one fresh current-diff failure"
                 )
+
+            checkpoint[_REMOTE_ADAPTIVE_EMERGENCY_REPAIR_KEY] = {
+                "blocker_generation": expected_generation,
+                "prior_diff_hash": previous_diff_hash,
+                "current_diff_hash": diff_hash,
+                "dimensions": sorted(set(emergency_dimensions)),
+                "recorded_at": now().isoformat(),
+            }
         if not str(job.get("source_commit") or ""):
             raise RuntimeError("Blocked repair requires preserved source commit")
         if not str(job.get("branch") or ""):
