@@ -92,13 +92,14 @@ def test_status_rollout_and_bridge_recovery_commands_are_exact(tmp_path):
                 "schema_version": 1,
                 "action": "pm_bridge_snapshot",
                 "project_id": "chonhac",
-                "comment_id": 6031547665,
+                "target_comment_id": 6031547665,
             }
         ),
         cfg,
     )
     assert bridge_snapshot["project_id"] == "chonhac"
-    assert bridge_snapshot["comment_id"] == 6031547665
+    assert bridge_snapshot["target_comment_id"] == 6031547665
+    assert bridge_snapshot["comment_id"] == 12345
 
     bridge_poll = guardian.parse_command(
         event(
@@ -111,6 +112,24 @@ def test_status_rollout_and_bridge_recovery_commands_are_exact(tmp_path):
         cfg,
     )
     assert bridge_poll["project_id"] == "chonhac"
+
+
+def test_pm_bridge_snapshot_keeps_guardian_and_target_comment_ids_distinct(tmp_path):
+    parsed = guardian.parse_command(
+        event(
+            {
+                "schema_version": 1,
+                "action": "pm_bridge_snapshot",
+                "project_id": "chonhac",
+                "target_comment_id": 6031547665,
+            }
+        ),
+        config(tmp_path),
+    )
+
+    assert parsed["comment_id"] == 12345
+    assert parsed["target_comment_id"] == 6031547665
+    assert parsed["comment_id"] != parsed["target_comment_id"]
 
 
 @pytest.mark.parametrize(
@@ -195,7 +214,7 @@ def test_event_identity_fails_closed(tmp_path, mutator, match):
                 "schema_version": 1,
                 "action": "pm_bridge_snapshot",
                 "project_id": "other",
-                "comment_id": 123,
+                "target_comment_id": 123,
             },
             "not allow-listed",
         ),
@@ -204,9 +223,9 @@ def test_event_identity_fails_closed(tmp_path, mutator, match):
                 "schema_version": 1,
                 "action": "pm_bridge_snapshot",
                 "project_id": "chonhac",
-                "comment_id": 0,
+                "target_comment_id": 0,
             },
-            "positive comment_id",
+            "positive target_comment_id",
         ),
         (
             {
@@ -350,8 +369,8 @@ class FakeHost:
             "reused": False,
         }
 
-    def pm_bridge_snapshot(self, *, project_id, comment_id):
-        self.bridge_snapshots.append((project_id, comment_id))
+    def pm_bridge_snapshot(self, *, project_id, target_comment_id):
+        self.bridge_snapshots.append((project_id, target_comment_id))
         return {
             "runtime": {"status": "ok"},
             "n8n": {"ok": True},
@@ -412,7 +431,8 @@ def test_action_dispatch_never_infers_rollout_sha(tmp_path):
         {
             "action": "pm_bridge_snapshot",
             "project_id": "chonhac",
-            "comment_id": 6031547665,
+            "target_comment_id": 6031547665,
+            "comment_id": 12345,
         },
         config=cfg,
         github=FakeGitHub(SHA),
@@ -881,7 +901,7 @@ def test_pm_bridge_snapshot_and_poll_use_only_fixed_runtime_contract(
 
     snapshot = host.pm_bridge_snapshot(
         project_id="chonhac",
-        comment_id=6031547665,
+        target_comment_id=6031547665,
     )
     assert snapshot["control_event"] == {"state": "absent"}
     assert calls[0] == (
@@ -902,3 +922,95 @@ def test_pm_bridge_snapshot_and_poll_use_only_fixed_runtime_contract(
 
     with pytest.raises(RuntimeError, match="allow-listed"):
         host.pm_bridge_poll_project_once(project_id="other")
+
+
+def test_pm_bridge_transport_uses_host_secret_boundary_and_fixed_contracts(
+    tmp_path,
+    monkeypatch,
+):
+    cfg = config(tmp_path)
+    root = Path(cfg["pcp_root"])
+    (root / "scripts").mkdir(parents=True, exist_ok=True)
+    (root / "scripts/with-host-secrets.sh").write_text(
+        "#!/bin/sh\nexec \"$@\"\n",
+        encoding="utf-8",
+    )
+    host = guardian.GuardianHost(cfg, tmp_path)
+    calls = []
+
+    class Result:
+        returncode = 0
+        stdout = '{"state":"ok"}\n200\n'
+        stderr = ""
+
+    def fake_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return Result()
+
+    monkeypatch.setattr(guardian, "_run", fake_run)
+
+    observed = host._runtime_pm_bridge_request(
+        method="GET",
+        path="/v1/pm-bridge/control-events/chonhac/6031547665",
+        allow_404=True,
+    )
+    assert observed == {"state": "ok"}
+    args, kwargs = calls[-1]
+    assert args[:2] == [
+        "bash",
+        str(root / "scripts/with-host-secrets.sh"),
+    ]
+    assert "ddev" not in args[:4]
+    assert "coding-runtime" not in args
+    assert "https://personal-coding-platform.ddev.site:8788" in args
+    assert kwargs["cwd"] == root
+    assert kwargs["check"] is False
+
+    observed = host._runtime_pm_bridge_request(
+        method="POST",
+        path="/v1/pm-bridge/poll",
+        payload={"project_id": "chonhac"},
+    )
+    assert observed == {"state": "ok"}
+
+    with pytest.raises(RuntimeError, match="GET contract"):
+        host._runtime_pm_bridge_request(
+            method="GET",
+            path="/v1/jobs/job-1",
+        )
+
+    with pytest.raises(RuntimeError, match="POST contract"):
+        host._runtime_pm_bridge_request(
+            method="POST",
+            path="/v1/pm-bridge/poll",
+            payload={"project_id": "other"},
+        )
+
+    with pytest.raises(RuntimeError, match="method"):
+        host._runtime_pm_bridge_request(
+            method="DELETE",
+            path="/v1/pm-bridge/poll",
+        )
+
+
+def test_pm_bridge_transport_404_projects_as_absent(
+    tmp_path,
+    monkeypatch,
+):
+    host = guardian.GuardianHost(config(tmp_path), tmp_path)
+
+    class Result:
+        returncode = 0
+        stdout = '{"detail":"not found"}\n404\n'
+        stderr = ""
+
+    monkeypatch.setattr(guardian, "_run", lambda *args, **kwargs: Result())
+
+    assert (
+        host._runtime_pm_bridge_request(
+            method="GET",
+            path="/v1/pm-bridge/control-events/chonhac/6031547665",
+            allow_404=True,
+        )
+        is None
+    )
