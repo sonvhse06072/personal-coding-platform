@@ -8,6 +8,7 @@ validated and pinned atomically when a job row is first created.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from copy import deepcopy
@@ -141,6 +142,36 @@ class RuntimeEngine(_RuntimeEngine):
     def __init__(self, storage: Any) -> None:
         super().__init__(storage)
         self.router = WorkOrderRouterProxy(self.router, self.storage)
+        self._project_operation_locks: dict[str, asyncio.Lock] = {}
+
+    def project_operation_lock(self, project_id: str) -> asyncio.Lock:
+        """Serialize direct-project source/lease transitions inside this Runtime."""
+        key = str(project_id or "").strip()
+        if not key:
+            raise ValueError("Project operation lock requires project_id")
+        lock = self._project_operation_locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._project_operation_locks[key] = lock
+        return lock
+
+    def is_exclusive_direct_project(self, project_id: str) -> bool:
+        project = project_config(project_id)
+        runtime = dict(project.get("runtime") or {})
+        return (
+            str(runtime.get("workspace_mode") or "") == "direct"
+            and runtime.get("exclusive_project_lease") is True
+        )
+
+    def reserve_direct_project_lease(self, job_id: str) -> dict[str, Any] | None:
+        """Reserve the durable lease for a newly-created exclusive direct job."""
+        row = self.storage.get(job_id)
+        if row is None:
+            raise RuntimeError("Cannot reserve direct lease for unknown job")
+        project_id = str(row.get("project_id") or "")
+        if not self.is_exclusive_direct_project(project_id):
+            return None
+        return self.storage.acquire_project_lease(project_id, job_id)
 
     @staticmethod
     def _next_reasoning_choice(
