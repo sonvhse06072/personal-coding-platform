@@ -46,6 +46,13 @@ class WorkspaceRequest(BaseModel):
     workspace_mode: Literal["project_default", "isolated_clone"] = "project_default"
 
 
+class SyncDirectBaseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: str = Field(min_length=1, max_length=200)
+    expected_remote_head: str = Field(pattern=r"^[0-9a-fA-F]{40}$")
+
+
 class PublishBranchRequest(BaseModel):
     job_id: str = Field(min_length=8, max_length=100)
     project_id: str = Field(min_length=1, max_length=200)
@@ -1295,10 +1302,101 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-DDEV_EXECUTOR_VERSION = "1.0.32"
+DDEV_EXECUTOR_VERSION = "1.0.33"
 
 app = FastAPI(title="Constrained DDEV/Git Executor", version=DDEV_EXECUTOR_VERSION)
 app.include_router(pm_bridge_github_router)
+
+
+@app.get("/v1/project-state", dependencies=[Depends(auth)])
+def project_state(
+    project_id: str = Query(..., min_length=1, max_length=200),
+) -> dict[str, Any]:
+    cfg = project(project_id)
+    repo = _configured_project_path(cfg)
+    branch = git(repo, "branch", "--show-current", check=False)
+    head = git(repo, "rev-parse", "HEAD")
+    porcelain = git(repo, "status", "--porcelain", check=False)
+    base_branch = str(cfg.get("base_branch") or "main")
+    origin_base = git(
+        repo,
+        "rev-parse",
+        f"refs/remotes/origin/{base_branch}",
+        check=False,
+    )
+    return {
+        "project_id": project_id,
+        "workspace_mode": _workspace_mode(cfg),
+        "branch": branch or None,
+        "head": head,
+        "clean": not bool(porcelain.strip()),
+        "base_branch": base_branch,
+        "origin_base_head": origin_base or None,
+    }
+
+
+@app.post("/v1/direct/sync-base", dependencies=[Depends(auth)])
+def sync_direct_base(payload: SyncDirectBaseRequest) -> dict[str, Any]:
+    cfg = project(payload.project_id)
+    if _workspace_mode(cfg) != "direct":
+        raise HTTPException(409, "Remote source sync requires configured direct workspace mode")
+    with _ACTIVE_LOCK:
+        if _ACTIVE:
+            raise HTTPException(409, "DDEV executor has active jobs; source sync is not allowed")
+
+    repo = _configured_project_path(cfg)
+    base_branch = str(cfg.get("base_branch") or "main").strip()
+    current_branch = git(repo, "branch", "--show-current", check=False)
+    if current_branch != base_branch:
+        raise HTTPException(409, "Direct workspace is not on configured base branch")
+    if git(repo, "status", "--porcelain", check=False):
+        raise HTTPException(
+            409,
+            "Direct workspace is dirty; PCP will not reset, clean or stash Human Owner changes",
+        )
+
+    local_head = git(repo, "rev-parse", "HEAD")
+    operation_id = (
+        "pm-sync-"
+        + hashlib.sha256(
+            f"{payload.project_id}:{payload.expected_remote_head}".encode("utf-8")
+        ).hexdigest()[:24]
+    )
+    remote_head = _fetch_remote_base_head(
+        cfg,
+        repo,
+        job_id=operation_id,
+    )
+    if remote_head != payload.expected_remote_head:
+        raise HTTPException(409, "Fetched remote base does not match expected exact SHA")
+
+    if local_head != remote_head:
+        _assert_fast_forward(
+            repo,
+            local_head,
+            remote_head,
+            message=(
+                "Direct workspace base diverged from expected remote base; "
+                "PCP will not reset or rewrite local history"
+            ),
+        )
+        git(repo, "merge", "--ff-only", remote_head)
+
+    final_head = git(repo, "rev-parse", "HEAD")
+    if final_head != remote_head:
+        raise HTTPException(409, "Direct source sync did not reach exact expected remote SHA")
+    if git(repo, "status", "--porcelain", check=False):
+        raise HTTPException(409, "Direct source sync postcondition is not clean")
+
+    return {
+        "project_id": payload.project_id,
+        "base_branch": base_branch,
+        "old_head": local_head,
+        "remote_head": remote_head,
+        "head": final_head,
+        "fast_forwarded": local_head != final_head,
+        "clean": True,
+    }
 
 
 @app.get("/health")

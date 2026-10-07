@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from .continuity_github import router as continuity_router
 from .github_delivery import GitHubDelivery, github_repository_from_origin
 from .github_merge import merge_pull_request
+from .managed_comment_github import ManagedCommentRequest, upsert_managed_comment
 from .plan_progress_github import ProgressRequest, upsert_progress
 
 
@@ -100,6 +101,19 @@ def progress(payload: ProgressRequest) -> dict[str, Any]:
         # Never reflect GitHub response bodies or credentials into Runtime errors.
         raise HTTPException(502 if isinstance(exc, httpx.HTTPError) else 409,
                             f"Progress publication failed ({type(exc).__name__})") from exc
+
+
+@router.post("/managed-comment", dependencies=[Depends(auth)])
+def managed_comment(payload: ManagedCommentRequest) -> dict[str, Any]:
+    delivery, repository = _repository(payload.project_id)
+    try:
+        return upsert_managed_comment(delivery, repository, payload)
+    except (httpx.HTTPError, RuntimeError, ValueError, KeyError) as exc:
+        # Never reflect GitHub response bodies or credentials into Runtime errors.
+        raise HTTPException(
+            502 if isinstance(exc, httpx.HTTPError) else 409,
+            f"Managed comment publication failed ({type(exc).__name__})",
+        ) from exc
 
 
 def _validate_ai_branch(cfg: dict[str, Any], branch: str) -> None:

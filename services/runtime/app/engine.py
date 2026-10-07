@@ -8,6 +8,7 @@ validated and pinned atomically when a job row is first created.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import uuid
 from copy import deepcopy
@@ -141,6 +142,36 @@ class RuntimeEngine(_RuntimeEngine):
     def __init__(self, storage: Any) -> None:
         super().__init__(storage)
         self.router = WorkOrderRouterProxy(self.router, self.storage)
+        self._project_operation_locks: dict[str, asyncio.Lock] = {}
+
+    def project_operation_lock(self, project_id: str) -> asyncio.Lock:
+        """Serialize direct-project source/lease transitions inside this Runtime."""
+        key = str(project_id or "").strip()
+        if not key:
+            raise ValueError("Project operation lock requires project_id")
+        lock = self._project_operation_locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._project_operation_locks[key] = lock
+        return lock
+
+    def is_exclusive_direct_project(self, project_id: str) -> bool:
+        project = project_config(project_id)
+        runtime = dict(project.get("runtime") or {})
+        return (
+            str(runtime.get("workspace_mode") or "") == "direct"
+            and runtime.get("exclusive_project_lease") is True
+        )
+
+    def reserve_direct_project_lease(self, job_id: str) -> dict[str, Any] | None:
+        """Reserve the durable lease for a newly-created exclusive direct job."""
+        row = self.storage.get(job_id)
+        if row is None:
+            raise RuntimeError("Cannot reserve direct lease for unknown job")
+        project_id = str(row.get("project_id") or "")
+        if not self.is_exclusive_direct_project(project_id):
+            return None
+        return self.storage.acquire_project_lease(project_id, job_id)
 
     @staticmethod
     def _next_reasoning_choice(
@@ -762,6 +793,7 @@ class RuntimeEngine(_RuntimeEngine):
         self, payload: dict[str, Any], *,
         _orchestration: tuple[str, str] | None = None,
         _intake_decision: IntakeDecision | None = None,
+        _remote_binding: dict[str, Any] | None = None,
     ) -> str:
         """Create one job with its governing baseline/contract in the same write.
 
@@ -835,6 +867,35 @@ class RuntimeEngine(_RuntimeEngine):
             checkpoint["canonical_intake"] = {
                 **_intake_decision.model_dump(mode="json"),
                 "baseline_revision": baseline.revision,
+            }
+
+        if _remote_binding is not None:
+            if _intake_decision is None:
+                raise ValueError("Remote binding requires canonical intake")
+            binding = dict(_remote_binding)
+            allowed = {"transport", "repository", "issue_number", "control_comment_id"}
+            if set(binding) != allowed:
+                raise ValueError("Remote binding fields are not exact")
+            if binding.get("transport") != "github_pm_control":
+                raise ValueError("Unsupported remote binding transport")
+            repository = str(binding.get("repository") or "")
+            issue_number = binding.get("issue_number")
+            control_comment_id = binding.get("control_comment_id")
+            if (
+                not repository
+                or "/" not in repository
+                or len(repository) > 300
+                or type(issue_number) is not int
+                or issue_number <= 0
+                or type(control_comment_id) is not int
+                or control_comment_id <= 0
+            ):
+                raise ValueError("Invalid remote GitHub binding")
+            checkpoint["github_pm_binding"] = {
+                "transport": "github_pm_control",
+                "repository": repository,
+                "issue_number": issue_number,
+                "control_comment_id": control_comment_id,
             }
 
         self.storage.create({

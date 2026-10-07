@@ -3,8 +3,9 @@ from __future__ import annotations
 import json
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .schemas import RepoHints, SemanticSignals
 from .storage import Storage, now
 
 
@@ -119,6 +120,8 @@ class PMControlEnvelope(BaseModel):
         default=None,
         pattern=r"^[0-9a-fA-F]{40}$",
     )
+    intake_semantic: SemanticSignals | None = None
+    intake_repo_hints: RepoHints | None = None
 
     diagnostic_collectors: list[
         Literal[
@@ -132,6 +135,20 @@ class PMControlEnvelope(BaseModel):
             "runtime_health",
         ]
     ] = Field(default_factory=list, max_length=8)
+
+    @field_validator("intake_semantic", "intake_repo_hints", mode="before")
+    @classmethod
+    def reject_unknown_intake_signal_fields(cls, value, info):
+        if value is None:
+            return value
+        schema = (
+            SemanticSignals
+            if info.field_name == "intake_semantic"
+            else RepoHints
+        )
+        if isinstance(value, dict) and set(value) - set(schema.model_fields):
+            raise ValueError("Unknown remote intake structured signal fields")
+        return value
 
     @model_validator(mode="after")
     def validate_action_identity(self) -> "PMControlEnvelope":
@@ -186,7 +203,12 @@ class PMControlEnvelope(BaseModel):
                 "ready_work_order_ids",
             )
         elif self.action == "direct_intake":
-            require("baseline_revision", "expected_remote_main_sha")
+            require(
+                "baseline_revision",
+                "expected_remote_main_sha",
+                "intake_semantic",
+                "intake_repo_hints",
+            )
 
         if self.ready_work_order_ids:
             if any(
