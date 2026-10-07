@@ -53,11 +53,14 @@ class FakeStorage:
 
 
 class FakeControls:
+    def __init__(self):
+        self.generation = "generation-exact"
+
     def standalone_remote_actions(self, job_id):
         assert job_id == JOB_ID
         return {
             "job_id": job_id,
-            "generation": "generation-exact",
+            "generation": self.generation,
             "reason": "reassessment_stopped",
             "phase": "reassessment",
             "actions": [
@@ -67,6 +70,70 @@ class FakeControls:
                 }
             ],
         }
+
+    def blocked_advisory(self, work_order, job):
+        assert work_order == {}
+        return {
+            "title": "WORKORDER BỊ CHẶN",
+            "phase": "reassessment",
+            "reason": str((job.get("result") or {}).get("reason") or "blocked"),
+            "summary": "Runtime không cho phép tiếp tục sau reassessment.",
+            "cause": "Trạng thái hiện tại không cho phép tự động tiếp tục.",
+            "preserved": ["legacy wording"],
+            "impact": "legacy wording",
+            "recommended": "Kiểm tra blocker hiện tại.",
+            "metrics": [],
+            "action_specs": [
+                {
+                    "action_type": "pm_scope_reassess",
+                    "label": "PM review file scope",
+                    "payload": {},
+                }
+            ],
+        }
+
+
+class FakeNotificationStore:
+    def __init__(self, *, fail=False):
+        self.events = []
+        self.supersede_calls = []
+        self.fail = fail
+
+    def supersede_standalone_notifications(
+        self,
+        job_id,
+        *,
+        except_generation=None,
+    ):
+        if self.fail:
+            raise RuntimeError("notification store unavailable")
+        self.supersede_calls.append((job_id, except_generation))
+        changed = 0
+        for event in self.events:
+            payload = event.get("payload") or {}
+            if (
+                event["status"] in {"pending", "delivering"}
+                and payload.get("standalone_job_id") == job_id
+                and (
+                    except_generation is None
+                    or payload.get("attention_generation") != except_generation
+                )
+            ):
+                event["status"] = "superseded"
+                changed += 1
+        return changed
+
+    def emit_notification(self, **kwargs):
+        if self.fail:
+            raise RuntimeError("notification store unavailable")
+        if any(event["dedupe_key"] == kwargs["dedupe_key"] for event in self.events):
+            return False
+        payload = deepcopy(kwargs.get("payload") or {})
+        if kwargs.get("attention_state") and kwargs.get("attention_generation"):
+            payload["attention_state"] = kwargs["attention_state"]
+            payload["attention_generation"] = kwargs["attention_generation"]
+        self.events.append({**deepcopy(kwargs), "payload": payload, "status": "pending"})
+        return True
 
 
 class FakeStore:
@@ -117,6 +184,108 @@ class FakeExecutor:
             "comment_url": "https://github.com/owner/demo/issues/77#issuecomment-900",
             "state": "created",
         }
+
+
+def test_blocked_standalone_job_materializes_one_sanitized_telegram_generation():
+    storage = FakeStorage([remote_job()])
+    notifications = FakeNotificationStore()
+    controls = FakeControls()
+    publisher = JobStatusPublisher(
+        storage,
+        FakeExecutor(),
+        controls,
+        store=FakeStore(),
+        notification_store=notifications,
+    )
+
+    publisher.stage_all()
+    publisher.stage_all()
+
+    assert len(notifications.events) == 1
+    event = notifications.events[0]
+    assert event["event_type"] == "standalone_job_blocked"
+    assert event["project_id"] == "demo"
+    assert event["ticket_id"] == "GH-77"
+    assert event["plan_id"] is None
+    assert event["work_order_id"] is None
+    assert event["github_url"] == "https://github.com/owner/demo/issues/77"
+    assert event["payload"]["job_id"] == JOB_ID
+    assert event["payload"]["standalone_job_id"] == JOB_ID
+    assert event["payload"]["attention_state"] == "blocked"
+    assert event["payload"]["attention_generation"] == "generation-exact"
+    assert event["payload"]["actions"] == []
+    assert event["payload"]["remote_actions"] == [
+        {
+            "action_type": "pm_scope_reassess",
+            "label": "PM review file scope",
+        }
+    ]
+    advisory = event["payload"]["advisory"]
+    assert advisory["title"] == "STANDALONE JOB BỊ CHẶN"
+    assert "Standalone job" in advisory["impact"]
+    assert "SECRET raw failure" not in repr(event)
+    assert "/private/path" not in repr(event)
+
+
+def test_changed_standalone_blocker_generation_supersedes_pending_old_notification():
+    storage = FakeStorage([remote_job()])
+    notifications = FakeNotificationStore()
+    controls = FakeControls()
+    publisher = JobStatusPublisher(
+        storage,
+        FakeExecutor(),
+        controls,
+        store=FakeStore(),
+        notification_store=notifications,
+    )
+
+    publisher.stage_all()
+    controls.generation = "generation-next"
+    publisher.stage_all()
+
+    assert len(notifications.events) == 2
+    assert [event["status"] for event in notifications.events] == [
+        "superseded",
+        "pending",
+    ]
+    assert notifications.events[1]["payload"]["attention_generation"] == "generation-next"
+
+
+def test_leaving_standalone_blocker_supersedes_pending_notification():
+    storage = FakeStorage([remote_job()])
+    notifications = FakeNotificationStore()
+    publisher = JobStatusPublisher(
+        storage,
+        FakeExecutor(),
+        FakeControls(),
+        store=FakeStore(),
+        notification_store=notifications,
+    )
+
+    publisher.stage_all()
+    storage.jobs[0]["status"] = "executing"
+    publisher.stage_all()
+
+    assert [event["status"] for event in notifications.events] == ["superseded"]
+    assert notifications.supersede_calls[-1] == (JOB_ID, None)
+
+
+def test_notification_materialization_failure_does_not_block_github_status_publication():
+    store = FakeStore()
+    executor = FakeExecutor()
+    publisher = JobStatusPublisher(
+        FakeStorage([remote_job()]),
+        executor,
+        FakeControls(),
+        store=store,
+        notification_store=FakeNotificationStore(fail=True),
+    )
+
+    worked = asyncio.run(publisher.publish_one())
+
+    assert worked is True
+    assert store.acked == [(JOB_ID, 900)]
+    assert len(executor.requests) == 1
 
 
 def test_remote_bound_blocked_job_publishes_exact_safe_recovery_status():
