@@ -5,9 +5,11 @@ import pytest
 import yaml
 from fastapi import HTTPException
 
+from app import main as main_module
 from app.main import (
     AdvanceDirectWorkspaceSourceRequest,
     PhaseRequest,
+    SyncDirectBaseRequest,
     PreviewRequest,
     PublishBranchRequest,
     QuiesceWorkspaceRequest,
@@ -17,12 +19,14 @@ from app.main import (
     create_workspace,
     phase,
     preview_status,
+    project_state,
     publish_branch,
     start_preview,
     stop_preview,
     quiesce_workspace,
     remove_workspace,
     return_direct_workspace_to_base,
+    sync_direct_base,
 )
 
 
@@ -1844,3 +1848,103 @@ def test_phase_request_accepts_visual_quality() -> None:
     )
 
     assert request.phase == "visual_quality"
+
+
+def test_remote_direct_sync_fast_forwards_to_exact_expected_head(
+    tmp_path,
+    monkeypatch,
+):
+    source, remote, _workspaces = configure_direct(monkeypatch, tmp_path)
+    old = run("git", "rev-parse", "HEAD", cwd=source)
+    remote_head = _advance_remote_main(
+        remote,
+        tmp_path,
+        filename="REMOTE-SYNC.txt",
+        content="remote sync\n",
+    )
+    assert old != remote_head
+
+    result = sync_direct_base(
+        SyncDirectBaseRequest(
+            project_id="demo",
+            expected_remote_head=remote_head,
+        )
+    )
+
+    assert result["old_head"] == old
+    assert result["remote_head"] == remote_head
+    assert result["head"] == remote_head
+    assert result["fast_forwarded"] is True
+    assert result["clean"] is True
+    assert run("git", "rev-parse", "HEAD", cwd=source) == remote_head
+    assert project_state("demo")["head"] == remote_head
+
+
+def test_remote_direct_sync_rejects_wrong_expected_sha_without_merge(
+    tmp_path,
+    monkeypatch,
+):
+    source, remote, _workspaces = configure_direct(monkeypatch, tmp_path)
+    old = run("git", "rev-parse", "HEAD", cwd=source)
+    remote_head = _advance_remote_main(
+        remote,
+        tmp_path,
+        filename="WRONG-EXPECTED.txt",
+        content="advance\n",
+    )
+    assert remote_head != old
+
+    with pytest.raises(HTTPException) as exc:
+        sync_direct_base(
+            SyncDirectBaseRequest(
+                project_id="demo",
+                expected_remote_head="f" * 40,
+            )
+        )
+
+    assert exc.value.status_code == 409
+    assert "expected exact SHA" in str(exc.value.detail)
+    assert run("git", "rev-parse", "HEAD", cwd=source) == old
+
+
+def test_remote_direct_sync_rejects_dirty_worktree(
+    tmp_path,
+    monkeypatch,
+):
+    source, _remote, _workspaces = configure_direct(monkeypatch, tmp_path)
+    head = run("git", "rev-parse", "HEAD", cwd=source)
+    (source / "HUMAN.txt").write_text("preserve me\n")
+
+    with pytest.raises(HTTPException) as exc:
+        sync_direct_base(
+            SyncDirectBaseRequest(
+                project_id="demo",
+                expected_remote_head=head,
+            )
+        )
+
+    assert exc.value.status_code == 409
+    assert "dirty" in str(exc.value.detail)
+    assert (source / "HUMAN.txt").read_text() == "preserve me\n"
+
+
+def test_remote_direct_sync_rejects_active_executor_process(
+    tmp_path,
+    monkeypatch,
+):
+    source, _remote, _workspaces = configure_direct(monkeypatch, tmp_path)
+    head = run("git", "rev-parse", "HEAD", cwd=source)
+    main_module._ACTIVE["busy-job"] = object()
+    try:
+        with pytest.raises(HTTPException) as exc:
+            sync_direct_base(
+                SyncDirectBaseRequest(
+                    project_id="demo",
+                    expected_remote_head=head,
+                )
+            )
+    finally:
+        main_module._ACTIVE.pop("busy-job", None)
+
+    assert exc.value.status_code == 409
+    assert "active jobs" in str(exc.value.detail)
