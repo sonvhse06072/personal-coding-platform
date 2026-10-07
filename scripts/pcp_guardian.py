@@ -28,7 +28,11 @@ _ALLOWED_CONFIG_KEYS = {
     "max_comment_bytes",
     "state_dir",
 }
-_ALLOWED_ACTIONS = {"status_snapshot", "rollout_pcp_exact_main"}
+_ALLOWED_ACTIONS = {
+    "status_snapshot",
+    "rollout_pcp_exact_main",
+    "recover_antigravity_bridge",
+}
 _SUBPROCESS_SECRET_ENV = frozenset({
     "GITHUB_TOKEN",
     "GH_TOKEN",
@@ -570,7 +574,7 @@ class GuardianHost:
         }
 
     def _antigravity_health(self) -> dict[str, Any]:
-        raw = _json_command(
+        proc = _run(
             [
                 "bash",
                 str(self.root / "scripts/with-host-secrets.sh"),
@@ -579,13 +583,33 @@ class GuardianHost:
                 "status",
             ],
             cwd=self.root,
+            timeout=30,
+            check=False,
         )
+        try:
+            raw = json.loads(proc.stdout)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError("Antigravity status returned invalid JSON") from exc
+        if not isinstance(raw, dict):
+            raise RuntimeError("Antigravity status returned non-object JSON")
+
+        status = str(raw.get("status") or "")
+        if status == "down":
+            if proc.returncode == 0:
+                raise RuntimeError("Antigravity down status returned success unexpectedly")
+            return {
+                "status": "down",
+                "service": raw.get("service"),
+            }
+        if proc.returncode != 0:
+            raise RuntimeError("Antigravity status command failed ambiguously")
+
         active = raw.get("active_runs")
         pending = raw.get("pending_cancellations")
         if type(active) is not int or type(pending) is not int:
             raise RuntimeError("Antigravity activity counters are invalid")
         return {
-            "status": raw.get("status"),
+            "status": status,
             "service": raw.get("service"),
             "version": raw.get("version"),
             "active_runs": active,
@@ -709,6 +733,141 @@ class GuardianHost:
                 self.checkout / "services/ddev-executor/app/main.py",
                 "DDEV_EXECUTOR_VERSION",
             ),
+        }
+
+    @staticmethod
+    def _require_bridge_recovery_preconditions(
+        snapshot: dict[str, Any],
+    ) -> None:
+        local = snapshot["local_git"]
+        runtime = snapshot["runtime"]
+        active = snapshot["active_engineering"]
+        executor = snapshot["executor"]
+        credential = snapshot["credential_boundary"]
+        antigravity = snapshot["antigravity"]
+
+        if (
+            not local.get("reachable")
+            or local.get("branch") != "main"
+            or local.get("clean") is not True
+        ):
+            raise RuntimeError("Local PCP main is not clean/reachable for bridge recovery")
+        if not runtime.get("reachable") or runtime.get("status") != "ok":
+            raise RuntimeError("Runtime is not healthy for bridge recovery")
+        if (
+            not active.get("reachable")
+            or active.get("active_engineering_jobs") != 0
+        ):
+            raise RuntimeError("Runtime is not provably idle for bridge recovery")
+        if (
+            not executor.get("reachable")
+            or executor.get("status") != "ok"
+            or executor.get("active_jobs") != 0
+        ):
+            raise RuntimeError("DDEV executor is not provably idle for bridge recovery")
+        if (
+            not credential.get("reachable")
+            or credential.get("ok") is not True
+        ):
+            raise RuntimeError("Credential boundary is not healthy for bridge recovery")
+
+        if not antigravity.get("reachable"):
+            raise RuntimeError("Antigravity status is ambiguous")
+        status = str(antigravity.get("status") or "")
+        if status == "ok":
+            if (
+                antigravity.get("safe_settings") is True
+                and antigravity.get("active_runs") == 0
+                and antigravity.get("pending_cancellations") == 0
+            ):
+                return
+            raise RuntimeError("Running Antigravity bridge is not safe/idle")
+        if status != "down":
+            raise RuntimeError("Antigravity bridge is neither healthy nor explicitly down")
+
+    def _require_reviewed_bridge_helpers(self) -> dict[str, str]:
+        hashes: dict[str, str] = {}
+        for relative in (
+            "scripts/with-host-secrets.sh",
+            "scripts/antigravity-bridge.sh",
+        ):
+            local = self.root / relative
+            reviewed = self.checkout / relative
+            if not local.is_file() or not reviewed.is_file():
+                raise RuntimeError("Bridge recovery helper is unavailable")
+            local_bytes = local.read_bytes()
+            reviewed_bytes = reviewed.read_bytes()
+            if local_bytes != reviewed_bytes:
+                raise RuntimeError(
+                    f"Local bridge recovery helper differs from reviewed checkout: {relative}"
+                )
+            hashes[relative] = hashlib.sha256(reviewed_bytes).hexdigest()
+        return hashes
+
+    def recover_antigravity_bridge(self) -> dict[str, Any]:
+        pre = self.snapshot()
+        self._require_bridge_recovery_preconditions(pre)
+        antigravity = pre["antigravity"]
+
+        if antigravity.get("status") == "ok":
+            return {
+                "status": "executed",
+                "reused": True,
+                "pre": pre,
+                "post": pre,
+            }
+
+        helper_hashes = self._require_reviewed_bridge_helpers()
+        _run(
+            [
+                "bash",
+                str(self.root / "scripts/with-host-secrets.sh"),
+                "bash",
+                str(self.root / "scripts/antigravity-bridge.sh"),
+                "start",
+            ],
+            cwd=self.root,
+            timeout=60,
+        )
+
+        post_antigravity: dict[str, Any] | None = None
+        for _ in range(30):
+            try:
+                post_antigravity = self._antigravity_health()
+            except Exception:
+                post_antigravity = None
+            if (
+                post_antigravity
+                and post_antigravity.get("status") == "ok"
+                and post_antigravity.get("safe_settings") is True
+                and post_antigravity.get("active_runs") == 0
+                and post_antigravity.get("pending_cancellations") == 0
+            ):
+                break
+            time.sleep(0.5)
+
+        if (
+            not post_antigravity
+            or post_antigravity.get("status") != "ok"
+            or post_antigravity.get("safe_settings") is not True
+            or post_antigravity.get("active_runs") != 0
+            or post_antigravity.get("pending_cancellations") != 0
+        ):
+            raise RuntimeError(
+                "Antigravity bridge did not become safe/idle after bounded start"
+            )
+
+        return {
+            "status": "executed",
+            "reused": False,
+            "helper_sha256": helper_hashes,
+            "pre": pre,
+            "post": {
+                "antigravity": {
+                    "reachable": True,
+                    **post_antigravity,
+                }
+            },
         }
 
     def rollout(self, expected_sha: str, github_head: str) -> dict[str, Any]:
@@ -839,6 +998,12 @@ def execute_action(
         return {
             "action": "rollout_pcp_exact_main",
             **host.rollout(str(command["expected_main_sha"]), github_head),
+        }
+    if command["action"] == "recover_antigravity_bridge":
+        return {
+            "action": "recover_antigravity_bridge",
+            "github_main": github_head,
+            **host.recover_antigravity_bridge(),
         }
     raise RuntimeError("Unsupported Guardian action")
 
