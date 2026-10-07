@@ -8,7 +8,7 @@ This roadmap is a planning artifact beneath the Project Constitution. PM may reo
 
 Build the smallest layer that enables the next layer safely. Do not add swarm infrastructure, dashboards, or model orchestration complexity before the underlying team contracts and source-of-truth rules are durable.
 
-## Current business/product priority overlay — 2026-10-07
+## Current business/product priority overlay — 2026-10-08
 
 The current business/product strategy is `business-strategy.md`. PCP has moved from broad foundational capability construction into a **consolidation and reliability** stage.
 
@@ -24,10 +24,14 @@ The practical roadmap is therefore narrower than the historical phase list below
 Current evidence:
 
 - RCTL-MVP #513 is completed after live standalone exact-head merge and exact supervised continuation proof.
-- Runtime 1.0.131 is live on PCP main `6db414df30040cacc9fd922283eb21e06ba576b8`.
+- Runtime 1.0.131 remains the last live rollout at local PCP head `6db414df30040cacc9fd922283eb21e06ba576b8`.
+- GitHub main is ahead at `b0c0e9a43634b4b133382a2b2cab4c5828372465`: PR #558 merged Runtime 1.0.132 and the estimated active-job workflow progress contract, and post-merge CI #1075 / run `37665108466` is green. This is source-ready, not live-ready evidence.
+- Fresh Guardian result `6044045994` still observed one active engineering/executor job, so exact-main rollout is intentionally held until a new zero-active quiescence proof. Do not use an older 1.0.131 proof to roll out 1.0.132.
+- #557 / PR #558 is a bounded Human Owner-attention improvement: workflow progress derives from durable stages/milestones and explicitly is not ETA or resource-budget usage. It does not justify broad dashboard expansion without similar evidence.
 - #512 remains open only for natural parent-level evidence such as post-rollout GitHub `direct_intake` and a real control-plane-unavailable Guardian case; do not create synthetic work solely to close those acceptance boundaries.
 - #524 intentionally stays open for Guardian command/audit history.
 - #555 / PR #556 is completed and live-proven: an exact `collaboration_pm_handoff` now exposes the existing generation-bound `resume_same` path, and GitHub PM control can resume that same durable job for one verification-only handoff turn without reroute/provider reset/replacement-job semantics.
+- #493 remains the next ordinary PCP engineering backlog candidate after the pending 1.0.132 rollout and a stable managed-project checkpoint. Its residual scope is cold/quiesced/isolated DDEV startup hardening; the healthy-direct-workspace incident is already mitigated. Do not implement it as a blind 600->1800 timeout increase.
 
 The older phases remain useful architecture/history context. They must not be interpreted as a requirement to continue building every previously imagined layer after the business problem has already been solved by a smaller path.
 
