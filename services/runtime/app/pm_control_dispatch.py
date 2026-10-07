@@ -262,6 +262,12 @@ class PMControlDispatcher:
                 expected_generation=str(envelope.blocker_generation),
                 finding=str(envelope.finding),
                 references=list(envelope.references),
+                anti_loop_bypass=list(envelope.anti_loop_bypass),
+                authorization_reference={
+                    "channel": "github_pm_control",
+                    "comment_id": int(comment_id),
+                    "issue_number": int(issue_number),
+                },
             )
             return (
                 "executed",
@@ -271,6 +277,7 @@ class PMControlDispatcher:
                     "job_id": row.get("id"),
                     "job_status": row.get("status"),
                     "blocker_generation": envelope.blocker_generation,
+                    "anti_loop_bypass": list(envelope.anti_loop_bypass),
                 },
             )
 

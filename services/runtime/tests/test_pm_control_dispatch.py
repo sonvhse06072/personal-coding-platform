@@ -297,12 +297,16 @@ class FakeControls:
         expected_generation,
         finding,
         references,
+        anti_loop_bypass,
+        authorization_reference,
     ):
         self.blocked_repairs.append({
             "job_id": job_id,
             "expected_generation": expected_generation,
             "finding": finding,
             "references": list(references),
+            "anti_loop_bypass": list(anti_loop_bypass),
+            "authorization_reference": dict(authorization_reference),
         })
         return {
             "id": job_id,
@@ -423,6 +427,7 @@ def test_remote_blocked_repair_dispatches_exact_same_job_request():
         "job_id": "job-12345678",
         "job_status": "queued",
         "blocker_generation": "generation-live",
+        "anti_loop_bypass": [],
     }
     assert orchestrator.controls.blocked_repairs == [
         {
@@ -433,8 +438,73 @@ def test_remote_blocked_repair_dispatches_exact_same_job_request():
                 "repair only the existing bounded diff."
             ),
             "references": ["GH-77", "diagnostic:6031574054"],
+            "anti_loop_bypass": [],
+            "authorization_reference": {
+                "channel": "github_pm_control",
+                "comment_id": 120,
+                "issue_number": 77,
+            },
         }
     ]
+
+
+def test_remote_blocked_repair_dispatches_pm_antiloop_bypass():
+    dispatch, _, _, orchestrator = dispatcher()
+
+    status, result = asyncio.run(
+        dispatch.dispatch(
+            envelope(
+                "repair_blocked_job",
+                job_id="job-12345678",
+                blocker_generation="generation-live",
+                finding="Continue the same bounded repair after PM review.",
+                anti_loop_bypass=["all_current"],
+            ),
+            comment_id=121,
+            issue_number=77,
+        )
+    )
+
+    assert status == "executed"
+    assert result["anti_loop_bypass"] == ["all_current"]
+    assert orchestrator.controls.blocked_repairs[-1]["anti_loop_bypass"] == [
+        "all_current"
+    ]
+    assert orchestrator.controls.blocked_repairs[-1][
+        "authorization_reference"
+    ] == {
+        "channel": "github_pm_control",
+        "comment_id": 121,
+        "issue_number": 77,
+    }
+
+
+def test_remote_blocked_repair_bypass_selector_validation():
+    with pytest.raises(ValueError, match="cannot be combined"):
+        envelope(
+            "repair_blocked_job",
+            job_id="job-12345678",
+            blocker_generation="generation-live",
+            finding="Continue.",
+            anti_loop_bypass=["all_current", "max_test_runs"],
+        )
+
+    with pytest.raises(ValueError, match="unique and sorted"):
+        envelope(
+            "repair_blocked_job",
+            job_id="job-12345678",
+            blocker_generation="generation-live",
+            finding="Continue.",
+            anti_loop_bypass=["max_test_runs", "max_repair_iterations"],
+        )
+
+    with pytest.raises(ValueError, match="only valid"):
+        envelope(
+            "request_diagnostics",
+            job_id="job-12345678",
+            diagnostic_collectors=["job"],
+            anti_loop_bypass=["all_current"],
+        )
 
 
 def test_remote_blocked_repair_envelope_requires_generation_and_finding():

@@ -100,6 +100,21 @@ class PMControlEnvelope(BaseModel):
 
     finding: str | None = Field(default=None, min_length=1, max_length=8000)
     references: list[str] = Field(default_factory=list, max_length=12)
+    anti_loop_bypass: list[
+        Literal[
+            "all_current",
+            "repeated_failure",
+            "no_progress",
+            "max_model_calls",
+            "max_tool_calls",
+            "max_test_runs",
+            "max_repair_iterations",
+            "max_iterations",
+            "max_wall_time_minutes",
+            "deterministic_failure_streak",
+            "adaptive_emergency_repair_window",
+        ]
+    ] = Field(default_factory=list, max_length=12)
 
     continuation_key: str | None = Field(
         default=None,
@@ -178,6 +193,17 @@ class PMControlEnvelope(BaseModel):
             require("job_id", "expected_commit", "finding")
         elif self.action == "repair_blocked_job":
             require("job_id", "blocker_generation", "finding")
+            if (
+                "all_current" in self.anti_loop_bypass
+                and len(self.anti_loop_bypass) != 1
+            ):
+                raise ValueError(
+                    "anti_loop_bypass all_current cannot be combined with explicit selectors"
+                )
+            if self.anti_loop_bypass != sorted(set(self.anti_loop_bypass)):
+                raise ValueError(
+                    "anti_loop_bypass selectors must be unique and sorted"
+                )
         elif self.action in {"recheck_blocker", "resume_same_job"}:
             require("job_id", "blocker_generation")
             if bool(self.control_action_id) == bool(self.recovery_action_type):
@@ -233,6 +259,10 @@ class PMControlEnvelope(BaseModel):
                 raise ValueError(
                     "references must contain non-empty values <= 500 characters"
                 )
+        if self.action != "repair_blocked_job" and self.anti_loop_bypass:
+            raise ValueError(
+                "anti_loop_bypass is only valid for repair_blocked_job"
+            )
         return self
 
     def target_identity(self) -> dict[str, Any]:
@@ -243,6 +273,7 @@ class PMControlEnvelope(BaseModel):
             "blocker_generation": self.blocker_generation,
             "control_action_id": self.control_action_id,
             "recovery_action_type": self.recovery_action_type,
+            "anti_loop_bypass": self.anti_loop_bypass,
             "expected_commit": self.expected_commit,
             "source_commit": self.source_commit,
             "expected_head": self.expected_head,

@@ -1819,6 +1819,184 @@ def test_remote_blocked_repair_rejects_unproven_adaptive_emergency_telemetry(
 
 
 
+def reblocked_after_emergency_repair(job, storage):
+    reblocked = storage.get("job-1")
+    reblocked["status"] = "blocked"
+    reblocked["result"] = deepcopy(job["result"])
+    reblocked["result"]["diff"]["diff_hash"] = "e" * 64
+    reblocked["result"]["reassess"]["signals"] = list(
+        job["result"]["reassess"]["signals"]
+    ) + ["budget_emergency_threshold_reached:max_test_runs"]
+    reblocked["progress"]["repair_iterations"] = 16
+    reblocked["progress"]["test_runs"] = 42
+    reblocked["checkpoint"]["failure_context"] = {
+        "version": 1,
+        "kind": "semantic_repair",
+        "source": "pm_reassessment",
+        "message": "second repair context",
+        "diff_hash": job["result"]["diff"]["diff_hash"],
+    }
+    reblocked["checkpoint"]["deterministic_verification_failure_streak"] = {
+        "count": 1,
+        "limit": 2,
+        "verification_attempt": 14,
+        "signature": "fresh-signature",
+        "diff_hash": "e" * 64,
+        "failing_phases": ["targeted_tests"],
+    }
+    storage.jobs["job-1"] = deepcopy(reblocked)
+    return reblocked
+
+
+def test_pm_antiloop_all_current_authorizes_one_more_same_job_window():
+    job = adaptive_emergency_repair_job()
+    controls, storage, engine = blocked_repair_service(job)
+    first = controls.standalone_remote_actions("job-1")
+    asyncio.run(
+        controls.request_standalone_blocked_repair(
+            "job-1",
+            expected_generation=first["generation"],
+            finding="Use the normal one-time adaptive emergency repair turn.",
+        )
+    )
+
+    reblocked = reblocked_after_emergency_repair(job, storage)
+    advisory = controls.blocked_advisory({}, reblocked)
+    generation = controls.standalone_attention_generation_fingerprint(
+        reblocked,
+        advisory,
+    )
+    before = storage.get("job-1")
+
+    result = asyncio.run(
+        controls.request_standalone_blocked_repair(
+            "job-1",
+            expected_generation=generation,
+            finding="PM reviewed the blocker; continue one bounded same-job repair.",
+            references=["GH-77", "PCP #547"],
+            anti_loop_bypass=["all_current"],
+            authorization_reference={
+                "channel": "github_pm_control",
+                "comment_id": 999,
+                "issue_number": 77,
+            },
+        )
+    )
+
+    assert result["status"] == "queued"
+    assert engine.enqueued == ["job-1", "job-1"]
+    after = storage.get("job-1")
+    assert after["source_commit"] == before["source_commit"]
+    assert after["branch"] == before["branch"]
+    assert after["workspace"] == before["workspace"]
+    assert after["progress"]["test_runs"] == before["progress"]["test_runs"]
+    assert after["progress"]["model_calls"] == before["progress"]["model_calls"]
+    assert after["progress"]["tool_calls"] == before["progress"]["tool_calls"]
+    assert after["progress"]["repair_iterations"] == 17
+
+    record = after["checkpoint"]["last_pm_antiloop_bypass"]
+    assert record["blocker_generation"] == generation
+    assert record["requested"] == ["all_current"]
+    assert record["selectors"] == [
+        "adaptive_emergency_repair_window",
+        "max_repair_iterations",
+        "max_test_runs",
+        "no_progress",
+        "repeated_failure",
+    ]
+    assert record["counters"]["test_runs"] == 42
+    assert record["counters"]["repair_iterations"] == 16
+    assert record["authorization_reference"] == {
+        "channel": "github_pm_control",
+        "comment_id": 999,
+        "issue_number": 77,
+    }
+    assert len(after["checkpoint"]["pm_antiloop_bypass_history"]) == 1
+    assert after["result"]["repair"]["anti_loop_bypass"] == record["selectors"]
+
+
+def test_pm_antiloop_partial_bypass_must_cover_every_required_current_gate():
+    job = adaptive_emergency_repair_job()
+    controls, storage, engine = blocked_repair_service(job)
+    first = controls.standalone_remote_actions("job-1")
+    asyncio.run(
+        controls.request_standalone_blocked_repair(
+            "job-1",
+            expected_generation=first["generation"],
+            finding="Use the normal emergency window.",
+        )
+    )
+    reblocked = reblocked_after_emergency_repair(job, storage)
+    advisory = controls.blocked_advisory({}, reblocked)
+    generation = controls.standalone_attention_generation_fingerprint(
+        reblocked,
+        advisory,
+    )
+
+    with pytest.raises(RuntimeError, match="missing required current gate"):
+        asyncio.run(
+            controls.request_standalone_blocked_repair(
+                "job-1",
+                expected_generation=generation,
+                finding="Authorize only part of the current anti-loop blocker.",
+                anti_loop_bypass=[
+                    "adaptive_emergency_repair_window",
+                    "max_test_runs",
+                ],
+            )
+        )
+
+    assert engine.enqueued == ["job-1"]
+    assert storage.get("job-1")["status"] == "blocked"
+
+
+def test_pm_antiloop_bypass_cannot_cross_protected_or_hard_platform_boundary():
+    protected = adaptive_emergency_repair_job()
+    protected["progress"]["unexpected_scope"] = True
+    controls, _storage, engine = blocked_repair_service(protected)
+    advisory = controls.blocked_advisory({}, protected)
+    generation = controls.standalone_attention_generation_fingerprint(
+        protected,
+        advisory,
+    )
+    with pytest.raises(RuntimeError, match="unexpected scope"):
+        asyncio.run(
+            controls.request_standalone_blocked_repair(
+                "job-1",
+                expected_generation=generation,
+                finding="Attempt bypass.",
+                anti_loop_bypass=["all_current"],
+            )
+        )
+    assert engine.enqueued == []
+
+    hard = adaptive_emergency_repair_job()
+    hard["checkpoint"]["remote_adaptive_emergency_repair"] = {
+        "blocker_generation": "prior",
+        "prior_diff_hash": "a" * 64,
+        "current_diff_hash": hard["result"]["diff"]["diff_hash"],
+        "dimensions": ["max_repair_iterations"],
+        "recorded_at": "2026-10-07T00:00:00+00:00",
+    }
+    hard["progress"]["repair_iterations"] = 20
+    controls, _storage, engine = blocked_repair_service(hard)
+    advisory = controls.blocked_advisory({}, hard)
+    generation = controls.standalone_attention_generation_fingerprint(
+        hard,
+        advisory,
+    )
+    with pytest.raises(RuntimeError, match="hard platform maximum"):
+        asyncio.run(
+            controls.request_standalone_blocked_repair(
+                "job-1",
+                expected_generation=generation,
+                finding="Attempt hard-max bypass.",
+                anti_loop_bypass=["all_current"],
+            )
+        )
+    assert engine.enqueued == []
+
+
 def test_remote_blocked_repair_emergency_window_is_consumed_once():
     job = adaptive_emergency_repair_job()
     controls, storage, engine = blocked_repair_service(job)
