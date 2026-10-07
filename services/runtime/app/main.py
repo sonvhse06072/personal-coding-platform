@@ -169,6 +169,47 @@ def runtime_error(exc: RuntimeError) -> HTTPException:
     return HTTPException(404 if message == "Unknown job" else 409, message)
 
 
+async def _create_local_job_guarded(
+    request: JobCreateRequest,
+    *,
+    intake_decision=None,
+) -> str:
+    """Create/enqueue one local job without racing exclusive direct-project sync."""
+    project_id = request.project_id
+    if engine.is_exclusive_direct_project(project_id):
+        async with engine.project_operation_lock(project_id):
+            lease = storage.project_lease(project_id)
+            if lease and str(lease.get("state") or "") == "active":
+                raise RuntimeError(
+                    f"Project {project_id} is already leased by job "
+                    f"{lease.get('owner_job_id')}"
+                )
+            job_id = engine.create_job(
+                request.model_dump(mode="json"),
+                _intake_decision=intake_decision,
+            )
+            if request.auto_run:
+                reserved = engine.reserve_direct_project_lease(job_id)
+                if (
+                    reserved is None
+                    or str(reserved.get("state") or "") != "active"
+                    or str(reserved.get("owner_job_id") or "") != job_id
+                ):
+                    raise RuntimeError(
+                        "Direct job could not reserve its exact project lease"
+                    )
+                await engine.enqueue(job_id)
+            return job_id
+
+    job_id = engine.create_job(
+        request.model_dump(mode="json"),
+        _intake_decision=intake_decision,
+    )
+    if request.auto_run:
+        await engine.enqueue(job_id)
+    return job_id
+
+
 def _require_manual_collaboration_state(job_id: str) -> None:
     row = storage.get(job_id)
     if not row:
@@ -326,11 +367,12 @@ async def intake_ticket(payload: IntakeRequest) -> IntakeResponse:
             provider_state={key: state.model_dump(mode="json") for key, state in payload.provider_state.items()},
             auto_run=payload.auto_run,
         )
-        job_id = engine.create_job(request.model_dump(mode="json"), _intake_decision=decision)
+        job_id = await _create_local_job_guarded(
+            request,
+            intake_decision=decision,
+        )
     except (RuntimeError, KeyError, ValueError) as exc:
         raise HTTPException(422, str(exc)) from exc
-    if payload.auto_run:
-        await engine.enqueue(job_id)
     row = storage.get(job_id)
     assert row is not None
     return DirectIntakeResponse(**result, job={"id": job_id, "status": row["status"]})
@@ -467,11 +509,9 @@ async def execute_control_action(
 @app.post("/v1/jobs", response_model=JobView, dependencies=[Depends(auth)])
 async def create_job(payload: JobCreateRequest) -> JobView:
     try:
-        job_id = engine.create_job(payload.model_dump(mode="json"))
+        job_id = await _create_local_job_guarded(payload)
     except (RuntimeError, KeyError, ValueError) as exc:
         raise HTTPException(422, str(exc)) from exc
-    if payload.auto_run:
-        await engine.enqueue(job_id)
     row = storage.get(job_id)
     assert row is not None
     return view(row)
