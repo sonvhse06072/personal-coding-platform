@@ -324,3 +324,66 @@ def test_reviewed_guardian_config_is_exact():
     assert cfg["control_issue_number"] == 524
     assert cfg["default_branch"] == "main"
     assert cfg["pcp_root"] == "/home/sonvh/personal-coding-platform-v1"
+
+
+def full_ready_snapshot() -> dict:
+    return {
+        "runtime": {
+            "reachable": True,
+            "status": "ok",
+            "version": "1.0.121",
+        },
+        "router": {
+            "reachable": True,
+            "status": "ok",
+        },
+        "executor": {
+            "reachable": True,
+            "status": "ok",
+            "version": "1.0.33",
+            "active_jobs": 0,
+        },
+        "antigravity": {
+            "reachable": True,
+            "status": "ok",
+            "safe_settings": True,
+            "active_runs": 0,
+            "pending_cancellations": 0,
+        },
+        "active_engineering": {
+            "reachable": True,
+            "active_engineering_jobs": 0,
+        },
+        "n8n": {
+            "reachable": True,
+            "ok": True,
+        },
+        "credential_boundary": {
+            "reachable": True,
+            "ok": True,
+        },
+    }
+
+
+def test_post_rollout_ready_requires_health_versions_and_mobile_control_plane():
+    target = {"runtime": "1.0.121", "executor": "1.0.33"}
+    snapshot = full_ready_snapshot()
+    assert guardian.GuardianHost._post_rollout_ready(snapshot, target) is True
+
+    cases = [
+        ("runtime", "status", "degraded"),
+        ("runtime", "version", "1.0.120"),
+        ("router", "reachable", False),
+        ("executor", "status", "degraded"),
+        ("executor", "version", "1.0.32"),
+        ("executor", "active_jobs", 1),
+        ("antigravity", "safe_settings", False),
+        ("antigravity", "active_runs", 1),
+        ("active_engineering", "active_engineering_jobs", 1),
+        ("n8n", "ok", False),
+        ("credential_boundary", "ok", False),
+    ]
+    for section, key, value in cases:
+        changed = json.loads(json.dumps(snapshot))
+        changed[section][key] = value
+        assert guardian.GuardianHost._post_rollout_ready(changed, target) is False
