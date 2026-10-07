@@ -24,12 +24,46 @@ def blocked_job():
             "test_runs": 2,
             "changed_files": 9,
             "unexpected_scope": True,
+            "failure_fingerprints": [
+                "fp-old-123",
+                "fp-current-456",
+                "SECRET fingerprint /home/private",
+            ],
+            "last_agent_failure_kind": "deterministic_check",
         },
         "checkpoint": {
             "project_baseline": {"revision": "pilot-r3"},
             "canonical_intake": {
                 "mode": "direct",
                 "bounded_direct": True,
+            },
+            "last_verification_summary": {
+                "passed": False,
+                "phases": [
+                    {"phase": "unit", "passed": True, "stdout": "SECRET-unit"},
+                    {"phase": "kernel", "passed": False, "stderr": "/home/private"},
+                ],
+                "raw": "SECRET raw verification",
+            },
+            "deterministic_verification_failure_streak": {
+                "signature": "verify-fp-abc123",
+                "diff_hash": "diff-abc123",
+                "count": 3,
+                "limit": 2,
+                "failing_phases": [
+                    "kernel",
+                    "unsafe phase /home/private",
+                ],
+                "verification_attempt": 4,
+                "commands": ["cat /home/private/token"],
+            },
+            "failure_context": {
+                "version": 1,
+                "kind": "semantic_repair",
+                "source": "pm_reassessment",
+                "message": "SECRET context message /home/private/token",
+                "diff_hash": "diff-abc123",
+                "decision_key": "decision:key:123",
             },
         },
         "result": {
@@ -256,8 +290,26 @@ def test_diagnostics_publish_sanitized_exact_blocker_evidence():
     assert "generation-exact" in body
     assert "pm_scope_reassess" in body
     assert "supervised_hold" in body
+    assert '"last_verification_summary"' in body
+    assert '"phase": "unit"' in body
+    assert '"phase": "kernel"' in body
+    assert '"passed": false' in body
+    assert '"signature": "verify-fp-abc123"' in body
+    assert '"count": 3' in body
+    assert '"limit": 2' in body
+    assert '"verification_attempt": 4' in body
+    assert '"kind": "semantic_repair"' in body
+    assert '"source": "pm_reassessment"' in body
+    assert '"decision_key": "decision:key:123"' in body
+    assert "fp-current-456" in body
+    assert "deterministic_check" in body
     assert "SECRET raw failure" not in body
+    assert "SECRET context message" not in body
+    assert "SECRET raw verification" not in body
+    assert "SECRET-unit" not in body
+    assert "SECRET fingerprint" not in body
     assert "SECRET-ACTIVITY" not in body
+    assert "cat /home/private/token" not in body
     assert "/home/private" not in body
 
 
@@ -329,3 +381,33 @@ def test_orchestrated_attention_exposes_exact_durable_action_identity():
     assert "architecture_choice" in body
     assert "Choose the already-reviewed architecture boundary." in body
     assert "SECRET raw failure" not in body
+
+
+def test_failure_evidence_rejects_malformed_list_shapes():
+    storage = FakeStorage()
+    storage.job["checkpoint"]["deterministic_verification_failure_streak"][
+        "failing_phases"
+    ] = "kernel"
+    storage.job["progress"]["failure_fingerprints"] = "fingerprint"
+    engine = FakeEngine()
+    service = PMDiagnosticsService(
+        storage,
+        engine,
+        FakeOrchestrator(),
+    )
+
+    asyncio.run(
+        service.collect_and_publish(
+            project_id="chonhac",
+            issue_number=77,
+            control_comment_id=126,
+            job_id=JOB_ID,
+            plan_id="plan-1",
+            collectors=["job"],
+        )
+    )
+
+    body = engine.ddev.comments[-1]["body"]
+    assert '"failing_phases"' not in body
+    assert '"recent_failure_fingerprints"' not in body
+    assert '"signature": "verify-fp-abc123"' in body
