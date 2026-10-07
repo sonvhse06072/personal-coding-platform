@@ -14,6 +14,7 @@ from .legacy_delivery_recovery import (
     recover_legacy_accepted_result,
 )
 from .orchestrator_resume import prepare_orchestrated_job_resume, reopen_orchestrated_job
+from .standalone_antiloop_epoch import start_pm_antiloop_epoch
 from .state import checkpoint_from_row, set_failure_context
 from .storage import now
 
@@ -1454,6 +1455,15 @@ class ControlActionService:
         progress["pm_reassessments"] = int(
             progress.get("pm_reassessments") or 0
         ) + 1
+
+        if expanded_bypass:
+            start_pm_antiloop_epoch(
+                checkpoint,
+                progress,
+                blocker_generation=expected_generation,
+                diff_hash=diff_hash,
+                selectors=sorted(expanded_bypass),
+            )
 
         set_failure_context(
             checkpoint,
