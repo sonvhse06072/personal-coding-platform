@@ -4,7 +4,7 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 fresh Runtime/GitHub evidence remain authoritative over chat history. This file
 is an index, not authority to change the approved baseline or protected scope.
 
-Last updated: 2026-10-07 after RCTL-MVP #513 live acceptance, Runtime 1.0.130 rollout, Chợ Nhạc #77 completion, and generation-4 EE-0-02 release.
+Last updated: 2026-10-07 after Runtime 1.0.131 rollout, #555/#556 bounded PM-handoff recovery acceptance, and live reconciliation of Chợ Nhạc EE-0-02.
 
 ## Resume order
 
@@ -31,16 +31,21 @@ GitHub/Runtime live evidence remains authoritative over this snapshot.
 ### Live PCP state
 
 - The last Runtime-affecting PCP main accepted and rolled out is
-  `62a89ff59669e68dd73533af7c6851f91c5b44dc` (PR #553).
-- Runtime: `1.0.130`.
+  `6db414df30040cacc9fd922283eb21e06ba576b8` (PR #556).
+- Runtime: `1.0.131`.
 - ddev-executor: `1.0.33`.
 - Router: `1.0.31`.
-- PR #553 fixed stale Developer Activity after a terminal standalone job; terminal jobs still disappear from the active picker while their previous BLOCK transcript is cleared.
+- PR #553 fixed stale Developer Activity after a terminal standalone job.
 - RCTL-MVP #513 is **closed completed**. Natural Chợ Nhạc #77 live-proved:
   - sanitized remote diagnostics and same-job repair;
   - one PM authorization surviving multiple progressing repair/reverification cycles;
   - exact-head standalone PM merge through `merge_standalone_job`;
   - exact supervised continuation through `continue_supervised_plan`.
+- #555 / PR #556 is **closed completed** and live-proven on Runtime 1.0.131:
+  - exact `collaboration_pm_handoff` durable context materializes the existing generation-bound `resume_same` action;
+  - incomplete/stale PM-handoff context remains fail-closed;
+  - exact GitHub `resume_same_job` for Chợ Nhạc job `f646378719a85fa2be340d3fd2af256a` was recorded as `executed` with `error=null`;
+  - recovery preserves the same job/workspace/diff/counters and does not reroute or reset provider state.
 - #512 remains open as a parent acceptance frame, not a broad implementation backlog. Remaining parent evidence should be gathered naturally:
   - a post-rollout GitHub `direct_intake` on a real bounded ticket;
   - a real Runtime/n8n-unavailable Guardian case if one occurs.
@@ -55,14 +60,25 @@ GitHub/Runtime live evidence remains authoritative over this snapshot.
 - Chợ Nhạc main after PR #78 is
   `f250dc799919910899e0000e23c2f48299894143`.
 - Supervised generation 4 was released through exact PM control identity.
-- EE-0-02 `public-event-discovery-detail` is active as job
-  `f646378719a85fa2be340d3fd2af256a`.
-- The direct workspace fast-forwarded to exact Chợ Nhạc main
-  `f250dc799919910899e0000e23c2f48299894143` before branch
-  `ai/f646378719a8` was created.
-- Latest diagnostic showed the job executing with no blocker generation, no pending Human decision, no failure evidence and `unexpected_scope=false`.
+- EE-0-02 `public-event-discovery-detail` remains the same durable job
+  `f646378719a85fa2be340d3fd2af256a` on branch `ai/f646378719a8`,
+  source `f250dc799919910899e0000e23c2f48299894143`.
+- The last full diagnostic before recovery showed `collaboration_pm_handoff`,
+  `frontend_quality` failing while targeted tests/static analysis passed,
+  `unexpected_scope=false`, and no pending Human decision.
+- Runtime 1.0.131 then materialized exact action `resume_same` with blocker
+  generation `745b859e861ba917e30cd57b16b23ca34911e1a66898ecf677d75c2d8f7750c6`
+  and control action `3K2EU61CDsBSvgrSxagTAh9I`.
+- GitHub PM control comment `6040773131` was durably recorded
+  `status=executed`, `error=null` for that exact job/generation/action.
+- Do not infer the post-resume verification outcome from that control event alone.
+  Re-read fresh Runtime/job evidence before any further repair, retry, merge or
+  supervised continuation.
 
-Because a managed-project engineering job is currently active, do not perform a PCP Runtime rebuild/restart/rollout. Docs-only GitHub work may proceed when it does not mutate local Runtime/executor state.
+Runtime-affecting PCP rollout is permitted only after a fresh quiescence check
+proves active engineering/executor/Antigravity work is zero and local PCP is
+clean. The 1.0.131 rollout met that gate; do not reuse that older proof for a
+future rollout.
 
 ### Immediate PM rule
 
