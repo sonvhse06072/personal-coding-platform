@@ -426,28 +426,32 @@ def test_post_rollout_ready_requires_health_versions_and_mobile_control_plane():
         assert guardian.GuardianHost._post_rollout_ready(changed, target) is False
 
 
-def test_guardian_token_is_scrubbed_from_subprocesses_by_default(
+def test_guardian_actions_metadata_is_scrubbed_from_subprocesses_by_default(
     monkeypatch,
 ):
-    secret_keys = {
+    scrubbed = {
         "GITHUB_TOKEN": "github-secret",
         "GH_TOKEN": "gh-secret",
         "ACTIONS_RUNTIME_TOKEN": "runtime-secret",
         "ACTIONS_ID_TOKEN_REQUEST_TOKEN": "oidc-secret",
         "ACTIONS_ID_TOKEN_REQUEST_URL": "https://token.example/request",
+        "RUNNER_TRACKING_ID": "runner-job-marker",
     }
-    for key, value in secret_keys.items():
+    for key, value in scrubbed.items():
         monkeypatch.setenv(key, value)
+    monkeypatch.setenv("PCP_UNRELATED_ENV", "preserved")
 
+    keys = sorted([*scrubbed, "PCP_UNRELATED_ENV"])
     probe = (
         "import json, os; "
         "print(json.dumps({k: os.environ.get(k) for k in "
-        + repr(sorted(secret_keys))
+        + repr(keys)
         + "}))"
     )
     default = guardian._run([guardian.sys.executable, "-c", probe])
     observed = json.loads(default.stdout)
-    assert all(value is None for value in observed.values())
+    assert all(observed[key] is None for key in scrubbed)
+    assert observed["PCP_UNRELATED_ENV"] == "preserved"
 
     scoped = guardian._run(
         [guardian.sys.executable, "-c", probe],
@@ -455,9 +459,11 @@ def test_guardian_token_is_scrubbed_from_subprocesses_by_default(
     )
     observed = json.loads(scoped.stdout)
     assert observed["GITHUB_TOKEN"] == "scoped-token"
+    assert observed["RUNNER_TRACKING_ID"] is None
+    assert observed["PCP_UNRELATED_ENV"] == "preserved"
     assert all(
-        value is None
-        for key, value in observed.items()
+        observed[key] is None
+        for key in scrubbed
         if key != "GITHUB_TOKEN"
     )
 
@@ -477,6 +483,7 @@ def test_git_fetch_askpass_contains_no_secret_and_is_private(
         assert "$GITHUB_TOKEN" in text
         assert env["GITHUB_TOKEN"] == "super-secret-token"
         assert env["GIT_ASKPASS"] == str(askpass)
+        assert "RUNNER_TRACKING_ID" not in env
         assert (askpass.stat().st_mode & 0o777) == 0o700
     finally:
         askpass.unlink(missing_ok=True)
