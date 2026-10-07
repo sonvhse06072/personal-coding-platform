@@ -1649,3 +1649,150 @@ def test_remote_blocked_repair_requires_repeat_and_no_progress_signals():
                 )
             )
         assert engine.enqueued == []
+
+
+def adaptive_emergency_repair_job():
+    job = blocked_repair_job()
+    job["route"]["strategy"]["budget_mode"] = "adaptive"
+    job["progress"].update({
+        "repair_iterations": 12,
+        "pm_reassessments": 1,
+    })
+    prior_diff = job["result"]["diff"]["diff_hash"]
+    current_diff = "ded7f2ca08baf2bba412b46c096dd44bcc76cc18eddf381b462f11f4ab5b269c"
+    job["checkpoint"]["failure_context"] = {
+        "version": 1,
+        "kind": "semantic_repair",
+        "source": "pm_reassessment",
+        "message": "PCP_PM_REASSESSMENT: repair prior diff",
+        "diff_hash": prior_diff,
+    }
+    job["checkpoint"]["deterministic_verification_failure_streak"] = {
+        "count": 1,
+        "limit": 2,
+        "verification_attempt": 11,
+        "signature": "0753dd6a298967d35d97a7f6",
+        "diff_hash": current_diff,
+        "failing_phases": ["targeted_tests"],
+    }
+    job["result"]["diff"]["diff_hash"] = current_diff
+    job["result"]["reassess"]["signals"] = [
+        "repeated_failure:1d70a54f5249177b07c2c01d",
+        "no_progress",
+        "budget_headroom_active:max_test_runs",
+        "budget_estimate_exceeded:max_tool_calls",
+        "budget_headroom_active:max_model_calls",
+        "budget_emergency_threshold_reached:max_repair_iterations",
+    ]
+    return job
+
+
+def test_remote_blocked_repair_allows_progress_proven_adaptive_emergency_telemetry():
+    job = adaptive_emergency_repair_job()
+    controls, storage, engine = blocked_repair_service(job)
+    before = storage.get("job-1")
+    advisory = controls.blocked_advisory({}, before)
+    generation = controls.standalone_attention_generation_fingerprint(
+        before,
+        advisory,
+    )
+
+    result = asyncio.run(
+        controls.request_standalone_blocked_repair(
+            "job-1",
+            expected_generation=generation,
+            finding=(
+                "Run current targeted_tests first and identify the exact failing "
+                "assertion before editing. Repair only the current five-file diff."
+            ),
+            references=["GH-77", "PCP diagnostic 6033146203"],
+        )
+    )
+
+    assert result["status"] == "queued"
+    assert engine.enqueued == ["job-1"]
+    after = storage.get("job-1")
+    assert after["route"] == before["route"]
+    assert after["source_commit"] == before["source_commit"]
+    assert after["branch"] == before["branch"]
+    assert after["workspace"] == before["workspace"]
+    assert after["progress"]["repair_iterations"] == 13
+    for key in (
+        "model_calls",
+        "tool_calls",
+        "test_runs",
+        "elapsed_minutes",
+        "iteration",
+    ):
+        assert after["progress"][key] == before["progress"][key]
+    assert (
+        after["result"]["previous_block"]["diff_hash"]
+        == before["result"]["diff"]["diff_hash"]
+    )
+
+
+@pytest.mark.parametrize(
+    ("mutate", "match"),
+    [
+        (
+            lambda job: job["route"]["strategy"].update(
+                budget_mode="legacy_hard"
+            ),
+            "requires adaptive route",
+        ),
+        (
+            lambda job: job["result"]["reassess"]["signals"].append(
+                "budget_emergency_threshold_reached:max_changed_files"
+            ),
+            "unsupported emergency telemetry dimension",
+        ),
+        (
+            lambda job: job["checkpoint"]["failure_context"].update(
+                source="provider"
+            ),
+            "prior PM repair context",
+        ),
+        (
+            lambda job: job["checkpoint"]["failure_context"].update(
+                diff_hash=job["result"]["diff"]["diff_hash"]
+            ),
+            "material diff progress",
+        ),
+        (
+            lambda job: job["checkpoint"][
+                "deterministic_verification_failure_streak"
+            ].update(count=2),
+            "one fresh current-diff failure",
+        ),
+        (
+            lambda job: job["checkpoint"][
+                "deterministic_verification_failure_streak"
+            ].update(diff_hash="f" * 64),
+            "one fresh current-diff failure",
+        ),
+    ],
+)
+def test_remote_blocked_repair_rejects_unproven_adaptive_emergency_telemetry(
+    mutate,
+    match,
+):
+    job = adaptive_emergency_repair_job()
+    mutate(job)
+    controls, storage, engine = blocked_repair_service(job)
+    advisory = controls.blocked_advisory({}, job)
+    generation = controls.standalone_attention_generation_fingerprint(
+        job,
+        advisory,
+    )
+
+    with pytest.raises(RuntimeError, match=match):
+        asyncio.run(
+            controls.request_standalone_blocked_repair(
+                "job-1",
+                expected_generation=generation,
+                finding="Repair only the new targeted test failure.",
+            )
+        )
+
+    assert engine.enqueued == []
+    assert storage.get("job-1")["status"] == "blocked"
