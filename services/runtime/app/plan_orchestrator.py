@@ -1254,6 +1254,36 @@ class PlanOrchestratorStore:
         )
         return int(result.rowcount or 0)
 
+    def supersede_standalone_notifications(
+        self,
+        job_id: str,
+        *,
+        except_generation: str | None = None,
+    ) -> int:
+        """Retire pending standalone owner attention outside one current generation."""
+        self.ensure()
+        generation_filter = ""
+        values: list[Any] = [now(), job_id]
+        if except_generation is not None:
+            generation_filter = (
+                " AND COALESCE(payload->>'attention_generation','') <> %s"
+            )
+            values.append(except_generation)
+        with self.storage.connect() as conn:
+            result = conn.execute(
+                f"""UPDATE cp_notification_outbox
+                SET status='superseded', lease_until=NULL, updated_at=%s
+                WHERE status IN ('pending','delivering')
+                  AND plan_id IS NULL
+                  AND work_order_id IS NULL
+                  AND payload->>'standalone_job_id'=%s
+                  AND COALESCE(payload->>'attention_state','')='blocked'
+                  {generation_filter}""",
+                values,
+            )
+            conn.commit()
+            return int(result.rowcount or 0)
+
     def supersede_obsolete_notifications(self) -> int:
         """Retire current or legacy attention rows that no longer match durable state."""
         self.ensure()

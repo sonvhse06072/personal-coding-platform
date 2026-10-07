@@ -282,11 +282,13 @@ class JobStatusPublisher:
         controls: Any,
         *,
         store: JobStatusStore | None = None,
+        notification_store: Any | None = None,
     ) -> None:
         self.storage = storage
         self.executor = executor
         self.controls = controls
         self.store = store or JobStatusStore(storage)
+        self.notification_store = notification_store
         self._task = None
 
     def _binding(self, job: dict[str, Any]) -> tuple[int, str] | None:
@@ -300,6 +302,119 @@ class JobStatusPublisher:
             return None
         return issue, repository
 
+    @staticmethod
+    def _fallback_attention_generation(job: dict[str, Any]) -> str:
+        result = dict(job.get("result") or {})
+        snapshot = {
+            "job_id": job.get("id"),
+            "project_id": job.get("project_id"),
+            "status": job.get("status"),
+            "updated_at": str(job.get("updated_at") or ""),
+            "reason": result.get("reason"),
+        }
+        return _sha(
+            json.dumps(
+                snapshot,
+                sort_keys=True,
+                separators=(",", ":"),
+                default=str,
+            )
+        )
+
+    def _standalone_notification_advisory(
+        self,
+        job: dict[str, Any],
+    ) -> dict[str, Any]:
+        advisory = dict(self.controls.blocked_advisory({}, job))
+        advisory.pop("action_specs", None)
+        advisory["title"] = "STANDALONE JOB BỊ CHẶN"
+        advisory["preserved"] = [
+            "Giữ nguyên cùng durable job và workspace hiện tại.",
+            "Giữ nguyên diff, tiến độ và các bộ đếm sử dụng bền vững.",
+            "Không tạo replacement job chỉ để vượt qua blocker.",
+        ]
+        advisory["impact"] = (
+            "Standalone job không chạy thêm tác vụ tự động cho đến khi "
+            "một recovery/control hợp lệ được revalidate và thực thi."
+        )
+        return advisory
+
+    def _stage_standalone_notification(
+        self,
+        job: dict[str, Any],
+        *,
+        issue_number: int,
+        repository: str,
+        attention: dict[str, Any] | None,
+    ) -> None:
+        if self.notification_store is None:
+            return
+        job_id = str(job.get("id") or "")
+        if not job_id:
+            return
+        try:
+            supersede = getattr(
+                self.notification_store,
+                "supersede_standalone_notifications",
+                None,
+            )
+            if str(job.get("status") or "") != "blocked":
+                if callable(supersede):
+                    supersede(job_id)
+                return
+
+            advisory = self._standalone_notification_advisory(job)
+            generation = str((attention or {}).get("generation") or "")
+            if not generation:
+                generation = self._fallback_attention_generation(job)
+            if callable(supersede):
+                supersede(job_id, except_generation=generation)
+
+            remote_actions = [
+                {
+                    "action_type": str(item.get("action_type") or "")[:100],
+                    "label": str(item.get("label") or "")[:120],
+                }
+                for item in list((attention or {}).get("actions") or [])[:12]
+                if isinstance(item, dict)
+                and str(item.get("action_type") or "")
+            ]
+            dedupe_key = _sha(
+                f"{job.get('project_id')}:{job_id}:"
+                f"standalone_job_blocked:{generation}"
+            )
+            self.notification_store.emit_notification(
+                dedupe_key=dedupe_key,
+                event_type="standalone_job_blocked",
+                severity="error",
+                project_id=str(job.get("project_id") or ""),
+                ticket_id=f"GH-{issue_number}",
+                plan_id=None,
+                work_order_id=None,
+                summary=str(
+                    advisory.get("summary")
+                    or "Standalone job đang bị chặn và cần owner chú ý."
+                ),
+                github_url=(
+                    f"https://github.com/{repository}/issues/{issue_number}"
+                ),
+                payload={
+                    "job_id": job_id,
+                    "standalone_job_id": job_id,
+                    "advisory": advisory,
+                    # Standalone PM controls are GitHub-bound today. Keep their
+                    # metadata visible without fabricating Telegram callbacks.
+                    "actions": [],
+                    "remote_actions": remote_actions,
+                },
+                attention_state="blocked",
+                attention_generation=generation,
+            )
+        except Exception:
+            # Telegram/outbox materialization is observability only. It must not
+            # block GitHub status publication or mutate engineering state.
+            return
+
     def stage_all(self) -> int:
         staged = 0
         for raw in self.storage.list(limit=200):
@@ -307,7 +422,7 @@ class JobStatusPublisher:
             binding = self._binding(job)
             if binding is None:
                 continue
-            issue_number, _ = binding
+            issue_number, repository = binding
             attention = None
             if str(job.get("status") or "") in {"blocked", "interrupted"}:
                 try:
@@ -320,6 +435,12 @@ class JobStatusPublisher:
                         "phase": "blocked",
                         "actions": [],
                     }
+            self._stage_standalone_notification(
+                job,
+                issue_number=issue_number,
+                repository=repository,
+                attention=attention,
+            )
             body = _render_job_status(job, attention=attention)
             if self.store.stage(
                 job,
