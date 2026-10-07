@@ -27,14 +27,18 @@ def _bounded_list(values: Any, *, limit: int = 12, item_limit: int = 300) -> lis
 
 
 
-_SAFE_IDENTITY = re.compile(r"^[A-Za-z0-9._:/+-]{1,200}$")
+_SAFE_IDENTITY = re.compile(r"^[A-Za-z0-9._:/+-]+$")
 
 
 def _safe_identity(value: Any, limit: int = 200) -> str | None:
-    if not isinstance(value, str) or not value:
+    if (
+        not isinstance(value, str)
+        or not value
+        or len(value) > limit
+        or _SAFE_IDENTITY.fullmatch(value) is None
+    ):
         return None
-    text = value[:limit]
-    return text if _SAFE_IDENTITY.fullmatch(text) else None
+    return value
 
 
 def _failure_evidence(
@@ -61,9 +65,10 @@ def _failure_evidence(
             value = _safe_identity(streak.get(key))
             if value is not None:
                 safe_streak[key] = value
+        raw_phases = streak.get("failing_phases")
         phases = [
             value
-            for raw in (streak.get("failing_phases") or [])[:16]
+            for raw in (raw_phases[:16] if isinstance(raw_phases, list) else [])
             if (value := _safe_identity(raw, 80)) is not None
         ]
         if phases:
@@ -85,9 +90,14 @@ def _failure_evidence(
         if safe_context:
             evidence["failure_context"] = safe_context
 
+    raw_fingerprints = progress.get("failure_fingerprints")
     fingerprints = [
         value
-        for raw in (progress.get("failure_fingerprints") or [])[-4:]
+        for raw in (
+            raw_fingerprints[-4:]
+            if isinstance(raw_fingerprints, list)
+            else []
+        )
         if (value := _safe_identity(raw, 200)) is not None
     ]
     if fingerprints:
