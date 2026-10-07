@@ -1031,3 +1031,189 @@ def test_failed_control_action_is_not_rearmed_after_state_drift():
 
     assert row["status"] == "failed"
     assert row["state_fingerprint"] == "old-state"
+
+
+def test_remote_control_executes_only_exact_routine_action_generation(monkeypatch):
+    controls, _ = service()
+    calls = []
+
+    monkeypatch.setattr(
+        controls,
+        "get_action",
+        lambda action_id: {
+            "action_id": action_id,
+            "action_type": "pm_scope_reassess",
+            "job_id": "job-1",
+            "generation_fingerprint": "generation-1",
+        },
+    )
+
+    async def execute_authorized(action_id):
+        calls.append(action_id)
+        return {"status": "executed", "action_id": action_id}
+
+    monkeypatch.setattr(controls, "_execute_authorized", execute_authorized)
+
+    result = asyncio.run(
+        controls.execute_remote(
+            "action-12345678",
+            expected_job_id="job-1",
+            expected_generation="generation-1",
+        )
+    )
+
+    assert result["status"] == "executed"
+    assert calls == ["action-12345678"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value", "message"),
+    [
+        ("job_id", "job-other", "job identity mismatch"),
+        ("generation_fingerprint", "generation-other", "generation mismatch"),
+        ("action_type", "budget_extend", "cannot execute action_type"),
+        ("action_type", "provider_quota_reset", "cannot execute action_type"),
+        ("action_type", "reroute_provider", "cannot execute action_type"),
+    ],
+)
+def test_remote_control_rejects_stale_or_nonroutine_actions(
+    monkeypatch,
+    field,
+    value,
+    message,
+):
+    controls, _ = service()
+    action = {
+        "action_id": "action-12345678",
+        "action_type": "resume_same",
+        "job_id": "job-1",
+        "generation_fingerprint": "generation-1",
+    }
+    action[field] = value
+    monkeypatch.setattr(controls, "get_action", lambda action_id: action)
+
+    with pytest.raises(RuntimeError, match=message):
+        asyncio.run(
+            controls.execute_remote(
+                "action-12345678",
+                expected_job_id="job-1",
+                expected_generation="generation-1",
+            )
+        )
+
+
+def standalone_scope_job():
+    job = base_job(
+        reason="reassessment_stopped",
+        last_failure="scope target exceeded",
+    )
+    job["id"] = "job-1"
+    job["status"] = "blocked"
+    job["updated_at"] = "2026-10-07T02:09:50+07:00"
+    job["source_commit"] = "a" * 40
+    job["branch"] = "ai/job-1"
+    job["checkpoint"]["canonical_intake"] = {
+        "policy_version": 1,
+        "mode": "direct",
+        "bounded_direct": True,
+        "decomposition_required": False,
+    }
+    job["route"]["strategy"].update({
+        "budget_mode": "adaptive",
+        "budget": {
+            **job["route"]["strategy"]["budget"],
+            "max_changed_files": 8,
+        },
+    })
+    job["progress"].update({
+        "changed_files": 10,
+        "unexpected_scope": True,
+        "important_decision_flags": [],
+    })
+    job["result"].update({
+        "reassess": {
+            "action": "stop",
+            "reason": "Circuit breaker: abnormal execution signal without a valid escalation path",
+            "signals": ["scope_expansion"],
+        }
+    })
+    return job
+
+
+def test_standalone_reassessment_exposes_only_runtime_offered_routine_action():
+    job = standalone_scope_job()
+    controls, _ = service(job)
+
+    view = controls.standalone_remote_actions("job-1")
+
+    assert view["reason"] == "reassessment_stopped"
+    assert view["phase"] == "reassessment"
+    assert view["actions"] == [
+        {
+            "action_type": "pm_scope_reassess",
+            "label": "🧭 PM review file scope",
+        }
+    ]
+    assert len(view["generation"]) == 64
+
+
+def test_standalone_recovery_recomputes_generation_and_action_before_dispatch(
+    monkeypatch,
+):
+    job = standalone_scope_job()
+    controls, storage = service(job)
+    view = controls.standalone_remote_actions("job-1")
+    dispatched = []
+
+    async def dispatch(action):
+        dispatched.append(action)
+        return {
+            "status": "executed",
+            "action_type": action["action_type"],
+        }
+
+    monkeypatch.setattr(controls, "_dispatch", dispatch)
+
+    result = asyncio.run(
+        controls.execute_standalone_remote(
+            "job-1",
+            expected_generation=view["generation"],
+            action_type="pm_scope_reassess",
+        )
+    )
+    assert result["status"] == "executed"
+    assert dispatched[0]["action_type"] == "pm_scope_reassess"
+
+    storage.jobs["job-1"]["updated_at"] = "2026-10-07T02:10:00+07:00"
+    with pytest.raises(RuntimeError, match="generation mismatch"):
+        asyncio.run(
+            controls.execute_standalone_remote(
+                "job-1",
+                expected_generation=view["generation"],
+                action_type="pm_scope_reassess",
+            )
+        )
+
+    current = controls.standalone_remote_actions("job-1")
+    with pytest.raises(RuntimeError, match="not currently offered"):
+        asyncio.run(
+            controls.execute_standalone_remote(
+                "job-1",
+                expected_generation=current["generation"],
+                action_type="retry_delivery",
+            )
+        )
+
+
+def test_standalone_remote_recovery_rejects_noncanonical_or_active_job():
+    job = standalone_scope_job()
+    job["checkpoint"].pop("canonical_intake")
+    controls, _ = service(job)
+    with pytest.raises(RuntimeError, match="canonical bounded-direct"):
+        controls.standalone_remote_actions("job-1")
+
+    job = standalone_scope_job()
+    job["status"] = "executing"
+    controls, _ = service(job)
+    with pytest.raises(RuntimeError, match="blocked/interrupted"):
+        controls.standalone_remote_actions("job-1")

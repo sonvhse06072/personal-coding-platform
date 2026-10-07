@@ -49,6 +49,21 @@ _ACTIVE_JOB_STATUSES = {
     "queued", "routing", "planning", "executing", "verifying", "evaluating", "delivering"
 }
 
+_REMOTE_ROUTINE_ACTION_TYPES = frozenset({
+    "pm_scope_reassess",
+    "resume_same",
+    "retry_delivery",
+    "recheck_ci",
+    "recheck_orchestration",
+})
+
+_REMOTE_STANDALONE_ACTION_TYPES = frozenset({
+    "pm_scope_reassess",
+    "resume_same",
+    "retry_delivery",
+    "recheck_ci",
+})
+
 # Explicit owner extensions may exceed a Router-selected/WorkOrder ceiling, but
 # never these platform hard maxima. Consumed counters are never reset.
 _BUDGET_EXTENSION_SPECS: dict[str, dict[str, Any]] = {
@@ -174,6 +189,34 @@ class ControlActionService:
             "action_specs": advisory.get("action_specs") or [],
         }
         encoded = json.dumps(snapshot, sort_keys=True, separators=(",", ":"), default=str)
+        return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+    def standalone_attention_generation_fingerprint(
+        self,
+        job: dict[str, Any],
+        advisory: dict[str, Any],
+    ) -> str:
+        """Bind one standalone blocker action to the exact durable direct-job state."""
+        snapshot = {
+            "job_id": job.get("id"),
+            "project_id": job.get("project_id"),
+            "job_status": job.get("status"),
+            "job_updated_at": self._iso(job.get("updated_at")),
+            "source_commit": job.get("source_commit"),
+            "branch": job.get("branch"),
+            "route": job.get("route") or {},
+            "progress": job.get("progress") or {},
+            "checkpoint": job.get("checkpoint") or {},
+            "job_result": job.get("result") or {},
+            "advisory_reason": advisory.get("reason"),
+            "action_specs": advisory.get("action_specs") or [],
+        }
+        encoded = json.dumps(
+            snapshot,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        )
         return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
     def supersede_pending_actions(
@@ -827,6 +870,110 @@ class ControlActionService:
             telegram_user_id=telegram_user_id,
             telegram_chat_id=telegram_chat_id,
         )
+        return await self._execute_authorized(action_id)
+
+    async def execute_remote(
+        self,
+        action_id: str,
+        *,
+        expected_job_id: str,
+        expected_generation: str,
+    ) -> dict[str, Any]:
+        """Execute one already-issued routine recovery action via GitHub PM control."""
+        action = self.get_action(action_id)
+        if action is None:
+            raise RuntimeError("Unknown control action")
+        if str(action.get("job_id") or "") != expected_job_id:
+            raise RuntimeError("Remote control action job identity mismatch")
+        if not secrets.compare_digest(
+            str(action.get("generation_fingerprint") or ""),
+            expected_generation,
+        ):
+            raise RuntimeError("Remote control action generation mismatch")
+        action_type = str(action.get("action_type") or "")
+        if action_type not in _REMOTE_ROUTINE_ACTION_TYPES:
+            raise RuntimeError(
+                f"Remote PM channel cannot execute action_type={action_type}"
+            )
+        return await self._execute_authorized(action_id)
+
+    def standalone_remote_actions(
+        self,
+        job_id: str,
+    ) -> dict[str, Any]:
+        """Return currently offered routine actions for a standalone direct job."""
+        job = self.storage.get(job_id)
+        if job is None:
+            raise RuntimeError("Unknown job")
+        job = dict(job)
+        checkpoint = dict(job.get("checkpoint") or {})
+        intake = dict(checkpoint.get("canonical_intake") or {})
+        if intake.get("mode") != "direct" or intake.get("bounded_direct") is not True:
+            raise RuntimeError(
+                "Standalone remote recovery requires canonical bounded-direct intake"
+            )
+        if str(job.get("status") or "") not in {"blocked", "interrupted"}:
+            raise RuntimeError(
+                "Standalone remote recovery requires blocked/interrupted job state"
+            )
+        advisory = self.blocked_advisory({}, job)
+        generation = self.standalone_attention_generation_fingerprint(
+            job,
+            advisory,
+        )
+        actions = [
+            {
+                "action_type": str(spec.get("action_type") or ""),
+                "label": str(spec.get("label") or "")[:80],
+            }
+            for spec in advisory.get("action_specs") or []
+            if str(spec.get("action_type") or "")
+            in _REMOTE_STANDALONE_ACTION_TYPES
+        ]
+        return {
+            "job_id": job_id,
+            "generation": generation,
+            "reason": advisory.get("reason"),
+            "phase": advisory.get("phase"),
+            "actions": actions,
+        }
+
+    async def execute_standalone_remote(
+        self,
+        job_id: str,
+        *,
+        expected_generation: str,
+        action_type: str,
+    ) -> dict[str, Any]:
+        """Execute one recomputed routine action for a standalone direct job."""
+        current = self.standalone_remote_actions(job_id)
+        if not secrets.compare_digest(
+            str(current.get("generation") or ""),
+            expected_generation,
+        ):
+            raise RuntimeError("Standalone remote blocker generation mismatch")
+        available = {
+            str(item.get("action_type") or "")
+            for item in current.get("actions") or []
+        }
+        if action_type not in available:
+            raise RuntimeError(
+                f"Standalone remote action is not currently offered: {action_type}"
+            )
+        action = {
+            "action_id": (
+                "github-standalone:"
+                + hashlib.sha256(
+                    f"{job_id}:{expected_generation}:{action_type}".encode("utf-8")
+                ).hexdigest()[:24]
+            ),
+            "action_type": action_type,
+            "job_id": job_id,
+            "payload": {},
+        }
+        return await self._dispatch(action)
+
+    async def _execute_authorized(self, action_id: str) -> dict[str, Any]:
         self.ensure()
         timestamp = now()
         with self.storage.connect() as conn:

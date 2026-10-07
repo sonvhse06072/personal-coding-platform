@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 
-from app.pm_merge import evaluate_pm_merge
+from app.pm_merge import evaluate_pm_merge, evaluate_standalone_pm_merge
 
 
 HEAD = "b" * 40
@@ -286,3 +286,66 @@ def test_fast_review_may_skip_only_with_durable_strong_evidence_marker() -> None
     values[3]["result"]["progress"]["review_skipped_strong_evidence"] = 0
     result = evaluate(tuple(values))
     assert "conditional_review_has_no_pass_or_strong_evidence_skip" in result.blockers
+
+
+def standalone_context() -> tuple[dict, dict, dict, dict]:
+    project, _, _, job, pr = context()
+    job = deepcopy(job)
+    job["checkpoint"].pop("work_order", None)
+    job["checkpoint"]["canonical_intake"] = {
+        "mode": "direct",
+        "bounded_direct": True,
+        "decomposition_required": False,
+        "policy_version": 1,
+    }
+    current_ci = {"state": "success", "commit": HEAD}
+    return project, job, pr, current_ci
+
+
+def evaluate_standalone(values):
+    project, job, pr, current_ci = values
+    return evaluate_standalone_pm_merge(
+        project=project,
+        job=job,
+        pr=pr,
+        pr_number=7,
+        current_ci=current_ci,
+    )
+
+
+def test_standalone_exact_green_bounded_direct_is_pm_merge_eligible() -> None:
+    result = evaluate_standalone(standalone_context())
+
+    assert result.eligible is True
+    assert result.manual_only is False
+    assert result.requires_human is False
+    assert result.blockers == ()
+    assert result.work_order_id is None
+    assert result.evidence["canonical_bounded_direct"] is True
+
+
+def test_standalone_merge_requires_canonical_bounded_direct_and_fresh_exact_ci() -> None:
+    values = list(standalone_context())
+    values[1] = deepcopy(values[1])
+    values[1]["checkpoint"].pop("canonical_intake", None)
+    result = evaluate_standalone(tuple(values))
+    assert "canonical_bounded_direct_intake_required" in result.blockers
+
+    values = list(standalone_context())
+    values[3] = {"state": "success", "commit": "c" * 40}
+    result = evaluate_standalone(tuple(values))
+    assert "fresh_exact_head_ci_not_successful" in result.blockers
+
+
+def test_standalone_merge_rejects_stale_pr_or_unapproved_protected_change() -> None:
+    values = list(standalone_context())
+    values[2] = {**values[2], "head": "c" * 40}
+    result = evaluate_standalone(tuple(values))
+    assert "pull_request_head_mismatch" in result.blockers
+
+    values = list(standalone_context())
+    values[1] = deepcopy(values[1])
+    values[1]["repo_analysis"]["security_sensitive"] = True
+    result = evaluate_standalone(tuple(values))
+    assert result.requires_human is True
+    assert "protected_change_without_matching_owner_approval" in result.blockers

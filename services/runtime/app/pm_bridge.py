@@ -234,11 +234,13 @@ class PMBridgeService:
         github: PMBridgeGitHubClient | None = None,
         events: PMBridgeEventStore | None = None,
         control_events: PMControlEventStore | None = None,
+        control_dispatcher: Any | None = None,
     ) -> None:
         self.storage = storage
         self.github = github or PMBridgeGitHubClient()
         self.events = events or PMBridgeEventStore(storage)
         self.control_events = control_events or PMControlEventStore(storage)
+        self.control_dispatcher = control_dispatcher
         self._lock = asyncio.Lock()
 
     async def poll_project(self, project_id: str) -> dict[str, Any]:
@@ -261,6 +263,9 @@ class PMBridgeService:
                 "controls_accepted": [],
                 "controls_rejected": [],
                 "controls_skipped": [],
+                "controls_dispatched": [],
+                "controls_failed": [],
+                "controls_uncertain": [],
             }
 
             for comment in reversed(comments):
@@ -327,14 +332,63 @@ class PMBridgeService:
                             target_identity=target_identity,
                             error=None,
                         )
-                        result["controls_accepted"].append(
-                            {
-                                "comment_id": comment_id,
-                                "action": action,
-                                "status": "accepted_pending_dispatch",
-                                "target_identity": target_identity,
-                            }
-                        )
+                        if self.control_dispatcher is None:
+                            result["controls_accepted"].append(
+                                {
+                                    "comment_id": comment_id,
+                                    "action": action,
+                                    "status": "accepted_pending_dispatch",
+                                    "target_identity": target_identity,
+                                }
+                            )
+                        else:
+                            self.control_events.claim(project_id, comment_id)
+                            try:
+                                terminal_status, dispatch_result = await self.control_dispatcher(
+                                    envelope,
+                                    comment_id=comment_id,
+                                    issue_number=issue_number,
+                                )
+                            except Exception as dispatch_exc:
+                                dispatch_error = (
+                                    f"{type(dispatch_exc).__name__}: {dispatch_exc}"
+                                )[-12000:]
+                                self.control_events.finish(
+                                    project_id=project_id,
+                                    comment_id=comment_id,
+                                    status="failed",
+                                    result={
+                                        "status": "failed",
+                                        "action": action,
+                                        "error_type": type(dispatch_exc).__name__,
+                                    },
+                                    error=dispatch_error,
+                                )
+                                result["controls_failed"].append(
+                                    {
+                                        "comment_id": comment_id,
+                                        "action": action,
+                                        "error": dispatch_error,
+                                    }
+                                )
+                            else:
+                                self.control_events.finish(
+                                    project_id=project_id,
+                                    comment_id=comment_id,
+                                    status=terminal_status,
+                                    result=dispatch_result,
+                                    error=None,
+                                )
+                                item = {
+                                    "comment_id": comment_id,
+                                    "action": action,
+                                    "status": terminal_status,
+                                    "result": dispatch_result,
+                                }
+                                if terminal_status == "uncertain":
+                                    result["controls_uncertain"].append(item)
+                                else:
+                                    result["controls_dispatched"].append(item)
                     except Exception as exc:
                         error = f"{type(exc).__name__}: {exc}"[-12000:]
                         self.control_events.record(
@@ -495,6 +549,10 @@ _storage = Storage()
 _service = PMBridgeService(_storage)
 
 
+def configure_control_dispatcher(dispatcher: Any) -> None:
+    _service.control_dispatcher = dispatcher
+
+
 @router.post("/poll")
 async def poll(payload: PMBridgePollRequest) -> dict[str, Any]:
     try:
@@ -519,4 +577,12 @@ def event(project_id: str, comment_id: int) -> dict[str, Any]:
     row = _service.events.get(project_id, comment_id)
     if row is None:
         raise HTTPException(404, "PM bridge event not found")
+    return dict(row)
+
+
+@router.get("/control-events/{project_id}/{comment_id}")
+def control_event(project_id: str, comment_id: int) -> dict[str, Any]:
+    row = _service.control_events.get(project_id, comment_id)
+    if row is None:
+        raise HTTPException(404, "PM control event not found")
     return dict(row)

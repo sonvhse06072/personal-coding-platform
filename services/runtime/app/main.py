@@ -25,7 +25,8 @@ from .plan_progress_store import PlanProgressStore
 from .plan_progress_publisher import PlanProgressPublisher
 from .plan_orchestrator import PlanContinuationConflict
 from .orchestrator_resume import prepare_orchestrated_job_resume, reopen_orchestrated_job
-from .pm_bridge import router as pm_bridge_router
+from .pm_bridge import configure_control_dispatcher, router as pm_bridge_router
+from .pm_control_dispatch import PMControlDispatcher
 from .preview import PreviewManager, ProjectPreviewManager
 from .pm_planning import (
     ExecutionPlanView,
@@ -123,6 +124,8 @@ pm_planner = PMPlanner(storage)
 collaboration_manager = engine.collaboration
 progress_handoffs = PlanProgressStore(storage)
 plan_orchestrator = PlanOrchestrator(storage, engine, progress_handoffs=progress_handoffs)
+pm_control_dispatcher = PMControlDispatcher(storage, engine, plan_orchestrator)
+configure_control_dispatcher(pm_control_dispatcher.dispatch)
 progress_publisher = PlanProgressPublisher(progress_handoffs, engine.ddev)
 preview_manager = PreviewManager(storage, engine.ddev)
 project_preview_manager = ProjectPreviewManager(storage, engine.ddev)
@@ -183,7 +186,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-RUNTIME_VERSION = "1.0.119"
+RUNTIME_VERSION = "1.0.120"
 
 app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan=lifespan)
 app.include_router(pm_bridge_router)
