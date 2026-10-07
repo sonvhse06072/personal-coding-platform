@@ -132,6 +132,7 @@ job_status_publisher = JobStatusPublisher(
     storage,
     engine.ddev,
     plan_orchestrator.controls,
+    notification_store=plan_orchestrator.store,
 )
 preview_manager = PreviewManager(storage, engine.ddev)
 project_preview_manager = ProjectPreviewManager(storage, engine.ddev)
@@ -235,7 +236,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-RUNTIME_VERSION = "1.0.124"
+RUNTIME_VERSION = "1.0.125"
 
 app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan=lifespan)
 app.include_router(pm_bridge_router)
