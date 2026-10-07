@@ -206,7 +206,7 @@ As of 2026-10-07, the PCP GitHub engineering backlog is intentionally small.
 - **#512 — Remote PM control plane + Guardian:** parent acceptance remains open for natural evidence, not broad new source implementation. Missing natural proofs should not justify synthetic jobs or destructive outage tests.
 - **#524 — Guardian control/audit:** intentionally persistent operational channel, not product backlog.
 
-RCTL-MVP #513 is completed. Runtime 1.0.130 and the remote standalone-merge/supervised-continuation path are live-proven.
+RCTL-MVP #513 is completed. Runtime 1.0.131 is live on PCP main `6db414df30040cacc9fd922283eb21e06ba576b8`. The remote standalone-merge/supervised-continuation path is live-proven, and #555 additionally live-proved bounded GitHub same-job recovery from an exact `collaboration_pm_handoff` without reroute, provider reset, replacement job or counter reset.
 
 Therefore the default PCP roadmap posture is:
 
