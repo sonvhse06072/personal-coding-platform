@@ -14,6 +14,16 @@ def test_dashboard_uses_provider_neutral_live_activity_labels_and_filters():
 
 
 
+def test_dashboard_activity_renders_estimated_job_progress_bar():
+    assert 'id="jobProgress"' in DASHBOARD_HTML
+    assert "Estimated workflow progress · not ETA or budget usage" in DASHBOARD_HTML
+    assert "renderWorkflowProgress" in DASHBOARD_HTML
+    assert 'role="progressbar"' in DASHBOARD_HTML
+    assert 'aria-label="Estimated workflow progress"' in DASHBOARD_HTML
+    assert "j.workflow_progress" in DASHBOARD_HTML
+    assert "p.paused===true" in DASHBOARD_HTML
+
+
 def test_dashboard_exposes_direct_preview_controls_without_internal_runtime_credentials():
     assert 'id="previewCard"' in DASHBOARD_HTML
     assert "j.workspace_mode!=='direct'" in DASHBOARD_HTML
@@ -76,7 +86,8 @@ def test_dashboard_exposes_standalone_job_observability_without_synthetic_work_o
 def test_dashboard_clears_stale_activity_when_no_current_job():
     assert (
         "if(!j){$('#jobMeta').textContent='No active job';"
-        "$('#jobStatus').innerHTML='';$('#metrics').innerHTML='';"
+        "$('#jobStatus').innerHTML='';renderWorkflowProgress(null);"
+        "$('#metrics').innerHTML='';"
         "$('#models').innerHTML='';consoleEvents=[];lastSeq=0;"
         "renderConsole();connectStream(null);return}"
         in DASHBOARD_HTML

@@ -111,6 +111,57 @@ def _remaining(used: Any, maximum: Any, *, integer: bool = True) -> int | float 
     return int(value) if integer else round(value, 3)
 
 
+_WORKFLOW_STAGE_PROGRESS: dict[str, tuple[int, str]] = {
+    "queued": (5, "Queued"),
+    "routing": (10, "Routing"),
+    "planning": (20, "Planning"),
+    "executing": (45, "Execution"),
+    "verifying": (70, "Verification"),
+    "evaluating": (85, "Independent review"),
+    "delivering": (95, "Delivery"),
+    "completed": (100, "Completed"),
+}
+_PAUSED_JOB_STATES = {"blocked", "waiting_human", "interrupted"}
+
+
+def _workflow_progress(status: str, progress: dict[str, Any]) -> dict[str, Any]:
+    """Return a bounded workflow-position estimate, never a resource/ETA ratio."""
+
+    stage_percent, stage_label = _WORKFLOW_STAGE_PROGRESS.get(status, (0, "Pending"))
+    milestone_percent = 0
+    milestone_label = ""
+    if bool(progress.get("required_checks_passed", False)):
+        milestone_percent, milestone_label = 88, "required checks passed"
+    elif bool(progress.get("tests_passed", False)):
+        milestone_percent, milestone_label = 72, "tests passed"
+    elif bool(progress.get("agent_succeeded", False)):
+        milestone_percent, milestone_label = 55, "implementation produced"
+    elif int(progress.get("iteration", 0) or 0) > 0 or int(progress.get("model_calls", 0) or 0) > 0:
+        milestone_percent, milestone_label = 45, "execution started"
+
+    if status == "completed":
+        percent = 100
+    else:
+        percent = max(stage_percent, milestone_percent)
+    percent = max(0, min(100, int(percent)))
+
+    paused = status in _PAUSED_JOB_STATES
+    if paused:
+        detail = milestone_label or "workflow paused"
+        label = f"Paused · {detail}"
+    elif milestone_percent > stage_percent and milestone_label:
+        label = f"{stage_label} · prior {milestone_label}"
+    else:
+        label = stage_label
+
+    return {
+        "percent": percent,
+        "label": label,
+        "estimated": True,
+        "paused": paused,
+    }
+
+
 def _job_snapshot(job: dict[str, Any] | None) -> dict[str, Any] | None:
     if not job:
         return None
@@ -157,6 +208,7 @@ def _job_snapshot(job: dict[str, Any] | None) -> dict[str, Any] | None:
         "complexity_score": route.get("complexity_score"),
         "profile": strategy.get("profile"),
         "analysis_depth": strategy.get("analysis_depth"),
+        "workflow_progress": _workflow_progress(status, progress),
         "models": {
             "planner": planner,
             "executor": executor,

@@ -41,6 +41,41 @@ _NEW_RENDER = """function kind(e){if(e.event==='runtime_activity'){if(e.data?.ki
 if _OLD_RENDER not in DASHBOARD_HTML:
     raise RuntimeError("Dashboard activity presentation target changed; review the base UI before rollout")
 DASHBOARD_HTML = DASHBOARD_HTML.replace(_OLD_RENDER, _NEW_RENDER)
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    "</style>",
+    ".job-progress{margin:0 0 12px}.job-progress-head{display:flex;justify-content:space-between;gap:12px;align-items:baseline;margin-bottom:6px}.job-progress-label{font-size:12px;color:var(--muted)}.job-progress-value{font-size:12px;font-weight:800;color:var(--text)}.job-progress-track{height:9px;border:1px solid var(--border);border-radius:999px;background:#080d14;overflow:hidden}.job-progress-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--blue),var(--accent));transition:width .25s ease}.job-progress.paused .job-progress-fill{background:linear-gradient(90deg,var(--amber),#f59e0b)}@media(max-width:640px){.job-progress-head{align-items:flex-start;flex-direction:column;gap:2px}}</style>",
+    1,
+)
+if '<div id="jobStatus"></div></div><div id="console"' not in DASHBOARD_HTML:
+    raise RuntimeError("Dashboard Activity card target changed; review job progress integration")
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    '<div id="jobStatus"></div></div><div id="console"',
+    '<div id="jobStatus"></div></div><div id="jobProgress" class="job-progress" style="display:none"></div><div id="console"',
+    1,
+)
+
+_PROGRESS_FUNCTION = r'''function renderWorkflowProgress(j){const el=$('#jobProgress');if(!el)return;if(!j||!j.workflow_progress){el.style.display='none';el.innerHTML='';return}const p=j.workflow_progress,pct=Math.max(0,Math.min(100,Number(p.percent||0)));el.style.display='';el.classList.toggle('paused',p.paused===true);el.innerHTML='<div class="job-progress-head"><div class="job-progress-label">Estimated workflow progress · not ETA or budget usage</div><div class="job-progress-value">'+esc(Math.round(pct))+'% · '+esc(p.label||'Pending')+'</div></div><div class="job-progress-track" role="progressbar" aria-label="Estimated workflow progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+esc(Math.round(pct))+'"><div class="job-progress-fill" style="width:'+esc(pct)+'%"></div></div>'}'''
+if "function kind(e){" not in DASHBOARD_HTML:
+    raise RuntimeError("Dashboard activity render target changed; review job progress function integration")
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    "function kind(e){",
+    _PROGRESS_FUNCTION + "function kind(e){",
+    1,
+)
+if "if(!j){$('#jobMeta').textContent='No active job';$('#jobStatus').innerHTML='';$('#metrics').innerHTML='';$('#models').innerHTML='';" not in DASHBOARD_HTML:
+    raise RuntimeError("Dashboard no-job target changed; review job progress clearing")
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    "if(!j){$('#jobMeta').textContent='No active job';$('#jobStatus').innerHTML='';$('#metrics').innerHTML='';$('#models').innerHTML='';",
+    "if(!j){$('#jobMeta').textContent='No active job';$('#jobStatus').innerHTML='';renderWorkflowProgress(null);$('#metrics').innerHTML='';$('#models').innerHTML='';",
+    1,
+)
+if "$('#jobStatus').innerHTML=status(j.status);const p=j.progress||{}" not in DASHBOARD_HTML:
+    raise RuntimeError("Dashboard active-job target changed; review job progress render integration")
+DASHBOARD_HTML = DASHBOARD_HTML.replace(
+    "$('#jobStatus').innerHTML=status(j.status);const p=j.progress||{}",
+    "$('#jobStatus').innerHTML=status(j.status);renderWorkflowProgress(j);const p=j.progress||{}",
+    1,
+)
 
 # Provider quota is a separate read-only resource view. Keep it outside job
 # counters so users can distinguish provider allowance from WorkOrder budgets.
