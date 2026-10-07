@@ -124,49 +124,72 @@ class PMControlDispatcher:
             if not repository:
                 raise RuntimeError("Remote direct intake issue repository missing")
 
-            lease = self.storage.project_lease(envelope.project_id)
-            if lease and str(lease.get("state") or "") == "active":
-                raise RuntimeError(
-                    "Remote direct intake blocked by active project lease"
-                )
-
-            sync = await self.engine.ddev.sync_direct_base(
-                project_id=envelope.project_id,
-                expected_remote_head=str(envelope.expected_remote_main_sha),
-            )
-            if (
-                str(sync.get("head") or "")
-                != str(envelope.expected_remote_main_sha)
-                or sync.get("clean") is not True
+            async with self.engine.project_operation_lock(
+                envelope.project_id
             ):
-                raise RuntimeError(
-                    "Remote direct intake source-sync postcondition mismatch"
-                )
+                lease = self.storage.project_lease(envelope.project_id)
+                if lease and str(lease.get("state") or "") == "active":
+                    raise RuntimeError(
+                        "Remote direct intake blocked by active project lease"
+                    )
 
-            request = JobCreateRequest(
-                project_id=envelope.project_id,
-                task=TaskInput(
-                    title=str(issue.get("title") or ""),
-                    description=str(issue.get("body") or ""),
-                    semantic=envelope.intake_semantic,
-                ),
-                source_commit=str(envelope.expected_remote_main_sha),
-                baseline_revision=baseline.revision,
-                repo_hints=envelope.intake_repo_hints,
-                provider_state={},
-                auto_run=True,
-            )
-            job_id = self.engine.create_job(
-                request.model_dump(mode="json"),
-                _intake_decision=decision,
-                _remote_binding={
-                    "transport": "github_pm_control",
-                    "repository": repository,
-                    "issue_number": int(issue_number),
-                    "control_comment_id": int(comment_id),
-                },
-            )
-            await self.engine.enqueue(job_id)
+                sync = await self.engine.ddev.sync_direct_base(
+                    project_id=envelope.project_id,
+                    expected_remote_head=str(envelope.expected_remote_main_sha),
+                )
+                if (
+                    str(sync.get("head") or "")
+                    != str(envelope.expected_remote_main_sha)
+                    or sync.get("clean") is not True
+                ):
+                    raise RuntimeError(
+                        "Remote direct intake source-sync postcondition mismatch"
+                    )
+
+                # Re-read lease state after the awaited sync while still holding
+                # the same Runtime project-operation lock used by worker lease
+                # acquisition. A concurrent orchestrated/direct worker therefore
+                # cannot enter the direct workspace between sync and job creation.
+                lease = self.storage.project_lease(envelope.project_id)
+                if lease and str(lease.get("state") or "") == "active":
+                    raise RuntimeError(
+                        "Remote direct intake project lease changed during source sync"
+                    )
+
+                request = JobCreateRequest(
+                    project_id=envelope.project_id,
+                    task=TaskInput(
+                        title=str(issue.get("title") or ""),
+                        description=str(issue.get("body") or ""),
+                        semantic=envelope.intake_semantic,
+                    ),
+                    source_commit=str(envelope.expected_remote_main_sha),
+                    baseline_revision=baseline.revision,
+                    repo_hints=envelope.intake_repo_hints,
+                    provider_state={},
+                    auto_run=True,
+                )
+                job_id = self.engine.create_job(
+                    request.model_dump(mode="json"),
+                    _intake_decision=decision,
+                    _remote_binding={
+                        "transport": "github_pm_control",
+                        "repository": repository,
+                        "issue_number": int(issue_number),
+                        "control_comment_id": int(comment_id),
+                    },
+                )
+                reserved = self.engine.reserve_direct_project_lease(job_id)
+                if (
+                    reserved is None
+                    or str(reserved.get("state") or "") != "active"
+                    or str(reserved.get("owner_job_id") or "") != job_id
+                ):
+                    raise RuntimeError(
+                        "Remote direct intake could not reserve exact project lease"
+                    )
+                await self.engine.enqueue(job_id)
+
             row = self.storage.get(job_id)
             if row is None:
                 raise RuntimeError("Remote direct intake job disappeared")
