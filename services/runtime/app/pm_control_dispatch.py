@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
+from .baseline import resolve_project_baseline
 from .config import project_config
+from .intake_policy import classify_intake
 from .pm_control import PMControlEnvelope
 from .pm_diagnostics import PMDiagnosticsService
 from .pm_merge import evaluate_standalone_pm_merge
+from .schemas import JobCreateRequest, TaskInput
 
 
 _RECHECK_ACTION_TYPES = frozenset({"recheck_orchestration", "recheck_ci"})
@@ -74,12 +77,113 @@ class PMControlDispatcher:
             )
 
         if action == "direct_intake":
+            project = project_config(envelope.project_id)
+            runtime_cfg = dict(project.get("runtime") or {})
+            if (
+                str(runtime_cfg.get("workspace_mode") or "") != "direct"
+                or runtime_cfg.get("exclusive_project_lease") is not True
+            ):
+                raise RuntimeError(
+                    "Remote direct intake requires exclusive direct workspace mode"
+                )
+
+            baseline = resolve_project_baseline(
+                envelope.project_id,
+                envelope.baseline_revision,
+            )
+            if baseline is None:
+                raise RuntimeError(
+                    "Remote direct intake requires an approved ProjectBaseline"
+                )
+            decision = classify_intake(
+                bounded_direct=True,
+                semantic=envelope.intake_semantic,
+                repo_hints=envelope.intake_repo_hints,
+            )
+            if (
+                decision.mode != "direct"
+                or decision.bounded_direct is not True
+                or decision.decomposition_required
+            ):
+                raise RuntimeError(
+                    "Remote direct intake classifier requires planning; "
+                    "no source sync or job creation performed"
+                )
+
+            issue = await self.engine.ddev.github_issue(
+                project_id=envelope.project_id,
+                issue_number=issue_number,
+            )
+            if bool(issue.get("is_pull_request")):
+                raise RuntimeError(
+                    "Remote direct intake must target a GitHub issue, not PR"
+                )
+            if str(issue.get("state") or "") != "open":
+                raise RuntimeError("Remote direct intake issue is not open")
+            repository = str(issue.get("repository") or "").strip()
+            if not repository:
+                raise RuntimeError("Remote direct intake issue repository missing")
+
+            lease = self.storage.project_lease(envelope.project_id)
+            if lease and str(lease.get("state") or "") == "active":
+                raise RuntimeError(
+                    "Remote direct intake blocked by active project lease"
+                )
+
+            sync = await self.engine.ddev.sync_direct_base(
+                project_id=envelope.project_id,
+                expected_remote_head=str(envelope.expected_remote_main_sha),
+            )
+            if (
+                str(sync.get("head") or "")
+                != str(envelope.expected_remote_main_sha)
+                or sync.get("clean") is not True
+            ):
+                raise RuntimeError(
+                    "Remote direct intake source-sync postcondition mismatch"
+                )
+
+            request = JobCreateRequest(
+                project_id=envelope.project_id,
+                task=TaskInput(
+                    title=str(issue.get("title") or ""),
+                    description=str(issue.get("body") or ""),
+                    semantic=envelope.intake_semantic,
+                ),
+                source_commit=str(envelope.expected_remote_main_sha),
+                baseline_revision=baseline.revision,
+                repo_hints=envelope.intake_repo_hints,
+                provider_state={},
+                auto_run=True,
+            )
+            job_id = self.engine.create_job(
+                request.model_dump(mode="json"),
+                _intake_decision=decision,
+                _remote_binding={
+                    "transport": "github_pm_control",
+                    "repository": repository,
+                    "issue_number": int(issue_number),
+                    "control_comment_id": int(comment_id),
+                },
+            )
+            await self.engine.enqueue(job_id)
+            row = self.storage.get(job_id)
+            if row is None:
+                raise RuntimeError("Remote direct intake job disappeared")
             return (
-                "unsupported_action_dispatch",
+                "executed",
                 {
-                    "status": "pending_future_slice",
+                    "status": "executed",
                     "action": action,
-                    "message": "Action is parsed but not executable until source-sync/direct-intake is implemented.",
+                    "job_id": job_id,
+                    "job_status": row.get("status"),
+                    "source_commit": row.get("source_commit"),
+                    "baseline_revision": baseline.revision,
+                    "classification": decision.model_dump(mode="json"),
+                    "source_sync": {
+                        "head": sync.get("head"),
+                        "fast_forwarded": sync.get("fast_forwarded"),
+                    },
                 },
             )
 
