@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 from app import main
 from app.config import clear_config_cache
 from app.engine import RuntimeEngine
+from app.intake_policy import classify_intake
+from app.schemas import RepoHints, SemanticSignals
 from test_intake_policy import small_hints, small_semantic
 from test_pm_planning import configure as configure_planner, proposal, ticket, work_order
 from test_work_order_contract import CaptureStorage, baseline_doc, configure
@@ -80,6 +82,85 @@ def test_direct_creates_one_job_with_atomic_evidence_and_no_plan(api, monkeypatc
     if auto_run:
         assert enqueued[0]["checkpoint"]["canonical_intake"] == checkpoint["canonical_intake"]
     planner.assert_not_awaited()
+
+
+def test_remote_binding_is_persisted_atomically_with_canonical_intake(api):
+    _client, storage, engine, _enqueued = api
+    semantic = SemanticSignals.model_validate(small_semantic())
+    hints = RepoHints.model_validate(small_hints())
+    decision = classify_intake(
+        bounded_direct=True,
+        semantic=semantic,
+        repo_hints=hints,
+    )
+
+    job_id = engine.create_job(
+        {
+            "project_id": "demo",
+            "task": {
+                "title": "Remote bounded fix",
+                "description": "Exact GitHub-bound repair",
+                "semantic": semantic.model_dump(mode="json"),
+            },
+            "source_commit": "a" * 40,
+            "baseline_revision": "v1",
+            "repo_hints": hints.model_dump(mode="json"),
+            "provider_state": {},
+            "auto_run": False,
+            "dry_run": False,
+        },
+        _intake_decision=decision,
+        _remote_binding={
+            "transport": "github_pm_control",
+            "repository": "owner/demo",
+            "issue_number": 77,
+            "control_comment_id": 555,
+        },
+    )
+
+    row = storage.get(job_id)
+    assert row["checkpoint"]["canonical_intake"]["mode"] == "direct"
+    assert row["checkpoint"]["github_pm_binding"] == {
+        "transport": "github_pm_control",
+        "repository": "owner/demo",
+        "issue_number": 77,
+        "control_comment_id": 555,
+    }
+
+
+def test_remote_binding_rejects_malformed_identity_before_job_insert(api):
+    _client, storage, engine, _enqueued = api
+    semantic = SemanticSignals.model_validate(small_semantic())
+    hints = RepoHints.model_validate(small_hints())
+    decision = classify_intake(
+        bounded_direct=True,
+        semantic=semantic,
+        repo_hints=hints,
+    )
+    before = set(storage.rows)
+
+    with pytest.raises(ValueError, match="Invalid remote GitHub binding"):
+        engine.create_job(
+            {
+                "project_id": "demo",
+                "task": {"title": "Bad remote binding"},
+                "source_commit": "a" * 40,
+                "baseline_revision": "v1",
+                "repo_hints": hints.model_dump(mode="json"),
+                "provider_state": {},
+                "auto_run": False,
+                "dry_run": False,
+            },
+            _intake_decision=decision,
+            _remote_binding={
+                "transport": "github_pm_control",
+                "repository": "owner/demo",
+                "issue_number": 0,
+                "control_comment_id": 555,
+            },
+        )
+
+    assert set(storage.rows) == before
 
 
 @pytest.mark.parametrize("material", [False, True])
