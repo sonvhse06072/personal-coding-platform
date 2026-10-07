@@ -33,12 +33,16 @@ _ALLOWED_ACTIONS = {
     "rollout_pcp_exact_main",
     "recover_antigravity_bridge",
 }
-_SUBPROCESS_SECRET_ENV = frozenset({
+_SUBPROCESS_SCRUB_ENV = frozenset({
+    # Secrets/tokens must never leak into host or DDEV child processes.
     "GITHUB_TOKEN",
     "GH_TOKEN",
     "ACTIONS_RUNTIME_TOKEN",
     "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
     "ACTIONS_ID_TOKEN_REQUEST_URL",
+    # Self-hosted runner uses this marker to track/clean descendant processes.
+    # A deliberately persistent host bridge must not inherit the job marker.
+    "RUNNER_TRACKING_ID",
 })
 _SHA40 = re.compile(r"^[0-9a-f]{40}$")
 
@@ -363,10 +367,12 @@ def _run(
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     merged_env = os.environ.copy()
-    # Guardian/Actions credentials are never inherited by host/DDEV/service
-    # commands. One reviewed git-fetch call may opt GITHUB_TOKEN back in
-    # through a secret-free GIT_ASKPASS helper.
-    for key in _SUBPROCESS_SECRET_ENV:
+    # Guardian/Actions credentials and self-hosted runner process-tracking
+    # metadata are never inherited by host/DDEV/service commands. One reviewed
+    # git-fetch call may opt GITHUB_TOKEN back in through a secret-free
+    # GIT_ASKPASS helper. RUNNER_TRACKING_ID is never re-added, so a deliberately
+    # persistent host daemon is not collected when the workflow job exits.
+    for key in _SUBPROCESS_SCRUB_ENV:
         merged_env.pop(key, None)
     if env:
         merged_env.update(env)
