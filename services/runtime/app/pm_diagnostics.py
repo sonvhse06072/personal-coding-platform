@@ -201,6 +201,13 @@ class PMDiagnosticsService:
             if str(job.get("project_id") or "") != project_id:
                 raise RuntimeError("Diagnostic job project identity mismatch")
 
+        if plan_id:
+            plan = self.orchestrator.store.orchestration(plan_id)
+            if plan is None:
+                raise RuntimeError("Unknown diagnostic plan")
+            if str(plan.get("project_id") or "") != project_id:
+                raise RuntimeError("Diagnostic plan project identity mismatch")
+
         if "job" in collectors:
             if job is None:
                 raise RuntimeError("job collector requires job_id")
