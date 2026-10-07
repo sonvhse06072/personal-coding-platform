@@ -69,6 +69,8 @@ For a PCP-managed project, repository `HEAD` is not automatically the approved p
 - Do not weaken a trust boundary to make an agent/tool easier to run.
 - Do not add infrastructure, agents, services, frameworks, or model calls without a demonstrated project need.
 - New automation should reduce failure rate, reduce model/tool time, reduce avoidable Human Owner attention, or strengthen a security/governance boundary.
+- Apply the business-value gate in `docs/project/business-strategy.md` before opening material PCP scope: technical novelty or convenience alone is not sufficient expected return.
+- Managed-project dogfood is evidence, not PCP roadmap authority. A project-specific blocker becomes PCP work only when it demonstrates a reusable platform defect/capability gap, recurring owner-cost pattern, or broken approved PCP invariant; otherwise repair it in the managed project.
 - Preserve durable counters and anti-loop behavior; escalation/headroom must not reset consumed job budget.
 - When changing Router/Runtime budget, reassessment, recovery, or control-action behavior, explicitly verify that healthy-progress jobs continue autonomously inside the approved resource envelope and that counter exhaustion alone cannot become a Human Owner gate.
 - Treat a routine owner `continue` / `+N` action caused only by an underestimated healthy task as a platform defect requiring follow-up, not as normal operation.
