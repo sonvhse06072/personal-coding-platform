@@ -110,6 +110,21 @@ class FakeControls:
             ],
         }
 
+    def remote_pending_actions(self, job_id):
+        assert job_id == JOB_ID
+        return {
+            "job_id": job_id,
+            "plan_id": "plan-1",
+            "work_order_id": "WO-1",
+            "generation": "orchestrated-generation",
+            "actions": [
+                {
+                    "control_action_id": "action-exact-12345678",
+                    "action_type": "resume_same",
+                }
+            ],
+        }
+
 
 class FakeCollaboration:
     def list(self, job_id):
@@ -272,3 +287,45 @@ def test_diagnostics_reject_cross_project_plan_binding():
         raise AssertionError("cross-project diagnostic plan must fail closed")
 
     assert engine.ddev.comments == []
+
+
+def test_orchestrated_attention_exposes_exact_durable_action_identity():
+    storage = FakeStorage()
+    storage.job["checkpoint"].pop("canonical_intake", None)
+    storage.job["checkpoint"]["pending_decision"] = {
+        "key": "architecture_choice",
+        "source": "reassessment",
+        "decision": {
+            "required": True,
+            "triggers": ["architecture_choice"],
+            "reason": "Choose the already-reviewed architecture boundary.",
+        },
+    }
+    engine = FakeEngine()
+    service = PMDiagnosticsService(
+        storage,
+        engine,
+        FakeOrchestrator(),
+    )
+
+    result = asyncio.run(
+        service.collect_and_publish(
+            project_id="chonhac",
+            issue_number=77,
+            control_comment_id=125,
+            job_id=JOB_ID,
+            plan_id="plan-1",
+            collectors=["job", "attention"],
+        )
+    )
+
+    assert result["status"] == "published"
+    body = engine.ddev.comments[-1]["body"]
+    assert "orchestrated-generation" in body
+    assert "action-exact-12345678" in body
+    assert "resume_same" in body
+    assert "plan-1" in body
+    assert "WO-1" in body
+    assert "architecture_choice" in body
+    assert "Choose the already-reviewed architecture boundary." in body
+    assert "SECRET raw failure" not in body
