@@ -4,8 +4,7 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 fresh Runtime/GitHub evidence remain authoritative over chat history. This file
 is an index, not authority to change the approved baseline or protected scope.
 
-Last updated: 2026-10-07 after live GitHub reconciliation of remote PM control
-issues #512/#513 and natural Chợ Nhạc #77 dogfood evidence.
+Last updated: 2026-10-07 after RCTL-MVP #513 live acceptance, Runtime 1.0.130 rollout, Chợ Nhạc #77 completion, and generation-4 EE-0-02 release.
 
 ## Resume order
 
@@ -17,53 +16,69 @@ issues #512/#513 and natural Chợ Nhạc #77 dogfood evidence.
 Memory-tier policy: `context-memory-architecture.md`.
 
 
-## Remote PM control reconciliation — 2026-10-07
+## Current business / platform reconciliation — 2026-10-07
 
-GitHub live state is authoritative for this section.
+GitHub/Runtime live evidence remains authoritative over this snapshot.
 
-- GitHub PCP `main` is
-  `a9766d423ee5d75296e48dacc7caf947ed4db6fd` (merged PR #540).
-- The latest Runtime rollout proven live by the accepted same-job repair dogfood is
-  Runtime `1.0.123` at PCP source
-  `f11bde43bd572074c062b7111d4573d4a6aea2fb`. PR #540 targets Runtime
-  `1.0.124`, but its rollout/live #77 second-repair acceptance is not proven and
-  must not be inferred from the GitHub merge.
-- RCTL-MVP source work is implemented and merged: #514 / RCTL-01, #515 /
-  RCTL-02, and #516 / RCTL-03. #515 child bookkeeping #518/#519/#520 is
-  reconciled closed because merged PR #521 already contains those capabilities.
-- #526 / PR #527 is reconciled closed after live #77 diagnostics proved bounded
-  deterministic failing-phase/streak evidence without raw stdout/stderr, command
-  strings, failure messages, or filesystem paths.
-- Draft PR #535 is closed without merge as stale/superseded by #536 / merged PR
-  #537, whose Guardian audit-identity and Runtime transport repair is live-proven.
-- #541 is closed not-planned: per-command verification evidence is optional
-  hardening, not a remaining #513 acceptance requirement.
-- #539 remains open but is explicitly **non-gating for #513**. Its one-time
-  adaptive-emergency repair allowance is already merged in PR #540; do not force
-  a rollout or another Chợ Nhạc #77 repair merely to close it.
-- #524 remains intentionally open as the persistent Guardian control/audit issue.
-- #513 remains open for **live acceptance only**, not new implementation. Natural
-  #77 dogfood has already proven remote observe -> sanitized diagnose -> bounded
-  same-job repair with preserved durable job/source/branch/workspace/counters.
-  Remaining proof is:
-  1. one natural eligible standalone delivery through `merge_standalone_job`
-     with exact PR/head/CI and post-merge confirmation;
-  2. one naturally authorized supervised hold through
-     `continue_supervised_plan` with exact generation/checkpoint/continuation
-     identity.
-- Next smallest WorkOrder is `RCTL-MVP-ACCEPT-01`: acceptance-only, zero PCP
-  source changes by default. Use natural eligible checkpoints; do not create a
-  replacement job, reset counters/providers, release Chợ Nhạc supervised
-  generation 4 merely to exercise an API, or open another PCP repair issue from
-  #77 unless an existing #513 acceptance capability itself is proven defective.
-- Close #513 only after both remaining live proofs. Reassess #512 / remaining
-  Guardian work only after that parent acceptance.
+### PCP product/business posture
 
-The older execution sections below remain historical evidence for their named
-incidents. Re-read live GitHub, Runtime, local Git and active-job state before any
-mutation; do not treat an older recorded Runtime/local SHA as current.
+- The product/business strategy is now explicit in `business-strategy.md`.
+- PCP is an internal personal engineering operating system, not a SaaS product.
+- The current product stage is **consolidation/reliability**: improve the proven end-to-end loop before adding adjacent capabilities.
+- Managed-project dogfood is evidence, not automatic PCP roadmap authority. Application-specific bugs remain in the application repo unless they prove a generic PCP platform defect/capability gap, recurring owner-cost pattern or broken platform invariant.
+- New platform work should be justified by reduced Human Owner attention, reduced recurring failure/resource waste, improved accepted-work quality, a required trust boundary, or reusable leverage.
 
-## Accepted platform / local state
+### Live PCP state
+
+- The last Runtime-affecting PCP main accepted and rolled out is
+  `62a89ff59669e68dd73533af7c6851f91c5b44dc` (PR #553).
+- Runtime: `1.0.130`.
+- ddev-executor: `1.0.33`.
+- Router: `1.0.31`.
+- PR #553 fixed stale Developer Activity after a terminal standalone job; terminal jobs still disappear from the active picker while their previous BLOCK transcript is cleared.
+- RCTL-MVP #513 is **closed completed**. Natural Chợ Nhạc #77 live-proved:
+  - sanitized remote diagnostics and same-job repair;
+  - one PM authorization surviving multiple progressing repair/reverification cycles;
+  - exact-head standalone PM merge through `merge_standalone_job`;
+  - exact supervised continuation through `continue_supervised_plan`.
+- #512 remains open as a parent acceptance frame, not a broad implementation backlog. Remaining parent evidence should be gathered naturally:
+  - a post-rollout GitHub `direct_intake` on a real bounded ticket;
+  - a real Runtime/n8n-unavailable Guardian case if one occurs.
+  Do not create synthetic jobs or destructive outages merely to close those acceptance points.
+- #524 remains intentionally open as the persistent Guardian control/audit issue; it is not engineering backlog.
+- #493 remains the ordinary independent open engineering issue for DDEV cold/bootstrap hardening.
+
+### Current Chợ Nhạc dogfood state
+
+- #77 is closed completed.
+- #56 is closed again after the public Event lineup avatar DTO repair.
+- Chợ Nhạc main after PR #78 is
+  `f250dc799919910899e0000e23c2f48299894143`.
+- Supervised generation 4 was released through exact PM control identity.
+- EE-0-02 `public-event-discovery-detail` is active as job
+  `f646378719a85fa2be340d3fd2af256a`.
+- The direct workspace fast-forwarded to exact Chợ Nhạc main
+  `f250dc799919910899e0000e23c2f48299894143` before branch
+  `ai/f646378719a8` was created.
+- Latest diagnostic showed the job executing with no blocker generation, no pending Human decision, no failure evidence and `unexpected_scope=false`.
+
+Because a managed-project engineering job is currently active, do not perform a PCP Runtime rebuild/restart/rollout. Docs-only GitHub work may proceed when it does not mutate local Runtime/executor state.
+
+### Immediate PM rule
+
+Do not let the current Chợ Nhạc execution become an unbounded PCP roadmap generator.
+
+If EE-0-02 or a later managed-project job blocks:
+
+1. diagnose the exact durable failure;
+2. decide project defect versus generic PCP defect;
+3. repair the project when the problem is project-specific;
+4. repair an existing PCP capability/issue when that capability is generically defective;
+5. open new PCP scope only when the evidence passes the business-value and reuse tests in `business-strategy.md`.
+
+The older execution sections below are retained only as incident/history evidence. Re-read live GitHub, Runtime, local Git and active-job state before mutation.
+
+## Historical accepted platform / local state snapshot
 
 - Runtime `1.0.106`; Router/executor healthy; executor `1.0.31`.
 - Owner audit v2 observed active engineering jobs = 0 and executor active_jobs = 0.
