@@ -677,14 +677,19 @@ class GuardianHost:
             raise RuntimeError("Local PCP worktree is dirty")
 
         old_head = str(local.get("head") or "")
+        reviewed_remote = (
+            f"https://github.com/{self.config['repository']}.git"
+        )
         _run(
             [
                 "git",
+                "-c",
+                "core.hooksPath=/dev/null",
                 "-C",
                 str(self.root),
                 "fetch",
                 "--no-tags",
-                "origin",
+                reviewed_remote,
                 f"+refs/heads/{self.config['default_branch']}:"
                 f"refs/remotes/origin/{self.config['default_branch']}",
             ],
@@ -716,6 +721,8 @@ class GuardianHost:
             _run(
                 [
                     "git",
+                    "-c",
+                    "core.hooksPath=/dev/null",
                     "-C",
                     str(self.root),
                     "merge",
