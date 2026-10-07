@@ -607,6 +607,41 @@ class GuardianHost:
         ):
             raise RuntimeError("Antigravity bridge is not provably idle")
 
+    @staticmethod
+    def _post_rollout_ready(
+        snapshot: dict[str, Any],
+        target: dict[str, str],
+    ) -> bool:
+        runtime = snapshot["runtime"]
+        router = snapshot["router"]
+        executor = snapshot["executor"]
+        antigravity = snapshot["antigravity"]
+        n8n = snapshot["n8n"]
+        credential = snapshot["credential_boundary"]
+        active = snapshot["active_engineering"]
+        return bool(
+            runtime.get("reachable")
+            and runtime.get("status") == "ok"
+            and runtime.get("version") == target["runtime"]
+            and router.get("reachable")
+            and router.get("status") == "ok"
+            and executor.get("reachable")
+            and executor.get("status") == "ok"
+            and executor.get("version") == target["executor"]
+            and executor.get("active_jobs") == 0
+            and antigravity.get("reachable")
+            and antigravity.get("status") == "ok"
+            and antigravity.get("safe_settings") is True
+            and antigravity.get("active_runs") == 0
+            and antigravity.get("pending_cancellations") == 0
+            and active.get("reachable")
+            and active.get("active_engineering_jobs") == 0
+            and n8n.get("reachable")
+            and n8n.get("ok") is True
+            and credential.get("reachable")
+            and credential.get("ok") is True
+        )
+
     def _checkout_head(self) -> str:
         return _run(
             ["git", "-C", str(self.checkout), "rev-parse", "HEAD"],
@@ -697,38 +732,18 @@ class GuardianHost:
         _run(["ddev", "restart", "-y"], cwd=self.root, timeout=900)
 
         post: dict[str, Any] | None = None
-        for _ in range(45):
+        for _ in range(60):
             post = self.snapshot()
-            runtime = post["runtime"]
-            executor = post["executor"]
-            antigravity = post["antigravity"]
-            if (
-                runtime.get("reachable")
-                and executor.get("reachable")
-                and antigravity.get("reachable")
-            ):
+            if self._post_rollout_ready(post, target):
                 break
             time.sleep(2)
         assert post is not None
 
         self._require_quiescent(post)
-        if post["runtime"].get("status") != "ok":
-            raise RuntimeError("Runtime is not healthy after rollout")
-        if post["runtime"].get("version") != target["runtime"]:
-            raise RuntimeError("Runtime version does not match target source")
-        if post["executor"].get("status") != "ok":
-            raise RuntimeError("DDEV executor is not healthy after rollout")
-        if post["executor"].get("version") != target["executor"]:
-            raise RuntimeError("DDEV executor version does not match target source")
-        if post["router"].get("reachable") is not True:
-            raise RuntimeError("Router is unavailable after rollout")
-        if post["n8n"].get("reachable") is not True or post["n8n"].get("ok") is not True:
-            raise RuntimeError("n8n is unavailable after rollout")
-        if (
-            post["credential_boundary"].get("reachable") is not True
-            or post["credential_boundary"].get("ok") is not True
-        ):
-            raise RuntimeError("Credential boundary check failed after rollout")
+        if not self._post_rollout_ready(post, target):
+            raise RuntimeError(
+                "PCP services did not reach all reviewed rollout postconditions"
+            )
         if post["local_git"].get("head") != expected_sha:
             raise RuntimeError("Local PCP HEAD drifted after rollout")
 
