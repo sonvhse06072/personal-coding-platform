@@ -29,6 +29,13 @@ _ALLOWED_CONFIG_KEYS = {
     "state_dir",
 }
 _ALLOWED_ACTIONS = {"status_snapshot", "rollout_pcp_exact_main"}
+_SUBPROCESS_SECRET_ENV = frozenset({
+    "GITHUB_TOKEN",
+    "GH_TOKEN",
+    "ACTIONS_RUNTIME_TOKEN",
+    "ACTIONS_ID_TOKEN_REQUEST_TOKEN",
+    "ACTIONS_ID_TOKEN_REQUEST_URL",
+})
 _SHA40 = re.compile(r"^[0-9a-f]{40}$")
 
 
@@ -352,9 +359,11 @@ def _run(
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     merged_env = os.environ.copy()
-    # Guardian's GitHub token is never inherited by host/DDEV/service commands.
-    # A single reviewed git-fetch call may opt it back in through GIT_ASKPASS.
-    merged_env.pop("GITHUB_TOKEN", None)
+    # Guardian/Actions credentials are never inherited by host/DDEV/service
+    # commands. One reviewed git-fetch call may opt GITHUB_TOKEN back in
+    # through a secret-free GIT_ASKPASS helper.
+    for key in _SUBPROCESS_SECRET_ENV:
+        merged_env.pop(key, None)
     if env:
         merged_env.update(env)
     proc = subprocess.run(
