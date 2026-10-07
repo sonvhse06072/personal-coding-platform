@@ -1144,6 +1144,11 @@ class ControlActionService:
         if "no_progress" not in signals:
             raise RuntimeError("Blocked repair requires no_progress signal")
 
+        emergency_signals = [
+            item
+            for item in signals
+            if item.startswith("budget_emergency_threshold_reached:")
+        ]
         invalid_signals = [
             item
             for item in signals
@@ -1152,6 +1157,7 @@ class ControlActionService:
                 and not item.startswith("repeated_failure:")
                 and not item.startswith("budget_headroom_active:")
                 and not item.startswith("budget_estimate_exceeded:")
+                and not item.startswith("budget_emergency_threshold_reached:")
             )
         ]
         if invalid_signals:
@@ -1164,6 +1170,62 @@ class ControlActionService:
         diff_hash = str(diff.get("diff_hash") or "")
         if not diff_hash:
             raise RuntimeError("Blocked repair requires exact preserved diff hash")
+
+        if emergency_signals:
+            if not self._adaptive_work_shape_nonblocking(job):
+                raise RuntimeError(
+                    "Blocked repair emergency telemetry requires adaptive route"
+                )
+
+            emergency_dimensions = [
+                item.split(":", 1)[1]
+                for item in emergency_signals
+                if ":" in item
+            ]
+            if (
+                len(emergency_dimensions) != len(emergency_signals)
+                or any(
+                    dimension not in _ADAPTIVE_WORK_SHAPE_DIMENSIONS
+                    for dimension in emergency_dimensions
+                )
+            ):
+                raise RuntimeError(
+                    "Blocked repair contains unsupported emergency telemetry dimension"
+                )
+
+            failure_context = dict(checkpoint.get("failure_context") or {})
+            previous_diff_hash = str(failure_context.get("diff_hash") or "")
+            if (
+                failure_context.get("kind") != "semantic_repair"
+                or failure_context.get("source") != "pm_reassessment"
+                or not previous_diff_hash
+            ):
+                raise RuntimeError(
+                    "Blocked repair emergency telemetry requires prior PM repair context"
+                )
+            if previous_diff_hash == diff_hash:
+                raise RuntimeError(
+                    "Blocked repair emergency telemetry requires material diff progress"
+                )
+
+            streak = dict(
+                checkpoint.get("deterministic_verification_failure_streak") or {}
+            )
+            try:
+                streak_count = int(streak.get("count"))
+                streak_limit = int(streak.get("limit"))
+            except (TypeError, ValueError):
+                raise RuntimeError(
+                    "Blocked repair emergency telemetry requires deterministic failure streak"
+                ) from None
+            if (
+                str(streak.get("diff_hash") or "") != diff_hash
+                or streak_count != 1
+                or streak_limit < 1
+            ):
+                raise RuntimeError(
+                    "Blocked repair emergency telemetry requires one fresh current-diff failure"
+                )
         if not str(job.get("source_commit") or ""):
             raise RuntimeError("Blocked repair requires preserved source commit")
         if not str(job.get("branch") or ""):
