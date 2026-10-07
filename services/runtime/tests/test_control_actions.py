@@ -498,12 +498,16 @@ def test_stable_attention_reuses_control_action_generation_and_material_change_r
 
 
 class ActionResult:
-    def __init__(self, row=None, *, rowcount=0):
+    def __init__(self, row=None, *, rows=None, rowcount=0):
         self.row = deepcopy(row)
+        self.rows = deepcopy(rows or [])
         self.rowcount = rowcount
 
     def fetchone(self):
         return deepcopy(self.row)
+
+    def fetchall(self):
+        return deepcopy(self.rows)
 
 
 class ActionConnection:
@@ -526,6 +530,27 @@ class ActionConnection:
             return ActionResult()
         if normalized.startswith("SELECT * FROM cp_control_actions WHERE action_id="):
             return ActionResult(self.storage.actions.get(params[0]))
+        if (
+            normalized.startswith("SELECT * FROM cp_control_actions WHERE job_id=")
+            and "status='pending'" in normalized
+            and "expires_at>" in normalized
+        ):
+            job_id, timestamp = params
+            rows = [
+                deepcopy(action)
+                for action in self.storage.actions.values()
+                if action.get("job_id") == job_id
+                and action.get("status") == "pending"
+                and action.get("expires_at") > timestamp
+            ]
+            rows.sort(
+                key=lambda action: (
+                    action.get("created_at"),
+                    action.get("action_id"),
+                ),
+                reverse=True,
+            )
+            return ActionResult(rows=rows)
         if normalized.startswith("INSERT INTO cp_control_actions"):
             (
                 action_id, dedupe_key, action_type, plan_id, work_order_id, job_id,
@@ -1217,3 +1242,142 @@ def test_standalone_remote_recovery_rejects_noncanonical_or_active_job():
     controls, _ = service(job)
     with pytest.raises(RuntimeError, match="blocked/interrupted"):
         controls.standalone_remote_actions("job-1")
+
+
+def _current_orchestrated_control_fixture():
+    store = ActionStore("blocked")
+    store.work_order["job_id"] = "job-1"
+    storage = ActionStorage([], store)
+    job = base_job(reason="reassessment_stopped")
+    job["id"] = "job-1"
+    job["status"] = "blocked"
+    job["updated_at"] = "j-current"
+    storage.jobs["job-1"] = deepcopy(job)
+    controls = ControlActionService(storage, FakeEngine(), store)
+    plan = store.orchestration("plan-1")
+    work_order = store.work_orders("plan-1")[0]
+    state = controls.state_fingerprint(plan, work_order, job)
+    return controls, storage, store, job, state
+
+
+def test_remote_pending_actions_exposes_only_exact_current_routine_generation():
+    controls, storage, _store, _job, state = (
+        _current_orchestrated_control_fixture()
+    )
+    current = control_action(
+        "scope-current",
+        "pm_scope_reassess",
+        fingerprint=state,
+    )
+    current.update(
+        job_id="job-1",
+        generation_fingerprint="generation-current",
+    )
+    nonroutine = control_action(
+        "budget-current",
+        "budget_extend",
+        fingerprint=state,
+    )
+    nonroutine.update(
+        job_id="job-1",
+        generation_fingerprint="generation-current",
+    )
+    cancelled = control_action(
+        "old-cancelled",
+        "resume_same",
+        status="cancelled",
+        fingerprint=state,
+    )
+    cancelled.update(
+        job_id="job-1",
+        generation_fingerprint="generation-old",
+    )
+    storage.actions = {
+        item["action_id"]: item
+        for item in (current, nonroutine, cancelled)
+    }
+
+    result = controls.remote_pending_actions("job-1")
+
+    assert result == {
+        "job_id": "job-1",
+        "plan_id": "plan-1",
+        "work_order_id": "WO-1",
+        "generation": "generation-current",
+        "actions": [
+            {
+                "control_action_id": "scope-current",
+                "action_type": "pm_scope_reassess",
+            }
+        ],
+    }
+
+
+def test_remote_pending_actions_omits_stale_state_and_expired_actions():
+    controls, storage, _store, _job, state = (
+        _current_orchestrated_control_fixture()
+    )
+    stale = control_action(
+        "stale-current",
+        "resume_same",
+        fingerprint="stale-state",
+    )
+    stale.update(
+        job_id="job-1",
+        generation_fingerprint="generation-current",
+    )
+    expired = control_action(
+        "expired-current",
+        "retry_delivery",
+        fingerprint=state,
+    )
+    expired.update(
+        job_id="job-1",
+        generation_fingerprint="generation-current",
+        expires_at=datetime.now(timezone.utc) - timedelta(seconds=1),
+    )
+    storage.actions = {
+        stale["action_id"]: stale,
+        expired["action_id"]: expired,
+    }
+
+    result = controls.remote_pending_actions("job-1")
+
+    assert result == {
+        "job_id": "job-1",
+        "generation": None,
+        "plan_id": None,
+        "work_order_id": None,
+        "actions": [],
+    }
+
+
+def test_remote_pending_actions_refuses_multiple_current_generations():
+    controls, storage, _store, _job, state = (
+        _current_orchestrated_control_fixture()
+    )
+    first = control_action(
+        "first-current",
+        "resume_same",
+        fingerprint=state,
+    )
+    first.update(
+        job_id="job-1",
+        generation_fingerprint="generation-a",
+    )
+    second = control_action(
+        "second-current",
+        "retry_delivery",
+        fingerprint=state,
+    )
+    second.update(
+        job_id="job-1",
+        generation_fingerprint="generation-b",
+    )
+    storage.actions = {
+        first["action_id"]: first,
+        second["action_id"]: second,
+    }
+
+    with pytest.raises(RuntimeError, match="Multiple exact-current"):
+        controls.remote_pending_actions("job-1")
