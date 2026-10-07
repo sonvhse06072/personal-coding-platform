@@ -8,6 +8,28 @@ This roadmap is a planning artifact beneath the Project Constitution. PM may reo
 
 Build the smallest layer that enables the next layer safely. Do not add swarm infrastructure, dashboards, or model orchestration complexity before the underlying team contracts and source-of-truth rules are durable.
 
+## Current business/product priority overlay — 2026-10-07
+
+The current business/product strategy is `business-strategy.md`. PCP has moved from broad foundational capability construction into a **consolidation and reliability** stage.
+
+The practical roadmap is therefore narrower than the historical phase list below:
+
+1. **Protect the live end-to-end loop.** Existing PM planning/orchestration, bounded execution, deterministic verification, independent review, GitHub delivery, PM merge, remote PM control and Guardian paths should become predictable before adjacent capability expansion.
+2. **Finish existing evidence-backed backlog before new scope.** The only ordinary open PCP engineering issue is #493 (DDEV cold/bootstrap reliability). #512 remains a parent acceptance frame for natural remote-control evidence, not permission for broad new implementation. #524 is a persistent Guardian operations/audit channel, not product backlog.
+3. **Treat managed-project dogfood as evidence.** Chợ Nhạc and other managed projects may expose real PCP defects, but an application bug or contract miss stays in the application repo. Open PCP work only for a reusable platform defect/capability gap, recurring owner-cost pattern or broken approved PCP invariant.
+4. **Prefer repair/reconciliation over issue multiplication.** If an existing PCP capability is defective, repair that capability/issue before creating a neighboring abstraction or replacement workflow.
+5. **Measure before optimizing.** Staffing, budget and review calibration should use meaningful task-outcome samples. Do not add statistical/dashboard complexity merely because telemetry fields exist.
+6. **Defer convenience-only expansion.** New remote controls, dashboards, agent roles, parallelism or operator surfaces require a demonstrated reduction in Human Owner attention, recurring failure, resource waste, quality risk or a real blocker to an approved project workflow.
+
+Current evidence:
+
+- RCTL-MVP #513 is completed after live standalone exact-head merge and exact supervised continuation proof.
+- Runtime 1.0.130 is live on PCP main `62a89ff59669e68dd73533af7c6851f91c5b44dc`.
+- #512 remains open only for natural parent-level evidence such as post-rollout GitHub `direct_intake` and a real control-plane-unavailable Guardian case; do not create synthetic work solely to close those acceptance boundaries.
+- #524 intentionally stays open for Guardian command/audit history.
+
+The older phases remain useful architecture/history context. They must not be interpreted as a requirement to continue building every previously imagined layer after the business problem has already been solved by a smaller path.
+
 ## Current priority overlay — personal-budget execution efficiency
 
 Human Owner approved initiative #146 on 2026-09-15. The authoritative policy is `efficiency-model.md`.
