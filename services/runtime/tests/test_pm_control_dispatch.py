@@ -149,6 +149,28 @@ class FakeEngine:
         self.repairs = []
         self.created = []
         self.enqueued = []
+        self.operations = []
+        self._project_locks = {}
+
+    def project_operation_lock(self, project_id):
+        lock = self._project_locks.get(project_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._project_locks[project_id] = lock
+        return lock
+
+    def reserve_direct_project_lease(self, job_id):
+        row = self.storage.jobs[job_id]
+        lease = {
+            "project_id": row["project_id"],
+            "owner_job_id": job_id,
+            "generation": 1,
+            "state": "active",
+            "reused": False,
+        }
+        self.storage.lease = deepcopy(lease)
+        self.operations.append(("reserve", job_id))
+        return lease
 
     async def resolve_human_decision(
         self,
@@ -192,6 +214,7 @@ class FakeEngine:
         _remote_binding=None,
     ):
         job_id = "newjob12345678"
+        self.operations.append(("create", job_id))
         self.created.append(
             {
                 "payload": deepcopy(payload),
@@ -212,6 +235,7 @@ class FakeEngine:
         return job_id
 
     async def enqueue(self, job_id):
+        self.operations.append(("enqueue", job_id))
         self.enqueued.append(job_id)
 
 
@@ -659,6 +683,18 @@ def test_remote_direct_intake_syncs_exact_source_and_binds_github_issue(
     assert result["classification"]["mode"] == "direct"
     assert engine.ddev.sync_calls == [("demo", SOURCE)]
     assert engine.enqueued == ["newjob12345678"]
+    assert engine.operations == [
+        ("create", "newjob12345678"),
+        ("reserve", "newjob12345678"),
+        ("enqueue", "newjob12345678"),
+    ]
+    assert storage.lease == {
+        "project_id": "demo",
+        "owner_job_id": "newjob12345678",
+        "generation": 1,
+        "state": "active",
+        "reused": False,
+    }
     created = engine.created[0]
     assert created["payload"]["source_commit"] == SOURCE
     assert created["binding"] == {
