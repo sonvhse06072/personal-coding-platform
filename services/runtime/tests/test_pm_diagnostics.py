@@ -162,9 +162,23 @@ class FakeEngine:
         self.collaboration = FakeCollaboration()
 
 
+class FakePlanStore:
+    def __init__(self, project_id="chonhac"):
+        self.project_id = project_id
+
+    def orchestration(self, plan_id):
+        if plan_id != "plan-1":
+            return None
+        return {
+            "plan_id": plan_id,
+            "project_id": self.project_id,
+        }
+
+
 class FakeOrchestrator:
-    def __init__(self):
+    def __init__(self, project_id="chonhac"):
         self.controls = FakeControls()
+        self.store = FakePlanStore(project_id)
 
     def progress(self, plan_id):
         return {
@@ -230,3 +244,31 @@ def test_diagnostics_publish_sanitized_exact_blocker_evidence():
     assert "SECRET raw failure" not in body
     assert "SECRET-ACTIVITY" not in body
     assert "/home/private" not in body
+
+
+def test_diagnostics_reject_cross_project_plan_binding():
+    storage = FakeStorage()
+    engine = FakeEngine()
+    service = PMDiagnosticsService(
+        storage,
+        engine,
+        FakeOrchestrator(project_id="other-project"),
+    )
+
+    try:
+        asyncio.run(
+            service.collect_and_publish(
+                project_id="chonhac",
+                issue_number=77,
+                control_comment_id=124,
+                job_id=JOB_ID,
+                plan_id="plan-1",
+                collectors=["plan_progress"],
+            )
+        )
+    except RuntimeError as exc:
+        assert "plan project identity mismatch" in str(exc)
+    else:
+        raise AssertionError("cross-project diagnostic plan must fail closed")
+
+    assert engine.ddev.comments == []
