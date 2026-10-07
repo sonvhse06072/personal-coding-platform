@@ -44,6 +44,20 @@ class DdevExecutorClient:
         except httpx.HTTPError:
             return False
 
+    async def project_worktree_state(
+        self,
+        *,
+        project_id: str,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=30) as client:
+            response = await client.get(
+                f"{self.base}/v1/project-state",
+                params={"project_id": project_id},
+                headers=self.headers,
+            )
+            _raise_for_status_with_detail(response)
+            return response.json()
+
     async def upsert_plan_progress(
         self, *, project_id: str, issue_number: int, handoff_key: str,
         body: str, known_comment_id: int | None = None,
