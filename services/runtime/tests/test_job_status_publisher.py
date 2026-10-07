@@ -45,11 +45,22 @@ def remote_job():
 
 
 class FakeStorage:
-    def __init__(self, jobs):
+    def __init__(self, jobs, *, lease_owner=JOB_ID, lease_state="active"):
         self.jobs = jobs
+        self.lease_owner = lease_owner
+        self.lease_state = lease_state
 
     def list(self, limit=200):
         return deepcopy(self.jobs[:limit])
+
+    def project_lease(self, project_id):
+        if self.lease_owner is None:
+            return None
+        return {
+            "project_id": project_id,
+            "owner_job_id": self.lease_owner,
+            "state": self.lease_state,
+        }
 
 
 class FakeControls:
@@ -286,6 +297,45 @@ def test_notification_materialization_failure_does_not_block_github_status_publi
     assert worked is True
     assert store.acked == [(JOB_ID, 900)]
     assert len(executor.requests) == 1
+
+
+def test_unbound_current_direct_job_still_materializes_telegram_attention():
+    job = remote_job()
+    job["checkpoint"].pop("github_pm_binding")
+    notifications = FakeNotificationStore()
+    publisher = JobStatusPublisher(
+        FakeStorage([job]),
+        FakeExecutor(),
+        FakeControls(),
+        store=FakeStore(),
+        notification_store=notifications,
+    )
+
+    publisher.stage_all()
+
+    assert len(notifications.events) == 1
+    event = notifications.events[0]
+    assert event["event_type"] == "standalone_job_blocked"
+    assert event["ticket_id"] is None
+    assert event["github_url"] is None
+    assert event["payload"]["standalone_job_id"] == JOB_ID
+    assert event["payload"]["attention_generation"] == "generation-exact"
+
+
+def test_historical_blocked_direct_job_without_current_lease_does_not_rematerialize():
+    notifications = FakeNotificationStore()
+    publisher = JobStatusPublisher(
+        FakeStorage([remote_job()], lease_owner="different-job"),
+        FakeExecutor(),
+        FakeControls(),
+        store=FakeStore(),
+        notification_store=notifications,
+    )
+
+    publisher.stage_all()
+
+    assert notifications.events == []
+    assert notifications.supersede_calls == [(JOB_ID, None)]
 
 
 def test_remote_bound_blocked_job_publishes_exact_safe_recovery_status():

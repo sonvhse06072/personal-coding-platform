@@ -302,6 +302,23 @@ class JobStatusPublisher:
             return None
         return issue, repository
 
+    def _is_current_canonical_direct_job(self, job: dict[str, Any]) -> bool:
+        checkpoint = dict(job.get("checkpoint") or {})
+        intake = dict(checkpoint.get("canonical_intake") or {})
+        if intake.get("mode") != "direct" or intake.get("bounded_direct") is not True:
+            return False
+        if checkpoint.get("orchestrator_launch"):
+            return False
+        lease_lookup = getattr(self.storage, "project_lease", None)
+        if not callable(lease_lookup):
+            return False
+        lease = lease_lookup(str(job.get("project_id") or ""))
+        return bool(
+            lease
+            and str(lease.get("state") or "") == "active"
+            and str(lease.get("owner_job_id") or "") == str(job.get("id") or "")
+        )
+
     @staticmethod
     def _fallback_attention_generation(job: dict[str, Any]) -> str:
         result = dict(job.get("result") or {})
@@ -343,8 +360,9 @@ class JobStatusPublisher:
         self,
         job: dict[str, Any],
         *,
-        issue_number: int,
-        repository: str,
+        eligible: bool,
+        issue_number: int | None,
+        repository: str | None,
         attention: dict[str, Any] | None,
     ) -> None:
         if self.notification_store is None:
@@ -358,7 +376,7 @@ class JobStatusPublisher:
                 "supersede_standalone_notifications",
                 None,
             )
-            if str(job.get("status") or "") != "blocked":
+            if not eligible or str(job.get("status") or "") != "blocked":
                 if callable(supersede):
                     supersede(job_id)
                 return
@@ -388,7 +406,7 @@ class JobStatusPublisher:
                 event_type="standalone_job_blocked",
                 severity="error",
                 project_id=str(job.get("project_id") or ""),
-                ticket_id=f"GH-{issue_number}",
+                ticket_id=(f"GH-{issue_number}" if issue_number else None),
                 plan_id=None,
                 work_order_id=None,
                 summary=str(
@@ -397,6 +415,8 @@ class JobStatusPublisher:
                 ),
                 github_url=(
                     f"https://github.com/{repository}/issues/{issue_number}"
+                    if repository and issue_number
+                    else None
                 ),
                 payload={
                     "job_id": job_id,
@@ -420,11 +440,12 @@ class JobStatusPublisher:
         for raw in self.storage.list(limit=200):
             job = dict(raw)
             binding = self._binding(job)
-            if binding is None:
-                continue
-            issue_number, repository = binding
+            current_direct = self._is_current_canonical_direct_job(job)
             attention = None
-            if str(job.get("status") or "") in {"blocked", "interrupted"}:
+            if (
+                str(job.get("status") or "") in {"blocked", "interrupted"}
+                and (binding is not None or current_direct)
+            ):
                 try:
                     attention = self.controls.standalone_remote_actions(
                         str(job["id"])
@@ -435,12 +456,19 @@ class JobStatusPublisher:
                         "phase": "blocked",
                         "actions": [],
                     }
+
+            issue_number = binding[0] if binding is not None else None
+            repository = binding[1] if binding is not None else None
             self._stage_standalone_notification(
                 job,
+                eligible=current_direct,
                 issue_number=issue_number,
                 repository=repository,
                 attention=attention,
             )
+
+            if binding is None:
+                continue
             body = _render_job_status(job, attention=attention)
             if self.store.stage(
                 job,
