@@ -72,7 +72,11 @@ def load_event(path: Path) -> dict[str, Any]:
     return raw
 
 
-def parse_command(event: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+def trusted_comment_identity(
+    event: dict[str, Any],
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    """Validate only the authority envelope, before interpreting command payload."""
     if str(event.get("action") or "") != "created":
         raise ValueError("Guardian accepts created comments only")
 
@@ -95,8 +99,18 @@ def parse_command(event: dict[str, Any], config: dict[str, Any]) -> dict[str, An
     actor = (comment.get("user") or {}).get("login")
     if str(actor or "") != config["allowed_actor"]:
         raise ValueError("Guardian comment author is not allowed")
-
     body = str(comment.get("body") or "")
+    return {
+        "comment_id": comment_id,
+        "body": body,
+        "body_sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
+    }
+
+
+def parse_command(event: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    identity = trusted_comment_identity(event, config)
+    comment_id = int(identity["comment_id"])
+    body = str(identity["body"])
     if len(body.encode("utf-8")) > config["max_comment_bytes"]:
         raise ValueError("Guardian command exceeds byte bound")
     marker = config["marker"]
@@ -140,7 +154,7 @@ def parse_command(event: dict[str, Any], config: dict[str, Any]) -> dict[str, An
     return {
         **command,
         "comment_id": comment_id,
-        "body_sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
+        "body_sha256": identity["body_sha256"],
     }
 
 
@@ -796,12 +810,43 @@ def main() -> int:
 
     config = load_config(Path(args.config).resolve())
     event = load_event(Path(args.event).resolve())
-    command = parse_command(event, config)
+    # Wrong actor/repository/issue identities receive no response. The workflow
+    # also prefilters them, while this check is the defense-in-depth authority.
+    identity = trusted_comment_identity(event, config)
     token = os.getenv("GITHUB_TOKEN", "").strip()
     github = GitHubClient(token, config["repository"])
+    state_dir = Path(config["state_dir"])
+
+    try:
+        command = parse_command(event, config)
+    except Exception as exc:
+        rejected = {
+            "comment_id": int(identity["comment_id"]),
+            "body_sha256": str(identity["body_sha256"]),
+            "action": "invalid",
+        }
+        result = {
+            "status": "rejected",
+            "action": "invalid",
+            "comment_id": int(identity["comment_id"]),
+            "error_type": type(exc).__name__,
+            "message": _bounded(str(exc), 500),
+        }
+        with AuditStore(state_dir) as audit:
+            fresh, row = audit.claim(rejected)
+            if fresh:
+                audit.finish(rejected, status="rejected", result=result)
+            elif isinstance(row.get("result"), dict):
+                result = dict(row["result"])
+        github.upsert_result(
+            issue_number=config["control_issue_number"],
+            comment_id=int(identity["comment_id"]),
+            result=result,
+        )
+        return 20
+
     checkout = Path(os.getenv("GITHUB_WORKSPACE", os.getcwd())).resolve()
     host = GuardianHost(config, checkout)
-    state_dir = Path(config["state_dir"])
 
     with AuditStore(state_dir) as audit:
         fresh, row = audit.claim(command)
