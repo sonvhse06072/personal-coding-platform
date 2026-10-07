@@ -4,8 +4,8 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 fresh Runtime/GitHub evidence remain authoritative over chat history. This file
 is an index, not authority to change the approved baseline or protected scope.
 
-Last updated: 2026-10-05 theo owner v5 release recovery lúc
-`2026-10-04T18:31:55.449578+00:00`. Generation 1 đã release; AP-MVP-01 đang execution.
+Last updated: 2026-10-07 after live GitHub reconciliation of remote PM control
+issues #512/#513 and natural Chợ Nhạc #77 dogfood evidence.
 
 ## Resume order
 
@@ -15,6 +15,53 @@ Last updated: 2026-10-05 theo owner v5 release recovery lúc
    and local Git before any mutation. Older snapshots are evidence, not live locks.
 
 Memory-tier policy: `context-memory-architecture.md`.
+
+
+## Remote PM control reconciliation — 2026-10-07
+
+GitHub live state is authoritative for this section.
+
+- GitHub PCP `main` is
+  `a9766d423ee5d75296e48dacc7caf947ed4db6fd` (merged PR #540).
+- The latest Runtime rollout proven live by the accepted same-job repair dogfood is
+  Runtime `1.0.123` at PCP source
+  `f11bde43bd572074c062b7111d4573d4a6aea2fb`. PR #540 targets Runtime
+  `1.0.124`, but its rollout/live #77 second-repair acceptance is not proven and
+  must not be inferred from the GitHub merge.
+- RCTL-MVP source work is implemented and merged: #514 / RCTL-01, #515 /
+  RCTL-02, and #516 / RCTL-03. #515 child bookkeeping #518/#519/#520 is
+  reconciled closed because merged PR #521 already contains those capabilities.
+- #526 / PR #527 is reconciled closed after live #77 diagnostics proved bounded
+  deterministic failing-phase/streak evidence without raw stdout/stderr, command
+  strings, failure messages, or filesystem paths.
+- Draft PR #535 is closed without merge as stale/superseded by #536 / merged PR
+  #537, whose Guardian audit-identity and Runtime transport repair is live-proven.
+- #541 is closed not-planned: per-command verification evidence is optional
+  hardening, not a remaining #513 acceptance requirement.
+- #539 remains open but is explicitly **non-gating for #513**. Its one-time
+  adaptive-emergency repair allowance is already merged in PR #540; do not force
+  a rollout or another Chợ Nhạc #77 repair merely to close it.
+- #524 remains intentionally open as the persistent Guardian control/audit issue.
+- #513 remains open for **live acceptance only**, not new implementation. Natural
+  #77 dogfood has already proven remote observe -> sanitized diagnose -> bounded
+  same-job repair with preserved durable job/source/branch/workspace/counters.
+  Remaining proof is:
+  1. one natural eligible standalone delivery through `merge_standalone_job`
+     with exact PR/head/CI and post-merge confirmation;
+  2. one naturally authorized supervised hold through
+     `continue_supervised_plan` with exact generation/checkpoint/continuation
+     identity.
+- Next smallest WorkOrder is `RCTL-MVP-ACCEPT-01`: acceptance-only, zero PCP
+  source changes by default. Use natural eligible checkpoints; do not create a
+  replacement job, reset counters/providers, release Chợ Nhạc supervised
+  generation 4 merely to exercise an API, or open another PCP repair issue from
+  #77 unless an existing #513 acceptance capability itself is proven defective.
+- Close #513 only after both remaining live proofs. Reassess #512 / remaining
+  Guardian work only after that parent acceptance.
+
+The older execution sections below remain historical evidence for their named
+incidents. Re-read live GitHub, Runtime, local Git and active-job state before any
+mutation; do not treat an older recorded Runtime/local SHA as current.
 
 ## Accepted platform / local state
 
