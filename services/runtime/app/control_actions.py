@@ -102,8 +102,19 @@ _ADAPTIVE_WORK_SHAPE_DIMENSIONS = {
 }
 
 _REMOTE_ADAPTIVE_EMERGENCY_REPAIR_KEY = "remote_adaptive_emergency_repair"
-
-
+_PM_ANTI_LOOP_BYPASS_HISTORY_KEY = "pm_antiloop_bypass_history"
+_PM_ANTI_LOOP_BYPASS_SELECTORS = frozenset({
+    "repeated_failure",
+    "no_progress",
+    "max_model_calls",
+    "max_tool_calls",
+    "max_test_runs",
+    "max_repair_iterations",
+    "max_iterations",
+    "max_wall_time_minutes",
+    "deterministic_failure_streak",
+    "adaptive_emergency_repair_window",
+})
 
 
 class ControlActionService:
@@ -1083,6 +1094,8 @@ class ControlActionService:
         expected_generation: str,
         finding: str,
         references: list[str] | None = None,
+        anti_loop_bypass: list[str] | None = None,
+        authorization_reference: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Queue one PM-directed repair turn for the exact preserved direct job."""
 
@@ -1151,6 +1164,25 @@ class ControlActionService:
             for item in signals
             if item.startswith("budget_emergency_threshold_reached:")
         ]
+        requested_bypass = {
+            str(item)
+            for item in (anti_loop_bypass or [])
+            if str(item)
+        }
+        if "all_current" in requested_bypass and len(requested_bypass) != 1:
+            raise RuntimeError(
+                "PM anti-loop bypass all_current cannot be combined with explicit selectors"
+            )
+        unknown_bypass = (
+            requested_bypass
+            - {"all_current"}
+            - _PM_ANTI_LOOP_BYPASS_SELECTORS
+        )
+        if unknown_bypass:
+            raise RuntimeError(
+                "PM anti-loop bypass contains unsupported selector(s): "
+                + ",".join(sorted(unknown_bypass))
+            )
         invalid_signals = [
             item
             for item in signals
@@ -1173,14 +1205,12 @@ class ControlActionService:
         if not diff_hash:
             raise RuntimeError("Blocked repair requires exact preserved diff hash")
 
+        expanded_bypass: set[str] = set()
+        bypass_record: dict[str, Any] | None = None
         if emergency_signals:
             if not self._adaptive_work_shape_nonblocking(job):
                 raise RuntimeError(
                     "Blocked repair emergency telemetry requires adaptive route"
-                )
-            if checkpoint.get(_REMOTE_ADAPTIVE_EMERGENCY_REPAIR_KEY):
-                raise RuntimeError(
-                    "Blocked repair adaptive emergency repair window was already used"
                 )
 
             emergency_dimensions = [
@@ -1209,10 +1239,6 @@ class ControlActionService:
                 raise RuntimeError(
                     "Blocked repair emergency telemetry requires prior PM repair context"
                 )
-            if previous_diff_hash == diff_hash:
-                raise RuntimeError(
-                    "Blocked repair emergency telemetry requires material diff progress"
-                )
 
             streak = dict(
                 checkpoint.get("deterministic_verification_failure_streak") or {}
@@ -1226,18 +1252,134 @@ class ControlActionService:
                 ) from None
             if (
                 str(streak.get("diff_hash") or "") != diff_hash
-                or streak_count != 1
                 or streak_limit < 1
             ):
                 raise RuntimeError(
-                    "Blocked repair emergency telemetry requires one fresh current-diff failure"
+                    "Blocked repair emergency telemetry requires exact current-diff failure evidence"
                 )
+
+            current_gates: set[str] = set(emergency_dimensions)
+            if any(item.startswith("repeated_failure:") for item in signals):
+                current_gates.add("repeated_failure")
+            if "no_progress" in signals:
+                current_gates.add("no_progress")
+            if checkpoint.get(_REMOTE_ADAPTIVE_EMERGENCY_REPAIR_KEY):
+                current_gates.add("adaptive_emergency_repair_window")
+            if streak_count != 1:
+                current_gates.add("deterministic_failure_streak")
+
+            if requested_bypass:
+                if "all_current" in requested_bypass:
+                    expanded_bypass = set(current_gates)
+                else:
+                    expanded_bypass = set(requested_bypass)
+                    stale = expanded_bypass - current_gates
+                    if stale:
+                        raise RuntimeError(
+                            "PM anti-loop bypass selector(s) are not current: "
+                            + ",".join(sorted(stale))
+                        )
+
+                required_bypass: set[str] = set()
+                if checkpoint.get(_REMOTE_ADAPTIVE_EMERGENCY_REPAIR_KEY):
+                    required_bypass.add("adaptive_emergency_repair_window")
+                    required_bypass.update(emergency_dimensions)
+                if previous_diff_hash == diff_hash:
+                    required_bypass.add("no_progress")
+                if streak_count != 1:
+                    required_bypass.add("deterministic_failure_streak")
+
+                missing = required_bypass - expanded_bypass
+                if missing:
+                    raise RuntimeError(
+                        "PM anti-loop bypass is missing required current gate(s): "
+                        + ",".join(sorted(missing))
+                    )
+
+                for dimension in emergency_dimensions:
+                    spec = _BUDGET_EXTENSION_SPECS.get(dimension)
+                    if not spec:
+                        raise RuntimeError(
+                            "PM anti-loop bypass cannot classify emergency dimension"
+                        )
+                    counter = str(spec["counter"])
+                    try:
+                        used = float(progress.get(counter) or 0)
+                        hard_max = float(spec["hard_max"])
+                    except (TypeError, ValueError):
+                        raise RuntimeError(
+                            "PM anti-loop bypass cannot verify hard platform maximum"
+                        ) from None
+                    if used >= hard_max:
+                        raise RuntimeError(
+                            "PM anti-loop bypass cannot exceed hard platform maximum "
+                            f"for {dimension}"
+                        )
+
+                safe_reference = {
+                    key: value
+                    for key, value in dict(authorization_reference or {}).items()
+                    if key in {"channel", "comment_id", "issue_number"}
+                }
+                bypass_record = {
+                    "version": 1,
+                    "blocker_generation": expected_generation,
+                    "requested": sorted(requested_bypass),
+                    "selectors": sorted(expanded_bypass),
+                    "signals": signals[:24],
+                    "diff_hash": diff_hash,
+                    "deterministic_failure_streak": {
+                        "count": streak_count,
+                        "limit": streak_limit,
+                        "verification_attempt": streak.get("verification_attempt"),
+                        "signature": streak.get("signature"),
+                        "diff_hash": streak.get("diff_hash"),
+                        "failing_phases": list(streak.get("failing_phases") or [])[:8],
+                    },
+                    "counters": {
+                        key: progress.get(key)
+                        for key in (
+                            "model_calls",
+                            "tool_calls",
+                            "test_runs",
+                            "repair_iterations",
+                            "iteration",
+                            "elapsed_minutes",
+                        )
+                    },
+                    "authorization_reference": safe_reference,
+                    "recorded_at": now().isoformat(),
+                }
+                history = [
+                    deepcopy(item)
+                    for item in (
+                        checkpoint.get(_PM_ANTI_LOOP_BYPASS_HISTORY_KEY) or []
+                    )
+                    if isinstance(item, dict)
+                ]
+                history.append(deepcopy(bypass_record))
+                checkpoint[_PM_ANTI_LOOP_BYPASS_HISTORY_KEY] = history[-20:]
+                checkpoint["last_pm_antiloop_bypass"] = deepcopy(bypass_record)
+            else:
+                if checkpoint.get(_REMOTE_ADAPTIVE_EMERGENCY_REPAIR_KEY):
+                    raise RuntimeError(
+                        "Blocked repair adaptive emergency repair window was already used"
+                    )
+                if previous_diff_hash == diff_hash:
+                    raise RuntimeError(
+                        "Blocked repair emergency telemetry requires material diff progress"
+                    )
+                if streak_count != 1:
+                    raise RuntimeError(
+                        "Blocked repair emergency telemetry requires one fresh current-diff failure"
+                    )
 
             checkpoint[_REMOTE_ADAPTIVE_EMERGENCY_REPAIR_KEY] = {
                 "blocker_generation": expected_generation,
                 "prior_diff_hash": previous_diff_hash,
                 "current_diff_hash": diff_hash,
                 "dimensions": sorted(set(emergency_dimensions)),
+                "pm_bypass_selectors": sorted(expanded_bypass),
                 "recorded_at": now().isoformat(),
             }
         if not str(job.get("source_commit") or ""):
@@ -1286,6 +1428,7 @@ class ControlActionService:
             "decision": decision,
             "staffing": None,
             "references": refs,
+            "anti_loop_bypass": sorted(expanded_bypass),
         }
         checkpoint.pop("pending_pm_reassessment", None)
 
@@ -1299,6 +1442,7 @@ class ControlActionService:
                 "signal": "github_pm_control:repair_blocked_job",
                 "protected_decision_flags": [],
                 "references": refs,
+                "anti_loop_bypass": sorted(expanded_bypass),
             },
             ensure_ascii=False,
             sort_keys=True,
@@ -1342,6 +1486,8 @@ class ControlActionService:
                     "references": refs,
                     "diff_hash": diff_hash,
                     "blocker_generation": expected_generation,
+                    "anti_loop_bypass": sorted(expanded_bypass),
+                    "anti_loop_authorization": bypass_record,
                 },
                 "previous_block": {
                     "reason": result.get("reason"),
