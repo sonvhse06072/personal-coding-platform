@@ -94,8 +94,6 @@ _PROVIDER_BLOCK_REASONS = {
 
 _ADAPTIVE_WORK_SHAPE_DIMENSIONS = {
     "max_model_calls",
-    "max_input_tokens",
-    "max_output_tokens",
     "max_tool_calls",
     "max_test_runs",
     "max_repair_iterations",
