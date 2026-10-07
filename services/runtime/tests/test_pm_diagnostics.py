@@ -61,6 +61,21 @@ class FakeStorage:
         assert job_ids == [JOB_ID]
         return [
             {
+                "id": 9,
+                "job_id": JOB_ID,
+                "event_type": "developer_command_completed",
+                "phase": "execution",
+                "level": "error",
+                "message": "raw command message SECRET-ACTIVITY",
+                "data": {
+                    "command": "cat /home/private/token",
+                    "output": "SECRET-ACTIVITY /home/private/token",
+                    "status": "failed",
+                    "exit_code": 1,
+                },
+                "created_at": datetime(2026, 10, 7, tzinfo=timezone.utc),
+            },
+            {
                 "id": 10,
                 "job_id": JOB_ID,
                 "event_type": "job_blocked",
@@ -72,7 +87,7 @@ class FakeStorage:
                     "to_status": "blocked",
                 },
                 "created_at": datetime(2026, 10, 7, tzinfo=timezone.utc),
-            }
+            },
         ]
 
     def count_active_engineering_jobs(self):
@@ -213,4 +228,5 @@ def test_diagnostics_publish_sanitized_exact_blocker_evidence():
     assert "pm_scope_reassess" in body
     assert "supervised_hold" in body
     assert "SECRET raw failure" not in body
+    assert "SECRET-ACTIVITY" not in body
     assert "/home/private" not in body
