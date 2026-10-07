@@ -367,6 +367,31 @@ class ControlActionService:
             return False
         return changed_files > previous_limit
 
+    @staticmethod
+    def _verification_only_pm_handoff_candidate(job: dict[str, Any]) -> bool:
+        if str(job.get("status") or "") != "blocked":
+            return False
+        result = dict(job.get("result") or {})
+        if str(result.get("reason") or "") != "collaboration_pm_handoff":
+            return False
+        checkpoint = dict(job.get("checkpoint") or {})
+        collaboration = checkpoint.get("collaboration_context")
+        collaboration = (
+            dict(collaboration) if isinstance(collaboration, dict) else {}
+        )
+        if str(collaboration.get("status") or "") != "pm_handoff":
+            return False
+        if not str(collaboration.get("thread_id") or "").strip():
+            return False
+        try:
+            round_number = int(collaboration.get("round") or 0)
+        except (TypeError, ValueError):
+            return False
+        return (
+            round_number >= 1
+            and isinstance(collaboration.get("pm_handoff"), dict)
+        )
+
     def blocked_advisory(self, work_order: dict[str, Any], job: dict[str, Any] | None) -> dict[str, Any]:
         job = job or {}
         result = dict(job.get("result") or {})
@@ -497,6 +522,49 @@ class ControlActionService:
             advisory["summary"] = "Legacy delivery acceptance evidence is incomplete."
             advisory["cause"] = "Runtime stopped before coding because it cannot safely reconstruct the prior accepted result."
             advisory["recommended"] = "Keep the same job blocked and repair or verify acceptance only through an authoritative operator mechanism."
+
+        elif reason == "collaboration_pm_handoff":
+            advisory["phase"] = "verification"
+            advisory["summary"] = (
+                "Bounded collaboration reached PM handoff during verification."
+            )
+            if self._verification_only_pm_handoff_candidate(job):
+                advisory["cause"] = (
+                    "The collaborator could not resolve the verification question "
+                    "within its round limit; the exact durable PM-handoff context is preserved."
+                )
+                advisory["recommended"] = (
+                    "Resume the same job for one verification-only PM-handoff turn. "
+                    "Do not reroute, reset provider state or broaden the WorkOrder."
+                )
+                advisory["action_specs"] = [
+                    {
+                        "action_type": "resume_same",
+                        "label": "▶️ Verify same job",
+                        "payload": {
+                            "verification_only_after_pm_handoff": True,
+                        },
+                    },
+                    {
+                        "action_type": "details",
+                        "label": "📋 Chi tiết",
+                        "payload": {},
+                    },
+                    {
+                        "action_type": "keep_blocked",
+                        "label": "⛔ Giữ blocked",
+                        "payload": {},
+                    },
+                ]
+            else:
+                advisory["cause"] = (
+                    "The block reason indicates PM handoff, but the exact durable "
+                    "collaboration context is incomplete or stale."
+                )
+                advisory["recommended"] = (
+                    "Keep the WorkOrder blocked and inspect the durable collaboration "
+                    "context; Runtime will not synthesize a resume action."
+                )
 
         elif reason == "material_change_missing_without_model_fallback":
             advisory["summary"] = "The coding agent completed without the required material repository change."
@@ -1604,12 +1672,14 @@ class ControlActionService:
         reset_transient_provider_failures: bool,
         reroute: bool,
         require_changed_file_headroom: bool = False,
+        verification_only_after_pm_handoff: bool = False,
     ) -> dict[str, Any]:
         context = prepare_orchestrated_job_resume(self.store, job_id)
         row = await self.engine.resume(
             job_id,
             reset_transient_provider_failures=reset_transient_provider_failures,
             reroute=reroute,
+            verification_only_after_pm_handoff=verification_only_after_pm_handoff,
             _allow_failed_orchestrated_resume=bool(context and context.get("reopen")),
             _require_changed_file_headroom=require_changed_file_headroom,
         )
@@ -1709,8 +1779,29 @@ class ControlActionService:
                 "Current adaptive scope policy was revalidated; the same job resumed into the PM reassessment gate without resetting its workspace, diff or counters.",
             )
         if action_type == "resume_same":
-            row = await self._resume(job_id, reset_transient_provider_failures=False, reroute=False)
-            return self._resume_result(action, row, "The same interrupted job was resumed without replacing its route.")
+            allowed_payload = {"verification_only_after_pm_handoff"}
+            if set(payload) - allowed_payload:
+                raise RuntimeError("resume_same payload contains unsupported fields")
+            verification_only = payload.get(
+                "verification_only_after_pm_handoff",
+                False,
+            )
+            if type(verification_only) is not bool:
+                raise RuntimeError(
+                    "resume_same verification-only flag must be boolean"
+                )
+            row = await self._resume(
+                job_id,
+                reset_transient_provider_failures=False,
+                reroute=False,
+                verification_only_after_pm_handoff=verification_only,
+            )
+            message = (
+                "The same job resumed for one verification-only PM-handoff turn."
+                if verification_only
+                else "The same interrupted job was resumed without replacing its route."
+            )
+            return self._resume_result(action, row, message)
         if action_type == "budget_extend":
             authorization = self._apply_budget_extension(action)
             row = await self._resume(job_id, reset_transient_provider_failures=False, reroute=False)

@@ -174,6 +174,104 @@ def test_unknown_block_reason_fails_closed_without_mutating_recovery_action():
     assert "force_complete" not in action_types(advisory)
 
 
+def test_collaboration_pm_handoff_offers_only_verification_same_job_resume():
+    job = base_job(reason="collaboration_pm_handoff")
+    job["checkpoint"]["collaboration_context"] = {
+        "thread_id": "ct-handoff",
+        "status": "pm_handoff",
+        "round": 2,
+        "pm_handoff": {
+            "reason": "collaboration_round_limit_with_unresolved_disagreement",
+            "trace_hash": "trace-1",
+        },
+    }
+    controls, _ = service(job)
+
+    advisory = controls.blocked_advisory(row(), job)
+
+    assert advisory["phase"] == "verification"
+    assert action_types(advisory) == ["resume_same", "details", "keep_blocked"]
+    assert advisory["action_specs"][0]["payload"] == {
+        "verification_only_after_pm_handoff": True,
+    }
+    assert "reroute" not in json.dumps(advisory["action_specs"][0]).lower()
+
+
+def test_collaboration_pm_handoff_without_exact_context_fails_closed():
+    job = base_job(reason="collaboration_pm_handoff")
+    job["checkpoint"]["collaboration_context"] = {
+        "thread_id": "ct-handoff",
+        "status": "pm_handoff",
+        "round": 2,
+    }
+    controls, _ = service(job)
+
+    advisory = controls.blocked_advisory(row(), job)
+
+    assert action_types(advisory) == ["details", "keep_blocked"]
+    assert "resume_same" not in action_types(advisory)
+
+
+def test_resume_same_dispatch_forwards_verification_only_pm_handoff_flag():
+    controls, _ = service()
+    calls = []
+
+    async def fake_resume(job_id, **kwargs):
+        calls.append((job_id, kwargs))
+        return {"id": job_id, "status": "queued"}
+
+    controls._resume = fake_resume
+
+    result = asyncio.run(
+        controls._dispatch(
+            {
+                "action_id": "action-pm-handoff",
+                "action_type": "resume_same",
+                "job_id": "job-1",
+                "payload": {
+                    "verification_only_after_pm_handoff": True,
+                },
+            }
+        )
+    )
+
+    assert result["job_status"] == "queued"
+    assert calls == [
+        (
+            "job-1",
+            {
+                "reset_transient_provider_failures": False,
+                "reroute": False,
+                "verification_only_after_pm_handoff": True,
+            },
+        )
+    ]
+
+
+def test_resume_same_dispatch_keeps_ordinary_resume_flag_false():
+    controls, _ = service()
+    calls = []
+
+    async def fake_resume(job_id, **kwargs):
+        calls.append((job_id, kwargs))
+        return {"id": job_id, "status": "queued"}
+
+    controls._resume = fake_resume
+
+    asyncio.run(
+        controls._dispatch(
+            {
+                "action_id": "action-interrupted",
+                "action_type": "resume_same",
+                "job_id": "job-1",
+                "payload": {},
+            }
+        )
+    )
+
+    assert calls[0][1]["verification_only_after_pm_handoff"] is False
+
+
 def test_ci_infrastructure_block_offers_only_preserved_delivery_recovery():
     job = base_job(
         reason="github_ci_infrastructure_failure",
