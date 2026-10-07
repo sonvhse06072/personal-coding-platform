@@ -7,6 +7,7 @@ These documents are intentionally stored in the repository so ChatGPT, Codex, an
 ## Documents
 
 - `constitution.md` — project purpose, authority hierarchy, non-negotiable invariants, human decision boundaries, and change-control rules.
+- `business-strategy.md` — PCP product/business identity, internal investment thesis, north-star metrics, dogfood-to-roadmap rules, portfolio priorities, maturity stages, and the business-value gate for new platform work.
 - `architecture.md` — current system architecture and the approved target architecture for the small-agent-team model.
 - `operating-model.md` — responsibilities and communication contracts for Human Owner, Product Manager, Router, Runtime, Developer, Reviewer, and n8n.
 - `provider-policy.md` — provider/model resource tiers, Router authority, privacy/failover rules, and the approved OpenRouter opportunistic free-tier policy.
