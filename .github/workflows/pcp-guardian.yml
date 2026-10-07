@@ -1,0 +1,39 @@
+name: pcp-guardian
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: pcp-guardian
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  guardian:
+    if: >-
+      github.event.action == 'created' &&
+      github.event.comment.user.login == 'sonvhse06072' &&
+      github.event.issue.number == 524 &&
+      github.event.issue.pull_request == null &&
+      contains(github.event.comment.body, '<!-- coding-platform:pcp-guardian:v1 -->')
+    runs-on: [self-hosted, linux, x64]
+    timeout-minutes: 20
+    steps:
+      - name: Checkout reviewed default branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Execute bounded Guardian command
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 scripts/pcp_guardian.py
+          --event "$GITHUB_EVENT_PATH"
+          --config config/guardian.json
