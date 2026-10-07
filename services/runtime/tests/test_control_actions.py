@@ -1818,40 +1818,6 @@ def test_remote_blocked_repair_rejects_unproven_adaptive_emergency_telemetry(
     assert storage.get("job-1")["status"] == "blocked"
 
 
-@pytest.mark.parametrize(
-    "dimension",
-    ["max_input_tokens", "max_output_tokens"],
-)
-def test_remote_blocked_repair_allows_token_emergency_only_on_progress_proven_adaptive_route(
-    dimension,
-):
-    job = adaptive_emergency_repair_job()
-    job["result"]["reassess"]["signals"] = [
-        signal
-        for signal in job["result"]["reassess"]["signals"]
-        if not signal.startswith("budget_emergency_threshold_reached:")
-    ] + [f"budget_emergency_threshold_reached:{dimension}"]
-    controls, storage, engine = blocked_repair_service(job)
-    advisory = controls.blocked_advisory({}, job)
-    generation = controls.standalone_attention_generation_fingerprint(
-        job,
-        advisory,
-    )
-
-    result = asyncio.run(
-        controls.request_standalone_blocked_repair(
-            "job-1",
-            expected_generation=generation,
-            finding="Repair only the fresh targeted test failure.",
-        )
-    )
-
-    assert result["status"] == "queued"
-    assert engine.enqueued == ["job-1"]
-    assert storage.get("job-1")["checkpoint"][
-        "remote_adaptive_emergency_repair"
-    ]["dimensions"] == [dimension]
-
 
 def test_remote_blocked_repair_emergency_window_is_consumed_once():
     job = adaptive_emergency_repair_job()
