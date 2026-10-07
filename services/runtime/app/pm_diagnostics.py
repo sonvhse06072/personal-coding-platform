@@ -251,14 +251,41 @@ class PMDiagnosticsService:
                 [str(job["id"])],
                 per_job_limit=30,
             )
-            sections["recent_activity"] = [
-                item
-                for item in (
-                    public_event(dict(event))
-                    for event in events
+            activity: list[dict[str, Any]] = []
+            safe_data_keys = {
+                "status",
+                "role",
+                "model",
+                "adapter",
+                "provider",
+                "tool",
+                "kind",
+                "exit_code",
+                "from_status",
+                "to_status",
+                "profile",
+                "analysis_depth",
+            }
+            for event in events:
+                item = public_event(dict(event))
+                if item is None:
+                    continue
+                data = dict(item.get("data") or {})
+                activity.append(
+                    {
+                        "seq": item.get("seq"),
+                        "timestamp": item.get("timestamp"),
+                        "phase": item.get("phase"),
+                        "level": item.get("level"),
+                        "event": item.get("event"),
+                        "data": {
+                            key: data.get(key)
+                            for key in safe_data_keys
+                            if data.get(key) is not None
+                        },
+                    }
                 )
-                if item is not None
-            ]
+            sections["recent_activity"] = activity
 
         if "github_delivery" in collectors:
             if job is None:
