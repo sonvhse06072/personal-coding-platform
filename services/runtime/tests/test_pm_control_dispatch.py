@@ -544,8 +544,25 @@ def test_standalone_merge_rejects_stale_command_before_github_mutation(monkeypat
     assert engine.ddev.merge_calls == []
 
 
-def test_future_slice_actions_are_explicitly_non_mutating():
+def test_request_diagnostics_delegates_to_bounded_service(monkeypatch):
     dispatch, _, _, _ = dispatcher()
+    calls = []
+
+    async def collect_and_publish(**kwargs):
+        calls.append(kwargs)
+        return {
+            "status": "published",
+            "collectors": ["job"],
+            "comment_id": 900,
+            "comment_url": "https://github.com/owner/demo/issues/77#issuecomment-900",
+            "state": "created",
+        }
+
+    monkeypatch.setattr(
+        dispatch.diagnostics,
+        "collect_and_publish",
+        collect_and_publish,
+    )
 
     status, result = asyncio.run(
         dispatch.dispatch(
@@ -559,8 +576,19 @@ def test_future_slice_actions_are_explicitly_non_mutating():
         )
     )
 
-    assert status == "unsupported_action_dispatch"
-    assert result["status"] == "pending_future_slice"
+    assert status == "executed"
+    assert result["status"] == "published"
+    assert result["comment_id"] == 900
+    assert calls == [
+        {
+            "project_id": "demo",
+            "issue_number": 77,
+            "control_comment_id": 17,
+            "job_id": "job-12345678",
+            "plan_id": None,
+            "collectors": ["job"],
+        }
+    ]
 
 
 def remote_direct_envelope(**overrides):
