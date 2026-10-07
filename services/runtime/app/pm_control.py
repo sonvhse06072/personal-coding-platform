@@ -55,6 +55,7 @@ class PMControlEnvelope(BaseModel):
         "request_diagnostics",
         "resolve_job_decision",
         "review_repair",
+        "repair_blocked_job",
         "recheck_blocker",
         "resume_same_job",
         "merge_standalone_job",
@@ -175,6 +176,8 @@ class PMControlEnvelope(BaseModel):
             require("job_id", "decision_key", "decision")
         elif self.action == "review_repair":
             require("job_id", "expected_commit", "finding")
+        elif self.action == "repair_blocked_job":
+            require("job_id", "blocker_generation", "finding")
         elif self.action in {"recheck_blocker", "resume_same_job"}:
             require("job_id", "blocker_generation")
             if bool(self.control_action_id) == bool(self.recovery_action_type):

@@ -8,12 +8,13 @@ from copy import deepcopy
 from datetime import timedelta
 from typing import Any
 
+from .fingerprint import failure_fingerprint
 from .legacy_delivery_recovery import (
     LEGACY_RECOVERY_BLOCK_REASON,
     recover_legacy_accepted_result,
 )
 from .orchestrator_resume import prepare_orchestrated_job_resume, reopen_orchestrated_job
-from .state import checkpoint_from_row
+from .state import checkpoint_from_row, set_failure_context
 from .storage import now
 
 
@@ -1072,6 +1073,212 @@ class ControlActionService:
             "payload": {},
         }
         return await self._dispatch(action)
+
+    async def request_standalone_blocked_repair(
+        self,
+        job_id: str,
+        *,
+        expected_generation: str,
+        finding: str,
+        references: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Queue one PM-directed repair turn for the exact preserved direct job."""
+
+        row = self.storage.get(job_id)
+        if row is None:
+            raise RuntimeError("Unknown job")
+        job = dict(row)
+        checkpoint = checkpoint_from_row(job)
+        progress = dict(job.get("progress") or {})
+        result = dict(job.get("result") or {})
+
+        intake = dict(checkpoint.get("canonical_intake") or {})
+        if (
+            intake.get("mode") != "direct"
+            or intake.get("bounded_direct") is not True
+        ):
+            raise RuntimeError(
+                "Blocked repair requires canonical bounded-direct intake"
+            )
+        if str(job.get("status") or "") != "blocked":
+            raise RuntimeError("Blocked repair requires exact blocked job state")
+        if str(result.get("reason") or "") != "reassessment_stopped":
+            raise RuntimeError(
+                "Blocked repair is only allowed for reassessment_stopped"
+            )
+
+        advisory = self.blocked_advisory({}, job)
+        generation = self.standalone_attention_generation_fingerprint(
+            job,
+            advisory,
+        )
+        if not secrets.compare_digest(generation, expected_generation):
+            raise RuntimeError("Blocked repair generation mismatch")
+
+        if checkpoint.get("pending_decision"):
+            raise RuntimeError("Blocked repair cannot bypass pending Human decision")
+        if checkpoint.get("pending_pm_reassessment"):
+            raise RuntimeError(
+                "Blocked repair cannot bypass an existing PM reassessment gate"
+            )
+        protected_flags = [
+            str(item)
+            for item in (progress.get("important_decision_flags") or [])
+            if str(item)
+        ]
+        if protected_flags:
+            raise RuntimeError(
+                "Blocked repair cannot bypass protected decision flags"
+            )
+        if bool(progress.get("unexpected_scope")):
+            raise RuntimeError("Blocked repair cannot bypass unexpected scope")
+
+        reassess = dict(result.get("reassess") or {})
+        signals = [
+            str(item)
+            for item in (reassess.get("signals") or [])
+            if str(item)
+        ]
+        if not any(item.startswith("repeated_failure:") for item in signals):
+            raise RuntimeError("Blocked repair requires repeated_failure signal")
+        if "no_progress" not in signals:
+            raise RuntimeError("Blocked repair requires no_progress signal")
+
+        invalid_signals = [
+            item
+            for item in signals
+            if (
+                item != "no_progress"
+                and not item.startswith("repeated_failure:")
+                and not item.startswith("budget_headroom_active:")
+                and not item.startswith("budget_estimate_exceeded:")
+            )
+        ]
+        if invalid_signals:
+            raise RuntimeError(
+                "Blocked repair contains unsupported reassessment signal(s): "
+                + ",".join(sorted(invalid_signals))
+            )
+
+        diff = dict(result.get("diff") or {})
+        diff_hash = str(diff.get("diff_hash") or "")
+        if not diff_hash:
+            raise RuntimeError("Blocked repair requires exact preserved diff hash")
+        if not str(job.get("source_commit") or ""):
+            raise RuntimeError("Blocked repair requires preserved source commit")
+        if not str(job.get("branch") or ""):
+            raise RuntimeError("Blocked repair requires preserved job branch")
+
+        project_id = str(job.get("project_id") or "")
+        if str(checkpoint.get("workspace_mode") or "") == "direct":
+            lease_lookup = getattr(self.storage, "project_lease", None)
+            if not callable(lease_lookup):
+                raise RuntimeError(
+                    "Blocked repair cannot verify direct project lease"
+                )
+            lease = lease_lookup(project_id)
+            if (
+                not lease
+                or str(lease.get("state") or "") != "active"
+                or str(lease.get("owner_job_id") or "") != job_id
+            ):
+                raise RuntimeError(
+                    "Blocked repair requires exact active same-job project lease"
+                )
+
+        message = str(finding or "").strip()
+        if not message or len(message) > 8000:
+            raise RuntimeError("Blocked repair finding must be 1..8000 characters")
+        refs = [
+            str(item).strip()
+            for item in (references or [])
+            if str(item).strip()
+        ]
+        if len(refs) > 12 or any(len(item) > 500 for item in refs):
+            raise RuntimeError("Blocked repair references exceed bounds")
+
+        decision = {
+            "action": "request_repair",
+            "summary": message[:2000],
+            "developer_message": message,
+            "unresolved_risks": [],
+            "human_triggers": [],
+        }
+        checkpoint["last_pm_reassessment"] = {
+            "diff_hash": diff_hash,
+            "signal": "github_pm_control:repair_blocked_job",
+            "decision": decision,
+            "staffing": None,
+            "references": refs,
+        }
+        checkpoint.pop("pending_pm_reassessment", None)
+
+        last_failure = "PCP_PM_REASSESSMENT: " + json.dumps(
+            {
+                "action": "request_repair",
+                "summary": decision["summary"],
+                "developer_message": decision["developer_message"],
+                "unresolved_risks": [],
+                "diff_hash": diff_hash,
+                "signal": "github_pm_control:repair_blocked_job",
+                "protected_decision_flags": [],
+                "references": refs,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+
+        progress["required_checks_passed"] = False
+        failure_fingerprints = list(
+            progress.get("failure_fingerprints") or []
+        )
+        progress_markers = list(progress.get("progress_markers") or [])
+        fp = failure_fingerprint(last_failure)
+        failure_fingerprints.append(fp)
+        progress_markers.append(fp)
+        progress["failure_fingerprints"] = failure_fingerprints
+        progress["progress_markers"] = progress_markers
+        progress["repair_iterations"] = int(
+            progress.get("repair_iterations") or 0
+        ) + 1
+        progress["pm_reassessments"] = int(
+            progress.get("pm_reassessments") or 0
+        ) + 1
+
+        set_failure_context(
+            checkpoint,
+            kind="semantic_repair",
+            source="pm_reassessment",
+            message=last_failure,
+            diff_hash=diff_hash,
+        )
+
+        self.storage.update(
+            job_id,
+            status="queued",
+            progress=progress,
+            checkpoint=checkpoint,
+            result={
+                "reason": "remote_pm_repair_requested",
+                "source": "github_pm_control",
+                "repair": {
+                    "finding": message,
+                    "references": refs,
+                    "diff_hash": diff_hash,
+                    "blocker_generation": expected_generation,
+                },
+                "previous_block": {
+                    "reason": result.get("reason"),
+                    "reassess": reassess,
+                    "diff_hash": diff_hash,
+                },
+            },
+            error=None,
+        )
+        await self.engine.enqueue(job_id)
+        updated = self.storage.get(job_id)
+        assert updated is not None
+        return updated
 
     async def _execute_authorized(self, action_id: str) -> dict[str, Any]:
         self.ensure()

@@ -39,6 +39,7 @@ def _control_dedupe_key(
 class FakeStorage:
     def __init__(self, jobs=None):
         self.jobs = deepcopy(jobs or {})
+        self.lease = None
 
     def get(self, job_id):
         value = self.jobs.get(job_id)
@@ -47,9 +48,16 @@ class FakeStorage:
     def update(self, job_id, **fields):
         self.jobs[job_id].update(deepcopy(fields))
 
+    def project_lease(self, project_id):
+        return deepcopy(self.lease)
+
 
 class FakeEngine:
-    pass
+    def __init__(self):
+        self.enqueued = []
+
+    async def enqueue(self, job_id):
+        self.enqueued.append(job_id)
 
 
 class FakeStore:
@@ -109,7 +117,9 @@ def row():
 
 def service(job=None):
     storage = FakeStorage({"job-1": job or base_job()})
-    return ControlActionService(storage, FakeEngine(), FakeStore()), storage
+    engine = FakeEngine()
+    controls = ControlActionService(storage, engine, FakeStore())
+    return controls, storage
 
 
 def action_types(advisory):
@@ -1381,3 +1391,261 @@ def test_remote_pending_actions_refuses_multiple_current_generations():
 
     with pytest.raises(RuntimeError, match="Multiple exact-current"):
         controls.remote_pending_actions("job-1")
+
+
+def blocked_repair_job():
+    job = base_job(reason="reassessment_stopped", last_failure="circuit breaker")
+    job.update({
+        "id": "job-1",
+        "project_id": "chonhac",
+        "status": "blocked",
+        "source_commit": "a" * 40,
+        "branch": "ai/job-1",
+        "workspace": "/home/sonvh/chonhac",
+    })
+    job["checkpoint"].update({
+        "canonical_intake": {
+            "policy_version": 1,
+            "mode": "direct",
+            "bounded_direct": True,
+            "decomposition_required": False,
+        },
+        "workspace_mode": "direct",
+        "pending_decision": None,
+    })
+    job["progress"].update({
+        "changed_files": 5,
+        "unexpected_scope": False,
+        "important_decision_flags": [],
+        "required_checks_passed": False,
+        "failure_fingerprints": [
+            "old-a",
+            "same",
+            "same",
+            "same",
+        ],
+        "progress_markers": [
+            "old-a",
+            "same",
+            "same",
+            "same",
+        ],
+        "repair_iterations": 8,
+        "pm_reassessments": 0,
+    })
+    job["result"] = {
+        "reason": "reassessment_stopped",
+        "last_failure": "Circuit breaker",
+        "reassess": {
+            "action": "stop",
+            "reason": "Circuit breaker: abnormal execution signal without a valid escalation path",
+            "signals": [
+                "repeated_failure:1d70a54f5249177b07c2c01d",
+                "no_progress",
+                "budget_headroom_active:max_model_calls",
+                "budget_headroom_active:max_repair_iterations",
+                "budget_estimate_exceeded:max_test_runs",
+            ],
+        },
+        "diff": {
+            "diff_hash": "a160822e5810bd2e19e8630022ef577a97e1b242886d0afe3b7f9bc61869c3a1",
+            "changed_files": ["one.php", "two.php"],
+        },
+    }
+    return job
+
+
+def blocked_repair_service(job=None):
+    job = job or blocked_repair_job()
+    storage = FakeStorage({"job-1": job})
+    storage.lease = {
+        "project_id": "chonhac",
+        "owner_job_id": "job-1",
+        "generation": 3,
+        "state": "active",
+    }
+    engine = FakeEngine()
+    controls = ControlActionService(storage, engine, FakeStore())
+    return controls, storage, engine
+
+
+def test_remote_blocked_repair_reuses_exact_job_workspace_and_counters():
+    controls, storage, engine = blocked_repair_service()
+    before = storage.get("job-1")
+    view = controls.standalone_remote_actions("job-1")
+
+    result = asyncio.run(
+        controls.request_standalone_blocked_repair(
+            "job-1",
+            expected_generation=view["generation"],
+            finding=(
+                "Inspect the preserved targeted_tests failure locally, repair only "
+                "the existing five-file bounded diff, rerun deterministic tests, "
+                "and do not expand scope or alter contract authority."
+            ),
+            references=["GH-77", "PCP diagnostic 6031574054"],
+        )
+    )
+
+    assert result["id"] == "job-1"
+    assert result["status"] == "queued"
+    assert engine.enqueued == ["job-1"]
+
+    after = storage.get("job-1")
+    assert after["source_commit"] == before["source_commit"]
+    assert after["branch"] == before["branch"]
+    assert after["workspace"] == before["workspace"]
+    assert after["route"] == before["route"]
+    for key in (
+        "model_calls",
+        "tool_calls",
+        "test_runs",
+        "elapsed_minutes",
+        "iteration",
+    ):
+        assert after["progress"][key] == before["progress"][key]
+
+    assert after["progress"]["repair_iterations"] == 9
+    assert after["progress"]["pm_reassessments"] == 1
+    assert after["progress"]["required_checks_passed"] is False
+    assert len(after["progress"]["failure_fingerprints"]) == (
+        len(before["progress"]["failure_fingerprints"]) + 1
+    )
+    assert after["checkpoint"]["failure_context"]["kind"] == "semantic_repair"
+    assert after["checkpoint"]["failure_context"]["source"] == "pm_reassessment"
+    assert after["checkpoint"]["failure_context"]["diff_hash"] == (
+        before["result"]["diff"]["diff_hash"]
+    )
+    assert (
+        after["checkpoint"]["last_pm_reassessment"]["decision"]["action"]
+        == "request_repair"
+    )
+    assert after["result"]["reason"] == "remote_pm_repair_requested"
+    assert (
+        after["result"]["previous_block"]["reason"]
+        == "reassessment_stopped"
+    )
+    assert storage.lease["owner_job_id"] == "job-1"
+    assert storage.lease["state"] == "active"
+
+
+@pytest.mark.parametrize(
+    ("mutate", "match"),
+    [
+        (
+            lambda job: job["checkpoint"].update(
+                pending_decision={"key": "human:1"}
+            ),
+            "pending Human decision",
+        ),
+        (
+            lambda job: job["progress"].update(
+                important_decision_flags=["security_boundary_change"]
+            ),
+            "protected decision flags",
+        ),
+        (
+            lambda job: job["progress"].update(unexpected_scope=True),
+            "unexpected scope",
+        ),
+        (
+            lambda job: job["result"]["reassess"]["signals"].append(
+                "scope_expansion"
+            ),
+            "unsupported reassessment signal",
+        ),
+        (
+            lambda job: job["result"]["diff"].update(diff_hash=""),
+            "preserved diff hash",
+        ),
+        (
+            lambda job: job["checkpoint"]["canonical_intake"].update(
+                bounded_direct=False
+            ),
+            "canonical bounded-direct",
+        ),
+        (
+            lambda job: job.update(status="executing"),
+            "exact blocked job state",
+        ),
+    ],
+)
+def test_remote_blocked_repair_rejects_stale_or_protected_boundaries(
+    mutate,
+    match,
+):
+    job = blocked_repair_job()
+    mutate(job)
+    controls, storage, engine = blocked_repair_service(job)
+
+    advisory = controls.blocked_advisory({}, job)
+    generation = controls.standalone_attention_generation_fingerprint(
+        job,
+        advisory,
+    )
+
+    with pytest.raises(RuntimeError, match=match):
+        asyncio.run(
+            controls.request_standalone_blocked_repair(
+                "job-1",
+                expected_generation=generation,
+                finding="Repair the preserved targeted test failure only.",
+            )
+        )
+
+    assert engine.enqueued == []
+    assert storage.get("job-1")["status"] == job["status"]
+
+
+def test_remote_blocked_repair_rejects_stale_generation_and_wrong_lease():
+    controls, storage, engine = blocked_repair_service()
+    view = controls.standalone_remote_actions("job-1")
+
+    with pytest.raises(RuntimeError, match="generation mismatch"):
+        asyncio.run(
+            controls.request_standalone_blocked_repair(
+                "job-1",
+                expected_generation="f" * 64,
+                finding="Repair exact targeted test failure.",
+            )
+        )
+
+    storage.lease["owner_job_id"] = "different-job"
+    with pytest.raises(RuntimeError, match="same-job project lease"):
+        asyncio.run(
+            controls.request_standalone_blocked_repair(
+                "job-1",
+                expected_generation=view["generation"],
+                finding="Repair exact targeted test failure.",
+            )
+        )
+    assert engine.enqueued == []
+
+
+def test_remote_blocked_repair_requires_repeat_and_no_progress_signals():
+    for missing_prefix in ("repeated_failure:", "no_progress"):
+        job = blocked_repair_job()
+        job["result"]["reassess"]["signals"] = [
+            signal
+            for signal in job["result"]["reassess"]["signals"]
+            if not (
+                signal == missing_prefix
+                or signal.startswith(missing_prefix)
+            )
+        ]
+        controls, _storage, engine = blocked_repair_service(job)
+        view = controls.standalone_remote_actions("job-1")
+        expected = (
+            "repeated_failure signal"
+            if missing_prefix == "repeated_failure:"
+            else "no_progress signal"
+        )
+        with pytest.raises(RuntimeError, match=expected):
+            asyncio.run(
+                controls.request_standalone_blocked_repair(
+                    "job-1",
+                    expected_generation=view["generation"],
+                    finding="Repair exact targeted test failure.",
+                )
+            )
+        assert engine.enqueued == []
