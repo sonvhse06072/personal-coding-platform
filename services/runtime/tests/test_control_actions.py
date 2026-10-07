@@ -10,6 +10,7 @@ import pytest
 
 from app.control_actions import ControlActionService
 from app.engine import _apply_owner_budget_authorizations
+from app.standalone_antiloop_epoch import EPOCH_KEY as STANDALONE_ANTI_LOOP_EPOCH_KEY
 
 
 def _control_dedupe_key(
@@ -1913,6 +1914,18 @@ def test_pm_antiloop_all_current_authorizes_one_more_same_job_window():
     }
     assert len(after["checkpoint"]["pm_antiloop_bypass_history"]) == 1
     assert after["result"]["repair"]["anti_loop_bypass"] == record["selectors"]
+
+    epoch = after["checkpoint"][STANDALONE_ANTI_LOOP_EPOCH_KEY]
+    assert epoch["blocker_generation"] == generation
+    assert epoch["selectors"] == record["selectors"]
+    assert epoch["failure_fingerprint_start"] == len(
+        after["progress"]["failure_fingerprints"]
+    )
+    assert epoch["progress_marker_start"] == len(
+        after["progress"]["progress_markers"]
+    )
+    assert epoch["latest_verification_signature"] == "fresh-signature"
+    assert epoch["baseline_counters"]["repair_iterations"] == 17
 
 
 def test_pm_antiloop_partial_bypass_must_cover_every_required_current_gate():
