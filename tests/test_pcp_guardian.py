@@ -86,6 +86,32 @@ def test_status_rollout_and_bridge_recovery_commands_are_exact(tmp_path):
     )
     assert recovery["action"] == "recover_antigravity_bridge"
 
+    bridge_snapshot = guardian.parse_command(
+        event(
+            {
+                "schema_version": 1,
+                "action": "pm_bridge_snapshot",
+                "project_id": "chonhac",
+                "comment_id": 6031547665,
+            }
+        ),
+        cfg,
+    )
+    assert bridge_snapshot["project_id"] == "chonhac"
+    assert bridge_snapshot["comment_id"] == 6031547665
+
+    bridge_poll = guardian.parse_command(
+        event(
+            {
+                "schema_version": 1,
+                "action": "pm_bridge_poll_project_once",
+                "project_id": "chonhac",
+            }
+        ),
+        cfg,
+    )
+    assert bridge_poll["project_id"] == "chonhac"
+
 
 @pytest.mark.parametrize(
     "mutator,match",
@@ -161,6 +187,33 @@ def test_event_identity_fails_closed(tmp_path, mutator, match):
                 "schema_version": 1,
                 "action": "recover_antigravity_bridge",
                 "service": "router",
+            },
+            "fields are not exact",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "action": "pm_bridge_snapshot",
+                "project_id": "other",
+                "comment_id": 123,
+            },
+            "not allow-listed",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "action": "pm_bridge_snapshot",
+                "project_id": "chonhac",
+                "comment_id": 0,
+            },
+            "positive comment_id",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "action": "pm_bridge_poll_project_once",
+                "project_id": "chonhac",
+                "path": "/v1/jobs",
             },
             "fields are not exact",
         ),
@@ -284,6 +337,8 @@ class FakeHost:
     def __init__(self) -> None:
         self.rollouts = []
         self.recoveries = 0
+        self.bridge_snapshots = []
+        self.bridge_polls = []
 
     def snapshot(self):
         return {"safe": True}
@@ -293,6 +348,22 @@ class FakeHost:
         return {
             "status": "executed",
             "reused": False,
+        }
+
+    def pm_bridge_snapshot(self, *, project_id, comment_id):
+        self.bridge_snapshots.append((project_id, comment_id))
+        return {
+            "runtime": {"status": "ok"},
+            "n8n": {"ok": True},
+            "control_event": {"state": "absent"},
+        }
+
+    def pm_bridge_poll_project_once(self, *, project_id):
+        self.bridge_polls.append(project_id)
+        return {
+            "runtime": {"status": "ok"},
+            "n8n": {"ok": True},
+            "poll": {"project_id": project_id, "scanned": 1},
         }
 
     def rollout(self, expected_sha: str, github_head: str):
@@ -336,6 +407,31 @@ def test_action_dispatch_never_infers_rollout_sha(tmp_path):
     assert recovery["status"] == "executed"
     assert recovery["github_main"] == SHA
     assert host.recoveries == 1
+
+    bridge_snapshot = guardian.execute_action(
+        {
+            "action": "pm_bridge_snapshot",
+            "project_id": "chonhac",
+            "comment_id": 6031547665,
+        },
+        config=cfg,
+        github=FakeGitHub(SHA),
+        host=host,
+    )
+    assert bridge_snapshot["control_event"]["state"] == "absent"
+    assert host.bridge_snapshots == [("chonhac", 6031547665)]
+
+    bridge_poll = guardian.execute_action(
+        {
+            "action": "pm_bridge_poll_project_once",
+            "project_id": "chonhac",
+        },
+        config=cfg,
+        github=FakeGitHub(SHA),
+        host=host,
+    )
+    assert bridge_poll["poll"]["project_id"] == "chonhac"
+    assert host.bridge_polls == ["chonhac"]
 
 
 def test_guardian_workflow_is_owner_issue_and_default_branch_bound():
@@ -664,3 +760,145 @@ def test_antigravity_down_status_is_explicit_not_probe_failure(
         "status": "down",
         "service": "antigravity-host-bridge",
     }
+
+
+def test_pm_bridge_control_event_projection_is_bounded_and_allow_listed():
+    raw = {
+        "project_id": "chonhac",
+        "comment_id": 6031547665,
+        "action": "request_diagnostics",
+        "status": "failed",
+        "target_identity": {
+            "job_id": "job-12345678",
+            "plan_id": "plan-1",
+            "finding": "SECRET should not project",
+            "arbitrary": "/private/path",
+        },
+        "error": "x" * 2000,
+        "created_at": "2026-10-07T05:00:00+00:00",
+        "updated_at": "2026-10-07T05:01:00+00:00",
+        "body_sha256": "secret",
+        "author": "owner",
+    }
+
+    projected = guardian.GuardianHost._sanitize_pm_control_event(raw)
+
+    assert projected["state"] == "present"
+    assert projected["target_identity"] == {
+        "job_id": "job-12345678",
+        "plan_id": "plan-1",
+    }
+    assert len(projected["error"]) == 500
+    rendered = json.dumps(projected)
+    assert "SECRET" not in rendered
+    assert "/private/path" not in rendered
+    assert "body_sha256" not in rendered
+    assert "author" not in rendered
+
+
+def test_pm_bridge_poll_projection_drops_raw_results_and_bounds_errors():
+    raw = {
+        "project_id": "chonhac",
+        "repository": "sonvhse06072/chonhac",
+        "scanned": 3,
+        "controls_accepted": [
+            {"comment_id": 10, "action": "request_diagnostics"},
+        ],
+        "controls_skipped": [11],
+        "controls_dispatched": [
+            {
+                "comment_id": 12,
+                "action": "request_diagnostics",
+                "status": "executed",
+                "result": {
+                    "status": "published",
+                    "comment_id": 900,
+                    "raw": "SECRET",
+                },
+            }
+        ],
+        "controls_failed": [
+            {
+                "comment_id": 13,
+                "action": "resume_same_job",
+                "error": "e" * 2000,
+            }
+        ],
+        "controls_rejected": [
+            {"comment_id": 14, "error": "reject " + ("z" * 1000)}
+        ],
+        "controls_uncertain": [15],
+        "accepted": [{"plan_id": "plan-1", "proposal": "SECRET"}],
+    }
+
+    projected = guardian.GuardianHost._sanitize_pm_bridge_poll(raw)
+
+    assert projected["controls_accepted"] == [10]
+    assert projected["controls_skipped"] == [11]
+    assert projected["controls_uncertain"] == [15]
+    assert projected["controls_dispatched"] == [
+        {
+            "comment_id": 12,
+            "action": "request_diagnostics",
+            "status": "executed",
+            "result_status": "published",
+            "diagnostic_comment_id": 900,
+        }
+    ]
+    assert len(projected["controls_failed"][0]["error"]) == 500
+    assert len(projected["controls_rejected"][0]["error"]) == 500
+    assert projected["accepted_plan_ids"] == ["plan-1"]
+    assert "SECRET" not in json.dumps(projected)
+
+
+def test_pm_bridge_snapshot_and_poll_use_only_fixed_runtime_contract(
+    tmp_path,
+    monkeypatch,
+):
+    cfg = config(tmp_path)
+    host = guardian.GuardianHost(cfg, tmp_path)
+    calls = []
+
+    monkeypatch.setattr(
+        host,
+        "_runtime_health",
+        lambda: {"status": "ok", "version": "1.0.122"},
+    )
+    monkeypatch.setattr(host, "_n8n_health", lambda: {"ok": True})
+
+    def fake_request(*, method, path, payload=None, allow_404=False):
+        calls.append((method, path, payload, allow_404))
+        if method == "GET":
+            return None
+        return {
+            "project_id": "chonhac",
+            "repository": "sonvhse06072/chonhac",
+            "scanned": 1,
+            "controls_dispatched": [],
+        }
+
+    monkeypatch.setattr(host, "_runtime_pm_bridge_request", fake_request)
+
+    snapshot = host.pm_bridge_snapshot(
+        project_id="chonhac",
+        comment_id=6031547665,
+    )
+    assert snapshot["control_event"] == {"state": "absent"}
+    assert calls[0] == (
+        "GET",
+        "/v1/pm-bridge/control-events/chonhac/6031547665",
+        None,
+        True,
+    )
+
+    poll = host.pm_bridge_poll_project_once(project_id="chonhac")
+    assert poll["poll"]["project_id"] == "chonhac"
+    assert calls[1] == (
+        "POST",
+        "/v1/pm-bridge/poll",
+        {"project_id": "chonhac"},
+        False,
+    )
+
+    with pytest.raises(RuntimeError, match="allow-listed"):
+        host.pm_bridge_poll_project_once(project_id="other")
