@@ -24,9 +24,10 @@ The practical roadmap is therefore narrower than the historical phase list below
 Current evidence:
 
 - RCTL-MVP #513 is completed after live standalone exact-head merge and exact supervised continuation proof.
-- Runtime 1.0.130 is live on PCP main `62a89ff59669e68dd73533af7c6851f91c5b44dc`.
+- Runtime 1.0.131 is live on PCP main `6db414df30040cacc9fd922283eb21e06ba576b8`.
 - #512 remains open only for natural parent-level evidence such as post-rollout GitHub `direct_intake` and a real control-plane-unavailable Guardian case; do not create synthetic work solely to close those acceptance boundaries.
 - #524 intentionally stays open for Guardian command/audit history.
+- #555 / PR #556 is completed and live-proven: an exact `collaboration_pm_handoff` now exposes the existing generation-bound `resume_same` path, and GitHub PM control can resume that same durable job for one verification-only handoff turn without reroute/provider reset/replacement-job semantics.
 
 The older phases remain useful architecture/history context. They must not be interpreted as a requirement to continue building every previously imagined layer after the business problem has already been solved by a smaller path.
 
