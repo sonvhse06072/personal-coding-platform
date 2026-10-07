@@ -4,7 +4,7 @@ Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
 fresh Runtime/GitHub evidence remain authoritative over chat history. This file
 is an index, not authority to change the approved baseline or protected scope.
 
-Last updated: 2026-10-07 after Runtime 1.0.131 rollout, #555/#556 bounded PM-handoff recovery acceptance, and live reconciliation of Chợ Nhạc EE-0-02.
+Last updated: 2026-10-08 after #557/#558 merged the Dashboard workflow-progress contract and post-merge CI passed. Runtime 1.0.132 is source-ready on GitHub main but is not live yet because fresh Guardian evidence still showed active Chợ Nhạc engineering.
 
 ## Resume order
 
@@ -35,6 +35,9 @@ GitHub/Runtime live evidence remains authoritative over this snapshot.
 - Runtime: `1.0.131`.
 - ddev-executor: `1.0.33`.
 - Router: `1.0.31`.
+- GitHub `main` is now `b0c0e9a43634b4b133382a2b2cab4c5828372465` after PR #558. Post-merge CI run `37665108466` / run number `1075` completed successfully on that exact SHA.
+- That source carries Runtime `1.0.132` plus the server-computed Dashboard `workflow_progress` contract. It is **merged but not rolled out**. The progress value is milestone/stage based, not ETA, token/model/tool/test budget usage; paused/blocked states retain bounded milestone progress.
+- Fresh Guardian `status_snapshot` control `6043987232` produced result `6044045994`: `active_engineering_jobs=1`, executor `active_jobs=1`, local PCP remained clean at `6db414df30040cacc9fd922283eb21e06ba576b8`, and live Runtime remained `1.0.131`. Therefore no `1.0.132` rollout is authorized until a new quiescence proof shows active engineering/executor/Antigravity work at zero and the PCP worktree clean.
 - PR #553 fixed stale Developer Activity after a terminal standalone job.
 - RCTL-MVP #513 is **closed completed**. Natural Chợ Nhạc #77 live-proved:
   - sanitized remote diagnostics and same-job repair;
@@ -54,6 +57,8 @@ GitHub/Runtime live evidence remains authoritative over this snapshot.
 - #493 remains the ordinary independent open engineering issue for DDEV cold/bootstrap hardening.
 
 ### Current Chợ Nhạc dogfood state
+
+Fresh 2026-10-08 delta: GH-63 plan `pm-b0748be27f8446a0813c2d1fe7d697fd` is executing supervised generation 6. WorkOrder `AP-MVP-03-generalized-verified-performance` is the current released unit, job `42cadf99d81855d5a722ed821a7df430`, last proven at checkpoint `73` (`started`) with Runtime `active_engineering_jobs=1`. Do not infer current execution state from the older EE-0-02 evidence retained below; re-read live diagnostics before continuation, rollout or repair.
 
 - #77 is closed completed.
 - #56 is closed again after the public Event lineup avatar DTO repair.
@@ -77,8 +82,10 @@ GitHub/Runtime live evidence remains authoritative over this snapshot.
 
 Runtime-affecting PCP rollout is permitted only after a fresh quiescence check
 proves active engineering/executor/Antigravity work is zero and local PCP is
-clean. The 1.0.131 rollout met that gate; do not reuse that older proof for a
-future rollout.
+clean. The next prepared rollout target is exact GitHub main
+`b0c0e9a43634b4b133382a2b2cab4c5828372465` / Runtime `1.0.132`; the 1.0.131
+rollout proof and Guardian result `6044045994` are not sufficient because they
+do not prove a later zero-active checkpoint.
 
 ### Immediate PM rule
 
