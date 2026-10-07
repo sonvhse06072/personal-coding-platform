@@ -5,7 +5,13 @@ from datetime import datetime, timezone
 import pytest
 from fastapi import HTTPException
 
-from app.dashboard import _job_snapshot, _require_session, _session_value, build_dashboard_snapshot
+from app.dashboard import (
+    _job_snapshot,
+    _require_session,
+    _session_value,
+    _workflow_progress,
+    build_dashboard_snapshot,
+)
 from app.dashboard_ui import DASHBOARD_HTML
 
 
@@ -89,6 +95,12 @@ def test_job_snapshot_exposes_safe_runtime_telemetry_only():
     assert snapshot["tokens"]["input_budget_tokens"] == 668_037
     assert snapshot["tokens"]["last_attempt_gross_input_tokens"] == 7_568_037
     assert snapshot["tokens"]["last_attempt_cached_input_tokens"] == 6_900_000
+    assert snapshot["workflow_progress"] == {
+        "percent": 72,
+        "label": "Execution · prior tests passed",
+        "estimated": True,
+        "paused": False,
+    }
     assert snapshot["remaining"] == {
         "input_tokens": 1_331_963,
         "output_tokens": 243_040,
@@ -105,6 +117,49 @@ def test_job_snapshot_exposes_safe_runtime_telemetry_only():
     assert "DO NOT LEAK" not in encoded
     assert "PRIVATE AGENT OUTPUT" not in encoded
     assert "PRIVATE STDERR" not in encoded
+
+
+@pytest.mark.parametrize(
+    ("status", "progress", "expected"),
+    [
+        ("queued", {}, (5, "Queued", False)),
+        ("routing", {}, (10, "Routing", False)),
+        ("planning", {}, (20, "Planning", False)),
+        ("executing", {"agent_succeeded": True}, (55, "Execution · prior implementation produced", False)),
+        ("verifying", {"tests_passed": True}, (72, "Verification · prior tests passed", False)),
+        ("evaluating", {"tests_passed": True}, (85, "Independent review", False)),
+        ("delivering", {"required_checks_passed": True}, (95, "Delivery", False)),
+        ("completed", {}, (100, "Completed", False)),
+        ("blocked", {"tests_passed": True}, (72, "Paused · tests passed", True)),
+        ("waiting_human", {"required_checks_passed": True}, (88, "Paused · required checks passed", True)),
+        ("interrupted", {"iteration": 1}, (45, "Paused · execution started", True)),
+    ],
+)
+def test_workflow_progress_is_stage_and_milestone_based(status, progress, expected):
+    result = _workflow_progress(status, progress)
+    percent, label, paused = expected
+    assert result == {
+        "percent": percent,
+        "label": label,
+        "estimated": True,
+        "paused": paused,
+    }
+
+
+def test_workflow_progress_does_not_use_resource_consumption_as_completion():
+    result = _workflow_progress(
+        "executing",
+        {
+            "model_calls": 0,
+            "tool_calls": 999,
+            "test_runs": 999,
+            "elapsed_minutes": 999.0,
+            "input_tokens": 9_999_999,
+            "output_tokens": 9_999_999,
+        },
+    )
+    assert result["percent"] == 45
+    assert result["label"] == "Execution"
 
 
 def test_dashboard_session_is_separate_and_fail_closed(monkeypatch):
