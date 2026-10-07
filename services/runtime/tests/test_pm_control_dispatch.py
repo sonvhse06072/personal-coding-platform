@@ -251,6 +251,7 @@ class FakeControls:
         }
         self.executed = []
         self.standalone_executed = []
+        self.blocked_repairs = []
 
     def get_action(self, action_id):
         value = self.actions.get(action_id)
@@ -286,6 +287,27 @@ class FakeControls:
             "status": "executed",
             "job_id": job_id,
             "action_type": action_type,
+        }
+
+
+    async def request_standalone_blocked_repair(
+        self,
+        job_id,
+        *,
+        expected_generation,
+        finding,
+        references,
+    ):
+        self.blocked_repairs.append({
+            "job_id": job_id,
+            "expected_generation": expected_generation,
+            "finding": finding,
+            "references": list(references),
+        })
+        return {
+            "id": job_id,
+            "project_id": "demo",
+            "status": "queued",
         }
 
 
@@ -372,6 +394,63 @@ def test_remote_decision_and_review_repair_use_exact_existing_primitives():
     assert status == "executed"
     assert engine.repairs[0]["expected_commit"] == HEAD
     assert engine.repairs[0]["evidence"]["comment_id"] == 11
+
+
+def test_remote_blocked_repair_dispatches_exact_same_job_request():
+    dispatch, _, _, orchestrator = dispatcher()
+
+    status, result = asyncio.run(
+        dispatch.dispatch(
+            envelope(
+                "repair_blocked_job",
+                job_id="job-12345678",
+                blocker_generation="generation-live",
+                finding=(
+                    "Inspect the preserved targeted_tests failure locally and "
+                    "repair only the existing bounded diff."
+                ),
+                references=["GH-77", "diagnostic:6031574054"],
+            ),
+            comment_id=120,
+            issue_number=77,
+        )
+    )
+
+    assert status == "executed"
+    assert result == {
+        "status": "executed",
+        "action": "repair_blocked_job",
+        "job_id": "job-12345678",
+        "job_status": "queued",
+        "blocker_generation": "generation-live",
+    }
+    assert orchestrator.controls.blocked_repairs == [
+        {
+            "job_id": "job-12345678",
+            "expected_generation": "generation-live",
+            "finding": (
+                "Inspect the preserved targeted_tests failure locally and "
+                "repair only the existing bounded diff."
+            ),
+            "references": ["GH-77", "diagnostic:6031574054"],
+        }
+    ]
+
+
+def test_remote_blocked_repair_envelope_requires_generation_and_finding():
+    with pytest.raises(ValueError, match="requires exact target field"):
+        envelope(
+            "repair_blocked_job",
+            job_id="job-12345678",
+            finding="Repair only the failing targeted tests.",
+        )
+
+    with pytest.raises(ValueError, match="requires exact target field"):
+        envelope(
+            "repair_blocked_job",
+            job_id="job-12345678",
+            blocker_generation="generation-live",
+        )
 
 
 def test_remote_resume_requires_runtime_issued_action_type_and_generation():
