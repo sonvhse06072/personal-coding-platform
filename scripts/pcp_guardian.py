@@ -352,6 +352,9 @@ def _run(
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     merged_env = os.environ.copy()
+    # Guardian's GitHub token is never inherited by host/DDEV/service commands.
+    # A single reviewed git-fetch call may opt it back in through GIT_ASKPASS.
+    merged_env.pop("GITHUB_TOKEN", None)
     if env:
         merged_env.update(env)
     proc = subprocess.run(
@@ -424,6 +427,31 @@ class GuardianHost:
             check=check,
             env={"GIT_TERMINAL_PROMPT": "0"},
         ).stdout.strip()
+
+    def _github_fetch_auth(self) -> tuple[Path, dict[str, str]]:
+        """Create one secret-free askpass helper and scope token to git fetch only."""
+        token = os.getenv("GITHUB_TOKEN", "").strip()
+        if not token:
+            raise RuntimeError("GITHUB_TOKEN is unavailable for exact GitHub fetch")
+        directory = Path(self.config["state_dir"])
+        directory.mkdir(parents=True, exist_ok=True)
+        os.chmod(directory, 0o700)
+        askpass = directory / "git-askpass.sh"
+        content = (
+            "#!/bin/sh\n"
+            "case \"$1\" in\n"
+            "  *Username*) printf '%s\\n' 'x-access-token' ;;\n"
+            "  *Password*) printf '%s\\n' \"$GITHUB_TOKEN\" ;;\n"
+            "  *) exit 1 ;;\n"
+            "esac\n"
+        )
+        askpass.write_text(content, encoding="utf-8")
+        os.chmod(askpass, 0o700)
+        return askpass, {
+            "GIT_TERMINAL_PROMPT": "0",
+            "GIT_ASKPASS": str(askpass),
+            "GITHUB_TOKEN": token,
+        }
 
     def local_git(self) -> dict[str, Any]:
         if not self.root.is_dir():
@@ -694,22 +722,26 @@ class GuardianHost:
         reviewed_remote = (
             f"https://github.com/{self.config['repository']}.git"
         )
-        _run(
-            [
-                "git",
-                "-c",
-                "core.hooksPath=/dev/null",
-                "-C",
-                str(self.root),
-                "fetch",
-                "--no-tags",
-                reviewed_remote,
-                f"+refs/heads/{self.config['default_branch']}:"
-                f"refs/remotes/origin/{self.config['default_branch']}",
-            ],
-            timeout=180,
-            env={"GIT_TERMINAL_PROMPT": "0"},
-        )
+        askpass, fetch_env = self._github_fetch_auth()
+        try:
+            _run(
+                [
+                    "git",
+                    "-c",
+                    "core.hooksPath=/dev/null",
+                    "-C",
+                    str(self.root),
+                    "fetch",
+                    "--no-tags",
+                    reviewed_remote,
+                    f"+refs/heads/{self.config['default_branch']}:"
+                    f"refs/remotes/origin/{self.config['default_branch']}",
+                ],
+                timeout=180,
+                env=fetch_env,
+            )
+        finally:
+            askpass.unlink(missing_ok=True)
         remote_head = self._git(
             "rev-parse",
             f"refs/remotes/origin/{self.config['default_branch']}",
