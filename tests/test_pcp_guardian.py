@@ -55,7 +55,7 @@ def event(payload: dict | None = None, **overrides) -> dict:
     return value
 
 
-def test_status_and_rollout_commands_are_exact(tmp_path):
+def test_status_rollout_and_bridge_recovery_commands_are_exact(tmp_path):
     cfg = config(tmp_path)
 
     status = guardian.parse_command(event(), cfg)
@@ -74,6 +74,17 @@ def test_status_and_rollout_commands_are_exact(tmp_path):
         cfg,
     )
     assert rollout["expected_main_sha"] == SHA
+
+    recovery = guardian.parse_command(
+        event(
+            {
+                "schema_version": 1,
+                "action": "recover_antigravity_bridge",
+            }
+        ),
+        cfg,
+    )
+    assert recovery["action"] == "recover_antigravity_bridge"
 
 
 @pytest.mark.parametrize(
@@ -142,6 +153,14 @@ def test_event_identity_fails_closed(tmp_path, mutator, match):
                 "action": "rollout_pcp_exact_main",
                 "expected_main_sha": SHA,
                 "path": "/tmp/other",
+            },
+            "fields are not exact",
+        ),
+        (
+            {
+                "schema_version": 1,
+                "action": "recover_antigravity_bridge",
+                "service": "router",
             },
             "fields are not exact",
         ),
@@ -264,9 +283,17 @@ class FakeGitHub:
 class FakeHost:
     def __init__(self) -> None:
         self.rollouts = []
+        self.recoveries = 0
 
     def snapshot(self):
         return {"safe": True}
+
+    def recover_antigravity_bridge(self):
+        self.recoveries += 1
+        return {
+            "status": "executed",
+            "reused": False,
+        }
 
     def rollout(self, expected_sha: str, github_head: str):
         self.rollouts.append((expected_sha, github_head))
@@ -300,6 +327,16 @@ def test_action_dispatch_never_infers_rollout_sha(tmp_path):
     assert rollout["status"] == "executed"
     assert host.rollouts == [(SHA, SHA)]
 
+    recovery = guardian.execute_action(
+        {"action": "recover_antigravity_bridge"},
+        config=cfg,
+        github=FakeGitHub(SHA),
+        host=host,
+    )
+    assert recovery["status"] == "executed"
+    assert recovery["github_main"] == SHA
+    assert host.recoveries == 1
+
 
 def test_guardian_workflow_is_owner_issue_and_default_branch_bound():
     text = (ROOT / ".github/workflows/pcp-guardian.yml").read_text(
@@ -331,7 +368,7 @@ def full_ready_snapshot() -> dict:
         "runtime": {
             "reachable": True,
             "status": "ok",
-            "version": "1.0.121",
+            "version": "1.0.122",
         },
         "router": {
             "reachable": True,
@@ -366,7 +403,7 @@ def full_ready_snapshot() -> dict:
 
 
 def test_post_rollout_ready_requires_health_versions_and_mobile_control_plane():
-    target = {"runtime": "1.0.121", "executor": "1.0.33"}
+    target = {"runtime": "1.0.122", "executor": "1.0.33"}
     snapshot = full_ready_snapshot()
     assert guardian.GuardianHost._post_rollout_ready(snapshot, target) is True
 
@@ -443,3 +480,180 @@ def test_git_fetch_askpass_contains_no_secret_and_is_private(
         assert (askpass.stat().st_mode & 0o777) == 0o700
     finally:
         askpass.unlink(missing_ok=True)
+
+
+
+def bridge_recovery_snapshot(status="down"):
+    snapshot = full_ready_snapshot()
+    snapshot["runtime"]["version"] = "1.0.121"
+    snapshot["antigravity"] = {
+        "reachable": True,
+        "status": status,
+    }
+    if status == "ok":
+        snapshot["antigravity"].update(
+            {
+                "safe_settings": True,
+                "active_runs": 0,
+                "pending_cancellations": 0,
+            }
+        )
+    snapshot["local_git"] = {
+        "reachable": True,
+        "branch": "main",
+        "clean": True,
+        "head": "a" * 40,
+        "origin_repository": "sonvhse06072/personal-coding-platform",
+    }
+    return snapshot
+
+
+def test_bridge_recovery_requires_explicit_down_or_already_safe_idle():
+    down = bridge_recovery_snapshot("down")
+    guardian.GuardianHost._require_bridge_recovery_preconditions(down)
+
+    healthy = bridge_recovery_snapshot("ok")
+    guardian.GuardianHost._require_bridge_recovery_preconditions(healthy)
+
+    busy = bridge_recovery_snapshot("ok")
+    busy["antigravity"]["active_runs"] = 1
+    with pytest.raises(RuntimeError, match="not safe/idle"):
+        guardian.GuardianHost._require_bridge_recovery_preconditions(busy)
+
+    ambiguous = bridge_recovery_snapshot("degraded")
+    with pytest.raises(RuntimeError, match="neither healthy nor explicitly down"):
+        guardian.GuardianHost._require_bridge_recovery_preconditions(ambiguous)
+
+    unreachable = bridge_recovery_snapshot("down")
+    unreachable["antigravity"]["reachable"] = False
+    with pytest.raises(RuntimeError, match="ambiguous"):
+        guardian.GuardianHost._require_bridge_recovery_preconditions(unreachable)
+
+
+@pytest.mark.parametrize(
+    ("section", "key", "value"),
+    [
+        ("local_git", "clean", False),
+        ("runtime", "status", "degraded"),
+        ("active_engineering", "active_engineering_jobs", 1),
+        ("executor", "active_jobs", 1),
+        ("credential_boundary", "ok", False),
+    ],
+)
+def test_bridge_recovery_requires_idle_healthy_control_plane(
+    section,
+    key,
+    value,
+):
+    snapshot = bridge_recovery_snapshot("down")
+    snapshot[section][key] = value
+    with pytest.raises(RuntimeError):
+        guardian.GuardianHost._require_bridge_recovery_preconditions(snapshot)
+
+
+def _write_helper_pair(root: Path, checkout: Path, relative: str, content: str):
+    local = root / relative
+    reviewed = checkout / relative
+    local.parent.mkdir(parents=True, exist_ok=True)
+    reviewed.parent.mkdir(parents=True, exist_ok=True)
+    local.write_text(content, encoding="utf-8")
+    reviewed.write_text(content, encoding="utf-8")
+
+
+def test_bridge_recovery_helpers_must_match_reviewed_checkout(tmp_path):
+    cfg = config(tmp_path)
+    root = Path(cfg["pcp_root"])
+    checkout = tmp_path / "checkout"
+    for relative in (
+        "scripts/with-host-secrets.sh",
+        "scripts/antigravity-bridge.sh",
+    ):
+        _write_helper_pair(root, checkout, relative, "#!/bin/sh\nexit 0\n")
+
+    host = guardian.GuardianHost(cfg, checkout)
+    hashes = host._require_reviewed_bridge_helpers()
+    assert set(hashes) == {
+        "scripts/with-host-secrets.sh",
+        "scripts/antigravity-bridge.sh",
+    }
+
+    (root / "scripts/antigravity-bridge.sh").write_text(
+        "#!/bin/sh\necho changed\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(RuntimeError, match="differs from reviewed checkout"):
+        host._require_reviewed_bridge_helpers()
+
+
+def test_bridge_recovery_only_starts_exact_bridge_after_preconditions(
+    tmp_path,
+    monkeypatch,
+):
+    cfg = config(tmp_path)
+    root = Path(cfg["pcp_root"])
+    checkout = tmp_path / "checkout"
+    for relative in (
+        "scripts/with-host-secrets.sh",
+        "scripts/antigravity-bridge.sh",
+    ):
+        _write_helper_pair(root, checkout, relative, "#!/bin/sh\nexit 0\n")
+
+    host = guardian.GuardianHost(cfg, checkout)
+    monkeypatch.setattr(host, "snapshot", lambda: bridge_recovery_snapshot("down"))
+    monkeypatch.setattr(
+        host,
+        "_antigravity_health",
+        lambda: {
+            "status": "ok",
+            "service": "antigravity-host-bridge",
+            "version": "1.13",
+            "safe_settings": True,
+            "active_runs": 0,
+            "pending_cancellations": 0,
+        },
+    )
+    calls = []
+
+    class Result:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def fake_run(args, **kwargs):
+        calls.append((args, kwargs))
+        return Result()
+
+    monkeypatch.setattr(guardian, "_run", fake_run)
+
+    result = host.recover_antigravity_bridge()
+
+    assert result["status"] == "executed"
+    assert result["reused"] is False
+    assert len(calls) == 1
+    assert calls[0][0] == [
+        "bash",
+        str(root / "scripts/with-host-secrets.sh"),
+        "bash",
+        str(root / "scripts/antigravity-bridge.sh"),
+        "start",
+    ]
+    assert calls[0][1]["cwd"] == root
+
+
+def test_antigravity_down_status_is_explicit_not_probe_failure(
+    tmp_path,
+    monkeypatch,
+):
+    cfg = config(tmp_path)
+    host = guardian.GuardianHost(cfg, tmp_path)
+
+    class Result:
+        returncode = 1
+        stdout = '{"status":"down","service":"antigravity-host-bridge"}'
+        stderr = ""
+
+    monkeypatch.setattr(guardian, "_run", lambda *args, **kwargs: Result())
+    assert host._antigravity_health() == {
+        "status": "down",
+        "service": "antigravity-host-bridge",
+    }
