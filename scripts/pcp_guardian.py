@@ -807,6 +807,13 @@ class GuardianHost:
     def recover_antigravity_bridge(self) -> dict[str, Any]:
         pre = self.snapshot()
         self._require_bridge_recovery_preconditions(pre)
+        if (
+            pre["local_git"].get("origin_repository")
+            != self.config["repository"]
+        ):
+            raise RuntimeError(
+                "Local PCP origin does not match reviewed Guardian repository"
+            )
         antigravity = pre["antigravity"]
 
         if antigravity.get("status") == "ok":
