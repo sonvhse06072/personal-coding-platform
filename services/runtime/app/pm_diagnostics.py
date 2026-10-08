@@ -222,6 +222,86 @@ def _collaboration_summary(threads: list[Any]) -> list[dict[str, Any]]:
     return result
 
 
+_KNOWN_PM_MERGE_BLOCKERS = frozenset({
+    "canonical_bounded_direct_intake_required",
+    "ci_commit_mismatch",
+    "ci_not_successful",
+    "conditional_review_has_no_pass_or_strong_evidence_skip",
+    "current_delivery_ci_evidence_not_success",
+    "current_github_ci_commit_mismatch",
+    "delivery_not_finalized",
+    "delivery_pr_branch_mismatch",
+    "delivery_pr_head_mismatch",
+    "delivery_pr_missing",
+    "delivery_pr_number_mismatch",
+    "delivery_state_not_mergeable",
+    "deterministic_verification_not_passed",
+    "dry_run_not_mergeable",
+    "fresh_exact_head_ci_not_successful",
+    "job_identity_mismatch",
+    "job_not_completed",
+    "job_result_not_accepted",
+    "missing_job_branch",
+    "missing_source_commit",
+    "missing_verified_commit",
+    "persisted_ci_commit_mismatch",
+    "pm_evidence_has_unresolved_risks",
+    "pull_request_base_mismatch",
+    "pull_request_branch_mismatch",
+    "pull_request_head_mismatch",
+    "pull_request_identity_mismatch",
+    "pull_request_not_open_unmerged",
+    "required_checks_not_passed",
+    "required_independent_review_not_passed",
+    "required_review_independence_not_satisfied",
+    "unexpected_scope",
+    "work_order_identity_mismatch",
+})
+
+
+def _safe_merge_gate_reason(
+    snapshot: dict[str, Any] | None,
+    progress: dict[str, Any] | None,
+) -> str | None:
+    """Expose only a known merge-gate code on an exact blocked checkpoint.
+
+    This is diagnostic-only: no permission, checkpoint, job, or merge mutation.
+    Other reasons (which may contain arbitrary text) remain private.
+    """
+    if not isinstance(snapshot, dict) or not isinstance(progress, dict):
+        return None
+    if progress.get("state") != "blocked":
+        return None
+    published = progress.get("last_checkpoint")
+    checkpoint = snapshot.get("blocked_checkpoint")
+    if not isinstance(published, dict) or not isinstance(checkpoint, dict):
+        return None
+    if published.get("kind") != "blocked" or published.get("state") != "blocked":
+        return None
+    if checkpoint.get("kind") != "blocked" or checkpoint.get("state") != "blocked":
+        return None
+    if any(
+        published.get(key) != checkpoint.get(key)
+        for key in ("id", "checkpoint_key", "work_order_id", "job_id")
+    ):
+        return None
+    evidence = checkpoint.get("evidence")
+    reason = evidence.get("reason") if isinstance(evidence, dict) else None
+    if not isinstance(reason, str) or len(reason) > 128:
+        return None
+    if reason in {
+        "pm_merge_replay_rejected",
+        "uncertain_merge_attempt",
+        "pull_request_closed_without_merge",
+    }:
+        return reason
+    if reason.startswith("pm_merge_ineligible:"):
+        suffix = reason.partition(":")[2]
+        if suffix in _KNOWN_PM_MERGE_BLOCKERS:
+            return reason
+    return None
+
+
 def _plan_summary(progress: dict[str, Any] | None) -> dict[str, Any] | None:
     if not isinstance(progress, dict):
         return None
@@ -377,9 +457,16 @@ class PMDiagnosticsService:
         if "plan_progress" in collectors:
             if not plan_id:
                 raise RuntimeError("plan_progress collector requires plan_id")
-            sections["plan_progress"] = _plan_summary(
-                self.orchestrator.progress(plan_id)
-            )
+            progress = _plan_summary(self.orchestrator.progress(plan_id))
+            if isinstance(progress, dict) and progress.get("state") == "blocked":
+                # A separate bounded, read-only checkpoint snapshot is required
+                # because generic plan_progress deliberately omits raw reasons.
+                # Exact checkpoint identity rejects races between the two reads.
+                snapshot = self.orchestrator.store.progress_snapshot(plan_id)
+                merge_gate_reason = _safe_merge_gate_reason(snapshot, progress)
+                if merge_gate_reason is not None:
+                    progress["merge_gate_reason"] = merge_gate_reason
+            sections["plan_progress"] = progress
 
         if "recent_activity" in collectors:
             if job is None:

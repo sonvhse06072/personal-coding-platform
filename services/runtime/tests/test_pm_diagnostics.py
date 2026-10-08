@@ -4,7 +4,7 @@ import asyncio
 from copy import deepcopy
 from datetime import datetime, timezone
 
-from app.pm_diagnostics import PMDiagnosticsService
+from app.pm_diagnostics import PMDiagnosticsService, _safe_merge_gate_reason
 
 
 JOB_ID = "92abc7a33bd5438fbb6c2815e9ee3b33"
@@ -411,3 +411,112 @@ def test_failure_evidence_rejects_malformed_list_shapes():
     assert '"failing_phases"' not in body
     assert '"recent_failure_fingerprints"' not in body
     assert '"signature": "verify-fp-abc123"' in body
+
+
+def test_safe_merge_gate_reason_requires_exact_checkpoint_and_fixed_code():
+    progress = {
+        "state": "blocked",
+        "last_checkpoint": {
+            "id": 182,
+            "checkpoint_key": "wo:blocked:exact",
+            "work_order_id": "EE-0-04",
+            "job_id": JOB_ID,
+            "kind": "blocked",
+            "state": "blocked",
+        },
+    }
+    checkpoint = {
+        **progress["last_checkpoint"],
+        "evidence": {"reason": "pm_merge_ineligible:pm_evidence_has_unresolved_risks"},
+    }
+    snapshot = {"blocked_checkpoint": checkpoint}
+    assert _safe_merge_gate_reason(snapshot, progress) == (
+        "pm_merge_ineligible:pm_evidence_has_unresolved_risks"
+    )
+
+    for known in (
+        "pm_merge_replay_rejected",
+        "uncertain_merge_attempt",
+        "pull_request_closed_without_merge",
+    ):
+        checkpoint["evidence"]["reason"] = known
+        assert _safe_merge_gate_reason(snapshot, progress) == known
+
+    for untrusted in (
+        "pm_merge_ineligible:bad/secret",
+        "pm_merge_ineligible:arbitrary_secret_code",
+        "arbitrary /home/owner/token",
+        "pm_merge_ineligible:" + "x" * 140,
+        "orchestrated_job_missing",
+    ):
+        checkpoint["evidence"]["reason"] = untrusted
+        assert _safe_merge_gate_reason(snapshot, progress) is None
+
+    checkpoint["evidence"]["reason"] = "pm_merge_ineligible:ci_not_successful"
+    progress["last_checkpoint"]["id"] = 183
+    assert _safe_merge_gate_reason(snapshot, progress) is None
+    progress["last_checkpoint"]["id"] = 182
+    progress["state"] = "awaiting_merge"
+    assert _safe_merge_gate_reason(snapshot, progress) is None
+
+
+def test_diagnostics_publishes_only_bound_merge_gate_reason():
+    checkpoint = {
+        "id": 182,
+        "checkpoint_key": "wo:blocked:exact",
+        "work_order_id": "EE-0-04",
+        "job_id": JOB_ID,
+        "kind": "blocked",
+        "state": "blocked",
+        "evidence": {"reason": "pm_merge_ineligible:pm_evidence_has_unresolved_risks"},
+    }
+
+    class BlockedPlanStore(FakePlanStore):
+        def progress_snapshot(self, plan_id):
+            assert plan_id == "plan-1"
+            return {"blocked_checkpoint": deepcopy(checkpoint)}
+
+    class BlockedOrchestrator(FakeOrchestrator):
+        def __init__(self):
+            super().__init__()
+            self.store = BlockedPlanStore()
+
+        def progress(self, plan_id):
+            assert plan_id == "plan-1"
+            return {
+                "plan_id": plan_id,
+                "state": "blocked",
+                "next": [],
+                "last_checkpoint": {
+                    key: checkpoint[key]
+                    for key in ("id", "checkpoint_key", "work_order_id", "job_id", "kind", "state")
+                },
+            }
+
+    storage = FakeStorage()
+    engine = FakeEngine()
+    service = PMDiagnosticsService(storage, engine, BlockedOrchestrator())
+    result = asyncio.run(service.collect_and_publish(
+        project_id="chonhac",
+        issue_number=77,
+        control_comment_id=127,
+        job_id=None,
+        plan_id="plan-1",
+        collectors=["plan_progress"],
+    ))
+    assert result["status"] == "published"
+    body = engine.ddev.comments[-1]["body"]
+    assert '"merge_gate_reason": "pm_merge_ineligible:pm_evidence_has_unresolved_risks"' in body
+
+    checkpoint["evidence"]["reason"] = "pm_merge_ineligible:bad/private"
+    asyncio.run(service.collect_and_publish(
+        project_id="chonhac",
+        issue_number=77,
+        control_comment_id=128,
+        job_id=None,
+        plan_id="plan-1",
+        collectors=["plan_progress"],
+    ))
+    sanitized = engine.ddev.comments[-1]["body"]
+    assert "merge_gate_reason" not in sanitized
+    assert "bad/private" not in sanitized
