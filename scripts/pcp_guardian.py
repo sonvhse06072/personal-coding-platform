@@ -703,7 +703,14 @@ class GuardianHost:
                 if isinstance(review_mode, str) and review_mode in {"cross_provider", "same_provider_higher_tier"}:
                     late_review_outcome["review_mode"] = review_mode
                 attempt_id = inner.get("attempt_id")
-                if type(attempt_id) is int and 0 < attempt_id <= 2**63 - 1:
+                # A no-capacity/staffing result cannot own a model-call claim;
+                # never suggest that it consumed an attempt even if a malformed
+                # internal payload carried an arbitrary identifier.
+                if (
+                    status in {"claimed", "passed", "failed", "uncertain"}
+                    and type(attempt_id) is int
+                    and 0 < attempt_id <= 2**63 - 1
+                ):
                     late_review_outcome["attempt_id"] = attempt_id
                 projected["late_review_outcome"] = late_review_outcome
         return projected
