@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from .adapters import build_adapter
-from .config import project_config
+from .config import models_doc, project_config
 from .model_capabilities import validate_model_choice
 from .pm_merge import LateReviewProof, evaluate_pm_merge
 from .prompts import evaluator_prompt
@@ -65,6 +65,20 @@ def _digest(value: dict[str, Any]) -> str:
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
+def _registered_provider(model_id: str, adapter: str, declared_provider: str) -> str:
+    """A Router-reported provider is never independent proof of its origin."""
+    models = models_doc().get("models") or {}
+    registered = models.get(model_id)
+    if (
+        not isinstance(registered, dict)
+        or not isinstance(declared_provider, str) or not declared_provider
+        or declared_provider != registered.get("provider")
+        or adapter != registered.get("adapter")
+    ):
+        raise RuntimeError("late_review_provider_registry_mismatch")
+    return declared_provider
+
+
 def writer_providers(job: dict[str, Any]) -> tuple[str, ...]:
     """Every attempted coding turn must have trusted, complete provider telemetry.
 
@@ -97,7 +111,7 @@ def writer_providers(job: dict[str, Any]) -> tuple[str, ...]:
         ):
             raise RuntimeError("late_review_writer_history_incomplete")
         seen.add(iteration)
-        providers.add(provider)
+        providers.add(_registered_provider(model, adapter, provider))
     if seen != set(range(1, iterations + 1)):
         raise RuntimeError("late_review_writer_history_incomplete")
     # Router choice and last persisted executor choice may be conservatively
@@ -111,7 +125,10 @@ def writer_providers(job: dict[str, Any]) -> tuple[str, ...]:
             continue
         if not isinstance(choice, dict) or not str(choice.get("provider") or "").strip():
             raise RuntimeError("late_review_writer_history_incomplete")
-        providers.add(str(choice["provider"]))
+        providers.add(_registered_provider(
+            str(choice.get("id") or ""), str(choice.get("adapter") or ""),
+            str(choice["provider"]),
+        ))
     return tuple(sorted(providers))
 
 
@@ -459,6 +476,10 @@ class LateReviewService:
             })
             choice = dict(response.get("choice") or {})
             validate_model_choice(choice)
+            _registered_provider(
+                str(choice.get("id") or ""), str(choice.get("adapter") or ""),
+                str(choice.get("provider") or ""),
+            )
             if (
                 str(response.get("role") or "") != "reviewer"
                 or str(response.get("request_id") or "") != request_id
