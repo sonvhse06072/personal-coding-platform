@@ -28,18 +28,28 @@ def test_chonhac_targeted_verification_follows_changed_module_test_layers() -> N
     chonhac = data["projects"]["chonhac"]
     ddev = chonhac["ddev"]
 
-    commands = list(ddev["targeted_tests"])
-    assert len(commands) >= 2
+    assert list(ddev["targeted_tests"]) == [
+        "ddev drush cr",
+        "bash /config/scripts/chonhac-targeted-tests.sh",
+    ]
 
-    joined = "\n".join(commands)
-    assert "git diff --name-only HEAD -- web/modules/custom" in joined
-    assert "for module in $modules" in joined
-    assert "for layer in Unit Kernel Functional" in joined
-    assert 'web/modules/custom/$module/tests/src/$layer' in joined
-    assert "vendor/bin/phpunit -c web/core/phpunit.xml.dist" in joined
-    assert "ShowDomainTest.php" not in joined
-    assert "cho_nhac_show/tests" not in joined
-    assert "|| true" not in joined
+    # The selector is mounted with projects.yml and executes from the
+    # Executor's Chợ Nhạc workspace, not inside a nested DDEV login shell.
+    script = (PROJECTS_FILE.parent / "scripts" / "chonhac-targeted-tests.sh").read_text(
+        encoding="utf-8"
+    )
+    assert "set -euo pipefail" in script
+    assert "git diff --name-only HEAD -- web/modules/custom" in script
+    assert "git ls-files --others --exclude-standard -- web/modules/custom" in script
+    assert 'for module in "${modules[@]}"' in script
+    assert "for layer in Unit Kernel Functional" in script
+    assert 'web/modules/custom/$module/tests/src/$layer' in script
+    assert "vendor/bin/phpunit -c web/core/phpunit.xml.dist" in script
+    assert "ddev exec --raw -- env" in script
+    assert "ddev exec --raw -- bash -lc" not in script
+    assert "ShowDomainTest.php" not in script
+    assert "cho_nhac_show/tests" not in script
+    assert "|| true" not in script
 
     assert any(
         "vendor/bin/phpcs web/modules/custom" in command

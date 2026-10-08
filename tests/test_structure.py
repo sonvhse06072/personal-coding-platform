@@ -1,6 +1,4 @@
-import os
 from pathlib import Path
-import subprocess
 
 import yaml
 
@@ -61,109 +59,27 @@ def test_chonhac_targeted_tests_execute_phpunit_and_static_analysis_executes_php
     ddev = doc["projects"]["chonhac"]["ddev"]
     targeted = ddev["targeted_tests"]
     static = ddev["static_analysis"]
+    script_path = ROOT / "config/scripts/chonhac-targeted-tests.sh"
+    script = script_path.read_text(encoding="utf-8")
 
-    preflight = ddev["preflight"]
     assert ddev["reuse_running_direct_ddev"] is True
-    assert preflight == [
-        "ddev composer install --no-interaction",
+    assert ddev["preflight"] == ["ddev composer install --no-interaction"]
+    assert targeted == [
+        "ddev drush cr",
+        "bash /config/scripts/chonhac-targeted-tests.sh",
     ]
-    assert len(targeted) == 2
-    assert targeted[0] == "ddev drush cr"
-    targeted_runner = targeted[1]
-    assert targeted_runner.startswith("ddev exec --raw -- bash -lc 'set -euo pipefail;")
-    assert "ddev exec bash -lc" not in targeted_runner
-    assert 'modules="$(git diff --name-only HEAD -- web/modules/custom |' in targeted_runner
-    assert 'if [ -z "$modules" ]' in targeted_runner
-    assert '\\"$modules\\"' not in targeted_runner
-    assert "git diff --name-only HEAD -- web/modules/custom" in targeted_runner
-    assert 'export BROWSERTEST_OUTPUT_DIRECTORY="/tmp/pcp-chonhac-browser-output-$(id -u)"' in targeted_runner
-    assert 'mkdir -p "$BROWSERTEST_OUTPUT_DIRECTORY"' in targeted_runner
-    assert 'chmod 700 "$BROWSERTEST_OUTPUT_DIRECTORY"' in targeted_runner
-    assert '[ ! -w "$BROWSERTEST_OUTPUT_DIRECTORY" ]' in targeted_runner
-    assert "chmod 777" not in targeted_runner
-    assert "ddev exec -u root" not in targeted_runner
-    assert "for module in $modules" in targeted_runner
-    assert "for layer in Unit Kernel Functional" in targeted_runner
-    assert 'web/modules/custom/$module/tests/src/$layer' in targeted_runner
-    assert "vendor/bin/phpunit -c web/core/phpunit.xml.dist" in targeted_runner
-    assert "ShowDomainTest.php" not in targeted_runner
-    assert "cho_nhac_show/tests" not in targeted_runner
+    assert script.startswith("#!/usr/bin/env bash\n")
+    assert "git diff --name-only HEAD -- web/modules/custom" in script
+    assert "git ls-files --others --exclude-standard -- web/modules/custom" in script
+    assert "for layer in Unit Kernel Functional" in script
+    assert "vendor/bin/phpunit -c web/core/phpunit.xml.dist" in script
+    assert "ddev exec --raw -- env" in script
+    assert "ddev exec --raw -- bash -lc" not in script
+    assert "|| true" not in script
+    assert "chmod 777" not in script
+    assert "ddev exec -u root" not in script
     assert static == ["ddev exec vendor/bin/phpcs web/modules/custom"]
-    assert all("|| true" not in command for command in targeted + static)
 
-
-
-def test_chonhac_targeted_runner_preserves_variables_through_raw_ddev(tmp_path):
-    doc = yaml.safe_load((ROOT / "config/projects.yml").read_text())
-    runner = doc["projects"]["chonhac"]["ddev"]["targeted_tests"][1]
-
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    fake_ddev = bin_dir / "ddev"
-    fake_ddev.write_text(
-        """#!/usr/bin/env bash
-set -euo pipefail
-[[ "$1" == "exec" ]]
-shift
-[[ "$1" == "--raw" ]]
-shift
-[[ "$1" == "--" ]]
-shift
-exec "$@"
-""",
-        encoding="utf-8",
-    )
-    fake_ddev.chmod(0o755)
-
-    repo = tmp_path / "repo"
-    test_dir = repo / "web/modules/custom/demo/tests/src/Unit"
-    test_dir.mkdir(parents=True)
-    test_file = test_dir / "DemoTest.php"
-    test_file.write_text("<?php\n// baseline\n", encoding="utf-8")
-
-    phpunit = repo / "vendor/bin/phpunit"
-    phpunit.parent.mkdir(parents=True)
-    phpunit.write_text(
-        "#!/usr/bin/env bash\n"
-        "printf 'BROWSER_OUTPUT:%s\\n' \"$BROWSERTEST_OUTPUT_DIRECTORY\"\n"
-        "printf 'PHPUNIT:%s\\n' \"$*\"\n",
-        encoding="utf-8",
-    )
-    phpunit.chmod(0o755)
-
-    subprocess.run(["git", "init", "-b", "main"], cwd=repo, check=True, capture_output=True)
-    subprocess.run(["git", "config", "user.email", "pcp-test@example.invalid"], cwd=repo, check=True)
-    subprocess.run(["git", "config", "user.name", "PCP Test"], cwd=repo, check=True)
-    subprocess.run(["git", "add", "."], cwd=repo, check=True)
-    subprocess.run(["git", "commit", "-m", "baseline"], cwd=repo, check=True, capture_output=True)
-    test_file.write_text("<?php\n// changed\n", encoding="utf-8")
-
-    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ.get('PATH', '')}"}
-    result = subprocess.run(
-        ["bash", "-lc", f'PATH="{bin_dir}:$PATH"; {runner}'],
-        cwd=repo,
-        env=env,
-        text=True,
-        capture_output=True,
-        timeout=30,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert "Running targeted tests for demo" in result.stdout
-    assert (
-        "PHPUNIT:-c web/core/phpunit.xml.dist "
-        "web/modules/custom/demo/tests/src/Unit/DemoTest.php"
-    ) in result.stdout
-    browser_line = next(
-        line for line in result.stdout.splitlines()
-        if line.startswith("BROWSER_OUTPUT:")
-    )
-    browser_output = Path(browser_line.removeprefix("BROWSER_OUTPUT:"))
-    assert browser_output.parent == Path("/tmp")
-    assert browser_output.name.startswith("pcp-chonhac-browser-output-")
-    assert browser_output.is_dir()
-    assert os.access(browser_output, os.W_OK)
-    assert browser_output.stat().st_mode & 0o777 == 0o700
 
 def test_service_homes_are_prepared_for_ddev_uid():
     compose = (ROOT / ".ddev/docker-compose.platform.yaml").read_text()

@@ -217,30 +217,8 @@ projects:
 
       targeted_tests:
         - ddev drush cr
-        - >-
-          ddev exec --raw -- bash -lc 'set -euo pipefail;
-          export BROWSERTEST_OUTPUT_DIRECTORY="/tmp/pcp-chonhac-browser-output-$(id -u)";
-          mkdir -p "$BROWSERTEST_OUTPUT_DIRECTORY";
-          chmod 700 "$BROWSERTEST_OUTPUT_DIRECTORY";
-          if [ ! -d "$BROWSERTEST_OUTPUT_DIRECTORY" ] || [ ! -w "$BROWSERTEST_OUTPUT_DIRECTORY" ]; then
-            echo "BROWSERTEST_OUTPUT_DIRECTORY is not writable: $BROWSERTEST_OUTPUT_DIRECTORY" >&2;
-            exit 1;
-          fi;
-          modules="$(git diff --name-only HEAD -- web/modules/custom |
-          awk -F/ "/^web\/modules\/custom\/[^/]+\// {print \$4}" | sort -u)";
-          if [ -z "$modules" ]; then
-            echo "No changed custom Drupal modules";
-            exit 0;
-          fi;
-          for module in $modules; do
-            echo "Running targeted tests for $module";
-            for layer in Unit Kernel Functional; do
-              dir="web/modules/custom/$module/tests/src/$layer";
-              [ -d "$dir" ] || continue;
-              find "$dir" -type f -name "*Test.php" -print0 |
-              xargs -0 -r vendor/bin/phpunit -c web/core/phpunit.xml.dist;
-            done;
-          done'
+        # The selector runs in the Executor; DDEV receives only simple raw argv.
+        - bash /config/scripts/chonhac-targeted-tests.sh
 
       static_analysis:
         - ddev exec vendor/bin/phpcs web/modules/custom
