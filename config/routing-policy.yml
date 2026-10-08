@@ -1,4 +1,4 @@
-version: 20
+version: 21
 complexity_weights:
   scope: 0.18
   dependency_depth: 0.1
