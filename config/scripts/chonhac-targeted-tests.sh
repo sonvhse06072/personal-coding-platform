@@ -9,11 +9,17 @@ git rev-parse --verify HEAD >/dev/null
 # The old HEAD^..HEAD CI helper would miss an active direct-workspace diff.
 changed_tracked="$(git diff --name-only HEAD -- web/modules/custom)"
 changed_untracked="$(git ls-files --others --exclude-standard -- web/modules/custom)"
-mapfile -t modules < <(
+# Command substitution preserves pipeline/awk/sort failure under pipefail.
+# A process substitution here could silently return an empty module list.
+selected_modules="$(
   printf '%s\n%s\n' "$changed_tracked" "$changed_untracked" |
     awk -F/ '$1=="web" && $2=="modules" && $3=="custom" && NF>=5 {print $4}' |
     LC_ALL=C sort -u
-)
+)"
+modules=()
+if [[ -n "$selected_modules" ]]; then
+  mapfile -t modules <<< "$selected_modules"
+fi
 
 if ((${#modules[@]} == 0)); then
   echo "No changed custom Drupal modules"
@@ -33,6 +39,11 @@ ddev exec --raw -- chmod 700 "$output_dir"
 ddev exec --raw -- test -d "$output_dir"
 ddev exec --raw -- test -w "$output_dir"
 
+# Capture test files to a temporary manifest: find failures must abort the
+# verification instead of becoming an empty test array.
+test_list="$(mktemp)"
+trap 'rm -f "$test_list"' EXIT
+
 for module in "${modules[@]}"; do
   if [[ ! "$module" =~ ^[a-z][a-z0-9_]*$ ]]; then
     echo "Invalid custom Drupal module path" >&2
@@ -44,7 +55,8 @@ for module in "${modules[@]}"; do
     [[ -d "$dir" ]] || continue
 
     tests=()
-    mapfile -d '' -t tests < <(find "$dir" -type f -name '*Test.php' -print0)
+    find "$dir" -type f -name '*Test.php' -print0 > "$test_list"
+    mapfile -d '' -t tests < "$test_list"
     ((${#tests[@]} > 0)) || continue
 
     echo "Running $layer tests for $module"

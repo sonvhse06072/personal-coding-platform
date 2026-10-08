@@ -126,3 +126,41 @@ def test_phpunit_nonzero_is_not_hidden_by_selector(tmp_path):
     assert "Running Unit tests for demo" in result.stdout
     assert "DemoTest.php" in phpunit.read_text()
     assert "DemoKernelTest.php" not in phpunit.read_text()
+
+
+def test_staged_custom_module_change_is_detected(tmp_path):
+    repo, env, tracked, phpunit = _fixture(tmp_path)
+    tracked.write_text("<?php\n// staged change\n")
+    _command("git", "add", "web/modules/custom/demo/src/Demo.php", cwd=repo)
+    result = _run(repo, env)
+
+    assert result.returncode == 0, result.stderr
+    assert "Running targeted tests for demo" in result.stdout
+    assert "DemoTest.php" in phpunit.read_text()
+
+
+def test_failed_module_selector_tool_is_not_treated_as_no_backend_diff(tmp_path):
+    repo, env, tracked, phpunit = _fixture(tmp_path)
+    tracked.write_text("<?php\n// changed\n")
+    awk = tmp_path / "bin" / "awk"
+    awk.write_text("#!/usr/bin/env sh\nexit 19\n")
+    awk.chmod(0o755)
+    result = _run(repo, env)
+
+    assert result.returncode == 19
+    assert "No changed custom Drupal modules" not in result.stdout
+    assert not phpunit.exists()
+    assert not (tmp_path / "ddev.log").exists()
+
+
+def test_failed_find_must_not_silently_skip_phpunit(tmp_path):
+    repo, env, tracked, phpunit = _fixture(tmp_path)
+    tracked.write_text("<?php\n// changed\n")
+    failing_find = tmp_path / "bin" / "find"
+    failing_find.write_text("#!/usr/bin/env sh\nexit 17\n")
+    failing_find.chmod(0o755)
+    result = _run(repo, env)
+
+    assert result.returncode == 17
+    assert "Running targeted tests for demo" in result.stdout
+    assert not phpunit.exists()
