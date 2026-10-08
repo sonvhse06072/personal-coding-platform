@@ -59,7 +59,7 @@ def test_chonhac_targeted_verification_follows_changed_module_test_layers() -> N
 
 def test_projects_file_prefers_runtime_mount(monkeypatch, tmp_path) -> None:
     mounted = tmp_path / "projects.yml"
-    mounted.write_text("projects: {}\\n", encoding="utf-8")
+    mounted.write_text("projects: {}\n", encoding="utf-8")
     monkeypatch.setenv("PROJECTS_FILE", str(mounted))
 
     assert projects_file() == mounted
