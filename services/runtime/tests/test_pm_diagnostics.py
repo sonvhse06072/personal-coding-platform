@@ -444,6 +444,7 @@ def test_safe_merge_gate_reason_requires_exact_checkpoint_and_fixed_code():
 
     for untrusted in (
         "pm_merge_ineligible:bad/secret",
+        "pm_merge_ineligible:arbitrary_secret_code",
         "arbitrary /home/owner/token",
         "pm_merge_ineligible:" + "x" * 140,
         "orchestrated_job_missing",
