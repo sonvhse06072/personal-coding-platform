@@ -918,7 +918,8 @@ def test_registered_reviewer_capacity_reports_writer_floor_and_candidates_withou
     assert result["writer_providers"] == ["openai"]
     assert result["max_writer_tier"] == "strong"
     assert result["max_writer_review_score"] == 8
-    assert result["eligible_higher_tier_model_ids"] == ["upgraded"]
+    assert result["strict_higher_tier_registry_model_ids"] == ["upgraded"]
+    assert result["critical_profile_higher_tier_registry_model_ids"] == ["upgraded"]
     assert result["cross_provider_registered_model_ids"] == ["cross"]
 
     # A malformed or truncated provenance record never produces any capacity
@@ -927,7 +928,7 @@ def test_registered_reviewer_capacity_reports_writer_floor_and_candidates_withou
     invalid = pm_late_review.registered_review_capacity(job)
     assert invalid["status"] == "provenance_unverifiable"
     assert invalid["reason"] == "late_review_writer_history_incomplete"
-    assert "eligible_higher_tier_model_ids" not in invalid
+    assert "strict_higher_tier_registry_model_ids" not in invalid
 
 
 def test_registered_reviewer_capacity_does_not_treat_registry_as_live_health():
