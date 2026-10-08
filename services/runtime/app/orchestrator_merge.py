@@ -49,6 +49,10 @@ class PlanOrchestrator(CorePlanOrchestrator):
     async def start(self) -> None:
         self.merge_audit.ensure()
         self.late_reviews.store.ensure()
+        # Runtime startup follows RuntimeEngine.start(), which cancels host
+        # orphan agents. One former 'claimed' attempt may have reached a model:
+        # record uncertainty without repeating it or forever blocking Guardian.
+        self.late_reviews.store.reconcile_orphan_claims()
         await super().start()
 
     async def stop(self) -> None:
