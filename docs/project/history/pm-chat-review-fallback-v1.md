@@ -50,6 +50,14 @@ Control được đưa vào comment issue gốc; PM Bridge tiếp nhận theo
 `<!-- coding-platform:pm-control:v1 -->`, sau đó Guardian dùng
 `pm_bridge_poll_project_once` để dispatch.
 
+Trước khi đăng review, PM gửi `request_diagnostics` với các collector
+`job`, `plan_progress`, `late_review`, `reviewer_capacity` cho đúng job.
+`late_review.persisted_accepted_diff_sha256` trả về digest đã được
+Runtime lưu (không phải bằng chứng workspace đã được kiểm lại). PM phải
+đối chiếu nó với exact diff/head đã kiểm tra, đưa vào trường `diff_hash`
+trong GitHub review JSON. Control ghi nhận sẽ tự tính lại `accepted_diff`
+và từ chối mọi hash/head không trùng.
+
 ### 1. record_pm_chat_review
 
 Ví dụ (phải thay ID bằng giá trị live, không copy mù):
