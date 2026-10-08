@@ -431,3 +431,57 @@ def test_release_rechecks_all_original_protected_gates_before_checkpoint(monkeyp
     with pytest.raises(RuntimeError, match="other_merge_gates"):
         asyncio.run(service.release(envelope, comment_id=904, issue_number=63))
     assert calls["transitions"] == []
+
+
+def test_manual_release_transition_seals_owner_delegation_in_durable_checkpoint():
+    from app.plan_orchestrator import PlanOrchestrator as CorePlanOrchestrator
+
+    _, _, tracked, job, pr = context()
+    tracked["state"] = "blocked"
+    captured = []
+    class CaptureStore:
+        def transition_work_order(self, **kwargs):
+            captured.append(kwargs)
+            return {"id": 183}
+    facade = SimpleNamespace(
+        storage=SimpleNamespace(get=lambda job_id: job),
+        store=CaptureStore(),
+    )
+    release = {
+        "attestation_id": 91,
+        "checkpoint_id": 182,
+        "checkpoint_key": "wo:blocked:key",
+        "head": job["result"]["commit"],
+        "review_mode": "pm_chat_manual_review",
+        "control_comment_id": 903,
+    }
+    CorePlanOrchestrator._checkpoint_transition(
+        facade, tracked, kind="pm_chat_review_released",
+        state="awaiting_merge", job=job, pr=pr,
+        detail={"pm_chat_review_release": release},
+    )
+    assert captured[0]["evidence"]["pm_chat_review_proof"] == {
+        "review_mode": "pm_chat_manual_review",
+        "attestation_id": 91,
+        "blocked_checkpoint_id": 182,
+        "blocked_checkpoint_key": "wo:blocked:key",
+        "expected_head": job["result"]["commit"],
+        "release_control_comment_id": 903,
+    }
+    for invalid in (
+        None,
+        {},
+        {**release, "head": "c" * 40},
+        {**release, "review_mode": "cross_provider"},
+        {**release, "checkpoint_id": 0},
+        {**release, "control_comment_id": 0},
+        {**release, "checkpoint_key": "random"},
+    ):
+        captured.clear()
+        with pytest.raises(RuntimeError, match="requires exact Owner-delegated proof"):
+            CorePlanOrchestrator._checkpoint_transition(
+                facade, tracked, kind="pm_chat_review_released",
+                state="awaiting_merge", job=job, pr=pr,
+                detail={"pm_chat_review_release": invalid},
+            )
+        assert captured == []
