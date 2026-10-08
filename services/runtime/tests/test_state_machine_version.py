@@ -5,7 +5,7 @@ from app.main import RUNTIME_VERSION, app
 
 
 def test_runtime_version_is_1_0_139():
-    assert RUNTIME_VERSION == "1.0.139"
+    assert RUNTIME_VERSION == "1.0.140"
     assert app.version == RUNTIME_VERSION
 
 
