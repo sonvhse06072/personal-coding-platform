@@ -713,6 +713,75 @@ class GuardianHost:
                 ):
                     late_review_outcome["attempt_id"] = attempt_id
                 projected["late_review_outcome"] = late_review_outcome
+
+        # Owner-delegated PM-chat review is a separate, explicitly auditable
+        # trust mode. Its record control creates an append-only attestation, but
+        # the initial Guardian v1 projection suppressed the attestation ID.
+        # Expose only the immutable integer identifier from an authenticated
+        # Runtime control event whose exact action, target and GitHub HEAD match.
+        # Never expose a failed review ID as if it authorized release.
+        action = event.get("action")
+        if (
+            action in {"record_pm_chat_review", "release_pm_chat_review"}
+            and event.get("status") == "executed"
+        ):
+            outer = event.get("result")
+            outer = dict(outer) if isinstance(outer, dict) else {}
+            inner = outer.get("result")
+            inner = dict(inner) if isinstance(inner, dict) else {}
+            target_head = target.get("expected_head")
+            head_key = (
+                "expected_head" if action == "record_pm_chat_review" else "head"
+            )
+            status = inner.get("status")
+            mode = inner.get("review_mode")
+            attestation_id = inner.get("attestation_id")
+            if (
+                outer.get("status") == "executed"
+                and outer.get("action") == action
+                and all(
+                    outer.get(field) == target.get(field)
+                    for field in ("plan_id", "work_order_id", "job_id")
+                )
+                and mode == "pm_chat_manual_review"
+                and isinstance(target_head, str)
+                and _SHA40.fullmatch(target_head)
+                and inner.get(head_key) == target_head
+            ):
+                if action == "record_pm_chat_review" and status == "review_failed":
+                    projected["pm_chat_review_outcome"] = {
+                        "status": "review_failed",
+                        "review_mode": "pm_chat_manual_review",
+                    }
+                elif (
+                    action == "record_pm_chat_review"
+                    and status == "attested"
+                    and type(attestation_id) is int
+                    and 0 < attestation_id <= 2**63 - 1
+                ):
+                    projected["pm_chat_review_outcome"] = {
+                        "status": "attested",
+                        "review_mode": "pm_chat_manual_review",
+                        "attestation_id": attestation_id,
+                        "expected_head": target_head,
+                    }
+                elif (
+                    action == "release_pm_chat_review"
+                    and status == "released"
+                    and type(attestation_id) is int
+                    and 0 < attestation_id <= 2**63 - 1
+                    and type(target.get("attestation_id")) is int
+                    and attestation_id == target["attestation_id"]
+                    and type(inner.get("checkpoint_id")) is int
+                    and inner["checkpoint_id"] > 0
+                ):
+                    projected["pm_chat_review_outcome"] = {
+                        "status": "released",
+                        "review_mode": "pm_chat_manual_review",
+                        "attestation_id": attestation_id,
+                        "expected_head": target_head,
+                        "checkpoint_id": inner["checkpoint_id"],
+                    }
         return projected
 
     @staticmethod
