@@ -822,6 +822,70 @@ def test_pm_bridge_control_event_projection_is_bounded_and_allow_listed():
     assert "author" not in rendered
 
 
+def test_late_review_guardian_snapshot_shows_bounded_no_capacity_outcome():
+    raw = {
+        "project_id": "chonhac",
+        "comment_id": 6055219870,
+        "action": "request_late_independent_review",
+        "status": "executed",
+        "target_identity": {
+            "job_id": "057f6acff17b501eae3a673cbb6bbe36",
+            "work_order_id": "SECRET job contract",
+        },
+        "result": {
+            "status": "executed",
+            "action": "request_late_independent_review",
+            "result": {
+                "status": "no_capacity",
+                "reason": "no_eligible_higher_tier_reviewer",
+                "reviewer_output": "SECRET model transcript",
+                "workspace": "/home/private/repo",
+            },
+            "raw": "SECRET response",
+        },
+    }
+    projected = guardian.GuardianHost._sanitize_pm_control_event(raw)
+    assert projected["late_review_outcome"] == {
+        "status": "no_capacity",
+        "reason": "no_eligible_higher_tier_reviewer",
+    }
+    rendered = json.dumps(projected)
+    assert "SECRET" not in rendered
+    assert "/home/private" not in rendered
+
+
+def test_late_review_guardian_snapshot_disallows_unknown_status_and_reason():
+    raw = {
+        "project_id": "chonhac",
+        "comment_id": 6055219870,
+        "action": "request_late_independent_review",
+        "status": "executed",
+        "result": {
+            "result": {
+                "status": "claimed",
+                "review_mode": "cross_provider",
+                "attempt_id": 101,
+                "reason": "SECRET arbitrary reason",
+                "secret": "SECRET",
+            },
+        },
+    }
+    projected = guardian.GuardianHost._sanitize_pm_control_event(raw)
+    assert projected["late_review_outcome"] == {
+        "status": "claimed",
+        "review_mode": "cross_provider",
+        "attempt_id": 101,
+    }
+    raw["result"]["result"]["status"] = "SECRET arbitrary status"
+    assert "late_review_outcome" not in guardian.GuardianHost._sanitize_pm_control_event(raw)
+    raw["result"]["result"]["status"] = "no_capacity"
+    raw["action"] = "request_diagnostics"
+    assert "late_review_outcome" not in guardian.GuardianHost._sanitize_pm_control_event(raw)
+    raw["action"] = "request_late_independent_review"
+    raw["status"] = "failed"
+    assert "late_review_outcome" not in guardian.GuardianHost._sanitize_pm_control_event(raw)
+
+
 def test_pm_bridge_poll_projection_drops_raw_results_and_bounds_errors():
     raw = {
         "project_id": "chonhac",
