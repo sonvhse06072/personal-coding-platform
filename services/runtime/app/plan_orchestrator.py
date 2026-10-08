@@ -179,7 +179,8 @@ _CHECKPOINT_TRANSITIONS = {
     "merged": ({"awaiting_merge"}, "completed"),
     "blocked": ({"pending", "running", "waiting_human", "awaiting_merge"}, "blocked"),
     "recovered_accepted": ({"blocked"}, "awaiting_merge"),
-    # Only explicit, attested late cross-provider review can release this gate.
+    # Only explicitly attested late review (cross-provider or strictly stronger
+    # same-provider fallback) can release this merge gate.
     "late_review_released": ({"blocked"}, "awaiting_merge"),
     "repair_reopened": ({"awaiting_merge"}, "running"),
 }

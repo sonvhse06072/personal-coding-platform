@@ -1,4 +1,4 @@
-"""Bounded read-only cross-provider review of a delivered, merge-blocked WorkOrder.
+"""Bounded read-only late reviewer recovery of a delivered, merge-blocked WorkOrder.
 
 No existing job/result/review-policy is mutated. A claimed review is never
 replayed after an uncertain completion. Attestations are append-only and can be
