@@ -63,6 +63,7 @@ class PMChatReviewReport(BaseModel):
     job_id: str = Field(min_length=8, max_length=100)
     source_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
     expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    diff_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
     branch: str = Field(min_length=1, max_length=200)
     pr_number: int = Field(ge=1)
     checkpoint_id: int = Field(ge=1)
@@ -262,7 +263,10 @@ class PMChatReviewService:
             pr_number=envelope.pr_number, review_id=envelope.review_id,
             expected_head=envelope.expected_head,
         )
-        if not self._report_matches(report, envelope):
+        if (
+            not self._report_matches(report, envelope)
+            or report.diff_hash != str((job["result"]["diff"] or {}).get("diff_hash") or "")
+        ):
             raise RuntimeError("pm_chat_review_report_identity_mismatch")
         capacity = await self._capacity(job)
         data = {
@@ -345,6 +349,7 @@ class PMChatReviewService:
         if (
             hashlib.sha256(review["body"].encode("utf-8")).hexdigest() != proof.review_body_sha256
             or report.verdict != "pass" or report.findings
+            or report.diff_hash != proof.diff_hash
         ):
             raise RuntimeError("pm_chat_review_live_review_changed")
 
