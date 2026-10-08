@@ -190,7 +190,7 @@ class _FakeLedger:
     def finish(self, attempt_id, **kwargs):
         self.calls.append(("finish", kwargs["status"]))
         self.saved = kwargs
-        return 120 if kwargs["attestation"] is not None else None
+        return 120 if kwargs.get("attestation") is not None else None
 
 
 class _FakeAdapter:
@@ -313,13 +313,14 @@ def test_late_review_structured_fail_and_contradictory_pass_are_not_attested(tmp
     adapter2.output = adapter2.output.replace("PASS\n", "FAIL\n", 1)
     request2, result2 = asyncio.run(_execute(service2, envelope2))
     assert result2["status"] == "uncertain"
-    assert ledger2.saved["attestation"] is None
+    assert ledger2.saved.get("attestation") is None
 
 
 def test_snapshot_requires_exact_blocked_checkpoint_job_and_delivery():
     project, plan, tracked, job, pr = context()
     reason = "pm_merge_ineligible:required_review_independence_not_satisfied"
     plan.update({"status": "blocked", "lifecycle": "active"})
+    plan["plan"]["work_orders"] = [{"id": "WO-1"}]
     tracked.update({"state": "blocked", "lifecycle": "active", "detail": {"reason": reason}})
     job["result"]["route"]["strategy"]["review_policy"]["independence_satisfied"] = False
     job["result"]["review"]["protocol_valid"] = True
@@ -356,6 +357,10 @@ def test_snapshot_requires_exact_blocked_checkpoint_job_and_delivery():
     job["result"]["commit"] = "b" * 40
     tracked["detail"]["reason"] = "different_blocker"
     with pytest.raises(RuntimeError, match="work_order_identity_changed"):
+        service._snapshot(envelope)
+    tracked["detail"]["reason"] = reason
+    plan["plan"]["work_orders"] = []
+    with pytest.raises(RuntimeError, match="canonical_plan_missing"):
         service._snapshot(envelope)
 
 
