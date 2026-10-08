@@ -322,6 +322,7 @@ def test_snapshot_requires_exact_blocked_checkpoint_job_and_delivery():
     plan.update({"status": "blocked", "lifecycle": "active"})
     tracked.update({"state": "blocked", "lifecycle": "active", "detail": {"reason": reason}})
     job["result"]["route"]["strategy"]["review_policy"]["independence_satisfied"] = False
+    job["result"]["review"]["protocol_valid"] = True
     checkpoint = {
         "id": 182, "checkpoint_key": "blocked:exact", "state": "blocked",
         "kind": "blocked", "job_id": job["id"], "evidence": {"reason": reason},
