@@ -1272,6 +1272,35 @@ def _ddev_subprocess_env() -> dict[str, str]:
     }
 
 
+
+def _effective_ddev_start_timeout(phase_timeout: int) -> int:
+    """Use an explicit finite cold-start policy within the existing phase budget."""
+    configured = os.getenv("DDEV_START_TIMEOUT_SECONDS", "600").strip()
+    if not configured.isdecimal() or not 10 <= int(configured) <= 1800:
+        raise HTTPException(
+            500,
+            "DDEV_START_TIMEOUT_SECONDS must be an integer between 10 and 1800",
+        )
+    return min(phase_timeout, int(configured))
+
+
+def _ddev_start_failure_hint(
+    stdout: str, stderr: str, *, timed_out: bool, timeout: int,
+) -> str:
+    """Provide a bounded stage hint without claiming a Docker root cause."""
+    stage = (
+        "image_build"
+        if "Building project images" in (stdout + stderr)
+        else "startup_other"
+    )
+    outcome = "timeout" if timed_out else "command_failure"
+    return (
+        f"pcp_infrastructure_failure=ddev_start_{outcome} "
+        f"stage_hint={stage} effective_timeout_seconds={timeout}"
+    )
+
+
+
 def run_tracked(
     job_id: str,
     argv: list[str],
@@ -1302,7 +1331,7 @@ def run_tracked(
         _unregister(job_id, proc)
 
 
-DDEV_EXECUTOR_VERSION = "1.0.34"
+DDEV_EXECUTOR_VERSION = "1.0.35"
 
 app = FastAPI(title="Constrained DDEV/Git Executor", version=DDEV_EXECUTOR_VERSION)
 app.include_router(pm_bridge_github_router)
@@ -2415,13 +2444,20 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
             reused_running_direct_ddev = returncode == 0
 
         if not reused_running_direct_ddev:
+            start_timeout = _effective_ddev_start_timeout(timeout)
             returncode, stdout, stderr, timed_out = run_tracked(
                 payload.job_id,
                 ["ddev", "start", "-y"],
                 cwd=workspace,
-                timeout=min(timeout, 600),
+                timeout=start_timeout,
                 env=_ddev_subprocess_env(),
             )
+            if returncode != 0 or timed_out:
+                # This is a diagnostic stage hint, not a proven BuildKit cause.
+                hint = _ddev_start_failure_hint(
+                    stdout, stderr, timed_out=timed_out, timeout=start_timeout,
+                )
+                stderr = f"{stderr[-11500:]}\n{hint}"
             infrastructure.append(
                 CommandOutput(
                     command="ddev start -y",
