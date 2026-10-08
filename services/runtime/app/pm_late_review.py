@@ -23,6 +23,7 @@ from .model_capabilities import validate_model_choice
 from .pm_merge import LateReviewProof, evaluate_pm_merge
 from .prompts import evaluator_prompt
 from .review import parse_review_output
+from .shell import run_command
 from .storage import now
 from .usage import normalize_usage
 
@@ -269,6 +270,16 @@ def _git(workspace: Path, *args: str) -> str:
     if proc.returncode != 0:
         raise RuntimeError("late_review_git_evidence_unavailable")
     return proc.stdout.decode("utf-8", errors="replace").strip()
+
+
+async def _review_git(cwd: Path, *args: str, timeout: int = 60) -> str:
+    """Async Git with bounded time and process-group cancellation semantics."""
+    result = await run_command(
+        ["git", *args], cwd=cwd, timeout=timeout,
+    )
+    if result.returncode != 0:
+        raise RuntimeError("late_review_git_command_failed")
+    return result.stdout.strip()
 
 
 def accepted_diff(job: dict[str, Any], workspace_root: Path) -> str:
@@ -537,7 +548,9 @@ class LateReviewService:
     async def _preflight(self, envelope: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], str]:
         plan, tracked, job = self._snapshot(envelope)
         writers = writer_providers(job)
-        diff_text = accepted_diff(job, self.engine.workspace_root)
+        diff_text = await asyncio.to_thread(
+            accepted_diff, job, self.engine.workspace_root,
+        )
         audit = self.orchestrator.merge_audit.get(
             plan_id=envelope.plan_id, work_order_id=envelope.work_order_id,
             expected_head=envelope.expected_head,
@@ -714,17 +727,15 @@ class LateReviewService:
                 prefix="pcp-late-review-", dir=str(self.engine.workspace_root),
             ) as temp:
                 checkout = Path(temp) / "review"
-                clone = subprocess.run(
-                    ["git", "clone", "--quiet", "--no-local", "--no-checkout", "--", str(original), str(checkout)],
-                    capture_output=True, timeout=90, check=False,
+                await _review_git(
+                    original, "clone", "--quiet", "--no-local", "--no-checkout",
+                    "--", str(original), str(checkout), timeout=90,
                 )
-                if clone.returncode != 0:
-                    raise RuntimeError("late_review_isolated_clone_failed")
-                subprocess.run(
-                    ["git", "-C", str(checkout), "checkout", "--quiet", "--detach", envelope.expected_head],
-                    capture_output=True, timeout=45, check=True,
+                await _review_git(
+                    checkout, "checkout", "--quiet", "--detach",
+                    envelope.expected_head, timeout=45,
                 )
-                if _git(checkout, "rev-parse", "HEAD") != envelope.expected_head:
+                if await _review_git(checkout, "rev-parse", "HEAD") != envelope.expected_head:
                     raise RuntimeError("late_review_checkout_head_changed")
                 adapter = build_adapter(
                     choice["adapter"], choice["model"], choice.get("reasoning_effort"),
@@ -740,8 +751,9 @@ class LateReviewService:
                     mode="evaluate", timeout=600,
                 )
                 if (
-                    _git(checkout, "rev-parse", "HEAD") != envelope.expected_head
-                    or _git(checkout, "status", "--porcelain")
+                    await _review_git(checkout, "rev-parse", "HEAD")
+                    != envelope.expected_head
+                    or await _review_git(checkout, "status", "--porcelain")
                 ):
                     raise RuntimeError("late_review_read_only_checkout_modified")
             if (
