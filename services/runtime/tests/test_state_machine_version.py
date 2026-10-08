@@ -19,3 +19,12 @@ def test_runtime_health_reports_same_runtime_version(monkeypatch):
     payload = asyncio.run(main_module.health())
 
     assert payload.version == RUNTIME_VERSION
+
+
+def test_guardian_active_engineering_count_includes_claimed_late_reviews(monkeypatch):
+    monkeypatch.setattr(main_module.storage, "count_active_engineering_jobs", lambda: 1)
+    monkeypatch.setattr(main_module.plan_orchestrator.late_reviews.store, "active_count", lambda: 2)
+
+    result = main_module.active_engineering_work_count()
+
+    assert result.active_engineering_jobs == 3
