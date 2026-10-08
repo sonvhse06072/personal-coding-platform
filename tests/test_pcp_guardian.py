@@ -884,6 +884,15 @@ def test_late_review_guardian_snapshot_disallows_unknown_status_and_reason():
     raw["action"] = "request_late_independent_review"
     raw["status"] = "failed"
     assert "late_review_outcome" not in guardian.GuardianHost._sanitize_pm_control_event(raw)
+    raw["status"] = "executed"
+    raw["result"]["result"]["status"] = ["not a scalar"]
+    assert "late_review_outcome" not in guardian.GuardianHost._sanitize_pm_control_event(raw)
+    raw["result"]["result"]["status"] = "no_capacity"
+    raw["result"]["result"]["reason"] = {"unexpected": "SECRET"}
+    raw["result"]["result"]["review_mode"] = ["SECRET"]
+    assert guardian.GuardianHost._sanitize_pm_control_event(raw)[
+        "late_review_outcome"
+    ] == {"status": "no_capacity"}
 
 
 def test_pm_bridge_poll_projection_drops_raw_results_and_bounds_errors():
