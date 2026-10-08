@@ -208,8 +208,6 @@ class PMControlEnvelope(BaseModel):
                 require("attestation_id")
             elif self.attestation_id is not None:
                 raise ValueError("Late review request cannot supply an attestation")
-        elif self.attestation_id is not None:
-            raise ValueError("Attestation id only belongs to late review release")
         elif self.action == "repair_blocked_job":
             require("job_id", "blocker_generation", "finding")
             if (
@@ -257,6 +255,12 @@ class PMControlEnvelope(BaseModel):
                 "intake_semantic",
                 "intake_repo_hints",
             )
+
+        if (
+            self.attestation_id is not None
+            and self.action != "release_late_independent_review"
+        ):
+            raise ValueError("Attestation id only belongs to late review release")
 
         if self.ready_work_order_ids:
             if any(
