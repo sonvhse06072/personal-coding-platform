@@ -266,3 +266,15 @@ def test_evaluation_fixture_passes():
     assert payload["metrics"]["authority_conflict_failure_rate"] == 0.0
     assert payload["metrics"]["abstention_accuracy"] == 1.0
     assert payload["metrics"]["mean_context_ratio_vs_read_all"] < 0.50
+
+
+def test_t1_stays_compact_and_does_not_accumulate_completed_chronology():
+    """Tier-1 is an active replace-in-place index, not a historical rollout log."""
+    content = (ROOT / "docs/project/current-state.md").read_text(encoding="utf-8")
+    assert len(content.encode("utf-8")) < 15000
+    assert len(content.splitlines()) <= 250
+    assert "## Active PCP issues and owner attention" in content
+    assert "## Immediate next safe actions" in content
+    assert "## Historical accepted platform / local state snapshot" not in content
+    assert "## Generation-1 execution — active" not in content
+    assert "GitHub/Runtime" in content
