@@ -1623,6 +1623,9 @@ class PlanOrchestrator:
                 or release["checkpoint_id"] <= 0
                 or not isinstance(release.get("checkpoint_key"), str)
                 or not release["checkpoint_key"].startswith("wo:blocked:")
+                or release.get("review_mode") not in {
+                    "cross_provider", "same_provider_higher_tier",
+                }
                 or not isinstance(release.get("head"), str)
                 or len(release["head"]) != 40
                 or not all(c in "0123456789abcdef" for c in release["head"])
@@ -1631,7 +1634,8 @@ class PlanOrchestrator:
             # Evidence is checkpoint-store-owned: the caller cannot forge this
             # via generic transition fields. Attestation was independently
             # revalidated by the late-review service before reaching here.
-            evidence["late_independent_review"] = {
+            evidence["late_review_proof"] = {
+                "review_mode": release["review_mode"],
                 "attestation_id": release["attestation_id"],
                 "blocked_checkpoint_id": release["checkpoint_id"],
                 "blocked_checkpoint_key": release["checkpoint_key"],
