@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from pathlib import Path
 
 from app.continuity import (
     MANAGED_END,
@@ -106,3 +107,23 @@ def test_continuity_carries_only_bounded_incident_candidate() -> None:
 
     assert value["incident_learning"]["candidate"] == candidate
     assert "raw_log" not in str(value["incident_learning"])
+
+
+
+def test_real_project_t1_has_single_replaceable_continuity_block() -> None:
+    repo_root = Path(__file__).resolve().parents[3]
+    path = repo_root / "docs/project/current-state.md"
+    existing = path.read_text(encoding="utf-8")
+    assert existing.count(MANAGED_START) == 1
+    assert existing.count(MANAGED_END) == 1
+
+    first = render_managed_current_state(existing, proposal())
+    second = render_managed_current_state(first, proposal())
+    assert first == second  # idempotent; no growing history
+    assert first.count(MANAGED_START) == first.count(MANAGED_END) == 1
+    assert "No automated `pr_merged` continuity publication" not in first
+    assert "## Active PCP issues and owner attention" in first
+    assert "## Immediate next safe actions" in first
+    assert "## Standing safety boundary" in first
+    assert "Event: `job_terminal`" in first
+    assert len(first.encode("utf-8")) < 15000

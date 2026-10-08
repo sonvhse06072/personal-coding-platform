@@ -41,6 +41,13 @@ Memory/retrieval contract: docs/project/context-memory-architecture.md. The exis
 
 Current Human Owner attention: #562 requires an explicit approved review-governance choice before implementing a critical late-review eligibility path. Do not treat a normal doc hygiene PR as this approval.
 
+<!-- PCP:CONTINUITY:START -->
+## Automated continuity snapshot
+
+- No automated `pr_merged` continuity publication is recorded in this document revision.
+- A future bounded, exact-head, one-file continuity PR may replace **only this block** after its own CI/merge gate. This placeholder does not assert Runtime health, deployment, or a current lock.
+<!-- PCP:CONTINUITY:END -->
+
 ## Chợ Nhạc managed-project checkpoint
 
 - Active configured approved baseline: **pilot-v1-2026-10-04-dec033-r3**, source **aa8e68dd9aea6740de446151eb97615931de9b40**. Existing and new WorkOrders must respect their **own pinned revision**; do not silently advance or rewrite authority to follow newer main.
