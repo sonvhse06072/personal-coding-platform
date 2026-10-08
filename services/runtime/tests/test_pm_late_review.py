@@ -14,7 +14,7 @@ from pydantic import ValidationError
 from app import pm_late_review
 from app.adapters.base import AgentRun
 from app.pm_control import PMControlEnvelope
-from app.pm_late_review import LateReviewService, accepted_diff, writer_providers
+from app.pm_late_review import LateReviewService, LateReviewStore, accepted_diff, writer_providers
 from app.plan_orchestrator import PlanOrchestrator as CorePlanOrchestrator
 from app.pm_merge import LateReviewProof, evaluate_pm_merge
 from test_pm_merge import context
@@ -775,3 +775,37 @@ def test_fallback_disabled_does_not_consume_a_model_slot(tmp_path, monkeypatch):
     assert len(router.calls) == 1
     assert adapter.calls == []
     assert ledger.saved is None
+
+
+
+def test_orphan_claim_is_marked_uncertain_on_startup_without_replay(monkeypatch):
+    class Connection:
+        def __init__(self):
+            self.statements = []
+            self.committed = False
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def execute(self, statement, args):
+            self.statements.append((statement, args))
+            return self
+
+        def fetchall(self):
+            return [{"id": 7}, {"id": 8}]
+
+        def commit(self):
+            self.committed = True
+
+    conn = Connection()
+    store = LateReviewStore(SimpleNamespace(connect=lambda: conn))
+    monkeypatch.setattr(store, "ensure", lambda: None)
+    assert store.reconcile_orphan_claims() == 2
+    statement, _ = conn.statements[0]
+    assert "status='uncertain'" in statement
+    assert "WHERE status='claimed'" in statement
+    assert "runtime_restarted_before_review_finalization" in statement
+    assert conn.committed is True
