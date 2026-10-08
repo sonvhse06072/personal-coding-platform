@@ -264,6 +264,10 @@ def test_evaluation_fixture_passes():
     payload = json.loads(result.stdout)
     assert payload["passed"] is True
     assert payload["metrics"]["required_target_recall"] == 1.0
+    assert payload["metrics"]["required_content_recall"] == 1.0
+    assert payload["metrics"]["case_count"] >= 12
+    assert payload["metrics"]["composed_case_count"] >= 11
+    assert payload["metrics"]["mean_compose_ms"] >= 0
     assert payload["metrics"]["stale_historical_false_positive_rate"] == 0.0
     assert payload["metrics"]["authority_conflict_failure_rate"] == 0.0
     assert payload["metrics"]["abstention_accuracy"] == 1.0
@@ -360,3 +364,17 @@ def test_t1_stays_compact_and_does_not_accumulate_completed_chronology():
     assert "## Historical accepted platform / local state snapshot" not in content
     assert "## Generation-1 execution — active" not in content
     assert "GitHub/Runtime" in content
+
+
+def test_memory_evaluation_includes_content_and_project_scope_cases():
+    fixture = json.loads(
+        (ROOT / "config" / "context-memory-eval.json").read_text(encoding="utf-8")
+    )
+    cases = fixture["cases"]
+    assert any(case.get("required_content_contains") for case in cases)
+    assert any(case.get("expected_error_contains") == "project_id" for case in cases)
+    assert any(
+        case.get("kind") == "current"
+        and "hiện tại" in case["request"]["task"]["title"]
+        for case in cases
+    )
