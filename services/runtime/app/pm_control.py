@@ -154,6 +154,7 @@ class PMControlEnvelope(BaseModel):
             "worktree",
             "runtime_health",
             "late_review",
+            "reviewer_capacity",
         ]
     ] = Field(default_factory=list, max_length=8)
 
