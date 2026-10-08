@@ -44,8 +44,14 @@ Current Human Owner attention: #562 requires an explicit approved review-governa
 <!-- PCP:CONTINUITY:START -->
 ## Automated continuity snapshot
 
-- No automated `pr_merged` continuity publication is recorded in this document revision.
-- A future bounded, exact-head, one-file continuity PR may replace **only this block** after its own CI/merge gate. This placeholder does not assert Runtime health, deployment, or a current lock.
+- Event: `pr_merged`.
+- Project/job: `chonhac` / `057f6acff17b501eae3a673cbb6bbe36`.
+- Runtime state: `completed`; outcome: `accepted`.
+- WorkOrder: `EE-0-04-event-engagement-analytics`; branch: `ai/057f6acff17b`.
+- Human attention: interventions `1`, avoidable `0`, owner wait `502.9` seconds.
+- Execution evidence: first-pass `False`, repairs `5`, provider failures `0`, quota failures `0`.
+- Incident learning: candidate `incident:5ca80fdd5a5adbc9a082`; signals repair_churn, verification_retry_anomaly.
+- This section is mutable execution state only. Durable architecture/policy changes still require their normal reviewed Git path.
 <!-- PCP:CONTINUITY:END -->
 
 ## Chợ Nhạc managed-project checkpoint
