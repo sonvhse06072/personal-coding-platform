@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+import re
 from typing import Any
 
 from .pm_reassessment import baseline_covered_protected_authorized_signals
@@ -125,6 +126,52 @@ class LateReviewProof:
         )
 
 
+@dataclass(frozen=True)
+class PMChatReviewProof:
+    """Owner-delegated GitHub PM-chat evidence; NEVER cross-provider independence."""
+
+    attestation_id: int
+    project_id: str
+    plan_id: str
+    work_order_id: str
+    job_id: str
+    source_commit: str
+    branch: str
+    expected_head: str
+    pr_number: int
+    diff_hash: str
+    checkpoint_id: int
+    checkpoint_key: str
+    review_id: int
+    review_author: str
+    review_body_sha256: str
+    control_comment_id: int
+    verdict: str
+    review_mode: str = "pm_chat_manual_review"
+
+    def matches(self, plan: dict[str, Any], tracked: dict[str, Any], job: dict[str, Any]) -> bool:
+        result = _dict(job.get("result"))
+        diff = _dict(result.get("diff"))
+        return bool(
+            self.review_mode == "pm_chat_manual_review"
+            and self.attestation_id > 0 and self.control_comment_id > 0 and self.review_id > 0
+            and self.verdict == "pass" and bool(self.review_author)
+            and re.fullmatch(r"[0-9a-f]{64}", self.review_body_sha256)
+            and re.fullmatch(r"[0-9a-f]{64}", self.diff_hash)
+            and self.project_id == str(plan.get("project_id") or "")
+            and self.plan_id == str(plan.get("plan_id") or "")
+            and self.work_order_id == str(tracked.get("work_order_id") or "")
+            and self.job_id == str(tracked.get("job_id") or "")
+            and self.job_id == str(job.get("id") or "")
+            and self.source_commit == str(job.get("source_commit") or "")
+            and self.branch == str(job.get("branch") or "")
+            and self.expected_head == str(result.get("commit") or "")
+            and self.pr_number == int(tracked.get("pr_number") or 0)
+            and self.diff_hash == str(diff.get("diff_hash") or "")
+            and self.checkpoint_id > 0 and bool(self.checkpoint_key)
+        )
+
+
 def _dict(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
@@ -213,6 +260,7 @@ def evaluate_pm_merge(
     pr: dict[str, Any],
     current_ci: dict[str, Any] | None = None,
     late_review_proof: LateReviewProof | None = None,
+    pm_chat_review_proof: PMChatReviewProof | None = None,
 ) -> MergeEligibility:
     """Evaluate PM merge authority from durable evidence plus bounded live CI.
 
@@ -365,8 +413,14 @@ def evaluate_pm_merge(
             blockers.append("required_independent_review_not_passed")
         if review_policy.get("independent") and review_policy.get("independence_satisfied") is False:
             if not (
-                isinstance(late_review_proof, LateReviewProof)
-                and late_review_proof.matches(plan, tracked, job)
+                (
+                    isinstance(late_review_proof, LateReviewProof)
+                    and late_review_proof.matches(plan, tracked, job)
+                )
+                or (
+                    isinstance(pm_chat_review_proof, PMChatReviewProof)
+                    and pm_chat_review_proof.matches(plan, tracked, job)
+                )
             ):
                 blockers.append("required_review_independence_not_satisfied")
     elif review_policy.get("conditional_on_strong_evidence"):
@@ -402,6 +456,20 @@ def evaluate_pm_merge(
             late_review_proof.review_mode
             if isinstance(late_review_proof, LateReviewProof)
             and late_review_proof.matches(plan, tracked, job)
+            else None
+        ),
+        # A manual Owner-delegated review is recorded separately, never
+        # reclassified as independent model-provider provenance.
+        "pm_chat_review_attestation_id": (
+            pm_chat_review_proof.attestation_id
+            if isinstance(pm_chat_review_proof, PMChatReviewProof)
+            and pm_chat_review_proof.matches(plan, tracked, job)
+            else None
+        ),
+        "pm_chat_review_mode": (
+            "pm_chat_manual_review"
+            if isinstance(pm_chat_review_proof, PMChatReviewProof)
+            and pm_chat_review_proof.matches(plan, tracked, job)
             else None
         ),
         "risk_level": risk_level,

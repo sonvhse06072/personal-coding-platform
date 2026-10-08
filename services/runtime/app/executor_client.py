@@ -297,6 +297,18 @@ class DdevExecutorClient:
             _raise_for_status_with_detail(response)
             return response.json()
 
+    async def github_pull_request_review(
+        self, *, project_id: str, pr_number: int, review_id: int,
+    ) -> dict[str, Any]:
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.get(
+                f"{self.base}/v1/github/pm-bridge/pulls/{pr_number}/reviews/{review_id}",
+                params={"project_id": project_id},
+                headers=self.headers,
+            )
+            _raise_for_status_with_detail(response)
+            return response.json()
+
     async def github_merge_pull_request(
         self,
         *,

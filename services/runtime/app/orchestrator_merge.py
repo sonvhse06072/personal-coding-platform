@@ -10,6 +10,7 @@ from .plan_orchestrator import PlanOrchestrator as CorePlanOrchestrator
 from .pm_merge import evaluate_pm_merge
 from .pm_merge_audit import PMMergeAuditStore
 from .pm_late_review import LateReviewService
+from .pm_chat_review import PMChatReviewService
 
 
 class PlanOrchestrator(CorePlanOrchestrator):
@@ -25,6 +26,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
         super().__init__(storage, engine, store=store, progress_handoffs=progress_handoffs)
         self.merge_audit = PMMergeAuditStore(storage)
         self.late_reviews = LateReviewService(storage, engine, self)
+        self.pm_chat_reviews = PMChatReviewService(storage, engine, self)
 
     @staticmethod
     def _project_merge_config(project_id: str) -> dict[str, Any]:
@@ -230,6 +232,45 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 except Exception:
                     self._block_tracked(plan, tracked, "late_review_attestation_or_ci_invalid")
                     return
+            # Owner-delegated PM-chat review has separate provenance and a
+            # separate merge-gate proof. Never reclassify it as an independent
+            # model-provider review or accept both modes simultaneously.
+            pm_chat_review_proof = None
+            manual_release = detail.get("pm_chat_review_release")
+            if manual_release is not None:
+                if not isinstance(manual_release, dict) or release is not None:
+                    self._block_tracked(plan, tracked, "pm_chat_review_conflicting_release_modes")
+                    return
+                expected_head = str(result.get("commit") or "")
+                if (
+                    manual_release.get("head") != expected_head
+                    or manual_release.get("review_mode") != "pm_chat_manual_review"
+                ):
+                    self._block_tracked(plan, tracked, "pm_chat_review_release_head_or_mode_mismatch")
+                    return
+                try:
+                    pm_chat_review_proof = self.pm_chat_reviews.trusted_proof(
+                        plan=plan, tracked=tracked, job=job,
+                        attestation_id=int(manual_release["attestation_id"]),
+                        checkpoint_id=int(manual_release["checkpoint_id"]),
+                        checkpoint_key=str(manual_release["checkpoint_key"]),
+                    )
+                    if pm_chat_review_proof is None:
+                        raise RuntimeError("Missing owner-delegated PM-chat proof")
+                    await self.pm_chat_reviews.verify_live(
+                        pm_chat_review_proof, str(pr.get("repository") or ""),
+                    )
+                    current_ci = await self.engine.ddev.github_ci(
+                        project_id=str(plan["project_id"]), commit=expected_head,
+                    )
+                    if (
+                        current_ci.get("state") != "success"
+                        or current_ci.get("commit") != expected_head
+                    ):
+                        raise RuntimeError("PM-chat review fresh exact-head CI not successful")
+                except Exception:
+                    self._block_tracked(plan, tracked, "pm_chat_review_attestation_or_ci_invalid")
+                    return
             project = self._project_merge_config(str(plan["project_id"]))
             eligibility = evaluate_pm_merge(
                 project=project,
@@ -239,6 +280,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 pr=pr,
                 current_ci=current_ci,
                 late_review_proof=late_review_proof,
+                pm_chat_review_proof=pm_chat_review_proof,
             )
             decision = eligibility.model_dump()
 

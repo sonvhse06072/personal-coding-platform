@@ -531,6 +531,10 @@ def test_late_review_diagnostic_publishes_registry_only_capacity_floor(monkeypat
 
     storage = FakeStorage()
     storage.job["status"] = "completed"
+    storage.job["result"] = {
+        **dict(storage.job.get("result") or {}),
+        "diff": {"diff_hash": "d" * 64},
+    }
     engine = FakeEngine()
     orchestrator = FakeOrchestrator()
     orchestrator.late_reviews = SimpleNamespace(
@@ -576,6 +580,7 @@ def test_late_review_diagnostic_publishes_registry_only_capacity_floor(monkeypat
     assert '"max_writer_tier": "premium"' in body
     assert '"strict_higher_tier_registry_model_ids": []' in body
     assert '"capacity_is_live": false' in body
+    assert '"persisted_accepted_diff_sha256": "' + "d" * 64 + '"' in body
     assert "SECRET" not in body
 
 

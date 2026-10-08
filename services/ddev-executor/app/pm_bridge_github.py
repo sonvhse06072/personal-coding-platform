@@ -216,6 +216,48 @@ def pull_request(
     }
 
 
+@router.get("/pulls/{pr_number}/reviews/{review_id}", dependencies=[Depends(auth)])
+def pull_request_review(
+    pr_number: int,
+    review_id: int,
+    project_id: str = Query(..., min_length=1, max_length=200),
+) -> dict[str, Any]:
+    """Read one exact GitHub review through executor-owned credentials.
+
+    Runtime authenticates its owner-delegated PM-chat proof against this
+    GitHub response, not against arbitrary control-supplied review text.
+    """
+    if pr_number < 1 or review_id < 1:
+        raise HTTPException(422, "PR and review IDs must be positive")
+    delivery, repository = _repository(project_id)
+    try:
+        with delivery._client() as client:
+            response = client.get(
+                f"{delivery.base}/repos/{repository}/pulls/{pr_number}/reviews/{review_id}"
+            )
+            response.raise_for_status()
+            raw = response.json()
+        if int(raw.get("id") or 0) != review_id:
+            raise ValueError("GitHub review identity mismatch")
+        body = raw.get("body")
+        if not isinstance(body, str) or len(body.encode("utf-8")) > 16384:
+            raise ValueError("GitHub review body is missing or too large")
+    except (httpx.HTTPError, RuntimeError, ValueError, KeyError) as exc:
+        raise _github_error(exc) from exc
+    return {
+        "project_id": project_id,
+        "repository": repository,
+        "pr_number": pr_number,
+        "id": review_id,
+        "state": str(raw.get("state") or ""),
+        "commit_id": str(raw.get("commit_id") or ""),
+        "author": str((raw.get("user") or {}).get("login") or ""),
+        "body": body,
+        "submitted_at": raw.get("submitted_at"),
+        "html_url": raw.get("html_url"),
+    }
+
+
 @router.post("/pulls/{pr_number}/merge", dependencies=[Depends(auth)])
 def merge_pr(
     pr_number: int,

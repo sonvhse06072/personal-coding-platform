@@ -22,6 +22,7 @@ def test_known_authority_classes_are_distinct():
     assert classify_path("AGENTS.md") == "protected"
     assert classify_path("docs/project/business-strategy.md") == "protected"
     assert classify_path("config/project-baselines.yml") == "protected"
+    assert classify_path("config/pm-bridge.yml") == "protected"
     assert classify_path("docs/project/current-state.md") == "mutable"
     assert classify_path("docs/project/history/episodes.md") == "evidence"
     assert classify_path("docs/project/new-undocumented-policy.md") == "unclassified"
