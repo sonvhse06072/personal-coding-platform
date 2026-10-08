@@ -130,14 +130,16 @@ def _workflow_progress(status: str, progress: dict[str, Any]) -> dict[str, Any]:
     stage_percent, stage_label = _WORKFLOW_STAGE_PROGRESS.get(status, (0, "Pending"))
     milestone_percent = 0
     milestone_label = ""
-    if bool(progress.get("required_checks_passed", False)):
-        milestone_percent, milestone_label = 88, "required checks passed"
-    elif bool(progress.get("tests_passed", False)):
-        milestone_percent, milestone_label = 72, "tests passed"
-    elif bool(progress.get("agent_succeeded", False)):
-        milestone_percent, milestone_label = 55, "implementation produced"
-    elif int(progress.get("iteration", 0) or 0) > 0 or int(progress.get("model_calls", 0) or 0) > 0:
-        milestone_percent, milestone_label = 45, "execution started"
+    # Planner model/tool use is resource telemetry, not execution evidence.
+    # Until a durable transition out of planning, only the stage is valid.
+    # For paused jobs, retain explicit verified milestones when available.
+    if status not in {"queued", "routing", "planning"}:
+        if bool(progress.get("required_checks_passed", False)):
+            milestone_percent, milestone_label = 88, "required checks passed"
+        elif bool(progress.get("tests_passed", False)):
+            milestone_percent, milestone_label = 72, "tests passed"
+        elif bool(progress.get("agent_succeeded", False)):
+            milestone_percent, milestone_label = 55, "implementation produced"
 
     if status == "completed":
         percent = 100

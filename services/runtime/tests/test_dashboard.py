@@ -132,7 +132,9 @@ def test_job_snapshot_exposes_safe_runtime_telemetry_only():
         ("completed", {}, (100, "Completed", False)),
         ("blocked", {"tests_passed": True}, (72, "Paused · tests passed", True)),
         ("waiting_human", {"required_checks_passed": True}, (88, "Paused · required checks passed", True)),
-        ("interrupted", {"iteration": 1}, (45, "Paused · execution started", True)),
+        ("interrupted", {"iteration": 1}, (0, "Paused · workflow paused", True)),
+        ("waiting_human", {"model_calls": 2, "iteration": 1}, (0, "Paused · workflow paused", True)),
+        ("blocked", {"model_calls": 8, "iteration": 3}, (0, "Paused · workflow paused", True)),
     ],
 )
 def test_workflow_progress_is_stage_and_milestone_based(status, progress, expected):
@@ -144,6 +146,37 @@ def test_workflow_progress_is_stage_and_milestone_based(status, progress, expect
         "estimated": True,
         "paused": paused,
     }
+
+
+@pytest.mark.parametrize(
+    "progress",
+    [
+        {"model_calls": 5},
+        {"iteration": 2},
+        {"model_calls": 5, "iteration": 2, "tool_calls": 12, "elapsed_minutes": 15.0},
+        {"model_calls": 2, "agent_succeeded": True},
+        {"model_calls": 2, "tests_passed": True},
+        {"model_calls": 2, "required_checks_passed": True},
+    ],
+)
+def test_planning_progress_never_jumps_from_resource_or_stale_milestones(progress):
+    assert _workflow_progress("planning", progress) == {
+        "percent": 20,
+        "label": "Planning",
+        "estimated": True,
+        "paused": False,
+    }
+
+
+def test_queued_and_routing_do_not_inherit_later_stage_evidence():
+    for status, percent, label in [("queued", 5, "Queued"), ("routing", 10, "Routing")]:
+        progress = {"model_calls": 7, "iteration": 4, "agent_succeeded": True}
+        assert _workflow_progress(status, progress) == {
+            "percent": percent,
+            "label": label,
+            "estimated": True,
+            "paused": False,
+        }
 
 
 def test_workflow_progress_does_not_use_resource_consumption_as_completion():
