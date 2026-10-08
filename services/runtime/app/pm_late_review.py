@@ -273,6 +273,13 @@ def registered_review_capacity(job: dict[str, Any]) -> dict[str, Any]:
         }
 
     models = models_doc().get("models") or {}
+    critical_eligible_higher = sorted(
+        model_id for model_id in higher
+        if (
+            not models[model_id].get("allowed_profiles")
+            or "critical" in models[model_id]["allowed_profiles"]
+        )
+    )
     cross_provider_models = sorted(
         model_id
         for model_id, registered in models.items()
@@ -294,7 +301,8 @@ def registered_review_capacity(job: dict[str, Any]) -> dict[str, Any]:
         "writer_model_ids": benchmark["writer_model_ids"][:16],
         "max_writer_tier": _TIER_ORDER[benchmark["writer_max_tier_index"]],
         "max_writer_review_score": benchmark["writer_max_review_score"],
-        "eligible_higher_tier_model_ids": list(higher)[:12],
+        "strict_higher_tier_registry_model_ids": list(higher)[:12],
+        "critical_profile_higher_tier_registry_model_ids": critical_eligible_higher[:12],
         "cross_provider_registered_model_ids": cross_provider_models[:12],
         "capacity_is_live": False,
         "same_provider_fallback_enabled": _fallback_enabled(),
