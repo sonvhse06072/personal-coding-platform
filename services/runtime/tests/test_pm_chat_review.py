@@ -345,6 +345,8 @@ def _manual_service_fixture(monkeypatch):
         "branch": "ai/job-123456", "pr_number": 7,
         "checkpoint_id": 182, "checkpoint_key": "wo:blocked:key",
         "review_id": 45, "attestation_id": 91,
+        "action": "record_pm_chat_review",
+        "target_identity": lambda: {"job_id": "job-12345678", "review_id": 45},
     })
     repo = "acme/demo"
     review = {
@@ -409,6 +411,7 @@ def test_record_fetches_real_github_review_and_keeps_same_checkpoint(monkeypatch
 
 def test_release_rechecks_all_original_protected_gates_before_checkpoint(monkeypatch):
     service, envelope, project, plan, tracked, job, pr, review, orch = _manual_service_fixture(monkeypatch)
+    envelope.action = "release_pm_chat_review"
     monkeypatch.setattr(service, "trusted_proof", lambda **kwargs: proof())
     calls = {"transitions": [], "plans": []}
     async def live(_proof, _repo):
