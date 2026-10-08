@@ -6,6 +6,7 @@ consumed only through the constrained PM merge gate.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
@@ -283,6 +284,7 @@ class LateReviewService:
         self.engine = engine
         self.orchestrator = orchestrator
         self.store = LateReviewStore(storage)
+        self._tasks: set[asyncio.Task] = set()
 
     def _snapshot(self, envelope: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         plan_id = str(envelope.plan_id)
@@ -388,6 +390,19 @@ class LateReviewService:
                 "replayed": True, "head": envelope.expected_head,
             }
         attempt_id = int(attempt["id"])
+        task = asyncio.create_task(
+            self._execute_claim(envelope, job, extra, diff_text, identity, attempt_id)
+        )
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+        return {"status": "claimed", "attempt_id": attempt_id, "head": envelope.expected_head}
+
+    async def _execute_claim(
+        self, envelope: Any, job: dict[str, Any],
+        extra: dict[str, Any], diff_text: str,
+        identity: dict[str, Any], attempt_id: int,
+    ) -> dict[str, Any]:
+        """Run at most one reviewer outside the PM Bridge HTTP request lifetime."""
         choice: dict[str, Any] = {}
         try:
             provider_state = dict((job.get("checkpoint") or {}).get("provider_state") or {})
@@ -506,6 +521,14 @@ class LateReviewService:
                 result={"reason": "review_invocation_or_preflight_uncertain"},
             )
             return {"status": "uncertain", "attempt_id": attempt_id, "head": envelope.expected_head}
+
+    async def stop(self) -> None:
+        """Cancel in-flight reviews and wait for their durable uncertain audit."""
+        pending = tuple(self._tasks)
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
     def trusted_proof(
         self, *, plan: dict[str, Any], tracked: dict[str, Any],
