@@ -76,6 +76,24 @@ def evaluate(repo_root: Path, fixture: dict[str, Any]) -> dict[str, Any]:
             else:
                 missing.append(needle)
 
+        # Check that the *selected text* contains essential evidence; heading-only
+        # recall can pass even when the correct passage was clipped or omitted.
+        selected_text = "\n".join(str(item.get("content") or "") for item in selected).lower()
+        retrieved_text = "\n".join(
+            str(item.get("content") or "") for item in retrieved
+        ).lower()
+        required_content = list(case.get("required_content_contains") or [])
+        required_content_total += len(required_content)
+        missing_content = [
+            needle for needle in required_content
+            if str(needle).lower() not in selected_text
+        ]
+        required_content_hits += len(required_content) - len(missing_content)
+        forbidden_retrieved = [
+            needle for needle in case.get("forbidden_retrieved_content_contains") or []
+            if str(needle).lower() in retrieved_text
+        ]
+
         current_failure = False
         if case.get("kind") == "current":
             current_cases += 1
@@ -120,6 +138,8 @@ def evaluate(repo_root: Path, fixture: dict[str, Any]) -> dict[str, Any]:
                 "passed": not any(
                     [
                         missing,
+                        missing_content,
+                        forbidden_retrieved,
                         current_failure,
                         authority_failure,
                         unsupported_failure,
@@ -130,6 +150,8 @@ def evaluate(repo_root: Path, fixture: dict[str, Any]) -> dict[str, Any]:
                 "required_hits": case_required_hits,
                 "required_total": len(required),
                 "missing_required": missing,
+                "missing_required_content": missing_content,
+                "forbidden_retrieved_content": forbidden_retrieved,
                 "selected_chars": pack["selected_chars"],
                 "retrieved_count": len(retrieved),
                 "retrieved": [
@@ -152,8 +174,15 @@ def evaluate(repo_root: Path, fixture: dict[str, Any]) -> dict[str, Any]:
         )
 
     case_count = len(rows)
-    mean_selected = selected_chars_total / case_count if case_count else 0.0
+    mean_selected = selected_chars_total / composed_cases if composed_cases else 0.0
     target_recall = required_hits / required_total if required_total else 1.0
+    content_recall = (
+        required_content_hits / required_content_total if required_content_total else 1.0
+    )
+    mean_compose_ms = (
+        sum(compose_duration_ms) / len(compose_duration_ms)
+        if compose_duration_ms else 0.0
+    )
     stale_false_positive_rate = (
         stale_current_failures / current_cases if current_cases else 0.0
     )
@@ -170,7 +199,10 @@ def evaluate(repo_root: Path, fixture: dict[str, Any]) -> dict[str, Any]:
         "cases": rows,
         "metrics": {
             "case_count": case_count,
+            "composed_case_count": composed_cases,
             "required_target_recall": target_recall,
+            "required_content_recall": content_recall,
+            "mean_compose_ms": round(mean_compose_ms, 2),
             "stale_historical_false_positive_rate": stale_false_positive_rate,
             "authority_conflict_failure_rate": authority_conflict_failure_rate,
             "abstention_accuracy": abstention_accuracy,
@@ -184,6 +216,7 @@ def evaluate(repo_root: Path, fixture: dict[str, Any]) -> dict[str, Any]:
         },
         "passed": all(row["passed"] for row in rows)
         and target_recall == 1.0
+        and content_recall == 1.0
         and stale_false_positive_rate == 0.0
         and authority_conflict_failure_rate == 0.0
         and abstention_accuracy == 1.0
