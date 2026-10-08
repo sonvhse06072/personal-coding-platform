@@ -253,6 +253,83 @@ def test_exact_commit_diff_matches_persisted_hash_or_fails_closed(tmp_path):
         accepted_diff(job, tmp_path)
 
 
+
+def test_completed_direct_workspace_exact_diff_at_returned_main(tmp_path, monkeypatch):
+    # The original coding job has finished, so direct checkout is back on the
+    # source/main commit; the delivered head still exists in this Git database.
+    repo, source, head, digest = _repo(tmp_path)
+    isolated_root = tmp_path / "isolated"
+    isolated_root.mkdir()
+    job = {
+        "project_id": "chonhac",
+        "workspace": str(repo),
+        "source_commit": source,
+        "checkpoint": {"workspace_mode": "direct"},
+        "result": {"commit": head, "diff": {"diff_hash": digest}},
+    }
+    monkeypatch.setattr(
+        pm_late_review, "project_config",
+        lambda project_id: {
+            "path": str(repo),
+            "runtime": {"workspace_mode": "direct"},
+        },
+    )
+    monkeypatch.setenv("CODING_DIRECT_PROJECT_ROOT", str(repo))
+    _git(repo, "checkout", "--detach", source)
+    assert _git(repo, "rev-parse", "HEAD") == source
+    assert "review this exact diff" in accepted_diff(job, isolated_root)
+    assert _git(repo, "rev-parse", "HEAD") == source
+
+    job["result"]["diff"]["diff_hash"] = "0" * 64
+    with pytest.raises(RuntimeError, match="accepted_diff_mismatch"):
+        accepted_diff(job, isolated_root)
+
+
+def test_direct_workspace_requires_exact_mount_project_and_immutable_mode(tmp_path, monkeypatch):
+    repo, source, head, digest = _repo(tmp_path)
+    root = tmp_path / "isolated"
+    root.mkdir()
+    configured = {
+        "path": str(repo),
+        "runtime": {"workspace_mode": "direct"},
+    }
+    monkeypatch.setattr(pm_late_review, "project_config", lambda _id: configured)
+    monkeypatch.setenv("CODING_DIRECT_PROJECT_ROOT", str(repo))
+    job = {
+        "project_id": "chonhac",
+        "workspace": str(repo),
+        "source_commit": source,
+        "checkpoint": {"workspace_mode": "direct"},
+        "result": {"commit": head, "diff": {"diff_hash": digest}},
+    }
+    assert "review this exact diff" in accepted_diff(job, root)
+
+    # No generic exception for arbitrary absolute paths or a stale mount.
+    monkeypatch.setenv("CODING_DIRECT_PROJECT_ROOT", str(tmp_path))
+    with pytest.raises(RuntimeError, match="exact_diff_unavailable"):
+        accepted_diff(job, root)
+    monkeypatch.setenv("CODING_DIRECT_PROJECT_ROOT", str(repo))
+
+    configured["path"] = str(tmp_path)
+    with pytest.raises(RuntimeError, match="exact_diff_unavailable"):
+        accepted_diff(job, root)
+    configured["path"] = str(repo)
+
+    configured["runtime"]["workspace_mode"] = "isolated_clone"
+    with pytest.raises(RuntimeError, match="exact_diff_unavailable"):
+        accepted_diff(job, root)
+    configured["runtime"]["workspace_mode"] = "direct"
+
+    job["checkpoint"]["workspace_mode"] = "isolated_clone"
+    with pytest.raises(RuntimeError, match="exact_diff_unavailable"):
+        accepted_diff(job, root)
+    job["checkpoint"]["workspace_mode"] = "direct"
+
+    job["result"]["diff"]["diff_truncated"] = True
+    with pytest.raises(RuntimeError, match="exact_diff_unavailable"):
+        accepted_diff(job, root)
+
+
 class _FakeLedger:
     def __init__(self, *, created=True):
         self.created = created
