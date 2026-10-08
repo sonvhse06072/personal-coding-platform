@@ -221,18 +221,33 @@ def test_control_must_be_from_configured_owner_and_canonical_issue(monkeypatch):
     service.control_events = SimpleNamespace(get=lambda project_id, comment_id: {
         "author": "owner", "comment_id": 15, "issue_number": 63,
         "repository": "acme/demo", "body_sha256": "a" * 64,
+        "status": "dispatching", "action": "record_pm_chat_review",
+        "target_identity": {"job_id": "job-12345678", "review_id": 45},
     })
     assert service._owner_author("default") == "owner"
     assert service._control(
         project_id="default", comment_id=15, issue_number=63, owner="owner",
+        action="record_pm_chat_review", target_identity={"job_id": "job-12345678", "review_id": 45},
     )["author"] == "owner"
     with pytest.raises(RuntimeError, match="not_authorized"):
         service._control(
             project_id="default", comment_id=15, issue_number=5, owner="owner",
+            action="record_pm_chat_review", target_identity={"job_id": "job-12345678", "review_id": 45},
         )
     with pytest.raises(RuntimeError, match="not_authorized"):
         service._control(
             project_id="default", comment_id=16, issue_number=63, owner="owner",
+            action="record_pm_chat_review", target_identity={"job_id": "job-12345678", "review_id": 45},
+        )
+    with pytest.raises(RuntimeError, match="not_authorized"):
+        service._control(
+            project_id="default", comment_id=15, issue_number=63, owner="owner",
+            action="release_pm_chat_review", target_identity={"job_id": "job-12345678", "review_id": 45},
+        )
+    with pytest.raises(RuntimeError, match="not_authorized"):
+        service._control(
+            project_id="default", comment_id=15, issue_number=63, owner="owner",
+            action="record_pm_chat_review", target_identity={"job_id": "different", "review_id": 45},
         )
     monkeypatch.setattr(pm_chat_review, "bridge_project_config", lambda project_id: {
         "allowed_authors": ["owner"],
