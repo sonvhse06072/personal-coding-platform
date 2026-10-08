@@ -270,6 +270,8 @@ class PMControlEnvelope(BaseModel):
             and self.action not in {"release_late_independent_review", "release_pm_chat_review"}
         ):
             raise ValueError("Attestation id only belongs to late review release")
+        if self.review_id is not None and self.action != "record_pm_chat_review":
+            raise ValueError("GitHub review id is valid only for PM-chat review recording")
 
         if self.ready_work_order_ids:
             if any(
