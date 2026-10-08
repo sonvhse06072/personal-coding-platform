@@ -449,7 +449,8 @@ class LateReviewStore:
         with self.storage.connect() as conn:
             row = conn.execute(
                 """SELECT t.id,t.status,t.expected_head,t.checkpoint_id,t.reviewer_provider,
-                          t.reviewer_model,a.id AS attestation_id
+                          t.reviewer_model,a.id AS attestation_id,
+                          a.payload->>'review_mode' AS review_mode
                 FROM cp_pm_late_review_attempts t
                 LEFT JOIN cp_pm_late_review_attestations a ON a.attempt_id=t.id
                 WHERE t.plan_id=%s AND t.job_id=%s ORDER BY t.id DESC LIMIT 1""",
