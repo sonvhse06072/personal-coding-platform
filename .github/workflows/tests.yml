@@ -51,8 +51,17 @@ jobs:
     runs-on: [self-hosted, linux, x64]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
       - run: python -m pip install 'pytest>=8,<9' 'PyYAML>=6,<7'
+      - name: Enforce direct-PM documentation authority
+        if: github.event_name == 'pull_request'
+        env:
+          DOC_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          DOC_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          DOC_PR_BODY: ${{ github.event.pull_request.body }}
+        run: python scripts/check_project_doc_authority.py --base "$DOC_BASE_SHA" --head "$DOC_HEAD_SHA"
       - run: python -m pytest -q -p no:cacheprovider tests
