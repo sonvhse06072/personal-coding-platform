@@ -57,6 +57,53 @@ class MergeEligibility:
         return asdict(self)
 
 
+
+@dataclass(frozen=True)
+class LateReviewProof:
+    """Internal, store-verified attestation; never accepted from a PM control."""
+
+    attestation_id: int
+    plan_id: str
+    work_order_id: str
+    job_id: str
+    source_commit: str
+    branch: str
+    expected_head: str
+    pr_number: int
+    diff_hash: str
+    checkpoint_id: int
+    checkpoint_key: str
+    writer_providers: tuple[str, ...]
+    reviewer_provider: str
+    reviewer_model: str
+    verdict: str
+
+    def matches(self, plan: dict[str, Any], tracked: dict[str, Any], job: dict[str, Any]) -> bool:
+        result = _dict(job.get("result"))
+        accepted_diff = _dict(result.get("diff"))
+        return (
+            self.attestation_id > 0
+            and self.verdict == "pass"
+            and self.checkpoint_id > 0
+            and bool(self.checkpoint_key)
+            and bool(self.writer_providers)
+            and all(bool(provider) for provider in self.writer_providers)
+            and bool(self.reviewer_provider)
+            and self.reviewer_provider not in self.writer_providers
+            and bool(self.reviewer_model)
+            and self.plan_id == str(plan.get("plan_id") or "")
+            and self.work_order_id == str(tracked.get("work_order_id") or "")
+            and self.job_id == str(job.get("id") or "")
+            and self.job_id == str(tracked.get("job_id") or "")
+            and self.source_commit == str(job.get("source_commit") or "")
+            and self.branch == str(job.get("branch") or "")
+            and self.expected_head == str(result.get("commit") or "")
+            and self.pr_number == tracked.get("pr_number")
+            and self.diff_hash == str(accepted_diff.get("diff_hash") or "")
+            and len(self.diff_hash) == 64
+        )
+
+
 def _dict(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
 
@@ -144,6 +191,7 @@ def evaluate_pm_merge(
     job: dict[str, Any],
     pr: dict[str, Any],
     current_ci: dict[str, Any] | None = None,
+    late_review_proof: LateReviewProof | None = None,
 ) -> MergeEligibility:
     """Evaluate PM merge authority from durable evidence plus bounded live CI.
 
@@ -295,7 +343,11 @@ def evaluate_pm_merge(
         if str(review.get("verdict") or "") != "pass":
             blockers.append("required_independent_review_not_passed")
         if review_policy.get("independent") and review_policy.get("independence_satisfied") is False:
-            blockers.append("required_review_independence_not_satisfied")
+            if not (
+                isinstance(late_review_proof, LateReviewProof)
+                and late_review_proof.matches(plan, tracked, job)
+            ):
+                blockers.append("required_review_independence_not_satisfied")
     elif review_policy.get("conditional_on_strong_evidence"):
         verdict = str(review.get("verdict") or "")
         skipped = verdict == "skipped" and int(progress.get("review_skipped_strong_evidence", 0) or 0) > 0
@@ -319,6 +371,12 @@ def evaluate_pm_merge(
         "required_checks_passed": progress.get("required_checks_passed"),
         "review_verdict": review.get("verdict"),
         "review_required": bool(review_policy.get("required")),
+        "late_independent_review_attestation_id": (
+            late_review_proof.attestation_id
+            if isinstance(late_review_proof, LateReviewProof)
+            and late_review_proof.matches(plan, tracked, job)
+            else None
+        ),
         "risk_level": risk_level,
         "pm_merge_enabled": pm_merge_enabled,
         "changed_files": _changed_paths(job),
