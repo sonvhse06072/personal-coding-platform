@@ -160,6 +160,14 @@ _ACTIVE_JOB_STATUSES = {
     "delivering",
 }
 _TERMINAL_JOB_STATUSES = {"blocked", "failed", "interrupted", "cancelled"}
+# Terminal merge-gate denials must not be reopened by the same accepted child
+# delivery on each reconciliation tick. A changed outcome requires an explicit,
+# freshly revalidated recovery path; CI-green alone does not grant merge rights.
+_STABLE_MERGE_GATE_BLOCK_REASONS = {
+    "pm_merge_replay_rejected",
+    "uncertain_merge_attempt",
+    "pull_request_closed_without_merge",
+}
 _BUSY_WORK_ORDER_STATES = {"running", "awaiting_merge", "waiting_human"}
 _ATTENTION_WORK_ORDER_STATES = {"awaiting_merge", "blocked", "waiting_human"}
 _SUPERSEDEABLE_WORK_ORDER_STATES = {"awaiting_merge", "blocked", "pending", "waiting_human"}
@@ -1716,6 +1724,15 @@ class PlanOrchestrator:
             job_id = tracked.get("job_id")
 
             if state == "blocked" and job_id:
+                blocked_reason = str((tracked.get("detail") or {}).get("reason") or "")
+                if (
+                    blocked_reason.startswith("pm_merge_ineligible:")
+                    or blocked_reason in _STABLE_MERGE_GATE_BLOCK_REASONS
+                ):
+                    # The same completed child/PR cannot erase a later PM merge
+                    # denial. Reopening it here would loop through
+                    # blocked -> awaiting_merge -> blocked on every tick.
+                    continue
                 job = self.storage.get(str(job_id))
                 if job is not None and str(job.get("status") or "") == "completed":
                     result = dict(job.get("result") or {})
