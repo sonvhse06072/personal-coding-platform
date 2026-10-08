@@ -1659,6 +1659,7 @@ class PlanOrchestrator:
                 or not isinstance(release.get("head"), str)
                 or len(release["head"]) != 40
                 or not all(c in "0123456789abcdef" for c in release["head"])
+                or release["head"] != str(((job or {}).get("result") or {}).get("commit") or "")
             ):
                 raise RuntimeError("PM-chat review release requires exact Owner-delegated proof")
             evidence["pm_chat_review_proof"] = {
