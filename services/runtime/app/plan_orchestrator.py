@@ -1643,6 +1643,32 @@ class PlanOrchestrator:
                 "blocked_checkpoint_key": release["checkpoint_key"],
                 "expected_head": release["head"],
             }
+        if kind == "pm_chat_review_released":
+            release = (fields.get("detail") or {}).get("pm_chat_review_release")
+            if (
+                not isinstance(release, dict)
+                or type(release.get("attestation_id")) is not int
+                or release["attestation_id"] <= 0
+                or type(release.get("checkpoint_id")) is not int
+                or release["checkpoint_id"] <= 0
+                or not isinstance(release.get("checkpoint_key"), str)
+                or not release["checkpoint_key"].startswith("wo:blocked:")
+                or release.get("review_mode") != "pm_chat_manual_review"
+                or type(release.get("control_comment_id")) is not int
+                or release["control_comment_id"] <= 0
+                or not isinstance(release.get("head"), str)
+                or len(release["head"]) != 40
+                or not all(c in "0123456789abcdef" for c in release["head"])
+            ):
+                raise RuntimeError("PM-chat review release requires exact Owner-delegated proof")
+            evidence["pm_chat_review_proof"] = {
+                "review_mode": "pm_chat_manual_review",
+                "attestation_id": release["attestation_id"],
+                "blocked_checkpoint_id": release["checkpoint_id"],
+                "blocked_checkpoint_key": release["checkpoint_key"],
+                "expected_head": release["head"],
+                "release_control_comment_id": release["control_comment_id"],
+            }
         job_id = fields.get("job_id", tracked.get("job_id"))
         return self.store.transition_work_order(
             expected=tracked, kind=kind, state=state, evidence=evidence,
