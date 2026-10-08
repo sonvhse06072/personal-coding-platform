@@ -24,6 +24,7 @@ STOPWORDS = {
 
 T2_FILES = (
     "docs/project/architecture.md",
+    "docs/project/business-strategy.md",
     "docs/project/operating-model.md",
     "docs/project/efficiency-model.md",
     "docs/project/provider-policy.md",
@@ -127,71 +128,74 @@ T0_HEADINGS = {
 
 T0_PRIORITY = {
     "product_manager": (
+        "Core invariants",
         "Authority order",
         "Baseline authority preservation",
         "4. Authority hierarchy",
         "5. Human Owner authority",
         "6. Product Manager authority",
-        "Core invariants",
-        "Change discipline",
-        "Mandatory documentation continuity",
         "9. Trust and security invariants",
         "10. Verification and delivery invariants",
+        "Change discipline",
+        "Mandatory documentation continuity",
         "12. Change control",
         "13. Practicality rule",
     ),
     "developer": (
+        "Core invariants",
         "Authority order",
         "Baseline authority preservation",
         "4. Authority hierarchy",
         "5. Human Owner authority",
         "8. Agent-role principles",
-        "Core invariants",
-        "Change discipline",
-        "Mandatory documentation continuity",
         "9. Trust and security invariants",
         "10. Verification and delivery invariants",
+        "Change discipline",
+        "Mandatory documentation continuity",
         "12. Change control",
     ),
     "reviewer": (
+        "Core invariants",
         "Authority order",
         "Baseline authority preservation",
         "4. Authority hierarchy",
         "5. Human Owner authority",
         "8. Agent-role principles",
-        "Core invariants",
-        "Change discipline",
         "9. Trust and security invariants",
         "10. Verification and delivery invariants",
+        "Change discipline",
         "12. Change control",
     ),
     "debugger": (
+        "Core invariants",
         "Authority order",
         "Baseline authority preservation",
         "4. Authority hierarchy",
         "5. Human Owner authority",
-        "Core invariants",
-        "Change discipline",
         "9. Trust and security invariants",
         "10. Verification and delivery invariants",
+        "Change discipline",
         "12. Change control",
     ),
     "specialist": (
+        "Core invariants",
         "Authority order",
         "Baseline authority preservation",
         "4. Authority hierarchy",
         "5. Human Owner authority",
-        "Core invariants",
-        "Change discipline",
         "9. Trust and security invariants",
         "10. Verification and delivery invariants",
+        "Change discipline",
         "12. Change control",
     ),
 }
 
+
 CURRENT_INTENT_TERMS = {
     "current", "currently", "now", "active", "open", "today", "latest", "version",
     "state", "status", "next",
+    # Vietnamese status questions also need current-state precedence.
+    "hiện", "đang", "trạng", "mới", "nay",
 }
 
 HOST_PATH_RE = re.compile(
@@ -275,11 +279,8 @@ def _markdown_sections(source: str, tier: str, text: str) -> list[Section]:
 
     sections: list[Section] = []
     for ordinal, (start, level, heading) in enumerate(headings):
-        end = len(lines)
-        for next_start, next_level, _next_heading in headings[ordinal + 1 :]:
-            if next_level <= level:
-                end = next_start
-                break
+        # Non-overlapping blocks prevent an H1/parent from inheriting all matches.
+        end = headings[ordinal + 1][0] if ordinal + 1 < len(headings) else len(lines)
         block = "\n".join(lines[start:end]).strip()
         if block:
             sections.append(Section(source, tier, heading, level, block, ordinal))
@@ -319,6 +320,65 @@ def _clip(text: str, limit: int) -> tuple[str, bool]:
         return marker[:limit], True
     return text[: limit - len(marker)] + marker, True
 
+
+
+def _budgeted_t1_content(text: str, limit: int) -> tuple[str, list[str]]:
+    """Prioritize active state and next actions instead of a silent T1 prefix cut.
+
+    The source remains the original repository file; omitted heading identities
+    are reported for a required live verification rather than silently hidden.
+    """
+    if len(text) <= limit:
+        return text, []
+    if limit <= 0:
+        return "", []
+
+    blocks = re.split(r"(?=^## )", text, flags=re.MULTILINE)
+    if len(blocks) == 1:
+        return _clip(text, limit)[0], []
+
+    preamble = blocks[0].strip()
+    ranked: list[tuple[int, int, str, str]] = []
+    for index, block in enumerate(blocks[1:]):
+        heading = block.splitlines()[0].removeprefix("## ").strip()
+        lower = heading.lower()
+        if "resume" in lower:
+            priority = 0
+        elif "immediate" in lower or "next safe" in lower:
+            priority = 1
+        elif "active" in lower or "block" in lower:
+            priority = 2
+        elif "checkpoint" in lower or "github source" in lower:
+            priority = 3
+        elif "current" in lower:
+            priority = 4
+        elif "historical" in lower or "completed" in lower:
+            priority = 90
+        else:
+            priority = 10
+        ranked.append((priority, index, heading, block.strip()))
+
+    selected = [preamble] if preamble else []
+    remaining = max(limit - len(preamble), 0)
+    omitted: list[str] = []
+    for priority, _index, heading, block in sorted(ranked):
+        separator = 2 if selected else 0
+        available = remaining - separator
+        if available <= 0:
+            omitted.append(heading)
+            continue
+        if len(block) <= available:
+            selected.append(block)
+            remaining -= len(block) + separator
+        elif priority <= 2 and available >= 300:
+            clipped, _ = _clip(block, available)
+            selected.append(clipped)
+            remaining -= len(clipped) + separator
+            omitted.append(heading + " (partially selected)")
+        else:
+            omitted.append(heading)
+
+    return _clip("\n\n".join(selected), limit)[0], omitted
 
 def _query_text(request: dict[str, Any]) -> str:
     task = request.get("task") if isinstance(request.get("task"), dict) else {}
@@ -364,7 +424,13 @@ def _score_section(
     haystack = section.content.lower()
     heading_tokens = _tokens(section.heading)
     body_tokens = _tokens(section.content)
-    exact_hits = sorted(ref for ref in exact_refs if ref in haystack)
+    # File references must match the repository path itself. Paths normally
+    # do not appear inside the Markdown body, so body-only matching misses them.
+    source_path = section.source.lower()
+    exact_hits = sorted(
+        ref for ref in exact_refs
+        if ref in haystack or (ref.endswith(".md") and ref == source_path)
+    )
 
     heading_overlap = len(query_tokens & heading_tokens)
     body_overlap = len(query_tokens & body_tokens)
@@ -476,6 +542,20 @@ def _append_budgeted(
 
 def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
     repo_root = repo_root.resolve()
+    # Repository-local retrieval must not return PCP source for another project.
+    # PCP checkouts may have local directory names such as '-v1'.
+    source_project_id = (
+        "personal-coding-platform"
+        if (repo_root / "config/context-memory-eval.json").is_file()
+        and (repo_root / "docs/project/context-memory-architecture.md").is_file()
+        else repo_root.name
+    )
+    requested_project_id = str(request.get("project_id") or "").strip()
+    if requested_project_id and requested_project_id != source_project_id:
+        raise ValueError(
+            f"project_id {requested_project_id!r} does not match "
+            f"repository source {source_project_id!r}"
+        )
     role = str(request.get("role") or "specialist").strip().lower()
     role = {
         "pm": "product_manager",
@@ -507,13 +587,21 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
     pinned: list[dict[str, Any]] = []
     retrieved: list[dict[str, Any]] = []
 
-    t0_budget = min(7000, max(1200, int(budget_chars * 0.30)))
+    # At the normal 24K character budget, retain full role-critical governance
+    # before topical retrieval; reserve minimum T1 space for small budgets.
+    t0_budget = min(9500, max(2400, int(budget_chars * 0.40)), budget_chars - 800)
     t0_remaining = min(t0_budget, remaining)
     for section in _t0_sections(repo_root, role):
+        if t0_remaining < 300:
+            break
         t0_remaining = _append_budgeted(
             pinned,
             section=section,
-            content_limit=1400,
+            content_limit=(
+                2600 if section.heading == "Core invariants"
+                else 1800 if section.heading == "6. Product Manager authority"
+                else 1400
+            ),
             remaining=t0_remaining,
             reasons=["pinned_governance", f"role:{role}"],
             score=None,
@@ -522,17 +610,20 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
             break
     remaining -= t0_budget - t0_remaining
 
-    current_state = Section(
-        "docs/project/current-state.md",
-        "T1",
-        "Current Project State and Handoff",
-        1,
-        _read(repo_root, "docs/project/current-state.md"),
-        0,
-    )
+    t1_source = _read(repo_root, "docs/project/current-state.md")
+    t1_omitted_headings: list[str] = []
     if remaining > 0:
         t1_budget = min(12000, max(800, int(budget_chars * 0.45)))
         t1_budget = min(t1_budget, remaining)
+        t1_content, t1_omitted_headings = _budgeted_t1_content(t1_source, t1_budget)
+        current_state = Section(
+            "docs/project/current-state.md",
+            "T1",
+            "Current Project State and Handoff",
+            1,
+            t1_content,
+            0,
+        )
         t1_remaining = _append_budgeted(
             pinned,
             section=current_state,
@@ -542,6 +633,9 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
             score=None,
         )
         remaining -= t1_budget - t1_remaining
+        if t1_omitted_headings and pinned and pinned[-1]["tier"] == "T1":
+            pinned[-1]["truncated"] = True
+            pinned[-1]["reasons"].append("t1_sections_omitted")
 
     scored: list[tuple[int, int, Section, list[str]]] = []
     for section in _candidate_sections(repo_root):
@@ -576,7 +670,7 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "context_pack_version": 1,
-        "project_id": str(request.get("project_id") or ""),
+        "project_id": requested_project_id or source_project_id,
         "role": role,
         "task": _sanitize_value(
             request.get("task") if isinstance(request.get("task"), dict) else {}
@@ -599,6 +693,13 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
             "candidate_count": len(scored),
             "omitted_candidate_count": omitted,
             "current_intent": current_intent,
+            "core_governance_complete": any(
+                item["tier"] == "T0" and item["heading"] == "Core invariants"
+                and not item["truncated"]
+                for item in pinned
+            ),
+            "t1_omitted_section_count": len(t1_omitted_headings),
+            "t1_omitted_headings": _sanitize_value(t1_omitted_headings[:12]),
             "exact_references": [
                 _sanitize_content(value)
                 for value in sorted(exact_refs)
@@ -606,6 +707,7 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
         },
         "provenance": {
             "generated_from_head": _git_head(repo_root),
+            "source_project_id": source_project_id,
             "repository_root_name": repo_root.name,
             "sources_are_repository_relative": True,
         },
