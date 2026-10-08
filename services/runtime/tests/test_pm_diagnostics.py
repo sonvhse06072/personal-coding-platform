@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+
+import pytest
 from copy import deepcopy
 from types import SimpleNamespace
 from datetime import datetime, timezone
@@ -575,3 +577,70 @@ def test_late_review_diagnostic_publishes_registry_only_capacity_floor(monkeypat
     assert '"strict_higher_tier_registry_model_ids": []' in body
     assert '"capacity_is_live": false' in body
     assert "SECRET" not in body
+
+
+
+
+def test_reviewer_capacity_diagnostic_only_checks_completed_job_in_exact_blocked_gate(monkeypatch):
+    from app import pm_diagnostics as module
+
+    storage = FakeStorage()
+    storage.job["status"] = "completed"
+    engine = FakeEngine()
+    seen = []
+    async def fake_probe(*, job, router):
+        seen.append((job["id"], router))
+        return {
+            "status": "no_eligible_cross_provider_now",
+            "staffing_checked": True,
+            "staffing_is_model_invocation": False,
+        }
+    monkeypatch.setattr(module, "probe_reviewer_capacity", fake_probe)
+
+    class ExactBlockedStore(FakePlanStore):
+        def __init__(self):
+            super().__init__("chonhac")
+            self.reason = "pm_merge_ineligible:required_review_independence_not_satisfied"
+            self.plan_state = "blocked"
+
+        def orchestration(self, plan_id):
+            value = super().orchestration(plan_id)
+            return {**value, "status": self.plan_state} if value else None
+
+        def work_orders(self, plan_id):
+            return [{
+                "work_order_id": "WO-1",
+                "job_id": JOB_ID,
+                "state": "blocked",
+                "detail": {"reason": self.reason},
+            }]
+
+    orchestration = FakeOrchestrator()
+    orchestration.store = ExactBlockedStore()
+    service = PMDiagnosticsService(storage, engine, orchestration)
+
+    response = asyncio.run(service.collect_and_publish(
+        project_id="chonhac", issue_number=77, control_comment_id=184,
+        job_id=JOB_ID, plan_id="plan-1",
+        collectors=["reviewer_capacity"],
+    ))
+    assert response["status"] == "published"
+    assert response["collectors"] == ["reviewer_capacity"]
+    assert seen == [(JOB_ID, engine.router)]
+    body = engine.ddev.comments[-1]["body"]
+    assert "no_eligible_cross_provider_now" in body
+    assert '"staffing_is_model_invocation": false' in body
+
+    for state, reason in (
+        ("active", "pm_merge_ineligible:required_review_independence_not_satisfied"),
+        ("blocked", "unrelated_failure"),
+    ):
+        orchestration.store.plan_state = state
+        orchestration.store.reason = reason
+        with pytest.raises(RuntimeError, match="exact blocked merge gate"):
+            asyncio.run(service.collect_and_publish(
+                project_id="chonhac", issue_number=77,
+                control_comment_id=185, job_id=JOB_ID,
+                plan_id="plan-1", collectors=["reviewer_capacity"],
+            ))
+        assert len(seen) == 1

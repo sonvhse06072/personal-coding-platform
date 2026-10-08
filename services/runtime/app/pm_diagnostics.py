@@ -7,6 +7,7 @@ from typing import Any
 
 from .activity import public_event
 from .pm_late_review import registered_review_capacity
+from .pm_review_capacity_diagnostic import probe_reviewer_capacity
 from .work_order_checkpoints import verification_checkpoint_summary
 
 
@@ -498,6 +499,30 @@ class PMDiagnosticsService:
             # never be presented as an actually healthy/available reviewer.
             if str(job.get("status") or "") == "completed":
                 sections["late_review"]["capacity"] = registered_review_capacity(job)
+
+        if "reviewer_capacity" in collectors:
+            # Diagnostic-only: never schedule or approve a reviewer model run.
+            # Bind the live eligibility probe to the *same* blocked plan/job.
+            if not plan_id or job is None:
+                raise RuntimeError("reviewer_capacity requires plan_id and job_id")
+            if str(job.get("status") or "") != "completed":
+                raise RuntimeError("reviewer_capacity requires completed job")
+            plan = self.orchestrator.store.orchestration(plan_id)
+            tracked = [
+                item for item in self.orchestrator.store.work_orders(plan_id)
+                if str(item.get("job_id") or "") == str(job.get("id") or "")
+                and str(item.get("state") or "") == "blocked"
+                and str((item.get("detail") or {}).get("reason") or "")
+                    == "pm_merge_ineligible:required_review_independence_not_satisfied"
+            ]
+            if (
+                plan is None or str(plan.get("status") or "") != "blocked"
+                or len(tracked) != 1
+            ):
+                raise RuntimeError("reviewer_capacity requires exact blocked merge gate")
+            sections["reviewer_capacity"] = await probe_reviewer_capacity(
+                job=job, router=self.engine.router,
+            )
 
         if "recent_activity" in collectors:
             if job is None:
