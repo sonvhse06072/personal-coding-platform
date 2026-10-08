@@ -658,7 +658,7 @@ class GuardianHost:
             if target.get(key) not in (None, "", [])
         }
         error = event.get("error")
-        return {
+        projected = {
             "state": "present",
             "project_id": event.get("project_id"),
             "comment_id": event.get("comment_id"),
@@ -669,6 +669,44 @@ class GuardianHost:
             "created_at": event.get("created_at"),
             "updated_at": event.get("updated_at"),
         }
+        # Late reviewer staffing may legitimately return no_capacity without
+        # consuming a model-call claim. A control with status='executed' is
+        # *not* proof that any reviewer ran. Surface only fixed status/reason
+        # enums from the authenticated Runtime control ledger; never project
+        # raw model output, prompts, source or arbitrary error strings.
+        if (
+            event.get("action") == "request_late_independent_review"
+            and event.get("status") == "executed"
+        ):
+            outer = event.get("result")
+            outer = dict(outer) if isinstance(outer, dict) else {}
+            inner = outer.get("result")
+            inner = dict(inner) if isinstance(inner, dict) else {}
+            status = inner.get("status")
+            reason = inner.get("reason")
+            review_mode = inner.get("review_mode")
+            allowed_status = {
+                "claimed", "no_capacity", "staffing_error",
+                "policy_blocked", "passed", "failed", "uncertain",
+            }
+            allowed_reason = {
+                "cross_provider_staffing_untrusted_or_unavailable",
+                "cross_provider_staffing_violation",
+                "writer_strength_unverifiable",
+                "no_eligible_higher_tier_reviewer",
+                "higher_tier_staffing_untrusted_or_unavailable",
+            }
+            if status in allowed_status:
+                late_review_outcome = {"status": status}
+                if reason in allowed_reason:
+                    late_review_outcome["reason"] = reason
+                if review_mode in {"cross_provider", "same_provider_higher_tier"}:
+                    late_review_outcome["review_mode"] = review_mode
+                attempt_id = inner.get("attempt_id")
+                if type(attempt_id) is int and 0 < attempt_id <= 2**63 - 1:
+                    late_review_outcome["attempt_id"] = attempt_id
+                projected["late_review_outcome"] = late_review_outcome
+        return projected
 
     @staticmethod
     def _sanitize_pm_bridge_poll(raw: dict[str, Any]) -> dict[str, Any]:
