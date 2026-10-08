@@ -552,7 +552,7 @@ def test_late_review_diagnostic_publishes_registry_only_capacity_floor(monkeypat
             "source": "registered_models_not_live_capacity",
             "max_writer_tier": "premium",
             "max_writer_review_score": 9,
-            "eligible_higher_tier_model_ids": [],
+            "strict_higher_tier_registry_model_ids": [],
             "capacity_is_live": False,
         },
     )
@@ -572,6 +572,6 @@ def test_late_review_diagnostic_publishes_registry_only_capacity_floor(monkeypat
     body = engine.ddev.comments[-1]["body"]
     assert '"status": "no_capacity"' in body
     assert '"max_writer_tier": "premium"' in body
-    assert '"eligible_higher_tier_model_ids": []' in body
+    assert '"strict_higher_tier_registry_model_ids": []' in body
     assert '"capacity_is_live": false' in body
     assert "SECRET" not in body
