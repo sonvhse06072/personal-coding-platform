@@ -15,6 +15,7 @@ from app import pm_late_review
 from app.adapters.base import AgentRun
 from app.pm_control import PMControlEnvelope
 from app.pm_late_review import LateReviewService, accepted_diff, writer_providers
+from app.plan_orchestrator import PlanOrchestrator as CorePlanOrchestrator
 from app.pm_merge import LateReviewProof, evaluate_pm_merge
 from test_pm_merge import context
 
@@ -55,7 +56,7 @@ def _proof(values):
         source_commit=job["source_commit"], branch=job["branch"],
         expected_head=job["result"]["commit"], pr_number=tracked["pr_number"],
         diff_hash=job["result"]["diff"]["diff_hash"],
-        checkpoint_id=182, checkpoint_key="blocked:exact",
+        checkpoint_id=182, checkpoint_key="wo:blocked:exact",
         writer_providers=("openai",), reviewer_provider="google",
         reviewer_model="model-review", verdict="pass",
     )
@@ -111,7 +112,7 @@ def _envelope(action="request_late_independent_review", **overrides):
         "plan_id": "plan-1", "work_order_id": "WO-1",
         "job_id": "job-12345678", "source_commit": "a" * 40,
         "expected_head": "b" * 40, "branch": "ai/job-123456",
-        "pr_number": 7, "checkpoint_id": 182, "checkpoint_key": "blocked:exact",
+        "pr_number": 7, "checkpoint_id": 182, "checkpoint_key": "wo:blocked:exact",
     }
     fields.update(overrides)
     return PMControlEnvelope.model_validate(fields)
@@ -325,7 +326,7 @@ def test_snapshot_requires_exact_blocked_checkpoint_job_and_delivery():
     job["result"]["route"]["strategy"]["review_policy"]["independence_satisfied"] = False
     job["result"]["review"]["protocol_valid"] = True
     checkpoint = {
-        "id": 182, "checkpoint_key": "blocked:exact", "state": "blocked",
+        "id": 182, "checkpoint_key": "wo:blocked:exact", "state": "blocked",
         "kind": "blocked", "job_id": job["id"], "evidence": {"reason": reason},
     }
     class FakePlanStore:
@@ -409,3 +410,46 @@ def test_release_checks_full_pm_gates_before_transition(monkeypatch):
     with pytest.raises(RuntimeError, match="merge_gate_still_blocked"):
         asyncio.run(service.release(envelope))
     assert decisions == []
+
+
+
+def test_release_transition_seals_attestation_in_immutable_checkpoint():
+    _, _, tracked, job, pr = context()
+    tracked["state"] = "blocked"
+    captured = []
+    class CaptureStore:
+        def transition_work_order(self, **kwargs):
+            captured.append(kwargs)
+            return {"id": 301}
+    facade = SimpleNamespace(
+        storage=SimpleNamespace(get=lambda job_id: job),
+        store=CaptureStore(),
+    )
+    release = {
+        "attestation_id": 77,
+        "checkpoint_id": 182,
+        "checkpoint_key": "wo:blocked:exact",
+        "head": job["result"]["commit"],
+    }
+    CorePlanOrchestrator._checkpoint_transition(
+        facade, tracked, kind="late_review_released",
+        state="awaiting_merge", job=job, pr=pr,
+        detail={"late_review_release": release},
+    )
+    proof = captured[0]["evidence"]["late_independent_review"]
+    assert proof == {
+        "attestation_id": 77,
+        "blocked_checkpoint_id": 182,
+        "blocked_checkpoint_key": "wo:blocked:exact",
+        "expected_head": job["result"]["commit"],
+    }
+
+    captured.clear()
+    for invalid in (None, {}, {"attestation_id": 77}, {**release, "head": "c"}):
+        with pytest.raises(RuntimeError, match="requires exact attested checkpoint"):
+            CorePlanOrchestrator._checkpoint_transition(
+                facade, tracked, kind="late_review_released",
+                state="awaiting_merge", job=job, pr=pr,
+                detail={"late_review_release": invalid},
+            )
+        assert not captured
