@@ -460,6 +460,47 @@ Risk proportionality:
 - complex: strong independent reviewer;
 - critical/security/architecture: different-model/provider review required if eligible capacity exists.
 
+### Bounded late reviewer recovery — PCP #562 (Owner-approved 2026-10-08)
+
+Khi một WorkOrder đã hoàn tất, PR còn mở và CI đúng commit PASS nhưng
+PM merge bị chặn bởi `required_review_independence_not_satisfied`, PM
+có thể kích hoạt **một review bổ sung, chỉ đọc, trên cùng job và exact head**
+qua PM Bridge; không mở job mới, không reset counters và không sửa
+`review_policy.independence_satisfied` của route gốc.
+
+1. **Ưu tiên `cross_provider`:** reviewer ở provider chưa từng tham gia viết
+   code. Nếu Router tìm được reviewer hợp lệ, không sử dụng fallback.
+2. **Fallback `same_provider_higher_tier`:** chỉ khi Router xác nhận **không
+   có reviewer khác provider đủ điều kiện**. Model fallback phải khác tất cả
+   contributor model ID, thuộc một provider đã viết code, có tier **cao hơn
+   tuyệt đối** và năng lực `capabilities.review` **cao hơn tuyệt đối** mức
+   cao nhất của tất cả model đã viết code. So sánh dựa trên model registry
+   có xác minh, không dựa vào tên/nhận định của agent. Thứ tự tier:
+   `utility < balanced < strong < premium < frontier`.
+3. Không fallback sau lỗi mạng/Router, output sai protocol, kết quả FAIL,
+   timeout hoặc sai metadata reviewer. Nếu không có model mạnh hơn, giữ
+   `no_capacity` và chỉ kiểm tra lại capacity bằng PM control mới sau khi
+   nguồn lực thay đổi; chưa tiêu hao slot model trước khi claim.
+4. Mỗi exact head + blocked checkpoint có **tối đa một** model invocation
+   đã claim. PASS/FAIL được chứng thực bất biến với `review_mode`, model,
+   provider và nguồn diff; `uncertain` không được phát lại. Review diễn ra
+   trên checkout cô lập, read-only. Chính sách fallback ở
+   `config/routing-policy.yml` là opt-in và có version.
+5. Chỉ khi có attestation PASS hợp lệ, PM mới gửi control release trùng
+   danh tính plan/WO/job/PR/source/head/checkpoint. Runtime đối chiếu lại
+   tier/capability, PR, fresh exact-head CI, tất cả Human Owner protected
+   approvals, rồi mới cho `blocked → awaiting_merge` qua PM merge audit
+   sẵn có. **Same-provider higher-tier không được ghi nhận là đã đạt
+   cross-provider independence.**
+6. Guardian phải tính review attempt đang `claimed` vào active work;
+   không rollout khi model đang review. Hai control:
+   `request_late_independent_review`, `release_late_independent_review`;
+   PM Bridge collector `late_review` công bố trạng thái và mode đã kiểm chứng.
+
+Governance reference: [PCP #562](https://github.com/sonvhse06072/personal-coding-platform/issues/562),
+Owner amendment comment #6053915604. Human Owner review vẫn bắt buộc nếu
+protected decision chưa được phê duyệt hoặc merge còn blocker khác.
+
 Reviewer/developer dialogue may use a small bounded number of finding -> response/repair -> re-check rounds. Persistent disagreement is summarized to PM rather than debated recursively.
 
 Do not recursively review reviewers by default.
