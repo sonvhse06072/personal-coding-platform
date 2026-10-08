@@ -256,9 +256,19 @@ def _service(tmp_path, monkeypatch, *, verdict="PASS", provider="google", create
     return service, ledger, router, adapter, envelope
 
 
+async def _execute(service, envelope):
+    received = await service.request(envelope)
+    active = tuple(service._tasks)
+    if active:
+        completed = await asyncio.gather(*active)
+        return received, completed[0]
+    return received, received
+
+
 def test_late_review_one_real_distinct_provider_pass_is_attested(tmp_path, monkeypatch):
     service, ledger, router, adapter, envelope = _service(tmp_path, monkeypatch)
-    result = asyncio.run(service.request(envelope))
+    request, result = asyncio.run(_execute(service, envelope))
+    assert request["status"] == "claimed"
     assert result["status"] == "passed"
     assert result["attestation_id"] == 120
     assert ledger.saved["attestation"]["expected_head"] == envelope.expected_head
@@ -269,7 +279,7 @@ def test_late_review_one_real_distinct_provider_pass_is_attested(tmp_path, monke
 
 def test_duplicate_late_review_claim_does_not_spend_model_call(tmp_path, monkeypatch):
     service, ledger, router, adapter, envelope = _service(tmp_path, monkeypatch, created=False)
-    result = asyncio.run(service.request(envelope))
+    request, result = asyncio.run(_execute(service, envelope))
     assert result["replayed"] is True
     assert result["status"] == "claimed"
     assert router.calls == []
@@ -280,7 +290,7 @@ def test_same_provider_reviewer_never_invoked(tmp_path, monkeypatch):
     service, ledger, router, adapter, envelope = _service(
         tmp_path, monkeypatch, provider="openai",
     )
-    result = asyncio.run(service.request(envelope))
+    request, result = asyncio.run(_execute(service, envelope))
     assert result["status"] == "no_capacity"
     assert ledger.saved["attestation"] is None
     assert adapter.calls == []
@@ -288,7 +298,7 @@ def test_same_provider_reviewer_never_invoked(tmp_path, monkeypatch):
 
 def test_late_review_structured_fail_and_contradictory_pass_are_not_attested(tmp_path, monkeypatch):
     service, ledger, router, adapter, envelope = _service(tmp_path, monkeypatch, verdict="FAIL")
-    result = asyncio.run(service.request(envelope))
+    request, result = asyncio.run(_execute(service, envelope))
     assert result["status"] == "failed"
     assert ledger.saved["attestation"] is None
     # A contradictory reviewer output cannot smuggle PASS through REVIEW_JSON.
@@ -296,6 +306,6 @@ def test_late_review_structured_fail_and_contradictory_pass_are_not_attested(tmp
         tmp_path / "next", monkeypatch, verdict="PASS",
     )
     adapter2.output = adapter2.output.replace("PASS\n", "FAIL\n", 1)
-    result2 = asyncio.run(service2.request(envelope2))
+    request2, result2 = asyncio.run(_execute(service2, envelope2))
     assert result2["status"] == "uncertain"
     assert ledger2.saved["attestation"] is None
