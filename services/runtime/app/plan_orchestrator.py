@@ -1613,6 +1613,30 @@ class PlanOrchestrator:
         if job is None and tracked.get("job_id"):
             job = self.storage.get(str(tracked["job_id"]))
         evidence = checkpoint_evidence(tracked, job, pr=pr, reason=reason)
+        if kind == "late_review_released":
+            release = (fields.get("detail") or {}).get("late_review_release")
+            if (
+                not isinstance(release, dict)
+                or type(release.get("attestation_id")) is not int
+                or release["attestation_id"] <= 0
+                or type(release.get("checkpoint_id")) is not int
+                or release["checkpoint_id"] <= 0
+                or not isinstance(release.get("checkpoint_key"), str)
+                or not release["checkpoint_key"].startswith("wo:blocked:")
+                or not isinstance(release.get("head"), str)
+                or len(release["head"]) != 40
+                or not all(c in "0123456789abcdef" for c in release["head"])
+            ):
+                raise RuntimeError("Late review release requires exact attested checkpoint evidence")
+            # Evidence is checkpoint-store-owned: the caller cannot forge this
+            # via generic transition fields. Attestation was independently
+            # revalidated by the late-review service before reaching here.
+            evidence["late_independent_review"] = {
+                "attestation_id": release["attestation_id"],
+                "blocked_checkpoint_id": release["checkpoint_id"],
+                "blocked_checkpoint_key": release["checkpoint_key"],
+                "expected_head": release["head"],
+            }
         job_id = fields.get("job_id", tracked.get("job_id"))
         return self.store.transition_work_order(
             expected=tracked, kind=kind, state=state, evidence=evidence,
