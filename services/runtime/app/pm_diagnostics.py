@@ -222,6 +222,43 @@ def _collaboration_summary(threads: list[Any]) -> list[dict[str, Any]]:
     return result
 
 
+_KNOWN_PM_MERGE_BLOCKERS = frozenset({
+    "canonical_bounded_direct_intake_required",
+    "ci_commit_mismatch",
+    "ci_not_successful",
+    "conditional_review_has_no_pass_or_strong_evidence_skip",
+    "current_delivery_ci_evidence_not_success",
+    "current_github_ci_commit_mismatch",
+    "delivery_not_finalized",
+    "delivery_pr_branch_mismatch",
+    "delivery_pr_head_mismatch",
+    "delivery_pr_missing",
+    "delivery_pr_number_mismatch",
+    "delivery_state_not_mergeable",
+    "deterministic_verification_not_passed",
+    "dry_run_not_mergeable",
+    "fresh_exact_head_ci_not_successful",
+    "job_identity_mismatch",
+    "job_not_completed",
+    "job_result_not_accepted",
+    "missing_job_branch",
+    "missing_source_commit",
+    "missing_verified_commit",
+    "persisted_ci_commit_mismatch",
+    "pm_evidence_has_unresolved_risks",
+    "pull_request_base_mismatch",
+    "pull_request_branch_mismatch",
+    "pull_request_head_mismatch",
+    "pull_request_identity_mismatch",
+    "pull_request_not_open_unmerged",
+    "required_checks_not_passed",
+    "required_independent_review_not_passed",
+    "required_review_independence_not_satisfied",
+    "unexpected_scope",
+    "work_order_identity_mismatch",
+})
+
+
 def _safe_merge_gate_reason(
     snapshot: dict[str, Any] | None,
     progress: dict[str, Any] | None,
@@ -258,8 +295,10 @@ def _safe_merge_gate_reason(
         "pull_request_closed_without_merge",
     }:
         return reason
-    if re.fullmatch(r"pm_merge_ineligible:[a-z][a-z0-9_]{0,95}", reason):
-        return reason
+    if reason.startswith("pm_merge_ineligible:"):
+        suffix = reason.partition(":")[2]
+        if suffix in _KNOWN_PM_MERGE_BLOCKERS:
+            return reason
     return None
 
 
