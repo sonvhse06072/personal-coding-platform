@@ -592,6 +592,8 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
     t0_budget = min(9500, max(2400, int(budget_chars * 0.40)), budget_chars - 800)
     t0_remaining = min(t0_budget, remaining)
     for section in _t0_sections(repo_root, role):
+        if t0_remaining < 300:
+            break
         t0_remaining = _append_budgeted(
             pinned,
             section=section,
@@ -691,6 +693,11 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
             "candidate_count": len(scored),
             "omitted_candidate_count": omitted,
             "current_intent": current_intent,
+            "core_governance_complete": any(
+                item["tier"] == "T0" and item["heading"] == "Core invariants"
+                and not item["truncated"]
+                for item in pinned
+            ),
             "t1_omitted_section_count": len(t1_omitted_headings),
             "t1_omitted_headings": _sanitize_value(t1_omitted_headings[:12]),
             "exact_references": [
