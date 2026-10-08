@@ -6,3 +6,8 @@ projects:
       - sonvhse06072
     marker: "<!-- coding-platform:pm-plan:v1 -->"
     max_comments_per_poll: 100
+    # Explicit Owner delegation only. This is NOT model-provider independence;
+    # the authenticated GitHub review + exact-diff attestation is auditable.
+    pm_chat_review:
+      enabled: true
+      owner_author: sonvhse06072
