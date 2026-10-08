@@ -176,14 +176,20 @@ class PMChatReviewService:
             raise RuntimeError("pm_chat_review_not_owner_authorized_for_project")
         return author
 
-    def _control(self, *, project_id: str, comment_id: int, issue_number: int, owner: str) -> dict[str, Any]:
+    def _control(
+        self, *, project_id: str, comment_id: int, issue_number: int,
+        owner: str, action: str, target_identity: dict[str, Any],
+    ) -> dict[str, Any]:
         record = self.control_events.get(project_id, comment_id)
         if (
             not record or record.get("author") != owner
             or int(record.get("issue_number") or 0) != issue_number
             or int(record.get("comment_id") or 0) != comment_id
+            or record.get("status") != "dispatching"
+            or record.get("action") != action
+            or record.get("target_identity") != target_identity
         ):
-            raise RuntimeError("pm_chat_review_control_author_not_authorized")
+            raise RuntimeError("pm_chat_review_control_author_or_identity_not_authorized")
         return dict(record)
 
     async def _capacity(self, job: dict[str, Any]) -> str:
@@ -251,6 +257,7 @@ class PMChatReviewService:
         control = self._control(
             project_id=envelope.project_id, comment_id=comment_id,
             issue_number=issue_number, owner=owner,
+            action=envelope.action, target_identity=envelope.target_identity(),
         )
         plan, _, job, extra, _ = await self.orchestrator.late_reviews._preflight(envelope)
         if str(plan.get("ticket_id") or "") != f"GH-{issue_number}":
@@ -359,6 +366,7 @@ class PMChatReviewService:
         control = self._control(
             project_id=envelope.project_id, comment_id=comment_id,
             issue_number=issue_number, owner=owner,
+            action=envelope.action, target_identity=envelope.target_identity(),
         )
         plan, tracked, job, extra, _ = await self.orchestrator.late_reviews._preflight(envelope)
         if (
