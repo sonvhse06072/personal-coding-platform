@@ -3,6 +3,7 @@ from app import main
 
 def test_active_engineering_count_endpoint_uses_authoritative_storage(monkeypatch):
     monkeypatch.setattr(main.storage, "count_active_engineering_jobs", lambda: 1)
+    monkeypatch.setattr(main.plan_orchestrator.late_reviews.store, "active_count", lambda: 0)
 
     response = main.active_engineering_work_count()
 

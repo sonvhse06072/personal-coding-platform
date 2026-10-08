@@ -209,7 +209,7 @@ def test_frontier_codex_stays_manual_only() -> None:
 
 def test_automatic_policy_ceilings_remain_low_medium_high_only() -> None:
     policy = get_config()["policy"]
-    assert policy["version"] == 20
+    assert policy["version"] == 21
     assert {
         profile: config.get("reasoning_ceiling", {}).get("executor")
         for profile, config in policy["profiles"].items()

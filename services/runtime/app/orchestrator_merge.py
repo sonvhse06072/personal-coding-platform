@@ -9,6 +9,7 @@ from .continuity import render_managed_section
 from .plan_orchestrator import PlanOrchestrator as CorePlanOrchestrator
 from .pm_merge import evaluate_pm_merge
 from .pm_merge_audit import PMMergeAuditStore
+from .pm_late_review import LateReviewService
 
 
 class PlanOrchestrator(CorePlanOrchestrator):
@@ -23,6 +24,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
     def __init__(self, storage: Any, engine: Any, *, store: Any | None = None, progress_handoffs: Any = None) -> None:
         super().__init__(storage, engine, store=store, progress_handoffs=progress_handoffs)
         self.merge_audit = PMMergeAuditStore(storage)
+        self.late_reviews = LateReviewService(storage, engine, self)
 
     @staticmethod
     def _project_merge_config(project_id: str) -> dict[str, Any]:
@@ -46,7 +48,16 @@ class PlanOrchestrator(CorePlanOrchestrator):
 
     async def start(self) -> None:
         self.merge_audit.ensure()
+        self.late_reviews.store.ensure()
+        # Runtime startup follows RuntimeEngine.start(), which cancels host
+        # orphan agents. One former 'claimed' attempt may have reached a model:
+        # record uncertainty without repeating it or forever blocking Guardian.
+        self.late_reviews.store.reconcile_orphan_claims()
         await super().start()
+
+    async def stop(self) -> None:
+        await self.late_reviews.stop()
+        await super().stop()
 
     async def _recover_uncertain_merge(
         self,
@@ -190,6 +201,35 @@ class PlanOrchestrator(CorePlanOrchestrator):
                         # window. Do not turn an incomplete observation into a
                         # permanent orchestration block.
                         continue
+            late_review_proof = None
+            release = detail.get("late_review_release")
+            if isinstance(release, dict):
+                expected_head = str(result.get("commit") or "")
+                if release.get("head") != expected_head:
+                    self._block_tracked(plan, tracked, "late_review_release_head_mismatch")
+                    return
+                try:
+                    late_review_proof = self.late_reviews.trusted_proof(
+                        plan=plan, tracked=tracked, job=job,
+                        attestation_id=int(release["attestation_id"]),
+                        checkpoint_id=int(release["checkpoint_id"]),
+                        checkpoint_key=str(release["checkpoint_key"]),
+                    )
+                    if late_review_proof is None:
+                        raise RuntimeError("Missing late-review proof")
+                    # Late recovery always uses a fresh exact-head CI observation,
+                    # even if persisted delivery already recorded CI success.
+                    current_ci = await self.engine.ddev.github_ci(
+                        project_id=str(plan["project_id"]), commit=expected_head,
+                    )
+                    if (
+                        current_ci.get("state") != "success"
+                        or current_ci.get("commit") != expected_head
+                    ):
+                        raise RuntimeError("Late-review fresh exact-head CI is not successful")
+                except Exception:
+                    self._block_tracked(plan, tracked, "late_review_attestation_or_ci_invalid")
+                    return
             project = self._project_merge_config(str(plan["project_id"]))
             eligibility = evaluate_pm_merge(
                 project=project,
@@ -198,6 +238,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
                 job=job,
                 pr=pr,
                 current_ci=current_ci,
+                late_review_proof=late_review_proof,
             )
             decision = eligibility.model_dump()
 

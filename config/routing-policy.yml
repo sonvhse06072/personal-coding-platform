@@ -1,4 +1,4 @@
-version: 20
+version: 21
 complexity_weights:
   scope: 0.18
   dependency_depth: 0.1
@@ -57,6 +57,11 @@ telemetry_calibration:
   multiplier_min: 0.75
   multiplier_max: 1.75
 review_policy:
+  # PCP #562 Owner-approved fallback is *not* cross-provider independence.
+  # Used only for one late, exact-head PM merge recovery after explicitly
+  # confirmed cross-provider reviewer capacity is unavailable.
+  late_review_recovery:
+    same_provider_higher_tier_fallback_enabled: true
   # Review spend is policy/calibration data, not a model identity decision.
   # Router still staffs the logical reviewer role from current provider/model
   # eligibility and Runtime remains responsible for deterministic acceptance.

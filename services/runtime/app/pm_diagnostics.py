@@ -468,6 +468,32 @@ class PMDiagnosticsService:
                     progress["merge_gate_reason"] = merge_gate_reason
             sections["plan_progress"] = progress
 
+        if "late_review" in collectors:
+            if not plan_id or job is None:
+                raise RuntimeError("late_review collector requires plan_id and job_id")
+            service = getattr(self.orchestrator, "late_reviews", None)
+            if service is None:
+                raise RuntimeError("late_review service unavailable")
+            attempt = service.store.status(plan_id=plan_id, job_id=str(job["id"]))
+            sections["late_review"] = (
+                {
+                    "status": attempt.get("status"),
+                    "attempt_id": attempt.get("id"),
+                    "head": attempt.get("expected_head"),
+                    "blocked_checkpoint_id": attempt.get("checkpoint_id"),
+                    "reviewer_provider": _safe_identity(attempt.get("reviewer_provider"), 100),
+                    "reviewer_model": _safe_identity(attempt.get("reviewer_model"), 100),
+                    "review_mode": (
+                        attempt.get("review_mode")
+                        if attempt.get("review_mode") in {
+                            "cross_provider", "same_provider_higher_tier",
+                        } else None
+                    ),
+                    "attestation_id": attempt.get("attestation_id"),
+                }
+                if attempt else {"status": "not_requested"}
+            )
+
         if "recent_activity" in collectors:
             if job is None:
                 raise RuntimeError("recent_activity collector requires job_id")
