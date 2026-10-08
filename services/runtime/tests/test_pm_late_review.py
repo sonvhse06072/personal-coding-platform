@@ -300,7 +300,7 @@ def test_late_review_structured_fail_and_contradictory_pass_are_not_attested(tmp
     service, ledger, router, adapter, envelope = _service(tmp_path, monkeypatch, verdict="FAIL")
     request, result = asyncio.run(_execute(service, envelope))
     assert result["status"] == "failed"
-    assert ledger.saved["attestation"] is None
+    assert ledger.saved["attestation"]["verdict"] == "fail"
     # A contradictory reviewer output cannot smuggle PASS through REVIEW_JSON.
     service2, ledger2, _, adapter2, envelope2 = _service(
         tmp_path / "next", monkeypatch, verdict="PASS",
@@ -309,3 +309,92 @@ def test_late_review_structured_fail_and_contradictory_pass_are_not_attested(tmp
     request2, result2 = asyncio.run(_execute(service2, envelope2))
     assert result2["status"] == "uncertain"
     assert ledger2.saved["attestation"] is None
+
+
+def test_snapshot_requires_exact_blocked_checkpoint_job_and_delivery():
+    project, plan, tracked, job, pr = context()
+    reason = "pm_merge_ineligible:required_review_independence_not_satisfied"
+    plan.update({"status": "blocked", "lifecycle": "active"})
+    tracked.update({"state": "blocked", "lifecycle": "active", "detail": {"reason": reason}})
+    job["result"]["route"]["strategy"]["review_policy"]["independence_satisfied"] = False
+    checkpoint = {
+        "id": 182, "checkpoint_key": "blocked:exact", "state": "blocked",
+        "kind": "blocked", "job_id": job["id"], "evidence": {"reason": reason},
+    }
+    class FakePlanStore:
+        def orchestration(self, _id):
+            return plan
+        def work_orders(self, _id):
+            return [tracked]
+        def checkpoints(self, _id, **kwargs):
+            return [checkpoint]
+    class FakeJobStore:
+        def get(self, _id):
+            return job
+        def get_execution_plan(self, _id):
+            return {"plan": plan["plan"]}
+    orch = SimpleNamespace(store=FakePlanStore())
+    service = LateReviewService(FakeJobStore(), SimpleNamespace(), orch)
+    envelope = _envelope()
+    captured = service._snapshot(envelope)
+    assert captured[1]["state"] == "blocked"
+    assert captured[2]["id"] == job["id"]
+
+    checkpoint["id"] = 183
+    with pytest.raises(RuntimeError, match="checkpoint_stale"):
+        service._snapshot(envelope)
+    checkpoint["id"] = 182
+    job["result"]["commit"] = "c" * 40
+    with pytest.raises(RuntimeError, match="delivery_identity_changed"):
+        service._snapshot(envelope)
+    job["result"]["commit"] = "b" * 40
+    tracked["detail"]["reason"] = "different_blocker"
+    with pytest.raises(RuntimeError, match="work_order_identity_changed"):
+        service._snapshot(envelope)
+
+
+def test_release_checks_full_pm_gates_before_transition(monkeypatch):
+    project, plan, tracked, job, pr = context()
+    proof = _proof([project, plan, tracked, job, pr])
+    tracked["state"] = "blocked"
+    tracked["detail"] = {"reason": "pm_merge_ineligible:required_review_independence_not_satisfied"}
+    decisions = []
+    class FakeAudit:
+        existing = None
+        def get(self, **kwargs):
+            return self.existing
+    class FakePlanStore:
+        def update_plan(self, plan_id, *, status):
+            decisions.append(("plan", status))
+    class FakeOrch:
+        store = FakePlanStore()
+        merge_audit = FakeAudit()
+        def _checkpoint_transition(self, *args, **kwargs):
+            decisions.append(("transition", kwargs["kind"]))
+            return {"id": 301}
+    orch = FakeOrch()
+    service = LateReviewService(SimpleNamespace(), SimpleNamespace(), orch)
+    async def preflight(envelope):
+        return plan, tracked, job, {
+            "writers": ("openai",), "pr": pr,
+            "ci": {"state": "success", "commit": job["result"]["commit"]},
+        }, "diff"
+    monkeypatch.setattr(service, "_preflight", preflight)
+    monkeypatch.setattr(service, "trusted_proof", lambda **kwargs: proof)
+    monkeypatch.setattr(pm_late_review, "project_config", lambda project_id: project)
+    envelope = _envelope("release_late_independent_review", attestation_id=77)
+    response = asyncio.run(service.release(envelope))
+    assert response["status"] == "released"
+    assert decisions == [("transition", "late_review_released"), ("plan", "waiting_merge")]
+
+    decisions.clear()
+    orch.merge_audit.existing = {"status": "uncertain"}
+    with pytest.raises(RuntimeError, match="merge_audit_replay_rejected"):
+        asyncio.run(service.release(envelope))
+    assert decisions == []
+
+    orch.merge_audit.existing = None
+    job["checkpoint"]["pending_decision"] = {"key": "owner-required"}
+    with pytest.raises(RuntimeError, match="merge_gate_still_blocked"):
+        asyncio.run(service.release(envelope))
+    assert decisions == []
