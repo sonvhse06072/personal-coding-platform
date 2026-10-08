@@ -179,6 +179,10 @@ class _FakeLedger:
         self.calls = []
         self.saved = None
 
+    def find(self, identity):
+        self.calls.append(("find", dict(identity)))
+        return {"id": 99, "status": "claimed"} if not self.created else None
+
     def claim(self, identity):
         self.calls.append(("claim", dict(identity)))
         return {"id": 99, "status": "claimed"}, self.created
@@ -292,7 +296,8 @@ def test_same_provider_reviewer_never_invoked(tmp_path, monkeypatch):
     )
     request, result = asyncio.run(_execute(service, envelope))
     assert result["status"] == "no_capacity"
-    assert ledger.saved["attestation"] is None
+    assert ledger.saved is None
+    assert not any(item[0] == "claim" for item in ledger.calls)
     assert adapter.calls == []
 
 
