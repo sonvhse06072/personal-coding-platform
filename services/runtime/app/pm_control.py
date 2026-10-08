@@ -153,6 +153,7 @@ class PMControlEnvelope(BaseModel):
             "github_delivery",
             "worktree",
             "runtime_health",
+            "late_review",
         ]
     ] = Field(default_factory=list, max_length=8)
 
