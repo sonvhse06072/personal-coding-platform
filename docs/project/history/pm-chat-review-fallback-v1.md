@@ -87,6 +87,22 @@ capacity result, control ID/body hash. **Chỉ ghi nhận, không merge.**
 Thay đổi cùng khóa nhưng khác bằng chứng bị từ chối; không cho replay để
 đổi review hoặc override failed proof.
 
+Sau khi Guardian dispatch `record_pm_chat_review`, gọi đúng một control
+Guardian **chỉ đọc** `pm_bridge_snapshot` trên PCP #524, với
+`project_id=chonhac` và `target_comment_id` bằng comment ID của control
+`record_pm_chat_review` đã thực thi. Chỉ dùng
+`control_event.pm_chat_review_outcome.attestation_id` nếu:
+- `control_event.status=executed`;
+- `pm_chat_review_outcome.status=attested`;
+- `review_mode=pm_chat_manual_review`, `expected_head` khớp commit;
+- `attestation_id` là số nguyên dương do Runtime ghi nhận.
+
+Trạng thái `executed` chung hoặc `review_failed` không cấp quyền
+release. Không đoán ID từ thứ tự database, không đọc trực tiếp SQL hoặc
+vượt Guardian sanitizer. Với control `release_pm_chat_review`, có thể
+đối chiếu tương tự trạng thái `released` và checkpoint mới trong
+`pm_chat_review_outcome` trước khi kiểm tra GitHub merged PR.
+
 ### 2. release_pm_chat_review
 
 Control thứ hai giữ **y nguyên** exact identity, thay action thành
