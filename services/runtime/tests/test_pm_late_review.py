@@ -20,6 +20,19 @@ from app.pm_merge import LateReviewProof, evaluate_pm_merge
 from test_pm_merge import context
 
 
+@pytest.fixture(autouse=True)
+def registered_test_models(monkeypatch):
+    """Use authoritative provider mappings, not mutable Router declarations."""
+    monkeypatch.setattr(
+        pm_late_review, "models_doc",
+        lambda: {"models": {
+            "openai-model": {"provider": "openai", "adapter": "codex_cli"},
+            "google-model": {"provider": "google", "adapter": "codex_cli"},
+            "cross": {"provider": "google", "adapter": "fake"},
+        }},
+    )
+
+
 def _attempt(iteration: int, provider: str = "openai") -> dict:
     return {
         "iteration": iteration, "provider": provider,
@@ -33,6 +46,10 @@ def test_writer_provider_provenance_must_cover_every_coding_turn():
         _attempt(1, "openai"), _attempt(2, "google"),
     ]}}
     assert writer_providers(job) == ("google", "openai")
+    with pytest.raises(RuntimeError, match="provider_registry_mismatch"):
+        writer_providers({"progress": {"iteration": 1, "agent_attempts": [
+            {**_attempt(1), "provider": "google"},
+        ]}})
 
     for attempts in (
         [_attempt(2)],  # truncated history
