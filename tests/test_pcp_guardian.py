@@ -895,6 +895,136 @@ def test_late_review_guardian_snapshot_disallows_unknown_status_and_reason():
     ] == {"status": "no_capacity"}
 
 
+def test_pm_chat_guardian_snapshot_reveals_only_verified_attestation_id():
+    raw = {
+        "project_id": "chonhac",
+        "comment_id": 6059100422,
+        "action": "record_pm_chat_review",
+        "status": "executed",
+        "target_identity": {
+            "job_id": "job-12345678",
+            "plan_id": "plan-1",
+            "work_order_id": "WO-1",
+            "expected_head": "b" * 40,
+            "review_id": 5455737177,
+            "checkpoint_id": 182,
+        },
+        "result": {
+            "status": "executed",
+            "action": "record_pm_chat_review",
+            "plan_id": "plan-1",
+            "work_order_id": "WO-1",
+            "job_id": "job-12345678",
+            "result": {
+                "status": "attested",
+                "review_mode": "pm_chat_manual_review",
+                "attestation_id": 91,
+                "expected_head": "b" * 40,
+                "reviewer_secret": "SECRET",
+                "workspace": "/private/worktree",
+            },
+        },
+    }
+    expected = {
+        "status": "attested",
+        "review_mode": "pm_chat_manual_review",
+        "attestation_id": 91,
+        "expected_head": "b" * 40,
+    }
+    projected = guardian.GuardianHost._sanitize_pm_control_event(raw)
+    assert projected["pm_chat_review_outcome"] == expected
+    serialized = json.dumps(projected)
+    assert "SECRET" not in serialized
+    assert "/private/worktree" not in serialized
+    assert "review_id" not in projected["target_identity"]
+
+    # No control-supplied value, alternate action or malformed outcome can be
+    # mistaken for a trusted PM-chat release identifier.
+    for mutation in (
+        lambda x: x.update(action="request_diagnostics"),
+        lambda x: x.update(status="failed"),
+        lambda x: x["result"].update(status="failed"),
+        lambda x: x["result"].update(action="release_pm_chat_review"),
+        lambda x: x["result"].update(plan_id="other-plan"),
+        lambda x: x["result"].update(work_order_id="other-WO"),
+        lambda x: x["result"].update(job_id="other-job"),
+        lambda x: x["result"]["result"].update(expected_head="c" * 40),
+        lambda x: x["result"]["result"].update(review_mode="cross_provider"),
+        lambda x: x["result"]["result"].update(status="claimed"),
+        lambda x: x["result"]["result"].update(attestation_id=True),
+        lambda x: x["result"]["result"].update(attestation_id="91"),
+        lambda x: x["result"]["result"].update(attestation_id=0),
+        lambda x: x["result"]["result"].update(attestation_id=2**63),
+    ):
+        changed = json.loads(json.dumps(raw))
+        mutation(changed)
+        assert "pm_chat_review_outcome" not in (
+            guardian.GuardianHost._sanitize_pm_control_event(changed)
+        )
+
+    failed = json.loads(json.dumps(raw))
+    failed["result"]["result"].update(status="review_failed", attestation_id=91)
+    assert guardian.GuardianHost._sanitize_pm_control_event(failed)[
+        "pm_chat_review_outcome"
+    ] == {
+        "status": "review_failed",
+        "review_mode": "pm_chat_manual_review",
+    }
+
+
+def test_pm_chat_guardian_snapshot_release_has_separate_exact_gate():
+    raw = {
+        "project_id": "chonhac",
+        "comment_id": 6059200000,
+        "action": "release_pm_chat_review",
+        "status": "executed",
+        "target_identity": {
+            "job_id": "job-12345678",
+            "plan_id": "plan-1",
+            "work_order_id": "WO-1",
+            "expected_head": "b" * 40,
+            "attestation_id": 91,
+            "checkpoint_id": 182,
+        },
+        "result": {
+            "status": "executed",
+            "action": "release_pm_chat_review",
+            "plan_id": "plan-1",
+            "work_order_id": "WO-1",
+            "job_id": "job-12345678",
+            "result": {
+                "status": "released",
+                "review_mode": "pm_chat_manual_review",
+                "attestation_id": 91,
+                "head": "b" * 40,
+                "checkpoint_id": 183,
+            },
+        },
+    }
+    assert guardian.GuardianHost._sanitize_pm_control_event(raw)[
+        "pm_chat_review_outcome"
+    ] == {
+        "status": "released",
+        "review_mode": "pm_chat_manual_review",
+        "attestation_id": 91,
+        "expected_head": "b" * 40,
+        "checkpoint_id": 183,
+    }
+    for nested in (
+        {"head": "c" * 40},
+        {"attestation_id": 92},
+        {"checkpoint_id": True},
+        {"checkpoint_id": -1},
+        {"review_mode": "cross_provider"},
+        {"status": "attested"},
+    ):
+        changed = json.loads(json.dumps(raw))
+        changed["result"]["result"].update(nested)
+        assert "pm_chat_review_outcome" not in (
+            guardian.GuardianHost._sanitize_pm_control_event(changed)
+        )
+
+
 def test_pm_bridge_poll_projection_drops_raw_results_and_bounds_errors():
     raw = {
         "project_id": "chonhac",
