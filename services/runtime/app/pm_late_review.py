@@ -582,40 +582,96 @@ class LateReviewService:
                 "status": str(previous["status"]), "attempt_id": int(previous["id"]),
                 "replayed": True, "head": envelope.expected_head,
             }
-        # Reviewer *staffing* consumes no model call. No-capacity does not
-        # spend the unique model-call slot, so a later explicit PM control may
-        # recheck capacity without resetting or replaying a failed invocation.
+        # Stage 1: genuine cross-provider review whenever capacity exists.
+        # Stage 2: Owner-approved, strictly stronger same-provider model only
+        # after Router explicitly says no different-provider reviewer is eligible.
+        # Missing credential, broken Router, bad response or invalid registry
+        # metadata must NOT be misclassified as "no cross-provider capacity".
         provider_state = dict((job.get("checkpoint") or {}).get("provider_state") or {})
         unavailable = {
             "healthy": False, "available": False, "quota_pressure": 1.0,
             "error_rate": 1.0, "latency_ms": 0,
         }
-        for provider in extra["writers"]:
-            provider_state["provider:" + provider] = dict(unavailable)
         request_id = "late-review:" + _digest(identity)[:24]
-        try:
+        semantic = dict((job.get("task") or {}).get("semantic") or {})
+
+        async def staff(state: dict[str, Any]) -> dict[str, Any]:
             response = await self.engine.router.staff({
-                "request_id": request_id,
-                "project_id": envelope.project_id, "role": "reviewer",
-                "profile": "critical",
-                "semantic": dict((job.get("task") or {}).get("semantic") or {}),
-                "provider_state": provider_state,
+                "request_id": request_id, "project_id": envelope.project_id,
+                "role": "reviewer", "profile": "critical",
+                "semantic": semantic, "provider_state": state,
             })
             choice = dict(response.get("choice") or {})
+            if (
+                response.get("role") != "reviewer"
+                or response.get("request_id") != request_id
+            ):
+                raise RuntimeError("late_review_staffing_identity_invalid")
             validate_model_choice(choice)
             _registered_provider(
                 str(choice.get("id") or ""), str(choice.get("adapter") or ""),
                 str(choice.get("provider") or ""),
             )
-            if (
-                str(response.get("role") or "") != "reviewer"
-                or str(response.get("request_id") or "") != request_id
-                or not choice.get("provider")
-                or choice["provider"] in extra["writers"]
-            ):
-                raise RuntimeError("late_review_independent_staffing_unavailable")
-        except Exception:
-            return {"status": "no_capacity", "head": envelope.expected_head}
+            return choice
+
+        cross_state = dict(provider_state)
+        for provider in extra["writers"]:
+            cross_state["provider:" + provider] = dict(unavailable)
+        try:
+            choice = await staff(cross_state)
+        except Exception as exc:
+            if not _no_eligible_reviewer(exc):
+                return {
+                    "status": "staffing_error", "head": envelope.expected_head,
+                    "reason": "cross_provider_staffing_untrusted_or_unavailable",
+                }
+            choice = None
+
+        review_mode = "cross_provider"
+        fallback_evidence: dict[str, Any] = {}
+        if choice is not None:
+            if choice["provider"] in extra["writers"]:
+                return {
+                    "status": "staffing_error", "head": envelope.expected_head,
+                    "reason": "cross_provider_staffing_violation",
+                }
+        else:
+            if not _fallback_enabled():
+                return {"status": "no_capacity", "head": envelope.expected_head}
+            try:
+                candidate_ids = _same_provider_candidate_ids(job, extra["writers"])
+            except RuntimeError:
+                return {
+                    "status": "policy_blocked", "head": envelope.expected_head,
+                    "reason": "writer_strength_unverifiable",
+                }
+            if not candidate_ids:
+                return {
+                    "status": "no_capacity", "head": envelope.expected_head,
+                    "reason": "no_eligible_higher_tier_reviewer",
+                }
+            # Preserve actual live/quota/provider health on allowed candidates.
+            # Mask all models outside the *verified* higher-tier candidate set,
+            # so Router's normal role/privacy/health selection cannot downgrade.
+            fallback_state = dict(provider_state)
+            for model_id in (models_doc().get("models") or {}):
+                if model_id not in candidate_ids:
+                    fallback_state[model_id] = dict(unavailable)
+            try:
+                choice = await staff(fallback_state)
+                if choice["id"] not in candidate_ids:
+                    raise RuntimeError("late_review_fallback_staffing_not_in_allowlist")
+                fallback_evidence = _escalated_reviewer_evidence(
+                    job, choice, extra["writers"],
+                )
+            except Exception as exc:
+                if _no_eligible_reviewer(exc):
+                    return {"status": "no_capacity", "head": envelope.expected_head}
+                return {
+                    "status": "staffing_error", "head": envelope.expected_head,
+                    "reason": "higher_tier_staffing_untrusted_or_unavailable",
+                }
+            review_mode = "same_provider_higher_tier"
 
         # Atomic claim occurs strictly *before* any reviewer model invocation.
         # Another concurrent caller may have claimed after our read-only lookup;
@@ -628,17 +684,24 @@ class LateReviewService:
             }
         attempt_id = int(attempt["id"])
         task = asyncio.create_task(
-            self._execute_claim(envelope, job, extra, diff_text, identity, attempt_id, choice)
+            self._execute_claim(
+                envelope, job, extra, diff_text, identity, attempt_id,
+                choice, review_mode, fallback_evidence,
+            )
         )
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
-        return {"status": "claimed", "attempt_id": attempt_id, "head": envelope.expected_head}
+        return {
+            "status": "claimed", "attempt_id": attempt_id,
+            "head": envelope.expected_head, "review_mode": review_mode,
+        }
 
     async def _execute_claim(
         self, envelope: Any, job: dict[str, Any],
         extra: dict[str, Any], diff_text: str,
         identity: dict[str, Any], attempt_id: int,
-        choice: dict[str, Any],
+        choice: dict[str, Any], review_mode: str,
+        fallback_evidence: dict[str, Any],
     ) -> dict[str, Any]:
         """Run at most one reviewer outside the PM Bridge HTTP request lifetime."""
         try:
@@ -710,8 +773,18 @@ class LateReviewService:
                 or structured.get("verdict") != report.verdict
             ):
                 raise RuntimeError("late_review_structured_protocol_invalid")
-            # Review is useful only while source, PR and gates still match.
+            # Review is useful only while source, PR and all other merge
+            # gates still match. Revalidate the registered fallback strength
+            # after the expensive model call; a registry change cannot promote
+            # an already-consumed attempt.
             await self._preflight(envelope)
+            if review_mode == "same_provider_higher_tier":
+                if _escalated_reviewer_evidence(
+                    job, choice, extra["writers"],
+                ) != fallback_evidence:
+                    raise RuntimeError("late_review_fallback_strength_changed")
+            elif review_mode != "cross_provider" or choice["provider"] in extra["writers"]:
+                raise RuntimeError("late_review_mode_identity_invalid")
             verdict = "passed" if report.verdict == "pass" and not report.findings else "failed"
             # Both definitive PASS and FAIL have immutable provenance. Only
             # PASS can ever become a trusted merge-eligibility proof.
@@ -721,6 +794,9 @@ class LateReviewService:
                 "reviewer_provider": choice["provider"],
                 "reviewer_model": choice["id"],
                 "reviewer_adapter": choice["adapter"],
+                "review_mode": review_mode,
+                "cross_provider_unavailable": review_mode == "same_provider_higher_tier",
+                "escalation": dict(fallback_evidence),
                 "verdict": "pass" if verdict == "passed" else "fail",
                 "finding_count": len(report.findings),
                 "protocol_valid": True,
@@ -735,6 +811,7 @@ class LateReviewService:
                          "message": f.message[:600]} for f in report.findings[:12]
                     ],
                     "summary": report.summary[:1000], "usage": normalize_usage(run.usage),
+                    "review_mode": review_mode,
                 },
                 attestation=attestation,
             )
@@ -742,6 +819,7 @@ class LateReviewService:
                 "status": verdict, "attempt_id": attempt_id,
                 "attestation_id": attestation_id, "head": envelope.expected_head,
                 "reviewer_provider": choice["provider"], "reviewer_model": choice["id"],
+                "review_mode": review_mode,
             }
         except BaseException:
             # Cancellation/timeouts are uncertain; a new control cannot replay
