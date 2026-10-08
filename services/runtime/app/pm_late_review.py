@@ -13,10 +13,12 @@ import re
 import subprocess
 import tempfile
 from pathlib import Path
+
+import httpx
 from typing import Any
 
 from .adapters import build_adapter
-from .config import models_doc, project_config
+from .config import models_doc, project_config, routing_policy_doc
 from .model_capabilities import validate_model_choice
 from .pm_merge import LateReviewProof, evaluate_pm_merge
 from .prompts import evaluator_prompt
@@ -130,6 +132,131 @@ def writer_providers(job: dict[str, Any]) -> tuple[str, ...]:
             str(choice["provider"]),
         ))
     return tuple(sorted(providers))
+
+
+# Tier and task-specific review capability are both required to increase.
+_TIER_ORDER = ("utility", "balanced", "strong", "premium", "frontier")
+
+
+def _fallback_enabled() -> bool:
+    """Owner-approved opt-in, independent of ordinary Router route eligibility."""
+    policy = routing_policy_doc().get("review_policy") or {}
+    recovery = policy.get("late_review_recovery") or {}
+    return recovery.get("same_provider_higher_tier_fallback_enabled") is True
+
+
+def _writer_model_benchmark(job: dict[str, Any]) -> dict[str, Any]:
+    """Verify every coder model against registry; return the strict comparison floor."""
+    writer_providers(job)  # Full, non-truncated attempted-turn provenance.
+    progress = dict(job.get("progress") or {})
+    checkpoint = dict(job.get("checkpoint") or {})
+    result = dict(job.get("result") or {})
+    route = dict(result.get("route") or job.get("route") or {})
+    strategy = dict(route.get("strategy") or {})
+    choices: list[dict[str, Any]] = list(progress.get("agent_attempts") or [])
+    for choice in (checkpoint.get("executor_choice"), strategy.get("executor")):
+        if choice is not None:
+            choices.append(dict(choice))
+    models = models_doc().get("models") or {}
+    identifiers: set[str] = set()
+    tiers: list[int] = []
+    scores: list[float] = []
+    for choice in choices:
+        model_id = str(choice.get("model") or "") if "iteration" in choice else str(choice.get("id") or "")
+        registered = models.get(model_id)
+        _registered_provider(
+            model_id, str(choice.get("adapter") or ""), str(choice.get("provider") or ""),
+        )
+        if not isinstance(registered, dict):
+            raise RuntimeError("late_review_writer_model_unregistered")
+        tier = str(registered.get("tier") or "")
+        review = (registered.get("capabilities") or {}).get("review")
+        if tier not in _TIER_ORDER or type(review) not in (int, float) or not 0 <= review <= 10:
+            raise RuntimeError("late_review_writer_strength_not_verifiable")
+        identifiers.add(model_id)
+        tiers.append(_TIER_ORDER.index(tier))
+        scores.append(float(review))
+    if not identifiers:
+        raise RuntimeError("late_review_writer_strength_not_verifiable")
+    return {
+        "writer_model_ids": sorted(identifiers),
+        "writer_max_tier_index": max(tiers),
+        "writer_max_review_score": max(scores),
+    }
+
+
+def _escalated_reviewer_evidence(
+    job: dict[str, Any], choice: dict[str, Any], writers: tuple[str, ...],
+) -> dict[str, Any]:
+    """Trust registry facts rather than a model/router assertion of superiority."""
+    if not _fallback_enabled():
+        raise RuntimeError("late_review_fallback_policy_disabled")
+    benchmark = _writer_model_benchmark(job)
+    model_id = str(choice.get("id") or "")
+    provider = _registered_provider(
+        model_id, str(choice.get("adapter") or ""), str(choice.get("provider") or ""),
+    )
+    registered = (models_doc().get("models") or {}).get(model_id) or {}
+    tier = str(registered.get("tier") or "")
+    score = (registered.get("capabilities") or {}).get("review")
+    if (
+        provider not in writers or model_id in benchmark["writer_model_ids"]
+        or tier not in _TIER_ORDER or type(score) not in (int, float)
+        or not 0 <= score <= 10
+        or _TIER_ORDER.index(tier) <= benchmark["writer_max_tier_index"]
+        or float(score) <= benchmark["writer_max_review_score"]
+        or "reviewer" not in (registered.get("roles") or [])
+        or registered.get("kind") != "agent"
+    ):
+        raise RuntimeError("late_review_reviewer_not_strictly_stronger")
+    return {
+        **benchmark,
+        "reviewer_tier_index": _TIER_ORDER.index(tier),
+        "reviewer_review_score": float(score),
+    }
+
+
+def _same_provider_candidate_ids(
+    job: dict[str, Any], writers: tuple[str, ...],
+) -> tuple[str, ...]:
+    """Allowed registry set; Router still applies health, quota and privacy checks."""
+    if not _fallback_enabled():
+        return ()
+    # Missing full writer strength cannot grant model selection or merge authority.
+    benchmark = _writer_model_benchmark(job)
+    candidates: list[str] = []
+    for model_id, registered in (models_doc().get("models") or {}).items():
+        if not isinstance(registered, dict):
+            continue
+        tier = str(registered.get("tier") or "")
+        review = (registered.get("capabilities") or {}).get("review")
+        if (
+            model_id not in benchmark["writer_model_ids"]
+            and registered.get("provider") in writers
+            and registered.get("kind") == "agent"
+            and "reviewer" in (registered.get("roles") or [])
+            and tier in _TIER_ORDER
+            and _TIER_ORDER.index(tier) > benchmark["writer_max_tier_index"]
+            and type(review) in (int, float)
+            and float(review) > benchmark["writer_max_review_score"]
+        ):
+            candidates.append(model_id)
+    return tuple(sorted(candidates))
+
+
+def _no_eligible_reviewer(exc: Exception) -> bool:
+    """Fallback only on Router's explicit, bounded no-eligible-reviewer signal."""
+    if isinstance(exc, httpx.HTTPStatusError):
+        if exc.response.status_code != 422:
+            return False
+        try:
+            detail = exc.response.json().get("detail")
+        except (ValueError, AttributeError, TypeError):
+            return False
+        return isinstance(detail, str) and detail.startswith("No eligible model for role=reviewer;")
+    return isinstance(exc, RuntimeError) and str(exc).startswith(
+        "No eligible model for role=reviewer;"
+    )
 
 
 def _git(workspace: Path, *args: str) -> str:
