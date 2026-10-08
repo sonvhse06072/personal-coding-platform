@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from .activity import public_event
+from .pm_late_review import registered_review_capacity
 from .work_order_checkpoints import verification_checkpoint_summary
 
 
@@ -493,6 +494,10 @@ class PMDiagnosticsService:
                 }
                 if attempt else {"status": "not_requested"}
             )
+            # Registry-only evidence explains a no-capacity result but must
+            # never be presented as an actually healthy/available reviewer.
+            if str(job.get("status") or "") == "completed":
+                sections["late_review"]["capacity"] = registered_review_capacity(job)
 
         if "recent_activity" in collectors:
             if job is None:

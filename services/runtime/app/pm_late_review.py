@@ -246,6 +246,69 @@ def _same_provider_candidate_ids(
     return tuple(sorted(candidates))
 
 
+def registered_review_capacity(job: dict[str, Any]) -> dict[str, Any]:
+    """Bounded read-only explanation; never claims live/quota model availability.
+
+    Facts are recomputed from the trusted persisted contributor telemetry and
+    current model registry. They do not confer merge authority, modify the job,
+    or consume a Router/model call.
+    """
+    try:
+        writers = writer_providers(job)
+        benchmark = _writer_model_benchmark(job)
+        higher = _same_provider_candidate_ids(job, writers)
+    except RuntimeError as exc:
+        # No raw error/user data goes to a managed GitHub diagnostic comment.
+        allowed = {
+            "late_review_writer_history_incomplete",
+            "late_review_provider_registry_mismatch",
+            "late_review_writer_model_unregistered",
+            "late_review_writer_strength_not_verifiable",
+        }
+        reason = str(exc)
+        return {
+            "status": "provenance_unverifiable",
+            "reason": reason if reason in allowed else "late_review_capacity_unavailable",
+            "source": "registered_models_not_live_capacity",
+        }
+
+    models = models_doc().get("models") or {}
+    critical_eligible_higher = sorted(
+        model_id for model_id in higher
+        if (
+            not models[model_id].get("allowed_profiles")
+            or "critical" in models[model_id]["allowed_profiles"]
+        )
+    )
+    cross_provider_models = sorted(
+        model_id
+        for model_id, registered in models.items()
+        if (
+            isinstance(registered, dict)
+            and registered.get("kind") == "agent"
+            and registered.get("provider") not in writers
+            and "reviewer" in (registered.get("roles") or [])
+            and (
+                not registered.get("allowed_profiles")
+                or "critical" in registered["allowed_profiles"]
+            )
+        )
+    )
+    return {
+        "status": "registry_evaluated",
+        "source": "registered_models_not_live_capacity",
+        "writer_providers": list(writers)[:8],
+        "writer_model_ids": benchmark["writer_model_ids"][:16],
+        "max_writer_tier": _TIER_ORDER[benchmark["writer_max_tier_index"]],
+        "max_writer_review_score": benchmark["writer_max_review_score"],
+        "strict_higher_tier_registry_model_ids": list(higher)[:12],
+        "critical_profile_higher_tier_registry_model_ids": critical_eligible_higher[:12],
+        "cross_provider_registered_model_ids": cross_provider_models[:12],
+        "capacity_is_live": False,
+        "same_provider_fallback_enabled": _fallback_enabled(),
+    }
+
+
 def _no_eligible_reviewer(exc: Exception) -> bool:
     """Fallback only on Router's explicit, bounded no-eligible-reviewer signal."""
     if isinstance(exc, httpx.HTTPStatusError):

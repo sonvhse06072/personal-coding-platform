@@ -898,3 +898,45 @@ def test_orphan_claim_is_marked_uncertain_on_startup_without_replay(monkeypatch)
     assert "WHERE status='claimed'" in statement
     assert "runtime_restarted_before_review_finalization" in statement
     assert conn.committed is True
+
+
+def test_registered_reviewer_capacity_reports_writer_floor_and_candidates_without_staffing():
+    job = {
+        "progress": {
+            "iteration": 1,
+            "agent_attempts": [_attempt(1, "openai")],
+        },
+        "checkpoint": {},
+        "result": {},
+    }
+    result = pm_late_review.registered_review_capacity(job)
+
+    assert result["source"] == "registered_models_not_live_capacity"
+    assert result["capacity_is_live"] is False
+    assert result["status"] == "registry_evaluated"
+    assert result["writer_model_ids"] == ["openai-model"]
+    assert result["writer_providers"] == ["openai"]
+    assert result["max_writer_tier"] == "strong"
+    assert result["max_writer_review_score"] == 8
+    assert result["strict_higher_tier_registry_model_ids"] == ["upgraded"]
+    assert result["critical_profile_higher_tier_registry_model_ids"] == ["upgraded"]
+    assert result["cross_provider_registered_model_ids"] == ["cross"]
+
+    # A malformed or truncated provenance record never produces any capacity
+    # claim or artificial cross-provider proof.
+    job["progress"]["iteration"] = 2
+    invalid = pm_late_review.registered_review_capacity(job)
+    assert invalid["status"] == "provenance_unverifiable"
+    assert invalid["reason"] == "late_review_writer_history_incomplete"
+    assert "strict_higher_tier_registry_model_ids" not in invalid
+
+
+def test_registered_reviewer_capacity_does_not_treat_registry_as_live_health():
+    job = {
+        "progress": {"iteration": 1, "agent_attempts": [_attempt(1)]},
+    }
+    before = deepcopy(job)
+    output = pm_late_review.registered_review_capacity(job)
+    assert job == before
+    assert output["capacity_is_live"] is False
+    assert "router_staffing_available" not in output
