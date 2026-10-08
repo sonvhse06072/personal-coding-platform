@@ -51,6 +51,10 @@ class PlanOrchestrator(CorePlanOrchestrator):
         self.late_reviews.store.ensure()
         await super().start()
 
+    async def stop(self) -> None:
+        await self.late_reviews.stop()
+        await super().stop()
+
     async def _recover_uncertain_merge(
         self,
         *,
