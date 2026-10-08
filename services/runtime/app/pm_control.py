@@ -57,6 +57,8 @@ class PMControlEnvelope(BaseModel):
         "review_repair",
         "request_late_independent_review",
         "release_late_independent_review",
+        "record_pm_chat_review",
+        "release_pm_chat_review",
         "repair_blocked_job",
         "recheck_blocker",
         "resume_same_job",
@@ -69,6 +71,7 @@ class PMControlEnvelope(BaseModel):
     plan_id: str | None = Field(default=None, min_length=1, max_length=200)
     work_order_id: str | None = Field(default=None, min_length=1, max_length=200)
     attestation_id: int | None = Field(default=None, ge=1)
+    review_id: int | None = Field(default=None, ge=1)
     generation: int | None = Field(default=None, ge=1)
     blocker_generation: str | None = Field(default=None, min_length=1, max_length=200)
     control_action_id: str | None = Field(default=None, min_length=8, max_length=200)
@@ -199,16 +202,21 @@ class PMControlEnvelope(BaseModel):
             require("job_id", "expected_commit", "finding")
         elif self.action in {
             "request_late_independent_review", "release_late_independent_review",
+            "record_pm_chat_review", "release_pm_chat_review",
         }:
             require(
                 "plan_id", "work_order_id", "job_id", "source_commit",
                 "expected_head", "branch", "pr_number",
                 "checkpoint_id", "checkpoint_key",
             )
-            if self.action == "release_late_independent_review":
+            if self.action in {"release_late_independent_review", "release_pm_chat_review"}:
                 require("attestation_id")
             elif self.attestation_id is not None:
-                raise ValueError("Late review request cannot supply an attestation")
+                raise ValueError("Review record/request cannot supply an attestation")
+            if self.action == "record_pm_chat_review":
+                require("review_id")
+            elif self.review_id is not None:
+                raise ValueError("Only PM-chat review record may supply a GitHub review ID")
         elif self.action == "repair_blocked_job":
             require("job_id", "blocker_generation", "finding")
             if (
@@ -259,7 +267,7 @@ class PMControlEnvelope(BaseModel):
 
         if (
             self.attestation_id is not None
-            and self.action != "release_late_independent_review"
+            and self.action not in {"release_late_independent_review", "release_pm_chat_review"}
         ):
             raise ValueError("Attestation id only belongs to late review release")
 
@@ -295,6 +303,7 @@ class PMControlEnvelope(BaseModel):
             "plan_id": self.plan_id,
             "work_order_id": self.work_order_id,
             "attestation_id": self.attestation_id,
+            "review_id": self.review_id,
             "generation": self.generation,
             "blocker_generation": self.blocker_generation,
             "control_action_id": self.control_action_id,
