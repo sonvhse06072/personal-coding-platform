@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -27,9 +28,39 @@ def evaluate(repo_root: Path, fixture: dict[str, Any]) -> dict[str, Any]:
     unsupported_cases = 0
     unsupported_hits = 0
     selected_chars_total = 0
+    composed_cases = 0
+    compose_duration_ms: list[float] = []
+    required_content_total = 0
+    required_content_hits = 0
 
     for case in fixture.get("cases", []):
-        pack = compose_context(repo_root, case["request"])
+        started = time.perf_counter()
+        try:
+            pack = compose_context(repo_root, case["request"])
+        except ValueError as exc:
+            expected_error = str(case.get("expected_error_contains") or "")
+            if not expected_error or expected_error.lower() not in str(exc).lower():
+                raise
+            rows.append({
+                "id": case["id"],
+                "kind": case.get("kind"),
+                "passed": True,
+                "expected_error_matched": expected_error,
+                "compose_ms": round((time.perf_counter() - started) * 1000, 2),
+            })
+            continue
+
+        if case.get("expected_error_contains"):
+            rows.append({
+                "id": case["id"],
+                "kind": case.get("kind"),
+                "passed": False,
+                "missing_expected_error": case["expected_error_contains"],
+            })
+            continue
+
+        compose_duration_ms.append((time.perf_counter() - started) * 1000)
+        composed_cases += 1
         selected = [*pack.get("pinned", []), *pack.get("retrieved", [])]
         identities = [str(item.get("identity") or "") for item in selected]
         retrieved = pack.get("retrieved", [])
