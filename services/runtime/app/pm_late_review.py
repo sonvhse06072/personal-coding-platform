@@ -169,6 +169,30 @@ class LateReviewStore:
             conn.execute(LATE_REVIEW_DDL)
             conn.commit()
 
+    def find(self, identity: dict[str, Any]) -> dict[str, Any] | None:
+        """Check durable claim before Router staffing; this performs no model call."""
+        self.ensure()
+        with self.storage.connect() as conn:
+            row = conn.execute(
+                """SELECT * FROM cp_pm_late_review_attempts
+                WHERE plan_id=%s AND work_order_id=%s AND job_id=%s
+                  AND expected_head=%s AND checkpoint_id=%s""",
+                (
+                    identity["plan_id"], identity["work_order_id"], identity["job_id"],
+                    identity["expected_head"], identity["checkpoint_id"],
+                ),
+            ).fetchone()
+        if row is None:
+            return None
+        actual = dict(row)
+        if any(
+            actual.get(key) != identity[key]
+            for key in ("project_id", "checkpoint_key", "pr_number",
+                        "source_commit", "branch", "diff_hash")
+        ) or sorted(actual["writer_providers"]) != identity["writer_providers"]:
+            raise RuntimeError("late_review_claim_identity_conflict")
+        return actual
+
     def claim(self, identity: dict[str, Any]) -> tuple[dict[str, Any], bool]:
         """One durable model-call slot per exact head and blocked checkpoint."""
         self.ensure()
@@ -395,37 +419,26 @@ class LateReviewService:
     async def request(self, envelope: Any) -> dict[str, Any]:
         _, _, job, extra, diff_text = await self._preflight(envelope)
         identity = self._identity(envelope, job, extra["writers"])
-        attempt, created = self.store.claim(identity)
-        if not created:
+        previous = self.store.find(identity)
+        if previous is not None:
             return {
-                "status": str(attempt["status"]), "attempt_id": int(attempt["id"]),
+                "status": str(previous["status"]), "attempt_id": int(previous["id"]),
                 "replayed": True, "head": envelope.expected_head,
             }
-        attempt_id = int(attempt["id"])
-        task = asyncio.create_task(
-            self._execute_claim(envelope, job, extra, diff_text, identity, attempt_id)
-        )
-        self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
-        return {"status": "claimed", "attempt_id": attempt_id, "head": envelope.expected_head}
-
-    async def _execute_claim(
-        self, envelope: Any, job: dict[str, Any],
-        extra: dict[str, Any], diff_text: str,
-        identity: dict[str, Any], attempt_id: int,
-    ) -> dict[str, Any]:
-        """Run at most one reviewer outside the PM Bridge HTTP request lifetime."""
-        choice: dict[str, Any] = {}
+        # Reviewer *staffing* consumes no model call. No-capacity does not
+        # spend the unique model-call slot, so a later explicit PM control may
+        # recheck capacity without resetting or replaying a failed invocation.
+        provider_state = dict((job.get("checkpoint") or {}).get("provider_state") or {})
+        unavailable = {
+            "healthy": False, "available": False, "quota_pressure": 1.0,
+            "error_rate": 1.0, "latency_ms": 0,
+        }
+        for provider in extra["writers"]:
+            provider_state["provider:" + provider] = dict(unavailable)
+        request_id = "late-review:" + _digest(identity)[:24]
         try:
-            provider_state = dict((job.get("checkpoint") or {}).get("provider_state") or {})
-            unavailable = {
-                "healthy": False, "available": False, "quota_pressure": 1.0,
-                "error_rate": 1.0, "latency_ms": 0,
-            }
-            for provider in extra["writers"]:
-                provider_state["provider:" + provider] = dict(unavailable)
             response = await self.engine.router.staff({
-                "request_id": f"late-review:{attempt_id}",
+                "request_id": request_id,
                 "project_id": envelope.project_id, "role": "reviewer",
                 "profile": "critical",
                 "semantic": dict((job.get("task") or {}).get("semantic") or {}),
@@ -435,15 +448,38 @@ class LateReviewService:
             validate_model_choice(choice)
             if (
                 str(response.get("role") or "") != "reviewer"
-                or str(response.get("request_id") or "") != f"late-review:{attempt_id}"
+                or str(response.get("request_id") or "") != request_id
                 or not choice.get("provider")
                 or choice["provider"] in extra["writers"]
             ):
                 raise RuntimeError("late_review_independent_staffing_unavailable")
         except Exception:
-            self.store.finish(attempt_id, status="no_capacity", result={"reason": "reviewer_capacity_unavailable"})
-            return {"status": "no_capacity", "attempt_id": attempt_id, "head": envelope.expected_head}
+            return {"status": "no_capacity", "head": envelope.expected_head}
 
+        # Atomic claim occurs strictly *before* any reviewer model invocation.
+        # Another concurrent caller may have claimed after our read-only lookup;
+        # only the winner may schedule an invocation.
+        attempt, created = self.store.claim(identity)
+        if not created:
+            return {
+                "status": str(attempt["status"]), "attempt_id": int(attempt["id"]),
+                "replayed": True, "head": envelope.expected_head,
+            }
+        attempt_id = int(attempt["id"])
+        task = asyncio.create_task(
+            self._execute_claim(envelope, job, extra, diff_text, identity, attempt_id, choice)
+        )
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+        return {"status": "claimed", "attempt_id": attempt_id, "head": envelope.expected_head}
+
+    async def _execute_claim(
+        self, envelope: Any, job: dict[str, Any],
+        extra: dict[str, Any], diff_text: str,
+        identity: dict[str, Any], attempt_id: int,
+        choice: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Run at most one reviewer outside the PM Bridge HTTP request lifetime."""
         try:
             original = Path(str(job["workspace"])).resolve()
             with tempfile.TemporaryDirectory(prefix="pcp-late-review-") as temp:
