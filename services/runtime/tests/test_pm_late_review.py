@@ -234,7 +234,11 @@ def _repo(tmp_path: Path):
     binary = subprocess.check_output(
         ["git", "-C", str(repo), "diff", "--binary", source, head],
     )
-    return repo, source, head, hashlib.sha256(binary).hexdigest()
+    # repo.diff_state() stores the digest of repo._git()'s .strip()'d text,
+    # not the digest of Git's raw stdout (which ends in a newline).
+    canonical = binary.decode("utf-8").strip().encode("utf-8")
+    assert binary.endswith(b"\n") and binary != canonical
+    return repo, source, head, hashlib.sha256(canonical).hexdigest()
 
 
 def test_exact_commit_diff_matches_persisted_hash_or_fails_closed(tmp_path):
@@ -243,7 +247,15 @@ def test_exact_commit_diff_matches_persisted_hash_or_fails_closed(tmp_path):
         "workspace": str(repo), "source_commit": source,
         "result": {"commit": head, "diff": {"diff_hash": digest}},
     }
-    assert "review this exact diff" in accepted_diff(job, tmp_path)
+    recovered = accepted_diff(job, tmp_path)
+    assert "review this exact diff" in recovered
+    assert not recovered.endswith("\n")
+    raw = subprocess.check_output(
+        ["git", "-C", str(repo), "diff", "--binary", source, head],
+    )
+    # Regression: raw stdout SHA-256 is not the accepted Runtime hash.
+    assert hashlib.sha256(raw).hexdigest() != digest
+    assert hashlib.sha256(raw.decode("utf-8").strip().encode()).hexdigest() == digest
     job["result"]["diff"]["diff_hash"] = "0" * 64
     with pytest.raises(RuntimeError, match="accepted_diff_mismatch"):
         accepted_diff(job, tmp_path)
