@@ -53,7 +53,7 @@ def test_product_manager_staffing_selects_only_pm_eligible_agent() -> None:
         "low" if capability.supports_explicit_effort else None
     )
     assert "product_manager" in engine.models[result.choice.id]["roles"]
-    assert result.policy_version == 20
+    assert result.policy_version == 21
     assert result.registry_version == 13
 
 
