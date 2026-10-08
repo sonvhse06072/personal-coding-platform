@@ -77,6 +77,12 @@ class LateReviewProof:
     reviewer_provider: str
     reviewer_model: str
     verdict: str
+    review_mode: str = "cross_provider"
+    writer_model_ids: tuple[str, ...] = ()
+    reviewer_tier_index: int = -1
+    writer_max_tier_index: int = -1
+    reviewer_review_score: float = -1
+    writer_max_review_score: float = -1
 
     def matches(self, plan: dict[str, Any], tracked: dict[str, Any], job: dict[str, Any]) -> bool:
         result = _dict(job.get("result"))
@@ -89,7 +95,22 @@ class LateReviewProof:
             and bool(self.writer_providers)
             and all(bool(provider) for provider in self.writer_providers)
             and bool(self.reviewer_provider)
-            and self.reviewer_provider not in self.writer_providers
+            and (
+                (
+                    self.review_mode == "cross_provider"
+                    and self.reviewer_provider not in self.writer_providers
+                )
+                or (
+                    self.review_mode == "same_provider_higher_tier"
+                    and self.reviewer_provider in self.writer_providers
+                    and bool(self.writer_model_ids)
+                    and self.reviewer_model not in self.writer_model_ids
+                    and self.writer_max_tier_index >= 0
+                    and self.reviewer_tier_index > self.writer_max_tier_index
+                    and self.writer_max_review_score >= 0
+                    and self.reviewer_review_score > self.writer_max_review_score
+                )
+            )
             and bool(self.reviewer_model)
             and self.plan_id == str(plan.get("plan_id") or "")
             and self.work_order_id == str(tracked.get("work_order_id") or "")
@@ -371,8 +392,14 @@ def evaluate_pm_merge(
         "required_checks_passed": progress.get("required_checks_passed"),
         "review_verdict": review.get("verdict"),
         "review_required": bool(review_policy.get("required")),
-        "late_independent_review_attestation_id": (
+        "late_review_attestation_id": (
             late_review_proof.attestation_id
+            if isinstance(late_review_proof, LateReviewProof)
+            and late_review_proof.matches(plan, tracked, job)
+            else None
+        ),
+        "late_review_mode": (
+            late_review_proof.review_mode
             if isinstance(late_review_proof, LateReviewProof)
             and late_review_proof.matches(plan, tracked, job)
             else None
