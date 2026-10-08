@@ -128,67 +128,68 @@ T0_HEADINGS = {
 
 T0_PRIORITY = {
     "product_manager": (
+        "Core invariants",
         "Authority order",
         "Baseline authority preservation",
         "4. Authority hierarchy",
         "5. Human Owner authority",
         "6. Product Manager authority",
-        "Core invariants",
-        "Change discipline",
-        "Mandatory documentation continuity",
         "9. Trust and security invariants",
         "10. Verification and delivery invariants",
+        "Change discipline",
+        "Mandatory documentation continuity",
         "12. Change control",
         "13. Practicality rule",
     ),
     "developer": (
+        "Core invariants",
         "Authority order",
         "Baseline authority preservation",
         "4. Authority hierarchy",
         "5. Human Owner authority",
         "8. Agent-role principles",
-        "Core invariants",
-        "Change discipline",
-        "Mandatory documentation continuity",
         "9. Trust and security invariants",
         "10. Verification and delivery invariants",
+        "Change discipline",
+        "Mandatory documentation continuity",
         "12. Change control",
     ),
     "reviewer": (
+        "Core invariants",
         "Authority order",
         "Baseline authority preservation",
         "4. Authority hierarchy",
         "5. Human Owner authority",
         "8. Agent-role principles",
-        "Core invariants",
-        "Change discipline",
         "9. Trust and security invariants",
         "10. Verification and delivery invariants",
+        "Change discipline",
         "12. Change control",
     ),
     "debugger": (
+        "Core invariants",
         "Authority order",
         "Baseline authority preservation",
         "4. Authority hierarchy",
         "5. Human Owner authority",
-        "Core invariants",
-        "Change discipline",
         "9. Trust and security invariants",
         "10. Verification and delivery invariants",
+        "Change discipline",
         "12. Change control",
     ),
     "specialist": (
+        "Core invariants",
         "Authority order",
         "Baseline authority preservation",
         "4. Authority hierarchy",
         "5. Human Owner authority",
-        "Core invariants",
-        "Change discipline",
         "9. Trust and security invariants",
         "10. Verification and delivery invariants",
+        "Change discipline",
         "12. Change control",
     ),
 }
+
 
 CURRENT_INTENT_TERMS = {
     "current", "currently", "now", "active", "open", "today", "latest", "version",
@@ -586,13 +587,19 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
     pinned: list[dict[str, Any]] = []
     retrieved: list[dict[str, Any]] = []
 
-    t0_budget = min(7000, max(1200, int(budget_chars * 0.30)))
+    # At the normal 24K character budget, retain full role-critical governance
+    # before topical retrieval; reserve minimum T1 space for small budgets.
+    t0_budget = min(9500, max(2400, int(budget_chars * 0.40)), budget_chars - 800)
     t0_remaining = min(t0_budget, remaining)
     for section in _t0_sections(repo_root, role):
         t0_remaining = _append_budgeted(
             pinned,
             section=section,
-            content_limit=1400,
+            content_limit=(
+                2600 if section.heading == "Core invariants"
+                else 1800 if section.heading == "6. Product Manager authority"
+                else 1400
+            ),
             remaining=t0_remaining,
             reasons=["pinned_governance", f"role:{role}"],
             score=None,
