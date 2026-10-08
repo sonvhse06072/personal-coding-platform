@@ -1899,7 +1899,7 @@ def test_cold_start_uses_explicit_policy_limited_by_phase(
     assert result.infrastructure[0].stderr == ""
 
 
-@pytest.mark.parametrize("invalid", ["", "oops", "0", "1801", "-3"])
+@pytest.mark.parametrize("invalid", ["", "oops", "0", "1801", "-3", "99999"])
 def test_cold_start_rejects_invalid_timeout_before_spawning(
     tmp_path, monkeypatch, invalid,
 ):
