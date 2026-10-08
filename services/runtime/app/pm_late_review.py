@@ -100,6 +100,18 @@ def writer_providers(job: dict[str, Any]) -> tuple[str, ...]:
         providers.add(provider)
     if seen != set(range(1, iterations + 1)):
         raise RuntimeError("late_review_writer_history_incomplete")
+    # Router choice and last persisted executor choice may be conservatively
+    # broader than the observed attempts; they must never make the exclusion
+    # set narrower if there was an unrecorded handoff.
+    checkpoint = dict(job.get("checkpoint") or {})
+    route = dict((job.get("result") or {}).get("route") or job.get("route") or {})
+    strategy = dict(route.get("strategy") or {})
+    for choice in (checkpoint.get("executor_choice"), strategy.get("executor")):
+        if choice is None:
+            continue
+        if not isinstance(choice, dict) or not str(choice.get("provider") or "").strip():
+            raise RuntimeError("late_review_writer_history_incomplete")
+        providers.add(str(choice["provider"]))
     return tuple(sorted(providers))
 
 
