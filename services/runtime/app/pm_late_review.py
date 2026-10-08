@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -123,7 +124,9 @@ def accepted_diff(job: dict[str, Any], workspace_root: Path) -> str:
     root = workspace_root.resolve()
     workspace = Path(workspace_raw).resolve()
     if (
-        len(source) != 40 or len(head) != 40 or len(expected) != 64
+        re.fullmatch(r"[0-9a-f]{40}", source) is None
+        or re.fullmatch(r"[0-9a-f]{40}", head) is None
+        or re.fullmatch(r"[0-9a-f]{64}", expected) is None
         or not workspace_raw or workspace == root
         or not workspace.is_relative_to(root)
         or not workspace.is_dir()
@@ -457,7 +460,10 @@ class LateReviewService:
             ):
                 raise RuntimeError("late_review_structured_protocol_required")
             report = parse_review_output(output)
-            if not report.protocol_valid:
+            if (
+                not report.protocol_valid
+                or report.verdict.upper() != output.splitlines()[0]
+            ):
                 raise RuntimeError("late_review_structured_protocol_invalid")
             # Review is useful only while source, PR and gates still match.
             await self._preflight(envelope)
