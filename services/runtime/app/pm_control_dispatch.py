@@ -256,6 +256,32 @@ class PMControlDispatcher:
                 },
             )
 
+        if action in {"record_pm_chat_review", "release_pm_chat_review"}:
+            self._plan(envelope)
+            self._job(envelope)
+            service = getattr(self.orchestrator, "pm_chat_reviews", None)
+            if service is None:
+                raise RuntimeError("PM-chat review service is unavailable")
+            if action == "record_pm_chat_review":
+                result = await service.record(
+                    envelope, comment_id=comment_id, issue_number=issue_number,
+                )
+            else:
+                result = await service.release(
+                    envelope, comment_id=comment_id, issue_number=issue_number,
+                )
+            return (
+                "executed",
+                {
+                    "status": "executed",
+                    "action": action,
+                    "plan_id": envelope.plan_id,
+                    "work_order_id": envelope.work_order_id,
+                    "job_id": envelope.job_id,
+                    "result": result,
+                },
+            )
+
         if action == "review_repair":
             self._job(envelope)
             row = await self.engine.request_review_repair(
