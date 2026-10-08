@@ -696,11 +696,11 @@ class GuardianHost:
                 "no_eligible_higher_tier_reviewer",
                 "higher_tier_staffing_untrusted_or_unavailable",
             }
-            if status in allowed_status:
+            if isinstance(status, str) and status in allowed_status:
                 late_review_outcome = {"status": status}
-                if reason in allowed_reason:
+                if isinstance(reason, str) and reason in allowed_reason:
                     late_review_outcome["reason"] = reason
-                if review_mode in {"cross_provider", "same_provider_higher_tier"}:
+                if isinstance(review_mode, str) and review_mode in {"cross_provider", "same_provider_higher_tier"}:
                     late_review_outcome["review_mode"] = review_mode
                 attempt_id = inner.get("attempt_id")
                 if type(attempt_id) is int and 0 < attempt_id <= 2**63 - 1:
