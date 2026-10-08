@@ -48,7 +48,7 @@ for module in "${modules[@]}"; do
     ((${#tests[@]} > 0)) || continue
 
     echo "Running $layer tests for $module"
-    # Preserve true PHPUnit exit status; no || true, shell wrapper, or test skip.
+    # Preserve the actual PHPUnit exit status; never mask a failing test.
     ddev exec --raw -- env "BROWSERTEST_OUTPUT_DIRECTORY=$output_dir" \
       vendor/bin/phpunit -c web/core/phpunit.xml.dist "${tests[@]}"
   done
