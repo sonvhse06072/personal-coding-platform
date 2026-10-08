@@ -26,10 +26,43 @@ def registered_test_models(monkeypatch):
     monkeypatch.setattr(
         pm_late_review, "models_doc",
         lambda: {"models": {
-            "openai-model": {"provider": "openai", "adapter": "codex_cli"},
-            "google-model": {"provider": "google", "adapter": "codex_cli"},
-            "cross": {"provider": "google", "adapter": "fake"},
+            "openai-model": {
+                "provider": "openai", "adapter": "codex_cli",
+                "tier": "strong", "kind": "agent", "roles": ["executor"],
+                "capabilities": {"review": 8},
+            },
+            "google-model": {
+                "provider": "google", "adapter": "codex_cli",
+                "tier": "balanced", "kind": "agent", "roles": ["executor"],
+                "capabilities": {"review": 7},
+            },
+            "cross": {
+                "provider": "google", "adapter": "fake",
+                "tier": "strong", "kind": "agent", "roles": ["reviewer"],
+                "capabilities": {"review": 8},
+            },
+            "upgraded": {
+                "provider": "openai", "adapter": "fake",
+                "tier": "premium", "kind": "agent", "roles": ["reviewer"],
+                "capabilities": {"review": 9},
+            },
+            "weaker": {
+                "provider": "openai", "adapter": "fake",
+                "tier": "strong", "kind": "agent", "roles": ["reviewer"],
+                "capabilities": {"review": 10},
+            },
+            "equal_review": {
+                "provider": "openai", "adapter": "fake",
+                "tier": "premium", "kind": "agent", "roles": ["reviewer"],
+                "capabilities": {"review": 8},
+            },
         }},
+    )
+    monkeypatch.setattr(
+        pm_late_review, "routing_policy_doc",
+        lambda: {"review_policy": {"late_review_recovery": {
+            "same_provider_higher_tier_fallback_enabled": True,
+        }}},
     )
 
 
@@ -111,6 +144,35 @@ def test_late_review_requires_exact_trusted_different_provider_pass():
     changed = deepcopy(values)
     changed[3]["result"]["commit"] = "c" * 40
     assert _eligibility(changed, proof).eligible is False
+
+
+def test_same_provider_proof_requires_strictly_higher_tier_and_review_strength():
+    values = list(context())
+    cross = _proof(values)
+    upgraded = LateReviewProof(**{
+        **cross.__dict__,
+        "review_mode": "same_provider_higher_tier",
+        "reviewer_provider": "openai",
+        "reviewer_model": "upgraded",
+        "writer_model_ids": ("openai-model",),
+        "reviewer_tier_index": 3,
+        "writer_max_tier_index": 2,
+        "reviewer_review_score": 9,
+        "writer_max_review_score": 8,
+    })
+    assert _eligibility(values, upgraded).eligible
+    for field, value in (
+        ("reviewer_tier_index", 2),
+        ("reviewer_review_score", 8),
+        ("reviewer_model", "openai-model"),
+        ("reviewer_provider", "google"),
+        ("writer_model_ids", ()),
+        ("review_mode", "unverified"),
+    ):
+        fake = LateReviewProof(**{**upgraded.__dict__, field: value})
+        assert "required_review_independence_not_satisfied" in _eligibility(
+            values, fake,
+        ).blockers
 
 
 def test_late_review_does_not_waive_protected_human_decisions():
@@ -212,8 +274,9 @@ class _FakeLedger:
 
 
 class _FakeAdapter:
-    def __init__(self, output):
+    def __init__(self, output, model="cross"):
         self.output = output
+        self.model = model
         self.calls = []
 
     async def run(self, *, workspace, prompt, mode, timeout):
@@ -221,30 +284,53 @@ class _FakeAdapter:
         assert mode == "evaluate"
         assert _git(workspace, "status", "--porcelain") == ""
         return AgentRun(
-            adapter="fake", model="cross", returncode=0, output=self.output,
+            adapter="fake", model=self.model, returncode=0, output=self.output,
         )
 
 
 class _FakeRouter:
-    def __init__(self, choice):
+    def __init__(
+        self, choice, *, cross_unavailable=False, fallback_choice=None,
+        cross_failure=None,
+    ):
         self.choice = choice
+        self.cross_unavailable = cross_unavailable
+        self.fallback_choice = fallback_choice
+        self.cross_failure = cross_failure
         self.calls = []
 
     async def staff(self, data):
         self.calls.append(data)
+        if len(self.calls) == 1:
+            if self.cross_failure:
+                raise RuntimeError(self.cross_failure)
+            if self.cross_unavailable:
+                raise RuntimeError("No eligible model for role=reviewer; rejected={}")
         return {
             "role": "reviewer",
             "request_id": data["request_id"],
-            "choice": self.choice,
+            "choice": (
+                self.fallback_choice
+                if len(self.calls) > 1 and self.fallback_choice is not None
+                else self.choice
+            ),
         }
 
 
-def _service(tmp_path, monkeypatch, *, verdict="PASS", provider="google", created=True):
+def _service(
+    tmp_path, monkeypatch, *, verdict="PASS", provider="google",
+    created=True, cross_unavailable=False, fallback_choice=None,
+    cross_failure=None,
+):
     repo, source, head, digest = _repo(tmp_path)
     job = {
         "workspace": str(repo), "project_id": "default",
         "source_commit": source, "branch": "ai/job-123456",
         "task": {"title": "Review bounded changes", "semantic": {}},
+        "progress": {
+            "iteration": 1,
+            "agent_attempts": [_attempt(1, "openai")],
+        },
         "checkpoint": {"provider_state": {}, "work_order": {"id": "WO-1"}},
         "result": {
             "commit": head, "diff": {"diff_hash": digest},
@@ -255,7 +341,10 @@ def _service(tmp_path, monkeypatch, *, verdict="PASS", provider="google", create
         "id": "cross", "model": "cross", "provider": provider,
         "adapter": "fake",
     }
-    router = _FakeRouter(choice)
+    router = _FakeRouter(
+        choice, cross_unavailable=cross_unavailable,
+        fallback_choice=fallback_choice, cross_failure=cross_failure,
+    )
     engine = SimpleNamespace(router=router, workspace_root=tmp_path)
     service = LateReviewService(SimpleNamespace(), engine, SimpleNamespace())
     ledger = _FakeLedger(created=created)
@@ -273,7 +362,12 @@ def _service(tmp_path, monkeypatch, *, verdict="PASS", provider="google", create
             "findings": [], "jit_context_used": False,
         })
     )
-    adapter = _FakeAdapter(output)
+    adapter = _FakeAdapter(
+        output, model=(
+            str(fallback_choice.get("model") or "")
+            if cross_unavailable and fallback_choice else "cross"
+        ),
+    )
     monkeypatch.setattr(pm_late_review, "build_adapter", lambda *args: adapter)
     return service, ledger, router, adapter, envelope
 
@@ -313,9 +407,75 @@ def test_same_provider_reviewer_never_invoked(tmp_path, monkeypatch):
         tmp_path, monkeypatch, provider="openai",
     )
     request, result = asyncio.run(_execute(service, envelope))
-    assert result["status"] == "no_capacity"
+    assert result["status"] == "staffing_error"
     assert ledger.saved is None
     assert not any(item[0] == "claim" for item in ledger.calls)
+    assert adapter.calls == []
+
+
+def test_same_provider_higher_tier_fallback_after_confirmed_no_cross_capacity(
+    tmp_path, monkeypatch,
+):
+    upgraded = {
+        "id": "upgraded", "provider": "openai",
+        "model": "upgraded", "adapter": "fake",
+    }
+    service, ledger, router, adapter, envelope = _service(
+        tmp_path, monkeypatch, cross_unavailable=True,
+        fallback_choice=upgraded,
+    )
+    request, result = asyncio.run(_execute(service, envelope))
+    assert request["review_mode"] == "same_provider_higher_tier"
+    assert result["status"] == "passed"
+    assert result["review_mode"] == "same_provider_higher_tier"
+    assert result["reviewer_provider"] == "openai"
+    assert ledger.saved["attestation"]["cross_provider_unavailable"] is True
+    escalation = ledger.saved["attestation"]["escalation"]
+    assert escalation["writer_model_ids"] == ["openai-model"]
+    assert escalation["reviewer_tier_index"] > escalation["writer_max_tier_index"]
+    assert escalation["reviewer_review_score"] > escalation["writer_max_review_score"]
+    assert len(router.calls) == 2
+    assert router.calls[0]["provider_state"]["provider:openai"]["available"] is False
+    # At fallback time only models satisfying BOTH stronger constraints are eligible.
+    assert router.calls[1]["provider_state"]["openai-model"]["available"] is False
+    assert router.calls[1]["provider_state"]["weaker"]["available"] is False
+    assert router.calls[1]["provider_state"]["equal_review"]["available"] is False
+    assert len(adapter.calls) == 1
+    assert len([x for x in ledger.calls if x[0] == "claim"]) == 1
+
+
+@pytest.mark.parametrize("model_id", ["weaker", "equal_review", "openai-model"])
+def test_fallback_rejects_non_stronger_model_without_model_call(
+    tmp_path, monkeypatch, model_id,
+):
+    rejected = {
+        "id": model_id, "provider": "openai",
+        "model": model_id, "adapter": (
+            "codex_cli" if model_id == "openai-model" else "fake"
+        ),
+    }
+    service, ledger, router, adapter, envelope = _service(
+        tmp_path, monkeypatch, cross_unavailable=True,
+        fallback_choice=rejected,
+    )
+    request, result = asyncio.run(_execute(service, envelope))
+    assert result["status"] == "staffing_error"
+    assert ledger.saved is None
+    assert adapter.calls == []
+    assert len(router.calls) == 2
+    assert not any(c[0] == "claim" for c in ledger.calls)
+
+
+def test_network_or_untrusted_cross_staffing_never_enables_fallback(
+    tmp_path, monkeypatch,
+):
+    service, ledger, router, adapter, envelope = _service(
+        tmp_path, monkeypatch, cross_failure="Router temporarily unreachable",
+    )
+    request, result = asyncio.run(_execute(service, envelope))
+    assert result["status"] == "staffing_error"
+    assert len(router.calls) == 1
+    assert ledger.saved is None
     assert adapter.calls == []
 
 
