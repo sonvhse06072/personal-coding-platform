@@ -1272,16 +1272,21 @@ def _ddev_subprocess_env() -> dict[str, str]:
     }
 
 
-
 def _effective_ddev_start_timeout(phase_timeout: int) -> int:
     """Use an explicit finite cold-start policy within the existing phase budget."""
     configured = os.getenv("DDEV_START_TIMEOUT_SECONDS", "600").strip()
-    if not configured.isdecimal() or not 10 <= int(configured) <= 1800:
+    if re.fullmatch(r"[0-9]{1,4}", configured) is None:
         raise HTTPException(
             500,
             "DDEV_START_TIMEOUT_SECONDS must be an integer between 10 and 1800",
         )
-    return min(phase_timeout, int(configured))
+    start_limit = int(configured)
+    if not 10 <= start_limit <= 1800:
+        raise HTTPException(
+            500,
+            "DDEV_START_TIMEOUT_SECONDS must be an integer between 10 and 1800",
+        )
+    return min(phase_timeout, start_limit)
 
 
 def _ddev_start_failure_hint(
@@ -1298,7 +1303,6 @@ def _ddev_start_failure_hint(
         f"pcp_infrastructure_failure=ddev_start_{outcome} "
         f"stage_hint={stage} effective_timeout_seconds={timeout}"
     )
-
 
 
 def run_tracked(
