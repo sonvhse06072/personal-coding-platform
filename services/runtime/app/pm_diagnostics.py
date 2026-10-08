@@ -495,6 +495,14 @@ class PMDiagnosticsService:
                 }
                 if attempt else {"status": "not_requested"}
             )
+            # The Owner-delegated PM reviewer needs the *persisted* accepted
+            # diff digest to author a report bound to the exact code. This is
+            # not proof of live workspace availability: record/release still
+            # recompute and verify accepted_diff before issuing any authority.
+            persisted_diff = dict((job.get("result") or {}).get("diff") or {})
+            diff_hash = persisted_diff.get("diff_hash")
+            if isinstance(diff_hash, str) and re.fullmatch(r"[0-9a-f]{64}", diff_hash):
+                sections["late_review"]["persisted_accepted_diff_sha256"] = diff_hash
             # Registry-only evidence explains a no-capacity result but must
             # never be presented as an actually healthy/available reviewer.
             if str(job.get("status") or "") == "completed":
