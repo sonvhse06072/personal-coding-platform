@@ -1,581 +1,70 @@
 # Current Project State and Handoff
 
-Status: Tier-1 mutable working-state snapshot. Repository policy/code/tests and
-fresh Runtime/GitHub evidence remain authoritative over chat history. This file
-is an index, not authority to change the approved baseline or protected scope.
+Status: **Tier-1 mutable working-state index**. This is not a chronological incident log, an approved ProjectBaseline amendment, or proof of a live Runtime/local lock. Repository governance and approved ProjectBaseline revisions remain authoritative; read GitHub/Runtime/local evidence again before any mutation.
 
-Last updated: 2026-10-08 after exact GitHub-main Runtime 1.0.132 rollout via Guardian, with post-rollout health and clean Git verification; Chợ Nhạc AP-MVP-03 has merged through PR #84.
+Last reconciled: **2026-10-08** using GitHub main and issue/PR evidence. The last locally verified Guardian state cited below is historical; this edit does **not** assert a fresh local health/quiescence snapshot.
 
 ## Resume order
 
-1. Read root `AGENTS.md`, `docs/project/README.md`, then this snapshot.
-2. Read only relevant T2 contracts and T3 episodes in `history/episodes.md`.
-3. Check live issue/PR, exact source, Runtime health, active jobs, project lease
-   and local Git before any mutation. Older snapshots are evidence, not live locks.
+1. Read AGENTS.md and docs/project/README.md for repository authority and required boundaries.
+2. Read this compact T1 snapshot and the relevant T2 source, not all historical project documentation.
+3. Retrieve the relevant T3 episode from docs/project/history/episodes.md only when its lesson applies.
+4. Revalidate exact live GitHub issue/PR/head/CI and Runtime job/plan/lease/local Git state before review, repair, merge, continuation or rollout.
+5. Read exact code/diff/tests for the active WorkOrder; fetch T4 logs only to diagnose a specific problem.
 
-Memory-tier policy: `context-memory-architecture.md`.
+Memory/retrieval contract: docs/project/context-memory-architecture.md. The existing Context Composer is scripts/context_memory.py (standalone deterministic tool); do not assume Runtime prompts automatically use it.
 
+## Current product and operating frame
 
-## Current business / platform reconciliation — 2026-10-07
+- PCP is a **personal engineering operating system**, not a SaaS product. Current stage is **consolidation and reliability**. See docs/project/business-strategy.md and docs/project/roadmap.md.
+- Human Owner retains protected scope, architecture, security, destructive data, production, governance and material resource decisions. PM may perform routine in-scope work/merges only after their existing gates pass.
+- Git/project documents hold durable approved knowledge. ProjectBaseline pins approved authority to an exact source commit; newer GitHub main is executable-source evidence, **not** implicit baseline approval.
+- Router selects staffing and bounded budgets; Runtime/PostgreSQL owns durable job/checkpoint/orchestration state; GitHub provides auditable development/remote PM control; Guardian supplies strictly allow-listed out-of-band actions.
+- Do not turn Chợ Nhạc application issues into PCP roadmap items unless a repeatable platform defect or material reusable capability gap is demonstrated.
 
-GitHub/Runtime live evidence remains authoritative over this snapshot.
+## PCP GitHub source and rollout evidence
 
-### PCP product/business posture
+- GitHub main last checked at **104900d8069a2db9d90850e53b5f81557257a42b** (PR #560 / issue #561 follow-up). This commit includes source code declaring **Runtime 1.0.134**. Re-read the current branch head before using this SHA as an exact-match precondition.
+- Runtime **1.0.132** rollout was accepted via Guardian result **6049394135**, following quiescence result **6049369444**: local PCP main was clean at **b0c0e9a43634b4b133382a2b2cab4c5828372465**, Router **1.0.31**, executor **1.0.33**, and no active work at that observation. This quiescence proof is **not reusable** for later rollouts.
+- Issue #561 records later **Runtime 1.0.133** Guardian deployment with stable parent checkpoint 182; issue #562 contains read-only diagnostics from **Runtime 1.0.134**. Those are point-in-time evidence; current running versions, health and local source must be checked live.
+- Dashboard workflow-progress implementation from #557 / PR #558 was merged in 1.0.132; #557 remains open on GitHub as a tracking issue. Estimated workflow percentage is based on durable workflow stages, not ETA or budget consumption.
+- GitHub PR listing showed no open PCP PR at this reconciliation. Treat this as an observation, not a persistent invariant.
 
-- The product/business strategy is now explicit in `business-strategy.md`.
-- PCP is an internal personal engineering operating system, not a SaaS product.
-- The current product stage is **consolidation/reliability**: improve the proven end-to-end loop before adding adjacent capabilities.
-- Managed-project dogfood is evidence, not automatic PCP roadmap authority. Application-specific bugs remain in the application repo unless they prove a generic PCP platform defect/capability gap, recurring owner-cost pattern or broken platform invariant.
-- New platform work should be justified by reduced Human Owner attention, reduced recurring failure/resource waste, improved accepted-work quality, a required trust boundary, or reusable leverage.
+## Active PCP issues and owner attention
 
-### Live PCP state
+- **#562 — protected review/merge recovery:** Chợ Nhạc GH-63 Step 7 is blocked by required different-provider reviewer independence. Preferred direction is a genuine late independent review of the exact verified head, preserving the same job, not an automatic waiver. The proposal explicitly requires a separate Human Owner approval for changes to this review/merge trust boundary. Do not bypass by resetting review policy, counters, identity or orchestrator state.
+- **#493 — DDEV cold/bootstrap reliability:** bounded cold image-start timeout/recovery still needs evidence-based repair. Do not blindly increase timeout or create extra retries.
+- **#512 — remote PM control parent:** keep open for naturally observed remaining acceptance evidence; no synthetic jobs/outages simply to close it.
+- **#524 — persistent Guardian commands/audit:** intentionally open operations channel, not engineering backlog.
+- **#557 — progress UI tracking:** implementation merged in PR #558; reconcile the open issue only against actual acceptance/owner UI evidence.
+- **#563 — documentation reliability hardening:** owner-approved, bounded T1 hygiene, deterministic retrieval correctness and evaluation/adoption. This is separate from Runtime/reviewer recovery.
 
-- The last Runtime-affecting PCP main accepted and rolled out is
-  `b0c0e9a43634b4b133382a2b2cab4c5828372465` (PR #558).
-- Runtime: `1.0.132`.
-- ddev-executor: `1.0.33`.
-- Router: `1.0.31`.
-- Post-merge CI #1075 / run `37665108466` passed on exact main `b0c0e9a43634b4b133382a2b2cab4c5828372465`.
-- Guardian `status_snapshot` control `6049363026` / result `6049369444` provided fresh pre-rollout quiescence (`active_engineering_jobs=0`, executor `active_jobs=0`, Antigravity `active_runs=0`, local PCP `main` clean).
-- Guardian `rollout_pcp_exact_main` control `6049372290` / result `6049394135` executed successfully. Guarded local main advanced from `6db414df30040cacc9fd922283eb21e06ba576b8` to exact `b0c0e9a43634b4b133382a2b2cab4c5828372465`, worktree remained clean, Runtime `1.0.132`, Router `1.0.31`, executor `1.0.33`, n8n/credential boundary/Antigravity healthy, and all active counters remained zero.
-- PR #558 includes the server-computed Dashboard `workflow_progress` contract; progress is based on durable stages/milestones, never ETA or token/model/tool/test budgets. The runtime contract is deployed; an independent browser/UI verification is not implied by rollout health.
-- PR #553 fixed stale Developer Activity after a terminal standalone job.
-- RCTL-MVP #513 is **closed completed**. Natural Chợ Nhạc #77 live-proved:
-  - sanitized remote diagnostics and same-job repair;
-  - one PM authorization surviving multiple progressing repair/reverification cycles;
-  - exact-head standalone PM merge through `merge_standalone_job`;
-  - exact supervised continuation through `continue_supervised_plan`.
-- #555 / PR #556 is **closed completed** and live-proven on Runtime 1.0.131:
-  - exact `collaboration_pm_handoff` durable context materializes the existing generation-bound `resume_same` action;
-  - incomplete/stale PM-handoff context remains fail-closed;
-  - exact GitHub `resume_same_job` for Chợ Nhạc job `f646378719a85fa2be340d3fd2af256a` was recorded as `executed` with `error=null`;
-  - recovery preserves the same job/workspace/diff/counters and does not reroute or reset provider state.
-- #512 remains open as a parent acceptance frame, not a broad implementation backlog. Remaining parent evidence should be gathered naturally:
-  - a post-rollout GitHub `direct_intake` on a real bounded ticket;
-  - a real Runtime/n8n-unavailable Guardian case if one occurs.
-  Do not create synthetic jobs or destructive outages merely to close those acceptance points.
-- #524 remains intentionally open as the persistent Guardian control/audit issue; it is not engineering backlog.
-- #493 remains the ordinary independent open engineering issue for DDEV cold/bootstrap hardening.
+Current Human Owner attention: #562 requires an explicit approved review-governance choice before implementing a critical late-review eligibility path. Do not treat a normal doc hygiene PR as this approval.
 
-### Current Chợ Nhạc dogfood state
+## Chợ Nhạc managed-project checkpoint
 
-Fresh 2026-10-08 delta: Chợ Nhạc GH-63 supervised generation 6 WorkOrder `AP-MVP-03-generalized-verified-performance` / job `42cadf99d81855d5a722ed821a7df430` merged via Chợ Nhạc PR #84 at `0ed8e38428d72cde41b4471c6d74e5614d7255f0`. Post-merge PCP Guardian quiescence and rollout results confirm zero active engineering/executor/Antigravity work. The exact parent-plan checkpoint/next continuation identity still requires fresh Runtime `plan_progress` evidence; do not infer `supervised_hold` or authorize generation 7 solely from PR merge.
+- Active configured approved baseline: **pilot-v1-2026-10-04-dec033-r3**, source **aa8e68dd9aea6740de446151eb97615931de9b40**. Existing and new WorkOrders must respect their **own pinned revision**; do not silently advance or rewrite authority to follow newer main.
+- GH-63 / parent plan **pm-b0748be27f8446a0813c2d1fe7d697fd**: Step 7 WorkOrder **EE-0-04-event-engagement-analytics**, preserved job **057f6acff17b501eae3a673cbb6bbe36**, Chợ Nhạc PR **#85** at exact verified head **90c84d38692f781e1df91e85d253897d68458638**.
+- The last cited Runtime 1.0.134 diagnostic in PCP #562 reported parent checkpoint **182**, stably blocked at **pm_merge_ineligible:required_review_independence_not_satisfied**, despite passing executable checks, evaluator and exact-head CI. This is **historical observed state**, not authorization to mutate the job or proof the state has not changed since.
+- Check Chợ Nhạc GH-63 and PCP #562 plus fresh Runtime plan_progress/diagnostics before inferring any next WorkOrder, PM merge, supervised hold or continuation identity.
+- Prior AP-MVP-03 was merged via Chợ Nhạc PR #84. Completed-stage details and retired pilots are historical evidence, not active T1 instructions.
 
-- #77 is closed completed.
-- #56 is closed again after the public Event lineup avatar DTO repair.
-- Chợ Nhạc main after PR #78 is
-  `f250dc799919910899e0000e23c2f48299894143`.
-- Supervised generation 4 was released through exact PM control identity.
-- EE-0-02 `public-event-discovery-detail` remains the same durable job
-  `f646378719a85fa2be340d3fd2af256a` on branch `ai/f646378719a8`,
-  source `f250dc799919910899e0000e23c2f48299894143`.
-- The last full diagnostic before recovery showed `collaboration_pm_handoff`,
-  `frontend_quality` failing while targeted tests/static analysis passed,
-  `unexpected_scope=false`, and no pending Human decision.
-- Runtime 1.0.131 then materialized exact action `resume_same` with blocker
-  generation `745b859e861ba917e30cd57b16b23ca34911e1a66898ecf677d75c2d8f7750c6`
-  and control action `3K2EU61CDsBSvgrSxagTAh9I`.
-- GitHub PM control comment `6040773131` was durably recorded
-  `status=executed`, `error=null` for that exact job/generation/action.
-- Do not infer the post-resume verification outcome from that control event alone.
-  Re-read fresh Runtime/job evidence before any further repair, retry, merge or
-  supervised continuation.
+## Immediate next safe actions
 
-Runtime-affecting PCP rollout remains permitted only after a fresh quiescence
-check proves zero active engineering/executor/Antigravity work and local PCP
-clean. The 1.0.132 exact-main rollout was accepted by Guardian with fresh proof
-(`6049369444` -> `6049394135`). Do not reuse this proof for a future rollout.
+1. For #562 / GH-63 Step 7, obtain/revalidate exact current plan/blocked-review evidence. Keep the PR blocked until a genuinely independent review or an explicit protected Owner decision has satisfied the existing governance.
+2. Complete #563 as small reviewed PRs: T1 cleanup first, retrieval correctness second, benchmark/adoption third. No new memory service, vector DB or Runtime execution-semantic change by implication.
+3. Reassess #493 after a safe managed-project checkpoint; preserve healthy active work before any DDEV/Runtime rollout.
+4. Use existing safe remote-control/Guardian paths with exact identity, idempotency and fresh preconditions; no arbitrary shell/SQL edits, force push, reset, stashing, destructive cleanup or unbounded retries.
 
-### Immediate PM rule
+## Historical and detailed evidence pointers
 
-Do not let the current Chợ Nhạc execution become an unbounded PCP roadmap generator.
+- Memory model and accepted original benchmark: #313, #314, #317; docs/project/context-memory-architecture.md.
+- Baseline/document governance hardening: #322; approved source in AGENTS.md / docs/project/constitution.md.
+- Incident-learning and PM triage: #406, docs/project/operating-model.md, docs/project/history/episodes.md.
+- Remote PM/Guardian controls: #512 and #524; Runtime state and audit events are authoritative for current actions.
+- Chợ Nhạc old/retired ExecutionPlan and rollout details: GH-63, PCP issues #424, #466, #493 and Git history of this file. Completed chronology belongs in GitHub/Git/Runtime/T3, not this replace-in-place snapshot.
+- Review required code, tests, and exact branch diff for implementation; high-volume CI logs, transcripts, and diagnostics belong at T4 and are fetched only when specifically needed.
 
-If EE-0-02 or a later managed-project job blocks:
+## Standing safety boundary
 
-1. diagnose the exact durable failure;
-2. decide project defect versus generic PCP defect;
-3. repair the project when the problem is project-specific;
-4. repair an existing PCP capability/issue when that capability is generically defective;
-5. open new PCP scope only when the evidence passes the business-value and reuse tests in `business-strategy.md`.
-
-The older execution sections below are retained only as incident/history evidence. Re-read live GitHub, Runtime, local Git and active-job state before mutation.
-
-## Historical accepted platform / local state snapshot
-
-- Runtime `1.0.106`; Router/executor healthy; executor `1.0.31`.
-- Owner audit v2 observed active engineering jobs = 0 and executor active_jobs = 0.
-- Local PCP is clean `main@e7fb6d364f109a2ddee979d3a040367b03d87f73`.
-  Later PCP handoff PRs are docs-only; do not restart just to obtain them.
-- Chợ Nhạc is clean `main@aa8e68dd9aea6740de446151eb97615931de9b40`.
-  Historical `ai/c02defa348fc` ref remains at
-  `88dd4f60dbe95c41c6e7ce8fc5bb3c7ba8a098ba`.
-- #463 / PR #464 is complete: planning source references are restricted to the
-  sorted/deduplicated `ProjectBaseline.references` allowlist. Authority-only
-  paths never become eligible references by implication.
-- #466 / PR #468 is implemented, merged and locally accepted. Historical GET
-  reads preserve template visual routes through non-executable snapshot models;
-  executable WorkOrder / PM proposal validators remain strict. No repeat rollout,
-  diagnostic or restart is needed.
-- In-process replay proof is not described as an HTTP POST replay test. Digests
-  from different probes are compared only with the same serialization contract.
-
-## Chợ Nhạc approved frame
-
-- Active baseline for new work: `pilot-v1-2026-10-04-dec033-r3`.
-- Immutable authority source: `aa8e68dd9aea6740de446151eb97615931de9b40`.
-- r3 preserves r2 source/authority and adds the authorized local-only
-  `docs/26-local-demo-workflow.md` to requirements/quality-policy references.
-  There are 27 reference paths; `docs/12-launch-metrics.md` remains authority-only.
-- r2 at the same source, r1 at `132c2ef767b595833677e9672d655872e07ba9b7`,
-  and the original `pilot-v1-2026-10-03-dec033` stay immutable/resolvable.
-  Do not create r4, rewrite r3, or add references to fit a rejected proposal.
-- Direct project root `/home/sonvh/chonhac`; configured base `main`;
-  `workspace_mode=direct`, exclusive engineering lease enabled, AI prefix `ai`.
-- DEC-033 remains the controlled-pilot execution decision. Historical DEC-025 and
-  GH-42 execution are retired, not candidates for resume/reroute/recreation.
-- PILOT-01 / GH #61 is accepted and merged through Chợ Nhạc PR #67 at the current
-  authority source. The product head was `88dd4f60...`; final product diff was
-  16 files / +223 / -56, within its <=25-file budget. Do not reimplement it.
-- CI governance repairs #68/#69 and #70/#71 preserve documentation authority and
-  isolated PostgreSQL 17 verification; the repository runner does not gain
-  Docker/DDEV privileges.
-
-## Historical reconciliation and lease — complete
-
-Supersession snapshot `2026-10-04T16:20:55.930831+00:00` proved 29 exact supported
-supersessions with zero model calls. Historical plan
-`pm-5cd9ec06f74b4feba4db5a1507ab35f0` and the three rejected plans
-`pm-095d6aea0fe94901bbf692fa7d113fc2`,
-`pm-a72e960c0f3b458897831cff3fb51a30`,
-`pm-ac6a52e6019947adab8744a7ada72011` are lifecycle=superseded.
-PILOT-02..08 map to the approved seven successor WorkOrders; PILOT-01 has no
-replacement because its product was merged. Source state/history is not rewritten
-as implementation success. Mapping details:
-`pilot-successor-reconciliation-map-b0748be-2026-10-04.md`.
-
-The supported historical cancel was sent once. Audit v2 now proves:
-
-- job `c02defa348fc5b19a0bd021e2697571e` is `cancelled`;
-- exact generation-9 lease is `released`, with recorded update
-  `2026-10-04T16:47:00.470307+00:00`; owner identity is retained;
-- preview absent; `resource_quiesce` is quiesced=false/data_removed=false;
-- `direct_base_restore` succeeded to clean `main@aa8e68dd...`, reused=false;
-- progress/result and all five immutable plan rows are preserved;
-- full pre-cancel checkpoint hash is reproduced by restoring the pre-existing
-  blocked `resource_quiesce` on a RAM copy and removing the new restore field.
-  Matched case: `RESTORE_PREEXISTING_BLOCKED_QUIESCE`.
-- The hash is `639bf30eb2b7e796d5a5eafe8ffd315375c65491f844f42e12e0ccb16136344c`.
-  No reconstruction was written to the database.
-
-Owner artifact `chonhac_post_cancel_audit_v2.json` SHA256:
-`b7e11836b7c5a1ab7339fb36e727445a4695ac719871f30e40436f46f312d76b`.
-Acceptance and conditional next action are recorded in Chợ Nhạc #63 comment
-`5982524270`. Do not repeat cancel, alignment, supersession, intake or checkpoint
-probes. The old audit's pop-both-fields comparison was invalid for a field that
-already existed and was overwritten; its STOP did not imply rollback.
-
-## Approved candidate — generation 1 released
-
-Plan: `pm-b0748be27f8446a0813c2d1fe7d697fd`.
-Content approval: #63 comment `5981710459`;
-review details: `pilot-successor-pm-review-b0748be-2026-10-04.md`;
-contract/fixture ownership: `pilot-successor-review-2026-10-04.md`.
-These are execution evidence, not added ProjectBaseline references.
-
-Plan digest remains
-`f667ffe9d27fc3824f550089cf09269b0cfa7ccc58654d8c9e8a30e91ac7ab7d`.
-Owner v5 evidence shows generation 1 / checkpoint 45 was released through the
-supported `/continue` endpoint with exact continuation key
-`plan:continue:eb370313ac975fc2b6d9331b73cde0ebbd944bf0d54ade8f12eb7805e9722fe3`.
-Runtime acknowledged `status=released`, `idempotent=false`, and launched only
-`AP-MVP-01-artist-profile-data-curation` as deterministic child job
-`6b89482673ea5d2a92cc46b6ba7acf84`.
-
-Immediate observation after release: plan `executing`, lifecycle active,
-generation 1 supervision state `released`; AP-MVP-01 row `running` with the
-exact child job; the other six successor rows remain pending with no job IDs.
-The first child-job observation was `status=routing`; later Runtime progress
-must be read fresh rather than inferred from this launch snapshot.
-
-The seven sequential WorkOrders / issues / adaptive file targets are:
-
-1. `AP-MVP-01-artist-profile-data-curation` — #48 / 45 / complex.
-2. `AP-MVP-02-artist-profile-public-experience` — #49 / 55 / complex.
-3. `EE-0-01-event-backend-domain-api-access` — #56 / 90 / critical.
-4. `EE-0-02-public-event-discovery-detail` — #57 / 55 / complex.
-5. `EE-0-03-studio-event-management-participation-program` — #58 / 65 / complex.
-6. `AP-MVP-03-generalized-verified-performance` — #50 / 45 / complex.
-7. `EE-0-04-event-engagement-analytics` — #59 / 35 / critical.
-
-Keep all 42 acceptance criteria, linear dependencies, risk flags/profile floors,
-concrete visual routes and local fixture ownership. #50 has frontend_quality
-before visual_quality and only EventParticipation as a live pilot provider.
-No Booking provider/query/contribution, public recruitment, Reviews, Band domain,
-Audience identity/feedback, payment or staging/production seed/deployment.
-
-## Generation-1 execution — active
-
-The historical reconciliation/lease gate and generation-1 release gate are
-complete. Do **not** rerun v1-v5 release helpers, delete either durable attempt
-marker, repeat cancel/alignment/supersession/intake, or manually create another
-AP-MVP-01 job.
-
-The successful v5 recovery was valid only because pinned v4 evidence proved the
-prior attempt had `continue_post_attempted=false`. V5 preserved the original
-marker, created a second O_EXCL recovery marker, re-ran all generation-1 gates,
-and observed healthy Runtime/router/executor with zero active engineering jobs
-before POST. Planner/executor deterministic preview used `codex_terra` with
-fresh observed Codex quota pressure 0.16. Evaluator preview used
-`openrouter_qwen3_coder_free`; its checked-in registry explicitly declares no
-authoritative remaining-quota telemetry. No provider was forced and the standard
-Router/failover policy remains authoritative.
-
-Accepted continuation result:
-- plan `pm-b0748be27f8446a0813c2d1fe7d697fd`;
-- exact generation 1 / checkpoint 45 continuation;
-- WorkOrder `AP-MVP-01-artist-profile-data-curation`;
-- child job `6b89482673ea5d2a92cc46b6ba7acf84`;
-- continue acknowledged, `idempotent=false`;
-- six later WorkOrders still pending and unauthorized.
-
-Release acceptance is recorded in Chợ Nhạc #63 comment `5983110319` and #48
-comment `5983110686`.
-
-Next PM behavior is the normal supervised execution flow, not another release:
-read the exact live job/orchestration before any mutation; preserve the direct
-workspace while engineering is active; review implementation evidence, exact
-diff/head and required verification; require exact-head CI; then take the
-generation-1 supervised checkpoint decision. Generation 2 remains unauthorized
-until generation 1 reaches that checkpoint and PM review accepts it.
-
-The v4/v5 markers are historical anti-replay evidence and must remain untouched.
-A dirty/new AI branch after the running job enters workspace execution may be
-legitimate progress; do not reset/stash/clean merely to recreate the launch
-snapshot.
-## Active separate platform follow-up
-
-PCP #474: fix `_quiesce_stable_manual_job` detection of persisted orchestrated
-jobs. Raw `cp_jobs` does not contain top-level work_order_id; durable identity is
-in checkpoint metadata. Existing tests used synthetic top-level fields and did
-not cover this Storage shape. Current source is not fixed by this docs update.
-
-The accepted Chợ Nhạc incident is a direct-workspace preserve/no-op, not data
-removal. #474 does not require restarting/replanning this accepted successor.
-Do not generalize that safety conclusion to isolated-workspace cleanup. The
-issue still requires a bounded implementation and real-shaped regressions.
-
-## Active DDEV direct-workspace recovery — PCP #493
-
-Chợ Nhạc AP-MVP-02 exposed a deterministic DDEV bootstrap failure after the
-planner recovered successfully. The preserved direct workspace remained clean
-and its existing Chợ Nhạc web/database containers remained healthy, but every
-Runtime verification phase unconditionally ran `ddev start -y` first.
-
-Bounded diagnosis ruled out project Dockerfile/build-context correctness and
-current registry metadata resolution. The dedicated `pcp-builder`
-(`docker-container`) can build both project targets from cache, but PostgreSQL
-local-image export stalls in the `type=docker` tar-transfer path. The default
-Docker builder can export, tag and unpack both images but the multi-target build
-still fails to return before the bounded timeout. `DOCKER_BUILDKIT=0` also
-timed out and is not an accepted fallback. Do not increase timeouts, prune
-builders/images, replace the preserved AP-MVP-02 job, or bypass Runtime state.
-
-Repair branch `ai/493-reuse-running-direct-ddev` scopes a safer direct-workspace
-path behind `ddev.reuse_running_direct_ddev`. When enabled, a non-frontend
-phase may reuse an already-running direct DDEV project only when the tracked
-`.ddev` configuration has no uncommitted changes and `ddev exec true`
-succeeds within a short readiness bound. A failed readiness probe or dirty
-`.ddev` tree falls back to the existing fail-closed `ddev start -y` path.
-`frontend_quality` still forces startup/reconciliation because it may write a
-managed DDEV Node override. Chợ Nhạc preflight no longer duplicates
-`ddev start -y` as a configured command because infrastructure startup/reuse is
-owned by the executor phase wrapper.
-
-This recovery does not relax isolated-workspace resume semantics and does not
-remove the dedicated PCP builder from Router/Runtime/ddev-executor platform
-image builds. CI and zero-active-work rollout evidence are required before
-resuming the exact AP-MVP-02 job.
-
-## PM-handoff verification-only recovery — PCP #495
-
-AP-MVP-02 exposed a contract mismatch after a bounded collaboration exhausted
-its two rounds and handed an unresolved design question to PM. The execution
-prompt correctly tells a resumed developer not to invent a repository edit when
-PM has resolved the decision and no code-side repair remains, but the ordinary
-per-invocation material-change guard still treated that safe no-effect turn as a
-failure.
-
-The repair is explicit and single-use rather than a global relaxation. A caller
-must set `verification_only_after_pm_handoff=true` on the existing blocked job.
-Runtime accepts it only for a durable `pm_handoff` collaboration context bound
-to the exact thread and round, forbids provider reset/reroute in the same
-request, and arms one verification-only turn. That marker is consumed on the
-next executor turn whether or not the developer changes files. All ordinary
-no-effect turns remain fail-closed.
-
-This recovery preserves the same job, workspace, route, cumulative diff and
-usage counters. It does not reopen collaboration, reset budget telemetry or
-authorize a new product/design decision. The owner/PM must resolve the actual
-handoff decision outside Runtime before using the flag.
-
-## Orchestrated stable-job quiesce classification — PCP #474
-
-A historical Chợ Nhạc lease-retirement audit exposed that
-`_quiesce_stable_manual_job()` classified orchestration using a nonexistent
-top-level `cp_jobs.work_order_id` field. Persisted orchestration identity is
-owned by the durable `checkpoint.orchestrator_launch` reservation.
-
-The bounded repair uses the existing validated `orchestrator_launch(job)`
-predicate before any manual workspace quiesce. A genuinely orchestrated stable
-job is left to PlanOrchestrator resource handling, while standalone/manual jobs
-— including a standalone WorkOrder that has `checkpoint.work_order` but no
-orchestrator launch reservation — retain existing quiesce behavior.
-
-Regression coverage uses a Storage-shaped row with WorkOrder identity only
-inside the checkpoint plus the canonical launch marker; no top-level
-`work_order_id` test-only field remains.
-
-## Chợ Nhạc visual-runtime prerequisite — PCP #498
-
-AP-MVP-02 reached the Runtime-owned `visual_quality` phase and the locked
-Playwright Chromium executable failed to launch because the active DDEV web
-container was missing `libnspr4.so`. The existing `frontend_quality` phase
-already uses the repository-local Playwright CLI as root to install Chromium OS
-dependencies, but that installation is imperative container state and is not a
-durable guarantee for a later visual phase after container/image recreation.
-
-The bounded repair makes `visual_quality` self-contained: immediately before
-`npm run test:visual`, Runtime executes the same local
-`npx playwright install-deps chromium` command as root inside the active DDEV
-web container. This intentionally does not reintroduce a hard-coded
-`webimage_extra_packages` list in the application repository and does not
-change application code or Playwright versions.
-
-The visual test remains the second command in the phase, so dependency
-provisioning must succeed before capture begins. Ordinary DDEV/Runtime phase
-timeouts and fail-closed command handling remain unchanged.
-
-## Flash High fixed-effort compatibility — PCP #500
-
-AP-MVP-02 completed deterministic verification and then exposed a model-registry
-mismatch in the evaluator. PCP selected logical model
-`antigravity_flash_high`, upstream `gemini-3.8-flash-high`, with persisted
-`reasoning_effort=medium`. The Antigravity CLI rejected the invocation because
-the explicit model preset already encodes the effort level and conflicts with
-`--effort=medium`.
-
-The bounded repair follows the same compatibility pattern already used for
-`gemini-3.8-flash-medium`:
-
-- `antigravity_flash_high` declares `supports_reasoning_effort: false`;
-- historical `low/medium/high` values remain accepted as
-  `legacy_ignored_reasoning_efforts` so durable routes can resume;
-- fresh Router choices omit explicit effort;
-- Runtime's Antigravity adapter omits the effort payload even when a preserved
-  pre-fix evaluator choice still carries one;
-- registry version advances to 13 and Runtime advances to 1.0.113.
-
-This correction does not change the upstream model, model role, quota group,
-provider routing priority or AP-MVP-02 source/workspace. It does not generalize
-the same rule to `gemini-3.1-pro-high` without direct compatibility evidence.
-
-Because this incident occurred only after deterministic verification had
-already passed, the existing explicit PM-handoff verification-only recovery may
-also be armed for `evaluator_provider_failure_without_fallback` when the
-checkpoint proves `last_verification_summary.passed=true` and retains an exact
-durable evaluator choice. This avoids inventing an application edit or rerouting
-the WorkOrder merely to retry an evaluator after a platform capability repair.
-
-## Provider success rehabilitation + PM staffing recovery — PCP #502
-
-AP-MVP-02 exposed a durable health-state contradiction after the evaluator
-successfully completed on Google Antigravity. The checkpoint still retained a
-provider-wide `provider:google_antigravity=unavailable` marker from an older
-pre-fix evaluator failure. PM reassessment forwarded that stale state to Router
-staffing, leaving no eligible Product Manager candidate and producing HTTP 422
-from `/v1/staff`.
-
-Runtime now treats a successful planner/executor/evaluator invocation as
-authoritative evidence only for the exact provider/model that just succeeded:
-
-- remove a stale `provider:<provider>` marker for that provider;
-- remove a stale model-id health marker for that exact model;
-- preserve unrelated quota-group markers and unrelated model/provider failures;
-- retain a bounded rehabilitation audit in the checkpoint.
-
-For an already-blocked `pm_reassessment_failed` job, the existing explicit
-verification-only PM-handoff recovery is extended only when all of these are
-durably true:
-
-- deterministic verification passed;
-- independent review passed with a valid protocol;
-- the blocked result retains the exact diff hash;
-- the failure is an HTTP 422 from Router `/v1/staff`;
-- PM-handoff collaboration context is still exact;
-- review history identifies the successful reviewer provider/model;
-- a stale health marker contradicted by that successful review is actually
-  present.
-
-That recovery removes only the contradicted provider/model marker. It does not
-use the broad transient-provider reset and therefore does not clear unrelated
-quota state.
-
-To reduce repeated model work, the prior independent-review PASS may be reused
-once when the resumed run produces the same exact diff hash and deterministic
-verification passes again. Any diff change, verification failure, prior-review
-failure or invalid review protocol disables reuse and returns to ordinary
-review behavior.
-
-Runtime version: `1.0.114`.
-
-## Semantic dependency protected signals — PCP #504
-
-AP-MVP-02 exposed a false protected boundary after Runtime correctly reached
-deterministic verification and independent review PASS. The current diff still
-touches `frontend/package.json`, but only to change `test:browser` and
-`test:visual` script commands. No dependency declaration changes. Historical
-scope-guard behavior classified every dependency-manifest path as
-`major_dependency_addition`, so this script-only edit incorrectly forced the
-same Human/PM dependency gate as a real package addition.
-
-Runtime diff evidence now records `dependency_manifest_changes` against the
-exact persisted source commit:
-
-- `package.json`, `composer.json`, `pyproject.toml`, and `Cargo.toml`
-  are compared semantically on their dependency surfaces;
-- unrelated script/metadata changes in those structured manifests do not create
-  `major_dependency_addition`;
-- actual dependency additions/removals/version changes still do;
-- lockfiles, requirements files, Pipfile/Gemfile, Docker/Compose and
-  Helm/Kubernetes dependency surfaces remain fail-closed on any change;
-- missing semantic evidence on legacy/durable results remains fail-closed.
-
-Runtime execution and PM merge eligibility consume the same durable semantic
-evidence, so a protected signal cannot disappear between execution and merge
-without an exact diff change.
-
-Runtime version: `1.0.115`.
-
-## PM merge authority follows protected decisions, not risk labels — PCP #506
-
-AP-MVP-02 completed every deterministic, independent-review and exact-head CI
-gate with no unresolved protected signal, but still entered manual merge because
-the merge evaluator treated every WorkOrder above `standard` risk as a Human
-Owner decision. That contradicted the operating contract: risk level determines
-routing/profile/verification rigor, while Human Owner involvement is reserved
-for unresolved protected decisions.
-
-The merge policy now separates those concerns:
-
-- `autonomy.allow_pm_merge` is the explicit project-level PM merge authority;
-- legacy `allow_auto_merge_low_risk` remains a backward-compatible fallback
-  when the new key is absent;
-- Chợ Nhạc explicitly sets `allow_pm_merge: true`;
-- `high` and `critical` risk levels remain durable merge evidence but do not,
-  by themselves, create a Human Owner merge blocker;
-- unresolved plan/job decisions, protected signals without matching durable
-  approval, PM protected-decision evidence, verification/review/CI failures,
-  PR/head/base mismatches and project merge opt-out remain fail-closed;
-- production deployment authority is unchanged.
-
-This allows a high/critical WorkOrder whose stricter engineering gates are all
-green and whose protected decisions are already resolved to complete through
-PM-controlled merge without an avoidable owner loop.
-
-Runtime version: `1.0.116`.
-
-## Completed-child blocked-parent reconciliation — PCP #508
-
-EE-0-01 exposed a durable parent/child mismatch after a preserved Runtime job
-recovered and completed successfully while its supervised WorkOrder remained at
-an earlier blocked checkpoint. The child had deterministic verification PASS,
-independent review PASS, accepted PM protected-scope reassessment, finalized
-GitHub delivery and exact-head CI PASS, but the blocked plan was excluded from
-the normal reconciliation loop.
-
-Runtime now treats blocked plans as reconciliation-visible but still
-non-launchable. A blocked agent WorkOrder may recover to `awaiting_merge` only
-when its exact same durable child currently proves all finalized-delivery
-bindings:
-
-- child status is `completed` and result status is `accepted`;
-- `delivery_finalized=true`;
-- delivery and CI states are successful;
-- a verified commit is present;
-- delivery PR number is present;
-- PR head exactly matches the verified commit;
-- PR head branch exactly matches the child branch;
-- CI commit, when present, exactly matches the verified commit.
-
-The recovery appends an immutable `recovered_accepted` checkpoint and carries
-the preserved PR identity forward. It does not merge by itself. Existing PM
-merge eligibility remains authoritative immediately afterward.
-
-Missing or mismatched evidence remains blocked. Blocked plans remain excluded
-from launch in `_launch_one()`, so reconciliation visibility does not create
-new engineering execution authority.
-
-Runtime version: `1.0.117`.
-
-### Late exact-head CI reconciliation — Runtime 1.0.118
-
-Live rollout of 1.0.117 proved the preserved EE-0-01 child could be fully
-accepted and delivery-finalized while its persisted delivery snapshot remained
-`ci_none`: the PR had been created on the exact verified head, but GitHub
-Actions completed only after Runtime's bounded CI discovery window. The later
-exact-head CI was green, yet blocked-parent recovery rejected the stale
-`ci_none` snapshot and PM merge eligibility would have rejected it again.
-
-Runtime 1.0.118 keeps the durable accepted result immutable and adds one bounded
-compatibility path:
-
-- only finalized `accepted` children with persisted `delivery.state=ci_none`
-  and `ci.state=none` are eligible for the late-CI path;
-- persisted PR number/head/branch and CI commit still bind to the verified
-  commit;
-- Runtime re-reads the exact PR and requires it to remain open, unmerged, on the
-  same verified head, job branch and configured base branch;
-- Runtime re-reads CI for that exact verified commit and requires `success`
-  with the same commit identity;
-- missing, pending, mismatched or unavailable live evidence grants no recovery
-  or merge authority;
-- PM merge eligibility accepts that fresh exact-head CI observation only for the
-  persisted `ci_none` case, and the privileged merge boundary independently
-  re-reads PR state, ancestry and CI immediately before mutation.
-
-This does not rewrite job result history, resume or replace the completed child,
-or weaken the normal `ci_success` path.
-
-Runtime version: `1.0.118`.
-
-## Standing execution / quality boundaries
-
-- Normal flow: bounded issue/WorkOrder -> implementation/evidence -> deterministic
-  checks and required review -> exact-head CI -> PM review -> eligible PM merge.
-- Developers never merge; force push and production deployment remain forbidden.
-- Human Owner retains protected scope/architecture/security/destructive-data/
-  production/governance/material-resource decisions. CI alone is not approval.
-- Preserve durable history, counters, anomaly circuit breakers and adaptive
-  healthy-progress behavior. Never use SQL/state rewrites, reset, clean, stash,
-  quota overrides or endless retries to remove an operational gate.
-- Never restart/rebuild while engineering work is active. No broad Docker/image/
-  volume prune. Routine in-frame work should not create avoidable owner loops.
-- Trusted-local Chợ Nhạc execution remains scoped to direct workspace plus
-  antigravity_host execute/repair. Plan/evaluate, Codex/OpenCode, Docker/sudo,
-  remote/destructive Git, merge and deploy do not gain authority by this handoff.
-- Runtime owns preview/visual evidence. Visual quality follows frontend quality,
-  exact lease and 1..4 renderable local routes. Screenshot capture alone is not
-  multimodal/pixel review; image_reviewed=false forbids aesthetic claims.
-- Current changed-module Drupal verification covers Unit/Kernel/Functional;
-  CI, supported phases, authority rules and anti-loop behavior are not weakened.
-- Helper tests must exercise real-shaped collector -> gate -> failure reporting,
-  missing fields, false-vs-zero, timeout/partial outcomes and refusal-before-write.
-
-Completed platform chronology belongs in T3 and GitHub, not active blockers.
-Relevant completed references include #146, #387/#388, #389/#391/#393/#395/#397,
-#399, #400 (Chợ Nhạc #64 / DEC-034), #401/#402, #404/#405, #406/#436,
-#421/#437 (Chợ Nhạc #65/#66), #426/#427, #430/#431, #432/#433, #434/#435,
-#438/#439, #440/#442, #441/#443, #446/#447, #451/#452, #453/#454,
-#455/#456, #457/#458, #459, #461/#462, #463/#464 and #466/#468.
-Failed/non-orchestrated planning attempts and the original intake attempt marker
-remain evidence; `usage=null` never proves a model call did not occur.
+Developer agents never merge. Required deterministic verification, applicable independent review, exact-head CI, protected decisions and expected-head privileged merge checks are never waived by a status summary. Live locks, incident history, old PR evidence or T1 prose cannot override authoritative current Runtime/GitHub state.
