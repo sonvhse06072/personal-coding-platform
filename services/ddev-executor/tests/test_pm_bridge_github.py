@@ -129,6 +129,36 @@ def test_pull_request_status_exposes_only_merge_gate_metadata(monkeypatch):
     assert delivery.client.calls == [("https://api.github.test/repos/example/repo/pulls/12", None)]
 
 
+def test_exact_pr_review_is_fetched_and_bounded(monkeypatch):
+    body = '<!-- coding-platform:pm-chat-review:v1 -->\\n{"verdict":"pass"}'
+    delivery = FakeDelivery([{
+        "id": 45, "state": "COMMENTED", "commit_id": "a" * 40,
+        "user": {"login": "owner"}, "body": body,
+        "html_url": "https://github.com/example/repo/pull/12#pullrequestreview-45",
+        "submitted_at": "2026-10-08T10:00:00Z",
+    }])
+    monkeypatch.setattr(pm_bridge_github, "_repository", lambda project_id: (delivery, "example/repo"))
+    result = pm_bridge_github.pull_request_review(12, 45, "demo")
+    assert result["author"] == "owner"
+    assert result["commit_id"] == "a" * 40
+    assert result["pr_number"] == 12
+    assert result["body"] == body
+    assert delivery.client.calls == [
+        ("https://api.github.test/repos/example/repo/pulls/12/reviews/45", None),
+    ]
+
+
+def test_exact_pr_review_rejects_mismatched_id_and_oversized_body(monkeypatch):
+    delivery = FakeDelivery([{"id": 46, "body": "ok"}])
+    monkeypatch.setattr(pm_bridge_github, "_repository", lambda project_id: (delivery, "example/repo"))
+    with pytest.raises(HTTPException):
+        pm_bridge_github.pull_request_review(12, 45, "demo")
+    delivery = FakeDelivery([{"id": 45, "body": "x" * 16385}])
+    monkeypatch.setattr(pm_bridge_github, "_repository", lambda project_id: (delivery, "example/repo"))
+    with pytest.raises(HTTPException):
+        pm_bridge_github.pull_request_review(12, 45, "demo")
+
+
 def test_merge_bridge_preserves_project_opt_out(monkeypatch):
     monkeypatch.setattr(
         pm_bridge_github,
