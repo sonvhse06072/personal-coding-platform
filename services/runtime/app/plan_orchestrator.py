@@ -182,6 +182,7 @@ _CHECKPOINT_TRANSITIONS = {
     # Only explicitly attested late review (cross-provider or strictly stronger
     # same-provider fallback) can release this merge gate.
     "late_review_released": ({"blocked"}, "awaiting_merge"),
+    "pm_chat_review_released": ({"blocked"}, "awaiting_merge"),
     "repair_reopened": ({"awaiting_merge"}, "running"),
 }
 _OWNER_ATTENTION_EVENT_TYPES = {
