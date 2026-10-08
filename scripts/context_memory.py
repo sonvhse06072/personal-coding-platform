@@ -595,17 +595,20 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
             break
     remaining -= t0_budget - t0_remaining
 
-    current_state = Section(
-        "docs/project/current-state.md",
-        "T1",
-        "Current Project State and Handoff",
-        1,
-        _read(repo_root, "docs/project/current-state.md"),
-        0,
-    )
+    t1_source = _read(repo_root, "docs/project/current-state.md")
+    t1_omitted_headings: list[str] = []
     if remaining > 0:
         t1_budget = min(12000, max(800, int(budget_chars * 0.45)))
         t1_budget = min(t1_budget, remaining)
+        t1_content, t1_omitted_headings = _budgeted_t1_content(t1_source, t1_budget)
+        current_state = Section(
+            "docs/project/current-state.md",
+            "T1",
+            "Current Project State and Handoff",
+            1,
+            t1_content,
+            0,
+        )
         t1_remaining = _append_budgeted(
             pinned,
             section=current_state,
@@ -615,6 +618,9 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
             score=None,
         )
         remaining -= t1_budget - t1_remaining
+        if t1_omitted_headings and pinned and pinned[-1]["tier"] == "T1":
+            pinned[-1]["truncated"] = True
+            pinned[-1]["reasons"].append("t1_sections_omitted")
 
     scored: list[tuple[int, int, Section, list[str]]] = []
     for section in _candidate_sections(repo_root):
@@ -672,6 +678,8 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
             "candidate_count": len(scored),
             "omitted_candidate_count": omitted,
             "current_intent": current_intent,
+            "t1_omitted_section_count": len(t1_omitted_headings),
+            "t1_omitted_headings": _sanitize_value(t1_omitted_headings[:12]),
             "exact_references": [
                 _sanitize_content(value)
                 for value in sorted(exact_refs)
