@@ -493,7 +493,10 @@ qua PM Bridge; không mở job mới, không reset counters và không sửa
    sẵn có. **Same-provider higher-tier không được ghi nhận là đã đạt
    cross-provider independence.**
 6. Guardian phải tính review attempt đang `claimed` vào active work;
-   không rollout khi model đang review. Hai control:
+   không rollout khi model đang review. Nếu Runtime restart/crash sau khi
+   đã claim, attempt còn dang dở được ghi `uncertain` một lần lúc startup,
+   **không chạy lại model** và không giữ Guardian ở trạng thái bận vô hạn.
+   Hai control:
    `request_late_independent_review`, `release_late_independent_review`;
    PM Bridge collector `late_review` công bố trạng thái và mode đã kiểm chứng.
 
