@@ -24,22 +24,21 @@ Memory/retrieval contract: docs/project/context-memory-architecture.md. The exis
 
 ## PCP GitHub source and rollout evidence
 
-- GitHub main last checked at **104900d8069a2db9d90850e53b5f81557257a42b** (PR #560 / issue #561 follow-up). This commit includes source code declaring **Runtime 1.0.134**. Re-read the current branch head before using this SHA as an exact-match precondition.
-- Runtime **1.0.132** rollout was accepted via Guardian result **6049394135**, following quiescence result **6049369444**: local PCP main was clean at **b0c0e9a43634b4b133382a2b2cab4c5828372465**, Router **1.0.31**, executor **1.0.33**, and no active work at that observation. This quiescence proof is **not reusable** for later rollouts.
-- Issue #561 records later **Runtime 1.0.133** Guardian deployment with stable parent checkpoint 182; issue #562 contains read-only diagnostics from **Runtime 1.0.134**. Those are point-in-time evidence; current running versions, health and local source must be checked live.
-- Dashboard workflow-progress implementation from #557 / PR #558 was merged in 1.0.132; #557 remains open on GitHub as a tracking issue. Estimated workflow percentage is based on durable workflow stages, not ETA or budget consumption.
-- GitHub PR listing showed no open PCP PR at this reconciliation. Treat this as an observation, not a persistent invariant.
+- On **2026-10-08**, PCP [PR #581](https://github.com/sonvhse06072/personal-coding-platform/pull/581) was exact-head PM-reviewed at `46cb41082fdbd50332ab1ac0849ba669babec89e`, CI 4/4 green, and merged into GitHub main as `23d2d5432a11d4b39f6dbbeaf89ffc78d453040e`. This source declares **Runtime 1.0.141**, but source/CI success is **not** installation or browser-UX evidence.
+- Earlier PCP #562 reviewer fallback and Guardian attestation projection were delivered in PRs #578/#579; [Guardian post-health 6059320848](https://github.com/sonvhse06072/personal-coding-platform/issues/524#issuecomment-6059320848) verified **Runtime 1.0.140** and DDEV Executor **1.0.34** at its historical exact main `9d22dffef9d74e485f6f56c380ab883da616d07b`. #562 is CLOSED; Chợ Nhạc GH-63 Step 7 was then released/merged.
+- Guardian first [refused rollout](https://github.com/sonvhse06072/personal-coding-platform/issues/524#issuecomment-6061355284) with an active DDEV Executor process; later [fresh idle snapshot](https://github.com/sonvhse06072/personal-coding-platform/issues/524#issuecomment-6061444179) confirmed all zero and healthy. A second exact-main [rollout](https://github.com/sonvhse06072/personal-coding-platform/issues/524#issuecomment-6061451157) then [FAILED](https://github.com/sonvhse06072/personal-coding-platform/issues/524#issuecomment-6061782543): `ddev restart -y` exceeded its 900-second bound. This is **not** a successful Runtime 1.0.141 rollout.
+- Read-only Guardian [post-timeout snapshot](https://github.com/sonvhse06072/personal-coding-platform/issues/524#issuecomment-6061879197) confirmed local Git clean `main` exactly at `23d2d5432a11d4b39f6dbbeaf89ffc78d453040e`, but Runtime, Router, Executor, n8n and credential probes **unreachable/timed out**, with Antigravity host bridge `down`. Active Runtime/Executor work **cannot currently be proven**, and live Runtime version is unknown. Guardian's out-of-band diagnosis succeeded; safe service recovery has **not** been demonstrated. Do not retry rollout blind or mutate durable orchestration state.
+- GitHub open PR listing was empty at this reconciliation before this continuity PR; check again live, do not treat that as a persistent invariant.
 
 ## Active PCP issues and owner attention
 
-- **#562 — protected review/merge recovery:** Chợ Nhạc GH-63 Step 7 is blocked by required different-provider reviewer independence. Preferred direction is a genuine late independent review of the exact verified head, preserving the same job, not an automatic waiver. The proposal explicitly requires a separate Human Owner approval for changes to this review/merge trust boundary. Do not bypass by resetting review policy, counters, identity or orchestrator state.
-- **#493 — DDEV cold/bootstrap reliability:** bounded cold image-start timeout/recovery still needs evidence-based repair. Do not blindly increase timeout or create extra retries.
-- **#512 — remote PM control parent:** keep open for naturally observed remaining acceptance evidence; no synthetic jobs/outages simply to close it.
-- **#524 — persistent Guardian commands/audit:** intentionally open operations channel, not engineering backlog.
-- **#557 — progress UI tracking:** implementation merged in PR #558; reconcile the open issue only against actual acceptance/owner UI evidence.
-- **#563 — documentation reliability hardening:** owner-approved, bounded T1 hygiene, deterministic retrieval correctness and evaluation/adoption. This is separate from Runtime/reviewer recovery.
+Four PCP issues remain open at reconciliation:
+- **#557 — Estimated workflow progress:** PR #581 fixes Planning→45% inference and CI is green, but the Runtime 1.0.141 restart/rollout failed and services are unreachable. Keep OPEN until a safe authenticated post-health and subsequent natural Planning-job UI check; do not run synthetic jobs.
+- **#493 — DDEV cold-bootstrap reliability:** generic cold/quiesced/isolated fallback still contains `timeout=min(timeout, 600)` for `ddev start -y`; healthy direct-workspace reuse from PR #494 is already working. Bounded infrastructure policy/evidence/tests are outstanding; no blind 600→1800 increase.
+- **#512 — remote PM control/Guardian parent:** live same-job repair, PM-chat review/merge and prior Guardian rollout are proven. The new natural Runtime/n8n outage **proves out-of-band Guardian diagnosis** through #524 snapshot, but **safe recovery** of this failure is not yet proven; new-ticket GitHub `direct_intake` remains unproven. Keep OPEN, no failure injection or unsafe restart.
+- **#524 — persistent Guardian control/audit:** intentionally OPEN as operations channel, not an engineering work ticket.
 
-Current Human Owner attention: #562 requires an explicit approved review-governance choice before implementing a critical late-review eligibility path. Do not treat a normal doc hygiene PR as this approval.
+PCP **#562** and documentation hardening **#563** are CLOSED; do not carry their completed blockers as live Human Owner attention. The product/founder UX acceptance for Chợ Nhạc GH-63 is a separate outstanding decision, not proof of a PCP source blocker. `docs/project/current-state.md` is T1 execution continuity only and cannot amend higher-authority policy.
 
 <!-- PCP:CONTINUITY:START -->
 ## Automated continuity snapshot
@@ -56,18 +55,17 @@ Current Human Owner attention: #562 requires an explicit approved review-governa
 
 ## Chợ Nhạc managed-project checkpoint
 
-- Active configured approved baseline: **pilot-v1-2026-10-04-dec033-r3**, source **aa8e68dd9aea6740de446151eb97615931de9b40**. Existing and new WorkOrders must respect their **own pinned revision**; do not silently advance or rewrite authority to follow newer main.
-- GH-63 / parent plan **pm-b0748be27f8446a0813c2d1fe7d697fd**: Step 7 WorkOrder **EE-0-04-event-engagement-analytics**, preserved job **057f6acff17b501eae3a673cbb6bbe36**, Chợ Nhạc PR **#85** at exact verified head **90c84d38692f781e1df91e85d253897d68458638**.
-- The last cited Runtime 1.0.134 diagnostic in PCP #562 reported parent checkpoint **182**, stably blocked at **pm_merge_ineligible:required_review_independence_not_satisfied**, despite passing executable checks, evaluator and exact-head CI. This is **historical observed state**, not authorization to mutate the job or proof the state has not changed since.
-- Check Chợ Nhạc GH-63 and PCP #562 plus fresh Runtime plan_progress/diagnostics before inferring any next WorkOrder, PM merge, supervised hold or continuation identity.
-- Prior AP-MVP-03 was merged via Chợ Nhạc PR #84. Completed-stage details and retired pilots are historical evidence, not active T1 instructions.
+- Pinned approved pilot baseline referenced by this continuity snapshot: **pilot-v1-2026-10-04-dec033-r3**, source **aa8e68dd9aea6740de446151eb97615931de9b40**. This is **not** a statement that newer GitHub main amended the approved baseline; each existing WorkOrder retains its own bound revision.
+- GH-63 Step 7 `EE-0-04-event-engagement-analytics` completed on preserved job `057f6acff17b501eae3a673cbb6bbe36`, plan `pm-b0748be27f8446a0813c2d1fe7d697fd`. Its PR [#85](https://github.com/sonvhse06072/chonhac/pull/85) reviewed head `90c84d38692f781e1df91e85d253897d68458638`, merged as `d069ac2280b5592327debb166592f99efe685bac`; parent checkpoint **184** and plan `completed` confirmed in [GH-63 audit](https://github.com/sonvhse06072/chonhac/issues/63#issuecomment-6059394452).
+- Chợ Nhạc **GH-63 remains OPEN** for founder/live product acceptance, not for the already merged Step 7 source. PCP #562 reviewer-boundary recovery was completed and closed. Do not restart/recover the accepted job simply to produce another acceptance record.
+- Chợ Nhạc application issues are not automatically PCP roadmap scope. Reconcile fresh managed-project source/jobs and approved authority before any new WorkOrder.
 
 ## Immediate next safe actions
 
-1. For #562 / GH-63 Step 7, obtain/revalidate exact current plan/blocked-review evidence. Keep the PR blocked until a genuinely independent review or an explicit protected Owner decision has satisfied the existing governance.
-2. Complete #563 as small reviewed PRs: T1 cleanup first, retrieval correctness second, benchmark/adoption third. No new memory service, vector DB or Runtime execution-semantic change by implication.
-3. Reassess #493 after a safe managed-project checkpoint; preserve healthy active work before any DDEV/Runtime rollout.
-4. Use existing safe remote-control/Guardian paths with exact identity, idempotency and fresh preconditions; no arbitrary shell/SQL edits, force push, reset, stashing, destructive cleanup or unbounded retries.
+1. Resolve the **real PCP control-plane outage** shown in [Guardian post-timeout audit 6061879197](https://github.com/sonvhse06072/personal-coding-platform/issues/524#issuecomment-6061879197). Local main is already exact, but service health and active jobs are unprovable. The reviewed Guardian allowlist has no general DDEV restart/recovery action and rollout requires live quiescence. No repeat rollout, ad-hoc remote shell or DB/process reset; request bounded Owner-local diagnosis/recovery if no existing reviewed path is safe, with immutable audit and fresh post-health.
+2. #557 remains OPEN: preserve PR #581 merge/green CI evidence, then accept Runtime 1.0.141 only after a safe post-recovery status proving exact local main and healthy/idle services, followed by natural Planning-job UX validation.
+3. Update #512 to count the natural Runtime/n8n-unavailable Guardian **diagnosis** as proven, but keep it OPEN for an authorized recovery from this incident and for new-ticket GitHub `direct_intake`; #524 remains intentionally OPEN.
+4. After the first safe PCP rollout, plan the separate bounded #493 cold-DDEV fix with explicit startup timeout policy and relevant regressions, retaining direct reuse, tracked process-group termination and finite failure semantics. Do not disrupt legitimate active executor work.
 
 ## Historical and detailed evidence pointers
 
