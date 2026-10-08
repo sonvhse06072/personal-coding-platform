@@ -348,3 +348,15 @@ def test_business_strategy_available_as_topical_t2():
         for item in pack["retrieved"]
     )
     assert pack["provenance"]["source_project_id"] == "personal-coding-platform"
+
+
+def test_t1_stays_compact_and_does_not_accumulate_completed_chronology():
+    """Tier-1 is an active replace-in-place index, not a historical rollout log."""
+    content = (ROOT / "docs/project/current-state.md").read_text(encoding="utf-8")
+    assert len(content.encode("utf-8")) < 15000
+    assert len(content.splitlines()) <= 250
+    assert "## Active PCP issues and owner attention" in content
+    assert "## Immediate next safe actions" in content
+    assert "## Historical accepted platform / local state snapshot" not in content
+    assert "## Generation-1 execution — active" not in content
+    assert "GitHub/Runtime" in content
