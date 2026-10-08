@@ -13,7 +13,9 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from context_memory import (  # noqa: E402
+    _budgeted_t1_content,
     _exact_reference_strings,
+    _markdown_sections,
     compose_context,
     read_all_docs_chars,
     render_context_text,
@@ -266,3 +268,83 @@ def test_evaluation_fixture_passes():
     assert payload["metrics"]["authority_conflict_failure_rate"] == 0.0
     assert payload["metrics"]["abstention_accuracy"] == 1.0
     assert payload["metrics"]["mean_context_ratio_vs_read_all"] < 0.50
+
+
+def test_heading_blocks_are_non_overlapping():
+    """Parent headings must not claim matches present only under child headings."""
+    sections = _markdown_sections(
+        "sample.md",
+        "T2",
+        "# Guide\nIntro\n## First\nFirst-only.\n### Detail\nChild-only.\n## Second\nSecond-only.",
+    )
+    by_heading = {item.heading: item.content for item in sections}
+    assert "Second-only" not in by_heading["Guide"]
+    assert "Child-only" not in by_heading["First"]
+    assert "Child-only" in by_heading["Detail"]
+    assert "Second-only" in by_heading["Second"]
+
+
+def test_oversized_t1_prioritizes_active_actions_over_historical_prefix():
+    text = (
+        "# Current Project State and Handoff\nSource is checked at read time.\n"
+        "## Historical accepted status\n" + ("old rollout log " * 200) + "\n"
+        "## Resume order\nFetch live GitHub and Runtime before changes.\n"
+        "## Active PCP issues\nThe exact blocking gate is actionable.\n"
+        "## Immediate next safe actions\nDo not bypass independent review.\n"
+    )
+    selected, omitted = _budgeted_t1_content(text, 650)
+    assert len(selected) <= 650
+    assert "Do not bypass independent review." in selected
+    assert "exact blocking gate" in selected
+    assert "Resume order" in selected
+    assert "Historical accepted status" in omitted
+    assert "old rollout log" not in selected
+
+
+def test_cross_project_retrieval_fails_closed():
+    with pytest.raises(ValueError, match="project_id"):
+        compose_context(
+            ROOT,
+            {
+                "project_id": "chonhac",
+                "role": "product_manager",
+                "task": {"title": "Find artist profile requirements"},
+            },
+        )
+
+
+def test_vietnamese_current_intent_is_recognized():
+    pack = compose_context(
+        ROOT,
+        {
+            "project_id": "personal-coding-platform",
+            "role": "product_manager",
+            "task": {
+                "title": "Trạng thái hiện tại của Runtime và job đang hoạt động?",
+                "task_type": "status",
+            },
+        },
+    )
+    assert pack["retrieval"]["current_intent"] is True
+    assert "docs/project/current-state.md#Current Project State and Handoff" in identities(pack)
+
+
+def test_business_strategy_available_as_topical_t2():
+    pack = compose_context(
+        ROOT,
+        {
+            "project_id": "personal-coding-platform",
+            "role": "product_manager",
+            "task": {
+                "title": "PCP primary customer and internal business value proposition",
+                "task_type": "business_strategy",
+            },
+            "references": {"topic": "business strategy"},
+            "budget_chars": 24000,
+        },
+    )
+    assert any(
+        item["source"] == "docs/project/business-strategy.md"
+        for item in pack["retrieved"]
+    )
+    assert pack["provenance"]["source_project_id"] == "personal-coding-platform"
