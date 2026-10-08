@@ -1839,6 +1839,140 @@ def test_direct_workspace_return_to_base_refuses_branch_mismatch(tmp_path, monke
     assert run("git", "branch", "--show-current", cwd=source) == "human/manual"
 
 
+
+def _configure_cold_start_phase(monkeypatch, tmp_path: Path) -> tuple[str, Path]:
+    _source, _remote, workspaces = configure(
+        monkeypatch, tmp_path, allow_push=False
+    )
+    config = tmp_path / "projects.yml"
+    data = yaml.safe_load(config.read_text())
+    data["projects"]["demo"]["ddev"] = {
+        "enabled": True,
+        "targeted_tests": ["ddev exec echo check"],
+    }
+    config.write_text(yaml.safe_dump(data))
+    job_id = "jobcoldstart12"
+    workspace = workspaces / job_id
+    (workspace / ".ddev").mkdir(parents=True)
+    (workspace / ".ddev" / "config.yaml").write_text(
+        "name: demo\ntype: drupal11\n"
+    )
+    monkeypatch.setenv("DDEV_COMMAND_TIMEOUT_SECONDS", "1800")
+    return job_id, workspace
+
+
+@pytest.mark.parametrize(
+    ("policy", "phase_limit", "expected_start"),
+    [
+        ("1200", 1700, 1200),
+        ("1500", 350, 350),
+        (None, 1700, 600),
+    ],
+)
+def test_cold_start_uses_explicit_policy_limited_by_phase(
+    tmp_path, monkeypatch, policy, phase_limit, expected_start,
+):
+    job_id, workspace = _configure_cold_start_phase(monkeypatch, tmp_path)
+    if policy is None:
+        monkeypatch.delenv("DDEV_START_TIMEOUT_SECONDS", raising=False)
+    else:
+        monkeypatch.setenv("DDEV_START_TIMEOUT_SECONDS", policy)
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append((list(argv), timeout))
+        return 0, "ok", "", False
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+    result = phase(
+        PhaseRequest(
+            job_id=job_id, project_id="demo", workspace=str(workspace),
+            phase="targeted_tests", timeout_seconds=phase_limit,
+        )
+    )
+
+    assert result.passed is True
+    assert calls == [
+        (["ddev", "start", "-y"], expected_start),
+        (["bash", "-lc", "ddev exec echo check"], phase_limit),
+    ]
+    assert result.infrastructure[0].stderr == ""
+
+
+@pytest.mark.parametrize("invalid", ["", "oops", "0", "1801", "-3", "99999"])
+def test_cold_start_rejects_invalid_timeout_before_spawning(
+    tmp_path, monkeypatch, invalid,
+):
+    job_id, workspace = _configure_cold_start_phase(monkeypatch, tmp_path)
+    monkeypatch.setenv("DDEV_START_TIMEOUT_SECONDS", invalid)
+    calls = []
+    monkeypatch.setattr(
+        "app.main.run_tracked",
+        lambda *args, **kwargs: calls.append(args),
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        phase(
+            PhaseRequest(
+                job_id=job_id, project_id="demo",
+                workspace=str(workspace), phase="targeted_tests",
+            )
+        )
+
+    assert exc.value.status_code == 500
+    assert "DDEV_START_TIMEOUT_SECONDS" in str(exc.value.detail)
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("returncode", "stdout", "stderr", "timed_out", "expected"),
+    [
+        (
+            124, "Starting demo...\nBuilding project images...\n",
+            "Command timed out after 600s", True,
+            "ddev_start_timeout stage_hint=image_build",
+        ),
+        (
+            1, "Starting demo...\n", "DDEV config invalid",
+            False, "ddev_start_command_failure stage_hint=startup_other",
+        ),
+        (
+            124, "Starting demo...\n", "Command timed out",
+            True, "ddev_start_timeout stage_hint=startup_other",
+        ),
+    ],
+)
+def test_cold_start_failure_preserves_stage_hint_and_skips_commands(
+    tmp_path, monkeypatch, returncode, stdout, stderr, timed_out, expected,
+):
+    job_id, workspace = _configure_cold_start_phase(monkeypatch, tmp_path)
+    monkeypatch.setenv("DDEV_START_TIMEOUT_SECONDS", "600")
+    calls = []
+
+    def fake_run_tracked(job, argv, *, cwd, timeout, env):
+        calls.append((list(argv), timeout))
+        return returncode, stdout, stderr, timed_out
+
+    monkeypatch.setattr("app.main.run_tracked", fake_run_tracked)
+    result = phase(
+        PhaseRequest(
+            job_id=job_id, project_id="demo",
+            workspace=str(workspace), phase="targeted_tests",
+        )
+    )
+
+    assert result.passed is False
+    assert result.commands == []
+    assert calls == [(["ddev", "start", "-y"], 600)]
+    assert len(result.infrastructure) == 1
+    evidence = result.infrastructure[0]
+    assert evidence.returncode == returncode
+    assert evidence.timed_out is timed_out
+    assert expected in evidence.stderr
+    assert "effective_timeout_seconds=600" in evidence.stderr
+    assert stderr in evidence.stderr
+
+
 def test_phase_request_accepts_visual_quality() -> None:
     request = PhaseRequest(
         job_id="jobvisual123",

@@ -80,6 +80,8 @@ services:
       CODING_WORKSPACES_ROOT: ${CODING_WORKSPACES_ROOT}
       CODING_DIRECT_PROJECT_ROOT: ${CODING_DIRECT_PROJECT_ROOT:-/tmp/pcp-direct-disabled}
       DDEV_COMMAND_TIMEOUT_SECONDS: 1800
+      # Cold/quiesced workspace startup only; never exceeds Runtime phase allowance.
+      DDEV_START_TIMEOUT_SECONDS: ${DDEV_START_TIMEOUT_SECONDS:-600}
       CONTINUITY_GITHUB_REPOSITORY: ${CONTINUITY_GITHUB_REPOSITORY:-sonvhse06072/personal-coding-platform}
       CONTINUITY_BASE_BRANCH: ${CONTINUITY_BASE_BRANCH:-main}
       PCP_BUILDX_BUILDER: pcp-builder
