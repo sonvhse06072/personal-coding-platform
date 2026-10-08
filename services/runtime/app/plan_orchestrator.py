@@ -179,6 +179,8 @@ _CHECKPOINT_TRANSITIONS = {
     "merged": ({"awaiting_merge"}, "completed"),
     "blocked": ({"pending", "running", "waiting_human", "awaiting_merge"}, "blocked"),
     "recovered_accepted": ({"blocked"}, "awaiting_merge"),
+    # Only explicit, attested late cross-provider review can release this gate.
+    "late_review_released": ({"blocked"}, "awaiting_merge"),
     "repair_reopened": ({"awaiting_merge"}, "running"),
 }
 _OWNER_ATTENTION_EVENT_TYPES = {
