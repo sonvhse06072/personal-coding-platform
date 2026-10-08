@@ -782,3 +782,24 @@ merge blocker remains.
 
 Production deployment is separate authority and is never implied by PM merge.
 
+
+### Reviewer dự phòng do Owner ủy quyền trong phiên ChatGPT — PCP #562
+
+Khi probe Router đáng tin cậy xác nhận **không còn reviewer khác provider
+hợp lệ** và registry không có reviewer cùng provider đạt tier cao hơn writer,
+Owner có thể ủy quyền PM trong phiên ChatGPT đánh giá exact diff/head. Đây là
+đường chứng cứ riêng `pm_chat_manual_review`, **không** được gọi là
+`cross_provider`, `same_provider_higher_tier` hay GitHub independent APPROVE.
+
+PM Bridge chỉ chấp nhận người gửi control thuộc author được cấu hình bảo vệ.
+DDEV Executor phải lấy review thực tế theo PR/review ID từ GitHub, kiểm đúng
+tài khoản Owner được ủy quyền, commit head, structured JSON, kết quả và nội dung.
+Runtime phải tái dựng SHA-256 của accepted diff, kiểm current CI và các gate
+gốc, rồi mới có thể ghi attestation **append-only**. `record_pm_chat_review`
+chỉ tạo proof; `release_pm_chat_review` là control thứ hai, đọc lại review
+và CI trước khi chuyển checkpoint. Constrained PM merge vẫn kiểm exact head,
+attestation, Owner-protected decisions, CI và merge audit. Không tự merge nếu
+thiếu một trong các điều kiện này.
+
+Nguồn/quy trình/audit/threat model chi tiết ở
+`docs/project/history/pm-chat-review-fallback-v1.md`.
