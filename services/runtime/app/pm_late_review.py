@@ -370,6 +370,7 @@ class LateReviewService:
             or not (result.get("verification") or {}).get("passed")
             or not (job.get("progress") or {}).get("required_checks_passed")
             or (result.get("review") or {}).get("verdict") != "pass"
+            or (result.get("review") or {}).get("protocol_valid") is not True
             or not policy.get("required") or not policy.get("independent")
             or policy.get("independence_satisfied") is not False
         ):
