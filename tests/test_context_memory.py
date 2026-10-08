@@ -264,6 +264,10 @@ def test_evaluation_fixture_passes():
     payload = json.loads(result.stdout)
     assert payload["passed"] is True
     assert payload["metrics"]["required_target_recall"] == 1.0
+    assert payload["metrics"]["required_content_recall"] == 1.0
+    assert payload["metrics"]["case_count"] >= 12
+    assert payload["metrics"]["composed_case_count"] >= 11
+    assert payload["metrics"]["mean_compose_ms"] >= 0
     assert payload["metrics"]["stale_historical_false_positive_rate"] == 0.0
     assert payload["metrics"]["authority_conflict_failure_rate"] == 0.0
     assert payload["metrics"]["abstention_accuracy"] == 1.0
@@ -397,3 +401,17 @@ def test_role_critical_governance_is_not_clipped_by_default(role):
     assert "Developer agents must never merge." in pinned["Core invariants"]["content"]
     assert not pinned["9. Trust and security invariants"]["truncated"]
     assert not pinned["10. Verification and delivery invariants"]["truncated"]
+
+
+def test_memory_evaluation_includes_content_and_project_scope_cases():
+    fixture = json.loads(
+        (ROOT / "config" / "context-memory-eval.json").read_text(encoding="utf-8")
+    )
+    cases = fixture["cases"]
+    assert any(case.get("required_content_contains") for case in cases)
+    assert any(case.get("expected_error_contains") == "project_id" for case in cases)
+    assert any(
+        case.get("kind") == "current"
+        and "hiện tại" in case["request"]["task"]["title"]
+        for case in cases
+    )
