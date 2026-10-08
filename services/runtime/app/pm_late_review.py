@@ -851,13 +851,12 @@ class LateReviewService:
         if (
             data.get("verdict") != "pass" or data.get("protocol_valid") is not True
             or data.get("writer_providers") != list(writers)
-            or data.get("reviewer_provider") in writers
             or not data.get("reviewer_provider") or not data.get("reviewer_model")
             or att.get("attempt_id") != data.get("attempt_id")
             or data.get("checkpoint_id") != checkpoint_id
             or data.get("checkpoint_key") != checkpoint_key
         ):
-            raise RuntimeError("late_review_attestation_not_independent")
+            raise RuntimeError("late_review_attestation_invalid")
         for field in (
             "plan_id", "work_order_id", "job_id", "source_commit", "branch",
             "expected_head", "diff_hash", "pr_number", "checkpoint_id", "checkpoint_key",
@@ -865,6 +864,39 @@ class LateReviewService:
         ):
             if att.get(field) != data.get(field):
                 raise RuntimeError("late_review_attestation_identity_mismatch")
+
+        mode = data.get("review_mode")
+        provider = str(data["reviewer_provider"])
+        reviewer = {
+            "id": data["reviewer_model"],
+            "provider": provider,
+            "adapter": data.get("reviewer_adapter"),
+        }
+        _registered_provider(
+            str(reviewer["id"]), str(reviewer.get("adapter") or ""), provider,
+        )
+
+        escalation: dict[str, Any] = {}
+        if mode == "cross_provider":
+            if (
+                provider in writers
+                or data.get("cross_provider_unavailable") is not False
+                or data.get("escalation") != {}
+            ):
+                raise RuntimeError("late_review_cross_provider_attestation_invalid")
+        elif mode == "same_provider_higher_tier":
+            if (
+                provider not in writers
+                or data.get("cross_provider_unavailable") is not True
+                or not isinstance(data.get("escalation"), dict)
+            ):
+                raise RuntimeError("late_review_higher_tier_attestation_invalid")
+            escalation = _escalated_reviewer_evidence(job, reviewer, writers)
+            if data["escalation"] != escalation:
+                raise RuntimeError("late_review_higher_tier_attestation_stale")
+        else:
+            raise RuntimeError("late_review_mode_unknown")
+
         proof = LateReviewProof(
             attestation_id=int(att["id"]), plan_id=data["plan_id"],
             work_order_id=data["work_order_id"], job_id=data["job_id"],
@@ -873,8 +905,14 @@ class LateReviewService:
             diff_hash=data["diff_hash"], checkpoint_id=data["checkpoint_id"],
             checkpoint_key=data["checkpoint_key"],
             writer_providers=tuple(writers),
-            reviewer_provider=data["reviewer_provider"],
+            reviewer_provider=provider,
             reviewer_model=data["reviewer_model"], verdict="pass",
+            review_mode=mode,
+            writer_model_ids=tuple(escalation.get("writer_model_ids") or []),
+            reviewer_tier_index=escalation.get("reviewer_tier_index", -1),
+            writer_max_tier_index=escalation.get("writer_max_tier_index", -1),
+            reviewer_review_score=escalation.get("reviewer_review_score", -1),
+            writer_max_review_score=escalation.get("writer_max_review_score", -1),
         )
         return proof if proof.matches(plan, tracked, job) else None
 
@@ -904,6 +942,7 @@ class LateReviewService:
             "checkpoint_id": proof.checkpoint_id,
             "checkpoint_key": proof.checkpoint_key,
             "head": proof.expected_head,
+            "review_mode": proof.review_mode,
         }
         detail.pop("reason", None)
         checkpoint = self.orchestrator._checkpoint_transition(
@@ -914,4 +953,5 @@ class LateReviewService:
         return {
             "status": "released", "attestation_id": proof.attestation_id,
             "checkpoint_id": checkpoint["id"], "head": proof.expected_head,
+            "review_mode": proof.review_mode,
         }
