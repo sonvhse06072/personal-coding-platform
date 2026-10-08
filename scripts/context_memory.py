@@ -476,6 +476,20 @@ def _append_budgeted(
 
 def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
     repo_root = repo_root.resolve()
+    # Repository-local retrieval must not return PCP source for another project.
+    # PCP checkouts may have local directory names such as '-v1'.
+    source_project_id = (
+        "personal-coding-platform"
+        if (repo_root / "config/context-memory-eval.json").is_file()
+        and (repo_root / "docs/project/context-memory-architecture.md").is_file()
+        else repo_root.name
+    )
+    requested_project_id = str(request.get("project_id") or "").strip()
+    if requested_project_id and requested_project_id != source_project_id:
+        raise ValueError(
+            f"project_id {requested_project_id!r} does not match "
+            f"repository source {source_project_id!r}"
+        )
     role = str(request.get("role") or "specialist").strip().lower()
     role = {
         "pm": "product_manager",
@@ -576,7 +590,7 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "context_pack_version": 1,
-        "project_id": str(request.get("project_id") or ""),
+        "project_id": requested_project_id or source_project_id,
         "role": role,
         "task": _sanitize_value(
             request.get("task") if isinstance(request.get("task"), dict) else {}
@@ -606,6 +620,7 @@ def compose_context(repo_root: Path, request: dict[str, Any]) -> dict[str, Any]:
         },
         "provenance": {
             "generated_from_head": _git_head(repo_root),
+            "source_project_id": source_project_id,
             "repository_root_name": repo_root.name,
             "sources_are_repository_relative": True,
         },
