@@ -286,3 +286,125 @@ def test_manual_proof_storage_rejects_tampering_without_any_model_execution(monk
             plan=plan, tracked=tracked, job=job,
             attestation_id=91, checkpoint_id=182, checkpoint_key="wo:blocked:key",
         )
+
+
+def test_pm_control_contract_rejects_spoofed_attestation_and_wrong_action_fields():
+    from app.pm_control import PMControlEnvelope
+
+    identity = {
+        "schema_version": 1, "project_id": "default", "plan_id": "plan-1",
+        "work_order_id": "WO-1", "job_id": "job-12345678",
+        "source_commit": SOURCE, "expected_head": HEAD,
+        "branch": "ai/job-123456", "pr_number": 7,
+        "checkpoint_id": 182, "checkpoint_key": "wo:blocked:key",
+    }
+    recorded = PMControlEnvelope.model_validate({
+        **identity, "action": "record_pm_chat_review", "review_id": 45,
+    })
+    assert recorded.review_id == 45 and recorded.attestation_id is None
+    released = PMControlEnvelope.model_validate({
+        **identity, "action": "release_pm_chat_review", "attestation_id": 91,
+    })
+    assert released.attestation_id == 91 and released.review_id is None
+    for bad in (
+        {**identity, "action": "record_pm_chat_review"},
+        {**identity, "action": "record_pm_chat_review", "review_id": 45, "attestation_id": 91},
+        {**identity, "action": "release_pm_chat_review", "review_id": 45, "attestation_id": 91},
+        {**identity, "action": "release_pm_chat_review"},
+        {**identity, "action": "request_diagnostics", "review_id": 45, "diagnostic_collectors": ["job"]},
+    ):
+        with pytest.raises(ValidationError):
+            PMControlEnvelope.model_validate(bad)
+
+
+def _manual_service_fixture(monkeypatch):
+    project, plan, tracked, job, pr = manual_context()
+    plan["ticket_id"] = "GH-63"
+    job["result"]["review"]["protocol_valid"] = True
+    envelope = SimpleNamespace(**{
+        "project_id": "default", "plan_id": "plan-1",
+        "work_order_id": "WO-1", "job_id": "job-12345678",
+        "source_commit": SOURCE, "expected_head": HEAD,
+        "branch": "ai/job-123456", "pr_number": 7,
+        "checkpoint_id": 182, "checkpoint_key": "wo:blocked:key",
+        "review_id": 45, "attestation_id": 91,
+    })
+    repo = "acme/demo"
+    review = {
+        "project_id": "default", "repository": repo,
+        "pr_number": 7, "id": 45, "state": "COMMENTED",
+        "commit_id": HEAD, "author": "owner", "body": review_body(),
+        "submitted_at": "2026-10-08T10:00:00Z",
+        "html_url": "https://github.com/acme/demo/pull/7#pullrequestreview-45",
+    }
+
+    async def preflight(_envelope):
+        return plan, tracked, job, {"pr": pr, "ci": {"state": "success", "commit": HEAD}}, "exact-diff"
+
+    fake_orchestrator = SimpleNamespace(
+        late_reviews=SimpleNamespace(_preflight=preflight),
+        merge_audit=SimpleNamespace(get=lambda **kwargs: None),
+    )
+    service = PMChatReviewService(SimpleNamespace(), SimpleNamespace(), fake_orchestrator)
+    monkeypatch.setattr(service, "_owner_author", lambda project_id: "owner")
+    monkeypatch.setattr(service, "_control", lambda **kwargs: {
+        "author": "owner", "repository": repo, "body_sha256": "a" * 64,
+    })
+    async def capacity(_job):
+        return "no_eligible_cross_provider_now"
+    monkeypatch.setattr(service, "_capacity", capacity)
+    pr["repository"] = repo
+    return service, envelope, project, plan, tracked, job, pr, review, fake_orchestrator
+
+
+def test_record_fetches_real_github_review_and_keeps_same_checkpoint(monkeypatch):
+    service, envelope, project, plan, tracked, job, pr, review, orch = _manual_service_fixture(monkeypatch)
+    appended = []
+    service.store = SimpleNamespace(append=lambda data: (appended.append(data), {"id": 91})[1])
+    calls = []
+
+    async def github_review(**kwargs):
+        calls.append(kwargs)
+        return review, parse_pm_chat_review(review["body"])
+    service._github_review = github_review
+    result = asyncio.run(service.record(envelope, comment_id=901, issue_number=63))
+    assert result["status"] == "attested"
+    assert result["attestation_id"] == 91
+    assert len(calls) == 1 and calls[0]["expected_head"] == HEAD
+    assert appended[0]["diff_hash"] == DIFF
+    assert appended[0]["review_mode"] == "pm_chat_manual_review"
+    assert appended[0]["review_body_sha256"] == hashlib.sha256(review["body"].encode()).hexdigest()
+    assert appended[0]["control_comment_id"] == 901
+    assert tracked["state"] == "awaiting_merge"  # no transition or mutation at record
+
+    # An unrelated issue cannot confer review authority.
+    appended.clear()
+    with pytest.raises(RuntimeError, match="canonical_ticket"):
+        asyncio.run(service.record(envelope, comment_id=902, issue_number=99))
+    assert appended == []
+
+
+def test_release_rechecks_all_original_protected_gates_before_checkpoint(monkeypatch):
+    service, envelope, project, plan, tracked, job, pr, review, orch = _manual_service_fixture(monkeypatch)
+    monkeypatch.setattr(service, "trusted_proof", lambda **kwargs: proof())
+    calls = {"transitions": [], "plans": []}
+    async def live(_proof, _repo):
+        return None
+    monkeypatch.setattr(service, "verify_live", live)
+    orch._checkpoint_transition = lambda tracked, **kwargs: (
+        calls["transitions"].append(kwargs), {"id": 183},
+    )[1]
+    orch.store = SimpleNamespace(update_plan=lambda plan_id, **kwargs: calls["plans"].append((plan_id, kwargs)))
+    monkeypatch.setattr(pm_chat_review, "project_config", lambda project_id: project)
+    result = asyncio.run(service.release(envelope, comment_id=903, issue_number=63))
+    assert result["review_mode"] == "pm_chat_manual_review"
+    assert calls["transitions"][0]["kind"] == "pm_chat_review_released"
+    assert calls["transitions"][0]["state"] == "awaiting_merge"
+    assert calls["plans"] == [("plan-1", {"status": "waiting_merge"})]
+
+    # Even a genuine PM-chat attestation may not override Human Owner signals.
+    calls["transitions"].clear()
+    job["checkpoint"]["pending_decision"] = {"key": "owner-protected"}
+    with pytest.raises(RuntimeError, match="other_merge_gates"):
+        asyncio.run(service.release(envelope, comment_id=904, issue_number=63))
+    assert calls["transitions"] == []
