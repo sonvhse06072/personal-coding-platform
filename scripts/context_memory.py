@@ -24,6 +24,7 @@ STOPWORDS = {
 
 T2_FILES = (
     "docs/project/architecture.md",
+    "docs/project/business-strategy.md",
     "docs/project/operating-model.md",
     "docs/project/efficiency-model.md",
     "docs/project/provider-policy.md",
@@ -192,6 +193,8 @@ T0_PRIORITY = {
 CURRENT_INTENT_TERMS = {
     "current", "currently", "now", "active", "open", "today", "latest", "version",
     "state", "status", "next",
+    # Vietnamese status questions also need current-state precedence.
+    "hiện", "đang", "trạng", "mới", "nay",
 }
 
 HOST_PATH_RE = re.compile(
@@ -275,11 +278,8 @@ def _markdown_sections(source: str, tier: str, text: str) -> list[Section]:
 
     sections: list[Section] = []
     for ordinal, (start, level, heading) in enumerate(headings):
-        end = len(lines)
-        for next_start, next_level, _next_heading in headings[ordinal + 1 :]:
-            if next_level <= level:
-                end = next_start
-                break
+        # Non-overlapping blocks prevent an H1/parent from inheriting all matches.
+        end = headings[ordinal + 1][0] if ordinal + 1 < len(headings) else len(lines)
         block = "\n".join(lines[start:end]).strip()
         if block:
             sections.append(Section(source, tier, heading, level, block, ordinal))
