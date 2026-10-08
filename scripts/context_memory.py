@@ -320,6 +320,65 @@ def _clip(text: str, limit: int) -> tuple[str, bool]:
     return text[: limit - len(marker)] + marker, True
 
 
+
+def _budgeted_t1_content(text: str, limit: int) -> tuple[str, list[str]]:
+    """Prioritize active state and next actions instead of a silent T1 prefix cut.
+
+    The source remains the original repository file; omitted heading identities
+    are reported for a required live verification rather than silently hidden.
+    """
+    if len(text) <= limit:
+        return text, []
+    if limit <= 0:
+        return "", []
+
+    blocks = re.split(r"(?=^## )", text, flags=re.MULTILINE)
+    if len(blocks) == 1:
+        return _clip(text, limit)[0], []
+
+    preamble = blocks[0].strip()
+    ranked: list[tuple[int, int, str, str]] = []
+    for index, block in enumerate(blocks[1:]):
+        heading = block.splitlines()[0].removeprefix("## ").strip()
+        lower = heading.lower()
+        if "resume" in lower:
+            priority = 0
+        elif "immediate" in lower or "next safe" in lower:
+            priority = 1
+        elif "active" in lower or "block" in lower:
+            priority = 2
+        elif "checkpoint" in lower or "github source" in lower:
+            priority = 3
+        elif "current" in lower:
+            priority = 4
+        elif "historical" in lower or "completed" in lower:
+            priority = 90
+        else:
+            priority = 10
+        ranked.append((priority, index, heading, block.strip()))
+
+    selected = [preamble] if preamble else []
+    remaining = max(limit - len(preamble), 0)
+    omitted: list[str] = []
+    for priority, _index, heading, block in sorted(ranked):
+        separator = 2 if selected else 0
+        available = remaining - separator
+        if available <= 0:
+            omitted.append(heading)
+            continue
+        if len(block) <= available:
+            selected.append(block)
+            remaining -= len(block) + separator
+        elif priority <= 2 and available >= 300:
+            clipped, _ = _clip(block, available)
+            selected.append(clipped)
+            remaining -= len(clipped) + separator
+            omitted.append(heading + " (partially selected)")
+        else:
+            omitted.append(heading)
+
+    return _clip("\n\n".join(selected), limit)[0], omitted
+
 def _query_text(request: dict[str, Any]) -> str:
     task = request.get("task") if isinstance(request.get("task"), dict) else {}
     refs = request.get("references") if isinstance(request.get("references"), dict) else {}
