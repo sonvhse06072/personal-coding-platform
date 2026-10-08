@@ -360,3 +360,21 @@ def test_t1_stays_compact_and_does_not_accumulate_completed_chronology():
     assert "## Historical accepted platform / local state snapshot" not in content
     assert "## Generation-1 execution — active" not in content
     assert "GitHub/Runtime" in content
+
+
+def test_exact_file_reference_matches_source_path_not_only_body():
+    pack = compose_context(
+        ROOT,
+        {
+            "project_id": "personal-coding-platform",
+            "role": "specialist",
+            "task": {"title": "Consult the exact business policy file"},
+            "references": {"file": "docs/project/business-strategy.md"},
+            "budget_chars": 24000,
+        },
+    )
+    assert any(
+        item["source"] == "docs/project/business-strategy.md"
+        and any(reason.startswith("exact_ref:") for reason in item["reasons"])
+        for item in pack["retrieved"]
+    )
