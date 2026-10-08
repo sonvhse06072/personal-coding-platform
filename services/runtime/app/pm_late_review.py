@@ -208,8 +208,8 @@ class LateReviewStore:
         if status not in {"no_capacity", "failed", "passed", "uncertain"}:
             raise ValueError("Invalid late-review status")
         reviewer = reviewer or {}
-        if (status == "passed") != (attestation is not None):
-            raise ValueError("Only a trusted PASS creates an attestation")
+        if (status in {"passed", "failed"}) != (attestation is not None):
+            raise ValueError("Definitive structured review outcomes require an attestation")
         with self.storage.connect() as conn:
             row = conn.execute(
                 """UPDATE cp_pm_late_review_attempts
@@ -466,7 +466,11 @@ class LateReviewService:
                     or _git(checkout, "status", "--porcelain")
                 ):
                     raise RuntimeError("late_review_read_only_checkout_modified")
-            if run.provider_failed or run.returncode != 0:
+            if (
+                run.provider_failed or run.returncode != 0
+                or run.adapter != choice["adapter"]
+                or run.model != choice["model"]
+            ):
                 raise RuntimeError("late_review_provider_execution_uncertain")
             output = (run.output or "").strip()
             if (
@@ -474,28 +478,40 @@ class LateReviewService:
                 or "\nREVIEW_JSON:" not in output
             ):
                 raise RuntimeError("late_review_structured_protocol_required")
+            # Legacy PASS/FAIL text is not sufficient for a critical trust gate.
+            marker_line = next(
+                (line for line in output.splitlines()[1:]
+                 if line.strip().startswith("REVIEW_JSON:")), None,
+            )
+            try:
+                structured = json.loads(marker_line.split("REVIEW_JSON:", 1)[1])
+            except (ValueError, TypeError, AttributeError) as exc:
+                raise RuntimeError("late_review_structured_protocol_invalid") from exc
             report = parse_review_output(output)
             if (
-                not report.protocol_valid
+                not isinstance(structured, dict)
+                or not {"verdict", "summary", "findings", "jit_context_used"} <= set(structured)
+                or not report.protocol_valid
                 or report.verdict.upper() != output.splitlines()[0]
+                or structured.get("verdict") != report.verdict
             ):
                 raise RuntimeError("late_review_structured_protocol_invalid")
             # Review is useful only while source, PR and gates still match.
             await self._preflight(envelope)
             verdict = "passed" if report.verdict == "pass" and not report.findings else "failed"
-            attestation = None
-            if verdict == "passed":
-                attestation = {
-                    **identity,
-                    "attempt_id": attempt_id,
-                    "reviewer_provider": choice["provider"],
-                    "reviewer_model": choice["id"],
-                    "reviewer_adapter": choice["adapter"],
-                    "verdict": "pass",
-                    "finding_count": 0,
-                    "protocol_valid": True,
-                    "output_sha256": hashlib.sha256(output.encode("utf-8")).hexdigest(),
-                }
+            # Both definitive PASS and FAIL have immutable provenance. Only
+            # PASS can ever become a trusted merge-eligibility proof.
+            attestation = {
+                **identity,
+                "attempt_id": attempt_id,
+                "reviewer_provider": choice["provider"],
+                "reviewer_model": choice["id"],
+                "reviewer_adapter": choice["adapter"],
+                "verdict": "pass" if verdict == "passed" else "fail",
+                "finding_count": len(report.findings),
+                "protocol_valid": True,
+                "output_sha256": hashlib.sha256(output.encode("utf-8")).hexdigest(),
+            }
             attestation_id = self.store.finish(
                 attempt_id, status=verdict, reviewer=choice,
                 result={
