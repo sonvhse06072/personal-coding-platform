@@ -375,7 +375,19 @@ class LateReviewService:
             or policy.get("independence_satisfied") is not False
         ):
             raise RuntimeError("late_review_job_delivery_identity_changed")
-        return {**dict(plan), "plan": definition.get("plan") or {}}, tracked, dict(job)
+        plan_doc = definition.get("plan")
+        if (
+            not isinstance(plan_doc, dict)
+            or not isinstance(plan_doc.get("work_orders"), list)
+            or not any(
+                isinstance(wo, dict) and wo.get("id") == envelope.work_order_id
+                for wo in plan_doc["work_orders"]
+            )
+        ):
+            # A missing authority document may hide Owner decision boundaries.
+            # Never construct an empty plan as implicit merge permission.
+            raise RuntimeError("late_review_canonical_plan_missing")
+        return {**dict(plan), "plan": plan_doc}, tracked, dict(job)
 
     async def _preflight(self, envelope: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], str]:
         plan, tracked, job = self._snapshot(envelope)
