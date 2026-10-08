@@ -516,7 +516,12 @@ class LateReviewService:
         """Run at most one reviewer outside the PM Bridge HTTP request lifetime."""
         try:
             original = Path(str(job["workspace"])).resolve()
-            with tempfile.TemporaryDirectory(prefix="pcp-late-review-") as temp:
+            # Keep the isolated worktree on PCP's shared workspace mount. The
+            # host-side Antigravity bridge cannot see container-private /tmp.
+            # Do not reuse or modify the original job checkout.
+            with tempfile.TemporaryDirectory(
+                prefix="pcp-late-review-", dir=str(self.engine.workspace_root),
+            ) as temp:
                 checkout = Path(temp) / "review"
                 clone = subprocess.run(
                     ["git", "clone", "--quiet", "--no-local", "--no-checkout", "--", str(original), str(checkout)],
