@@ -35,6 +35,7 @@ def report(**changes):
         "job_id": "job-12345678",
         "source_commit": SOURCE,
         "expected_head": HEAD,
+        "diff_hash": DIFF,
         "branch": "ai/job-123456",
         "pr_number": 7,
         "checkpoint_id": 182,
@@ -68,7 +69,6 @@ def proof(**changes) -> PMChatReviewProof:
         "branch": "ai/job-123456",
         "expected_head": HEAD,
         "pr_number": 7,
-        "diff_hash": DIFF,
         "checkpoint_id": 182,
         "checkpoint_key": "wo:blocked:key",
         "review_id": 45,
@@ -97,6 +97,7 @@ def test_pm_chat_report_requires_structured_exact_bounded_protocol():
         review_body(verdict="pass", findings=["high: broken gate"]),
         review_body(verdict="fail", findings=[]),
         review_body(summary="not a substantive independent assessment"),
+        review_body(diff_hash="e" * 63),
         review_body(extra_key="no"),
     ):
         with pytest.raises((ValueError, ValidationError)):
@@ -372,6 +373,12 @@ def test_record_fetches_real_github_review_and_keeps_same_checkpoint(monkeypatch
     assert result["attestation_id"] == 91
     assert len(calls) == 1 and calls[0]["expected_head"] == HEAD
     assert appended[0]["diff_hash"] == DIFF
+    review["body"] = review_body(diff_hash="e" * 64)
+    appended.clear()
+    with pytest.raises(RuntimeError, match="report_identity_mismatch"):
+        asyncio.run(service.record(envelope, comment_id=905, issue_number=63))
+    assert appended == []
+    review["body"] = review_body()
     assert appended[0]["review_mode"] == "pm_chat_manual_review"
     assert appended[0]["review_body_sha256"] == hashlib.sha256(review["body"].encode()).hexdigest()
     assert appended[0]["control_comment_id"] == 901
