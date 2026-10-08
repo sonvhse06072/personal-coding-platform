@@ -24,6 +24,7 @@ PROTECTED_PATHS = frozenset({
     "scripts/check_project_doc_authority.py",
     "config/project-baselines.yml",
     "config/projects.yml",
+    "config/pm-bridge.yml",
     "config/routing-policy.yml",
     "config/models.yml",
     "docs/project/README.md",
