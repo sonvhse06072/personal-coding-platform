@@ -423,7 +423,13 @@ def _score_section(
     haystack = section.content.lower()
     heading_tokens = _tokens(section.heading)
     body_tokens = _tokens(section.content)
-    exact_hits = sorted(ref for ref in exact_refs if ref in haystack)
+    # File references must match the repository path itself. Paths normally
+    # do not appear inside the Markdown body, so body-only matching misses them.
+    source_path = section.source.lower()
+    exact_hits = sorted(
+        ref for ref in exact_refs
+        if ref in haystack or (ref.endswith(".md") and ref == source_path)
+    )
 
     heading_overlap = len(query_tokens & heading_tokens)
     body_overlap = len(query_tokens & body_tokens)
