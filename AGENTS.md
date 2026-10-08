@@ -90,6 +90,16 @@ For a PCP-managed project, repository `HEAD` is not automatically the approved p
 - When using a subshell, capture/report the subshell return code after `)` when useful so the Human Owner can distinguish `PASS`, a controlled gate failure, and an unexpected command failure without losing the terminal session.
 - For rollout/restart/deploy gates, default to a fail-closed subshell pattern: perform read-only checks first, print a clear stop reason, return non-zero from the subshell, and do not place the mutating restart/rebuild command in the same block unless all prerequisites have already passed.
 
+## Direct GitHub PM documentation writes
+
+A ChatGPT PM update via the linked GitHub account does **not** pass through Runtime's `evaluate_pm_merge` automatically. Before any document mutation, re-read the exact repository, PR/base/head, authority class, current approved scope and relevant Owner decision. Avoid direct pushes to `main`; use an `ai/*` branch, exact diff review and required CI.
+
+Protected T0/T2, project-baseline/CI/governance paths require an explicit real Human Owner approval. To make the scope auditable in the PR, include `Owner-Approval-Issue: https://github.com/sonvhse06072/personal-coding-platform/issues/N` and `Approved-Protected-Paths: \`path1\`, \`path2\``. The repository's deterministic PR check verifies these **declared references and path scope**, not independent human identity; the PM must still verify actual Owner consent before merge. A description, a new `Accepted` line, CI green or model reasoning alone cannot grant Owner authority.
+
+`docs/project/current-state.md` and T3 history are mutable/evidence only and may not redefine a protected Constitution, architecture or approved ProjectBaseline. Never edit the definition of an already-approved ProjectBaseline revision in place, including its source commit or authority classes. Create a reviewed approved successor revision when legitimate protected scope advances.
+
+The repository's private GitHub branch currently has limited server-side branch/ruleset protection availability; this review/CI protocol reduces accidental drift but cannot technically prevent a credential holder from bypassing PR gates. Do not claim otherwise or bypass controls for convenience.
+
 ## Mandatory documentation continuity
 
 Every material decision or state transition must be reflected in repository documentation before the work is considered complete or safely handed off, whether the work was performed by ChatGPT, Codex, or the platform itself.
