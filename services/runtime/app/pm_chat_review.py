@@ -9,8 +9,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
-from dataclasses import dataclass
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -19,7 +17,7 @@ from .config import project_config
 from .pm_bridge import bridge_project_config
 from .pm_control import PMControlEventStore
 from .pm_late_review import registered_review_capacity
-from .pm_merge import evaluate_pm_merge
+from .pm_merge import PMChatReviewProof, evaluate_pm_merge
 from .pm_review_capacity_diagnostic import probe_reviewer_capacity
 from .storage import now
 
@@ -97,50 +95,6 @@ def parse_pm_chat_review(body: str) -> PMChatReviewReport:
     return PMChatReviewReport.model_validate(data)
 
 
-@dataclass(frozen=True)
-class PMChatReviewProof:
-    """An internal, immutable, store-verified OWNER-DELEGATED review proof."""
-
-    attestation_id: int
-    project_id: str
-    plan_id: str
-    work_order_id: str
-    job_id: str
-    source_commit: str
-    branch: str
-    expected_head: str
-    pr_number: int
-    diff_hash: str
-    checkpoint_id: int
-    checkpoint_key: str
-    review_id: int
-    review_author: str
-    review_body_sha256: str
-    control_comment_id: int
-    verdict: str
-    review_mode: str = "pm_chat_manual_review"
-
-    def matches(self, plan: dict[str, Any], tracked: dict[str, Any], job: dict[str, Any]) -> bool:
-        result = dict(job.get("result") or {})
-        diff = dict(result.get("diff") or {})
-        return bool(
-            self.review_mode == "pm_chat_manual_review"
-            and self.attestation_id > 0 and self.control_comment_id > 0 and self.review_id > 0
-            and self.verdict == "pass" and self.review_author
-            and re.fullmatch(r"[0-9a-f]{64}", self.review_body_sha256)
-            and re.fullmatch(r"[0-9a-f]{64}", self.diff_hash)
-            and self.project_id == str(plan.get("project_id") or "")
-            and self.plan_id == str(plan.get("plan_id") or "")
-            and self.work_order_id == str(tracked.get("work_order_id") or "")
-            and self.job_id == str(tracked.get("job_id") or "")
-            and self.job_id == str(job.get("id") or "")
-            and self.source_commit == str(job.get("source_commit") or "")
-            and self.branch == str(job.get("branch") or "")
-            and self.expected_head == str(result.get("commit") or "")
-            and self.pr_number == int(tracked.get("pr_number") or 0)
-            and self.diff_hash == str(diff.get("diff_hash") or "")
-            and self.checkpoint_id > 0 and bool(self.checkpoint_key)
-        )
 
 
 class PMChatReviewStore:
