@@ -341,9 +341,19 @@ def accepted_diff(job: dict[str, Any], workspace_root: Path) -> str:
         timeout=45,
         check=False,
     )
-    if proc.returncode != 0 or hashlib.sha256(proc.stdout).hexdigest() != expected:
+    if proc.returncode != 0:
+        raise RuntimeError("late_review_git_command_failed")
+    try:
+        # repo.diff_state uses repo._git(), whose text=True stdout is
+        # .strip()'d before hashing and storing the accepted diff.
+        # Recreate that exact canonical text; hashing raw Git output would
+        # include its trailing newline and reject a valid accepted commit.
+        committed_diff = proc.stdout.decode("utf-8").strip()
+    except UnicodeDecodeError as exc:
+        raise RuntimeError("late_review_accepted_diff_mismatch") from exc
+    if hashlib.sha256(committed_diff.encode("utf-8")).hexdigest() != expected:
         raise RuntimeError("late_review_accepted_diff_mismatch")
-    return proc.stdout.decode("utf-8", errors="replace")
+    return committed_diff
 
 
 class LateReviewStore:
