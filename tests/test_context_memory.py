@@ -378,3 +378,22 @@ def test_exact_file_reference_matches_source_path_not_only_body():
         and any(reason.startswith("exact_ref:") for reason in item["reasons"])
         for item in pack["retrieved"]
     )
+
+
+@pytest.mark.parametrize("role", ["product_manager", "developer", "reviewer"])
+def test_role_critical_governance_is_not_clipped_by_default(role):
+    pack = compose_context(
+        ROOT,
+        {
+            "project_id": "personal-coding-platform",
+            "role": role,
+            "task": {"title": "Check merge and authorization boundaries"},
+            "budget_chars": 24000,
+        },
+    )
+    pinned = {item["heading"]: item for item in pack["pinned"] if item["tier"] == "T0"}
+    assert pack["retrieval"]["core_governance_complete"] is True
+    assert not pinned["Core invariants"]["truncated"]
+    assert "Developer agents must never merge." in pinned["Core invariants"]["content"]
+    assert not pinned["9. Trust and security invariants"]["truncated"]
+    assert not pinned["10. Verification and delivery invariants"]["truncated"]
