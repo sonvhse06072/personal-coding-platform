@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import re
 import subprocess
 import tempfile
@@ -290,14 +291,44 @@ def accepted_diff(job: dict[str, Any], workspace_root: Path) -> str:
     expected = str(evidence.get("diff_hash") or "")
     workspace_raw = str(job.get("workspace") or "")
     root = workspace_root.resolve()
+    if not workspace_raw or not Path(workspace_raw).is_absolute():
+        raise RuntimeError("late_review_exact_diff_unavailable")
     workspace = Path(workspace_raw).resolve()
+    checkpoint = dict(job.get("checkpoint") or {})
+    mode = str(checkpoint.get("workspace_mode") or "")
+
+    if mode == "direct":
+        # A completed direct WorkOrder is returned to the project's main
+        # checkout, not an isolated clone beneath CODING_WORKSPACES_ROOT.
+        # Permit precisely the configured and mounted direct project root;
+        # never widen this into an arbitrary filesystem read.
+        project = project_config(str(job.get("project_id") or ""))
+        runtime = dict(project.get("runtime") or {})
+        configured_raw = str(project.get("path") or "").strip()
+        approved_raw = os.getenv("CODING_DIRECT_PROJECT_ROOT", "").strip()
+        allowed = bool(
+            runtime.get("workspace_mode") == "direct"
+            and configured_raw
+            and Path(configured_raw).is_absolute()
+            and approved_raw
+            and Path(approved_raw).is_absolute()
+            and workspace == Path(configured_raw).resolve()
+            and workspace == Path(approved_raw).resolve()
+        )
+    elif mode in {"", "isolated_clone"}:
+        # Retain the original isolated-clone boundary. Legacy jobs without
+        # mode may use this route only if already confined to workspace_root.
+        allowed = workspace != root and workspace.is_relative_to(root)
+    else:
+        allowed = False
+
     if (
         re.fullmatch(r"[0-9a-f]{40}", source) is None
         or re.fullmatch(r"[0-9a-f]{40}", head) is None
         or re.fullmatch(r"[0-9a-f]{64}", expected) is None
-        or not workspace_raw or workspace == root
-        or not workspace.is_relative_to(root)
+        or not allowed
         or not workspace.is_dir()
+        or not (workspace / ".git").exists()
         or evidence.get("diff_truncated") is True
     ):
         raise RuntimeError("late_review_exact_diff_unavailable")
