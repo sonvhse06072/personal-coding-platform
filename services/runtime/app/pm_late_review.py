@@ -447,6 +447,28 @@ class LateReviewStore:
             raise RuntimeError("late_review_attestation_integrity_failure")
         return value
 
+    def reconcile_orphan_claims(self) -> int:
+        """Startup-only cleanup: never rerun a possibly completed model call.
+
+        Called by the *new* single Runtime after the previous process has ended.
+        Prior in-flight reviewers, if any, become uncertain rather than running
+        indefinitely as active engineering or automatically reusing a model slot.
+        """
+        self.ensure()
+        with self.storage.connect() as conn:
+            rows = conn.execute(
+                """UPDATE cp_pm_late_review_attempts
+                SET status='uncertain',
+                    result=jsonb_build_object(
+                        'reason', 'runtime_restarted_before_review_finalization'
+                    ),
+                    updated_at=%s
+                WHERE status='claimed' RETURNING id""",
+                (now(),),
+            ).fetchall()
+            conn.commit()
+        return len(rows)
+
     def active_count(self) -> int:
         self.ensure()
         with self.storage.connect() as conn:
