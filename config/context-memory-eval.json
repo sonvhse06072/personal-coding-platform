@@ -16,7 +16,11 @@
       "required_identity_contains": [
         "docs/project/current-state.md#Current Project State and Handoff"
       ],
-      "require_no_retrieved_t3": true
+      "require_no_retrieved_t3": true,
+      "required_content_contains": [
+        "## Immediate next safe actions",
+        "## Active PCP issues and owner attention"
+      ]
     },
     {
       "id": "authority-developer-merge",
@@ -52,7 +56,10 @@
       "required_identity_contains": [
         "docs/project/history/episodes.md#Autonomous provider recovery"
       ],
-      "expect_supported_memory": true
+      "expect_supported_memory": true,
+      "required_content_contains": [
+        "provider/model/quota failures should fall through autonomously"
+      ]
     },
     {
       "id": "historical-direct-preview",
@@ -144,6 +151,83 @@
         "budget_chars": 5000
       },
       "max_selected_chars": 5000
+    },
+    {
+      "id": "business-strategy-topical-content",
+      "kind": "topical",
+      "request": {
+        "project_id": "personal-coding-platform",
+        "role": "product_manager",
+        "task": {
+          "title": "PCP personal engineering operating system product identity primary customer",
+          "task_type": "business_strategy"
+        },
+        "references": {
+          "topic": "product identity"
+        },
+        "budget_chars": 24000
+      },
+      "required_identity_contains": [
+        "docs/project/business-strategy.md#"
+      ],
+      "required_content_contains": [
+        "PCP is a **personal engineering operating system for one Human Owner**"
+      ]
+    },
+    {
+      "id": "vietnamese-current-handoff",
+      "kind": "current",
+      "request": {
+        "project_id": "personal-coding-platform",
+        "role": "product_manager",
+        "task": {
+          "title": "Trạng thái hiện tại của PCP và bước tiếp theo cần làm là gì?",
+          "task_type": "status"
+        },
+        "budget_chars": 24000
+      },
+      "required_identity_contains": [
+        "docs/project/current-state.md#Current Project State and Handoff"
+      ],
+      "required_content_contains": [
+        "## Immediate next safe actions"
+      ]
+    },
+    {
+      "id": "vietnamese-historical-exact-ref",
+      "kind": "historical",
+      "request": {
+        "project_id": "personal-coding-platform",
+        "role": "debugger",
+        "task": {
+          "title": "Bài học từ việc tự động khôi phục provider trong issue 228 là gì?",
+          "task_type": "incident_research"
+        },
+        "references": {
+          "issue": "228"
+        },
+        "budget_chars": 24000
+      },
+      "required_identity_contains": [
+        "docs/project/history/episodes.md#Autonomous provider recovery"
+      ],
+      "required_content_contains": [
+        "provider/model/quota failures should fall through autonomously"
+      ]
+    },
+    {
+      "id": "cross-project-scope-rejection",
+      "kind": "scope",
+      "request": {
+        "project_id": "chonhac",
+        "role": "product_manager",
+        "task": {
+          "title": "Retrieve Chợ Nhạc artist-profile requirements from the PCP checkout",
+          "task_type": "planning"
+        },
+        "budget_chars": 24000
+      },
+      "expected_error_contains": "project_id"
     }
   ]
 }
