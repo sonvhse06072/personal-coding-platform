@@ -232,6 +232,30 @@ class PMControlDispatcher:
                 },
             )
 
+        if action in {
+            "request_late_independent_review", "release_late_independent_review",
+        }:
+            self._plan(envelope)
+            self._job(envelope)
+            service = getattr(self.orchestrator, "late_reviews", None)
+            if service is None:
+                raise RuntimeError("Late independent-review service is unavailable")
+            if action == "request_late_independent_review":
+                result = await service.request(envelope)
+            else:
+                result = await service.release(envelope)
+            return (
+                "executed",
+                {
+                    "status": "executed",
+                    "action": action,
+                    "plan_id": envelope.plan_id,
+                    "work_order_id": envelope.work_order_id,
+                    "job_id": envelope.job_id,
+                    "result": result,
+                },
+            )
+
         if action == "review_repair":
             self._job(envelope)
             row = await self.engine.request_review_repair(
