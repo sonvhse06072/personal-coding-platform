@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
+from types import SimpleNamespace
 from datetime import datetime, timezone
 
 from app.pm_diagnostics import PMDiagnosticsService, _safe_merge_gate_reason
@@ -520,3 +521,57 @@ def test_diagnostics_publishes_only_bound_merge_gate_reason():
     sanitized = engine.ddev.comments[-1]["body"]
     assert "merge_gate_reason" not in sanitized
     assert "bad/private" not in sanitized
+
+
+
+def test_late_review_diagnostic_publishes_registry_only_capacity_floor(monkeypatch):
+    from app import pm_diagnostics
+
+    storage = FakeStorage()
+    storage.job["status"] = "completed"
+    engine = FakeEngine()
+    orchestrator = FakeOrchestrator()
+    orchestrator.late_reviews = SimpleNamespace(
+        store=SimpleNamespace(
+            status=lambda *, plan_id, job_id: {
+                "id": 15,
+                "status": "no_capacity",
+                "expected_head": "b" * 40,
+                "checkpoint_id": 182,
+                "reviewer_provider": None,
+                "reviewer_model": None,
+                "review_mode": None,
+                "attestation_id": None,
+            },
+        ),
+    )
+    monkeypatch.setattr(
+        pm_diagnostics, "registered_review_capacity",
+        lambda job: {
+            "status": "registry_evaluated",
+            "source": "registered_models_not_live_capacity",
+            "max_writer_tier": "premium",
+            "max_writer_review_score": 9,
+            "eligible_higher_tier_model_ids": [],
+            "capacity_is_live": False,
+        },
+    )
+    service = PMDiagnosticsService(storage, engine, orchestrator)
+
+    response = asyncio.run(
+        service.collect_and_publish(
+            project_id="chonhac",
+            issue_number=77,
+            control_comment_id=777,
+            plan_id="plan-1",
+            job_id=JOB_ID,
+            collectors=["late_review"],
+        )
+    )
+    assert response["status"] == "published"
+    body = engine.ddev.comments[-1]["body"]
+    assert '"status": "no_capacity"' in body
+    assert '"max_writer_tier": "premium"' in body
+    assert '"eligible_higher_tier_model_ids": []' in body
+    assert '"capacity_is_live": false' in body
+    assert "SECRET" not in body
