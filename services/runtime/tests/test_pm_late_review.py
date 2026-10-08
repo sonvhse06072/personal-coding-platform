@@ -139,7 +139,7 @@ def _git(repo: Path, *args: str) -> str:
 
 def _repo(tmp_path: Path):
     repo = tmp_path / "preserved"
-    repo.mkdir()
+    repo.mkdir(parents=True)
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
     _git(repo, "config", "user.email", "tests@example.test")
     _git(repo, "config", "user.name", "Tests")
