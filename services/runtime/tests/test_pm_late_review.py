@@ -632,3 +632,146 @@ def test_release_transition_seals_attestation_in_immutable_checkpoint():
                 detail={"late_review_release": invalid},
             )
         assert not captured
+
+
+
+def test_staffing_422_must_explicitly_prove_no_eligible_cross_provider():
+    import httpx
+
+    request = httpx.Request("POST", "http://router/v1/staff")
+    no_model = httpx.Response(
+        422, request=request,
+        json={"detail": "No eligible model for role=reviewer; rejected={}"},
+    )
+    unavailable = httpx.Response(
+        503, request=request, json={"detail": "Router unavailable"},
+    )
+    malformed = httpx.Response(
+        422, request=request, json={"detail": "model registry invalid"},
+    )
+    assert pm_late_review._no_eligible_reviewer(
+        httpx.HTTPStatusError("no reviewer", request=request, response=no_model),
+    )
+    assert not pm_late_review._no_eligible_reviewer(
+        httpx.HTTPStatusError("backend unavailable", request=request, response=unavailable),
+    )
+    assert not pm_late_review._no_eligible_reviewer(
+        httpx.HTTPStatusError("invalid policy", request=request, response=malformed),
+    )
+
+
+def test_no_stronger_reviewer_can_safely_recheck_capacity_without_claim(
+    tmp_path, monkeypatch,
+):
+    base_registry = pm_late_review.models_doc()
+    base_registry["models"].pop("upgraded")
+    monkeypatch.setattr(pm_late_review, "models_doc", lambda: base_registry)
+    service, ledger, router, adapter, envelope = _service(
+        tmp_path, monkeypatch, cross_unavailable=True,
+    )
+    request, result = asyncio.run(_execute(service, envelope))
+    assert result["status"] == "no_capacity"
+    assert result["reason"] == "no_eligible_higher_tier_reviewer"
+    assert len(router.calls) == 1
+    assert adapter.calls == []
+    assert ledger.saved is None
+    assert not any(entry[0] == "claim" for entry in ledger.calls)
+
+
+def test_immutable_fallback_attestation_is_rechecked_at_release(monkeypatch):
+    project, plan, tracked, job, pr = context()
+    job["progress"].update({
+        "iteration": 1, "agent_attempts": [_attempt(1, "openai")],
+    })
+    job["checkpoint"]["executor_choice"] = {
+        "id": "openai-model", "provider": "openai", "adapter": "codex_cli",
+    }
+    job["result"]["diff"]["diff_hash"] = "d" * 64
+    job["result"]["route"]["strategy"]["review_policy"]["independence_satisfied"] = False
+
+    reviewer = {"id": "upgraded", "provider": "openai", "adapter": "fake"}
+    escalation = pm_late_review._escalated_reviewer_evidence(
+        job, reviewer, ("openai",),
+    )
+    data = {
+        "plan_id": plan["plan_id"],
+        "work_order_id": tracked["work_order_id"],
+        "job_id": job["id"],
+        "source_commit": job["source_commit"],
+        "branch": job["branch"],
+        "expected_head": job["result"]["commit"],
+        "pr_number": tracked["pr_number"],
+        "diff_hash": job["result"]["diff"]["diff_hash"],
+        "checkpoint_id": 182,
+        "checkpoint_key": "wo:blocked:exact",
+        "writer_providers": ["openai"],
+        "reviewer_provider": "openai",
+        "reviewer_model": "upgraded",
+        "reviewer_adapter": "fake",
+        "review_mode": "same_provider_higher_tier",
+        "cross_provider_unavailable": True,
+        "escalation": dict(escalation),
+        "attempt_id": 90,
+        "verdict": "pass",
+        "protocol_valid": True,
+    }
+    attestation = {
+        "id": 101,
+        "attempt_id": 90,
+        "payload": data,
+        "status": "passed",
+        **{
+            field: data[field] for field in (
+                "plan_id", "work_order_id", "job_id", "source_commit",
+                "branch", "expected_head", "diff_hash", "pr_number",
+                "checkpoint_id", "checkpoint_key",
+                "reviewer_provider", "reviewer_model",
+            )
+        },
+    }
+    service = LateReviewService(SimpleNamespace(), SimpleNamespace(), SimpleNamespace())
+    service.store = SimpleNamespace(get_attestation=lambda attestation_id: attestation)
+    kwargs = {
+        "plan": plan, "tracked": tracked, "job": job,
+        "attestation_id": 101,
+        "checkpoint_id": 182, "checkpoint_key": "wo:blocked:exact",
+    }
+    proof = service.trusted_proof(**kwargs)
+    assert proof is not None
+    assert proof.review_mode == "same_provider_higher_tier"
+    assert proof.reviewer_tier_index > proof.writer_max_tier_index
+    assert _eligibility((project, plan, tracked, job, pr), proof).eligible is True
+
+    data["escalation"]["reviewer_tier_index"] = 2
+    with pytest.raises(RuntimeError, match="higher_tier_attestation_stale"):
+        service.trusted_proof(**kwargs)
+    data["escalation"]["reviewer_tier_index"] = escalation["reviewer_tier_index"]
+    monkeypatch.setattr(
+        pm_late_review, "routing_policy_doc",
+        lambda: {"review_policy": {"late_review_recovery": {
+            "same_provider_higher_tier_fallback_enabled": False,
+        }}},
+    )
+    with pytest.raises(RuntimeError, match="fallback_policy_disabled"):
+        service.trusted_proof(**kwargs)
+
+
+def test_fallback_disabled_does_not_consume_a_model_slot(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        pm_late_review, "routing_policy_doc",
+        lambda: {"review_policy": {"late_review_recovery": {
+            "same_provider_higher_tier_fallback_enabled": False,
+        }}},
+    )
+    service, ledger, router, adapter, envelope = _service(
+        tmp_path, monkeypatch, cross_unavailable=True,
+        fallback_choice={
+            "id": "upgraded", "model": "upgraded",
+            "provider": "openai", "adapter": "fake",
+        },
+    )
+    _, result = asyncio.run(_execute(service, envelope))
+    assert result["status"] == "no_capacity"
+    assert len(router.calls) == 1
+    assert adapter.calls == []
+    assert ledger.saved is None
