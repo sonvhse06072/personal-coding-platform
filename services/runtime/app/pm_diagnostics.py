@@ -483,6 +483,12 @@ class PMDiagnosticsService:
                     "blocked_checkpoint_id": attempt.get("checkpoint_id"),
                     "reviewer_provider": _safe_identity(attempt.get("reviewer_provider"), 100),
                     "reviewer_model": _safe_identity(attempt.get("reviewer_model"), 100),
+                    "review_mode": (
+                        attempt.get("review_mode")
+                        if attempt.get("review_mode") in {
+                            "cross_provider", "same_provider_higher_tier",
+                        } else None
+                    ),
                     "attestation_id": attempt.get("attestation_id"),
                 }
                 if attempt else {"status": "not_requested"}
