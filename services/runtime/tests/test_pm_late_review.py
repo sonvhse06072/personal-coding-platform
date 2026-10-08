@@ -447,14 +447,16 @@ def test_release_transition_seals_attestation_in_immutable_checkpoint():
         "checkpoint_id": 182,
         "checkpoint_key": "wo:blocked:exact",
         "head": job["result"]["commit"],
+        "review_mode": "cross_provider",
     }
     CorePlanOrchestrator._checkpoint_transition(
         facade, tracked, kind="late_review_released",
         state="awaiting_merge", job=job, pr=pr,
         detail={"late_review_release": release},
     )
-    proof = captured[0]["evidence"]["late_independent_review"]
+    proof = captured[0]["evidence"]["late_review_proof"]
     assert proof == {
+        "review_mode": "cross_provider",
         "attestation_id": 77,
         "blocked_checkpoint_id": 182,
         "blocked_checkpoint_key": "wo:blocked:exact",
