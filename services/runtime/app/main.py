@@ -236,7 +236,7 @@ async def lifespan(app: FastAPI):
     await engine.stop()
 
 
-RUNTIME_VERSION = "1.0.134"
+RUNTIME_VERSION = "1.0.135"
 
 app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan=lifespan)
 app.include_router(pm_bridge_router)
@@ -530,7 +530,10 @@ def list_jobs(limit: int = Query(50, ge=1, le=500)) -> JobList:
 )
 def active_engineering_work_count() -> ActiveEngineeringWorkCount:
     return ActiveEngineeringWorkCount(
-        active_engineering_jobs=storage.count_active_engineering_jobs()
+        active_engineering_jobs=(
+            storage.count_active_engineering_jobs()
+            + plan_orchestrator.late_reviews.store.active_count()
+        )
     )
 
 
