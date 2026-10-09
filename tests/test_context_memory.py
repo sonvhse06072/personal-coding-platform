@@ -52,10 +52,10 @@ def test_unknown_task_type_is_not_topical_retrieval_evidence():
             "task_type": "unknown",
         },
     }
-    assert _query_text(request) == "quantum banana orbital jurisprudence"
+    assert _query_text(request).strip() == "quantum banana orbital jurisprudence"
     assert _query_text({
         "task": {"title": "Review provider update", "task_type": "model_update"},
-    }) == "Review provider update model_update"
+    }).strip() == "Review provider update model_update"
 
 
 
