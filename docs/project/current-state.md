@@ -2,7 +2,7 @@
 
 Status: **Tier-1 mutable working-state index**. This is not a chronological incident log, an approved ProjectBaseline amendment, or proof of a live Runtime/local lock. Repository governance and approved ProjectBaseline revisions remain authoritative; read GitHub/Runtime/local evidence again before any mutation.
 
-Last reconciled: **2026-10-09** for GitHub issues and Owner-approved documentation direction only. Live Guardian/Runtime and local project leases were **not revalidated** for this doc update; the last independently verified local snapshot below remains historical (2026-10-08). Recheck all runtime/source/lease gates before any mutation or rollout.
+Last reconciled: **2026-10-09** for GitHub issue-tree cleanup and Owner-approved product documentation direction. Local Runtime and direct-workspace lease **have not been freshly verified in this PR**; source/CI changes must not be interpreted as deployed behavior. Recheck full live state before any operation.
 
 ## Resume order
 
@@ -34,20 +34,18 @@ Memory/retrieval contract: docs/project/context-memory-architecture.md. The exis
 
 ## Active PCP issues and owner attention
 
-GitHub issue search on **2026-10-09** reported nine open issues. These are backlog/authority references, **not permission to dispatch jobs**:
-- **#493 — DDEV bootstrap:** #583 merged source; Executor 1.0.35 rollout/cold-start proof pending.
-- **#512 — Remote PM/Guardian:** parent acceptance on natural remote recovery/direct-intake; no synthetic outage.
-- **#524 — Guardian control/audit:** intentionally permanently open operations channel, not engineering backlog.
-- **#586 — same-job recovery:** Chợ Nhạc #89 verifier/repair; preserve same job, dirty worktree, lease and counters until verified recovery.
-- **#587 — Doc/Context Governance:** Owner-approved target; runtime-integrated evaluation not yet proven.
-- **#588 — Project Discovery:** **Future/Deferred**, no automatic onboarding now.
-- **#589 — Provider Intelligence:** target discovery/verification/update process; no auto-upgrade active.
-- **#590 — Trusted Development:** target Codex parity and preview feedback, no new developer authority granted yet.
-- **#591 — Documentation reconciliation:** approved protected-doc scope recorded; PR/CI/merge still gated.
+GitHub issue search on **2026-10-09** found **23 open issues** after Owner-requested backlog consolidation. These are **backlog and operational evidence**, not permission to dispatch jobs:
 
-**#557, #562, #563 and #571 are CLOSED**, not open development gates. Chợ Nhạc GH-63 founder acceptance remains a separate managed-project gate; T1 cannot amend ProjectBaseline/production authority.
+- **#593 — Canonical PCP product-completion program:** 17 implementation issues **#594–#610** across G0–G3. All were open/planned at the reconciliation point. **#594** is the first read-only architecture/critical-path audit; **#595** is direct-Codex benchmark. G1–G3 remain behind staged Go/No-Go, approved authority and real evidence gates.
+- **#493 — DDEV Executor cold-start:** source fix PR #583 merged; actual Executor **1.0.35** rollout/natural cold-start acceptance still must be verified. Not a new source implementation ticket.
+- **#512 — Remote PM/Guardian:** retained for natural remote-intake and out-of-band recovery acceptance, not a second implementation program.
+- **#524 — Guardian control/audit:** intentionally open operations channel, **not** developer backlog.
+- **#588 — Project Discovery:** **FUTURE / DEFERRED**; excluded from Product RC1, no autonomous no-doc onboarding now.
+- **#591 — T2 documentation reconciliation:** protected docs PR [#592](https://github.com/sonvhse06072/personal-coding-platform/pull/592); its exact-head tests, review and merge must be checked live. A source branch does not automatically update approved project authority.
 
-PCP **#562** and documentation hardening **#563** are CLOSED; do not carry their completed blockers as live Human Owner attention. The product/founder UX acceptance for Chợ Nhạc GH-63 is a separate outstanding decision, not proof of a PCP source blocker. `docs/project/current-state.md` is T1 execution continuity only and cannot amend higher-authority policy.
+**#586, #587, #589, #590 were closed as duplicate/superseded planning** and their implementation acceptance moved to #594/#601, #603/#604, #606/#607, and #594–#599 respectively. This is **not** proof that the associated features or the old Chợ Nhạc #89 PCP job are complete, cancelled or released. Do not issue a replacement job, bypass a lease or mutate worktree because its historical issue is closed. **#557, #562, #563, #571 are also closed** and do not represent open development gates.
+
+Chợ Nhạc GH-63 founder acceptance is a managed-project decision, not a PCP source blocker. Live GitHub/Runtime and project branch/lease state are authoritative for time-sensitive work, not this snapshot.
 
 <!-- PCP:CONTINUITY:START -->
 ## Automated continuity snapshot
@@ -73,7 +71,7 @@ PCP **#562** and documentation hardening **#563** are CLOSED; do not carry their
 
 1. #493 source/CI/review completed in merged PR #583. **Do not repeat Guardian rollout without addressing the host `ddev restart` pre-start 900s incident**; first obtain a fresh safe startup plan and full quiescence, then separately deploy Executor 1.0.35. GitHub merge does not imply local deployment.
 2. Fresh post-merge Guardian [snapshot 6064238395](https://github.com/sonvhse06072/personal-coding-platform/issues/524#issuecomment-6064238395) confirmed Runtime **1.0.141**, Executor **1.0.34**, Router **1.0.31**, n8n/Antigravity/credentials healthy, and 0 active Runtime/Executor/Antigravity work. **At that 2026-10-08 snapshot**, local `main` was clean at `23d2d5432a11d4b39f6dbbeaf89ffc78d453040e` and GitHub `main` was `dabc579f23a8b9d500a6dcf5647c1e2593b08216`. The later GitHub #585 source merge is recorded above; **no newer local deployment/source state is claimed**. Recheck all quiescence/clean gates before any future rollout, never reuse this historical snapshot as a standing permission.
-3. #557 is CLOSED. Keep #512 parent acceptance open for natural remote cases; #524 remains the operations channel. Diagnose #586 without bypassing same-job authorization. Align approved vision/docs for #587/#589/#590 through reviewed PR/CI; #588 stays deferred.
+3. Finish #591 / PR #592 via exact-head tests and reviewed doc authority; start #594 read-only audit against live GitHub. Use #593 as the single engineering plan and only dispatch later phases after Go/No-Go. #512 remains for natural remote acceptance; #524 for Guardian audit. #588 remains deferred. Historical #586 GH-89 job/lease needs read-only reconciliation before any new write.
 4. Preserve approved ProjectBaseline/managed-project source identities, existing job state, tracked cancellation, finite retries and Human Owner-protected decisions. No Docker prune/reset or replacement job to bypass a blocker.
 
 ## Historical and detailed evidence pointers
