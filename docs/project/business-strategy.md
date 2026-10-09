@@ -1,6 +1,6 @@
 # PCP Business and Product Strategy
 
-Status: PM-reviewed synthesis of the existing Project Constitution, approved efficiency policy, operating model, current Runtime behavior and live dogfood evidence as of 2026-10-07.
+Status: Owner-approved product direction updated 2026-10-09; implementation/rollout status remains governed by live Runtime/GitHub evidence. Historical synthesis below remains supporting context, not an active roadmap override.
 
 This document does **not** create a new commercialization mandate, weaken any Constitution boundary, or expand PCP into a multi-tenant product. It makes the existing business/product logic explicit so future PCP work can be prioritized by user value instead of by technical novelty or whichever managed-project blocker happened most recently.
 
@@ -17,6 +17,31 @@ The current economic case is internal leverage:
 > increase accepted engineering outcomes while reducing avoidable Human Owner attention, repetitive operator work, wasted model/provider capacity and recurring platform failure.
 
 External users, pricing, multi-tenancy, enterprise administration, public hosting and commercial support are outside the current product frame. Any future commercialization requires a separate Human Owner decision and a new product/business baseline.
+
+### Định hướng sản phẩm được Owner chấp thuận — 2026-10-09
+
+**North Star:** Từ nghiệp vụ, tài liệu và phạm vi đã được Owner phê duyệt, PCP tự phát triển các thay đổi phần mềm tuần tự đến trạng thái được nghiệm thu; lựa chọn tài nguyên AI phù hợp, duy trì kiến thức chính xác, và ưu tiên tự chẩn đoán/phục hồi lỗi thường gặp. Chỉ yêu cầu Owner khi phát sinh quyết định thuộc quyền bảo vệ hoặc không còn phương án tiếp tục an toàn.
+
+**Bốn năng lực cốt lõi (định hướng, không mặc nhiên đã triển khai đầy đủ):**
+
+1. **Autonomous Development:** ChatGPT/Owner chốt nghiệp vụ và tài liệu; PM local lập/duy trì ExecutionPlan, WorkOrder và dependency; Runtime điều phối code → kiểm thử → review → PR/CI → PM merge đủ điều kiện → WorkOrder tiếp theo.
+2. **Resource Optimization:** PM phân tích độ phức tạp; Router lựa chọn provider, model, reasoning effort, review strategy và ngân sách theo chi phí **mỗi kết quả được nghiệm thu**, tính cả lượt phân tích, retry, test, quota và Human Attention. Không tối ưu riêng giá token.
+3. **Bounded Self-Healing:** Phân loại failure; tự chẩn đoán, sửa và phục hồi cùng durable job khi có bằng chứng/đường phục hồi được cho phép, bảo toàn diff, lease, counters và ProjectBaseline. Không coi lỗi lặp không tiến triển là lý do retry vô hạn; không hứa tự sửa mọi lỗi hệ thống.
+4. **Documentation & Context Governance:** Chuẩn hóa tài liệu theo quyền hạn, freshness và T0–T4; ngăn drift khỏi business/architecture được duyệt; tạo context pack theo role/task, đo omission, stale retrieval, token bloat và cải thiện có kiểm chứng.
+
+**Các năng lực hỗ trợ**, không xây thành dịch vụ/agent độc lập nếu có thể mở rộng cấu phần hiện tại:
+
+- **Trusted Project Development:** Developer có quyền đủ rộng **trong môi trường phát triển được ủy quyền**, chạy build/DDEV/browser/preview, sửa scope kỹ thuật phục vụ acceptance criteria; không nhận quyền đổi business, privileged PCP, secrets, production, destructive data hoặc tự merge.
+- **Rule / Tool / Skill Management:** Nhận diện kỹ năng và công cụ cần cho WorkOrder; chọn skill theo nhu cầu, ưu tiên nguồn uy tín và kiểm chứng trước khi đưa vào project; học từ hiệu quả thực tế, không tích trữ skill hoặc context mặc định.
+- **Provider Intelligence:** Theo dõi release/model/effort/quota/deprecation, xác minh khả năng dùng theo provider/adapter/tài khoản, đánh giá chi phí/lợi ích, cập nhật bằng PR/version/CI và rollout an toàn khi đủ quyền; không chạy theo bản mới nhất một cách mù quáng.
+
+**Năng lực thứ năm của tầm nhìn — Future/Deferred:** Chủ động phân tích một repository chưa có tài liệu, reverse-engineer code, hỏi Owner để làm rõ nghiệp vụ và đề xuất ProjectBaseline. **Không triển khai hoặc kích hoạt onboarding tự động ở giai đoạn hiện tại**; cần quyết định Owner riêng sau khi bốn năng lực chính ổn định.
+
+**Định hướng đầu tư:** Refactor có chọn lọc PCP hiện hữu thay vì viết lại toàn bộ. Thực thi theo giai đoạn có benchmark/stop-go; không mở thêm hạ tầng, role hoặc recovery protocol chỉ vì tính năng có vẻ hữu ích. Chợ Nhạc đang theo TECH-DEC-040 (Codex-first + PCP-light) cho công việc mới; PCP không được tự thu hồi quyền điều phối, chiếm workspace hoặc vượt qua lease/job hiện hữu chỉ vì roadmap mới.
+
+Nguồn yêu cầu: [#587](https://github.com/sonvhse06072/personal-coding-platform/issues/587), [#588](https://github.com/sonvhse06072/personal-coding-platform/issues/588), [#589](https://github.com/sonvhse06072/personal-coding-platform/issues/589), [#590](https://github.com/sonvhse06072/personal-coding-platform/issues/590), [#591](https://github.com/sonvhse06072/personal-coding-platform/issues/591). Chi tiết kiến trúc đích thuộc **architecture.md**, quyền/quy trình thuộc **operating-model.md**, đo hiệu suất thuộc **efficiency-model.md**, thứ tự/effort thuộc **roadmap.md**.
+
+**Giới hạn ủy quyền:** Việc Owner đồng ý định hướng và tài liệu **không** tự động sửa Constitution, project baseline đã được duyệt, mô hình bảo mật, quyền developer đang triển khai, CI/merge/deploy gate hoặc ngân sách. Mọi thay đổi thuộc thẩm quyền được bảo vệ phải có ChangeProposal, phê duyệt đúng phạm vi, PR và kiểm chứng riêng.
 
 ## 2. Primary user and jobs-to-be-done
 
