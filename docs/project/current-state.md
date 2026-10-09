@@ -2,7 +2,7 @@
 
 Status: **Tier-1 mutable working-state index**. This is not a chronological incident log, an approved ProjectBaseline amendment, or proof of a live Runtime/local lock. Repository governance and approved ProjectBaseline revisions remain authoritative; read GitHub/Runtime/local evidence again before any mutation.
 
-Last reconciled: **2026-10-09** for GitHub issue-tree cleanup and Owner-approved product documentation direction. Local Runtime and direct-workspace lease **have not been freshly verified in this PR**; source/CI changes must not be interpreted as deployed behavior. Recheck full live state before any operation.
+Last reconciled: **2026-10-09** after PR #592 merged and issue #591 completed; GitHub issue-tree snapshot checked again. This is a **GitHub source/backlog** reconciliation only: local Runtime, Executor version, DDEV state and Chợ Nhạc direct-workspace lease were **not freshly verified**. Recheck live health/lease before any operation.
 
 ## Resume order
 
@@ -30,18 +30,18 @@ Memory/retrieval contract: docs/project/context-memory-architecture.md. The exis
 - **Recovery verified on 2026-10-08:** after the Owner safely completed WSL disk work and manually ran `ddev start`, [Guardian read-only post-health 6063966849](https://github.com/sonvhse06072/personal-coding-platform/issues/524#issuecomment-6063966849) proved Runtime **1.0.141**, DDEV Executor **1.0.34**, Router **1.0.31**, n8n/credentials/Antigravity **1.13** healthy, with **zero active engineering/executor/Antigravity work** and local `main` clean at `23d2d5432a11d4b39f6dbbeaf89ffc78d453040e`. This is Owner-assisted recovery, **not** a proven autonomous Guardian outage-recovery feature. At the **earlier recovery observation**, GitHub main `4cff9689cf00d30141d1721eb5d64f7ac30e5ef4` was ahead only by docs PR #582; the later #583 code merge is separately recorded below. Do not force a DDEV restart just to sync T1 documentation.
 - [PCP PR #583](https://github.com/sonvhse06072/personal-coding-platform/pull/583) was exact-head PM-reviewed at `a5eefb54bd7bbfedc08a11601b28cdaff9a5d89c`, with **4/4 CI success** [37807089628](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/37807089628), and merged into GitHub `main` at `dabc579f23a8b9d500a6dcf5647c1e2593b08216`. This updates **Executor source** to **1.0.35**; **no Executor 1.0.35 local rollout** was attempted. The earlier Guardian post-health still proves *deployed* Executor 1.0.34; re-check live state for anything newer.
 
-- On **2026-10-09**, GitHub `main` before the documentation branch was `d53fbb07524bb3ca13324e2ed7edac1513367072` (PR #585 merged). This is **GitHub source evidence only**; no fresh deployed/healthy/quiescent Runtime or Chợ Nhạc workspace state is claimed.
+- On **2026-10-09**, GitHub [PR #592](https://github.com/sonvhse06072/personal-coding-platform/pull/592) merged after **4/4 exact-head CI success** and PM diff review, producing `main@26f5cc54912fc621e2daa898be00feb9f6cd2746`. This includes T2 product-direction documents and a bounded standalone Context Composer regression fix. It is **source acceptance only**, not proof of local Runtime/Executor rollout, project lease freshness, or new developer privileges.
 
 ## Active PCP issues and owner attention
 
-GitHub issue search on **2026-10-09** found **23 open issues** after Owner-requested backlog consolidation. These are **backlog and operational evidence**, not permission to dispatch jobs:
+GitHub issue search on **2026-10-09** found **22 open issues** after #591 was completed and PR #592 merged. These are **backlog and operational evidence**, not permission to dispatch jobs:
 
 - **#593 — Canonical PCP product-completion program:** 17 implementation issues **#594–#610** across G0–G3. All were open/planned at the reconciliation point. **#594** is the first read-only architecture/critical-path audit; **#595** is direct-Codex benchmark. G1–G3 remain behind staged Go/No-Go, approved authority and real evidence gates.
 - **#493 — DDEV Executor cold-start:** source fix PR #583 merged; actual Executor **1.0.35** rollout/natural cold-start acceptance still must be verified. Not a new source implementation ticket.
 - **#512 — Remote PM/Guardian:** retained for natural remote-intake and out-of-band recovery acceptance, not a second implementation program.
 - **#524 — Guardian control/audit:** intentionally open operations channel, **not** developer backlog.
 - **#588 — Project Discovery:** **FUTURE / DEFERRED**; excluded from Product RC1, no autonomous no-doc onboarding now.
-- **#591 — T2 documentation reconciliation:** protected docs PR [#592](https://github.com/sonvhse06072/personal-coding-platform/pull/592); its exact-head tests, review and merge must be checked live. A source branch does not automatically update approved project authority.
+- **#591 — COMPLETED source-of-truth reconciliation:** [PR #592](https://github.com/sonvhse06072/personal-coding-platform/pull/592) merged with **4/4 CI PASS**, as established above; **#591 is closed and is not one of the 22 open issues**. Runtime deployment and approved ProjectBaseline promotion remain separate events.
 
 **#586, #587, #589, #590 were closed as duplicate/superseded planning** and their implementation acceptance moved to #594/#601, #603/#604, #606/#607, and #594–#599 respectively. This is **not** proof that the associated features or the old Chợ Nhạc #89 PCP job are complete, cancelled or released. Do not issue a replacement job, bypass a lease or mutate worktree because its historical issue is closed. **#557, #562, #563, #571 are also closed** and do not represent open development gates.
 
@@ -71,7 +71,7 @@ Chợ Nhạc GH-63 founder acceptance is a managed-project decision, not a PCP s
 
 1. #493 source/CI/review completed in merged PR #583. **Do not repeat Guardian rollout without addressing the host `ddev restart` pre-start 900s incident**; first obtain a fresh safe startup plan and full quiescence, then separately deploy Executor 1.0.35. GitHub merge does not imply local deployment.
 2. Fresh post-merge Guardian [snapshot 6064238395](https://github.com/sonvhse06072/personal-coding-platform/issues/524#issuecomment-6064238395) confirmed Runtime **1.0.141**, Executor **1.0.34**, Router **1.0.31**, n8n/Antigravity/credentials healthy, and 0 active Runtime/Executor/Antigravity work. **At that 2026-10-08 snapshot**, local `main` was clean at `23d2d5432a11d4b39f6dbbeaf89ffc78d453040e` and GitHub `main` was `dabc579f23a8b9d500a6dcf5647c1e2593b08216`. The later GitHub #585 source merge is recorded above; **no newer local deployment/source state is claimed**. Recheck all quiescence/clean gates before any future rollout, never reuse this historical snapshot as a standing permission.
-3. Finish #591 / PR #592 via exact-head tests and reviewed doc authority; start #594 read-only audit against live GitHub. Use #593 as the single engineering plan and only dispatch later phases after Go/No-Go. #512 remains for natural remote acceptance; #524 for Guardian audit. #588 remains deferred. Historical #586 GH-89 job/lease needs read-only reconciliation before any new write.
+3. **#591/#592 documentation prerequisite is complete**. Continue **#594** read-only audit ([initial source audit](https://github.com/sonvhse06072/personal-coding-platform/issues/594#issuecomment-6082567587) is partial), then evidence-backed **#595** benchmarking. Use #593 as the single engineering plan; do not dispatch G1–G3 before their Go/No-Go gates. #512 remains for natural remote acceptance, #524 for Guardian audit, #588 deferred. Historical #586 GH-89 job/lease still requires fresh read-only reconciliation before a shared-workspace write.
 4. Preserve approved ProjectBaseline/managed-project source identities, existing job state, tracked cancellation, finite retries and Human Owner-protected decisions. No Docker prune/reset or replacement job to bypass a blocker.
 
 ## Historical and detailed evidence pointers
