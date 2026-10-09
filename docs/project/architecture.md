@@ -400,6 +400,42 @@ existing archive path, including cleanup of the request initialization marker.
 
 The following layers are approved targets but are not all implemented yet.
 
+### Refactor target 2026-10-09: one efficient autonomous execution path
+
+**Status:** Owner-approved architectural **direction**, not a statement that all components exist or that security/credential/merge invariants have been amended. The canonical product outcomes are in [business-strategy.md](business-strategy.md), the implementation priorities in [roadmap.md](roadmap.md), and day-to-day authority in [operating-model.md](operating-model.md).
+
+~~~text
+Owner + ChatGPT: approve business, architecture, ProjectBaseline
+  -> GitHub approved Source of Truth + scoped issue/contract
+  -> PCP PM: deterministic direct-intake OR planning/dependencies
+  -> Context Composer: pinned authority + minimal role/task context
+  -> Router: model/effort/quota + appropriate review/tool/skill
+  -> ONE trusted project-scoped developer writer
+       edit -> local build/DDEV -> browse configured dev URL -> test -> repair
+  -> required deterministic verification -> risk-aware review -> PR/exact CI
+  -> PM final outcome + eligible merge -> next approved WorkOrder
+          |
+          + failure classifier -> safe self-healing/reassess/owner decision
+          + TaskOutcome -> context/provider/skill efficiency feedback
+~~~
+
+No separate PM, reviewer, recovery daemon or provider-watcher service is required merely to represent a logical responsibility. Extend existing Runtime/Router/Executor/Guardian boundaries first; any new bridge or service must pass the economic and trust-boundary gates.
+
+**Execution modes and cost:** A small already-approved task may use deterministic admission + single developer invocation rather than an additional full AI planning/evaluation loop. Complex/dependent tasks still receive PM planning and appropriate independent review. Select verification by affected paths during iteration; final configured required tests, exact-head CI and PM merge requirements remain. The complexity score and effort are planning estimates, not routine reasons to pause healthy progress.
+
+**Trusted project developer — proposed, project-opt-in:** Keep a single writer bound to an exact registered project/workspace/lease and a per-run capability contract. Compare host-side constrained Codex, project-owned dev container and executor-brokered DDEV/Playwright as options in G0/G1; do not preselect an unsafe implementation. A developer may exercise routine local build, Drush/Composer/PHP/Node, private test fixtures, an allowlisted dev preview origin, browser evidence and related technical refactoring needed for approved acceptance criteria. A ready URL alone is **not** proof of visual review. Technical scope expansion is judged against requirements, architecture and risk, not file count alone. No blanket full host control, Docker socket/privileged credentials, unrelated filesystem access, production, destructive real data, unreviewed dependency or business changes. Direct-workspace authority must preserve existing branch/lease/dirty worktree. Widening any Constitution-level trust boundary requires a separate explicit ChangeProposal and approved implementation; this direction alone changes no Runtime permissions.
+
+**Self-Healing as a bounded flow, not a generic resume bypass:** On significant failures, distinguish application code/test failure, platform verifier/config defect, stale executable/unsupported model-effort, provider quota/outage, local infrastructure/preview, source/lease collision and protected decision. Capture sanitized exact job/WorkOrder/source/checkpoint/diff identity and failure fingerprint. Use deterministic local recheck or bounded repair first; ask PM/Router to replan/reroute only on meaningful evidence. For a PCP code defect, prepare an isolated fix PR, validate exact-head CI, install only under existing rollout/quiescence gates, then prove the original failure changed before reopening the **same** preserved job. Do not reset counters, invent control authorization, repeat identical failing commands or create replacement jobs just to escape a block. Guardian remains the independent, finite out-of-band path for Runtime/n8n outages, never generic elevated shell. Irrecoverable or unsafe cases surface a concise Owner decision.
+
+**Governed context:** Git/approved baseline defines durable business/architecture; Runtime stores mutable job state. Tier-0 rules are pinned, required WorkOrder constraints are non-optional, Tier-1 is current and Tier-2/3 are retrieved just in time, Tier-4 only for diagnostics. Integrate the existing deterministic Context Composer into PM/Developer/Reviewer *after measuring* role-specific coverage/provenance and token overhead. Doc-write guards must detect authority drift and stale/duplicated knowledge before merged documentation is used. See [context-memory-architecture.md](context-memory-architecture.md); standalone composer presence alone is not production integration proof.
+
+**Provider and capability adaptability:** Discovery inputs (official release/catalog and actual authenticated CLI/app-server signals) are **candidate** metadata, not routable authority. Verify model slug, supported reasoning effort/transport, entitlement, privacy, quota and adapter version in a disposable canary; update a stable-ID versioned registry/CLI pin via reviewed PR, then safe rollout and benchmark before changing routing preferences. Likewise, select project rules/tools/skills using a project/task-specific registry; a skill is untrusted material and cannot grant permissions or rewrite approved docs. Prefer project-local skills, pinned provenance and feedback on accepted task results instead of default-loading every skill. Canonical provider policy: [provider-policy.md](provider-policy.md).
+
+**Future only:** Autonomous Project Discovery and business interviewing for repositories without adequate documentation ([#588](https://github.com/sonvhse06072/personal-coding-platform/issues/588)) remain **deferred**. No code scanning of new repositories, draft-to-approved promotion, auto-registration or new intake mode is authorized by this roadmap.
+
+**Migration and compatibility:** Do not reinterpret existing durable jobs, WorkOrders, checkpoints, pinned ProjectBaseline revisions, provider histories or leased direct workspaces when a new execution mode arrives. Use opt-in fixture/canary, feature-specific regression and verified source-vs-deployed state; Chợ Nhạc TECH-DEC-040 Codex-first remains authoritative for new approved work until a separate project decision changes it.
+
+
 ### Project Source-of-Truth layer
 
 Each managed project will have a versioned baseline established by the Human Owner and PM before autonomous execution begins. It will describe:
