@@ -176,3 +176,21 @@ Provider/model changes should be introduced incrementally:
 8. review telemetry before broader role/profile eligibility.
 
 Never force-complete work or restart Runtime/DDEV while a job is in flight.
+
+## 10. Proactive Provider Intelligence & Safe Adaptation — Owner-approved target 2026-10-09
+
+**Hiện trạng:** PCP đã có Model Registry, per-model effort validation, Router, Codex/Antigravity adapter, quota telemetry và version pin. **Chưa có** provider lifecycle watcher/auto-upgrade được xác minh end-to-end; không được gọi khả năng này là live. Tài liệu này là policy đích cho [#589](https://github.com/sonvhse06072/personal-coding-platform/issues/589), không sửa ngay quyền hay provider.
+
+**Ba trạng thái riêng biệt của một capability:**
+
+1. **Discovered candidate:** quan sát release notes/catalog chính thức, deprecation, CLI/SDK release, model/effort/modalities/price/quota; chỉ là external metadata có source/version/timestamp.
+2. **Verified capability:** kiểm tra installed version, adapter/auth mode và account entitlement theo API/CLI hợp lệ, probe inference với giới hạn tài nguyên khi cần; đối chiếu model slug, supported reasoning effort, cách truyền/loại bỏ effort, tools, privacy, output/context limits. UI ChatGPT, OpenAI API, Codex subscription và Antigravity là các surface khác nhau, không suy diễn tương đương.
+3. **Approved routable model:** PCP logical ID ổn định, quota group và profile/roles được đánh giá rủi ro/chi phí, phê duyệt theo authority, versioned registry/policy rồi mới vào Router. Model mới không thay đổi ID/route lịch sử; retired model chỉ ảnh hưởng task mới khi có chuyển tiếp đã kiểm chứng.
+
+**Các trường hợp cần tự phát hiện:** mới/retired model, reasoning level mới, upstream slug/CLI version không tương thích, quota/rate-limit group thay đổi, cấm effort trên preset model, provider auth bị thu hồi, hạn cuối deprecation, thay đổi pricing hay privacy. Phân biệt capability mismatch với provider outage/quota. Unknown metadata không được mặc định thành allow. Không đặt global effort mới cho tất cả provider vì mỗi model có contract riêng.
+
+**Luồng cập nhật:** Poll official signals định kỳ với caching/dedupe và không gọi LLM nếu không có thay đổi → so versioned candidate với runtime thật → disposable canary/smoke + regression → tính expected accepted-work/owner/quota benefit → đề xuất PR cập nhật Model Registry, Router, adapter và/hoặc pinned CLI → exact-head CI/review → safe deploy trên quiescent state → theo dõi regression và rollback có giới hạn về last-known-good. Nâng client chỉ khi tương thích có bằng chứng; không dùng unpinned latest trên Runtime.
+
+**Quyền:** Owner có thể ủy quyền riêng các cập nhật metadata hoặc phiên bản low-risk đã đáp ứng gate; thay đổi privacy/credentials, thêm provider, enabled frontier/scarce role, budget materially lớn, production hoặc protected config phải qua phê duyệt phù hợp. Phát hiện phiên bản mới **không** tự cấp quyền sửa protected file. Không tự restart khi đang có job/direct lease, không mutate persisted route/counter hay giả lập quota recovered chỉ vì reset timestamp.
+
+**Đánh giá:** Lưu source-vs-deployed version riêng, compatible combos đã probe, số compatibility blockers tránh được, chi phí canary, quota consumed, first-pass/accepted outcome và chi phí operator. Cắt bớt polling/probe nếu không tạo lợi ích vượt chi phí quản lý; chuẩn hiệu quả chung nằm ở [efficiency-model.md](efficiency-model.md).
