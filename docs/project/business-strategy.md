@@ -223,9 +223,11 @@ Provider/model assignments should remain replaceable. Project source of truth sh
 
 This preserves the owner's ability to change providers, projects and tactics without rebuilding the entire operating system.
 
-## 8. Current portfolio priority
+## 8. Historical portfolio snapshot — 2026-10-07
 
-As of 2026-10-07, the PCP GitHub engineering backlog is intentionally small.
+The following is preserved historical 2026-10-07 context. It **does not describe the currently open backlog** after the Owner-approved 2026-10-09 direction, and does not override the current roadmap overlay or GitHub live issue state.
+
+As of 2026-10-07, the PCP GitHub engineering backlog was intentionally small.
 
 - **#493 — DDEV cold/bootstrap hardening:** real independent reliability/resource issue. It remains legitimate engineering work because cold bootstrap behavior can block execution and waste local infrastructure time.
 - **#512 — Remote PM control plane + Guardian:** parent acceptance remains open for natural evidence, not broad new source implementation. Missing natural proofs should not justify synthetic jobs or destructive outage tests.
