@@ -803,3 +803,44 @@ thiếu một trong các điều kiện này.
 
 Nguồn/quy trình/audit/threat model chi tiết ở
 `docs/project/history/pm-chat-review-fallback-v1.md`.
+
+## 18. Định hướng tác nghiệp hiệu quả và ít can thiệp — Owner-approved 2026-10-09
+
+**Status:** Mô hình vận hành đích; **chưa** cho phép tự động kích hoạt quyền mới. Constitution/AGENTS.md, ProjectBaseline và quy tắc bảo vệ hiện tại vẫn ràng buộc công việc đang chạy. Chi tiết kiến trúc ở [architecture.md](architecture.md) và lộ trình ở [roadmap.md](roadmap.md).
+
+### Quyền và trách nhiệm tách biệt
+
+- **Human Owner + ChatGPT product PM:** Làm rõ/chốt business, trải nghiệm, scope, kiến trúc và phân quyền protected; khi thay đổi durable authority phải có approved successor revision/DEC hoặc ChangeProposal. Không yêu cầu Owner chấp thuận lại các lựa chọn kỹ thuật routine đã được ủy quyền.
+- **PCP local PM:** Nhận approved baseline và WorkOrder, chọn fast path hay decomposition, sắp xếp dependency, đánh giá risk/contract và bằng chứng nghiệm thu; quyết định replan/repair/PM merge **trong phạm vi được cấp quyền**. Không tự phát minh product intent hay tiếp quản một project đang chạy ở chế độ Codex-direct.
+- **Router:** Chọn model, effort, quota và role/tool/skill phù hợp dựa trên độ phức tạp + bằng chứng thực tế; không có quyền sửa scope hoặc bật provider chưa xác minh.
+- **Developer:** Một writer cho một workspace/job, có thể chủ động sửa implementation details, file liên quan, test, build và quan sát preview khi **capability contract** cho phép. Không merge, production deploy, tự cấp credentials/permissions, thay ProjectBaseline hay sửa business/architecture bảo vệ.
+- **Runtime + ddev-executor + Guardian:** Runtime quyết định job/checkpoint, dữ liệu bền vững, hoạt động recovery; Executor sở hữu thao tác hệ thống nhạy cảm; Guardian duy trì đường khôi phục độc lập có action allowlist. Không giao Docker socket hoặc GitHub delivery credentials cho developer.
+
+### Trusted Project Development (target; chưa được bật cho Codex)
+
+Mỗi dự án chọn profile bảo thủ mặc định hoặc **trusted_project** theo opt-in của Owner, gắn exact registered project/workspace, mode=execute/repair, provider/adapter và ngân sách/quyền có hiệu lực cho từng run. Local development phải có đường chạy Drush, Composer, PHPUnit/PHPCS/PHPStan, Node/Playwright và **browse configured local preview URL** trong developer loop (code → build → browser console/screenshot → repair) mà không cần xin phép từng lệnh development thông thường.
+
+Cho phép sửa nhiều file và phối hợp backend/frontend nếu thực sự cần để đạt acceptance criteria đã duyệt; kiểm tra scope theo semantics, data/security/architecture dependency và provenance, không chặn chỉ vì file/token/test-count estimate. Cần cách ly root, Docker socket, host-home secrets, API tokens, unrelated filesystem, production và destructive real data; local DB/test fixture phải có kiểm soát/reversibility. Không mặc định dùng full-access trên host hay đặt credentials privileged trong coder container. Kiến trúc broker/host adapter phải qua ChangeProposal riêng nếu mở rộng trust boundary protected. Chế độ Antigravity trusted_local trước đây (#426/#427) vẫn là bằng chứng lịch sử, không đồng nghĩa Codex đã có quyền tương tự.
+
+### Autonomous loop và self-healing
+
+Một WorkOrder routine đã phê duyệt → phân loại deterministic → chọn role/model/context/skills → developer kiểm tra trực tiếp → final deterministic verification/CI → risk-proportionate review → PM merge khi đủ gate → WorkOrder dependency-ready kế tiếp. Không gọi PM AI, reviewer model hay full test suite cho mọi lệnh sửa nhỏ; chỉ thêm AI reasoning hoặc escalation khi nguy cơ/bằng chứng yêu cầu.
+
+Khi lỗi, **ưu tiên phân loại trước retry**: application/test failure; bad verification harness; DDEV/browser/preview; model slug/effort/old CLI; quota/provider; route/permission; lease/dirty-worktree; protected decision. Mỗi recovery cần exact current fingerprint/checkpoint, phép kiểm xác minh nguyên nhân đã đổi, giới hạn retry, và bảo toàn durable source/diff/job/usage. Lỗi PCP được sửa qua isolated fix/CI/safe rollout rồi mới phát hành một hành động same-job hợp lệ; không suy ra quyền resume chỉ từ reason string. Lỗi lặp không tiến triển → diagnosis/PM decision thay vì tự gia hạn vô hạn. Khi control plane sập, Guardian chỉ dùng action hiện có đã kiểm duyệt; không general remote shell.
+
+### Rule / Tool / Skill và tài liệu
+
+- **Hard policy/permission** được thực thi bởi Runtime/Executor/CI, không phải nội dung Skill Markdown. Hướng dẫn AGENTS/Skills không thể nâng authority.
+- **Tool Registry (target):** cấu hình khả năng chạy DDEV, test, browser, GitHub read-only theo project/mode/role. Chỉ cấp nhóm quyền cần thiết.
+- **Skill Registry/selection (target):** đọc metadata trước, chọn skill thích hợp cho WorkOrder, sử dụng nguồn/vị trí/phiên bản pin và kiểm tra license/nội dung/scripts trước khi đề xuất thêm skill qua PR. Không tải mọi skill vào context; không chạy tự động skill không đáng tin.
+- **Doc Governance:** khi PM/developer bổ sung doc, so authority class, accepted decision, tier T0–T4, version/supersession và nơi lưu canonical. Doc protected cần Owner decision; mutable history không được tự trở thành product authority. Đánh giá context omission/bloat tại các checkpoint có ý nghĩa; kết quả cụ thể ở [context-memory-architecture.md](context-memory-architecture.md).
+
+### Cập nhật provider và tính hiệu quả
+
+Provider watcher lấy metadata từ nguồn chính thức và thông số môi trường chạy thực tế; chỉ các model+adapter+effort được xác minh và được Router cho phép mới được đưa vào routing mới. Đề xuất PR cấu hình/CLI pin, canary/CI, safe rollout và khả năng revert last-known-good. Không đổi route đã persist, không infer account entitlement chỉ từ release notes. Phân quyền chi tiết ở [provider-policy.md](provider-policy.md).
+
+Mọi thay đổi ở các luồng trên phải báo cáo **thời gian task-to-accepted-PR, token/quota tổng, retries, verification cost, accepted quality, Human Owner attention và so sánh Codex trực tiếp**, dùng định nghĩa/threshold ở [efficiency-model.md](efficiency-model.md). Đây là phép đo giá trị, không phải mục tiêu đếm số agent hoặc số control action.
+
+### Giới hạn giai đoạn
+
+Project Discovery/Business Onboarding cho repository không có doc là vision **Future/Deferred #588**; không thêm vào flow hiện tại. Không thay đổi PCP đang deployed hay Chợ Nhạc TECH-DEC-040 cho đến khi có approved implementation, CI, quiescent rollout và handoff riêng.

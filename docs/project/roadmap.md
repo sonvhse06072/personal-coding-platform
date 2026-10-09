@@ -8,33 +8,41 @@ This roadmap is a planning artifact beneath the Project Constitution. PM may reo
 
 Build the smallest layer that enables the next layer safely. Do not add swarm infrastructure, dashboards, or model orchestration complexity before the underlying team contracts and source-of-truth rules are durable.
 
-## Current business/product priority overlay — 2026-10-08
+## Current product/engineering priority overlay — 2026-10-09 (Owner-approved direction)
 
-The current business/product strategy is `business-strategy.md`. PCP has moved from broad foundational capability construction into a **consolidation and reliability** stage.
+**Áp dụng thay thế các đoạn ưu tiên cũ trong tài liệu này**, không thay đổi lịch sử phase, các ProjectBaseline đã phê duyệt hoặc trạng thái job đang chạy. Product North Star là [business-strategy.md](business-strategy.md); kiến trúc đích là [architecture.md](architecture.md). Đây là **phê duyệt định hướng và thứ tự đầu tư**, không phải lệnh dispatch WorkOrder hoặc thay đổi quyền Runtime.
 
-The practical roadmap is therefore narrower than the historical phase list below:
+**Phương án được chọn:** Incremental refactor PCP hiện hữu; giữ Router, Model Registry, ProjectBaseline, Runtime state/checkpoints, DDEV Executor, CI/GitHub delivery, Context Composer, Guardian và các trust boundary; ưu tiên sửa vòng đời work thật và lớp kiểm soát gây overhead trước khi xây capability bổ sung. Không big-bang rewrite và không tạo nền tảng song song.
 
-1. **Protect the live end-to-end loop.** Existing PM planning/orchestration, bounded execution, deterministic verification, independent review, GitHub delivery, PM merge, remote PM control and Guardian paths should become predictable before adjacent capability expansion.
-2. **Finish existing evidence-backed backlog before new scope.** The only ordinary open PCP engineering issue is #493 (DDEV cold/bootstrap reliability). #512 remains a parent acceptance frame for natural remote-control evidence, not permission for broad new implementation. #524 is a persistent Guardian operations/audit channel, not product backlog.
-3. **Treat managed-project dogfood as evidence.** Chợ Nhạc and other managed projects may expose real PCP defects, but an application bug or contract miss stays in the application repo. Open PCP work only for a reusable platform defect/capability gap, recurring owner-cost pattern or broken approved PCP invariant.
-4. **Prefer repair/reconciliation over issue multiplication.** If an existing PCP capability is defective, repair that capability/issue before creating a neighboring abstraction or replacement workflow.
-5. **Measure before optimizing.** Staffing, budget and review calibration should use meaningful task-outcome samples. Do not add statistical/dashboard complexity merely because telemetry fields exist.
-6. **Defer convenience-only expansion.** New remote controls, dashboards, agent roles, parallelism or operator surfaces require a demonstrated reduction in Human Owner attention, recurring failure, resource waste, quality risk or a real blocker to an approved project workflow.
+| Giai đoạn | Effort dự kiến (ngày công) | Kết quả/boundary nghiệm thu |
+| --- | ---: | --- |
+| **G0 — Audit & direct-Codex benchmark** | 5–10 | Đo end-to-end parity trên các task so sánh được; phân loại overhead do permission, DDEV/preview, PM/verification, recovery, context, model; xác định module cần sửa; không xâm phạm Chợ Nhạc live lease |
+| **G1 — Fast Development Path** | 24–44 | Chế độ project-scoped trusted dev cho Codex/Antigravity; developer có vòng code → build/DDEV → truy cập preview URL/Playwright → repair trong cùng job; fast path cho ticket đơn giản; linh hoạt sửa kỹ thuật thuộc acceptance criteria; final CI và protected gates còn nguyên |
+| **G2 — Reliable Autonomy** | 33–65 | Tự chạy chuỗi WorkOrder đã duyệt; self-healing cho lớp lỗi được kiểm chứng, same-job preservation; Doc Governance + role-specific Runtime context packs; resource/attention telemetry và Router calibration dựa trên accepted outcome |
+| **G3 — Adaptive Capability** | 23–44 | Theo dõi provider/CLI/model/effort, verify/canary/update qua PR và rollout an toàn; rule/tool/skill selection, nguồn provenance, feedback về độ hiệu quả; tích hợp/benchmark hồi quy cho các luồng trên |
 
-Current evidence:
+Tổng effort nền tạm tính **85–163 ngày công**; với dự phòng rủi ro và tích hợp, khung đầu tư đề xuất **100–200 ngày công**, kỳ vọng sơ bộ **110–170 ngày** nếu không phải thay đổi kiến trúc lớn. Đây là **ước lượng, không phải kết quả profiling, hạn chót hay quyền chi ngân sách tự động**. Effort giữa các giai đoạn đã chứa kiểm thử/tích hợp tương ứng; không cộng lại một hạng mục integration lần hai. Một ngày công là khoảng 6–7 giờ kỹ thuật hiệu quả; phí provider/CI/compute và thời gian chờ các quyết định protected được theo dõi riêng.
 
-- RCTL-MVP #513 is completed after live standalone exact-head merge and exact supervised continuation proof.
-- Runtime 1.0.132 is live at exact GitHub/local main `b0c0e9a43634b4b133382a2b2cab4c5828372465` (PR #558). Post-merge CI #1075 / run `37665108466` passed.
-- Guardian fresh quiescence result `6049369444` proved zero engineering/executor/Antigravity activity and a clean local PCP main. Exact rollout result `6049394135` succeeded: Runtime 1.0.132, executor 1.0.33, Router 1.0.31, n8n/credential boundary/Antigravity healthy, zero active jobs, and clean exact-head local Git. Any future rollout needs a new proof.
-- #557 / PR #558 is a bounded Human Owner-attention improvement: workflow progress derives from durable stages/milestones and explicitly is not ETA or resource-budget usage. It does not justify broad dashboard expansion without similar evidence.
-- #512 remains open only for natural parent-level evidence such as post-rollout GitHub `direct_intake` and a real control-plane-unavailable Guardian case; do not create synthetic work solely to close those acceptance boundaries.
-- #524 intentionally stays open for Guardian command/audit history.
-- #555 / PR #556 is completed and live-proven: an exact `collaboration_pm_handoff` now exposes the existing generation-bound `resume_same` path, and GitHub PM control can resume that same durable job for one verification-only handoff turn without reroute/provider reset/replacement-job semantics.
-- #493 remains the next ordinary PCP engineering backlog candidate after the 1.0.132 rollout and a stable managed-project checkpoint. Its residual scope is cold/quiesced/isolated DDEV startup hardening; the healthy-direct-workspace incident is already mitigated. Do not implement it as a blind 600->1800 timeout increase.
+**Stop/go sau khoảng 30–50 ngày công đầu:** nếu trusted developer feedback loop chưa cạnh tranh được với Codex trực tiếp và owner intervention chưa giảm trên các task tương đương, phải tái đánh giá phạm vi và critical path trước khi commit G2–G3. Phân bổ effort theo từng đợt; không phê duyệt toàn bộ khung 100–200 ngày chỉ bằng roadmap này.
 
-The older phases remain useful architecture/history context. They must not be interpreted as a requirement to continue building every previously imagined layer after the business problem has already been solved by a smaller path.
+**Quality/value gates** (định nghĩa đo, cohort và baseline ở [efficiency-model.md](efficiency-model.md)):
+- Với cùng acceptance criteria/test/review: đề xuất PCP median task-cycle ≤1,25× và p90 ≤1,5× so với Codex trực tiếp; không giảm chất lượng, không so không cùng mức nghiệm thu.
+- Một chuỗi 3–5 WorkOrder routine đi từ scope được duyệt đến PR/merge và WorkOrder tiếp theo không cần paste/re-dispatch hoặc owner continuation vì counter ước lượng.
+- Runtime không tự bypass protected decision; không mất job/diff/lease/counters; self-healing chỉ chạy lớp lỗi có đường kiểm chứng và không retry lặp mù.
+- Giảm context/AI quota trên **accepted outcome**, bảo toàn required decision/constraint recall trong benchmark có nhãn.
+- Những cải tiến về routing, tool/skill và provider đều phải được kiểm nghiệm và không được làm chậm bất hợp lý đường thực thi chính.
+
+**Điều kiện triển khai:** G0 trước; G1 cần phê duyệt riêng cho chi tiết thay đổi protected developer trust boundary/permissions; G2–G3 chỉ khi G1 đã qua benchmark. Mỗi giai đoạn đi qua issue/WorkOrder, PR, exact-head CI, review và rollout an toàn. **Chợ Nhạc TECH-DEC-040 Codex-first + PCP-light vẫn là phương thức phát triển mới đang được áp dụng**; không khởi chạy PCP đồng thời trong cùng workspace/DB cho tới khi hoàn thành handoff/lease hợp lệ.
+
+**Không triển khai trong roadmap hiện tại:** [#588 — Autonomous Project Discovery/Business Onboarding](https://github.com/sonvhse06072/personal-coding-platform/issues/588), mô hình SaaS, agent swarm/parallelism mặc định, full-access developer trên máy host, generic remote shell, tự deploy production. Năng lực khám phá dự án mới chỉ được cân nhắc sau khi G0–G3 đạt kết quả và Owner kích hoạt riêng.
+
+**Các issue nguồn:** #590 (trusted dev/parity), #586 (orchestrated same-job recovery), #493 (DDEV infra), #512 (remote control), #587 (doc/context), #589 (provider), #146 (efficiency), #591 (Owner-approved docs reconciliation); #588 là **deferred**. Issues đã hoàn tất (#313/#317/#426/#478/#491/#563/#571) là tài sản nền, không tự mở lại.
+
+Các phase chi tiết bên dưới ghi lại kiến trúc, chương trình và mốc lịch sử đã được duyệt trước đây. Nếu chúng mô tả một thứ tự thực hiện khác, **overlay hiện tại là kế hoạch tác nghiệp**, trong khi Constitution/architecture/ProjectBaseline và protected decisions vẫn giữ thứ bậc authority cao hơn.
 
 ## Current priority overlay — personal-budget execution efficiency
+
+_Ghi chú: phần dưới là lịch sử chương trình #146; thứ tự đầu tư thực tế từ 2026-10-09 theo overlay mới phía trên. Không diễn giải số phiên bản/rollout lịch sử thành live hiện tại._
 
 Human Owner approved initiative #146 on 2026-09-15. The authoritative policy is `efficiency-model.md`.
 

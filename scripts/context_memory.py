@@ -383,9 +383,15 @@ def _budgeted_t1_content(text: str, limit: int) -> tuple[str, list[str]]:
 def _query_text(request: dict[str, Any]) -> str:
     task = request.get("task") if isinstance(request.get("task"), dict) else {}
     refs = request.get("references") if isinstance(request.get("references"), dict) else {}
+    # "unknown" is a task classifier placeholder, not topical evidence.
+    # Including it in the lexical query can retrieve any unrelated document
+    # that mentions unknown capabilities, even for an unsupported title.
+    task_type = str(task.get("task_type") or "").strip()
+    if task_type.lower() == "unknown":
+        task_type = ""
     parts = [
         task.get("title"),
-        task.get("task_type"),
+        task_type,
         task.get("description"),
         " ".join(f"{key}:{value}" for key, value in refs.items() if value),
     ]

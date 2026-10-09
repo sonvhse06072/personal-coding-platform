@@ -305,6 +305,20 @@ Default:
 - related prior T3 incidents;
 - T4 logs only as needed.
 
+### Định hướng nâng cấp Doc Governance & Context Quality — 2026-10-09
+
+**Status:** Owner-approved mục tiêu [#587](https://github.com/sonvhse06072/personal-coding-platform/issues/587), **không** phải bằng chứng Runtime hiện đã dùng Context Composer. Hiện Composer trong scripts/context_memory.py và benchmark trong scripts/pcp-context-eval.py là công cụ deterministic độc lập; đường PM/Developer/Reviewer đã có WorkOrder/baseline/evidence packs riêng. Mọi tích hợp phải xác minh và đo thực tế trước khi claim giảm token.
+
+**Doc-write lifecycle:** Khi PM local hoặc developer soạn/sửa doc, phân loại **project + tier + authority class + approved source commit + decision ID + supersession + canonical destination**. Check tự động nguồn/đường dẫn sai, T1 chứa history phình to, tài liệu trùng lặp, stale link, lower-authority text tự xưng approved, protected-path diff không có approval. AI chỉ phân tích mâu thuẫn ngữ nghĩa có rủi ro và phải trích dẫn claim/nguồn chứng minh, không tự sửa approved business/architecture. Thay đổi routine mutable/delegated được thực hiện qua PR/CI trong phạm vi cho phép; protected cần Owner-approved ChangeProposal và successor baseline nếu thay đổi authority. History/audit không bị xóa để giảm context.
+
+**Read lifecycle:** Runtime phải dùng role/task-specific context pack đúng **pinned approved ProjectBaseline**, kiểm tra source/revision/heading, current-vs-historical status, omitting/truncation markers và budget. Tier-0/protected constraints/WorkOrder acceptance criteria **không bị clip để đủ ngân sách**; thiếu evidence quan trọng thì bounded retrieval tiếp hoặc dừng với lý do cannot-prove, không bịa. T2/T3 chỉ đọc khi cần, T4 là diagnostic. Không cho PCP và dự án được quản lý vô tình dùng chéo authority; không mặc định đọc toàn bộ docs hoặc tất cả skills.
+
+**Feedback và tự điều chỉnh (bounded):** Ở doc PR, TaskOutcome hoặc sau các lỗi context lặp có bằng chứng, tạo ContextHealthReport: nguồn/mục yêu cầu bị bỏ sót, stale/duplicate source, context tokens/size, prompt caching, reader role, test/repair waste, outcome. Trước khi sửa retrieval, phân loại đúng nguyên nhân thành missing docs, stale docs, retrieval miss/truncation, reasoning failure dù đã đủ context, hay task specification ambiguity. Ưu tiên thay metadata/heading/dedup/role pack/chunk/budget hơn thêm embedding service. Chỉ tự apply các thay đổi không đụng protected authority sau offline benchmark + regression/CI; protected policy vẫn cần Owner approval.
+
+**Benchmark có kiểm chứng:** Tập case tiếng Việt/Anh với decision refs, current/stale, multiple file, source conflict, approved architectural constraints và context window dài; đo **selected content recall** (không chỉ đúng heading), wrong authority/historical false positive, latency, actual token usage, downstream rework/quality và chi phí chạy bộ đánh giá. Mục tiêu 100% required-evidence recall **trên fixture có nhãn** và 0 authority violations; không tuyên bố đảm bảo 100% trên mọi task ngoài đời. Vector/hybrid RAG chỉ có cửa khi có retrieval miss thực tế, benchmark uplift đủ lớn và tổng chi phí thấp hơn đường deterministic.
+
+**Interface với Capability Manager:** Metadata rules/tools/skills được chọn từ project/task/role; skill text là hướng dẫn không có quyền nâng authority. Tự phát hiện skill phù hợp phải kiểm nguồn, version, license, scripts trước khi thêm project qua PR; chỉ load skill được chọn thay vì toàn bộ. Tác động lợi ích được đánh giá theo accepted outcome, không theo số lượng skill được cài. Autonomous new-project discovery/business interviewing [#588](https://github.com/sonvhse06072/personal-coding-platform/issues/588) **Future/Deferred** và không nằm trong vòng đời hiện tại.
+
 ## 9. RAG decision gate
 
 PCP must not add a vector database merely because RAG is common in agent systems.
