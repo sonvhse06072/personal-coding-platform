@@ -573,3 +573,21 @@ The initiative succeeds when evidence shows that, without weakening final qualit
 - reviewer useful-finding yield is maintained or improved while low-value review spend decreases;
 - collaboration improves difficult-task outcomes without creating conversation loops;
 - final deterministic verification and protected Human Owner decision boundaries remain intact.
+
+## 24. Performance parity, tối ưu outcome và giới hạn đầu tư (định hướng 2026-10-09)
+
+**Mục tiêu kinh tế:** PCP chỉ đáng đầu tư thêm khi tạo ra nhiều **accepted engineering outcomes** hơn trên cùng chi phí tổng (model tokens, subscription quota, API spend, wall time, test/build, failure churn, bảo trì PCP và thời gian Owner). Cắt token mà tăng rework hoặc hạ kiểm thử không được tính là tối ưu.
+
+**So sánh có đối chứng với Codex/AI trực tiếp** (mục tiêu kế hoạch, **chưa phải kết quả đo**):
+
+- So cùng ticket/task contract, phiên bản code, acceptance criteria, tập kiểm thử cuối, review/CI và môi trường preview gần tương đương; không so 'model đã viết code' với 'PCP đã merge PR'.
+- Đo cycle time từ ticket được phê duyệt đến accepted PR/merge; p50 PCP/direct mục tiêu **≤1,25×**, p90 **≤1,5×** đối với task bounded so sánh được; dài hạn đặt mục tiêu p50 **≤1,15×** sau khi ổn định, không bảo đảm đạt ngay.
+- Đo ít nhất mẫu 10–20 ticket tự nhiên đa loại trước kết luận xu hướng; nhóm kết quả theo frontend/backend, role, risk và model/effort. Báo kích thước mẫu và độ bất định; không đưa ra tỷ lệ tiết kiệm token khi chưa có usage thật.
+- Đo cả cùng lớp chất lượng: coverage điều kiện nghiệm thu, CI pass, reviewer findings và lỗi thoát ra; không tối ưu bằng cách cắt kiểm tra bắt buộc. Đối với toàn roadmap, tính thời gian Owner không phải copy-paste/giám sát mỗi job và thời gian idle giữa các WorkOrder.
+- Khi provider trả token/cached/reasoning usage, đo **thực tế**; quota subscription, wall-clock, image/browser/CI và maintenance là tài nguyên riêng. Character-count chỉ là proxy cho context, không được gọi là token saving đã chứng minh.
+
+**Mục tiêu autonomy/self-healing theo nhóm lỗi có hỗ trợ:** WorkOrder routine không yêu cầu Owner continuation chỉ vì counter estimate; chuỗi ít nhất 3–5 WorkOrder đã duyệt tiếp tục tự động khi merge/dependency gate thông qua; không mất job, diff, checkpoint, quyền lease hoặc counters; protected decisions không bị vượt. Theo dõi success/failure recovery trên lớp lỗi xác định thay vì hứa tự sửa mọi lỗi.
+
+**Context & capability economics:** benchmark bắt buộc chứa nguồn quyết định/bằng chứng quan trọng có nhãn; không mất required constraint chỉ để giảm prompt size. Lượng context, false retrieval, duplicate skill, số lượt AI PM/reviewer và số vòng chạy test phải được tối ưu theo **end-to-end accepted outcome**, không theo ngân sách riêng một agent. New skill/provider/effort chỉ được đề xuất khi giá trị kỳ vọng tốt hơn cả chi phí benchmark/update/troubleshooting.
+
+**Cổng đầu tư:** G0 audit + benchmarking trước khi G1 Trusted Development; đánh giá lại sau khoảng 30–50 ngày công khi đã có direct-code parity evidence. Không commit toàn bộ effort 100–200 ngày công chỉ từ một ước lượng. Các khoảng và thứ tự dự kiến ở [roadmap.md](roadmap.md); ROI so sánh cần đo trên task thực tế trước khi mở rộng G2/G3.
