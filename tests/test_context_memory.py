@@ -16,6 +16,7 @@ from context_memory import (  # noqa: E402
     _budgeted_t1_content,
     _exact_reference_strings,
     _markdown_sections,
+    _query_text,
     compose_context,
     read_all_docs_chars,
     render_context_text,
@@ -40,6 +41,22 @@ def test_reference_parser_does_not_treat_normal_pr_prefix_words_as_ids():
     )
     assert "#311" in refs
     assert "#309" in refs
+
+
+
+def test_unknown_task_type_is_not_topical_retrieval_evidence():
+    # A classifier placeholder must not match unrelated T2/T3 content.
+    request = {
+        "task": {
+            "title": "quantum banana orbital jurisprudence",
+            "task_type": "unknown",
+        },
+    }
+    assert _query_text(request) == "quantum banana orbital jurisprudence"
+    assert _query_text({
+        "task": {"title": "Review provider update", "task_type": "model_update"},
+    }) == "Review provider update model_update"
+
 
 
 def test_context_composer_pins_governance_and_current_state():
