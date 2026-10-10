@@ -67,13 +67,14 @@ def test_docker_command_allowlist_only_our_two_pcp_services(monkeypatch):
         assert options["capture_output"] and options["timeout"] <= 25
         return SimpleNamespace(returncode=0, stdout="true", stderr="")
     monkeypatch.setattr(mod.subprocess, "run", fake_run)
+    allowed_fixture = str(Path.home() / "pcp-g0-fixtures" / mod.FIXTURE)
     commands = [
         ["docker", "inspect", "--format", "{{json .Mounts}}", mod.EXECUTOR],
         ["docker", "inspect", "--format", "{{json .Config.Labels}}", mod.RUNTIME],
         ["docker", "exec", mod.EXECUTOR, "printenv", "CODING_PROJECTS_ROOT"],
         ["docker", "exec", mod.RUNTIME, "codex", "--version"],
-        ["docker", "exec", mod.EXECUTOR, "test", "-d", "/fixture"],
-        ["docker", "exec", mod.EXECUTOR, "test", "-f", "/fixture/composer.lock"],
+        ["docker", "exec", mod.EXECUTOR, "test", "-d", allowed_fixture],
+        ["docker", "exec", mod.EXECUTOR, "test", "-f", allowed_fixture + "/composer.lock"],
     ]
     for cmd in commands:
         assert mod.call(cmd) == "true"
@@ -86,6 +87,9 @@ def test_docker_command_allowlist_only_our_two_pcp_services(monkeypatch):
         ["docker", "stop", mod.EXECUTOR],
         ["docker", "exec", mod.RUNTIME, "codex", "exec"],
         ["docker", "exec", mod.EXECUTOR, "printenv"],
+        ["docker", "exec", mod.EXECUTOR, "test", "-f", "/home/sonvh/chonhac/settings.php"],
+        ["docker", "exec", mod.EXECUTOR, "test", "-d", "/home/sonvh/chonhac"],
+        ["docker", "exec", mod.EXECUTOR, "test", "-d", "/fixture"],
         ["ddev", "start"],
         ["git", "fetch"],
     ]
