@@ -192,6 +192,18 @@ def project(project_id: str) -> dict[str, Any]:
     return projects[project_id]
 
 
+def _require_ddev_enabled(cfg: dict[str, Any]) -> None:
+    """A PARKED project cannot execute DDEV phases even via direct API calls.
+
+    Require the YAML boolean true, not merely a truthy string. This gate
+    precedes workspace mutation and any DDEV process; authorization, project
+    registry and job-specific workspace ownership remain separate checks.
+    """
+    ddev = cfg.get("ddev")
+    if not isinstance(ddev, dict) or ddev.get("enabled") is not True:
+        raise HTTPException(409, "Project DDEV is disabled (PARKED)")
+
+
 def _workspace_mode(cfg: dict[str, Any]) -> str:
     runtime = cfg.get("runtime", {}) or {}
     mode = str(runtime.get("workspace_mode") or "isolated_clone").strip()
@@ -1705,6 +1717,11 @@ def orphan_resources(payload: OrphanResourcesRequest) -> dict[str, Any]:
 @app.post("/v1/workspaces/quiesce", dependencies=[Depends(auth)])
 def quiesce_workspace(payload: QuiesceWorkspaceRequest) -> dict[str, Any]:
     cfg = project(payload.project_id)
+    # Direct project quiesce is a safe no-op, even when verification is off.
+    # An isolated project's quiesce executes DDEV stop and needs an explicit
+    # project-level enablement before consulting/mutating its workspace.
+    if _workspace_mode(cfg) != "direct":
+        _require_ddev_enabled(cfg)
     workspace = _validate_workspace(payload.job_id, payload.project_id, payload.workspace)
 
     if _workspace_instance_mode(cfg, job_id=payload.job_id, path=workspace) == "direct":
@@ -2338,6 +2355,7 @@ def remove_workspace(job_id: str, project_id: str, workspace: str = Query(...)) 
 @app.post("/v1/phase", response_model=PhaseResponse, dependencies=[Depends(auth)])
 def phase(payload: PhaseRequest) -> PhaseResponse:
     cfg = project(payload.project_id)
+    _require_ddev_enabled(cfg)
     workspace = _validate_workspace(
         payload.job_id,
         payload.project_id,
