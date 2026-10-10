@@ -32,7 +32,7 @@ fi
 
 # Read project registry once; fail if the name is in use OR an unrelated
 # DDEV project is active. Never start a fixture beside Chợ Nhạc on one router.
-DDEV_JSON="$(ddev list --json)" || fail 'Cannot read DDEV registered projects'
+DDEV_JSON="$(ddev list -j)" || fail 'Cannot read DDEV registered projects'
 if ! printf '%s' "$DDEV_JSON" | python3 "$BASE/check_ddev_name.py" "$PROJECT"
 then
   fail 'DDEV registry unavailable, collision, or other active project; no fixture created'

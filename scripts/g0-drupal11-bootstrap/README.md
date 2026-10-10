@@ -7,3 +7,5 @@ The bootstrap script is fail-closed, one-use and only writes inside `$HOME/pcp-g
 Review the script first. Run `bash bootstrap.sh` only on a SEPARATELY ISOLATED runner/VM or once DDEV lists no other active project and the Owner explicitly confirms a safe maintenance window. Do not stop or restart Chợ Nhạc to satisfy the gate. A successful result includes actual Drupal Core, Composer lock, Unit/Kernel tests, PHPCS, a local seed Git commit, and optional private `sonvhse06072/pcp-g0-drupal-fixture` GitHub repository if GitHub CLI is already authenticated. On failure, it leaves only its new fixture for diagnosis and stops rather than retrying.
 
 Owner decision: https://github.com/sonvhse06072/personal-coding-platform/issues/595#issuecomment-6094931078
+
+**v3 correction (2026-10-10):** A first isolated GitHub-hosted trial of v2 found `ddev list --json` unsupported by DDEV 1.25.4. v3 uses `ddev list -j` and has a regression gate. Keep previous archives obsolete. A hosted validation job must still demonstrate actual Drupal Unit/Kernel/Composer/PHPCS results; PHP lint/offline-only success is not enough.

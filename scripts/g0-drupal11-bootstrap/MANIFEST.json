@@ -1,9 +1,9 @@
 {
   "decision_issue": "sonvhse06072/personal-coding-platform#595",
   "files": {
-    "CHANGES.md": "886ac93286c95f5913c90ce8c39b89d5a9234e0cf0b4189cd2c4729034294dd5",
-    "README.md": "f82667757a76ec7fe85fb208d9b4190e7acdc2a4808fc1ac9ef33d7a520c55c7",
-    "bootstrap.sh": "ee31c82ff134887a146b555ec2e9a7a92164e1ee2c149d4194ca22c81314a642",
+    "CHANGES.md": "5f94744cbe8c9a578f88d4d128d78d94b573e542fc072f1d57d1022d88b26c5b",
+    "README.md": "e5ec19ea3d26cf2bfc906157889ba7e7cff52b2b6df4d96d0ba5f7f5e4675482",
+    "bootstrap.sh": "41bb6e6f0f170c39b30e76fa41a6a7425eca55c74b9496b6882efefddffa8837",
     "check_ddev_name.py": "5128d7ec0f992387bc19f3e90c24b8cbe8a8ca830e34c5b05c5a196b4ce1bc6e",
     "template/.github/workflows/validation.yml": "4c21ba9946108f30d6a9f9f1510bb1c062b6e4312c86b4bec1f1074749a19b1c",
     "template/.gitignore.extra": "a2c13aa2c79ed8b2a79636b648399ce2f2f503dd46c47fbdf5c15946638a0aa6",
@@ -14,10 +14,10 @@
     "template/web/modules/custom/pcp_g0_fixture/src/EventLabelNormalizer.php": "e75ca76225d4a367f0b00118cf6a8bfd147b611554e69e9e70058d01ae1df7f0",
     "template/web/modules/custom/pcp_g0_fixture/tests/src/Kernel/EventLabelServiceTest.php": "dabcb93f03e5be72c20145fd78eaedc4b7f8c29208ebfbfdceeb42e6df98f6b3",
     "template/web/modules/custom/pcp_g0_fixture/tests/src/Unit/EventLabelNormalizerTest.php": "6092774ecf11c25d16a4726e72ea19102527c4ad0889c283ff595917a2c12d2a",
-    "tests/test_bootstrap_contract.py": "a4d8503e11364ab39a1d5038b3c70f52a16d83b63e713a609f3ee623b11021e2"
+    "tests/test_bootstrap_contract.py": "8dd0de62b3a5cc6dcab1d6969190a75a588a4dc17b25ff34c9c048a97a36a5c1"
   },
   "kind": "static-bootstrap-not-installed",
   "safety": "no other active DDEV project allowed; never touch Chợ Nhạc",
-  "schema_version": 2,
+  "schema_version": 3,
   "workorder": "G0D-01"
 }

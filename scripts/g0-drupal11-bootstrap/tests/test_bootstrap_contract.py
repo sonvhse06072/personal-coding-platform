@@ -84,7 +84,7 @@ def test_live_ddev_project_blocks_bootstrap_before_any_mutation(tmp_path):
     fake_ddev = bin_dir / "ddev"
     fake_ddev.write_text(
         "#!/bin/sh\n"
-        "if [ \"$1\" = list ]; then\n"
+        "if [ \"$1\" = list ] && [ \"$2\" = -j ]; then\n"
         "  printf '%s\\n' '" + registry + "'\n"
         "  exit 0\n"
         "fi\n"
@@ -109,6 +109,14 @@ def test_live_ddev_project_blocks_bootstrap_before_any_mutation(tmp_path):
     assert "other active project" in run.stderr
     assert "UNSAFE DDEV COMMAND" not in run.stderr
     assert not (home / "pcp-g0-fixtures").exists()
+
+
+def test_bootstrap_calls_ddev_list_with_supported_json_flag():
+    # Observed on the actual GitHub-hosted DDEV 1.25.4 runner: --json is not
+    # accepted; DDEV list supports -j or --json-output instead.
+    code = SCRIPT.read_text(encoding="utf-8")
+    assert 'DDEV_JSON="$(ddev list -j)"' in code
+    assert 'ddev list --json' not in code
 
 
 def test_bash_syntax():
