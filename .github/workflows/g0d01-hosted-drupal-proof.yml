@@ -1,0 +1,89 @@
+name: g0d01-hosted-drupal-proof
+
+# G0D-01 Owner-approved: run on a disposable GitHub-hosted Ubuntu VM ONLY.
+# No local DDEV/WSL, Chợ Nhạc workspace, PCP Runtime, PM Bridge or Guardian.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/g0d01-hosted-drupal-proof.yml
+      - tests/test_g0d01_hosted_proof_workflow.py
+      - scripts/g0-drupal11-bootstrap/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: g0d01-proof-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  isolated-drupal-proof:
+    # Never run on a fork or on the owner's self-hosted runner.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout PCP source without stored credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install DDEV 1.25.4 without starting any project
+        uses: ddev/github-action-setup-ddev@fdf2f5c97943bae638f31df6df86f1defa6210c0
+        with:
+          autostart: 'false'
+          version: '1.25.4'
+          installScriptUrl: https://raw.githubusercontent.com/ddev/ddev/5da91aeb9ebab0b0e66171c450b72099308d332c/scripts/install_ddev.sh
+      - name: Fail if runner isolation assumptions are false
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          test "${RUNNER_ENVIRONMENT:-}" = github-hosted
+          test "${RUNNER_OS:-}" = Linux
+          test ! -e "$HOME/pcp-g0-fixtures/pcp-g0-drupal-fixture"
+          test ! -L "$HOME/pcp-g0-fixtures"
+          test -f scripts/g0-drupal11-bootstrap/bootstrap.sh
+          test -f scripts/g0-drupal11-bootstrap/check_ddev_name.py
+      - name: Bootstrap only the fresh, disposable Drupal fixture
+        shell: bash
+        timeout-minutes: 20
+        env:
+          GIT_CONFIG_COUNT: '2'
+          GIT_CONFIG_KEY_0: user.name
+          GIT_CONFIG_VALUE_0: PCP G0 Fixture CI
+          GIT_CONFIG_KEY_1: user.email
+          GIT_CONFIG_VALUE_1: pcp-g0-fixture@example.invalid
+          GH_CONFIG_DIR: ${{ runner.temp }}/pcp-g0-no-gh-credentials
+        run: |
+          set -Eeuo pipefail
+          # Prevent gh from receiving even a read-only Actions token.
+          env -u GH_TOKEN -u GITHUB_TOKEN -u GH_ENTERPRISE_TOKEN \
+            bash scripts/g0-drupal11-bootstrap/bootstrap.sh
+      - name: Record exact real verification result without secrets
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          root="$HOME/pcp-g0-fixtures/pcp-g0-drupal-fixture"
+          test -f "$root/composer.lock"
+          test -f "$root/web/core/tests/bootstrap.php"
+          direct="$(git -C "$root" rev-parse refs/heads/benchmark/direct)"
+          pcp="$(git -C "$root" rev-parse refs/heads/benchmark/pcp)"
+          main="$(git -C "$root" rev-parse HEAD)"
+          test "$direct" = "$pcp"
+          test "$main" = "$pcp"
+          test -z "$(git -C "$root" status --porcelain=v1)"
+          evidence="$RUNNER_TEMP/pcp-g0-evidence"
+          mkdir -p "$evidence"
+          cp "$root/composer.lock" "$evidence/composer.lock"
+          printf '%s\n' "$main" > "$evidence/seed-commit-sha.txt"
+          sha256sum "$root/composer.lock" | awk '{print $1}' > "$evidence/composer-lock-sha256.txt"
+          ddev --version > "$evidence/ddev-version.txt"
+          (cd "$root" && ddev exec php -r 'echo PHP_VERSION, PHP_EOL;') > "$evidence/php-version.txt"
+          echo 'G0D-01: GitHub-hosted DDEV/Composer/PHPCS/Unit/Kernel passed; remote repo/fixture PR CI/A-B NOT run.'
+      - name: Publish only lock and minimal provenance, not vendor or database
+        uses: actions/upload-artifact@v4
+        with:
+          name: g0d01-verified-lock-and-provenance
+          path: ${{ runner.temp }}/pcp-g0-evidence/
+          retention-days: 7
+          if-no-files-found: error

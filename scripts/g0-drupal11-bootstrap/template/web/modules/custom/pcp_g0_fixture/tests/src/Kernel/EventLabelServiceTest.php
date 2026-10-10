@@ -1,10 +1,5 @@
 <?php
 
-/**
- * @file
- * Covers the real Drupal 11 service container integration.
- */
-
 namespace Drupal\Tests\pcp_g0_fixture\Kernel;
 
 use Drupal\KernelTests\KernelTestBase;

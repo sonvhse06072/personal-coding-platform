@@ -1,6 +1,10 @@
-# G0D-01 Bootstrap v2 — 2026-10-10
+# G0D-01 Bootstrap v6 — 2026-10-10
 
-- Corrects `ddev list -j` decoding: DDEV 1.25.x returns a JSON envelope with `.raw[]` and can emit newline-delimited informational envelopes.
+- **v6 Composer lock compatibility:** add official `--with-all-dependencies` to the new-fixture-only Composer require for Coder + Core Dev. The Drupal 11.4.9 hosted run found an existing partial-update lock on `justinrainbow/json-schema` / `sebastian/diff`, and Composer explicitly recommended `-W`. Do not alter another project’s lock or bypass PHP/PHPCS/Unit/Kernel checks.
+- **v5 real PHPUnit dependency correction:** add official `drupal/core-dev:^11` alongside coder in one bounded Composer require; explicitly assert the PHPUnit and PHPCS binaries exist before running test stages. A real Drupal 11.4.9 hosted run passed PHPCS but found `vendor/bin/phpunit` missing. No tests are skipped.
+- **v4 real PHPCS correction:** remove top-of-file `@file` docblocks from the three namespaced Drupal fixture classes, as required by Drupal Coding Standards. An actual hosted Drupal 11.4.9 Composer/PHPCS run discovered this before Unit/Kernel, with no shared-host actions. Add offline regression; do not relax PHPCS.
+- **v3 real-run correction:** change the CLI invocation from invalid `ddev list --json` to supported `ddev list -j` after GitHub-hosted CI exposed the error. Adds exact invocation/fake-DDEV regression so the flag cannot silently regress. The original v2 never reached the Drupal installation step.
+- **v2 decoder improvement retained:** `ddev list -j` decoding: DDEV 1.25.x returns a JSON envelope with `.raw[]` and can emit newline-delimited informational envelopes.
 - Adds a hard **no-touch** preflight gate. When **any other DDEV project** is running, healthy, paused or otherwise not clearly stopped, the bootstrap refuses to call `ddev config` or `ddev start`; it does not stop those projects. The shared router is explicitly exempt from the project status rule.
 - Handles malformed/missing JSON, unknown project status, target-name collision, symlink target and preexisting fixture without modification. A fake DDEV binary in offline tests proves that Chợ Nhạc `running` prevents target creation or DDEV startup.
 - Replaces prior bootstrap ZIP; **do not run the older ZIP**. Neither ZIP is equivalent to a verified Drupal 11 installation, Composer lock, DDEV environment or GitHub-hosted Kernel test.

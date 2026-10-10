@@ -32,7 +32,7 @@ fi
 
 # Read project registry once; fail if the name is in use OR an unrelated
 # DDEV project is active. Never start a fixture beside Chợ Nhạc on one router.
-DDEV_JSON="$(ddev list --json)" || fail 'Cannot read DDEV registered projects'
+DDEV_JSON="$(ddev list -j)" || fail 'Cannot read DDEV registered projects'
 if ! printf '%s' "$DDEV_JSON" | python3 "$BASE/check_ddev_name.py" "$PROJECT"
 then
   fail 'DDEV registry unavailable, collision, or other active project; no fixture created'
@@ -52,7 +52,7 @@ printf 'G0D-01: starting new fixture at %s\n' "$TARGET"
 ddev config --project-name="$PROJECT" --project-type=drupal11 --docroot=web --php-version=8.4
 ddev start -y
 ddev composer create-project 'drupal/recommended-project:^11'
-ddev composer require --dev 'drupal/coder:^8'
+ddev composer require --dev --with-all-dependencies 'drupal/coder:^8' 'drupal/core-dev:^11'
 # Never overwrite user files: target was initially nonexistent and is only created here.
 mkdir -p web/modules/custom
 cp -R -- "$BASE/template/web/modules/custom/pcp_g0_fixture" web/modules/custom/
@@ -69,6 +69,8 @@ for file in web/modules/custom/pcp_g0_fixture/src/EventLabelNormalizer.php \
             web/modules/custom/pcp_g0_fixture/tests/src/Kernel/EventLabelServiceTest.php; do
   ddev exec php -l "$file"
 done
+ddev exec test -x vendor/bin/phpunit
+ddev exec test -x vendor/bin/phpcs
 ddev exec vendor/bin/phpcs --standard=Drupal web/modules/custom/pcp_g0_fixture
 ddev exec bash -lc "export SIMPLETEST_DB='mysql://db:db@db/db'; export SIMPLETEST_BASE_URL='http://web'; vendor/bin/phpunit -c web/core/phpunit.xml.dist web/modules/custom/pcp_g0_fixture/tests/src/Unit"
 ddev exec bash -lc "export SIMPLETEST_DB='mysql://db:db@db/db'; export SIMPLETEST_BASE_URL='http://web'; vendor/bin/phpunit -c web/core/phpunit.xml.dist web/modules/custom/pcp_g0_fixture/tests/src/Kernel"

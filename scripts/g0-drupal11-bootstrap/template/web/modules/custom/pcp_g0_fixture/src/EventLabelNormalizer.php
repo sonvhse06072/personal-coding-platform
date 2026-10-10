@@ -1,10 +1,5 @@
 <?php
 
-/**
- * @file
- * Provides the deliberately minimal initial label normalizer.
- */
-
 namespace Drupal\pcp_g0_fixture;
 
 /**

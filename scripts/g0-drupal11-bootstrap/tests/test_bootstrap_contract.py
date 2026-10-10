@@ -84,7 +84,7 @@ def test_live_ddev_project_blocks_bootstrap_before_any_mutation(tmp_path):
     fake_ddev = bin_dir / "ddev"
     fake_ddev.write_text(
         "#!/bin/sh\n"
-        "if [ \"$1\" = list ]; then\n"
+        "if [ \"$1\" = list ] && [ \"$2\" = -j ]; then\n"
         "  printf '%s\\n' '" + registry + "'\n"
         "  exit 0\n"
         "fi\n"
@@ -109,6 +109,14 @@ def test_live_ddev_project_blocks_bootstrap_before_any_mutation(tmp_path):
     assert "other active project" in run.stderr
     assert "UNSAFE DDEV COMMAND" not in run.stderr
     assert not (home / "pcp-g0-fixtures").exists()
+
+
+def test_bootstrap_calls_ddev_list_with_supported_json_flag():
+    # Observed on the actual GitHub-hosted DDEV 1.25.4 runner: --json is not
+    # accepted; DDEV list supports -j or --json-output instead.
+    code = SCRIPT.read_text(encoding="utf-8")
+    assert 'DDEV_JSON="$(ddev list -j)"' in code
+    assert 'ddev list --json' not in code
 
 
 def test_bash_syntax():
@@ -154,6 +162,26 @@ def test_php_source_syntax_and_initial_scope():
     assert "return trim($label);" in src
     assert "preg_replace" not in src
     assert "G0D-T01" in src
+
+
+def test_bootstrap_requires_real_drupal_core_dev_and_phpunit_binary():
+    # Official recommended-project may not ship Drupal core's test toolchain.
+    # The real hosted run reached PHPCS but did not have vendor/bin/phpunit.
+    code = SCRIPT.read_text(encoding="utf-8")
+    assert "'drupal/core-dev:^11'" in code
+    assert "ddev composer require --dev --with-all-dependencies" in code
+    assert "ddev exec test -x vendor/bin/phpunit" in code
+    assert "ddev exec test -x vendor/bin/phpcs" in code
+    assert code.index("ddev exec test -x vendor/bin/phpunit") < code.index("ddev exec bash -lc")
+
+
+def test_namespaced_php_class_files_follow_drupal_phpcs_file_comment_rule():
+    # A real hosted Drupal PHPCS run rejects @file on namespaced classes.
+    for path in sorted(FIXTURE.rglob("*.php")):
+        text = path.read_text(encoding="utf-8")
+        assert "namespace " in text
+        header = text.split("namespace ", 1)[0]
+        assert "@file" not in header, path
 
 
 def test_phpunit_classes_are_real_core_namespaces_not_mock_copies():

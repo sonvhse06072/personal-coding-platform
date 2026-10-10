@@ -1,10 +1,5 @@
 <?php
 
-/**
- * @file
- * Contains unit coverage for the initial fixture behavior.
- */
-
 namespace Drupal\Tests\pcp_g0_fixture\Unit;
 
 use Drupal\pcp_g0_fixture\EventLabelNormalizer;
