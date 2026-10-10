@@ -77,3 +77,23 @@ Chỉ sau khi PR chứa script đã merge và khi operator thực sự cần qua
 )
 ```
 Lệnh này **không thực thi tự động tại phiên PM GitHub**: repository GitHub và môi trường WSL của Owner là hai ngữ cảnh khác nhau. Report chỉ là read-only metadata và không chứng minh local PCP đã deploy, project đã được cấp quyền, không ảnh hưởng gián tiếp tới Chợ Nhạc hay có provider parity.
+
+## 5. Owner WSL read-only inventory observed — next source-only staging
+
+**Actual Owner-run JSON on 2026-10-10** from `scripts/g0-wsl-coexistence-preflight.py`, not a PM-generated estimate:
+
+- Local PCP Git checkout `/home/sonvh/personal-coding-platform-v1` **exists and is clean**, HEAD `d53fbb07524bb3ca13324e2ed7edac1513367072` (behind verified GitHub source). This alone does **not** prove installed runtime/Executor currently runs that exact HEAD; no sync/restart authorized.
+- **DDEV 1.25.4**, **17 projects registered, three active**; fixture project-name collision `false`. The report intentionally does not reveal names/paths of those other projects. Shared Docker/router indirect effect, host port and resource capacity are **not yet verified**. Do not stop other running projects.
+- Expected fixture source path **does not exist** (`fixture_source_not_observed`), so no PCP fixture checkout can be used by Runtime. Exact approved seed for `benchmark/pcp` and `benchmark/direct`: `39ef13c25b24c4a1b43a720ae53419f479996ed2`, Composer lock SHA256 `3a3d086be59571b43f05301ab099dc4d710a2ca1da0b25af60341d527f531f2b`. The remote private repo's two benchmark refs remain pinned at seed.
+- Host `codex-cli 0.162.0`, PCP checked-in `config/tool-versions.env` source pin `0.160.0`; **actual deployed Runtime binary still unknown**. Do not downgrade global host CLI or replace Codex session active for Chợ Nhạc.
+- `actual_runtime_binary_unverified=true`, `lease_unverified=true`, `model_and_effort_unverified=true`, `port_resource_headroom_unverified=true`, `ready_to_dispatch_g0d_t01=false`, **0 real paired accepted outcomes**.
+
+### 5.1. Minimal next operation — approved isolated Git source checkout only
+
+New `scripts/g0-stage-local-fixture.py` (PCP source-only, **not deployed**) offers two explicit modes:
+- **default / `--inspect`:** read-only, authenticated GitHub private repo and exact frozen `benchmark/pcp` + `benchmark/direct` commit checks; ensure the only fixed target `$HOME/pcp-g0-fixtures/pcp-g0-drupal-fixture` is new and not a symlink. No source/file creation.
+- **`--create`:** after successful preflight, create at most that one new user-owned parent directory and clone only the fixed private repo's `benchmark/pcp` branch, single branch, no tags. Verify exact Git HEAD `39ef13c2...`, clean tree, HTTPS/SSH origin repo identity, `composer.lock` SHA256 and baseline document. Do **not** fetch/update/pull PCP local, copy owner project data, rewrite an existing fixture, delete/retry partial clone, install Composer/DDEV, change Codex, or call PCP Runtime/Chợ Nhạc.
+
+**Expected execution:** from this ChatGPT conversation PM can merge the script via PR/CI but **cannot execute the Owner WSL shell**. When the branch is merged and Owner is ready, use an isolated subshell and `gh api` (read-only to PCP GitHub) to stream the exact merged source to `python3 - --inspect`, then `--create` only if preflight passes. This downloads executable code through a trusted exact Git SHA, so review the PR/script first. `gh repo clone` requires the Owner's already authenticated GitHub CLI; if unavailable/failed, STOP and do not ask for tokens. No DDEV operations are necessary to stage source while other projects are running.
+
+After source staging, rerun the **existing read-only WSL preflight**; expect the fixture Git source blocker to clear only if the real checkout exactly matches the protected seed and is clean. Host CLI mismatch/actual Runtime binary, model/effort/provider, local project path mapping, lease, ports/resource and indirect router impact remain separate blockers. **No protected fixture DDEV/delivery activation or G0D-T01 dispatch** from source checkout; ProjectBaseline remains PARKED until separately approved reviewed rollout.
