@@ -80,7 +80,97 @@ jobs:
           ddev --version > "$evidence/ddev-version.txt"
           (cd "$root" && ddev exec php -r 'echo PHP_VERSION, PHP_EOL;') > "$evidence/php-version.txt"
           echo 'G0D-01: GitHub-hosted DDEV/Composer/PHPCS/Unit/Kernel passed; remote repo/fixture PR CI/A-B NOT run.'
-      - name: Publish only lock and minimal provenance, not vendor or database
+      - name: Export only committed, sanitized fixture source
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          python3 - "$HOME/pcp-g0-fixtures/pcp-g0-drupal-fixture" "$RUNNER_TEMP/pcp-g0-evidence" <<'PY'
+          from hashlib import sha256
+          import os
+          from pathlib import Path, PurePosixPath
+          import re
+          import stat
+          import subprocess
+          import sys
+          from zipfile import ZipFile
+
+          source = Path(sys.argv[1])
+          evidence = Path(sys.argv[2])
+          assert os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"
+          assert source == Path.home() / "pcp-g0-fixtures" / "pcp-g0-drupal-fixture"
+          assert source.is_dir() and not source.is_symlink()
+          assert evidence == Path(os.environ["RUNNER_TEMP"]) / "pcp-g0-evidence"
+          assert evidence.is_dir()
+
+          def git(*args):
+              return subprocess.check_output(
+                  ["git", "-C", str(source), *args], text=True,
+              ).strip()
+
+          sha = git("rev-parse", "HEAD")
+          assert re.fullmatch(r"[a-f0-9]{40}", sha)
+          assert git("status", "--porcelain=v1") == ""
+          assert git("rev-parse", "benchmark/direct") == sha
+          assert git("rev-parse", "benchmark/pcp") == sha
+          assert (evidence / "seed-commit-sha.txt").read_text().strip() == sha
+
+          raw = subprocess.check_output(
+              ["git", "-C", str(source), "ls-tree", "-r", "-z", "HEAD"],
+          )
+          expected = set()
+          banned_prefixes = (
+              "vendor/", "web/core/", "web/sites/default/files/",
+              "web/sites/simpletest/", ".git/",
+          )
+          banned_suffixes = (".sql", ".db", ".sqlite", ".pem", ".key", ".p12")
+          for entry in raw.split(b"\0"):
+              if not entry:
+                  continue
+              metadata, raw_path = entry.split(b"\t", 1)
+              mode, kind, _ = metadata.decode("ascii").split()
+              name = raw_path.decode("utf-8")
+              parts = PurePosixPath(name).parts
+              assert kind == "blob" and mode in {"100644", "100755"}
+              assert name and not name.startswith("/") and "\\" not in name
+              assert ".." not in parts and "." not in parts
+              assert not name.startswith(banned_prefixes)
+              assert not name.lower().endswith(banned_suffixes)
+              assert not any(p == ".env" or p.startswith(".env.") for p in parts)
+              assert not any(p in {"settings.php", "settings.local.php"} for p in parts)
+              assert name not in expected
+              expected.add(name)
+          assert 5 <= len(expected) <= 200
+          for name in (
+              "composer.json", "composer.lock", "PROJECT-BASELINE.md",
+              ".github/workflows/validation.yml", ".ddev/config.yaml",
+              "web/modules/custom/pcp_g0_fixture/src/EventLabelNormalizer.php",
+          ):
+              assert name in expected, "Missing fixture source: " + name
+
+          archive = evidence / "fixture-seed-source.zip"
+          assert not archive.exists()
+          subprocess.run(
+              ["git", "-C", str(source), "archive", "--format=zip",
+               "-o", str(archive), "HEAD"],
+              check=True,
+          )
+          with ZipFile(archive) as packed:
+              infos = [item for item in packed.infolist() if not item.is_dir()]
+              actual = {item.filename for item in infos}
+              assert actual == expected
+              assert all(not stat.S_ISLNK(i.external_attr >> 16) for i in infos)
+              assert max(i.file_size for i in infos) < 2_000_000
+              assert sum(i.file_size for i in infos) < 5_000_000
+              lock_hash = sha256(packed.read("composer.lock")).hexdigest()
+          assert lock_hash == (evidence / "composer-lock-sha256.txt").read_text().strip()
+          assert archive.stat().st_size < 3_000_000
+          (evidence / "fixture-seed-source-sha256.txt").write_text(
+              sha256(archive.read_bytes()).hexdigest() + "\n",
+              encoding="ascii",
+          )
+          print("G0D-01: sanitized tracked-source artifact verified; entries=" + str(len(expected)))
+          PY
+      - name: Publish only locked source and minimal provenance, never vendor or database
         uses: actions/upload-artifact@v4
         with:
           name: g0d01-verified-lock-and-provenance
