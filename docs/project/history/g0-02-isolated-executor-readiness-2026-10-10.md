@@ -159,3 +159,18 @@ Therefore **the suspected `CODING_PROJECTS_ROOT` mismatch is RESOLVED**: the act
 4. After a deliberately approved PCP-only recovery, rerun mount and Runtime Codex version checks; verify actual in-container fixture visibility and file hash. Only then establish provider/model/effort equivalence, protected fixture `ddev.enabled` and delivery approval, and a single G0D-T01 matched trial.
 
 **Remaining:** checked-in CLI pin `0.160.0` is **not** an observed running Runtime binary, and host global Codex `0.162.0` must not be changed for this benchmark. Fixture remains `PARKED`; **zero accepted A/B pairs**, G0 NOT GO and G1 #596 unapproved.
+
+## 8. Owner xác nhận PCP đã được dừng chủ động — không có incident cần repair (2026-10-10)
+
+**Thông tin mới từ chính Human Owner:** khi PM hỏi có chủ động dừng PCP/WSL/Docker Desktop vào khoảng 14:21 ngày 10/10 không, Owner đáp **“tôi có dừng vào thời gian đó”**. Vì vậy không cần tiếp tục theo đuổi giả thuyết crash Docker daemon, WSL, thiếu bộ nhớ hoặc bốn ứng dụng PCP đồng thời lỗi. Các timestamp/exit code tại mục 7 vẫn chính xác là **quan sát kỹ thuật**, nhưng sự kiện dừng PCP là **chủ động**. Không biến `ExitCode=255` thành incident phần mềm, không sửa retry/restart policy chỉ để phản ứng với sự kiện đã biết.
+
+**G0 readiness hiện tại:** fixture đã có Git source mới, sạch và đúng seed/lock; `CODING_PROJECTS_ROOT=/home/sonvh` trong metadata stopped Executor cùng bind root đúng, nên nghi ngờ sai đường dẫn đã giải quyết. Nhưng PCP local source đã quan sát `d53fbb0` là bản cũ so với GitHub main, Runtime/Executor đều dừng, và `ddev.enabled=false`/delivery OFF vẫn là gate có chủ đích. Bản `ddev.enabled` guard sửa ở GitHub source chưa được chứng minh triển khai; `codex --version` trong Runtime và trạng thái các job/lease không thể suy ra từ host Codex.
+
+### 8.1. Thứ tự khôi phục PCP duy nhất theo phạm vi đã duyệt
+
+1. **Read-only pre-start audit trên chính PCP:** xác nhận `git branch --show-current`, `git status --porcelain`, HEAD local + main GitHub SHA; xác nhận đúng những container PCP đang dừng, kiểm tra ảnh build PCP còn tồn tại và RAM/đĩa/CPU còn đủ. Chỉ xuất trạng thái đã lược bỏ thông tin nhạy cảm; không xem thư mục/chạy lệnh trên Chợ Nhạc.
+2. **Quiescence/job/lease + source rollout:** nếu còn durable active work/recovery hay không chắc về ownership, stop tại đây; không xóa, reset, kill hoặc đổi counter. Quyết định đồng bộ PCP Git clean/fast-forward và kế hoạch image build/Antigravity bridge dựa trên diff mới nhất. `.ddev/config.yaml` có `pre-start` hooks build images bằng `pcp-builder` và start bridge; nên `ddev start` không phải thao tác chẩn đoán chỉ đọc.
+3. **PCP-only guarded startup**, sau khi Owner đã phê duyệt đúng scope và có điều kiện dừng/rollback; không `docker system prune`, restart Docker Desktop, `ddev poweroff` hoặc bất kỳ thao tác nào nhắm Chợ Nhạc. Shared Docker/DDEV router vẫn là rủi ro gián tiếp cần giám sát.
+4. **Post-start verification:** health PCP/Executor, thực tế fixture accessible trong executor, source/deployed SHA, Runtime Codex pin/model/effort, DB/job/lease và resource headroom. Chỉ khi đạt đầy đủ mới chuẩn bị **PR protected fixture-only activation**. Giữ hai benchmark refs nguyên seed, không dispatch G0D-T01 sớm.
+
+**Phạm vi/quyền:** Owner xác nhận lý do dừng **không đồng nghĩa đồng ý chạy lại hoặc đồng bộ local PCP ngay**. Không động tới Codex host đang phục vụ Chợ Nhạc; không tạo VM, không tự mở `ddev.enabled` hoặc GitHub delivery. G0 vẫn **NOT GO** với 0 cặp A/B accepted.
