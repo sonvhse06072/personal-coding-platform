@@ -1,0 +1,60 @@
+name: validation
+
+on:
+  pull_request:
+    branches: [main, benchmark/direct, benchmark/pcp]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture-validation:
+    runs-on: ubuntu-latest
+    services:
+      database:
+        image: mariadb:10.11
+        env:
+          MARIADB_DATABASE: db
+          MARIADB_USER: db
+          MARIADB_PASSWORD: db
+          MARIADB_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, gd, pdo_mysql, xml, dom, zip, curl
+          tools: composer:v2
+          coverage: none
+      - name: Validate dependency manifest and lock
+        run: composer validate --strict --no-interaction
+      - name: Install locked dependencies
+        run: composer install --no-interaction --prefer-dist --no-progress
+      - name: Prove Drupal core and PHPUnit are installed
+        run: |
+          test -f web/core/tests/bootstrap.php
+          test -x vendor/bin/phpunit
+          test -x vendor/bin/phpcs
+          test -f composer.lock
+      - name: PHP syntax
+        run: |
+          find web/modules/custom/pcp_g0_fixture -type f -name '*.php' -print0 | xargs -0 -r -n1 php -l
+      - name: Drupal coding standards
+        run: vendor/bin/phpcs --standard=Drupal web/modules/custom/pcp_g0_fixture
+      - name: Drupal Unit and Kernel tests
+        env:
+          SIMPLETEST_DB: mysql://db:db@127.0.0.1:3306/db
+          SIMPLETEST_BASE_URL: http://127.0.0.1
+          BROWSERTEST_OUTPUT_BASE_DIRECTORY: /tmp/pcp-g0-browser
+          SYMFONY_DEPRECATIONS_HELPER: disabled
+        run: |
+          vendor/bin/phpunit -c web/core/phpunit.xml.dist web/modules/custom/pcp_g0_fixture/tests/src/Unit
+          vendor/bin/phpunit -c web/core/phpunit.xml.dist web/modules/custom/pcp_g0_fixture/tests/src/Kernel

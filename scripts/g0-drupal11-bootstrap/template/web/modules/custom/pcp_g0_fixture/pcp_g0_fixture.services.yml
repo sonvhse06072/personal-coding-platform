@@ -1,0 +1,3 @@
+services:
+  pcp_g0_fixture.event_label_normalizer:
+    class: Drupal\pcp_g0_fixture\EventLabelNormalizer
