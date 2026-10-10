@@ -1,5 +1,6 @@
-# G0D-01 Bootstrap v4 — 2026-10-10
+# G0D-01 Bootstrap v5 — 2026-10-10
 
+- **v5 real PHPUnit dependency correction:** add official `drupal/core-dev:^11` alongside coder in one bounded Composer require; explicitly assert the PHPUnit and PHPCS binaries exist before running test stages. A real Drupal 11.4.9 hosted run passed PHPCS but found `vendor/bin/phpunit` missing. No tests are skipped.
 - **v4 real PHPCS correction:** remove top-of-file `@file` docblocks from the three namespaced Drupal fixture classes, as required by Drupal Coding Standards. An actual hosted Drupal 11.4.9 Composer/PHPCS run discovered this before Unit/Kernel, with no shared-host actions. Add offline regression; do not relax PHPCS.
 - **v3 real-run correction:** change the CLI invocation from invalid `ddev list --json` to supported `ddev list -j` after GitHub-hosted CI exposed the error. Adds exact invocation/fake-DDEV regression so the flag cannot silently regress. The original v2 never reached the Drupal installation step.
 - **v2 decoder improvement retained:** `ddev list -j` decoding: DDEV 1.25.x returns a JSON envelope with `.raw[]` and can emit newline-delimited informational envelopes.

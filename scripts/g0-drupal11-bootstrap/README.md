@@ -11,3 +11,5 @@ Owner decision: https://github.com/sonvhse06072/personal-coding-platform/issues/
 **v3 correction (2026-10-10):** A first isolated GitHub-hosted trial of v2 found `ddev list --json` unsupported by DDEV 1.25.4. v3 uses `ddev list -j` and has a regression gate. Keep previous archives obsolete. A hosted validation job must still demonstrate actual Drupal Unit/Kernel/Composer/PHPCS results; PHP lint/offline-only success is not enough.
 
 **v4 correction (2026-10-10):** The isolated Drupal 11.4.9 runner installed Composer and Coder successfully, but PHPCS rejected namespaced class files starting with `@file`. v4 removes those docblocks and adds a dedicated regression. Real Kernel/Unit verification remains pending on a new hosted run. Previous v1-v3 ZIPs are obsolete.
+
+**v5 correction (2026-10-10):** Require Drupal core-dev test dependencies and assert `vendor/bin/phpunit` exists. The preceding hosted run passed Composer/PHPCS but could not start PHPUnit without core-dev. Real Unit/Kernel acceptance still requires a fresh hosted proof. All v1-v4 ZIPs are obsolete.

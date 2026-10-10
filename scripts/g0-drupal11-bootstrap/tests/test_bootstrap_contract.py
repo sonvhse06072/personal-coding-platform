@@ -164,6 +164,16 @@ def test_php_source_syntax_and_initial_scope():
     assert "G0D-T01" in src
 
 
+def test_bootstrap_requires_real_drupal_core_dev_and_phpunit_binary():
+    # Official recommended-project may not ship Drupal core's test toolchain.
+    # The real hosted run reached PHPCS but did not have vendor/bin/phpunit.
+    code = SCRIPT.read_text(encoding="utf-8")
+    assert "'drupal/core-dev:^11'" in code
+    assert "ddev exec test -x vendor/bin/phpunit" in code
+    assert "ddev exec test -x vendor/bin/phpcs" in code
+    assert code.index("ddev exec test -x vendor/bin/phpunit") < code.index("ddev exec bash -lc")
+
+
 def test_namespaced_php_class_files_follow_drupal_phpcs_file_comment_rule():
     # A real hosted Drupal PHPCS run rejects @file on namespaced classes.
     for path in sorted(FIXTURE.rglob("*.php")):
