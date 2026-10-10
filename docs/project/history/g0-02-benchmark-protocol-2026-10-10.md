@@ -21,7 +21,7 @@ File JSON đầu vào chứa chính xác `schema_version=1` và `records` tối 
 
 | Nhóm | Các trường |
 | --- | --- |
-| Identity | `trial_id`, `task_id`, `task_type` = `drupal/frontend/repair`, `arm` = `direct/pcp` |
+| Identity | `trial_id`, `task_id`, `task_type` = `drupal/frontend/repair` hoặc `php` (PHP smoke, **không** tính vào cohort Drupal), `arm` = `direct/pcp` |
 | Comparability | `source_sha` (Git commit 40hex), `acceptance_sha256` (64hex), `environment_id`, `environment_class` = `isolated_fixture/historical_record`, `model_id`, `reasoning_effort`, `verification_policy`, `review_policy` |
 | Actual chronology | `started_at`, `ended_at` ISO-8601 có UTC offset; chỉ đo interval dương tối đa 30 ngày |
 | Outcome | `outcome` = `accepted/failed/aborted`, `quality` có bool `deterministic/review/ci` và `visual` bool/null |
@@ -38,7 +38,7 @@ python scripts/pcp-parity-benchmark.py --input records-real.json --output parity
 python -m pytest -q -p no:cacheprovider tests/test_pcp_parity_benchmark.py
 ```
 
-Script ghép hai nhánh bằng `trial_id`, so sánh toàn bộ comparability fields, loại khỏi **latency cohort** khi thiếu nhánh, khác model/criteria/environment/policy hoặc một arm chưa accepted; **vẫn công khai các excluded trials và toàn bộ failed/aborted attempts**. Duplicate identity, invalid timestamps, SHA, final QA, schema fields đều bị từ chối.
+Script ghép hai nhánh bằng `trial_id`, so sánh toàn bộ comparability fields, loại khỏi **latency cohort** khi thiếu nhánh, khác model/criteria/environment/policy hoặc một arm chưa accepted; **vẫn công khai các excluded trials và toàn bộ failed/aborted attempts**. Bản ghi `historical_record` là bằng chứng tham khảo, **không** phải phép thử A/B có đối chứng; case `php` chỉ dùng smoke test, **không** thay Drupal thật. Cả hai bị loại có lý do rõ và có bộ đếm riêng. Duplicate identity, invalid timestamps, SHA, final QA, schema fields đều bị từ chối.
 
 - Dưới **3 accepted pairs**: không hiển thị p50 hoặc p90.
 - Từ **3 đến 9 accepted pairs**: p50 mô tả; p90 giữ null, verdict `insufficient_evidence`.
@@ -58,3 +58,13 @@ Script ghép hai nhánh bằng `trial_id`, so sánh toàn bộ comparability fie
 **An toàn live 2026-10-10:** [Guardian 6093920625](https://github.com/sonvhse06072/personal-coding-platform/issues/524#issuecomment-6093920625) có 0 active PCP engineering lúc chụp, nhưng [GH-89 diagnostic 6093934986](https://github.com/sonvhse06072/chonhac/issues/89#issuecomment-6093934986) xác nhận direct Chợ Nhạc checkout **dirty trên nhánh Codex GH-132**, PCP job GH-89 vẫn blocked/checkpoint 187. Không có quyền tự clean/stash/restart/checkout/cancel/retire lease; benchmark chỉ được chạy trên fixture độc lập được phép.
 
 **Source:** [#593 roadmap](https://github.com/sonvhse06072/personal-coding-platform/issues/593), `docs/project/efficiency-model.md` (approved G0 performance targets), `docs/project/history/g0-01-architecture-audit-2026-10-10.md` (source/deployed gaps). Đây là protocol + audit evidence, không sửa target policy T2.
+
+## 5. Readiness audit hiện tại (2026-10-10)
+
+- [PCP Guardian read-only](https://github.com/sonvhse06072/personal-coding-platform/issues/524#issuecomment-6094166352) xác nhận Runtime 1.0.141, Executor 1.0.35, Router 1.0.31, n8n/Antigravity healthy và 0 active job tại thời điểm chụp; local PCP clean `d53fbb0` nhưng GitHub main `f5913448`. **Không có rollout/fast-forward đã thực thi trong G0.**
+- [Validation fixture](https://github.com/sonvhse06072/pcp-validation-fixture) là PHP 8.3 generic với bề mặt **Drupal-style**, không có Drupal Kernel/Core integration. Task đã được phê duyệt riêng [#7](https://github.com/sonvhse06072/pcp-validation-fixture/issues/7) **đã đóng**, [PR #9](https://github.com/sonvhse06072/pcp-validation-fixture/pull/9) đã merge `3ecd9ce66260245089efe2533080d1b5191b810c`; không replay hoặc mở rộng ProjectBaseline chỉ để tạo benchmark số đẹp.
+- [PCP R3 fixture audit](https://github.com/sonvhse06072/personal-coding-platform/issues/162#issuecomment-5702384513) chứa một **PCP-only** kết quả thật: first pass, targeted/style/static/full/CI success, 0 repair/retry/owner intervention. Không có cặp direct Codex độc lập cùng điều kiện; do đó **không** đi vào percentile A/B.
+- [Chợ Nhạc GH-89](https://github.com/sonvhse06072/chonhac/issues/89) là PCP blocked rồi handoff sang Codex-direct trên **cùng dirty workspace**, không phải hai nhánh thí nghiệm độc lập. Bằng chứng hữu ích để phân tích blocker/cost nhưng không ghép thành một A/B trial. Workspace Codex hiện hữu và PCP lease cũ không bị đụng tới.
+- Config PCP có `example-drupal` và `pcp-validation-fixture`; chưa có bằng chứng local `example-drupal` có đủ repo/dataset/lease sạch; chưa có benchmark Next.js fixture đăng ký. Không được tự lấy `chonhac` active writer làm Next fixture.
+
+**G0 disposition:** hiện có 0 cặp Drupal/frontend/repair được kiểm chứng tương đương; báo cáo phải là `insufficient_evidence`, chưa G0 Go. Trước khi đo thực nghiệm cần hai checkout/database disposable độc lập, chính sách model/effort/CLI/verification/review giống nhau, mục tiêu acceptance từ ticket đã duyệt, framework Drupal thật được xác minh và browser evidence cho frontend. Không thêm production/privileged workflow hoặc bypass ProjectBaseline. Việc tạo/cấp quyền fixture mới là một quyết định vận hành được kiểm tra riêng; không được ngụy trang thành cập nhật số đo.
