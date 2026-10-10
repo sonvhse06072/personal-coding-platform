@@ -35,3 +35,32 @@ Một runner GitHub-hosted tạm thời **không phải** PCP `coding-runtime` h
 5. Chỉ khi bốn gate trên thỏa mãn mới cho phép **một** G0D-T01 A/B với hai PR nghiệm thu bằng cùng CI, times/usage thực; `scripts/pcp-parity-benchmark.py` loại cả các pair thiếu model/effort/CLI/workspace/toolchain hoặc QA. Không suy ra p50 dưới 3 cặp hay p90 dưới 10 cặp; G0 investment Go/No-Go thuộc Owner.
 
 **Rollback/stop:** nếu không có VM độc lập hoặc chỉ có shared WSL đang chạy Chợ Nhạc, giữ `PARKED`, không start/restart DDEV ở máy đó, không chạm Chợ Nhạc. Không retry job mù, không cấp quyền host, không tự chạy G1 #596. Cập nhật #595 là `isolated prerequisites PASS; real PCP execution insufficient evidence`.
+
+## 4. Quyết định Owner mới: PCP tiếp tục trên WSL (supersedes separate-VM preference)
+
+**Decision DEC-G0-EXEC-02 / 2026-10-10:** Owner xác nhận tại ChatGPT “đồng ý. tiếp tục công việc”, sau khi PM đề xuất **giữ PCP ở Ubuntu WSL hiện tại**, không thuê VM độc lập. Quyết định đã được ghi tại [PCP #595](https://github.com/sonvhse06072/personal-coding-platform/issues/595#issuecomment-6096935630). Mục 3 phía trên và proposal VM cũ là **historical fallback**, không phải kiến trúc bắt buộc hoặc yêu cầu provision máy mới. Quyết định này **chưa** cho phép chuyển fixture từ PARKED sang active, cấp quyền Docker/model/GitHub mới, triển khai hoặc chạy G0D-T01.
+
+### 4.1. Kiến trúc đã chọn và rủi ro còn lại
+
+- PCP vẫn host tại `/home/sonvh/personal-coding-platform-v1` trong WSL/Docker Desktop. Fixture source là một checkout Git **mới, riêng**, đúng protected seed `39ef13c25b24c4a1b43a720ae53419f479996ed2`; không copy bất kỳ source/DB/media của Chợ Nhạc.
+- `runtime.workspace_mode=isolated_clone`: mỗi WorkOrder có một workspace riêng dưới `CODING_WORKSPACES_ROOT`, branch `ai/*`, Git clone không giữ origin trong agent workspace. DDEV override do executor quản lý có tên `cp-<job_id[:10]>`, độc lập với DDEV project Chợ Nhạc; DB, volume, ports và review/CI phải được xác minh riêng.
+- DDEV **có thể** chạy nhiều dự án trên một Docker daemon/router. Điều kiện an toàn thực tế là **không trùng project/port/hostname, đúng ownership, đủ tài nguyên**, không phải dừng các dự án đang hoạt động. Quy tắc bootstrap v1–v6 trước đó chặn mọi DDEV project active là chính sách thận trọng cho *bootstrap*; không chuyển quy tắc đó thành yêu cầu dừng Chợ Nhạc để benchmark. Không hạ gate của bootstrap cũ và không chạy nó trên Chợ Nhạc.
+- Shared Docker daemon/socket là quyền thực thi mạnh có thể ảnh hưởng gián tiếp đến các project khác, kể cả khi lệnh nhắm vào fixture. DDEV router có thể cập nhật topology khi `ddev start`. Vì vậy **không thể bảo đảm hard isolation như VM riêng** bằng project name, CLI regex hay prompt. Trước lần chạy local đầu tiên cần quan sát router/host capacity + thiết lập ranh giới capability/ownership ở Executor, xác minh không có xung đột, theo dõi và có rollback không restart global. Nếu không đủ điều kiện, *giữ PARKED*, VM riêng là lựa chọn fallback.
+- Cấm mọi PCP benchmark control, Git, DB, DDEV, preview, workspace, lease hoặc credential thao tác **trực tiếp nhắm vào Chợ Nhạc**. Không sử dụng Codex đang làm việc trên Chợ Nhạc. Không `ddev poweroff`, `ddev stop -a`, `docker system prune`, `docker restart`/Docker Desktop restart cho bước benchmark. Bất kỳ lệnh cleanup nào chỉ áp dụng đúng DDEV identity và project/volume của fixture, không xóa DB tùy tiện.
+
+### 4.2. Guard đầu tiên đã triển khai ở source PCP, chưa rollout
+
+Một lỗi thực đã phát hiện: `services/ddev-executor/app/main.py:phase()` trước đây **không kiểm tra `ddev.enabled`** trước khi gọi `ddev start`; endpoint quiesce cho isolated workspace cũng có thể gọi `ddev stop` khi project bị tắt. Do đó cấu hình PARKED không hoàn toàn là rào chắn ở Executor API.
+
+Sửa kiểm soát `_require_ddev_enabled` dùng **boolean YAML `true`** (không chấp nhận string `"true"`, `"false"` hay int), từ chối `phase` và `quiesce` isolated trước kiểm tra/ghi vào workspace hoặc spawn DDEV khi disabled. Direct-workspace `quiesce` vốn no-op vẫn được giữ nguyên; tránh ảnh hưởng luồng hiện hữu. Negative tests tạo dự án giả trong `tmp_path`, monkeypatch mọi lệnh DDEV và filesystem callbacks, chứng minh fail-closed ở `preflight`, `targeted_tests`, `cleanup` và `remove_data=true`. Không test nào chạy DDEV thật, không thao tác trên Chợ Nhạc.
+
+**Lưu ý:** guard này ngăn DDEV phase khi fixture PARKED; **không tự chứng minh** một project được bật sẽ không thể gửi lệnh tùy ý tới Docker socket. Gate nâng quyền/project-scoped broker/command allowlist và xác thực ownership của source/lease/DB là điều kiện riêng trước protected activation. Không được coi unit tests hoặc PR merge là local deploy.
+
+### 4.3. Bước tiến hành tiếp, không tự kích hoạt
+
+1. PM chuẩn bị **read-only WSL preflight** cho metadata của chính PCP/fixture và `ddev list -j`: kiểm tra CLI hiện cài, source HEAD/worktree, unique DDEV identity, context/ports/capacity, isolation markers; *không* gọi DDEV start/stop, không lấy credentials/DB/private files. Khi chủ sở hữu chạy thì chỉ xuất trạng thái đã ẩn tên project nhạy cảm và blocker/OK flags. Đầu ra này không là authorization.
+2. Sau khi có bằng chứng read-only ở WSL, hoàn thiện proposal chi tiết **fixture-only activation**: scope `config/projects.yml` đúng một fixture ID, `base_branch=benchmark/pcp`, DDEV phases có Unit/Kernel/PHPCS thật, cleanup chỉ đúng job, auto production deploy OFF; cần quyền GitHub PR giới hạn fixture và review/CI. Kiểm tra rằng các entry/config của Chợ Nhạc không bị sửa.
+3. So khớp **installed** Codex CLI (Runtime pin `0.160.0`; last observed host `0.162.0`), cùng `model_id`, reasoning effort, entitlement và quota. Dùng local **binary riêng** cho arm direct nếu thích hợp, không đổi global Codex đang phục vụ Chợ Nhạc. Phải có hai DB/workspace/CI/review độc lập, một pair G0D-T01 và stop nếu lệch.
+4. ProjectBaseline seed `g0d01-seed-2026-10-10` **giữ nguyên không rewrite**. Protected config activation/rollout chỉ sau explicit Owner approval cho phạm vi, exact-head PR/CI/review và source-vs-deployed/live lease gate. **G0 NOT GO** cho đến khi có real A/B outcomes; p50 tối thiểu ba pairs, p90 tối thiểu mười pairs và Owner đầu tư quyết định.
+
+**Rollback:** khi phát hiện DDEV project/route collision, resource pressure, wrong workspace/source/CLI, provider mismatch hoặc nghi ngờ tác động gián tiếp đến Chợ Nhạc: dừng **chỉ job fixture** theo guard chính thức, giữ diff/counters/lease, không stop/restart/destroy Chợ Nhạc hoặc Docker host. Nếu chưa thể chứng minh safe stop của fixture, không khởi chạy benchmark ngay từ đầu.
