@@ -2,7 +2,7 @@
 
 Status: **Tier-1 mutable working-state index**. This is not a chronological incident log, an approved ProjectBaseline amendment, or proof of a live Runtime/local lock. Repository governance and approved ProjectBaseline revisions remain authoritative; read GitHub/Runtime/local evidence again before any mutation.
 
-Last reconciled: **2026-10-10**, G0-01 #594 read-only audit in progress. GitHub main/issue/PR and fresh Guardian Runtime/Executor/Router health verified, with Chợ Nhạc GH-89 job + actual direct worktree observed by PM diagnostic. **The direct-project lease table and current Codex single-writer ownership remain unproven**; do not treat clean PCP local main or zero PCP active jobs as proof of Chợ Nhạc lease release. See `docs/project/history/g0-01-architecture-audit-2026-10-10.md`.
+Last reconciled: **2026-10-10**, G0-01 #594 audited and CLOSED after [PR #612](https://github.com/sonvhse06072/personal-coding-platform/pull/612) merged with 4/4 exact-head CI. G0-02 #595 is IN PROGRESS with benchmark harness [PR #613](https://github.com/sonvhse06072/personal-coding-platform/pull/613), **real matched cohort not yet collected**. GitHub main/issue/PR and fresh Guardian Runtime/Executor/Router health verified, with Chợ Nhạc GH-89 job + actual direct worktree observed by PM diagnostic. **The direct-project lease table and current Codex single-writer ownership remain unproven**; do not treat clean PCP local main or zero PCP active jobs as proof of Chợ Nhạc lease release. See `docs/project/history/g0-01-architecture-audit-2026-10-10.md`.
 
 ## Resume order
 
@@ -33,7 +33,7 @@ Memory/retrieval contract: docs/project/context-memory-architecture.md. The exis
 
 GitHub issue search on **2026-10-09** found **22 open issues** after #591 was completed and PR #592 merged. These are **backlog and operational evidence**, not permission to dispatch jobs:
 
-- **#593 — Canonical PCP product-completion program:** 17 implementation issues **#594–#610** across G0–G3. All were open/planned at the reconciliation point. **#594** is the first architecture/critical-path evidence audit, with a T3 report/PR in progress and exact runtime health/old job worktree diagnostics; **#595** is the subsequent controlled direct-Codex benchmark and is not yet dispatched. G1–G3 remain behind staged Go/No-Go, approved authority and real evidence gates.
+- **#593 — Canonical PCP product-completion program:** 17 implementation issues **#594–#610** across G0–G3. **#594 G0-01** is CLOSED completed with [T3 source+live audit](history/g0-01-architecture-audit-2026-10-10.md) / merged PR #612; **#595 G0-02** has PR #613 for read-only schema, synthetic-only tests and protocol, but no real benchmark or Go/No-Go result yet. G1–G3 remain behind staged Go/No-Go, approved authority and real evidence gates.
 - **#493 — DDEV Executor cold-start:** source fix PR #583 merged; Executor **1.0.35 was observed live** in Guardian 6093920625. The rollout/changed-image provenance and natural cold-start acceptance remain incomplete. Do not redo source fix.
 - **#512 — Remote PM/Guardian:** retained for natural remote-intake and out-of-band recovery acceptance, not a second implementation program.
 - **#524 — Guardian control/audit:** intentionally open operations channel, **not** developer backlog.
@@ -67,8 +67,8 @@ Chợ Nhạc GH-63 founder acceptance is a managed-project decision, not a PCP s
 
 ## Immediate next safe actions
 
-1. **#594 audit:** review the [T3 G0-01 evidence report](history/g0-01-architecture-audit-2026-10-10.md) and fresh [Guardian health 6093920625](https://github.com/sonvhse06072/personal-coding-platform/issues/524#issuecomment-6093920625); pin source-vs-deployed distinctions and 10 bottleneck hypotheses. Missing exact project lease/active Codex writer state must not be silently filled in. G0-01 audit is not a production/rollout task.
-2. **#595 benchmark:** remains next **after** #594 audit acceptance, using isolated fixtures and identical acceptance/CI/review conditions. Record actual sample and data gaps; do not claim direct-PCP p50/p90 from one GH-89 incident. #596/G1 remains protected by separate architecture/security ChangeProposal and stage gate.
+1. **#594 complete:** evidence [PR #612](https://github.com/sonvhse06072/personal-coding-platform/pull/612) merged; no further G0-01 code. Shared Chợ Nhạc dirty direct worktree and historical lease unresolved remain **no-touch** until separately authorized.
+2. **#595 in progress:** review exact head/CI of [PR #613](https://github.com/sonvhse06072/personal-coding-platform/pull/613) (read-only paired outcome analyzer, synthetic regression, [T3 protocol](history/g0-02-benchmark-protocol-2026-10-10.md)). Then gather REAL isolated matched Drupal/frontend/repair outcomes with identical source/model/effort/verification/CI/review, record missing usage explicitly, and make the G0 investment decision. **Do not call the synthetic tests a performance result.** #596/G1 remains behind G0 Go and separate protected ChangeProposal.
 3. **#493/#512 residual:** Executor **1.0.35 observed**, natural cold-start and remote recovery still unproven. No reason to restart just to update docs or repeat fixed source changes. The prior host `ddev restart` 900-second incident still requires bounded root-cause/rollback planning.
 4. **Chợ Nhạc writer protection:** GH-89 blocked durable PCP job exists while current direct worktree is **dirty Codex branch**. Do not checkout, stash, reset, resume, retire, cancel or overwrite that shared workspace from PCP audit. No Docker prune, replacement job or protected authority override. Only a fresh explicitly authorized single-writer/lease handoff can change this.
 
