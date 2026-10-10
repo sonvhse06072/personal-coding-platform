@@ -58,9 +58,22 @@ Sửa kiểm soát `_require_ddev_enabled` dùng **boolean YAML `true`** (không
 
 ### 4.3. Bước tiến hành tiếp, không tự kích hoạt
 
-1. PM chuẩn bị **read-only WSL preflight** cho metadata của chính PCP/fixture và `ddev list -j`: kiểm tra CLI hiện cài, source HEAD/worktree, unique DDEV identity, context/ports/capacity, isolation markers; *không* gọi DDEV start/stop, không lấy credentials/DB/private files. Khi chủ sở hữu chạy thì chỉ xuất trạng thái đã ẩn tên project nhạy cảm và blocker/OK flags. Đầu ra này không là authorization.
+1. PM đã chuẩn bị **read-only WSL preflight** `scripts/g0-wsl-coexistence-preflight.py` cho metadata PCP/fixture và `ddev list -j`: kiểm tra CLI hiện cài, source HEAD/worktree, unique DDEV identity, context/ports/capacity, isolation markers; *không* gọi DDEV start/stop, không lấy credentials/DB/private files. Khi chủ sở hữu chạy thì chỉ xuất trạng thái đã ẩn tên project nhạy cảm và blocker/OK flags. Đầu ra này không là authorization.
 2. Sau khi có bằng chứng read-only ở WSL, hoàn thiện proposal chi tiết **fixture-only activation**: scope `config/projects.yml` đúng một fixture ID, `base_branch=benchmark/pcp`, DDEV phases có Unit/Kernel/PHPCS thật, cleanup chỉ đúng job, auto production deploy OFF; cần quyền GitHub PR giới hạn fixture và review/CI. Kiểm tra rằng các entry/config của Chợ Nhạc không bị sửa.
 3. So khớp **installed** Codex CLI (Runtime pin `0.160.0`; last observed host `0.162.0`), cùng `model_id`, reasoning effort, entitlement và quota. Dùng local **binary riêng** cho arm direct nếu thích hợp, không đổi global Codex đang phục vụ Chợ Nhạc. Phải có hai DB/workspace/CI/review độc lập, một pair G0D-T01 và stop nếu lệch.
 4. ProjectBaseline seed `g0d01-seed-2026-10-10` **giữ nguyên không rewrite**. Protected config activation/rollout chỉ sau explicit Owner approval cho phạm vi, exact-head PR/CI/review và source-vs-deployed/live lease gate. **G0 NOT GO** cho đến khi có real A/B outcomes; p50 tối thiểu ba pairs, p90 tối thiểu mười pairs và Owner đầu tư quyết định.
 
 **Rollback:** khi phát hiện DDEV project/route collision, resource pressure, wrong workspace/source/CLI, provider mismatch hoặc nghi ngờ tác động gián tiếp đến Chợ Nhạc: dừng **chỉ job fixture** theo guard chính thức, giữ diff/counters/lease, không stop/restart/destroy Chợ Nhạc hoặc Docker host. Nếu chưa thể chứng minh safe stop của fixture, không khởi chạy benchmark ngay từ đầu.
+
+### 4.4. Read-only operator preflight đã được version hóa — chưa chạy trên WSL
+
+Script `scripts/g0-wsl-coexistence-preflight.py` chỉ chạy những lệnh đã cho phép cố định: `ddev list -j`, `ddev --version`, `codex --version` và `git -C <PCP/fixture-only> rev-parse HEAD` / `status --porcelain=v1`. Không gọi Docker, DDEV start/stop, Git fetch, Codex exec/model, API, file Chợ Nhạc hay network. Dữ liệu DDEV registry được đọc để kiểm tra **trùng tên DDEV fixture**, trả về **số lượng** các project đang chạy và trạng thái, **không xuất tên/địa chỉ project khác**. Việc DDEV khác đang chạy **không tự động là collision**; script vẫn đánh dấu **shared router indirect impact unverified** và `ready_to_dispatch_g0d_t01=false`. CLI mismatch/sai seed/source chưa có checkout/status không xác minh cũng đều được báo là blocker. Unit tests dùng DDEV JSON giả, không đọc WSL.
+
+Chỉ sau khi PR chứa script đã merge và khi operator thực sự cần quan sát (không yêu cầu sync/restart PCP), có thể chạy dưới **subshell** trong checkout PCP source đã được update qua rollout riêng:
+```bash
+(
+  cd /home/sonvh/personal-coding-platform-v1 || exit 2
+  PYTHONDONTWRITEBYTECODE=1 python3 scripts/g0-wsl-coexistence-preflight.py
+)
+```
+Lệnh này **không thực thi tự động tại phiên PM GitHub**: repository GitHub và môi trường WSL của Owner là hai ngữ cảnh khác nhau. Report chỉ là read-only metadata và không chứng minh local PCP đã deploy, project đã được cấp quyền, không ảnh hưởng gián tiếp tới Chợ Nhạc hay có provider parity.
