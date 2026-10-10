@@ -164,6 +164,15 @@ def test_php_source_syntax_and_initial_scope():
     assert "G0D-T01" in src
 
 
+def test_namespaced_php_class_files_follow_drupal_phpcs_file_comment_rule():
+    # A real hosted Drupal PHPCS run rejects @file on namespaced classes.
+    for path in sorted(FIXTURE.rglob("*.php")):
+        text = path.read_text(encoding="utf-8")
+        assert "namespace " in text
+        header = text.split("namespace ", 1)[0]
+        assert "@file" not in header, path
+
+
 def test_phpunit_classes_are_real_core_namespaces_not_mock_copies():
     unit = (FIXTURE / "tests/src/Unit/EventLabelNormalizerTest.php").read_text()
     kernel = (FIXTURE / "tests/src/Kernel/EventLabelServiceTest.php").read_text()
