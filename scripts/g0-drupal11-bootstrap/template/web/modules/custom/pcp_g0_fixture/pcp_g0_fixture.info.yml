@@ -1,0 +1,5 @@
+name: 'PCP G0 Fixture'
+type: module
+description: 'Deterministic, empty-data Drupal 11 benchmark fixture.'
+package: Testing
+core_version_requirement: '^11'
