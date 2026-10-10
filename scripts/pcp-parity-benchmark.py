@@ -37,6 +37,12 @@ REQUIRED_FIELDS = frozenset((
     "trial_id", "arm", *COMPARE_FIELDS, "started_at", "ended_at",
     "outcome", "quality", "evidence_url",
 ))
+# Optional for older records, but required to QUALIFY any controlled G0 pair.
+# Values must be observed separately on each arm, never assumed from source pins.
+CONTROLLED_PROOF_FIELDS = ("codex_cli_version", "workspace_id", "toolchain_id")
+CLI_VERSION_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.]+)?$")
+WORKSPACE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,119}$")
+TOOLCHAIN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,159}$")
 OPTIONAL_COUNTS = frozenset((
     "model_calls", "tool_calls", "test_runs", "repair_iterations",
     "owner_interventions", "input_tokens", "cached_input_tokens",
@@ -72,7 +78,7 @@ def validate_record(raw: Any, number: int) -> dict[str, Any]:
     label = f"records[{number}]"
     if not isinstance(raw, dict):
         raise ValueError(f"{label} must be an object")
-    unexpected = set(raw) - REQUIRED_FIELDS - OPTIONAL_COUNTS
+    unexpected = set(raw) - REQUIRED_FIELDS - OPTIONAL_COUNTS - set(CONTROLLED_PROOF_FIELDS)
     missing = REQUIRED_FIELDS - set(raw)
     if unexpected or missing:
         raise ValueError(f"{label} has unknown/missing fields: {sorted(unexpected)}/{sorted(missing)}")
@@ -114,6 +120,17 @@ def validate_record(raw: Any, number: int) -> dict[str, Any]:
         if record["task_type"] == "frontend" and quality["visual"] is not True:
             raise ValueError(f"{label} frontend acceptance requires actual visual pass")
     record["quality"] = quality
+    for field, pattern in (
+        ("codex_cli_version", CLI_VERSION_RE),
+        ("workspace_id", WORKSPACE_ID_RE),
+        ("toolchain_id", TOOLCHAIN_ID_RE),
+    ):
+        value = raw.get(field)
+        if value is not None:
+            value = _text(value, f"{label}.{field}")
+            if not pattern.fullmatch(value):
+                raise ValueError(f"{label}.{field} has invalid opaque evidence format")
+        record[field] = value
     for key in OPTIONAL_COUNTS:
         value = raw.get(key)
         if value is not None and (type(value) is not int or value < 0):
@@ -183,6 +200,24 @@ def summarize(data: Any) -> dict[str, Any]:
             php_smoke_pairs += 1
             excluded.append({"trial_id": trial_id, "reason": "php_smoke_not_drupal"})
             continue
+        if not direct["codex_cli_version"] or not pcp["codex_cli_version"]:
+            excluded.append({"trial_id": trial_id, "reason": "cli_version_missing"})
+            continue
+        if direct["codex_cli_version"] != pcp["codex_cli_version"]:
+            excluded.append({"trial_id": trial_id, "reason": "cli_version_mismatch"})
+            continue
+        if not direct["toolchain_id"] or not pcp["toolchain_id"]:
+            excluded.append({"trial_id": trial_id, "reason": "toolchain_evidence_missing"})
+            continue
+        if direct["toolchain_id"] != pcp["toolchain_id"]:
+            excluded.append({"trial_id": trial_id, "reason": "toolchain_mismatch"})
+            continue
+        if not direct["workspace_id"] or not pcp["workspace_id"]:
+            excluded.append({"trial_id": trial_id, "reason": "workspace_identity_missing"})
+            continue
+        if direct["workspace_id"] == pcp["workspace_id"]:
+            excluded.append({"trial_id": trial_id, "reason": "workspace_not_isolated"})
+            continue
         accepted.append((direct, pcp))
 
     count = len(accepted)
@@ -221,6 +256,8 @@ def summarize(data: Any) -> dict[str, Any]:
         "qualifications": [
             "Measured trial records are externally collected; this tool neither runs nor authenticates them.",
             "Historical records and generic PHP smoke cases never contribute to controlled G0 percentiles.",
+            "Controlled pairs require observed same Codex CLI, toolchain ID, and distinct workspace IDs.",
+            "Opaque IDs are operator assertions, not independently authenticated OS isolation or source evidence.",
             "Drupal-category entries require independently verified actual Drupal test evidence.",
             "Unmatched, failed, aborted, or quality-ineligible trials are not silently called accepted.",
             "G0 Go/No-Go and protected trust-boundary changes always require separate human decision.",

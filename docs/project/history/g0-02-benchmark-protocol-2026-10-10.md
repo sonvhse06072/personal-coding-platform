@@ -23,6 +23,7 @@ File JSON đầu vào chứa chính xác `schema_version=1` và `records` tối 
 | --- | --- |
 | Identity | `trial_id`, `task_id`, `task_type` = `drupal/frontend/repair` hoặc `php` (PHP smoke, **không** tính vào cohort Drupal), `arm` = `direct/pcp` |
 | Comparability | `source_sha` (Git commit 40hex), `acceptance_sha256` (64hex), `environment_id`, `environment_class` = `isolated_fixture/historical_record`, `model_id`, `reasoning_effort`, `verification_policy`, `review_policy` |
+| Controlled proof (tùy chọn khi nhập bản ghi lịch sử, **bắt buộc để tính A/B**) | `codex_cli_version` (phiên bản quan sát thực, dạng `0.162.0`), `toolchain_id` (mã profile gồm DDEV/PHP/Node/browser/OS), `workspace_id` (mã định danh opaque, **khác nhau** ở hai arm, không chứa đường dẫn máy) |
 | Actual chronology | `started_at`, `ended_at` ISO-8601 có UTC offset; chỉ đo interval dương tối đa 30 ngày |
 | Outcome | `outcome` = `accepted/failed/aborted`, `quality` có bool `deterministic/review/ci` và `visual` bool/null |
 | Checkable evidence | `evidence_url` dạng GitHub URL đến issue/PR/run/log được quyền truy cập |
@@ -38,7 +39,7 @@ python scripts/pcp-parity-benchmark.py --input records-real.json --output parity
 python -m pytest -q -p no:cacheprovider tests/test_pcp_parity_benchmark.py
 ```
 
-Script ghép hai nhánh bằng `trial_id`, so sánh toàn bộ comparability fields, loại khỏi **latency cohort** khi thiếu nhánh, khác model/criteria/environment/policy hoặc một arm chưa accepted; **vẫn công khai các excluded trials và toàn bộ failed/aborted attempts**. Bản ghi `historical_record` là bằng chứng tham khảo, **không** phải phép thử A/B có đối chứng; case `php` chỉ dùng smoke test, **không** thay Drupal thật. Cả hai bị loại có lý do rõ và có bộ đếm riêng. Duplicate identity, invalid timestamps, SHA, final QA, schema fields đều bị từ chối.
+Script ghép hai nhánh bằng `trial_id`, so sánh toàn bộ comparability fields, loại khỏi **latency cohort** khi thiếu nhánh, khác model/criteria/environment/policy hoặc một arm chưa accepted; **vẫn công khai các excluded trials và toàn bộ failed/aborted attempts**. Bản ghi `historical_record` là bằng chứng tham khảo, **không** phải phép thử A/B có đối chứng; case `php` chỉ dùng smoke test, **không** thay Drupal thật. Hai arm chỉ được tính A/B khi đã **quan sát đúng phiên bản Codex CLI** từ `codex --version` trên host/Runtime, trùng `toolchain_id` và có **hai `workspace_id` khác nhau**. Thiếu một trong ba hoặc mismatch sẽ trả `excluded_trials`/insufficient evidence, không tự suy ra phiên bản đã cài từ pin. Opaque `workspace_id`/`toolchain_id` do operator khai báo chỉ là dấu vết đối chiếu; cần nguồn read-only xác thực workspace/DB isolation riêng trước Human G0 Go. Duplicate identity, invalid timestamps, SHA, final QA, schema fields đều bị từ chối.
 
 - Dưới **3 accepted pairs**: không hiển thị p50 hoặc p90.
 - Từ **3 đến 9 accepted pairs**: p50 mô tả; p90 giữ null, verdict `insufficient_evidence`.
@@ -68,3 +69,13 @@ Script ghép hai nhánh bằng `trial_id`, so sánh toàn bộ comparability fie
 - Config PCP có `example-drupal` và `pcp-validation-fixture`; chưa có bằng chứng local `example-drupal` có đủ repo/dataset/lease sạch; chưa có benchmark Next.js fixture đăng ký. Không được tự lấy `chonhac` active writer làm Next fixture.
 
 **G0 disposition:** hiện có 0 cặp Drupal/frontend/repair được kiểm chứng tương đương; báo cáo phải là `insufficient_evidence`, chưa G0 Go. Trước khi đo thực nghiệm cần hai checkout/database disposable độc lập, chính sách model/effort/CLI/verification/review giống nhau, mục tiêu acceptance từ ticket đã duyệt, framework Drupal thật được xác minh và browser evidence cho frontend. Không thêm production/privileged workflow hoặc bypass ProjectBaseline. Việc tạo/cấp quyền fixture mới là một quyết định vận hành được kiểm tra riêng; không được ngụy trang thành cập nhật số đo.
+
+## 6. Environment discrepancy / operator check (2026-10-10)
+
+Owner WSL read-only preflight: local PCP clean `main@d53fbb07524bb3ca13324e2ed7edac1513367072`; GitHub `main@8aa1d47ef55132aac20948294d2fef75e1945d18` đi trước **21 commit, không behind** (diff docs/Context Composer/benchmark scripts+tests, **không có Router/Runtime/Executor/Guardian source diff**). Installed host `codex --version` trả `codex-cli 0.162.0`, trong khi `config/tool-versions.env` pin `CODEX_VERSION=0.160.0`. **Đây là candidate CLI mismatch, chưa xác minh version binary thực sự trong Runtime**. Không tự downgrade host, không tự nâng runtime pin hoặc gọi GitHub merge là local rollout.
+
+`example-drupal` không có Git checkout. `pcp-validation-fixture` tại local `6395655ec...`, đúng nguồn approved baseline lịch sử trước khi task #7 đã merge vào fixture GitHub; không reuse fixture làm task mới hay Drupal thật. DDEV liệt kê các dự án Drupal 10/11 đang stopped (KCCI, academic-management, cck, environmentaljobs, ipropaganda, lovenote, riebedebie) nhưng **đó là workspace/dữ liệu ứng dụng của Owner, chỉ được quan sát read-only**; Chợ Nhạc đang active, PCP historical cp-* workspace stopped/paused. Không restart/clone private data/DB khi chưa được phép.
+
+**Next bounded read-only proof:** chạy `ddev exec -s coding-runtime codex --version` trong PCP directory để xác minh binary đang được dùng; chỉ đọc branch/HEAD/dirty-count và `composer.json` Drupal core requirements của candidate repositories, không dump secrets. Nếu Runtime version khác host, giữ kết quả ở lớp `noncomparable` hoặc dùng hai binary version giống nhau trong các môi trường cô lập sau khi xác minh; tuyệt đối không thay provider/credentials hoặc áp dụng full-access để làm đẹp số.
+
+**Protected registration:** `config/projects.yml` và `config/project-baselines.yml` là đường dẫn được bảo vệ bởi `scripts/check_project_doc_authority.py`; tạo Drupal/Next fixture mới cần approval + PR/CI theo thẩm quyền. Chưa có kênh PM Bridge được phép dispatch remote các fixture ngoài Chợ Nhạc. Không gọi `/v1/intake` khi không có fixture/baseline đã duyệt.

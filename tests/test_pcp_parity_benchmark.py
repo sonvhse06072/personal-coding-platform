@@ -31,6 +31,10 @@ def record(trial, arm, category="drupal", seconds=100, **overrides):
         "reasoning_effort": "medium",
         "verification_policy": "required-final-v1",
         "review_policy": "pm-final-v1",
+        # These are SYNTHETIC per-arm assertions, never real environment proof.
+        "codex_cli_version": "0.160.0",
+        "toolchain_id": "ddev1.25.4-php8.3-node24-browser-pinned",
+        "workspace_id": f"{trial}-{arm}-isolated",
         "started_at": start.isoformat(),
         "ended_at": (start + timedelta(seconds=seconds)).isoformat(),
         "outcome": "accepted",
@@ -215,3 +219,80 @@ def test_failed_historical_attempts_are_still_visible():
     assert result["all_attempt_outcomes"]["pcp"]["failed"] == 1
     assert result["historical_accepted_pairs_excluded"] == 0
     assert result["excluded_trials"][0]["reason"] == "at_least_one_arm_not_accepted"
+
+
+
+def test_host_runtime_cli_mismatch_cannot_enter_controlled_latency_cohort():
+    payload = paired(12)
+    for record in payload["records"]:
+        if record["arm"] == "direct":
+            record["codex_cli_version"] = "0.162.0"
+        else:
+            record["codex_cli_version"] = "0.160.0"
+    result = summarize(payload)
+    assert result["accepted_comparable_pairs"] == 0
+    assert result["latency"] == {"p50": None, "p90": None}
+    assert result["status"] == "insufficient_evidence"
+    assert {e["reason"] for e in result["excluded_trials"]} == {
+        "cli_version_mismatch",
+    }
+
+
+def test_legacy_records_without_cli_version_still_parse_but_never_go():
+    payload = paired(12)
+    for record in payload["records"]:
+        del record["codex_cli_version"]
+    result = summarize(payload)
+    assert result["accepted_comparable_pairs"] == 0
+    assert result["status"] == "insufficient_evidence"
+    assert {e["reason"] for e in result["excluded_trials"]} == {"cli_version_missing"}
+
+
+def test_shared_workspace_identity_is_not_independent_pair():
+    payload = paired(12)
+    for record in payload["records"]:
+        record["workspace_id"] = "same-shared-checkout"
+    result = summarize(payload)
+    assert result["accepted_comparable_pairs"] == 0
+    assert result["status"] == "insufficient_evidence"
+    assert {e["reason"] for e in result["excluded_trials"]} == {
+        "workspace_not_isolated",
+    }
+
+
+def test_missing_workspace_and_toolchain_evidence_are_nonqualifying():
+    payload = paired(2)
+    for record in payload["records"]:
+        record.pop("workspace_id")
+    result = summarize(payload)
+    assert result["excluded_trials"][0]["reason"] == "workspace_identity_missing"
+
+    payload = paired(2)
+    for record in payload["records"]:
+        record.pop("toolchain_id")
+    result = summarize(payload)
+    assert result["excluded_trials"][0]["reason"] == "toolchain_evidence_missing"
+
+
+def test_different_toolchains_are_not_parity_even_with_same_model_and_cli():
+    payload = paired(12)
+    for record in payload["records"]:
+        if record["arm"] == "pcp":
+            record["toolchain_id"] = "ddev1.25.4-php8.3-node22-browser-pinned"
+    result = summarize(payload)
+    assert result["accepted_comparable_pairs"] == 0
+    assert {e["reason"] for e in result["excluded_trials"]} == {
+        "toolchain_mismatch",
+    }
+
+
+@pytest.mark.parametrize("name,value", [
+    ("codex_cli_version", "codex-cli 0.160.0"),
+    ("workspace_id", "/home/sonvh/my-secret-project"),
+    ("toolchain_id", "line\nline"),
+])
+def test_invalid_opaque_evidence_fields_fail_validation(name, value):
+    payload = paired(1)
+    payload["records"][0][name] = value
+    with pytest.raises(ValueError, match=name):
+        summarize(payload)
