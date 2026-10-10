@@ -115,3 +115,47 @@ New `scripts/g0-pcp-live-mount-probe.py` reads only the **two exact PCP service 
 The script also computes only the already approved local fixture's lock SHA256 and Linux filesystem/RAM observations; it **does not verify the full live Runtime source/lease/port or provider state**. Regardless of finding, `ready_to_dispatch_g0d_t01=false`; fixture remains `PARKED`. Tests stub Docker entirely, prove allowed PCP commands and reject all container operations on Chợ Nhạc. This script will be run **only by the Owner on WSL, after exact-HEAD reviewed/merged source**, not from this GitHub PM session.
 
 **Gate:** If Executor does not mount the directory the registered project points to, address only that proven discrepancy via separate guarded plan/PR. If Runtime Codex is `0.160.0`, future direct arm can use an **isolated pinned 0.160.0 binary**; **never downgrade host/global 0.162.0** used by Chợ Nhạc. Even with both facts matched, require live lease/resources/router safety, authenticated same model/effort, exact source-vs-deployed checks and separate protected fixture activation before any G0D-T01 dispatch. G0 remains **NOT GO**.
+
+## 7. Owner read-only result: mount **MATCH**, all PCP services **EXITED** (2026-10-10)
+
+### 7.1. Verified live Docker metadata, not inferred source configuration
+
+Owner executed [PR #629](https://github.com/sonvhse06072/personal-coding-platform/pull/629) PCP-only mount/Runtime observation probe. It **stopped correctly** at `pcp_container_identity_or_running_state_mismatch`. A subsequent targeted, read-only Docker inspection of the **four exact PCP containers** established:
+
+| PCP service | Docker state | Exit code | OOMKilled | Finished (UTC) |
+| --- | --- | --- | --- | --- |
+| Router | exited | 255 | false | `2026-10-10T07:21:54.279352010Z` |
+| Coding Runtime | exited | 255 | false | `2026-10-10T07:21:54.285823544Z` |
+| DDEV Executor | exited | 255 | false | `2026-10-10T07:21:54.279358068Z` |
+| n8n | exited | 255 | false | `2026-10-10T07:21:54.285849788Z` |
+
+All four have correct container names; they finished within **6.5 milliseconds** of each other at approximately 14:21:54 in Vietnam. A common Docker Desktop/WSL/daemon lifecycle event or coordinated stop is more plausible than four independent app failures, but **deliberate stop vs host failure is unknown**. This does not establish a PCP code defect, nor does per-container `OOMKilled=false` disprove all memory pressure. Existing `.ddev/docker-compose.platform.yaml` specifies `restart: "no"`; stopped services will not necessarily recover automatically.
+
+Owner then performed a scoped **Docker inspect metadata-only** check on the stopped PCP Executor, with this sanitized exact result:
+
+```json
+{
+  "executor_status": "exited",
+  "executor_projects_root": "/home/sonvh",
+  "configured_fixture_matches_local_checkout": true,
+  "projects_root_bind_present": true,
+  "restart_policy": "no",
+  "ready_to_dispatch_g0d_t01": false
+}
+```
+
+Therefore **the suspected `CODING_PROJECTS_ROOT` mismatch is RESOLVED**: the actual Executor project root is `/home/sonvh`, its host bind destination exists, and the clean frozen fixture at `/home/sonvh/pcp-g0-fixtures/pcp-g0-drupal-fixture` is at the registered relative path. **Do not** move/clone the fixture again, add symlinks, edit `.ddev/.env` or reconfigure mounts without a separate evidenced reason. A Docker bind declaration is a *reachability precondition*, **not proof the stopped service can currently read fixture files inside a live container**.
+
+### 7.2. Project-scoped safety consequences
+
+**Broad bind risk:** `/home/sonvh` is a broad host path and the DDEV Executor holds a Docker-socket capability. The mount contains more than just the fixture; project-name checks, prompt policies and a shared DDEV router are not OS-level hard isolation. Before any trusted fixture activation or developer execution on shared WSL, confirm the Executor's project-scoped API access, exact source/workspace identity and non-target operation bounds with negative tests. Keep Chợ Nhạc no-touch and do not equate read-only inspection with enforcement.
+
+**Do not restart blindly:** `.ddev/config.yaml` defines PCP `pre-start` hooks building PCP service images via `scripts/pcp-build-images.sh` and starting PCP's Antigravity host bridge. A new `ddev start` would run real host/build actions; `docker start` would run stopped containers against possibly outdated images/config and skip normal rollout checks. Neither is a neutral diagnostic. No Docker/Desktop/WSL reset, DDEV poweroff, global cleanup or Chợ Nhạc stop is permitted as a workaround for these PCP-only missing-runtime observations.
+
+**Safe recovery gate (not executed):**
+1. Establish whether the concurrent PCP stop was intentional or coincided with a host/daemon lifecycle interruption, using Owner recollection and scoped read-only PCP-specific Docker state/host event metadata as needed. Do not infer a service crash from exit code alone.
+2. Confirm local PCP Git still clean; compare local `d53fbb0` with approved remote `99939ef155cbb38910502dfc557664fc011f7b42`, and preserve any durable jobs, state, historical leases and active resources before any source sync, image build, startup or rollout. Never auto-reset, clean worktrees or release a lease.
+3. Review available CPU/RAM/disk, DDEV project/router/port identity, Builder use, intended PCP-only startup hooks and a bounded rollback. Keep existing Chợ Nhạc containers untouched. Explicit Owner-gated activation and source/deployed parity are separate from a documentary PR.
+4. After a deliberately approved PCP-only recovery, rerun mount and Runtime Codex version checks; verify actual in-container fixture visibility and file hash. Only then establish provider/model/effort equivalence, protected fixture `ddev.enabled` and delivery approval, and a single G0D-T01 matched trial.
+
+**Remaining:** checked-in CLI pin `0.160.0` is **not** an observed running Runtime binary, and host global Codex `0.162.0` must not be changed for this benchmark. Fixture remains `PARKED`; **zero accepted A/B pairs**, G0 NOT GO and G1 #596 unapproved.
