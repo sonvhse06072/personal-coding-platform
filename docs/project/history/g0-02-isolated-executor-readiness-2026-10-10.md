@@ -1,0 +1,37 @@
+# G0-02 — Đối chiếu runner cô lập và gate kích hoạt PCP Executor (2026-10-10)
+
+**Authority:** T3 evidence/decision-prep only, không thay đổi ProjectBaseline, Constitution, Router, Runtime hay Executor. Tracking: [PCP #595](https://github.com/sonvhse06072/personal-coding-platform/issues/595), parent #593, [fixture task G0D-T01 #2](https://github.com/sonvhse06072/pcp-g0-drupal-fixture/issues/2).
+
+**Trạng thái:** **ISOLATED TOOLCHAIN/DB PREFLIGHT PASS**; **PCP EXECUTOR CHƯA ĐƯỢC TRIỂN KHAI RIÊNG / G0 NOT GO**. Owner chỉ phê duyệt [DEC-G0-FIXTURE-01](https://github.com/sonvhse06072/personal-coding-platform/issues/595#issuecomment-6094931078) cho fixture thử nghiệm, không phê duyệt mở quyền runtime/developer, credentials, sản xuất hoặc thao tác trên Chợ Nhạc. Owner yêu cầu tất cả PCP work trong ChatGPT PM, tuyệt đối không sử dụng Codex đang chạy trên Chợ Nhạc.
+
+## 1. Đã quan sát bằng chứng thật
+
+- [Fixture PR #1](https://github.com/sonvhse06072/pcp-g0-drupal-fixture/pull/1): nguồn Drupal 11 `main`, seed `39ef13c25b24c4a1b43a720ae53419f479996ed2`, real PHPUnit Unit/Kernel/PHPCS/Composer CI PASS. [PCP PR #624](https://github.com/sonvhse06072/personal-coding-platform/pull/624) đăng ký nguồn và baseline `g0d01-seed-2026-10-10` ở trạng thái **PARKED**, `ddev.enabled=false` và mọi autonomous GitHub delivery OFF. No PCP local deployment.
+- [Fixture PR #3](https://github.com/sonvhse06072/pcp-g0-drupal-fixture/pull/3), reviewed exact head `af119ef6859a50c3094f2f6aefff02ac1518f3ef`, merged fixture main `b19e25fb35dbc94c8d725849943453aabb667e86`. [Fixture validation run 38046184895](https://github.com/sonvhse06072/pcp-g0-drupal-fixture/actions/runs/38046184895) **SUCCESS**; separate [GitHub-hosted isolation run 38046184891](https://github.com/sonvhse06072/pcp-g0-drupal-fixture/actions/runs/38046184891) **SUCCESS**.
+- [Sanitized artifact #11667810169](https://github.com/sonvhse06072/pcp-g0-drupal-fixture/actions/runs/38046184891/artifacts/11667810169), retention 7 ngày, đã tải và tự kiểm tra bằng Python. Artifact SHA-256 `1b32b734a73e13a5889be5b83895e05887aaae7b87799f61565561252e56497d`. Source SHA **cả hai** `39ef13c25b24c4a1b43a720ae53419f479996ed2`; Composer lock SHA-256 `3a3d086be59571b43f05301ab099dc4d710a2ca1da0b25af60341d527f531f2b`.
+- Hai Git clone độc lập, hai DDEV project `pcp-g0d02-direct` / `pcp-g0d02-pcp`, PHP **8.4.24**, Node **v24.20.0**, MariaDB **11.8.9**, Composer **2.10.3**, DDEV **1.25.4**, binary thực `codex-cli 0.160.0`. Hai phép kiểm tra chéo SQL xác nhận bảng tạo ở DB arm A không xuất hiện ở DB arm B và ngược lại. `toolchain_id=g0d02-83ea72ca870c84d9592f698b`.
+- Fixture `main` tiến lên `b19e25fb...` chỉ thêm workflow/script/test preflight; **`benchmark/direct` và `benchmark/pcp` vẫn ở seed `39ef13c2...`**, code task G0D-T01 chưa sửa. Cloud runner GitHub-hosted Ubuntu 24.04 bị tiêu hủy sau job: không chứa Chợ Nhạc, không dùng owner WSL/PCP Router/Guardian/PM Bridge, không chạy `codex exec`, không có token provider/authenticated session.
+
+**Giới hạn bằng chứng:** artifact tuyên bố rõ `eligible_for_controlled_benchmark=false`, `pcp_runtime_connected=false`, `project_baseline_activated=false`, `provider_authenticated=false`, `model_id=null`, `reasoning_effort=null`, `real_pcpxdirect_trials=0`. Việc runner cloud cài Codex **0.160.0** chỉ trùng **phiên bản đã quan sát trước đây** trong PCP Runtime, không chứng minh phiên bản mới nhất trong deployment hiện tại. Codex host Owner từng quan sát **0.162.0**, nên dùng host đó như direct arm và Runtime 0.160.0 làm PCP arm sẽ không tạo cohort chuẩn hóa.
+
+## 2. Architecture/authority: những gì **chưa** được chứng minh
+
+Một runner GitHub-hosted tạm thời **không phải** PCP `coding-runtime` hoặc `ddev-executor` đang hoạt động: nó không có durable job/state, kết nối điều khiển, ProjectBaseline đã triển khai, signed/intake mechanism, model/provider auth, lease, credential delivery, hay khả năng quay về GitHub với review/merge của một WorkOrder PCP. Không dùng nguồn CI để tự tuyên bố có PCP autonomous delivery.
+
+`config/projects.yml` vẫn cố ý PARKED, không đổi các cờ `autonomy.allow_commit/push_ai_branch/create_pr/auto_merge_low_risk`, không bật `ddev.enabled`. Tài liệu/issue hoặc GH Actions PASS không nâng quyền. G0D-T01 yêu cầu hai arm có model+effort, toolchain, source, acceptance, CI/review giống nhau, mỗi arm workspace/DB/PR khác nhau, và tiến trình thật mới tính timestamp/usage/Owner intervention.
+
+## 3. Phương án triển khai tiếp theo — chỉ là đề xuất, chưa kích hoạt
+
+**Ưu tiên đề xuất:** một **VM/runner PCP độc lập hoàn toàn** với Docker daemon, DDEV router, file system/workspaces, Runtime/Executor/Router và DB bền vững **riêng**; không mount `/home/sonvh/chonhac`, `~/.coding-platform/workspaces` hiện hữu, Docker socket/credential/DB của máy đang chạy Chợ Nhạc, và không mở tunnel/PM Bridge sang Chợ Nhạc. Tái sử dụng phiên bản source PCP đã duyệt, default tất cả project khác không cho phép; chỉ fixture repo private với write scope tối thiểu cho PR. Cài và kiểm tra thực tế Codex 0.160.0 trong **hai** arm hoặc dùng bản CLI riêng trong direct arm (không downgrade host toàn cục). Kiểm tra model slug, reasoning effort, tài khoản/entitlement và mức quota/giới hạn tài nguyên theo provider policy; không đưa secrets vào GitHub Actions artifact/log.
+
+**Không lựa chọn lúc này:** điều khiển Docker/Executor từ PCP trên máy Owner sang VM qua remote privileged broker, hoặc ghép GitHub-hosted job thành một Executor có credential toàn quyền. Đó là **thay đổi trust/network/authorization architecture**, cần ChangeProposal/Human Owner approval riêng; chứng minh toolchain chỉ là tiền đề kỹ thuật, không đủ quyền áp dụng.
+
+### Gate chặn trước protected activation PR
+
+1. Có địa chỉ/identity của VM độc lập **thật**, Docker/DDEV/DB chạy riêng, quyền thuộc fixture-only, không dùng nguồn Chợ Nhạc và không ảnh hưởng process/router chung. Thu live source SHA/deployed PCP binaries và preflight `project_id`, token scope, DDEV registry, resource headroom.
+2. Xác nhận installed `codex --version` của PCP Runtime/Executor và direct arm **cùng phiên bản thực**, `model_id` và `reasoning_effort` có entitlement authenticated, cùng acceptance hash và CI/review; nếu provider unavailable, **STOP**, không chép credential của Codex đang làm Chợ Nhạc hoặc giả lập model.
+3. Ràng buộc `pcp-g0-drupal-fixture` với exact protected approved seed `39ef13c2...`, `benchmark/pcp` và `benchmark/direct` tách biệt, base/PR/review gates rõ; GitHub delivery permissions chỉ cho repo fixture. Bằng chứng single writer/workspace/DB lease thật; không biến GH-89 hoặc historical PCP job thành test.
+4. Trình Owner **ChangeProposal kích hoạt fixture-only** nếu cần sửa protected DDEV/autonomy/Executor/runtime/network fields; PR khai báo đúng Owner approval/scope, exact-head CI/review, tách rollout/rollback. **Không** tự chỉnh `config/pm-bridge.yml`, Constitution, authorization model hoặc restart PCP/Chợ Nhạc.
+5. Chỉ khi bốn gate trên thỏa mãn mới cho phép **một** G0D-T01 A/B với hai PR nghiệm thu bằng cùng CI, times/usage thực; `scripts/pcp-parity-benchmark.py` loại cả các pair thiếu model/effort/CLI/workspace/toolchain hoặc QA. Không suy ra p50 dưới 3 cặp hay p90 dưới 10 cặp; G0 investment Go/No-Go thuộc Owner.
+
+**Rollback/stop:** nếu không có VM độc lập hoặc chỉ có shared WSL đang chạy Chợ Nhạc, giữ `PARKED`, không start/restart DDEV ở máy đó, không chạm Chợ Nhạc. Không retry job mù, không cấp quyền host, không tự chạy G1 #596. Cập nhật #595 là `isolated prerequisites PASS; real PCP execution insufficient evidence`.
