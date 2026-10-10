@@ -19,7 +19,8 @@ import sys
 from typing import Any
 
 ARMS = ("direct", "pcp")
-CATEGORIES = ("drupal", "frontend", "repair")
+CATEGORIES = ("drupal", "frontend", "repair", "php")
+PRODUCT_CATEGORIES = ("drupal", "frontend", "repair")
 COMPARE_FIELDS = (
     "task_id",
     "task_type",
@@ -158,6 +159,8 @@ def summarize(data: Any) -> dict[str, Any]:
 
     accepted: list[tuple[dict[str, Any], dict[str, Any]]] = []
     excluded: list[dict[str, str]] = []
+    historical_accepted_pairs = 0
+    php_smoke_pairs = 0
     for trial_id, arms in sorted(by_trial.items()):
         if set(arms) != set(ARMS):
             excluded.append({"trial_id": trial_id, "reason": "missing_arm"})
@@ -169,11 +172,22 @@ def summarize(data: Any) -> dict[str, Any]:
         if direct["outcome"] != "accepted" or pcp["outcome"] != "accepted":
             excluded.append({"trial_id": trial_id, "reason": "at_least_one_arm_not_accepted"})
             continue
+        # Historical outcomes are useful evidence, but never a controlled A/B
+        # experiment. A generic PHP smoke fixture is not a Drupal integration
+        # task and must not inflate the G0 product-cohort percentiles.
+        if direct["environment_class"] == "historical_record":
+            historical_accepted_pairs += 1
+            excluded.append({"trial_id": trial_id, "reason": "historical_not_controlled"})
+            continue
+        if direct["task_type"] == "php":
+            php_smoke_pairs += 1
+            excluded.append({"trial_id": trial_id, "reason": "php_smoke_not_drupal"})
+            continue
         accepted.append((direct, pcp))
 
     count = len(accepted)
     coverage = {category: sum(a["task_type"] == category for a, _ in accepted)
-                for category in CATEGORIES}
+                for category in PRODUCT_CATEGORIES}
     durations = {arm: [pair[0 if arm == "direct" else 1]["elapsed_seconds"]
                        for pair in accepted] for arm in ARMS}
     quantiles: dict[str, Any] = {"p50": None, "p90": None}
@@ -197,6 +211,8 @@ def summarize(data: Any) -> dict[str, Any]:
         "total_records": len(raw_records),
         "paired_trial_ids": sum(set(arms) == set(ARMS) for arms in by_trial.values()),
         "accepted_comparable_pairs": count,
+        "historical_accepted_pairs_excluded": historical_accepted_pairs,
+        "php_smoke_pairs_excluded": php_smoke_pairs,
         "task_type_coverage": coverage,
         "excluded_trials": excluded,
         "all_attempt_outcomes": outcome_counts,
@@ -204,6 +220,8 @@ def summarize(data: Any) -> dict[str, Any]:
         "latency": quantiles,
         "qualifications": [
             "Measured trial records are externally collected; this tool neither runs nor authenticates them.",
+            "Historical records and generic PHP smoke cases never contribute to controlled G0 percentiles.",
+            "Drupal-category entries require independently verified actual Drupal test evidence.",
             "Unmatched, failed, aborted, or quality-ineligible trials are not silently called accepted.",
             "G0 Go/No-Go and protected trust-boundary changes always require separate human decision.",
             "Unavailable token/cached/quota evidence is not inferred or converted from characters.",
