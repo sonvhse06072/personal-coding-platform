@@ -174,3 +174,32 @@ Therefore **the suspected `CODING_PROJECTS_ROOT` mismatch is RESOLVED**: the act
 4. **Post-start verification:** health PCP/Executor, thực tế fixture accessible trong executor, source/deployed SHA, Runtime Codex pin/model/effort, DB/job/lease và resource headroom. Chỉ khi đạt đầy đủ mới chuẩn bị **PR protected fixture-only activation**. Giữ hai benchmark refs nguyên seed, không dispatch G0D-T01 sớm.
 
 **Phạm vi/quyền:** Owner xác nhận lý do dừng **không đồng nghĩa đồng ý chạy lại hoặc đồng bộ local PCP ngay**. Không động tới Codex host đang phục vụ Chợ Nhạc; không tạo VM, không tự mở `ddev.enabled` hoặc GitHub delivery. G0 vẫn **NOT GO** với 0 cặp A/B accepted.
+
+## 9. Owner đã fast-forward PCP local thành công; gate startup phải bảo vệ durable jobs (2026-10-10)
+
+### 9.1. Kết quả WSL do Owner thực thi và đối chiếu GitHub
+
+Owner sử dụng subshell có kiểm soát để `git fetch --no-tags --no-recurse-submodules origin refs/heads/main` và fast-forward `main` từ `d53fbb07524bb3ca13324e2ed7edac1513367072` sang **`107202c0a6b7d99a91596e0039bcf680b2fccee9`**. Output `PCP_SOURCE_SYNC=PASS`, `PCP_HEAD=107202c0...`, `PCP_RUNTIME_RESTARTED=false`. GitHub compare giữa hai exact SHA xác nhận `ahead_by=37`, `behind_by=0`, tổng 45 files trong dải thay đổi. Đây là **source-only Git sync**, không khởi động hoặc cập nhật image đang chạy, không thay đổi database/job/lease, không gọi Codex/PCP Bridge.
+
+Pre-start inventory của Owner ngay trước sync: nhánh `main` và Git sạch, cả bốn container PCP Router/Runtime/Executor/n8n `exited`, ba image `personal-coding-platform-{router,coding-runtime,ddev-executor}:local` đều `PRESENT`, RAM có thể sử dụng **7.7 GiB**, ổ đĩa còn **839 GiB**. Giá trị RAM/đĩa là snapshot, không phải chứng nhận build cold-start/host-router an toàn. `.ddev/config.yaml` và `.ddev/docker-compose.platform.yaml` giữ nguyên blob giữa hai commit; `config/tool-versions.env` vẫn pin `CODEX_VERSION=0.160.0`. Config chỉ đăng ký thêm fixture PARKED; các project hiện hữu không đổi semantic scope. Đặc biệt `services/ddev-executor/app/main.py` mới chứa `_require_ddev_enabled` trước phase/isolated quiesce, nhưng **guard chưa chạy vì container vẫn dừng/image chưa rebuild**.
+
+### 9.2. Nguy cơ thực tế khi khởi động Runtime — cần chặn trước khi gọi DDEV
+
+Đọc exact GitHub source sau sync cho thấy `ddev start` không chỉ chạy PCP API:
+
+- `services/runtime/app/main.py:225-236` khởi động `engine.start()`, tiếp theo `plan_orchestrator.start()`, progress/status publishers.
+- `services/runtime/app/engine_core.py:60-97`: `engine.start()` chạy storage initialization (có SQL DDL và update plan `planning`), gọi `cancel_all_antigravity_runs()`, duyệt tối đa 500 job bền vững: **enqueue** những job `queued` phù hợp, chuyển non-stable job sang `interrupted`, gửi `ddev.cancel(job_id)`, xử lý cleanup/lease/preview của terminal direct jobs.
+- `services/runtime/app/adapters/antigravity.py:52-67`: `cancel_all_antigravity_runs` có thể `POST /cancel-all` đến Antigravity host bridge nếu có token. Đây là action có tác động ngoài process; phải chứng minh scope thật hoặc chủ động giữ bridge/runtime tắt.
+- `services/runtime/app/plan_orchestrator.py:1502-1506,1530-1545,2047-2120`: Orchestrator gọi `tick()` **ngay lúc start**, có thể reconcile các plan và tạo/enqueue WorkOrder mới nếu thỏa gate. PCP registry vẫn chứa `chonhac`; những job/plan historical chưa được chứng minh terminal hoặc đã tách. **Không được tự làm job/resume/cancel cho Chợ Nhạc.**
+- `.ddev/config.yaml` PCP `pre-start` hook vẫn dùng `pcp-build-images.sh` (đụng Docker Buildx/image) và `antigravity-bridge.sh start`; 3 image `PRESENT` chỉ xác nhận tag tồn tại, không chứng minh build của source đã đồng bộ.
+
+**Hệ quả:** nếu database PCP còn `queued` hoặc plan đủ điều kiện, bật toàn bộ Runtime có thể gây mutation/cancel/dispatch cũ ngoài phạm vi G0, kể cả PM không bấm nút job. Kể cả không có queued jobs, action `/cancel-all` của bridge và cleanup/lease path cũng phải được kiểm soát. Không được giả định rằng trạng thái container `exited` tương đương runtime job queue trống. Đây là **gate mới xác nhận bằng source**, chưa có bằng chứng startup đã gây tác động.
+
+### 9.3. Bước quan sát ngắn nhất sau đồng bộ
+
+1. Owner kiểm tra **chỉ metadata** đúng container PCP PostgreSQL `ddev-personal-coding-platform-db` bằng `docker inspect --format` trả về `Name`, owner labels, `State.Status`, `State.Running`; không liệt kê container khác, không xuất `Config.Env`, secrets hoặc mount sources.
+2. Nếu DB riêng PCP đang `running` và đúng ownership, mới xem xét truy vấn SQL **read-only transaction** để đếm tổng số `cp_jobs` không ở trạng thái kết thúc, lease `cp_project_leases` còn active, và active plan/orchestration. Không in job ID, project ID, task body/secret; không update hay release lease/counter. Nếu DB `exited`, **không tự start DB/PCP** vì chỉ có metadata này; phác thảo startup DB riêng sau khi Owner phê duyệt và kiểm tra ranh giới.
+3. Nếu tồn tại durable job/lease/orchestration chưa terminal, đánh giá bảo toàn trước khi viết thiết kế **PCP safe startup mode** hoặc phân vùng/cấm historical project execution; thay đổi trust/startup/lease cần change proposal và riêng Owner approval. Không sửa trực tiếp bảng DB để vượt gate.
+4. Sau khi có cách khôi phục an toàn, cân nhắc source/image parity và khởi động chỉ PCP qua quy trình Owner quyết định, tuyệt đối không restart Docker Desktop, làm công việc PCP trên Chợ Nhạc, thay global Codex 0.162.0 hoặc bật fixture DDEV/delivery tự động.
+
+**Trạng thái:** Owner WSL source đã khớp GitHub `107202c0...`; Runtime images vẫn chưa rollout/restarted, fixture `PARKED`, 0 accepted A/B pairs, **G0 NOT GO**, #596/G1 chưa được cho phép.
