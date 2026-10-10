@@ -169,3 +169,49 @@ def test_cli_refuses_unexpected_raw_prompt_field(tmp_path):
     assert run.returncode == 2
     assert "should never appear in output" not in run.stdout + run.stderr
     assert "unknown/missing fields" in run.stderr
+
+
+def test_historical_outcomes_never_unlock_controlled_g0_metrics():
+    payload = paired(12)
+    for record in payload["records"]:
+        record["environment_class"] = "historical_record"
+    result = summarize(payload)
+    assert result["paired_trial_ids"] == 12
+    assert result["accepted_comparable_pairs"] == 0
+    assert result["historical_accepted_pairs_excluded"] == 12
+    assert result["status"] == "insufficient_evidence"
+    assert result["latency"] == {"p50": None, "p90": None}
+    assert all(
+        item["reason"] == "historical_not_controlled"
+        for item in result["excluded_trials"]
+    )
+
+
+def test_generic_php_smoke_cases_do_not_masquerade_as_drupal_cohort():
+    payload = paired(12)
+    for record in payload["records"]:
+        if record["task_type"] == "drupal":
+            record["task_type"] = "php"
+    result = summarize(payload)
+    assert result["php_smoke_pairs_excluded"] == 4
+    assert result["accepted_comparable_pairs"] == 8
+    assert result["task_type_coverage"] == {
+        "drupal": 0, "frontend": 4, "repair": 4,
+    }
+    assert result["status"] == "insufficient_evidence"
+    assert result["latency"]["p90"] is None
+    assert {
+        item["reason"] for item in result["excluded_trials"]
+    } == {"php_smoke_not_drupal"}
+
+
+def test_failed_historical_attempts_are_still_visible():
+    payload = paired(1)
+    for record in payload["records"]:
+        record["environment_class"] = "historical_record"
+    payload["records"][1]["outcome"] = "failed"
+    payload["records"][1]["quality"]["ci"] = False
+    result = summarize(payload)
+    assert result["all_attempt_outcomes"]["pcp"]["failed"] == 1
+    assert result["historical_accepted_pairs_excluded"] == 0
+    assert result["excluded_trials"][0]["reason"] == "at_least_one_arm_not_accepted"
