@@ -89,3 +89,43 @@ def test_artifact_is_only_locked_source_evidence_never_vendor_or_database():
     assert '"$evidence/composer-lock-sha256.txt"' in commands
     assert "cp -R" not in commands
     assert "vendor/" not in uploads[0]["with"]["path"]
+
+
+def test_seed_export_is_git_archive_with_fail_closed_allowlist():
+    items = steps()
+    export_index = next(i for i, step in enumerate(items)
+                        if step["name"] == "Export only committed, sanitized fixture source")
+    upload_index = next(i for i, step in enumerate(items)
+                        if step["name"].startswith("Publish only locked source"))
+    assert export_index > next(i for i, step in enumerate(items)
+                               if step["name"] == "Record exact real verification result without secrets")
+    assert export_index < upload_index
+    cmd = items[export_index]["run"]
+    assert 'os.environ.get("RUNNER_ENVIRONMENT") == "github-hosted"' in cmd
+    assert '"ls-tree", "-r", "-z", "HEAD"' in cmd
+    assert '"archive", "--format=zip"' in cmd
+    assert "actual == expected" in cmd
+    assert "stat.S_ISLNK" in cmd
+    assert 'git("status", "--porcelain=v1") == ""' in cmd
+    assert 'git("rev-parse", "benchmark/direct") == sha' in cmd
+    assert 'git("rev-parse", "benchmark/pcp") == sha' in cmd
+    assert 'assert lock_hash == (evidence / "composer-lock-sha256.txt").read_text().strip()' in cmd
+    assert '"fixture-seed-source-sha256.txt"' in cmd
+    for blocked in ("vendor/", "web/core/", ".git/", "settings.php", ".env"):
+        assert blocked in cmd
+    assert "rm -rf" not in cmd
+    assert "gh repo" not in cmd
+    assert "docker " not in cmd
+
+
+def test_exported_seed_and_composer_evidence_stay_in_one_short_lived_artifact():
+    items = steps()
+    uploads = [item for item in items if "actions/upload-artifact" in item.get("uses", "")]
+    assert len(uploads) == 1
+    assert uploads[0]["with"]["path"] == "${{ runner.temp }}/pcp-g0-evidence/"
+    assert uploads[0]["with"]["retention-days"] <= 7
+    cmd = "\n".join(item.get("run", "") for item in items)
+    assert '"fixture-seed-source.zip"' in cmd
+    assert '"fixture-seed-source-sha256.txt"' in cmd
+    assert '"composer-lock-sha256.txt"' in cmd
+    assert "secrets." not in WORKFLOW.read_text(encoding="utf-8")
