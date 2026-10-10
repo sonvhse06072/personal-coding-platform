@@ -169,6 +169,7 @@ def test_bootstrap_requires_real_drupal_core_dev_and_phpunit_binary():
     # The real hosted run reached PHPCS but did not have vendor/bin/phpunit.
     code = SCRIPT.read_text(encoding="utf-8")
     assert "'drupal/core-dev:^11'" in code
+    assert "ddev composer require --dev --with-all-dependencies" in code
     assert "ddev exec test -x vendor/bin/phpunit" in code
     assert "ddev exec test -x vendor/bin/phpcs" in code
     assert code.index("ddev exec test -x vendor/bin/phpunit") < code.index("ddev exec bash -lc")

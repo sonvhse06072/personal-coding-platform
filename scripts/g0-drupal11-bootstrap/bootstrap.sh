@@ -52,7 +52,7 @@ printf 'G0D-01: starting new fixture at %s\n' "$TARGET"
 ddev config --project-name="$PROJECT" --project-type=drupal11 --docroot=web --php-version=8.4
 ddev start -y
 ddev composer create-project 'drupal/recommended-project:^11'
-ddev composer require --dev 'drupal/coder:^8' 'drupal/core-dev:^11'
+ddev composer require --dev --with-all-dependencies 'drupal/coder:^8' 'drupal/core-dev:^11'
 # Never overwrite user files: target was initially nonexistent and is only created here.
 mkdir -p web/modules/custom
 cp -R -- "$BASE/template/web/modules/custom/pcp_g0_fixture" web/modules/custom/
