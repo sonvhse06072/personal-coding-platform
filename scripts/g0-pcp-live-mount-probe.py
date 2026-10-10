@@ -55,9 +55,12 @@ def call(argv: list[str]) -> str:
             argv[2] == RUNTIME and argv[3:] == ["codex", "--version"]
         )
     elif len(argv) == 6 and argv[:3] == ["docker", "exec", EXECUTOR]:
-        safe = (
-            argv[3] == "test" and argv[4] in ("-d", "-f")
-            and argv[5].startswith("/")
+        # Do not accept an arbitrary absolute path, even for "test".
+        # Only the single Owner-approved local fixture and its lock are in scope.
+        only_fixture = Path.home() / PROJECT_SUBPATH[0] / PROJECT_SUBPATH[1]
+        safe = argv[3] == "test" and (
+            (argv[4] == "-d" and argv[5] == str(only_fixture))
+            or (argv[4] == "-f" and argv[5] == str(only_fixture / "composer.lock"))
         )
     if not safe:
         raise SafeStop("unapproved_read_only_command")
