@@ -320,6 +320,10 @@ def device_login(repo: Path, fixture: Path, sha: str, arm: str) -> dict:
     if arm not in G0_AUTH_DIRS:
         raise g0.GateError("g0_unknown_login_arm")
     env, report = _context(repo, fixture, sha, require_prepared=True)
+    # Codex login can replace/revoke a previously stored credential.
+    # Preserve an existing authenticated profile instead of re-logging in.
+    if _check_config(arm):
+        raise g0.GateError("g0_auth_profile_already_has_cached_credentials")
     g0.run(_compose(repo) + ["config", "--quiet"],
            env=env, label="g0_login_compose_config", timeout=30)
     # Interactive output intentionally stays only on Owner's local WSL terminal.
