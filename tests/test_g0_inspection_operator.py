@@ -246,9 +246,11 @@ def test_source_contains_no_global_docker_or_chonhac_control():
     code = SOURCE.read_text(encoding="utf-8")
     for forbidden in (
         "docker system prune", "ddev start", "ddev poweroff",
-        '"/var/run/docker.sock"', "chonhac/", "docker compose down",
+        "chonhac/", "docker compose down",
         "docker restart", "docker stop --all", "git reset --hard",
         "rm -rf", "--remove-orphans", "--volumes",
     ):
         assert forbidden not in code
     assert '"ready_to_dispatch_g0d_t01": False' in code
+    # This string is required to *deny* an accidental socket mount after startup.
+    assert 'm.get("Destination") == "/var/run/docker.sock"' in code
