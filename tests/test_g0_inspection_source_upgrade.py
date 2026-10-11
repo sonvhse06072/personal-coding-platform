@@ -155,6 +155,7 @@ def test_preflight_never_builds_or_recreates_containers(monkeypatch, private, tm
     monkeypatch.setattr(upgrade, "_base_source_validation", lambda *a: None)
     monkeypatch.setattr(upgrade, "_verify_g0_resources", lambda *a: None)
     monkeypatch.setattr(upgrade, "_require_empty_g0_job_store", lambda: None)
+    monkeypatch.setattr(upgrade.g0, "require_headroom", lambda *a: None)
     monkeypatch.setattr(upgrade, "_codex_cli_version", lambda: "0.160.0")
     monkeypatch.setattr(upgrade.g0, "exists", lambda k, n: k == "image" and n == "postgres:17")
     monkeypatch.setattr(upgrade.g0, "inspect", lambda k, n: {
