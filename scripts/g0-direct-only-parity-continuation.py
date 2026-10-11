@@ -9,6 +9,7 @@ This is an infrastructure parity check, not the Drupal G0D-T01 WorkOrder.
 """
 from __future__ import annotations
 
+import argparse
 from datetime import datetime, timezone
 import importlib.util
 import json
