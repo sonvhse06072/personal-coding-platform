@@ -1,7 +1,6 @@
 """Negative scope tests. No Docker, DDEV, Git, model or owner data access."""
 from __future__ import annotations
 
-from copy import deepcopy
 from pathlib import Path
 
 import pytest
