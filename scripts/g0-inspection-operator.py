@@ -196,10 +196,14 @@ def resource_names(source_sha: str) -> dict[str, str]:
 
 def compose_env(repo: Path, fixture: Path, workspace: Path,
                 source_sha: str, password: str) -> dict[str, str]:
-    env = dict(os.environ)
-    for key in list(env):
-        if key.startswith("COMPOSE_") or key.startswith("PCP_G0_"):
-            env.pop(key)
+    # Avoid passing host Codex/GitHub/provider secrets into Compose CLI at all.
+    # The local engine requires only a minimal Docker client environment.
+    allowed = {
+        "PATH", "HOME", "USER", "LANG", "LC_ALL",
+        "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG",
+        "XDG_RUNTIME_DIR",
+    }
+    env = {key: value for key, value in os.environ.items() if key in allowed}
     images = resource_names(source_sha)
     env.update({
         "COMPOSE_PARALLEL_LIMIT": "1",
