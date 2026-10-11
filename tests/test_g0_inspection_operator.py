@@ -161,6 +161,28 @@ def test_offline_overlay_builds_use_only_g0_tags(monkeypatch, tmp_path):
     assert not any("docker.sock" in str(a) for a, _ in commands)
 
 
+def test_activation_rechecks_names_after_build_and_before_compose_up(monkeypatch, tmp_path):
+    commands = []
+    monkeypatch.setattr(operator, "preflight", lambda *a: None)
+    monkeypatch.setattr(operator, "build_g0_overlays", lambda *a: None)
+    monkeypatch.setattr(operator, "save_private_state",
+                        lambda *a: tmp_path / "workspaces")
+    monkeypatch.setattr(operator, "read_private_state",
+                        lambda *a: (HEAD, "a" * 48, tmp_path / "workspaces"))
+    monkeypatch.setattr(operator, "compose_env", lambda *a: {})
+    monkeypatch.setattr(operator, "run",
+                        lambda argv, **kw: commands.append(argv) or "")
+
+    def collision():
+        raise operator.GateError("g0_network_already_exists")
+
+    monkeypatch.setattr(operator, "require_no_g0_runtime_collision", collision)
+    with pytest.raises(operator.GateError, match="g0_network_already_exists"):
+        operator.activate(tmp_path, tmp_path, HEAD)
+    assert len(commands) == 1
+    assert commands[0][-2:] == ["config", "--quiet"]
+
+
 def test_verification_scopes_all_inspections_to_exact_g0_resources(monkeypatch, tmp_path):
     inspections = []
     calls = []
