@@ -37,12 +37,18 @@ def test_exact_project_names_and_profile_are_not_dynamic():
 def test_compose_environment_strips_inherited_profile_and_provider_secrets(monkeypatch, tmp_path):
     monkeypatch.setenv("COMPOSE_PROFILES", "dangerous")
     monkeypatch.setenv("PCP_G0_RUNTIME_IMAGE", "wrong")
+    monkeypatch.setenv("GITHUB_TOKEN", "must-not-leak")
+    monkeypatch.setenv("OPENAI_API_KEY", "must-not-leak")
+    monkeypatch.setenv("ANTIGRAVITY_BRIDGE_TOKEN", "must-not-leak")
     env = operator.compose_env(tmp_path, tmp_path / "fixture", tmp_path / "work", HEAD, "f" * 48)
     assert env["COMPOSE_PARALLEL_LIMIT"] == "1"
     assert env["PCP_G0_POSTGRES_IMAGE"] == "postgres:17"
     assert env["PCP_G0_RUNTIME_IMAGE"] == "pcp-g0d01-runtime:aaaaaaaaaaaa"
     assert env["PCP_G0_DB_PASSWORD"] == "f" * 48
     assert "COMPOSE_PROFILES" not in env
+    assert "GITHUB_TOKEN" not in env
+    assert "OPENAI_API_KEY" not in env
+    assert "ANTIGRAVITY_BRIDGE_TOKEN" not in env
     assert "CODEX_PASSWORD" not in {
         key for key in env if key.startswith("PCP_G0_")
     }
