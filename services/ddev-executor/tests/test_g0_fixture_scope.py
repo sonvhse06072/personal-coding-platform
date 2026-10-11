@@ -129,6 +129,22 @@ def test_broadened_or_wrong_registry_blocks_every_http_route(
             assert response.status_code == 503
 
 
+def test_scoped_parked_health_has_no_host_tool_probes(g0, monkeypatch):
+    def forbidden(*args, **kwargs):
+        raise AssertionError("PARKED health cannot invoke Docker, DDEV or Buildx")
+
+    monkeypatch.setattr(main.subprocess, "run", forbidden)
+    with TestClient(main.app) as client:
+        response = client.get("/health")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "degraded"
+    assert body["ddev"] == "PARKED"
+    assert body["docker"] == "not_probed"
+    assert body["buildx"] == "not_probed"
+    assert body["github_delivery_configured"] is False
+
+
 def test_scoped_health_registry_check_fails_before_any_docker_probe(g0, tmp_path, monkeypatch):
     broken = tmp_path / "broken.yml"
     broken.write_text("projects: [not, a, mapping]\n", encoding="utf-8")
