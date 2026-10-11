@@ -87,7 +87,7 @@ def test_frozen_contract_never_includes_legacy_or_ddev_control():
     assert all(p.startswith("web/modules/custom/pcp_g0_fixture/") for p in g0.ALLOWED_FILES)
     for prohibited in (
         "git push", "ddev start", "/home/sonvh/", "rm -rf",
-        "gh pr create", "merge", "Docker socket",
+        "gh pr create", "docker compose up", "Docker socket",
     ):
         assert prohibited not in g0.G0_PROMPT
 
