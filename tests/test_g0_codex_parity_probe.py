@@ -50,7 +50,10 @@ def test_probe_uses_same_pinned_codex_model_effort_and_sandbox():
         assert 'approval_policy="never"' in argv
         assert "--no-deps" in argv and "--rm" in argv and "-T" in argv
         assert "gh" not in argv and "--force-recreate" not in argv
-        assert "/home/sonvh" not in " ".join(argv)
+        # Host paths to the two reviewed Compose source files are expected.
+        # Nothing passed *into Codex* may refer to the Owner host/workspaces.
+        codex_argv = argv[argv.index("exec"):]
+        assert "/home/sonvh" not in " ".join(codex_argv)
         assert argv[argv.index("run") + 4] == "auth_" + arm
     assert probe._probe_command(ROOT, "pcp") != probe._probe_command(ROOT, "direct")
     with pytest.raises(probe.g0.GateError, match="arm_invalid"):
