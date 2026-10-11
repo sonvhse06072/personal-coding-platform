@@ -271,6 +271,54 @@ def test_partial_restore_refuses_foreign_occupied_target(monkeypatch):
         op._verify_restore_targets()
 
 
+def test_render_accepts_compose_string_encoded_tmpfs_size(
+    monkeypatch
+):
+    mounts = [
+        {"type": "bind", "source": "/g0/config/projects.yml",
+         "target": "/g0/config/projects.yml"},
+        {"type": "bind", "source": "/g0/config/project-baselines.yml",
+         "target": "/g0/config/project-baselines.yml"},
+        {"type": "bind", "source": "/g0/config/models.yml",
+         "target": "/g0/config/models.yml"},
+        {"type": "bind", "source": "/g0/workspaces",
+         "target": "/g0/workspaces"},
+        {"type": "bind", "source": "/g0/g0-auth-profile",
+         "target": "/home/coder/.codex-g0"},
+        {"type": "tmpfs", "target": "/tmp",
+         "tmpfs": {"size": "134217728"}},
+    ]
+    compose = {"services": {
+        "db": {}, "router": {},
+        "runtime": {
+            "networks": {"g0-private": None, "g0-provider-pcp": None},
+            "read_only": True,
+            "volumes": mounts,
+            "environment": {"PCP_G0_DELIVERY_ENABLED": ""},
+        },
+        "executor": {
+            "networks": {"g0-private": None},
+            "volumes": [
+                {"type": "bind", "target": "/g0/workspaces",
+                 "source": "/g0/workspaces"},
+            ],
+            "environment": {},
+        },
+    }}
+    monkeypatch.setattr(op.auth, "_auth_dir",
+                        lambda arm: Path("/g0/g0-auth-profile"))
+    monkeypatch.setattr(op.g0, "run",
+                        lambda *a, **k: json.dumps(compose))
+    op._render(ROOT, {})
+
+    compose["services"]["runtime"]["volumes"].append({
+        "type": "bind", "target": "/var/run/docker.sock",
+        "source": "/var/run/docker.sock",
+    })
+    with pytest.raises(op.g0.GateError, match="mount_count"):
+        op._render(ROOT, {})
+
+
 def test_real_cli_help_entrypoint_does_not_contact_provider_or_docker():
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "--help"],
