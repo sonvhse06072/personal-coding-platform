@@ -7,7 +7,8 @@ import shutil
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
-from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .collaboration import (
@@ -222,9 +223,23 @@ def _require_manual_collaboration_state(job_id: str) -> None:
         )
 
 
+def runtime_startup_mode() -> str:
+    """Explicit, opt-in inspection startup without any durable/runtime transitions."""
+    mode = os.getenv("PCP_RUNTIME_STARTUP_MODE", "normal")
+    if mode not in {"normal", "inspect"}:
+        raise RuntimeError("Invalid PCP_RUNTIME_STARTUP_MODE; expected normal or inspect")
+    return mode
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     harden_runtime_process_secret_boundary()
+    if runtime_startup_mode() == "inspect":
+        # In particular: no Storage.init DDL/planning updates, Antigravity
+        # cancel-all, queued-job replay, lease cleanup, PlanOrchestrator ticks,
+        # or asynchronous notification publishers.
+        yield
+        return
     await engine.start()
     await plan_orchestrator.start()
     await progress_publisher.start()
@@ -239,6 +254,23 @@ async def lifespan(app: FastAPI):
 RUNTIME_VERSION = "1.0.141"
 
 app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan=lifespan)
+
+
+@app.middleware("http")
+async def inspection_mode_http_guard(request: Request, call_next):
+    # Restrict the entire surface, including dashboard and PM Bridge routes.
+    # Even GET handlers may perform DB writes as part of lazy initialization;
+    # /health is the only deliberately permitted inspection endpoint.
+    if runtime_startup_mode() == "inspect" and (
+        request.method != "GET" or request.url.path != "/health"
+    ):
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "Runtime inspection mode: mutation and dashboard APIs disabled"},
+        )
+    return await call_next(request)
+
+
 app.include_router(pm_bridge_router)
 app.include_router(
     create_dashboard_router(
@@ -255,7 +287,7 @@ async def health() -> RuntimeHealth:
     router_ok = await engine.router.health()
     executor_ok = await engine.ddev.health()
     return RuntimeHealth(
-        status="ok" if router_ok and executor_ok else "degraded",
+        status="ok" if router_ok and executor_ok and runtime_startup_mode() == "normal" else "degraded",
         service="coding-runtime",
         version=RUNTIME_VERSION,
         router="ok" if router_ok else "down",

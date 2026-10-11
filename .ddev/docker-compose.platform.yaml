@@ -36,6 +36,8 @@ services:
       CODING_WORKSPACES_ROOT: ${CODING_WORKSPACES_ROOT}
       CODING_DIRECT_PROJECT_ROOT: ${CODING_DIRECT_PROJECT_ROOT:-/tmp/pcp-direct-disabled}
       DATABASE_URL: postgresql://db:db@db:5432/db
+      # Explicit opt-in; keep existing normal startup as the default.
+      PCP_RUNTIME_STARTUP_MODE: ${PCP_RUNTIME_STARTUP_MODE:-normal}
       ANTIGRAVITY_BRIDGE_URL: http://host.docker.internal:${ANTIGRAVITY_BRIDGE_PORT:-8792}
       VIRTUAL_HOST: ${DDEV_HOSTNAME}
       HTTP_EXPOSE: 8787:8787
