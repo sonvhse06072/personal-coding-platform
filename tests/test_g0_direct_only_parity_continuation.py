@@ -9,6 +9,8 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import subprocess
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -248,6 +250,47 @@ def test_continuation_claim_is_atomic_not_a_renewal(session):
     with pytest.raises(cont.g0.GateError, match="already_recorded"):
         cont._claim_continuation(data)
     assert json.loads((session.root / cont.CONTINUATION_NAME).read_text()) == data
+
+
+
+def test_real_cli_help_enters_entrypoint_without_model_or_docker():
+    """A real Python process must reach argparse; no credentials or model calls."""
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), "--help"],
+        cwd=ROOT, capture_output=True, text=True, check=False,
+        timeout=15, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+    )
+    assert result.returncode == 0, result.stderr
+    assert "status" in result.stdout
+    assert "direct" in result.stdout
+    assert "--expected-sha" in result.stdout
+
+
+def test_cli_status_main_reconciles_synthetic_session_without_side_effects(
+    session, monkeypatch, capsys
+):
+    """Exercise actual main() argument parsing and read-only status path."""
+    before = session.journal.read_bytes()
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("status must not call model, direct arm or Docker")
+
+    monkeypatch.setattr(cont, "direct", forbidden)
+    monkeypatch.setattr(cont, "_direct_one_call", forbidden)
+    monkeypatch.setattr(cont.subprocess, "run", forbidden)
+    monkeypatch.setattr(
+        cont.sys, "argv", [str(SCRIPT), "status", "--expected-sha", EXPECTED_SHA]
+    )
+
+    assert cont.main() == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["status"] == "PASS"
+    assert report["phase"] == "g0_pcp_recovered_direct_pending"
+    assert report["pcp_evidence"]["pcp_turn_reconciled"] is True
+    assert report["model_calls_this_command"] == 0
+    assert report["ready_to_dispatch_g0d_t01"] is False
+    assert session.journal.read_bytes() == before
+    assert not (session.root / cont.CONTINUATION_NAME).exists()
 
 
 def test_no_pcp_retry_or_fixture_ddev_delivery():
