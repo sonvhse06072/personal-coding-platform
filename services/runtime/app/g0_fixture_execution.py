@@ -132,6 +132,8 @@ def validate_job_diff(diff: dict[str, Any]) -> list[str]:
         not isinstance(paths, list)
         or not paths
         or any(type(p) is not str or p not in ALLOWED_FILES for p in paths)
+        or set(paths) != ALLOWED_FILES
+        or len(paths) != len(ALLOWED_FILES)
         or diff.get("diff_truncated") is not False
         or int(diff.get("changed_file_count", -1)) != len(paths)
         or bool(diff.get("dependency_manifest_changes"))
