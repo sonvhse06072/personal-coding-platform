@@ -412,7 +412,8 @@ def verify_inspection(repo: Path, env: dict[str, str]) -> dict[str, str | bool]:
     run(cmd + ["db", "pg_isready", "-U", "g0", "-d", "g0"],
         env=env, label="g0_db_ready", timeout=25)
     probes = {
-        "router": ("http://127.0.0.1:8090", "ok", "/v1/models", "401"),
+        # Router has no API token mounted in inspection mode: route is 503.
+        "router": ("http://127.0.0.1:8090", "ok", "/v1/route", "503"),
         "executor": ("http://127.0.0.1:8790", "degraded", "/v1/workspaces", "403"),
         "runtime": ("http://127.0.0.1:8787", "degraded", "/v1/jobs", "503"),
     }
@@ -459,23 +460,34 @@ def existing_env(repo: Path, fixture: Path) -> dict[str, str]:
 
 
 def stop_g0(repo: Path, fixture: Path) -> dict:
-    env = existing_env(repo, fixture)
+    """Rollback only currently running exact-name, exact-owned G0 containers.
+
+    Works after a partial startup without needing passwords or a complete
+    Compose topology. Deliberately leaves the DB volume and all source intact.
+    """
+    owned: list[str] = []
     for svc in G0_SERVICES:
-        obj = inspect("container", NAMES[svc])
+        name = NAMES[svc]
+        if not exists("container", name):
+            continue
+        obj = inspect("container", name)
         labels = (obj.get("Config") or {}).get("Labels") or {}
         if (labels.get("com.docker.compose.project") != PROJECT or
                 labels.get("com.docker.compose.service") != svc):
             raise GateError("g0_stop_identity_mismatch")
-    run(compose_args(repo) + ["stop", "--timeout", "15"],
-        env=env, label="g0_stop", timeout=90)
+        if (obj.get("State") or {}).get("Running") is True:
+            owned.append(name)
+    if owned:
+        run(["docker", "stop", "--time", "15", *owned],
+            label="g0_exact_owned_stop", timeout=95)
     return {
         "status": "PASS",
         "phase": "g0_only_stopped",
+        "running_g0_services_stopped": len(owned),
         "legacy_services_touched": False,
         "g0_db_volume_preserved": True,
         "ready_to_dispatch_g0d_t01": False,
     }
-
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
