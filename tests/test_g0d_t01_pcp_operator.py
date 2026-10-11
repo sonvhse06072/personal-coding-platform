@@ -159,7 +159,8 @@ def test_one_execute_then_no_second_attempt(prepared, monkeypatch):
     result = op.execute(prepared["repo"], prepared["fixture"], SHA)
     assert result["status"] == "PASS"
     assert result["phase"] == "g0d_t01_pcp_executed"
-    assert result["model_calls_this_command"] == 1
+    assert result["codex_cli_invocations_attempted"] == 1
+    assert result["model_api_calls_observed"] is None
     assert result["needs_independent_ci_review"] is True
     assert result["github_delivery_enabled"] is False
     assert calls == [

@@ -300,7 +300,8 @@ def execute(repo: Path, fixture: Path, sha: str) -> dict:
         "status": "PASS", "phase": "g0d_t01_pcp_executed",
         "job_id": jid, "commit": record["commit"],
         "changed_files": result["result"]["changed_files"],
-        "model_calls_this_command": 1, "github_delivery_enabled": False,
+        "codex_cli_invocations_attempted": 1,
+        "model_api_calls_observed": None, "github_delivery_enabled": False,
         "needs_independent_ci_review": True,
     }
 
