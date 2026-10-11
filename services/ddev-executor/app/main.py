@@ -2031,12 +2031,37 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
     }
 
 
+def _require_g0_delivery_contract(
+    cfg: dict[str, Any], *, job_id: str, branch: str,
+    source_commit: str | None = None,
+) -> None:
+    if not _g0_fixture_delivery_enabled():
+        raise HTTPException(403, "G0 fixture delivery is not activated")
+    if not re.fullmatch(r"[0-9a-f]{32}", job_id):
+        raise HTTPException(403, "G0 delivery requires an exact job UUID")
+    if branch != f"ai/{job_id[:12]}":
+        raise HTTPException(403, "G0 delivery branch must match the owning job")
+    if source_commit is not None and source_commit != G0_SOURCE_COMMIT:
+        raise HTTPException(403, "G0 delivery cannot advance the frozen seed")
+    _require_g0_source_repository(cfg)
+    if cfg.get("ddev", {}).get("enabled") is not False:
+        raise HTTPException(403, "G0 delivery may not activate DDEV")
+
+
 @app.post("/v1/publish-branch", dependencies=[Depends(auth)])
 def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
     """Push exactly one verified AI branch without adding a remote to the workspace."""
     cfg = project(payload.project_id)
+    scoped = _g0_fixture_scoped()
+    if scoped:
+        _require_g0_delivery_contract(
+            cfg, job_id=payload.job_id, branch=payload.branch,
+            source_commit=payload.source_commit,
+        )
+        if payload.review_repair_pr_number is not None or payload.review_repair_previous_commit:
+            raise HTTPException(403, "G0 review-repair delivery is not enabled")
     autonomy = cfg.get("autonomy", {}) or {}
-    if not bool(autonomy.get("allow_push_ai_branch", False)):
+    if not scoped and not bool(autonomy.get("allow_push_ai_branch", False)):
         raise HTTPException(403, "Project policy does not allow AI branch publishing")
     guarded_repair = payload.review_repair_pr_number is not None
     if guarded_repair != (payload.review_repair_previous_commit is not None):
@@ -2263,8 +2288,16 @@ def prepare_review_repair(payload: ReviewRepairRequest) -> dict[str, Any]:
 @app.post("/v1/github/pull-request", dependencies=[Depends(auth)])
 def upsert_pull_request(payload: PullRequestRequest) -> dict[str, Any]:
     cfg = project(payload.project_id)
+    scoped = _g0_fixture_scoped()
+    if scoped:
+        _require_g0_delivery_contract(
+            cfg, job_id=payload.job_id, branch=payload.branch,
+        )
+        if (not payload.title.startswith("[G0D-T01]")
+                or payload.expected_pr_number is not None):
+            raise HTTPException(403, "G0 PR may only create the frozen task delivery")
     autonomy = cfg.get("autonomy", {}) or {}
-    if not bool(autonomy.get("allow_create_pr", False)):
+    if not scoped and not bool(autonomy.get("allow_create_pr", False)):
         raise HTTPException(403, "Project policy does not allow pull-request creation")
     _validate_ai_branch(cfg, payload.branch)
     delivery, repository = _github_context(cfg)
@@ -2291,8 +2324,15 @@ def github_ci(
     commit: str = Query(..., min_length=7, max_length=64),
 ) -> dict[str, Any]:
     cfg = project(project_id)
+    scoped = _g0_fixture_scoped()
+    if scoped:
+        if not _g0_fixture_delivery_enabled():
+            raise HTTPException(403, "G0 CI observation is not activated")
+        _require_g0_source_repository(cfg)
+        if not re.fullmatch(r"[0-9a-f]{40}", commit):
+            raise HTTPException(403, "G0 CI requires an exact delivered commit")
     autonomy = cfg.get("autonomy", {}) or {}
-    if not bool(autonomy.get("allow_create_pr", False)):
+    if not scoped and not bool(autonomy.get("allow_create_pr", False)):
         raise HTTPException(403, "Project policy does not allow GitHub delivery monitoring")
     delivery, repository = _github_context(cfg)
     try:
