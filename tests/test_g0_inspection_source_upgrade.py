@@ -54,10 +54,15 @@ def fake_resources(*, source=OLD, project="pcp-g0d01", mode="inspect",
                 "Networks": {upgrade.g0.NETWORK: {}},
             },
             "HostConfig": {"Privileged": False, "PortBindings": {}},
-            "Mounts": (
-                [{"Destination": "/var/run/docker.sock"}]
-                if docker_socket else []
-            ),
+            "Mounts": [
+                {
+                    "Destination": dst, "Type": typ, "RW": not readonly,
+                    **({"Name": upgrade.g0.DATA_VOLUME}
+                       if typ == "volume" else {}),
+                }
+                for dst, (typ, readonly) in upgrade.EXPECTED_MOUNTS[svc].items()
+            ] + ([{"Destination": "/var/run/docker.sock"}]
+                  if docker_socket else []),
             "Image": "sha256:" + ("1" if svc == "runtime" else "2") * 64,
         }
 
@@ -100,6 +105,21 @@ def test_exact_resources_verify_without_running_any_engine(monkeypatch):
 def test_foreign_or_activated_g0_state_is_rejected(monkeypatch, changes, reason):
     monkeypatch.setattr(upgrade.g0, "inspect", fake_resources(**changes))
     with pytest.raises(upgrade.g0.GateError, match=reason):
+        upgrade._verify_g0_resources(OLD)
+
+
+def test_unknown_g0_mount_or_secret_fails_closed(monkeypatch):
+    raw = fake_resources()
+    def extra_mount(kind, name):
+        data = raw(kind, name)
+        if kind == "container" and name == upgrade.g0.NAMES["executor"]:
+            data["Mounts"].append({
+                "Type": "bind", "Destination": "/home/coder/.codex",
+                "RW": False,
+            })
+        return data
+    monkeypatch.setattr(upgrade.g0, "inspect", extra_mount)
+    with pytest.raises(upgrade.g0.GateError, match="g0_mount_scope_changed"):
         upgrade._verify_g0_resources(OLD)
 
 
