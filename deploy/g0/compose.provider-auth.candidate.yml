@@ -30,7 +30,10 @@ services:
         bind: {create_host_path: false}
     networks: [g0-provider-pcp]
     read_only: true
-    tmpfs: [/tmp:rw,nosuid,size=128m]
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 134217728
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     pids_limit: 128
@@ -54,7 +57,10 @@ services:
         bind: {create_host_path: false}
     networks: [g0-provider-direct]
     read_only: true
-    tmpfs: [/tmp:rw,nosuid,size=128m]
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 134217728
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     pids_limit: 128
@@ -83,7 +89,10 @@ services:
         bind: {create_host_path: false}
     networks: [g0-provider-direct]
     read_only: true
-    tmpfs: [/tmp:rw,nosuid,size=128m]
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 134217728
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     pids_limit: 128
