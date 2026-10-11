@@ -246,9 +246,18 @@ def test_rollback_can_recover_partial_upgrade_with_only_original_images(
     monkeypatch.setattr(upgrade.g0, "require_local_docker_context",
                         lambda: None)
     monkeypatch.setattr(upgrade.g0, "exists",
-                        lambda kind, name: kind == "image"
-                        and ":" + OLD[:12] in name)
+                        lambda kind, name: (
+                            kind == "container" and name in {
+                                upgrade.g0.NAMES["executor"],
+                                upgrade.g0.NAMES["runtime"],
+                            }
+                        ) or (kind == "image" and ":" + OLD[:12] in name))
+    monkeypatch.setattr(upgrade, "_require_empty_g0_job_store", lambda: None)
     def fake_inspect(kind, name):
+        if kind == "network":
+            return {"Internal": True}
+        if kind == "volume":
+            return {"Labels": {"com.docker.compose.project": upgrade.g0.PROJECT}}
         if kind == "container":
             svc = next(s for s in upgrade.TARGET_SERVICES
                        if upgrade.g0.NAMES[s] == name)
@@ -257,7 +266,7 @@ def test_rollback_can_recover_partial_upgrade_with_only_original_images(
                     "com.docker.compose.project": upgrade.g0.PROJECT,
                     "com.docker.compose.service": svc,
                 }},
-                "State": {"Running": True},
+                "State": {"Running": True, "Status": "running"},
                 "Image": "sha256:" + "a" * 64,
             }
         return {"Id": "sha256:" + "a" * 64}
