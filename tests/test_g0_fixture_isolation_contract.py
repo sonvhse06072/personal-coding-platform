@@ -83,6 +83,8 @@ def test_exact_source_contract_is_verified_without_executing_on_host(capsys, mon
     ("config/g0-fixture-only/source-contract.yml",
      lambda d: d["activation"].update(runtime_startup_mode="normal")),
     ("config/g0-fixture-only/source-contract.yml",
+     lambda d: d["activation"].update(executor_project_scope="chonhac")),
+    ("config/g0-fixture-only/source-contract.yml",
      lambda d: d["activation"].update(allow_docker_socket=True)),
     ("config/g0-fixture-only/source-contract.yml",
      lambda d: d["activation"].update(allow_ddev=True)),
