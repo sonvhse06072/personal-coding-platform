@@ -196,11 +196,7 @@ def test_interactive_device_auth_cannot_touch_model_or_send_credentials(
     assert not report["ready_to_dispatch_g0d_t01"]
     assert len(commands) == 2
     argv = commands[-1]
-    assert argv[-5:] == [
-        "--no-deps", "auth_pcp", "login", "--device-auth",
-    ][-5:] if False else argv[-4:] == [
-        "auth_pcp", "login", "--device-auth",
-    ][-4:] if False else argv[-3:] == ["auth_pcp", "login", "--device-auth"]
+    assert argv[-3:] == ["auth_pcp", "login", "--device-auth"]
     assert "run" in argv and "--rm" in argv and "--no-deps" in argv
     assert "exec" not in argv and "workspace" not in argv
     assert "auth_direct" not in argv
@@ -220,7 +216,7 @@ def test_script_does_not_auto_login_dispatch_or_boot_legacy_services():
         "docker system prune", "ddev start", "ddev poweroff",
         "docker restart", "--remove-orphans", "--volumes",
         "codex exec", "gh pr create", "git reset --hard",
-        "git push", "auth.json").read_text(",
+        "git push", 'auth.json").read_text(',
         "OPENAI_API_KEY=", "GITHUB_DELIVERY_TOKEN=",
     ):
         assert forbidden not in source
