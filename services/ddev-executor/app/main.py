@@ -179,21 +179,11 @@ def auth(authorization: str | None = Header(default=None)) -> None:
 
 G0_FIXTURE_PROJECT_ID = "pcp-g0-drupal-fixture"
 G0_FIXTURE_PATH = "${CODING_PROJECTS_ROOT}/pcp-g0-fixtures/pcp-g0-drupal-fixture"
-# All other routes, including host orphan cleanups, unbound cancel, PM Bridge,
-# preview, direct source sync and any future routes, are denied in G0-only mode.
-G0_FIXTURE_API_ROUTES = frozenset({
-    ("GET", "/health"),
-    ("GET", "/v1/project-state"),
-    ("POST", "/v1/workspaces"),
-    ("DELETE", "/v1/workspaces"),
-    ("POST", "/v1/workspaces/quiesce"),
-    ("POST", "/v1/phase"),
-    ("POST", "/v1/publish-branch"),
-    ("POST", "/v1/github/reconcile-delivery"),
-    ("POST", "/v1/github/review-repair"),
-    ("POST", "/v1/github/pull-request"),
-    ("GET", "/v1/github/ci"),
-})
+# Parked G0 registration authorizes no local work. A separate protected
+# activation patch must explicitly enable project-bound operations; merely
+# setting the G0 scope cannot create workspaces, run DDEV or send deliveries.
+# Generic cancel/orphan/PM Bridge/host operations stay outside that boundary.
+G0_FIXTURE_API_ROUTES = frozenset({("GET", "/health")})
 
 
 def _g0_fixture_scoped() -> bool:
