@@ -1,0 +1,98 @@
+# G0 provider login/direct-arm candidate. NO Runtime activation or model invocation.
+# Combine with deploy/g0/compose.candidate.yml only through the guarded operator.
+# Each service is non-default and must be run explicitly with --no-deps.
+# ChatGPT device-auth stores credentials ONLY in fresh, G0-owned paths.
+x-g0-provider-contract:
+  status: parked
+  provider_login_method: chatgpt-device-auth
+  g0_runtime_activation: false
+  git_delivery: false
+  g0d_t01_dispatch: false
+  shared_host_codex_auth_used: false
+  network_domain_allowlist_verified: false
+
+services:
+  auth_pcp:
+    image: "${PCP_G0_RUNTIME_IMAGE:?exact_deployed_g0_runtime_image_required}"
+    pull_policy: never
+    profiles: [owner-gated-g0-auth]
+    restart: "no"
+    entrypoint: [codex]
+    command: [--version]
+    user: "${PCP_G0_UID:?g0_nonroot_uid_required}:${PCP_G0_GID:?g0_nonroot_gid_required}"
+    environment:
+      HOME: /home/coder
+      CODEX_HOME: /home/coder/.codex-g0
+    volumes:
+      - type: bind
+        source: "${PCP_G0_AUTH_PCP_DIR:?new_separate_pcp_auth_dir_required}"
+        target: /home/coder/.codex-g0
+        bind: {create_host_path: false}
+    networks: [g0-provider-pcp]
+    read_only: true
+    tmpfs: [/tmp:rw,nosuid,size=128m]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 512m
+
+  auth_direct:
+    image: "${PCP_G0_RUNTIME_IMAGE:?exact_deployed_g0_runtime_image_required}"
+    pull_policy: never
+    profiles: [owner-gated-g0-auth]
+    restart: "no"
+    entrypoint: [codex]
+    command: [--version]
+    user: "${PCP_G0_UID:?g0_nonroot_uid_required}:${PCP_G0_GID:?g0_nonroot_gid_required}"
+    environment:
+      HOME: /home/coder
+      CODEX_HOME: /home/coder/.codex-direct
+    volumes:
+      - type: bind
+        source: "${PCP_G0_AUTH_DIRECT_DIR:?new_separate_direct_auth_dir_required}"
+        target: /home/coder/.codex-direct
+        bind: {create_host_path: false}
+    networks: [g0-provider-direct]
+    read_only: true
+    tmpfs: [/tmp:rw,nosuid,size=128m]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 512m
+
+  direct:
+    image: "${PCP_G0_RUNTIME_IMAGE:?exact_deployed_g0_runtime_image_required}"
+    pull_policy: never
+    profiles: [owner-gated-g0-direct]
+    restart: "no"
+    entrypoint: [codex]
+    command: [--version]
+    user: "${PCP_G0_UID:?g0_nonroot_uid_required}:${PCP_G0_GID:?g0_nonroot_gid_required}"
+    working_dir: /g0/direct-workspace
+    environment:
+      HOME: /home/coder
+      CODEX_HOME: /home/coder/.codex-direct
+    volumes:
+      - type: bind
+        source: "${PCP_G0_AUTH_DIRECT_DIR:?new_separate_direct_auth_dir_required}"
+        target: /home/coder/.codex-direct
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G0_DIRECT_WORKSPACE_DIR:?independent_frozen_fixture_workspace_required}"
+        target: /g0/direct-workspace
+        bind: {create_host_path: false}
+    networks: [g0-provider-direct]
+    read_only: true
+    tmpfs: [/tmp:rw,nosuid,size=128m]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 1024m
+
+networks:
+  g0-provider-pcp:
+    name: pcp-g0d01-provider-pcp
+    internal: false
+  g0-provider-direct:
+    name: pcp-g0d01-provider-direct
+    internal: false
