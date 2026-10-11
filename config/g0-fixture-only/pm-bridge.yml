@@ -1,0 +1,3 @@
+# G0-only registry: zero remote intake/polling targets.
+version: 1
+projects: {}

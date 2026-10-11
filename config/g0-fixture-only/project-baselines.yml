@@ -1,0 +1,52 @@
+# G0-02 isolated candidate: exact, immutable approved fixture baseline only.
+# This is a source-only mirror, checked for exact identity against canonical registry.
+version: 1
+projects:
+  pcp-g0-drupal-fixture:
+    active_revision: g0d01-seed-2026-10-10
+    revisions:
+      g0d01-seed-2026-10-10:
+        status: approved
+        source_commit: 39ef13c25b24c4a1b43a720ae53419f479996ed2
+        authority:
+          - path: PROJECT-BASELINE.md
+            authority: human_owner_protected
+          - path: .github/workflows/validation.yml
+            authority: human_owner_protected
+          - path: composer.json
+            authority: human_owner_protected
+          - path: composer.lock
+            authority: human_owner_protected
+          - path: .ddev/config.yaml
+            authority: human_owner_protected
+          - path: web/modules/custom/pcp_g0_fixture/src/EventLabelNormalizer.php
+            authority: mutable_execution
+          - path: web/modules/custom/pcp_g0_fixture/tests/src/Unit/EventLabelNormalizerTest.php
+            authority: mutable_execution
+          - path: web/modules/custom/pcp_g0_fixture/tests/src/Kernel/EventLabelServiceTest.php
+            authority: mutable_execution
+        references:
+          goals:
+            - path: PROJECT-BASELINE.md
+              section: Purpose
+          non_goals:
+            - path: PROJECT-BASELINE.md
+              section: Constraints
+          requirements:
+            - path: PROJECT-BASELINE.md
+              section: First independent engineering task — G0D-T01 (NOT part of bootstrap)
+          architecture_constraints:
+            - path: PROJECT-BASELINE.md
+              section: Constraints
+          quality_policy:
+            - path: PROJECT-BASELINE.md
+              section: Starter source and quality policy
+          security_policy:
+            - path: PROJECT-BASELINE.md
+              section: Constraints
+          budget_policy:
+            - path: PROJECT-BASELINE.md
+              section: Change and measurement gates
+          roadmap_frame:
+            - path: PROJECT-BASELINE.md
+              section: Change and measurement gates

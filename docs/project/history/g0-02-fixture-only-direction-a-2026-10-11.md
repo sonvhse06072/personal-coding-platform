@@ -1,0 +1,33 @@
+# G0-02A — Fixture-only isolation on shared WSL: approved direction, source-only preparation
+
+**Authority:** T3 implementation/decision evidence for [PCP #595](https://github.com/sonvhse06072/personal-coding-platform/issues/595), not a replacement for the Constitution, approved ProjectBaseline or an authorization to execute. The Owner approved **direction A** in [DEC-G0-ISOLATED-A-01](https://github.com/sonvhse06072/personal-coding-platform/issues/595#issuecomment-6107064655) on 2026-10-11 (ICT). This is separate from the previously approved decision to retain WSL/Docker Desktop instead of renting another VM.
+
+## Problem and verified baseline
+
+- Existing PCP PostgreSQL was deliberately restored **as the only started PCP service**. The Owner waived the optional backup/restore exercise and obtained `PCP_DURABLE_READ_ONLY_AUDIT=PASS`: 1 historical Chợ Nhạc lease **active / blocked owner**, 3 historical orchestration rows `active`, and 37 historical WorkOrders `pending` among other durable statuses. See [exact SQL aggregate evidence](https://github.com/sonvhse06072/personal-coding-platform/issues/595#issuecomment-6106925635). Counts are observations, not permissions to release, cancel, migrate or mutate records.
+- Existing normal Runtime bootstrap runs `Storage.init`, Antigravity `/cancel-all`, job replay/lease reconciliation and immediate PlanOrchestrator tick. PCP `.ddev/config.yaml` also invokes host hooks that rebuild images and rewrite shared Antigravity settings. Do **not** launch that existing Runtime or `ddev start`.
+- [PR #634](https://github.com/sonvhse06072/personal-coding-platform/pull/634) added a safe `inspect` mode to source with HTTP `GET /health` only, but it is **not deployed** and intentionally cannot execute a WorkOrder.
+- Fixture Git source is a separate checkout at frozen `benchmark/pcp@39ef13c25b24c4a1b43a720ae53419f479996ed2`, with immutable baseline revision `g0d01-seed-2026-10-10`; `benchmark/direct` is a distinct ref pinned to the same seed. Existing PCP registration remains PARKED (`ddev.enabled=false`, delivery OFF). No accepted G0D-T01 A/B pair yet.
+
+## Direction A — scoped execution boundary (NOT an active topology)
+
+Only on Owner's existing WSL host and subject to separately approved activation:
+
+1. **Datastore:** a brand-new G0-only PostgreSQL service/volume (candidate names `pcp-g0d01-postgres` / `pcp-g0d01-postgres-data`), never the currently running legacy `personal-coding-platform-postgres`, no data copy from PCP's durable historical jobs, no import/migration, no published DB host port.
+2. **Registry:** Runtime/Router/Executor will eventually receive only `pcp-g0-drupal-fixture` from `config/g0-fixture-only/projects.yml`. Baselines are an exact subset of the approved immutable revision in `config/g0-fixture-only/project-baselines.yml`; PM Bridge registry is empty. Do not mount the canonical full `config/projects.yml` or any legacy project control/lease records in the new instance.
+3. **Workspaces / DDEV:** workspace namespace `pcp-g0d01` and dedicated G0 container network `pcp-g0d01-private`; frozen seed and a unique DDEV project ID for the PCP arm. Direct arm must have a *different* workspace/DB identity, same CLI/model/effort/source/acceptance digest. Do not touch active Codex's direct Chợ Nhạc worktree, DDEV project or global Codex binary.
+4. **Services and privileges:** staged mode has `runtime_startup_mode=inspect`; **all execution-related activation flags remain false**. No new executor with host Docker socket, no host Antigravity bridge, no PM Bridge polling, no n8n, no GitHub delivery, no automatic merge, no fixture `ddev start`. During any later active phase, a project-scoped Executor/host capability contract must be implemented and verified independently of the in-process allowlist.
+5. **Host coexistence:** sharing Docker Desktop daemon/router is **not hard isolation**. A separate database/registry removes the strongest historical cross-project replay path but does not prove that a host-socket-owning Executor cannot affect another project. If scoped permissions / resource or router coexistence cannot be demonstrated, **keep PARKED** and return an explicit No-Go rather than try a speculative startup.
+
+The new `config/g0-fixture-only/source-contract.yml` is **source-only planning data, not Docker Compose**. Other three files are PARKED mirrors, not applied to a deployed service. `scripts/g0-fixture-isolation-contract.py` checks their equality to canonical fixture source, frozen baseline, empty PM Bridge and the exact non-activating plan. Its default CLI only reads tracked files and emits sanitized PASS/STOP with `ready_to_dispatch_g0d_t01=false`. Negative tests intentionally fail on DDEV/delivery activation, registry widening, baseline drift, changed DB namespace or Docker-socket permission. CI PASS proves only source-contract consistency.
+
+## Future protected activation ChangeProposal — **pending**
+
+The separate Human Owner decision must enumerate exact changes and boundaries before operational G0 execution:
+- Source/image/toolchain parity: exact PCP Git SHA, actual installed Runtime Codex CLI vs direct arm, model ID, reasoning effort, provider entitlement, replay/repair/test and quality/CI protocol; no global downgrade or credentials copied from Chợ Nhạc.
+- G0-only explicit service/network/volume launcher and rollback; no legacy persistent DB or PCP dashboard/PM Bridge integration; no host DDEV pre-start/stop hooks. Verify port/resource/routing collisions without manipulating existing DDEV projects.
+- Enforced Executor broker capability/authorization policy for **fixture only**, plus negative attempts for project, workspace, lease, Docker/host command and GitHub delivery cross-scope access. Prompt, YAML allowlist or a Docker Compose project name alone are not an OS boundary.
+- Precisely scoped activation of `ddev.enabled`/phases and any GitHub delivery/PR permissions only after Owner signs off on protected path scope; never rewrite the approved ProjectBaseline `g0d01-seed-2026-10-10` in place. Preserve existing jobs/leases/counters.
+- Real protected rollout evidence (workspace/project ownership, Docker images/volumes, DB, source hash, host capacity, health and rollback), then dispatch exactly one G0D-T01 pair under a recorded WorkOrder; no percentages from insufficient cohort.
+
+**Current gate:** DIRECTION APPROVED; SOURCE-ONLY PREPARATION; **NO ACTIVATION**. PCP #595 G0 NOT GO; G1 #596 remains blocked. Chợ Nhạc strict no-touch and WSL Codex reserved for Chợ Nhạc.

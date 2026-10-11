@@ -1,0 +1,32 @@
+# G0-02 A: source-only architecture contract, NOT an operational Compose file.
+# No startup, fixture DDEV, Docker access, network changes or delivery is approved.
+schema_version: 1
+authority: proposal_only
+fixture:
+  project_id: pcp-g0-drupal-fixture
+  repository: sonvhse06072/pcp-g0-drupal-fixture
+  base_branch: benchmark/pcp
+  source_commit: 39ef13c25b24c4a1b43a720ae53419f479996ed2
+  baseline_revision: g0d01-seed-2026-10-10
+activation:
+  status: parked
+  runtime_startup_mode: inspect
+  start_services: false
+  allow_real_jobs: false
+  allow_ddev: false
+  allow_docker_socket: false
+  allow_github_delivery: false
+  allow_pm_bridge: false
+  allow_host_bridge: false
+  allow_n8n: false
+  require_owner_activation: true
+separation:
+  database_service: pcp-g0d01-postgres
+  database_volume: pcp-g0d01-postgres-data
+  database_host_port: null
+  network: pcp-g0d01-private
+  workspace_root_suffix: pcp-g0d01
+  legacy_database_used: false
+  legacy_project_registry_used: false
+  shared_docker_host: true
+  hard_isolation_verified: false
