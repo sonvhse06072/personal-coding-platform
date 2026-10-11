@@ -237,8 +237,11 @@ def test_upgrade_keeps_real_credentials_unmounted_and_preserves_db(
     assert "model" not in " ".join(call_order)
 
 
+@pytest.mark.parametrize("absent,stopped", [
+    (None, None), ("executor", None), (None, "runtime"),
+])
 def test_rollback_can_recover_partial_upgrade_with_only_original_images(
-    monkeypatch, private, tmp_path
+    monkeypatch, private, tmp_path, absent, stopped
 ):
     upgrade._private_write(private / upgrade.JOURNAL, {
         "old_sha": OLD, "target_sha": NEW, "state": "started",
@@ -250,7 +253,9 @@ def test_rollback_can_recover_partial_upgrade_with_only_original_images(
                             kind == "container" and name in {
                                 upgrade.g0.NAMES["executor"],
                                 upgrade.g0.NAMES["runtime"],
-                            }
+                            } and name != (
+                                upgrade.g0.NAMES.get(absent) if absent else None
+                            )
                         ) or (kind == "image" and ":" + OLD[:12] in name))
     monkeypatch.setattr(upgrade, "_require_empty_g0_job_store", lambda: None)
     def fake_inspect(kind, name):
@@ -266,7 +271,10 @@ def test_rollback_can_recover_partial_upgrade_with_only_original_images(
                     "com.docker.compose.project": upgrade.g0.PROJECT,
                     "com.docker.compose.service": svc,
                 }},
-                "State": {"Running": True, "Status": "running"},
+                "State": {
+                    "Running": svc != stopped,
+                    "Status": "exited" if svc == stopped else "running",
+                },
                 "Image": "sha256:" + "a" * 64,
             }
         return {"Id": "sha256:" + "a" * 64}
