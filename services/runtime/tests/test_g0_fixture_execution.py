@@ -346,3 +346,59 @@ def test_g0_commit_rejects_symlinks_before_git(monkeypatch, tmp_path):
                         lambda *a, **k: pytest.fail("no git for symlink"))
     with pytest.raises(g0.G0GateError, match="symlink"):
         g0._commit_exact_g0(tmp_path, [allowed])
+
+
+
+@pytest.mark.parametrize("foreign_table", [
+    "cp_project_leases", "cp_execution_plans",
+    "cp_plan_orchestrations", "cp_plan_work_orders",
+])
+def test_g0_startup_rejects_legacy_state_before_storage_init(
+    prepared, foreign_table
+):
+    runner, storage, executor = prepared
+
+    class FakeQuery:
+        def __init__(self, sql):
+            self.sql = sql
+        def fetchone(self):
+            if "to_regclass" in self.sql:
+                return {"table_name": "exists"}
+            if f"FROM {foreign_table}" in self.sql:
+                return {"value": 1}
+            return None
+        def fetchall(self):
+            return []
+
+    class FakeConn:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def execute(self, sql, *_args): return FakeQuery(sql)
+
+    storage.connect = FakeConn
+    with pytest.raises(g0.G0GateError, match="unexpected non-fixture work"):
+        runner.prepare_startup()
+    assert storage.initialized is False
+
+
+def test_g0_startup_allows_fresh_owned_db_without_historical_replay(prepared):
+    runner, storage, executor = prepared
+    sql_called = []
+
+    class FakeQuery:
+        def __init__(self, sql):
+            self.sql = sql
+        def fetchone(self):
+            return {"table_name": None}
+    class Conn:
+        def __enter__(self): return self
+        def __exit__(self, *_args): return False
+        def execute(self, sql, *_args):
+            sql_called.append(sql)
+            return FakeQuery(sql)
+
+    storage.connect = Conn
+    runner.prepare_startup()
+    assert storage.initialized is True
+    assert all("UPDATE" not in sql and "DELETE" not in sql for sql in sql_called)
+    assert executor.created == []
