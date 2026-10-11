@@ -74,4 +74,4 @@ The separate Human Owner decision must enumerate exact changes and boundaries be
 - Precisely scoped activation of `ddev.enabled`/phases and any GitHub delivery/PR permissions only after Owner signs off on protected path scope; never rewrite the approved ProjectBaseline `g0d01-seed-2026-10-10` in place. Preserve existing jobs/leases/counters.
 - Real protected rollout evidence (workspace/project ownership, Docker images/volumes, DB, source hash, host capacity, health and rollback), then dispatch exactly one G0D-T01 pair under a recorded WorkOrder; no percentages from insufficient cohort.
 
-**Current gate:** DIRECTION APPROVED; SOURCE-ONLY PREPARATION; **NO ACTIVATION**. PCP #595 G0 NOT GO; G1 #596 remains blocked. Chợ Nhạc strict no-touch and WSL Codex reserved for Chợ Nhạc.
+**Current gate:** DIRECTION APPROVED; OWNER-RUN **INSPECTION ACTIVATION PASS**; **NO FIXTURE JOB/DDEV/PROVIDER/DELIVERY ACTIVATION**. PCP #595 G0 NOT GO and 0 accepted A/B pairs; G1 #596 remains blocked. Chợ Nhạc strict no-touch and the WSL Codex session remain reserved for Chợ Nhạc.
