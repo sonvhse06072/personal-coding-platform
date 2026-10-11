@@ -184,6 +184,57 @@ G0_FIXTURE_PATH = "${CODING_PROJECTS_ROOT}/pcp-g0-fixtures/pcp-g0-drupal-fixture
 # setting the G0 scope cannot create workspaces, run DDEV or send deliveries.
 # Generic cancel/orphan/PM Bridge/host operations stay outside that boundary.
 G0_FIXTURE_API_ROUTES = frozenset({("GET", "/health")})
+G0_SOURCE_COMMIT = "39ef13c25b24c4a1b43a720ae53419f479996ed2"
+G0_FIXTURE_REPOSITORY = "sonvhse06072/pcp-g0-drupal-fixture"
+G0_SOURCE_PATH = Path("/g0/sources/pcp-g0-fixtures/pcp-g0-drupal-fixture")
+G0_WORKSPACE_PATH = Path("/g0/workspaces")
+G0_EXECUTION_ROUTES = frozenset({("POST", "/v1/workspaces")})
+G0_DELIVERY_ROUTES = frozenset({
+    ("POST", "/v1/publish-branch"),
+    ("POST", "/v1/github/pull-request"),
+    ("GET", "/v1/github/ci"),
+})
+
+
+def _g0_fixture_activation_flag(name: str) -> bool:
+    value = os.getenv(name, "")
+    if not value:
+        return False
+    if value != "owner-approved":
+        raise HTTPException(503, "Invalid G0 fixture activation flag")
+    if not _g0_fixture_scoped():
+        raise HTTPException(503, "G0 activation requires isolated Executor scope")
+    if Path("/var/run/docker.sock").exists():
+        raise HTTPException(503, "G0 Executor must not mount the host Docker socket")
+    if (os.getenv("CODING_PROJECTS_ROOT") != "/g0/sources"
+            or os.getenv("CODING_WORKSPACES_ROOT") != "/g0/workspaces"
+            or os.getenv("CODING_DIRECT_PROJECT_ROOT") != "/g0/direct-disabled"):
+        raise HTTPException(503, "G0 Executor roots are not isolated")
+    return True
+
+
+def _g0_fixture_execution_enabled() -> bool:
+    return _g0_fixture_activation_flag("PCP_G0_EXECUTION_ENABLED")
+
+
+def _g0_fixture_delivery_enabled() -> bool:
+    return (
+        _g0_fixture_execution_enabled()
+        and _g0_fixture_activation_flag("PCP_G0_DELIVERY_ENABLED")
+    )
+
+
+def _require_g0_source_repository(cfg: dict[str, Any]) -> None:
+    source = _configured_project_path(cfg)
+    if source != G0_SOURCE_PATH or source.is_symlink():
+        raise HTTPException(403, "G0 source checkout identity mismatch")
+    head = git(source, "rev-parse", "HEAD")
+    if head != G0_SOURCE_COMMIT:
+        raise HTTPException(409, "G0 source checkout differs from frozen seed")
+    origin = remote_origin(source)
+    if github_repository_from_origin(origin or "") != G0_FIXTURE_REPOSITORY:
+        raise HTTPException(403, "G0 source is not the exact private fixture repository")
+
 
 
 def _g0_fixture_scoped() -> bool:
@@ -1403,7 +1454,12 @@ async def fixture_only_http_scope(request: Request, call_next):
             # A canonical/legacy multi-project mount must fail closed even
             # for health; never assume a supplied project_id is trustworthy.
             load_projects()
-            if (request.method, request.url.path) not in G0_FIXTURE_API_ROUTES:
+            allowed = G0_FIXTURE_API_ROUTES
+            if _g0_fixture_execution_enabled():
+                allowed = allowed | G0_EXECUTION_ROUTES
+            if _g0_fixture_delivery_enabled():
+                allowed = allowed | G0_DELIVERY_ROUTES
+            if (request.method, request.url.path) not in allowed:
                 return JSONResponse(
                     status_code=403,
                     content={"detail": "Endpoint outside isolated G0 Executor scope"},
@@ -1860,6 +1916,14 @@ def quiesce_workspace(payload: QuiesceWorkspaceRequest) -> dict[str, Any]:
 def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
     """Prepare either the configured direct repo or one isolated clone."""
     cfg = project(payload.project_id)
+    if _g0_fixture_scoped():
+        if not _g0_fixture_execution_enabled():
+            raise HTTPException(403, "G0 workspace creation not approved")
+        if payload.ref != G0_SOURCE_COMMIT or payload.workspace_mode != "isolated_clone":
+            raise HTTPException(403, "G0 workspace requires frozen source and isolated clone")
+        if not re.fullmatch(r"[0-9a-f]{32}", payload.job_id):
+            raise HTTPException(403, "G0 requires an exact job UUID")
+        _require_g0_source_repository(cfg)
     repo = _configured_project_path(cfg)
     configured_mode = _workspace_mode(cfg)
     mode = (
@@ -1949,11 +2013,12 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
             git(workspace, "remote", "remove", "origin")
         git(workspace, "checkout", "-b", branch, source_commit)
         git(workspace, "update-ref", "-d", "refs/pcp/materialized-source", check=False)
-        _reconcile_workspace_ddev_identity(
-            workspace,
-            payload.job_id,
-            nodejs_version=cfg.get("ddev", {}).get("workspace_nodejs_version"),
-        )
+        if not _g0_fixture_scoped():
+            _reconcile_workspace_ddev_identity(
+                workspace,
+                payload.job_id,
+                nodejs_version=cfg.get("ddev", {}).get("workspace_nodejs_version"),
+            )
     except Exception:
         shutil.rmtree(workspace, ignore_errors=True)
         raise
