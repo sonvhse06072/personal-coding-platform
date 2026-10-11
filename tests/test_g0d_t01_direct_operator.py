@@ -220,7 +220,7 @@ def test_direct_invocation_pins_image_cli_model_reasoning_and_sandbox(monkeypatc
 @pytest.mark.parametrize("stdout,code", [
     (json.dumps({"type": "turn.failed"}), 0),
     (json.dumps({"type": "turn.completed"}) + "\n"
-     + json.dumps({"type": "error", "message": "bad"}), 0),
+     + json.dumps({"type": "turn.failed", "message": "bad"}), 0),
     ("", 0),
     (json.dumps({"type": "turn.completed"}), 7),
 ])
@@ -232,6 +232,23 @@ def test_no_false_success_for_incomplete_or_failed_codex(monkeypatch, stdout, co
                         SimpleNamespace(returncode=code, stdout=stdout, stderr=""))
     with pytest.raises(op.g0.GateError, match="failed|unverified"):
         op._direct_one_call(ROOT, ROOT)
+
+
+def test_transient_error_then_completed_matches_pcp_codex_adapter(monkeypatch):
+    monkeypatch.setattr(op.auth, "_compose", lambda *a: ["docker"])
+    monkeypatch.setattr(op, "_compose_env", lambda *a: {})
+    monkeypatch.setattr(op, "_fixed_prompt", lambda: "synthetic")
+    stdout = "\n".join([
+        json.dumps({"type": "error", "message": "transient"}),
+        json.dumps({"type": "turn.completed", "usage": {
+            "input_tokens": 30, "output_tokens": 9,
+        }}),
+    ])
+    monkeypatch.setattr(op.subprocess, "run", lambda *a, **k:
+                        SimpleNamespace(returncode=0, stdout=stdout, stderr=""))
+    result = op._direct_one_call(ROOT, ROOT)
+    assert result["terminal_verified"] is True
+    assert result["usage"]["output_tokens"] == 9
 
 
 def test_diff_scope_rejects_unrelated_php_or_untracked_content(monkeypatch, local):

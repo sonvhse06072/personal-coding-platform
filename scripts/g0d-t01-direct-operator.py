@@ -299,7 +299,7 @@ def _direct_one_call(repo: Path, fixture: Path) -> dict:
         raise g0.GateError("g0_direct_coding_docker_unavailable") from exc
     if p.returncode != 0 or len(p.stdout) > 4_000_000:
         raise g0.GateError("g0_direct_coding_cli_failed_no_retry")
-    ended, errors, usage = 0, False, {}
+    ended, terminal_event, usage = 0, None, {}
     for line in p.stdout.splitlines():
         try:
             event = json.loads(line)
@@ -308,10 +308,13 @@ def _direct_one_call(repo: Path, fixture: Path) -> dict:
         if not isinstance(event, dict):
             continue
         typ = event.get("type")
-        if typ in {"error", "turn.failed", "item.failed"}:
-            errors = True
+        # Match PCP CodexAdapter: a terminal success and process exit=0 are
+        # authoritative despite a prior transient error telemetry event.
+        if typ == "turn.failed":
+            terminal_event = "turn.failed"
         if typ == "turn.completed":
             ended += 1
+            terminal_event = "turn.completed"
             values = event.get("usage")
             if isinstance(values, dict):
                 usage = {
@@ -319,7 +322,7 @@ def _direct_one_call(repo: Path, fixture: Path) -> dict:
                     if k in {"input_tokens", "cached_input_tokens", "output_tokens"}
                     and type(v) is int and 0 <= v <= 5_000_000
                 }
-    if ended != 1 or errors:
+    if ended != 1 or terminal_event != "turn.completed":
         raise g0.GateError("g0_direct_coding_terminal_unverified_no_retry")
     return {
         "terminal_verified": True, "elapsed_seconds": round(time.monotonic()-start, 2),
