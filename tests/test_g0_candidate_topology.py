@@ -129,9 +129,32 @@ def validate(candidate):
     assert len(binds("executor")) == 3
     assert len(binds("runtime")) == 4
     assert len(binds("router")) == 3
-    assert any(m.get("target") == REGISTRY_TARGET for m in binds("router"))
-    assert any(m.get("target") == REGISTRY_TARGET for m in binds("executor"))
-    assert any(m.get("target") == REGISTRY_TARGET for m in binds("runtime"))
+    expected_config_binds = {
+        "router": {
+            "/g0/config/models.yml": "/config/models.yml",
+            "/g0/config/routing-policy.yml": "/config/routing-policy.yml",
+            REGISTRY_TARGET: "/config/g0-fixture-only/projects.yml",
+        },
+        "executor": {
+            REGISTRY_TARGET: "/config/g0-fixture-only/projects.yml",
+        },
+        "runtime": {
+            REGISTRY_TARGET: "/config/g0-fixture-only/projects.yml",
+            "/g0/config/project-baselines.yml":
+                "/config/g0-fixture-only/project-baselines.yml",
+            "/g0/config/models.yml": "/config/models.yml",
+        },
+    }
+    for name, expected in expected_config_binds.items():
+        actual_mounts = [
+            m for m in binds(name)
+            if source_of(m).startswith("${PCP_G0_REPO_ROOT:?")
+        ]
+        assert len(actual_mounts) == len(expected)
+        actual = {m["target"]: source_of(m) for m in actual_mounts}
+        assert set(actual) == set(expected)
+        for target, source_suffix in expected.items():
+            assert actual[target].endswith(source_suffix)
 
     # Neither the old PCP DB/registry nor Owner's Codex/Git credentials are mounted.
     encoded = yaml.safe_dump(candidate, allow_unicode=True)
@@ -172,6 +195,8 @@ def test_candidate_is_source_only_and_parked():
         "target": "/var/run/docker.sock",
     }),
     lambda d: d["services"]["executor"]["volumes"][1].update(read_only=False),
+    lambda d: d["services"]["executor"]["volumes"][0].update(
+        source="${PCP_G0_REPO_ROOT:?required}/config/unreviewed-config.yml"),
     lambda d: d["services"]["db"]["volumes"][0].update(
         source="personal-coding-platform-postgres"),
     lambda d: d["volumes"]["g0-db"].update(
