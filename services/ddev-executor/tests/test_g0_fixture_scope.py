@@ -177,3 +177,122 @@ def test_default_executor_behavior_is_unchanged(monkeypatch, tmp_path):
     assert main.project("example-project")["base_branch"] == "main"
     with TestClient(main.app) as client:
         assert client.get("/openapi.json").status_code == 200
+
+
+
+def _g0_activation_test_env(monkeypatch):
+    """No real Docker socket or fixture filesystem access from tests."""
+    monkeypatch.setenv("PCP_EXECUTOR_PROJECT_SCOPE", FIXTURE)
+    monkeypatch.setenv("PROJECTS_FILE", str(PARKED_REGISTRY))
+    monkeypatch.setenv("PLATFORM_INTERNAL_TOKEN", "test-fixture-token")
+    monkeypatch.setenv("PCP_G0_EXECUTION_ENABLED", "owner-approved")
+    monkeypatch.setenv("CODING_PROJECTS_ROOT", "/g0/sources")
+    monkeypatch.setenv("CODING_WORKSPACES_ROOT", "/g0/workspaces")
+    monkeypatch.setenv("CODING_DIRECT_PROJECT_ROOT", "/g0/direct-disabled")
+    real_exists = Path.exists
+    monkeypatch.setattr(main.Path, "exists",
+                        lambda self: False if str(self) == "/var/run/docker.sock"
+                        else real_exists(self))
+
+
+def test_g0_workspace_api_optin_remains_exact_and_legacy_still_forbidden(monkeypatch):
+    _g0_activation_test_env(monkeypatch)
+    assert main._g0_fixture_execution_enabled()
+    assert main._g0_fixture_delivery_enabled() is False
+    with TestClient(main.app) as client:
+        auth = {"Authorization": "Bearer test-fixture-token"}
+        assert client.post("/v1/cancel", headers=auth).status_code == 403
+        assert client.post("/v1/workspaces/orphan-resources", headers=auth).status_code == 403
+        assert client.post("/v1/pm-bridge/github/pulls/42/merge",
+                           headers=auth).status_code == 403
+        assert client.post("/v1/workspaces",
+                           json={"job_id": "f" * 32, "project_id": "chonhac"},
+                           headers=auth).status_code == 403
+        # Invalid ref is checked *before* source Git or workspace mutation.
+        wrong = client.post("/v1/workspaces", json={
+            "job_id": "a" * 32, "project_id": FIXTURE,
+            "ref": "main", "workspace_mode": "isolated_clone",
+        }, headers=auth)
+        assert wrong.status_code == 403
+        assert "frozen" in wrong.json()["detail"]
+
+
+@pytest.mark.parametrize("flag", ["yes", "true", "1", "chonhac"])
+def test_invalid_g0_activation_flag_fails_closed(monkeypatch, flag):
+    _g0_activation_test_env(monkeypatch)
+    monkeypatch.setenv("PCP_G0_EXECUTION_ENABLED", flag)
+    with TestClient(main.app) as client:
+        assert client.get("/health").status_code == 503
+        assert client.post("/v1/workspaces", json={
+            "job_id": "a" * 32, "project_id": FIXTURE,
+            "ref": main.G0_SOURCE_COMMIT,
+        }).status_code == 503
+
+
+def test_g0_activation_refuses_host_socket_or_broadened_mounts(monkeypatch):
+    _g0_activation_test_env(monkeypatch)
+    monkeypatch.setenv("CODING_PROJECTS_ROOT", "/home/sonvh")
+    with pytest.raises(HTTPException) as exc:
+        main._g0_fixture_execution_enabled()
+    assert exc.value.status_code == 503
+    monkeypatch.setenv("CODING_PROJECTS_ROOT", "/g0/sources")
+    monkeypatch.setattr(main.Path, "exists",
+                        lambda self: str(self) == "/var/run/docker.sock")
+    with pytest.raises(HTTPException) as exc:
+        main._g0_fixture_execution_enabled()
+    assert exc.value.status_code == 503
+
+
+def test_g0_exact_fixture_source_repo_and_seed_gate(monkeypatch):
+    _g0_activation_test_env(monkeypatch)
+    cfg = main.project(FIXTURE)
+    monkeypatch.setattr(main, "_configured_project_path", lambda *a: main.G0_SOURCE_PATH)
+    monkeypatch.setattr(main, "git", lambda *a, **k: main.G0_SOURCE_COMMIT)
+    monkeypatch.setattr(main, "remote_origin",
+                        lambda *a: "https://github.com/sonvhse06072/pcp-g0-drupal-fixture.git")
+    main._require_g0_source_repository(cfg)
+    monkeypatch.setattr(main, "remote_origin",
+                        lambda *a: "https://github.com/sonvhse06072/chonhac.git")
+    with pytest.raises(HTTPException, match="exact private fixture repository"):
+        main._require_g0_source_repository(cfg)
+
+
+def test_g0_delivery_is_disabled_without_separate_permission(monkeypatch):
+    _g0_activation_test_env(monkeypatch)
+    assert main._g0_fixture_execution_enabled()
+    assert not main._g0_fixture_delivery_enabled()
+    with TestClient(main.app) as client:
+        auth = {"Authorization": "Bearer test-fixture-token"}
+        payload = {
+            "job_id": "a" * 32, "project_id": FIXTURE,
+            "workspace": "/g0/workspaces/" + "a" * 32,
+            "branch": "ai/" + "a" * 12,
+            "source_commit": main.G0_SOURCE_COMMIT,
+            "expected_commit": "b" * 40,
+        }
+        assert client.post("/v1/publish-branch", json=payload, headers=auth).status_code == 403
+        assert client.post("/v1/github/pull-request", json={
+            "job_id": "a" * 32, "project_id": FIXTURE,
+            "branch": "ai/" + "a" * 12,
+            "expected_commit": "b" * 40, "title": "[G0D-T01] test",
+        }, headers=auth).status_code == 403
+
+    monkeypatch.setenv("PCP_G0_DELIVERY_ENABLED", "owner-approved")
+    # The route may now be considered, but delivery has extra **fixture repo**
+    # and exact job+branch checks, *not* a generic GitHub credential path.
+    cfg = main.project(FIXTURE)
+    monkeypatch.setattr(main, "_require_g0_source_repository", lambda *a: None)
+    main._require_g0_delivery_contract(
+        cfg, job_id="a" * 32, branch="ai/" + "a" * 12,
+        source_commit=main.G0_SOURCE_COMMIT,
+    )
+    with pytest.raises(HTTPException, match="match the owning job"):
+        main._require_g0_delivery_contract(
+            cfg, job_id="a" * 32, branch="ai/foreign",
+            source_commit=main.G0_SOURCE_COMMIT,
+        )
+    with pytest.raises(HTTPException, match="frozen seed"):
+        main._require_g0_delivery_contract(
+            cfg, job_id="a" * 32, branch="ai/" + "a" * 12,
+            source_commit="b" * 40,
+        )
