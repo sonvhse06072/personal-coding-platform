@@ -22,6 +22,9 @@ from .intake_policy import classify_intake
 from .job_status_publisher import JobStatusPublisher
 from .dashboard import _require_session, create_dashboard_router
 from .engine_telemetry import RuntimeEngine
+from .g0_fixture_execution import G0FixtureExecution, G0GateError
+from .storage import Storage
+from .executor_client import DdevExecutorClient
 from .orchestrator_notifications import PlanOrchestrator
 from .plan_progress_store import PlanProgressStore
 from .plan_progress_publisher import PlanProgressPublisher
@@ -122,6 +125,7 @@ class ContinuityEventRequest(BaseModel):
 
 storage = TelemetryStorage()
 engine = RuntimeEngine(storage)
+g0_fixture_runner = G0FixtureExecution(Storage(), DdevExecutorClient())
 pm_planner = PMPlanner(storage)
 collaboration_manager = engine.collaboration
 progress_handoffs = PlanProgressStore(storage)
@@ -226,8 +230,10 @@ def _require_manual_collaboration_state(job_id: str) -> None:
 def runtime_startup_mode() -> str:
     """Explicit, opt-in inspection startup without any durable/runtime transitions."""
     mode = os.getenv("PCP_RUNTIME_STARTUP_MODE", "normal")
-    if mode not in {"normal", "inspect"}:
-        raise RuntimeError("Invalid PCP_RUNTIME_STARTUP_MODE; expected normal or inspect")
+    if mode not in {"normal", "inspect", "g0_fixture_run"}:
+        raise RuntimeError(
+            "Invalid PCP_RUNTIME_STARTUP_MODE; expected normal, inspect or g0_fixture_run"
+        )
     return mode
 
 
@@ -238,6 +244,13 @@ async def lifespan(app: FastAPI):
         # In particular: no Storage.init DDL/planning updates, Antigravity
         # cancel-all, queued-job replay, lease cleanup, PlanOrchestrator ticks,
         # or asynchronous notification publishers.
+        yield
+        return
+    if runtime_startup_mode() == "g0_fixture_run":
+        # Dedicated G0-only DB and fixture scope. Never run engine.start(),
+        # Antigravity global cancellation, project lease repair, PM scheduling
+        # or notification publisher loops in this single-job research mode.
+        g0_fixture_runner.prepare_startup()
         yield
         return
     await engine.start()
@@ -258,17 +271,88 @@ app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan
 
 @app.middleware("http")
 async def inspection_mode_http_guard(request: Request, call_next):
-    # Restrict the entire surface, including dashboard and PM Bridge routes.
-    # Even GET handlers may perform DB writes as part of lazy initialization;
-    # /health is the only deliberately permitted inspection endpoint.
-    if runtime_startup_mode() == "inspect" and (
+    mode = runtime_startup_mode()
+    # GET handlers may also lazy-initialize mutable stores. Never expose the
+    # normal dashboard, PM Bridge, planner, generic job or control endpoints.
+    if mode == "inspect" and (
         request.method != "GET" or request.url.path != "/health"
     ):
         return JSONResponse(
             status_code=503,
             content={"detail": "Runtime inspection mode: mutation and dashboard APIs disabled"},
         )
+    if mode == "g0_fixture_run" and not g0_fixture_allowed_route(
+        request.method, request.url.path
+    ):
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "G0 fixture mode: only exact fixture job endpoints enabled"},
+        )
     return await call_next(request)
+
+
+def g0_fixture_allowed_route(method: str, path: str) -> bool:
+    if method == "GET" and path == "/health":
+        return True
+    if method == "POST" and path == "/v1/g0-fixture/prepare":
+        return True
+    match = __import__("re").fullmatch(
+        r"/v1/g0-fixture/jobs/([0-9a-f]{32})(?:/(execute|deliver))?", path
+    )
+    if match is None:
+        return False
+    return method == ("GET" if match.group(2) is None else "POST")
+
+
+def g0_view(row: dict[str, Any]) -> dict[str, Any]:
+    """Keep the G0 response bounded; no prompts, secrets or provider raw logs."""
+    result = row.get("result") or {}
+    return {
+        "job_id": row["id"],
+        "project_id": row["project_id"],
+        "status": row["status"],
+        "source_commit": row.get("source_commit"),
+        "branch": row.get("branch"),
+        "result": {
+            key: result.get(key) for key in (
+                "stage", "commit", "changed_files", "verification_policy",
+                "workflow_blob", "codex_cli_version", "deterministic_ci",
+                "pull_request",
+            ) if key in result
+        },
+    }
+
+
+@app.post("/v1/g0-fixture/prepare", dependencies=[Depends(auth)])
+async def g0_prepare() -> dict[str, Any]:
+    try:
+        return g0_view(await g0_fixture_runner.prepare())
+    except G0GateError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.post("/v1/g0-fixture/jobs/{job_id}/execute", dependencies=[Depends(auth)])
+async def g0_execute(job_id: str) -> dict[str, Any]:
+    try:
+        return g0_view(await g0_fixture_runner.execute(job_id))
+    except G0GateError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.post("/v1/g0-fixture/jobs/{job_id}/deliver", dependencies=[Depends(auth)])
+async def g0_deliver(job_id: str) -> dict[str, Any]:
+    try:
+        return g0_view(await g0_fixture_runner.deliver(job_id))
+    except G0GateError as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
+@app.get("/v1/g0-fixture/jobs/{job_id}", dependencies=[Depends(auth)])
+def g0_status(job_id: str) -> dict[str, Any]:
+    try:
+        return g0_view(g0_fixture_runner.current(job_id))
+    except G0GateError as exc:
+        raise HTTPException(404, str(exc)) from exc
 
 
 app.include_router(pm_bridge_router)
