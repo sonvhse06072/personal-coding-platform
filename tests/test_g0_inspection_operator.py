@@ -66,7 +66,7 @@ def test_wrong_expected_commit_fails_before_external_calls(monkeypatch, tmp_path
 
 
 def test_docker_context_must_resolve_to_local_unix_socket(monkeypatch):
-    valid = '{"docker":{"Host":"unix:///var/run/docker.sock"}}'
+    valid = '[{"Endpoints":{"docker":{"Host":"unix:///var/run/docker.sock"}}}]'
     monkeypatch.delenv("DOCKER_HOST", raising=False)
     monkeypatch.setattr(operator, "run", lambda *a, **k: valid)
     operator.require_local_docker_context()
@@ -75,7 +75,7 @@ def test_docker_context_must_resolve_to_local_unix_socket(monkeypatch):
         operator.require_local_docker_context()
     monkeypatch.delenv("DOCKER_HOST", raising=False)
     monkeypatch.setattr(operator, "run", lambda *a, **k:
-                        '{"docker":{"Host":"ssh://example.invalid"}}')
+                        '[{"Endpoints":{"docker":{"Host":"ssh://example.invalid"}}}]')
     with pytest.raises(operator.GateError, match="docker_context_not_local_unix"):
         operator.require_local_docker_context()
 
