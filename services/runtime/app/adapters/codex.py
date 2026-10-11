@@ -34,7 +34,10 @@ class CodexAdapter(AgentAdapter):
             )
         return super().invocation_capabilities(mode)
 
-    async def run(self, *, workspace: Path, prompt: str, mode: str, timeout: int) -> AgentRun:
+    async def run(
+        self, *, workspace: Path, prompt: str, mode: str, timeout: int,
+        environment: dict[str, str] | None = None,
+    ) -> AgentRun:
         sandbox = "read-only" if mode in {"plan", "evaluate"} else "workspace-write"
         # Runtime is non-interactive: a Codex approval prompt has no valid human
         # response channel. Make the policy explicit instead of inheriting mounted
@@ -107,12 +110,14 @@ class CodexAdapter(AgentAdapter):
 
             timed_out: CommandTimeoutError | None = None
             try:
-                result = await run_command(
-                    argv,
-                    cwd=workspace,
-                    timeout=timeout,
-                    on_stdout_line=on_stdout_line,
-                )
+                invoke = {
+                    "cwd": workspace,
+                    "timeout": timeout,
+                    "on_stdout_line": on_stdout_line,
+                }
+                if environment is not None:
+                    invoke["env"] = environment
+                result = await run_command(argv, **invoke)
             except CommandTimeoutError as exc:
                 timed_out = exc
                 result = CommandResult(
