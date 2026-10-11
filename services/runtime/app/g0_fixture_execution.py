@@ -151,6 +151,32 @@ def _checked_workspace(root: Path, job_id: str, path: str) -> Path:
     return workspace
 
 
+def _assert_frozen_workspace(workspace: Path, branch: str) -> None:
+    """No model call if seed, private branch, cleanliness or origin drifted."""
+    env = agent_subprocess_env({
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_TERMINAL_PROMPT": "0",
+    })
+    def git(*args: str) -> str:
+        result = subprocess.run(
+            ["git", "-C", str(workspace), "-c", "core.hooksPath=/dev/null",
+             *args],
+            capture_output=True, text=True, timeout=15, env=env,
+        )
+        if result.returncode:
+            raise G0GateError("G0 workspace Git identity probe failed")
+        return result.stdout.strip()
+
+    if (
+        git("rev-parse", "HEAD") != SEED
+        or git("branch", "--show-current") != branch
+        or git("remote")
+        or git("status", "--porcelain=v1")
+    ):
+        raise G0GateError("G0 workspace is no longer a clean frozen seed clone")
+
+
 def _commit_exact_g0(workspace: Path, paths: list[str]) -> str:
     """Commit only reviewed paths, with no Git hooks or inherited Runtime secrets."""
     if not paths or any(p not in ALLOWED_FILES for p in paths):
@@ -306,6 +332,7 @@ class G0FixtureExecution:
             if _codex_version() != expected_cli:
                 raise G0GateError("G0 Codex binary changed since preflight")
             workspace = _checked_workspace(self.workspace_root, job_id, row["workspace"])
+            _assert_frozen_workspace(workspace, str(row["branch"]))
             checkpoint = row["checkpoint"]["g0_fixture"]
             if any((checkpoint.get(k) != v) for k, v in {
                 "model_id": model, "reasoning_effort": effort,
