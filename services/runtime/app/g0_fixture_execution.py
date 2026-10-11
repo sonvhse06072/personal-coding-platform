@@ -231,6 +231,18 @@ class G0FixtureExecution:
                     for r in rows
                 )):
                     raise G0GateError("G0 DB has foreign, concurrent or ambiguous jobs")
+            # These tables should be empty for a single isolated G0 WorkOrder.
+            # Do not repair/cancel/import an unexpected historical plan or lease.
+            for table in (
+                "cp_project_leases", "cp_execution_plans",
+                "cp_plan_orchestrations", "cp_plan_work_orders",
+            ):
+                exists = conn.execute(
+                    "SELECT to_regclass(%s) AS table_name", ("public." + table,)
+                ).fetchone()
+                if exists and exists.get("table_name"):
+                    if conn.execute(f"SELECT 1 FROM {table} LIMIT 1").fetchone():
+                        raise G0GateError("G0 DB contains unexpected non-fixture work state")
         self.storage.init()
 
     def current(self, job_id: str) -> dict[str, Any]:
