@@ -23,6 +23,31 @@ def doc():
     return yaml.safe_load(auth.OVERLAY.read_text(encoding="utf-8"))
 
 
+def valid_rendered_compose():
+    """Model Docker Compose long-form mount normalization without Docker."""
+    mounts = {}
+    for arm, path in auth.G0_AUTH_DIRS.items():
+        mounts["auth_" + arm] = {
+            "volumes": [
+                {"type": "bind", "source": "/private/g0/" + arm,
+                 "target": path},
+                {"type": "tmpfs", "target": "/tmp",
+                 "tmpfs": {"size": 134217728}},
+            ],
+        }
+    mounts["direct"] = {
+        "volumes": [
+            {"type": "bind", "source": "/private/g0/direct",
+             "target": auth.G0_AUTH_DIRS["direct"]},
+            {"type": "bind", "source": "/private/g0/arms/direct",
+             "target": "/g0/direct-workspace"},
+            {"type": "tmpfs", "target": "/tmp",
+             "tmpfs": {"size": 134217728}},
+        ],
+    }
+    return {"services": mounts}
+
+
 def test_overlay_is_nondefault_and_has_same_codex_image_with_separate_auth_roots():
     auth._validate_overlay()
     document = doc()
@@ -30,6 +55,12 @@ def test_overlay_is_nondefault_and_has_same_codex_image_with_separate_auth_roots
     assert set(services) == {"auth_pcp", "auth_direct", "direct"}
     assert len({s["image"] for s in services.values()}) == 1
     assert all("docker.sock" not in str(s) for s in services.values())
+    for name, service in services.items():
+        assert "tmpfs" not in service  # no ambiguous top-level short syntax
+        assert service["volumes"][-1] == {
+            "type": "tmpfs", "target": "/tmp",
+            "tmpfs": {"size": 134217728},
+        }
     assert all(not s.get("ports") and s["read_only"] for s in services.values())
     assert all(s.get("profiles") for s in services.values())
     assert services["auth_pcp"]["volumes"][0]["target"] != (
@@ -62,6 +93,15 @@ def test_overlay_is_nondefault_and_has_same_codex_image_with_separate_auth_roots
     lambda d: d["services"]["direct"].update(profiles=[]),
     lambda d: d["services"]["auth_pcp"].update(read_only=False),
     lambda d: d["services"]["direct"].update(image="node:latest"),
+    lambda d: d["services"]["auth_pcp"].update(
+        tmpfs=["/tmp:rw,nosuid,size=128m"]),
+    lambda d: d["services"]["auth_direct"]["volumes"][-1].update(
+        target="size=128m"),
+    lambda d: d["services"]["direct"]["volumes"][-1]["tmpfs"].update(
+        size=0),
+    lambda d: d["services"]["auth_pcp"]["volumes"].append({
+        "type": "tmpfs", "target": "/other"
+    }),
     lambda d: d["networks"]["g0-provider-pcp"].update(
         name="shared-host-provider"),
     lambda d: d["x-g0-provider-contract"].update(
@@ -115,7 +155,8 @@ def test_read_only_preflight_no_docker_mutation(isolated, monkeypatch, tmp_path)
     commands = []
     def fake_run(argv, **kwargs):
         commands.append((argv, kwargs))
-        return ""
+        assert argv[-3:] == ["config", "--format", "json"]
+        return json.dumps(valid_rendered_compose())
     monkeypatch.setattr(auth.g0, "run", fake_run)
     report = auth.preflight(tmp_path, tmp_path, SHA)
     assert report["status"] == "PASS"
@@ -123,7 +164,7 @@ def test_read_only_preflight_no_docker_mutation(isolated, monkeypatch, tmp_path)
     assert report["installed_codex_cli_version"] == auth.CLI_VERSION
     assert report["network_domain_allowlist_verified"] is False
     assert len(commands) == 1
-    assert commands[0][0][-2:] == ["config", "--quiet"]
+    assert commands[0][0][-3:] == ["config", "--format", "json"]
     assert not (isolated / "provider").exists()
     assert not any("up" in cmd or "run" in cmd for cmd, _ in commands)
 
@@ -143,6 +184,41 @@ def test_private_profiles_are_new_empty_no_token_copy(isolated, monkeypatch, tmp
     assert not (isolated / "arms/direct/workspace/.git").exists()
     with pytest.raises(auth.g0.GateError, match="collision|already_prepared"):
         auth.prepare(tmp_path, tmp_path, SHA)
+
+
+@pytest.mark.parametrize("mutation", [
+    lambda d: d["services"]["auth_pcp"]["volumes"][-1].update(
+        target="size=128m"),
+    lambda d: d["services"]["auth_pcp"]["volumes"][-1].update(
+        type="volume", source="size=128m"),
+    lambda d: d["services"]["auth_direct"]["volumes"][-1]["tmpfs"].update(
+        size=268435456),
+    lambda d: d["services"]["direct"]["volumes"].append({
+        "type": "bind", "target": "/var/run/docker.sock"
+    }),
+])
+def test_rendered_docker_mount_validation_rejects_daemon_invalid_or_broadening(
+    isolated, monkeypatch, tmp_path, mutation
+):
+    sample = valid_rendered_compose()
+    mutation(sample)
+    monkeypatch.setattr(auth.g0, "run",
+                        lambda argv, **kw: json.dumps(sample))
+    with pytest.raises(auth.g0.GateError, match="g0_.*mount|g0_.*tmpfs"):
+        auth._verify_rendered_tmpfs_mounts(tmp_path, {})
+
+
+def test_rendered_compose_validates_both_login_mounts_without_any_docker_call(
+    isolated, monkeypatch, tmp_path
+):
+    commands = []
+    def safe_config(argv, **kwargs):
+        commands.append(argv)
+        return json.dumps(valid_rendered_compose())
+    monkeypatch.setattr(auth.g0, "run", safe_config)
+    auth._verify_rendered_tmpfs_mounts(tmp_path, {})
+    assert len(commands) == 1
+    assert commands[0][-3:] == ["config", "--format", "json"]
 
 
 def test_provider_identity_collision_rejected_without_reading_secrets(
@@ -181,7 +257,10 @@ def test_interactive_device_auth_cannot_touch_model_or_send_credentials(
     monkeypatch.setattr(auth, "preflight", lambda *a: {"status": "PASS"})
     auth.prepare(tmp_path, tmp_path, SHA)
     commands = []
-    monkeypatch.setattr(auth.g0, "run", lambda argv, **kw: commands.append(argv) or "")
+    monkeypatch.setattr(
+        auth.g0, "run",
+        lambda argv, **kw: commands.append(argv) or json.dumps(valid_rendered_compose()),
+    )
     def fake_docker(argv, **kw):
         commands.append(argv)
         assert kw["check"] is False
