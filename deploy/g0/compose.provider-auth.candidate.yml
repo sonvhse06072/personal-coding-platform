@@ -28,12 +28,12 @@ services:
         source: "${PCP_G0_AUTH_PCP_DIR:?new_separate_pcp_auth_dir_required}"
         target: /home/coder/.codex-g0
         bind: {create_host_path: false}
-    networks: [g0-provider-pcp]
-    read_only: true
       - type: tmpfs
         target: /tmp
         tmpfs:
           size: 134217728
+    networks: [g0-provider-pcp]
+    read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     pids_limit: 128
@@ -55,12 +55,12 @@ services:
         source: "${PCP_G0_AUTH_DIRECT_DIR:?new_separate_direct_auth_dir_required}"
         target: /home/coder/.codex-direct
         bind: {create_host_path: false}
-    networks: [g0-provider-direct]
-    read_only: true
       - type: tmpfs
         target: /tmp
         tmpfs:
           size: 134217728
+    networks: [g0-provider-direct]
+    read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     pids_limit: 128
@@ -87,12 +87,12 @@ services:
         source: "${PCP_G0_DIRECT_WORKSPACE_DIR:?independent_frozen_fixture_workspace_required}"
         target: /g0/direct-workspace
         bind: {create_host_path: false}
-    networks: [g0-provider-direct]
-    read_only: true
       - type: tmpfs
         target: /tmp
         tmpfs:
           size: 134217728
+    networks: [g0-provider-direct]
+    read_only: true
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     pids_limit: 128
