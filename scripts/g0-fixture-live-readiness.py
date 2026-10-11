@@ -32,6 +32,7 @@ import urllib.request
 
 port = int(sys.argv[1])
 paths = json.loads(sys.argv[2])
+opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 out = {}
 for path in paths:
     if not path.startswith("/") or any(c in path for c in "\r\n#"):
@@ -41,7 +42,7 @@ for path in paths:
     )
     content = b""
     try:
-        with urllib.request.urlopen(req, timeout=6) as response:
+        with opener.open(req, timeout=6) as response:
             code = response.status
             if path == "/health":
                 content = response.read(8192)
