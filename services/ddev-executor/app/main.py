@@ -2051,8 +2051,9 @@ def _verify_g0_delivered_diff(
     changed = git(
         workspace, "diff", "--name-only", source_commit, expected_commit
     ).splitlines()
-    if not changed or any(path not in G0_ALLOWED_CHANGED_FILES for path in changed):
-        raise HTTPException(403, "G0 commit includes changes outside the frozen task")
+    if (len(changed) != len(G0_ALLOWED_CHANGED_FILES)
+            or set(changed) != G0_ALLOWED_CHANGED_FILES):
+        raise HTTPException(403, "G0 commit must contain only the frozen code and test changes")
 
 
 def _require_g0_delivery_contract(
