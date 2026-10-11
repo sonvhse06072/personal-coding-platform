@@ -300,7 +300,7 @@ def test_g0_delivery_is_disabled_without_separate_permission(monkeypatch):
 
 
 def test_g0_privileged_delivery_rechecks_exact_committed_diff(monkeypatch, tmp_path):
-    allowed = next(iter(main.G0_ALLOWED_CHANGED_FILES))
+    allowed = "\n".join(sorted(main.G0_ALLOWED_CHANGED_FILES))
     calls = []
     def fake_git(repo, *argv, **kwargs):
         calls.append(argv)
@@ -322,7 +322,7 @@ def test_g0_privileged_delivery_rejects_changes_outside_frozen_files(
         main, "git", lambda _repo, *argv, **kwargs:
         "composer.lock" if "diff" in argv else ""
     )
-    with pytest.raises(HTTPException, match="outside the frozen task"):
+    with pytest.raises(HTTPException, match="only the frozen code and test changes"):
         main._verify_g0_delivered_diff(
             tmp_path, main.G0_SOURCE_COMMIT, "b" * 40,
         )
