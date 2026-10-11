@@ -11,6 +11,7 @@ fixture:
 activation:
   status: parked
   runtime_startup_mode: inspect
+  executor_project_scope: pcp-g0-drupal-fixture
   start_services: false
   allow_real_jobs: false
   allow_ddev: false
