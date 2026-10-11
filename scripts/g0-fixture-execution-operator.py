@@ -389,15 +389,16 @@ def _verify_restore_targets() -> None:
         networks = (data.get("NetworkSettings") or {}).get("Networks") or {}
         mounts = data.get("Mounts") or []
         image = g0.inspect("image", g0.resource_names(auth.DEPLOYED_SHA)[svc])
+        allowed_networks = {g0.NETWORK}
+        if svc == "runtime":
+            allowed_networks.add(auth.G0_AUTH_NETWORKS["pcp"])
         if (
             data.get("Name") != "/" + name
             or labels.get("com.docker.compose.project") != g0.PROJECT
             or labels.get("com.docker.compose.service") != svc
             or data.get("Image") != image.get("Id")
             or g0.NETWORK not in networks
-            or not set(networks).issubset({
-                g0.NETWORK, auth.G0_AUTH_NETWORKS["pcp"],
-            })
+            or not set(networks).issubset(allowed_networks)
             or any(
                 not isinstance(m, dict)
                 or m.get("Destination") == "/var/run/docker.sock"
