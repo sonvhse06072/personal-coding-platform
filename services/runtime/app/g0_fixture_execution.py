@@ -19,7 +19,8 @@ from urllib.parse import urlsplit
 from .adapters.codex import CodexAdapter
 from .config import project_baselines_doc, projects_doc
 from .executor_client import DdevExecutorClient
-from .repo import commit_changes, diff_state
+from .repo import diff_state
+from .shell import agent_subprocess_env
 from .storage import Storage
 
 
@@ -150,6 +151,47 @@ def _checked_workspace(root: Path, job_id: str, path: str) -> Path:
     return workspace
 
 
+def _commit_exact_g0(workspace: Path, paths: list[str]) -> str:
+    """Commit only reviewed paths, with no Git hooks or inherited Runtime secrets."""
+    if not paths or any(p not in ALLOWED_FILES for p in paths):
+        raise G0GateError("G0 commit paths are outside the frozen fixture contract")
+    if any((workspace / p).is_symlink() for p in paths):
+        raise G0GateError("G0 cannot commit replaced symlink source files")
+    env = agent_subprocess_env({
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_CONFIG_GLOBAL": "/dev/null",
+        "GIT_TERMINAL_PROMPT": "0",
+    })
+
+    def git(*args: str, allow_empty_commit: bool = False) -> str:
+        p = subprocess.run(
+            ["git", "-C", str(workspace), "-c", "core.hooksPath=/dev/null",
+             *args],
+            capture_output=True, text=True, timeout=30, env=env,
+        )
+        if p.returncode:
+            if allow_empty_commit and "nothing to commit" in p.stdout:
+                return ""
+            raise G0GateError("Fixture-only scoped Git operation failed")
+        return p.stdout.strip()
+
+    git("add", "--", *paths)
+    # Existing Codex-produced commits are allowed only if the source-to-final
+    # diff has already been scoped by validate_job_diff().
+    staged = git("diff", "--cached", "--name-only").splitlines()
+    if staged and any(p not in ALLOWED_FILES for p in staged):
+        raise G0GateError("G0 staging contains unauthorized paths")
+    if staged:
+        git("-c", "user.name=PCP G0 Fixture Developer",
+            "-c", "user.email=pcp-g0-fixture@localhost",
+            "commit", "-m", "test(g0): normalize internal ASCII whitespace")
+    git("merge-base", "--is-ancestor", SEED, "HEAD")
+    commit = git("rev-parse", "HEAD")
+    if commit == SEED or not re.fullmatch(r"[0-9a-f]{40}", commit):
+        raise G0GateError("Fixture-only job produced no derived commit")
+    return commit
+
+
 def _codex_version() -> str:
     try:
         p = subprocess.run(
@@ -270,21 +312,10 @@ class G0FixtureExecution:
                     raise G0GateError("G0 Codex failed; same job requires explicit recovery review")
                 diff = diff_state(workspace, max_bytes=60_000, base_ref=SEED)
                 paths = validate_job_diff(diff)
-                # Keep credentials out of the developer process. Local Git
-                # identity is set only in the isolated workspace after Codex.
-                for key, val in (
-                    ("user.name", "PCP G0 Fixture Developer"),
-                    ("user.email", "pcp-g0-fixture@localhost"),
-                ):
-                    p = subprocess.run(
-                        ["git", "-C", str(workspace), "config", "--local", key, val],
-                        capture_output=True, text=True, timeout=10,
-                    )
-                    if p.returncode:
-                        raise G0GateError("G0 fixture Git identity not writable")
-                commit = commit_changes(workspace, "test(g0): normalize internal ASCII whitespace")
-                if not commit:
-                    raise G0GateError("G0 Codex produced no verified source diff")
+                # Commit only the already scope-checked paths using sanitized
+                # Git subprocesses and disabled hooks; the agent never receives
+                # privileged delivery/API credentials.
+                commit = _commit_exact_g0(workspace, paths)
                 self.storage.update(
                     job_id, status="waiting_human",
                     result={
