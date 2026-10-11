@@ -32,7 +32,7 @@ def valid_rendered_compose():
                 {"type": "bind", "source": "/private/g0/" + arm,
                  "target": path},
                 {"type": "tmpfs", "target": "/tmp",
-                 "tmpfs": {"size": 134217728}},
+                 "tmpfs": {"size": "134217728"}},
             ],
         }
     mounts["direct"] = {
@@ -42,7 +42,7 @@ def valid_rendered_compose():
             {"type": "bind", "source": "/private/g0/arms/direct",
              "target": "/g0/direct-workspace"},
             {"type": "tmpfs", "target": "/tmp",
-             "tmpfs": {"size": 134217728}},
+             "tmpfs": {"size": "134217728"}},
         ],
     }
     return {"services": mounts}
@@ -206,6 +206,33 @@ def test_rendered_docker_mount_validation_rejects_daemon_invalid_or_broadening(
                         lambda argv, **kw: json.dumps(sample))
     with pytest.raises(auth.g0.GateError, match="g0_.*mount|g0_.*tmpfs"):
         auth._verify_rendered_tmpfs_mounts(tmp_path, {})
+
+
+@pytest.mark.parametrize("size", [134217728, "134217728"])
+def test_rendered_tmpfs_accepts_exact_integer_and_compose_json_string(size):
+    assert auth._is_exact_rendered_tmpfs({
+        "type": "tmpfs", "target": "/tmp", "tmpfs": {"size": size},
+    })
+
+
+@pytest.mark.parametrize("size", [
+    "128m", "128MiB", "size=128m", "134217727", "134217729",
+    134217727, 134217729, 134217728.0, 0, None, True, False, {},
+])
+def test_rendered_tmpfs_rejects_untrusted_or_broadened_size(size):
+    assert not auth._is_exact_rendered_tmpfs({
+        "type": "tmpfs", "target": "/tmp", "tmpfs": {"size": size},
+    })
+
+
+def test_rendered_mounts_allow_exact_mixed_compose_json_integer_encodings(
+    isolated, monkeypatch, tmp_path
+):
+    sample = valid_rendered_compose()
+    sample["services"]["auth_direct"]["volumes"][-1]["tmpfs"]["size"] = 134217728
+    monkeypatch.setattr(auth.g0, "run",
+                        lambda argv, **kw: json.dumps(sample))
+    auth._verify_rendered_tmpfs_mounts(tmp_path, {})
 
 
 def test_rendered_compose_validates_both_login_mounts_without_any_docker_call(

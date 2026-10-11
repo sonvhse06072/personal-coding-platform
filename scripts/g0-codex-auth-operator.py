@@ -271,6 +271,25 @@ def _compose(repo: Path) -> list[str]:
     ]
 
 
+def _is_exact_rendered_tmpfs(mount: object) -> bool:
+    """Require 128 MiB despite compose-go JSON's quoted UnitBytes encoding.
+
+    compose-go marshals UnitBytes as decimal *strings* in rendered JSON.
+    Some Compose builds encode a JSON integer instead. Accept exactly those
+    two representations, never booleans, units, fractions or changed sizes.
+    """
+    if not isinstance(mount, dict) or mount.get("type") != "tmpfs":
+        return False
+    options = mount.get("tmpfs")
+    if not isinstance(options, dict):
+        return False
+    size = options.get("size")
+    return (
+        (type(size) is int and size == 134217728)
+        or (type(size) is str and size == "134217728")
+    )
+
+
 def _verify_rendered_tmpfs_mounts(repo: Path, env: dict[str, str]) -> None:
     """Validate actual Compose mount resolution without contacting the daemon.
 
@@ -305,11 +324,7 @@ def _verify_rendered_tmpfs_mounts(repo: Path, env: dict[str, str]) -> None:
             raise g0.GateError("g0_auth_rendered_mount_target_invalid")
         auth = types[auth_path]
         tmp = types["/tmp"]
-        if auth.get("type") != "bind" or (
-            tmp.get("type") != "tmpfs"
-            or not isinstance(tmp.get("tmpfs"), dict)
-            or tmp["tmpfs"].get("size") != 134217728
-        ):
+        if auth.get("type") != "bind" or not _is_exact_rendered_tmpfs(tmp):
             raise g0.GateError("g0_auth_rendered_tmpfs_invalid")
     # Direct has a different opt-in profile. Check it when it appears in the
     # renderer (other profile filtering does not affect an auth-only login).
@@ -323,8 +338,7 @@ def _verify_rendered_tmpfs_mounts(repo: Path, env: dict[str, str]) -> None:
             raise g0.GateError("g0_direct_rendered_mount_target_invalid")
         tmps = [m for m in mounts if isinstance(m, dict)
                 and m.get("target") == "/tmp"]
-        if (len(tmps) != 1 or tmps[0].get("type") != "tmpfs"
-                or (tmps[0].get("tmpfs") or {}).get("size") != 134217728):
+        if len(tmps) != 1 or not _is_exact_rendered_tmpfs(tmps[0]):
             raise g0.GateError("g0_direct_rendered_tmpfs_invalid")
 
 
