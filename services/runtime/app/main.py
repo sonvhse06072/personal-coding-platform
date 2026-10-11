@@ -287,7 +287,7 @@ async def health() -> RuntimeHealth:
     router_ok = await engine.router.health()
     executor_ok = await engine.ddev.health()
     return RuntimeHealth(
-        status="ok" if router_ok and executor_ok else "degraded",
+        status="ok" if router_ok and executor_ok and runtime_startup_mode() == "normal" else "degraded",
         service="coding-runtime",
         version=RUNTIME_VERSION,
         router="ok" if router_ok else "down",
