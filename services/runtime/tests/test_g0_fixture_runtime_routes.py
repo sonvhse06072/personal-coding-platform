@@ -151,13 +151,16 @@ def test_invalid_g0_mode_cannot_fallback_to_normal(monkeypatch):
 
 
 def test_g0_routes_remain_inaccessible_from_legacy_normal_runtime(monkeypatch):
+    from fastapi import HTTPException
+
     monkeypatch.setenv("PCP_RUNTIME_STARTUP_MODE", "normal")
-    monkeypatch.setenv("RUNTIME_API_TOKEN", "g0-test-token")
-    with TestClient(main.app) as client:
-        headers = {"Authorization": "Bearer g0-test-token"}
-        assert client.post("/v1/g0-fixture/prepare", headers=headers).status_code == 403
-        assert client.get("/v1/g0-fixture/jobs/" + G0ID, headers=headers).status_code == 403
-        assert client.post("/v1/g0-fixture/jobs/" + G0ID + "/execute",
-                           headers=headers).status_code == 403
-        assert client.post("/v1/g0-fixture/jobs/" + G0ID + "/deliver",
-                           headers=headers).status_code == 403
+    # Do not start the legacy Runtime in tests merely to verify the route guard.
+    for operation in (
+        lambda: asyncio.run(main.g0_prepare()),
+        lambda: asyncio.run(main.g0_execute(G0ID)),
+        lambda: asyncio.run(main.g0_deliver(G0ID)),
+        lambda: main.g0_status(G0ID),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            operation()
+        assert exc.value.status_code == 403
