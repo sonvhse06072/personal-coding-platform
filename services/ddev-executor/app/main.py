@@ -15,7 +15,8 @@ from urllib.parse import urlsplit
 
 import httpx
 import yaml
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .github_delivery import (
@@ -176,9 +177,58 @@ def auth(authorization: str | None = Header(default=None)) -> None:
         raise HTTPException(401, "Invalid bearer token")
 
 
+G0_FIXTURE_PROJECT_ID = "pcp-g0-drupal-fixture"
+G0_FIXTURE_PATH = "${CODING_PROJECTS_ROOT}/pcp-g0-fixtures/pcp-g0-drupal-fixture"
+# All other routes, including host orphan cleanups, unbound cancel, PM Bridge,
+# preview, direct source sync and any future routes, are denied in G0-only mode.
+G0_FIXTURE_API_ROUTES = frozenset({
+    ("GET", "/health"),
+    ("GET", "/v1/project-state"),
+    ("POST", "/v1/workspaces"),
+    ("DELETE", "/v1/workspaces"),
+    ("POST", "/v1/workspaces/quiesce"),
+    ("POST", "/v1/phase"),
+    ("POST", "/v1/publish-branch"),
+    ("POST", "/v1/github/reconcile-delivery"),
+    ("POST", "/v1/github/review-repair"),
+    ("POST", "/v1/github/pull-request"),
+    ("GET", "/v1/github/ci"),
+})
+
+
+def _g0_fixture_scoped() -> bool:
+    """Optional narrower executor surface; never a host Docker security boundary."""
+    scope = os.getenv("PCP_EXECUTOR_PROJECT_SCOPE", "")
+    if not scope:
+        return False
+    if scope != G0_FIXTURE_PROJECT_ID:
+        raise HTTPException(503, "Invalid Executor project scope")
+    return True
+
+
+def _validate_g0_registry(projects: Any) -> None:
+    if not isinstance(projects, dict) or set(projects) != {G0_FIXTURE_PROJECT_ID}:
+        raise HTTPException(503, "Executor scoped registry must contain only the G0 fixture")
+    cfg = projects[G0_FIXTURE_PROJECT_ID]
+    if not isinstance(cfg, dict) or (
+        cfg.get("path") != G0_FIXTURE_PATH
+        or cfg.get("base_branch") != "benchmark/pcp"
+        or not isinstance(cfg.get("runtime"), dict)
+        or cfg["runtime"].get("workspace_mode") != "isolated_clone"
+        or cfg["runtime"].get("exclusive_project_lease") is not False
+    ):
+        raise HTTPException(503, "Executor scoped fixture identity is invalid")
+
+
 def load_projects() -> dict[str, Any]:
     with open(os.getenv("PROJECTS_FILE", "/config/projects.yml"), "r", encoding="utf-8") as handle:
-        return (yaml.safe_load(handle) or {}).get("projects", {})
+        document = yaml.safe_load(handle) or {}
+    if not isinstance(document, dict):
+        raise HTTPException(503, "Invalid executor project registry")
+    projects = document.get("projects", {})
+    if _g0_fixture_scoped():
+        _validate_g0_registry(projects)
+    return projects
 
 
 def expand(value: str) -> Path:
@@ -186,6 +236,9 @@ def expand(value: str) -> Path:
 
 
 def project(project_id: str) -> dict[str, Any]:
+    # This check also protects direct internal handler calls that bypass HTTP.
+    if _g0_fixture_scoped() and project_id != G0_FIXTURE_PROJECT_ID:
+        raise HTTPException(403, "Project outside isolated G0 Executor scope")
     projects = load_projects()
     if project_id not in projects:
         raise HTTPException(404, "Unknown project")
@@ -1350,6 +1403,29 @@ def run_tracked(
 DDEV_EXECUTOR_VERSION = "1.0.35"
 
 app = FastAPI(title="Constrained DDEV/Git Executor", version=DDEV_EXECUTOR_VERSION)
+
+
+@app.middleware("http")
+async def fixture_only_http_scope(request: Request, call_next):
+    try:
+        if _g0_fixture_scoped():
+            # Re-read the small, mounted G0-only registry on every request.
+            # A canonical/legacy multi-project mount must fail closed even
+            # for health; never assume a supplied project_id is trustworthy.
+            load_projects()
+            if (request.method, request.url.path) not in G0_FIXTURE_API_ROUTES:
+                return JSONResponse(
+                    status_code=403,
+                    content={"detail": "Endpoint outside isolated G0 Executor scope"},
+                )
+    except (HTTPException, OSError, ValueError, TypeError, yaml.YAMLError):
+        return JSONResponse(
+            status_code=503,
+            content={"detail": "G0 Executor scope configuration unavailable"},
+        )
+    return await call_next(request)
+
+
 app.include_router(pm_bridge_github_router)
 
 
