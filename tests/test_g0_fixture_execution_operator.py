@@ -239,6 +239,38 @@ def test_status_incomplete_journal_remains_stopped(monkeypatch, tmp_path):
     assert result["ready_to_dispatch_g0d_t01"] is False
 
 
+def test_partial_restore_target_missing_can_be_recreated_safely(
+    monkeypatch
+):
+    monkeypatch.setattr(op.g0, "exists", lambda *a: False)
+    monkeypatch.setattr(
+        op.g0, "inspect", lambda *a: (_ for _ in ()).throw(
+            AssertionError("absent G0 container has no object to inspect")
+        )
+    )
+    op._verify_restore_targets()
+
+
+def test_partial_restore_refuses_foreign_occupied_target(monkeypatch):
+    monkeypatch.setattr(op.g0, "exists", lambda *a: True)
+    monkeypatch.setattr(op.g0, "inspect", lambda kind, name: (
+        {"Id": "sha256:known"} if kind == "image" else {
+            "Name": "/" + name,
+            "Image": "sha256:known",
+            "Config": {"Labels": {
+                "com.docker.compose.project": "foreign-project",
+                "com.docker.compose.service": "runtime",
+            }},
+            "NetworkSettings": {"Networks": {
+                op.g0.NETWORK: {},
+            }},
+            "Mounts": [],
+        }
+    ))
+    with pytest.raises(op.g0.GateError, match="not_owned"):
+        op._verify_restore_targets()
+
+
 def test_real_cli_help_entrypoint_does_not_contact_provider_or_docker():
     result = subprocess.run(
         [sys.executable, str(SCRIPT), "--help"],
