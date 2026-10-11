@@ -93,8 +93,31 @@ def _base_source_validation(repo: Path, fixture: Path, expected: str) -> None:
     g0.guard_source(repo, fixture)
 
 
+EXPECTED_MOUNTS = {
+    "db": {
+        "/var/lib/postgresql/data": ("volume", False),
+    },
+    "router": {
+        "/g0/config/models.yml": ("bind", True),
+        "/g0/config/routing-policy.yml": ("bind", True),
+        "/g0/config/projects.yml": ("bind", True),
+    },
+    "executor": {
+        "/g0/config/projects.yml": ("bind", True),
+        "/g0/sources/pcp-g0-fixtures/pcp-g0-drupal-fixture": ("bind", True),
+        "/g0/workspaces": ("bind", False),
+    },
+    "runtime": {
+        "/g0/config/projects.yml": ("bind", True),
+        "/g0/config/project-baselines.yml": ("bind", True),
+        "/g0/config/models.yml": ("bind", True),
+        "/g0/workspaces": ("bind", False),
+    },
+}
+
+
 def _verify_g0_resources(deployed: str) -> None:
-    """Read only exact G0 resources; fail if any source or ownership changed."""
+    """Read only exact G0 resources; fail if any scope/ownership changed."""
     if not g0.SOURCE_SHA.fullmatch(deployed):
         raise g0.GateError("deployed_source_not_exact")
     for svc in g0.G0_SERVICES:
@@ -111,9 +134,21 @@ def _verify_g0_resources(deployed: str) -> None:
         host = obj.get("HostConfig") or {}
         if host.get("Privileged") is not False or host.get("PortBindings"):
             raise g0.GateError("g0_container_host_privilege_changed")
-        if any(m.get("Destination") == "/var/run/docker.sock"
-               for m in (obj.get("Mounts") or [])):
-            raise g0.GateError("g0_host_docker_socket_exposed")
+        actual = {}
+        for mount in (obj.get("Mounts") or []):
+            dest = mount.get("Destination")
+            if not isinstance(dest, str) or dest in actual:
+                raise g0.GateError("g0_mount_identity_ambiguous")
+            actual[dest] = (
+                mount.get("Type"), mount.get("RW") is False,
+            )
+            if dest == "/var/run/docker.sock":
+                raise g0.GateError("g0_host_docker_socket_exposed")
+            if (svc == "db" and dest == "/var/lib/postgresql/data"
+                    and mount.get("Name") != g0.DATA_VOLUME):
+                raise g0.GateError("g0_database_mount_name_mismatch")
+        if actual != EXPECTED_MOUNTS[svc]:
+            raise g0.GateError("g0_mount_scope_changed")
         config_env = (obj.get("Config") or {}).get("Env") or []
         items = dict(s.split("=", 1) for s in config_env if "=" in s)
         if svc == "runtime":
@@ -126,6 +161,7 @@ def _verify_g0_resources(deployed: str) -> None:
             for forbidden in (
                 "PCP_G0_EXECUTION_ENABLED", "PCP_G0_DELIVERY_ENABLED",
                 "GITHUB_DELIVERY_TOKEN", "OPENAI_API_KEY", "ANTIGRAVITY_BRIDGE_TOKEN",
+                "RUNTIME_API_TOKEN", "PLATFORM_INTERNAL_TOKEN",
             ):
                 if items.get(forbidden):
                     raise g0.GateError("g0_live_credentials_or_capability_unexpected")
