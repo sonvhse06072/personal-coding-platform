@@ -52,7 +52,9 @@ def _private_root() -> Path:
 
 def _read_json_secure(path: Path) -> dict:
     root = _private_root()
-    if path.parent != root or path.is_symlink() or not path.is_file():
+    if (root.is_symlink() or not root.is_dir()
+            or root.stat().st_mode & 0o077
+            or path.parent != root or path.is_symlink() or not path.is_file()):
         raise g0.GateError("g0_private_journal_invalid")
     if path.stat().st_mode & 0o077:
         raise g0.GateError("g0_private_journal_permissions_unsafe")
@@ -311,12 +313,15 @@ def rollback(repo: Path, fixture: Path) -> dict[str, object]:
             raise g0.GateError("g0_rollback_container_not_owned")
         if (obj.get("State") or {}).get("Running") is not True:
             raise g0.GateError("g0_rollback_requires_running_inspection_container")
+        recognized = False
         for candidate in (old, new):
-            if obj.get("Image") == g0.inspect(
-                "image", g0.resource_names(candidate)[svc]
-            ).get("Id"):
+            tag = g0.resource_names(candidate)[svc]
+            if g0.exists("image", tag) and (
+                obj.get("Image") == g0.inspect("image", tag).get("Id")
+            ):
+                recognized = True
                 break
-        else:
+        if not recognized:
             raise g0.GateError("g0_rollback_container_image_unknown")
     env = _compose_environment(repo, fixture, old, password, workspace)
     for svc in TARGET_SERVICES:
