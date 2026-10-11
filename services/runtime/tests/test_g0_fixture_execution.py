@@ -229,7 +229,7 @@ def test_execute_runs_existing_codex_adapter_without_publishing(prepared, monkey
         "diff_truncated": False,
         "dependency_manifest_changes": [],
     })
-    monkeypatch.setattr(g0, "commit_changes", lambda *a, **k: "b" * 40)
+    monkeypatch.setattr(g0, "_commit_exact_g0", lambda *a, **k: "b" * 40)
     monkeypatch.setattr(g0.subprocess, "run", lambda *a, **k: FakePopen())
 
     result = asyncio.run(runner.execute(row["id"]))
@@ -261,7 +261,7 @@ def test_model_scope_violation_blocks_same_job_and_keeps_workspace(prepared, mon
         "changed_files": ["config/projects.yml"], "changed_file_count": 1,
         "diff_truncated": False, "dependency_manifest_changes": [],
     })
-    monkeypatch.setattr(g0, "commit_changes",
+    monkeypatch.setattr(g0, "_commit_exact_g0",
                         lambda *a, **k: pytest.fail("must not commit out-of-scope diff"))
     with pytest.raises(g0.G0GateError, match="outside exact"):
         asyncio.run(runner.execute(row["id"]))
@@ -299,3 +299,50 @@ def test_never_show_unrelated_project_records(prepared):
     storage.create({"id": "a" * 32, "project_id": "chonhac", "status": "blocked"})
     with pytest.raises(g0.G0GateError, match="Unknown G0"):
         runner.current("a" * 32)
+
+
+
+def test_g0_commit_disables_hooks_and_limits_staging_to_reviewed_files(
+    monkeypatch, tmp_path
+):
+    allowed = next(iter(g0.ALLOWED_FILES))
+    file = tmp_path / allowed
+    file.parent.mkdir(parents=True)
+    file.write_text("safe fixture\n", encoding="utf-8")
+    commands = []
+    class Response:
+        def __init__(self, stdout=""):
+            self.stdout = stdout
+            self.returncode = 0
+
+    def fake_run(argv, **kwargs):
+        commands.append((argv, kwargs))
+        assert kwargs["env"]["GIT_CONFIG_GLOBAL"] == "/dev/null"
+        assert kwargs["env"]["GIT_CONFIG_NOSYSTEM"] == "1"
+        assert "RUNTIME_API_TOKEN" not in kwargs["env"]
+        assert ["-c", "core.hooksPath=/dev/null"] == argv[3:5]
+        if "diff" in argv:
+            return Response(allowed + "\n")
+        if "rev-parse" in argv:
+            return Response("b" * 40 + "\n")
+        return Response()
+
+    monkeypatch.setenv("RUNTIME_API_TOKEN", "secret-that-must-not-enter-git")
+    monkeypatch.setattr(g0.subprocess, "run", fake_run)
+    assert g0._commit_exact_g0(tmp_path, [allowed]) == "b" * 40
+    add = [argv for argv, _ in commands if "add" in argv]
+    assert len(add) == 1
+    assert add[0][-2:] == ["--", allowed]
+    assert any("commit" in argv for argv, _ in commands)
+    assert all("rm" not in argv for argv, _ in commands)
+
+
+def test_g0_commit_rejects_symlinks_before_git(monkeypatch, tmp_path):
+    allowed = next(iter(g0.ALLOWED_FILES))
+    file = tmp_path / allowed
+    file.parent.mkdir(parents=True)
+    file.symlink_to(tmp_path / "elsewhere")
+    monkeypatch.setattr(g0.subprocess, "run",
+                        lambda *a, **k: pytest.fail("no git for symlink"))
+    with pytest.raises(g0.G0GateError, match="symlink"):
+        g0._commit_exact_g0(tmp_path, [allowed])
