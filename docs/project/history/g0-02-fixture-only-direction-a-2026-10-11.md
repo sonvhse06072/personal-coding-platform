@@ -27,6 +27,14 @@ The scoped Executor mode uses `PCP_EXECUTOR_PROJECT_SCOPE=pcp-g0-drupal-fixture`
 
 **This is an application/API boundary, not an OS-level sandbox:** it does **not** restrict a future Executor's Docker-socket access, filesystem mounts, host project reachability, or indirect shared Docker/DDEV-router side effects. In particular, the currently denied unscoped cancel/orphan cleanup paths need fixture-owned job identity attestation before future active-execution support; never enable them globally merely to make G0 work. A separate protected decision and project-scoped host capability design are still prerequisites for actual startup/activation.
 
+### Isolated G0 service topology — parked Compose candidate (not deployed)
+
+`deploy/g0/compose.candidate.yml` specifies an independent `pcp-g0d01` Docker Compose namespace with a **new private PostgreSQL volume** (`pcp-g0d01-postgres-data`), **internal-only** `pcp-g0d01-private` network, and Router/Runtime/Executor containers using local images that must be explicitly selected and verified by the Owner. Every service is behind the non-default `owner-gated-g0` profile, `restart: no`, `pull_policy: never`, with no published host ports or shared host-DDEV hooks. All image references require explicit operator input; this source file does not build, pull, start or provision containers.
+
+The candidate Router/Runtime/Executor receive the **fixture-only** project registry via read-only individual file binds, not the legacy canonical multi-project registry. The Executor sees only the exact fixture Git source (read-only) plus a dedicated new workspace bind, **no host Docker socket** or broad projects root. Runtime uses `inspect`, Executor uses opt-in scoped/PARKED health, and no host Codex/Antigravity/Git credentials are mounted. The private network is deliberately offline. Candidate static CI checks reject changing the namespace, port/network exposure, host mounts, privileges, profiles, activation and registry/scope. They do not establish that images are current, services start, or shared Docker resource pressure is acceptable.
+
+**This candidate CANNOT execute G0D-T01:** no Docker socket, DDEV phases still disabled, no model/provider entitlement, no outbound network, no GitHub delivery and no job-execution authorization. It is a safe topology preparation only. To enter an active G0 phase, the separate protected proposal must resolve the precise project-bounded DDEV capability (e.g. private daemon/broker with enforceable scope, not a naked shared host socket), provision independent workspace/DB ownership, preserve rollback and negative tests, and establish provider/CLI/source/CI parity without touching Owner Codex or Chợ Nhạc.
+
 ## Future protected activation ChangeProposal — **pending**
 
 The separate Human Owner decision must enumerate exact changes and boundaries before operational G0 execution:
