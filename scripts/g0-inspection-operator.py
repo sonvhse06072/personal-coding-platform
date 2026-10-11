@@ -232,12 +232,16 @@ def compose_args(repo: Path) -> list[str]:
 def require_local_docker_context() -> None:
     """Do not activate the WSL-local G0 namespace through a remote engine."""
     try:
-        endpoints = json.loads(run([
-            "docker", "context", "inspect", "--format",
-            "{{json .Endpoints}}",
-        ], label="docker_context"))
+        contexts = json.loads(run(
+            ["docker", "context", "inspect"], label="docker_context",
+        ))
     except (TypeError, json.JSONDecodeError) as exc:
         raise GateError("docker_context_invalid") from exc
+    if not isinstance(contexts, list) or len(contexts) != 1 or (
+        not isinstance(contexts[0], dict)
+    ):
+        raise GateError("docker_context_invalid")
+    endpoints = contexts[0].get("Endpoints") or {}
     if not isinstance(endpoints, dict):
         raise GateError("docker_context_invalid")
     endpoint = (endpoints.get("docker") or {}).get("Host")
