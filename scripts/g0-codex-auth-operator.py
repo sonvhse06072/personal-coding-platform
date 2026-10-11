@@ -275,6 +275,9 @@ def prepare(repo: Path, fixture: Path, sha: str) -> dict:
     preflight(repo, fixture, sha)
     root = _root()
     _check_private_existing(root, directory=True)
+    if (_auth_root().exists() or _auth_root().is_symlink()
+            or (root / "arms").exists() or (root / "arms").is_symlink()):
+        raise g0.GateError("g0_auth_profile_already_prepared")
     # No existing CODEX_HOME/session/cache is copied or inspected.
     (_auth_root()).mkdir(mode=0o700)
     for arm in G0_AUTH_DIRS:
