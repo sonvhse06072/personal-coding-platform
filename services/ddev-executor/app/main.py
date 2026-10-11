@@ -2031,6 +2031,30 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
     }
 
 
+G0_ALLOWED_CHANGED_FILES = frozenset({
+    "web/modules/custom/pcp_g0_fixture/src/EventLabelNormalizer.php",
+    "web/modules/custom/pcp_g0_fixture/tests/src/Unit/EventLabelNormalizerTest.php",
+    "web/modules/custom/pcp_g0_fixture/tests/src/Kernel/EventLabelServiceTest.php",
+})
+
+
+def _verify_g0_delivered_diff(
+    workspace: Path, source_commit: str, expected_commit: str,
+) -> None:
+    """Recheck the exact committed fixture diff at the privileged Git boundary."""
+    if source_commit != G0_SOURCE_COMMIT or not re.fullmatch(
+        r"[0-9a-f]{40}", expected_commit
+    ):
+        raise HTTPException(403, "G0 delivery source/commit identity invalid")
+    if git(workspace, "status", "--porcelain", check=False):
+        raise HTTPException(409, "G0 delivery workspace must be clean")
+    changed = git(
+        workspace, "diff", "--name-only", source_commit, expected_commit
+    ).splitlines()
+    if not changed or any(path not in G0_ALLOWED_CHANGED_FILES for path in changed):
+        raise HTTPException(403, "G0 commit includes changes outside the frozen task")
+
+
 def _require_g0_delivery_contract(
     cfg: dict[str, Any], *, job_id: str, branch: str,
     source_commit: str | None = None,
@@ -2095,6 +2119,8 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
     )
     if ancestry.returncode != 0:
         raise HTTPException(409, "Expected commit is not descended from the job source commit")
+    if scoped:
+        _verify_g0_delivered_diff(workspace, source_commit, expected)
 
     _, origin = _source_origin(cfg)
     repository = github_repository_from_origin(origin)
