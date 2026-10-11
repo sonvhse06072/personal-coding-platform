@@ -1,0 +1,149 @@
+# G0-02 source-only topology candidate. DO NOT ACTIVATE without a protected Owner gate.
+# Plain 'docker compose up' starts nothing: all services use a non-default profile.
+# The executor has NO host Docker socket, credentials, or access to Chợ Nhạc.
+name: pcp-g0d01
+
+x-g0-contract:
+  status: parked
+  approved_scope: source_only
+  activation_requires_owner: true
+  ready_to_dispatch_g0d_t01: false
+
+services:
+  db:
+    container_name: pcp-g0d01-postgres
+    image: "${PCP_G0_POSTGRES_IMAGE:?reviewed_preloaded_postgres_image_required}"
+    pull_policy: never
+    profiles: [owner-gated-g0]
+    restart: "no"
+    environment:
+      POSTGRES_USER: g0
+      POSTGRES_DB: g0
+      POSTGRES_PASSWORD: "${PCP_G0_DB_PASSWORD:?set_private_g0_password}"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U g0 -d g0"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - type: volume
+        source: g0-db
+        target: /var/lib/postgresql/data
+    networks: [g0-private]
+    mem_limit: 512m
+
+  router:
+    image: "${PCP_G0_ROUTER_IMAGE:?reviewed_preloaded_router_image_required}"
+    pull_policy: never
+    profiles: [owner-gated-g0]
+    restart: "no"
+    environment:
+      ROUTER_MODELS_FILE: /g0/config/models.yml
+      ROUTER_POLICY_FILE: /g0/config/routing-policy.yml
+      ROUTER_PROJECTS_FILE: /g0/config/projects.yml
+    volumes:
+      - type: bind
+        source: "${PCP_G0_REPO_ROOT:?exact_reviewed_pcp_source_root_required}/config/models.yml"
+        target: /g0/config/models.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G0_REPO_ROOT:?exact_reviewed_pcp_source_root_required}/config/routing-policy.yml"
+        target: /g0/config/routing-policy.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G0_REPO_ROOT:?exact_reviewed_pcp_source_root_required}/config/g0-fixture-only/projects.yml"
+        target: /g0/config/projects.yml
+        read_only: true
+        bind: {create_host_path: false}
+    networks: [g0-private]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+
+  executor:
+    image: "${PCP_G0_EXECUTOR_IMAGE:?reviewed_preloaded_executor_image_required}"
+    pull_policy: never
+    profiles: [owner-gated-g0]
+    restart: "no"
+    user: "${PCP_G0_UID:?matching_nonroot_uid_required}:${PCP_G0_GID:?matching_nonroot_gid_required}"
+    environment:
+      HOME: /home/coder
+      PROJECTS_FILE: /g0/config/projects.yml
+      PCP_EXECUTOR_PROJECT_SCOPE: pcp-g0-drupal-fixture
+      CODING_PROJECTS_ROOT: /g0/sources
+      CODING_WORKSPACES_ROOT: /g0/workspaces
+      CODING_DIRECT_PROJECT_ROOT: /g0/direct-disabled
+    volumes:
+      - type: bind
+        source: "${PCP_G0_REPO_ROOT:?exact_reviewed_pcp_source_root_required}/config/g0-fixture-only/projects.yml"
+        target: /g0/config/projects.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G0_FIXTURE_ROOT:?exact_frozen_fixture_checkout_required}"
+        target: /g0/sources/pcp-g0-fixtures/pcp-g0-drupal-fixture
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G0_WORKSPACE_ROOT:?separate_g0_workspace_root_required}"
+        target: /g0/workspaces
+        bind: {create_host_path: false}
+    networks: [g0-private]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 512m
+
+  runtime:
+    image: "${PCP_G0_RUNTIME_IMAGE:?reviewed_preloaded_runtime_image_required}"
+    pull_policy: never
+    profiles: [owner-gated-g0]
+    restart: "no"
+    user: "${PCP_G0_UID:?matching_nonroot_uid_required}:${PCP_G0_GID:?matching_nonroot_gid_required}"
+    depends_on:
+      db: {condition: service_healthy}
+      router: {condition: service_started}
+      executor: {condition: service_started}
+    environment:
+      HOME: /home/coder
+      PCP_RUNTIME_STARTUP_MODE: inspect
+      PROJECTS_FILE: /g0/config/projects.yml
+      PROJECT_BASELINES_FILE: /g0/config/project-baselines.yml
+      MODELS_FILE: /g0/config/models.yml
+      ROUTER_URL: http://router:8090
+      DDEV_EXECUTOR_URL: http://executor:8790
+      CODING_PROJECTS_ROOT: /g0/sources
+      CODING_WORKSPACES_ROOT: /g0/workspaces
+      CODING_DIRECT_PROJECT_ROOT: /g0/direct-disabled
+      DATABASE_URL: "postgresql://g0:${PCP_G0_DB_PASSWORD:?set_private_g0_password}@db:5432/g0"
+    volumes:
+      - type: bind
+        source: "${PCP_G0_REPO_ROOT:?exact_reviewed_pcp_source_root_required}/config/g0-fixture-only/projects.yml"
+        target: /g0/config/projects.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G0_REPO_ROOT:?exact_reviewed_pcp_source_root_required}/config/g0-fixture-only/project-baselines.yml"
+        target: /g0/config/project-baselines.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G0_REPO_ROOT:?exact_reviewed_pcp_source_root_required}/config/models.yml"
+        target: /g0/config/models.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G0_WORKSPACE_ROOT:?separate_g0_workspace_root_required}"
+        target: /g0/workspaces
+        bind: {create_host_path: false}
+    networks: [g0-private]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1024m
+
+volumes:
+  g0-db:
+    name: pcp-g0d01-postgres-data
+
+networks:
+  g0-private:
+    name: pcp-g0d01-private
+    internal: true
