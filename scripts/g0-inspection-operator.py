@@ -264,7 +264,8 @@ def require_headroom(repo: Path) -> None:
         raise GateError("insufficient_shared_host_headroom")
 
 
-def require_no_g0_collision(source_sha: str) -> None:
+def require_no_g0_runtime_collision() -> None:
+    """Recheck data/containers/network right before creating G0 services."""
     for name in NAMES.values():
         if exists("container", name):
             raise GateError("g0_container_identity_already_exists")
@@ -272,6 +273,16 @@ def require_no_g0_collision(source_sha: str) -> None:
         raise GateError("g0_data_volume_already_exists")
     if exists("network", NETWORK):
         raise GateError("g0_network_already_exists")
+    count = run([
+        "docker", "ps", "-a", "-q", "--filter",
+        "label=com.docker.compose.project=" + PROJECT,
+    ], label="g0_container_label_inspection")
+    if count:
+        raise GateError("g0_compose_project_label_collision")
+
+
+def require_no_g0_collision(source_sha: str) -> None:
+    require_no_g0_runtime_collision()
     images = resource_names(source_sha)
     for svc, name in images.items():
         if exists("image", name):
@@ -285,13 +296,6 @@ def require_no_g0_collision(source_sha: str) -> None:
             raise GateError("g0_base_alias_already_exists")
     if not exists("image", "postgres:17"):
         raise GateError("postgres17_not_cached_no_implicit_pull")
-    # Explicitly query only containers belonging to the reserved G0 label.
-    count = run([
-        "docker", "ps", "-a", "-q", "--filter",
-        "label=com.docker.compose.project=" + PROJECT,
-    ], label="g0_container_label_inspection")
-    if count:
-        raise GateError("g0_compose_project_label_collision")
 
 
 def preflight(repo: Path, fixture: Path, expected_sha: str) -> dict[str, str | bool]:
@@ -472,6 +476,9 @@ def activate(repo: Path, fixture: Path, expected_sha: str) -> dict:
     env = compose_env(repo, fixture, workspace, expected_sha, password)
     run(compose_args(repo) + ["config", "--quiet"],
         env=env, label="compose_config", timeout=40)
+    # Guard against a resource name appearing during the offline image builds.
+    # Never attach an existing unverified volume/network or replace a container.
+    require_no_g0_runtime_collision()
     run(compose_args(repo) + [
         "up", "-d", "--no-build", "--pull", "never", "--no-recreate",
         "--wait", "--wait-timeout", "120",
