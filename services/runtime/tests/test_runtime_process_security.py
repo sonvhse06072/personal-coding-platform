@@ -142,6 +142,13 @@ def test_inspection_startup_skips_all_services_and_blocks_all_nonhealth_routes(m
         assert health.status_code == 200
         assert health.json()["status"] == "degraded"
 
+        async def online_health():
+            return True
+
+        monkeypatch.setattr(main.engine.router, "health", online_health)
+        monkeypatch.setattr(main.engine.ddev, "health", online_health)
+        assert client.get("/health").json()["status"] == "degraded"
+
         for method, endpoint in (
             ("GET", "/v1/jobs"),
             ("GET", "/v1/plans/example/orchestration"),
