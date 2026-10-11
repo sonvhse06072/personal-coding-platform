@@ -33,6 +33,7 @@ EXPECTED_CONTRACT = {
     "activation": {
         "status": "parked",
         "runtime_startup_mode": "inspect",
+        "executor_project_scope": FIXTURE,
         "start_services": False,
         "allow_real_jobs": False,
         "allow_ddev": False,

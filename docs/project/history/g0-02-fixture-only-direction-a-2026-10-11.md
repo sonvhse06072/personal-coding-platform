@@ -21,6 +21,12 @@ Only on Owner's existing WSL host and subject to separately approved activation:
 
 The new `config/g0-fixture-only/source-contract.yml` is **source-only planning data, not Docker Compose**. Other three files are PARKED mirrors, not applied to a deployed service. `scripts/g0-fixture-isolation-contract.py` checks their equality to canonical fixture source, frozen baseline, empty PM Bridge and the exact non-activating plan. Its default CLI only reads tracked files and emits sanitized PASS/STOP with `ready_to_dispatch_g0d_t01=false`. Negative tests intentionally fail on DDEV/delivery activation, registry widening, baseline drift, changed DB namespace or Docker-socket permission. CI PASS proves only source-contract consistency.
 
+### Opt-in Executor API scope — source hardening (separate PR, not live)
+
+The scoped Executor mode uses `PCP_EXECUTOR_PROJECT_SCOPE=pcp-g0-drupal-fixture`. Without that exact opt-in, existing Executor behavior remains unchanged. When opted in, a singleton fixture registry with the frozen project path, `benchmark/pcp` branch and isolated-clone mode is mandatory. All other project IDs are rejected before handler filesystem/DDEV operations. **The pre-activation HTTP allowlist contains only GET `/health`**, and this health response remains `degraded` without probing Docker, DDEV or Buildx. Even fixture-owned workspace creation, DDEV phases, delivery, generic job-ID-only `/v1/cancel`, orphan resource cleanup, PM GitHub bridge and all new endpoints are refused. Later fixture-owned operations require their own protected activation PR and ownership tests; scoped registration alone cannot perform work. Negative tests use mock inputs only.
+
+**This is an application/API boundary, not an OS-level sandbox:** it does **not** restrict a future Executor's Docker-socket access, filesystem mounts, host project reachability, or indirect shared Docker/DDEV-router side effects. In particular, the currently denied unscoped cancel/orphan cleanup paths need fixture-owned job identity attestation before future active-execution support; never enable them globally merely to make G0 work. A separate protected decision and project-scoped host capability design are still prerequisites for actual startup/activation.
+
 ## Future protected activation ChangeProposal — **pending**
 
 The separate Human Owner decision must enumerate exact changes and boundaries before operational G0 execution:
