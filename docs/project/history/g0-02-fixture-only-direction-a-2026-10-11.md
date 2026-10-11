@@ -50,6 +50,21 @@ The Owner separately approved an **inspection-only local creation/start** of new
 
 **Limits:** Successful `activate` proves only four G0 inspection services and data/network ownership. No real WorkOrder execution, no GitHub delivery, no provider/quota/model parity and no OS-isolated DDEV capability; old PCP PostgreSQL, leases and Chợ Nhạc must remain untouched. This is an Owner-operated local action: a ChatGPT GitHub-only session cannot attest it succeeded. After local PASS, separately review the protected fixture-only DDEV/host broker and explicit G0D-T01 permission contract. Do not interpret this section or source CI as actual rollout evidence.
 
+## Owner's actual inspection activation — **PASS, 2026-10-11 ICT**
+
+The Owner ran the merged `scripts/g0-inspection-operator.py` from local PCP `main@e4cd2526fe97792b92ebf43460c8dbe8ba74bcf2`. **Real [preflight and activation evidence](https://github.com/sonvhse06072/personal-coding-platform/issues/595#issuecomment-6108248370)** (not model-assumed):
+- `PCP_G0_PREFLIGHT=PASS`; cached base images, G0 resource names absent, frozen fixture seed `39ef13c25b24c4a1b43a720ae53419f479996ed2`, correct inspection/health-only modes and zero dispatch permission.
+- `PCP_G0_INSPECTION=PASS`: four G0 containers, new G0 PostgreSQL healthy, private network, zero published ports; Router `ok`, Executor `degraded_health_only` and Runtime `degraded_inspection_only` as designed.
+- This proves live scoped inspection on the shared WSL/Docker host and negative API probes through the versioned operator. It **does not** prove hard Docker-daemon isolation or enable `ddev`, Codex inference, GitHub delivery or fixture WorkOrders. No historic PCP DB, Chợ Nhạc job/lease or direct host Codex operation was requested by the launcher. Leave the new G0 inspection resources as-is; do not rerun activation. Only the exact-owned `stop` is an existing rollback.
+
+## Next feature-critical choice — first G0D-T01 comparable developer loop
+
+**Path CI-first (PM preferred for G0 only, needs explicit acceptance/governance decision):** The frozen fixture's [existing validation workflow](https://github.com/sonvhse06072/pcp-g0-drupal-fixture/blob/main/.github/workflows/validation.yml) already runs `composer validate --strict`, locked install, PHP lint, Drupal PHPCS, and real PHPUnit Unit/Kernel tests against its own isolated MariaDB service on GitHub-hosted Ubuntu, PHP 8.4. Keep **identical** workflow/acceptance policy for both `benchmark/direct` and `benchmark/pcp` arms and compare the full accepted-ticket→PR+CI+review cycle. This avoids exposing the shared WSL Docker socket or creating a bespoke local DDEV broker merely for G0 quality verification. It **does not** demonstrate local DDEV/preview parity (reserve that for G1); if the original controlled G0 cohort requires local DDEV on both arms, change the benchmark scope only by explicit Owner decision, with the limitation disclosed. The actual PCP developer still needs a scoped isolated workspace, real model/CLI entitlement, a source-pinned non-legacy Runtime enablement, and fixture-only GitHub PR delivery with protected authorization.
+
+**Path local-DDEV:** Build a true project-owned DDEV execution capability for the G0 fixture while leaving the shared host Docker daemon unavailable to the agent/runtime. A mere HTTP allowlist, project registry or Docker socket proxy is **not hard OS isolation**. A bounded host broker with exact project/lease/command attestation has residual privileged-host risk; a separate daemon/runner has higher complexity/resource cost. Each requires its own Owner-approved trust-boundary ChangeProposal and real negative host-coexistence tests. Do not provision this just to bypass G0 unless the local developer feedback loop is an explicit G0 acceptance requirement.
+
+**No automatic G0 permission follows from this design note.** Both routes still require equal source seed, same actual installed Codex CLI/model/reasoning effort, authenticated provider permission without copying the Chợ Nhạc session, per-arm distinct workspaces and databases, final deterministic/independent CI+review, and no mutation of either frozen benchmark branch before trials. G0 investment gate cannot claim p50/p90 with 0 accepted pairs.
+
 ## Future protected activation ChangeProposal — **pending**
 
 The separate Human Owner decision must enumerate exact changes and boundaries before operational G0 execution:
@@ -59,4 +74,4 @@ The separate Human Owner decision must enumerate exact changes and boundaries be
 - Precisely scoped activation of `ddev.enabled`/phases and any GitHub delivery/PR permissions only after Owner signs off on protected path scope; never rewrite the approved ProjectBaseline `g0d01-seed-2026-10-10` in place. Preserve existing jobs/leases/counters.
 - Real protected rollout evidence (workspace/project ownership, Docker images/volumes, DB, source hash, host capacity, health and rollback), then dispatch exactly one G0D-T01 pair under a recorded WorkOrder; no percentages from insufficient cohort.
 
-**Current gate:** DIRECTION APPROVED; SOURCE-ONLY PREPARATION; **NO ACTIVATION**. PCP #595 G0 NOT GO; G1 #596 remains blocked. Chợ Nhạc strict no-touch and WSL Codex reserved for Chợ Nhạc.
+**Current gate:** DIRECTION APPROVED; OWNER-RUN **INSPECTION ACTIVATION PASS**; **NO FIXTURE JOB/DDEV/PROVIDER/DELIVERY ACTIVATION**. PCP #595 G0 NOT GO and 0 accepted A/B pairs; G1 #596 remains blocked. Chợ Nhạc strict no-touch and the WSL Codex session remain reserved for Chợ Nhạc.
