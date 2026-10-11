@@ -1,0 +1,45 @@
+# G0 fixture-only execution candidate: NOT active until Owner's protected decision.
+x-g0-execution-contract:
+  status: owner-activation-pending
+  scope: pcp-g0-drupal-fixture
+  only_services_recreated: [executor, runtime]
+  automatic_dispatch: false
+  github_delivery_enabled: false
+  ddev_enabled: false
+  global_codex_used: false
+  domain_egress_restricted: false
+
+services:
+  executor:
+    environment:
+      PCP_G0_EXECUTION_ENABLED: owner-approved
+      PLATFORM_INTERNAL_TOKEN: "${PCP_G0_INTERNAL_TOKEN:?private_g0_internal_token_required}"
+
+  runtime:
+    read_only: true
+    environment:
+      PCP_RUNTIME_STARTUP_MODE: g0_fixture_run
+      PCP_G0_EXECUTION_ENABLED: owner-approved
+      PCP_G0_DELIVERY_ENABLED: ""
+      PCP_G0_MODEL_ID: gpt-6-luna
+      PCP_G0_REASONING_EFFORT: medium
+      PCP_G0_CODEX_CLI_VERSION: "0.160.0"
+      PCP_G0_CODEX_HOME: /home/coder/.codex-g0
+      CODEX_HOME: /home/coder/.codex-g0
+      PLATFORM_INTERNAL_TOKEN: "${PCP_G0_INTERNAL_TOKEN:?private_g0_internal_token_required}"
+      RUNTIME_API_TOKEN: "${PCP_G0_RUNTIME_API_TOKEN:?private_g0_runtime_token_required}"
+    volumes:
+      - type: bind
+        source: "${PCP_G0_AUTH_PCP_DIR:?owner_only_g0_pcp_auth_required}"
+        target: /home/coder/.codex-g0
+        bind: {create_host_path: false}
+      - type: tmpfs
+        target: /tmp
+        tmpfs:
+          size: 134217728
+    networks: [g0-private, g0-provider-pcp]
+
+networks:
+  g0-provider-pcp:
+    name: pcp-g0d01-provider-pcp
+    internal: false
