@@ -110,13 +110,14 @@ class CodexAdapter(AgentAdapter):
 
             timed_out: CommandTimeoutError | None = None
             try:
-                result = await run_command(
-                    argv,
-                    cwd=workspace,
-                    timeout=timeout,
-                    env=environment,
-                    on_stdout_line=on_stdout_line,
-                )
+                invoke = {
+                    "cwd": workspace,
+                    "timeout": timeout,
+                    "on_stdout_line": on_stdout_line,
+                }
+                if environment is not None:
+                    invoke["env"] = environment
+                result = await run_command(argv, **invoke)
             except CommandTimeoutError as exc:
                 timed_out = exc
                 result = CommandResult(
