@@ -332,11 +332,12 @@ def upgrade(repo: Path, fixture: Path, sha: str) -> dict[str, object]:
 
 
 def rollback(repo: Path, fixture: Path) -> dict[str, object]:
-    journal = _read_json_secure(_private_root() / JOURNAL)
-    old, new = journal.get("old_sha"), journal.get("target_sha")
+    journal_path = _private_root() / JOURNAL
+    journal_data = _read_json_secure(journal_path)
+    old, new = journal_data.get("old_sha"), journal_data.get("target_sha")
     if (old != OLD_SOURCE or not isinstance(new, str)
             or not g0.SOURCE_SHA.fullmatch(new)
-            or journal.get("state") not in {"started", "complete"}):
+            or journal_data.get("state") not in {"started", "complete"}):
         raise g0.GateError("g0_upgrade_rollback_journal_untrusted")
     g0.require_local_docker_context()
     _, password, workspace = _owner_state()
@@ -376,7 +377,7 @@ def rollback(repo: Path, fixture: Path) -> dict[str, object]:
     _private_write(_private_root() / "owner-state.json", {
         "source_sha": old, "password": password,
     })
-    _private_write(journal, {
+    _private_write(journal_path, {
         "old_sha": old, "target_sha": new, "state": "rolled_back",
     })
     return _safe_report(phase="inspection_source_rollback",
