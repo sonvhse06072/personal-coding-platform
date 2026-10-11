@@ -226,6 +226,8 @@ def preflight(repo: Path, fixture: Path, target: str) -> dict[str, object]:
         raise g0.GateError("g0_upgrade_journal_already_exists")
     _verify_g0_resources(deployed)
     _require_empty_g0_job_store()
+    # Offline image overlays still compete for shared WSL/Docker resources.
+    g0.require_headroom(repo)
     if not g0.exists("image", "postgres:17"):
         raise g0.GateError("g0_postgres_image_not_cached")
     for svc in TARGET_SERVICES:
