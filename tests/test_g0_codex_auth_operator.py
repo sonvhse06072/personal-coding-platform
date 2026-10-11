@@ -204,6 +204,23 @@ def test_interactive_device_auth_cannot_touch_model_or_send_credentials(
         auth.device_login(tmp_path, tmp_path, SHA, "chonhac")
 
 
+def test_repeat_device_login_never_replaces_or_revokes_existing_g0_auth(
+    isolated, monkeypatch, tmp_path
+):
+    monkeypatch.setattr(auth, "preflight", lambda *a: {"status": "PASS"})
+    auth.prepare(tmp_path, tmp_path, SHA)
+    cache = isolated / "provider/pcp/auth.json"
+    cache.write_text('{"private":"not-for-tool-logs"}', encoding="utf-8")
+    cache.chmod(0o600)
+    monkeypatch.setattr(auth.g0, "run",
+                        lambda *a, **kw: pytest.fail("no compose call for cached login"))
+    monkeypatch.setattr(auth.subprocess, "run",
+                        lambda *a, **kw: pytest.fail("no login for existing cache"))
+    with pytest.raises(auth.g0.GateError, match="already_has_cached_credentials"):
+        auth.device_login(tmp_path, tmp_path, SHA, "pcp")
+    assert cache.read_text(encoding="utf-8") == '{"private":"not-for-tool-logs"}'
+
+
 def test_altered_cli_or_deployed_source_refused_prior_to_login(isolated, monkeypatch, tmp_path):
     monkeypatch.setattr(auth.upgrader, "_codex_cli_version", lambda: "0.999.0")
     with pytest.raises(auth.g0.GateError, match="codex_cli_version_changed"):
