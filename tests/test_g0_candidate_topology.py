@@ -53,7 +53,8 @@ def validate(candidate):
     forbidden = {
         "ports", "extra_hosts", "network_mode", "pid", "ipc",
         "privileged", "cap_add", "devices", "volumes_from",
-        "links", "userns_mode",
+        "links", "userns_mode", "build", "env_file", "secrets",
+        "external_links",
     }
     for name, service in candidate["services"].items():
         assert not forbidden.intersection(service)
@@ -133,7 +134,7 @@ def validate(candidate):
     assert any(m.get("target") == REGISTRY_TARGET for m in binds("runtime"))
 
     # Neither the old PCP DB/registry nor Owner's Codex/Git credentials are mounted.
-    encoded = COMPOSE.read_text(encoding="utf-8")
+    encoded = yaml.safe_dump(candidate, allow_unicode=True)
     for forbidden_literal in (
         "personal-coding-platform-postgres",
         "chonhac",
@@ -155,6 +156,8 @@ def test_candidate_is_source_only_and_parked():
     lambda d: d["services"].update({"n8n": {"image": "n8nio/n8n"}}),
     lambda d: d["services"]["executor"].update(ports=["8790:8790"]),
     lambda d: d["services"]["executor"].update(privileged=True),
+    lambda d: d["services"]["runtime"].update(build="./unreviewed"),
+    lambda d: d["services"]["executor"].update(env_file=["/home/sonvh/.env"]),
     lambda d: d["services"]["executor"].update(network_mode="host"),
     lambda d: d["services"]["executor"].update(volumes_from=["legacy-pcp"]),
     lambda d: d["services"]["runtime"].update(profiles=[]),
