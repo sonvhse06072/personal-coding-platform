@@ -1512,6 +1512,21 @@ def sync_direct_base(payload: SyncDirectBaseRequest) -> dict[str, Any]:
 
 @app.get("/health")
 def health() -> dict[str, Any]:
+    if _g0_fixture_scoped():
+        # A PARKED fixture must not even probe the shared host Docker daemon.
+        # The scoped registry is already validated by the HTTP middleware.
+        with _ACTIVE_LOCK:
+            active_jobs = len(_ACTIVE)
+        return {
+            "status": "degraded",
+            "service": "ddev-executor",
+            "version": DDEV_EXECUTOR_VERSION,
+            "ddev": "PARKED",
+            "docker": "not_probed",
+            "buildx": "not_probed",
+            "active_jobs": active_jobs,
+            "github_delivery_configured": False,
+        }
     result = subprocess.run(["ddev", "version"], text=True, capture_output=True)
     docker = subprocess.run(["docker", "version", "--format", "{{.Server.Version}}"], text=True, capture_output=True)
     buildx = subprocess.run(["docker", "buildx", "version"], text=True, capture_output=True)
