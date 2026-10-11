@@ -229,6 +229,25 @@ def compose_args(repo: Path) -> list[str]:
     ]
 
 
+def require_local_docker_context() -> None:
+    """Do not activate the WSL-local G0 namespace through a remote engine."""
+    try:
+        endpoints = json.loads(run([
+            "docker", "context", "inspect", "--format",
+            "{{json .Endpoints}}",
+        ], label="docker_context"))
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise GateError("docker_context_invalid") from exc
+    if not isinstance(endpoints, dict):
+        raise GateError("docker_context_invalid")
+    endpoint = (endpoints.get("docker") or {}).get("Host")
+    if not isinstance(endpoint, str) or not endpoint.startswith("unix://"):
+        raise GateError("docker_context_not_local_unix")
+    override = os.environ.get("DOCKER_HOST", "").strip()
+    if override and override != endpoint:
+        raise GateError("docker_host_override_mismatch")
+
+
 def require_headroom(repo: Path) -> None:
     try:
         meminfo = Path("/proc/meminfo").read_text(encoding="utf-8")
@@ -274,8 +293,7 @@ def require_no_g0_collision(source_sha: str) -> None:
 def preflight(repo: Path, fixture: Path, expected_sha: str) -> dict[str, str | bool]:
     if not SOURCE_SHA.fullmatch(expected_sha):
         raise GateError("expected_source_sha_required")
-    if os.environ.get("DOCKER_HOST", "").strip().startswith(("tcp:", "ssh:")):
-        raise GateError("remote_docker_host_not_authorized")
+    require_local_docker_context()
     require_exact_repo(repo, EXPECTED_REPO, "main", expected_sha)
     require_exact_repo(fixture, EXPECTED_FIXTURE, "benchmark/pcp", SEED)
     guard_source(repo, fixture)
