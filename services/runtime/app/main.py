@@ -304,6 +304,13 @@ def g0_fixture_allowed_route(method: str, path: str) -> bool:
     return method == ("GET" if match.group(2) is None else "POST")
 
 
+def _require_g0_runtime_mode() -> None:
+    # The G0 endpoints exist in source for testability, but must never become
+    # callable through the existing multi-project normal Runtime.
+    if runtime_startup_mode() != "g0_fixture_run":
+        raise HTTPException(403, "G0 fixture endpoints require their isolated Runtime mode")
+
+
 def g0_view(row: dict[str, Any]) -> dict[str, Any]:
     """Keep the G0 response bounded; no prompts, secrets or provider raw logs."""
     result = row.get("result") or {}
@@ -325,6 +332,7 @@ def g0_view(row: dict[str, Any]) -> dict[str, Any]:
 
 @app.post("/v1/g0-fixture/prepare", dependencies=[Depends(auth)])
 async def g0_prepare() -> dict[str, Any]:
+    _require_g0_runtime_mode()
     try:
         return g0_view(await g0_fixture_runner.prepare())
     except G0GateError as exc:
@@ -333,6 +341,7 @@ async def g0_prepare() -> dict[str, Any]:
 
 @app.post("/v1/g0-fixture/jobs/{job_id}/execute", dependencies=[Depends(auth)])
 async def g0_execute(job_id: str) -> dict[str, Any]:
+    _require_g0_runtime_mode()
     try:
         return g0_view(await g0_fixture_runner.execute(job_id))
     except G0GateError as exc:
@@ -341,6 +350,7 @@ async def g0_execute(job_id: str) -> dict[str, Any]:
 
 @app.post("/v1/g0-fixture/jobs/{job_id}/deliver", dependencies=[Depends(auth)])
 async def g0_deliver(job_id: str) -> dict[str, Any]:
+    _require_g0_runtime_mode()
     try:
         return g0_view(await g0_fixture_runner.deliver(job_id))
     except G0GateError as exc:
@@ -349,6 +359,7 @@ async def g0_deliver(job_id: str) -> dict[str, Any]:
 
 @app.get("/v1/g0-fixture/jobs/{job_id}", dependencies=[Depends(auth)])
 def g0_status(job_id: str) -> dict[str, Any]:
+    _require_g0_runtime_mode()
     try:
         return g0_view(g0_fixture_runner.current(job_id))
     except G0GateError as exc:
