@@ -100,6 +100,7 @@ def test_frozen_contract_never_includes_legacy_or_ddev_control():
       "config/projects.yml"], False, []),
     ([".ddev/config.yaml"], False, []),
     ([next(iter(g0.ALLOWED_FILES))], True, []),
+    ([next(iter(g0.ALLOWED_FILES))], False, []),  # missing Unit/Kernel coverage
     ([next(iter(g0.ALLOWED_FILES))], False, ["composer.json"]),
 ])
 def test_scope_guard_blocks_nonfixture_and_incomplete_diffs(paths, truncated, deps):
