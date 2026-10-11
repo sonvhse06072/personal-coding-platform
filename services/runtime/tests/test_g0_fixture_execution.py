@@ -72,6 +72,7 @@ def prepared(monkeypatch, tmp_path):
     monkeypatch.setattr(g0, "_policy_fixture_only", lambda: None)
     monkeypatch.setattr(g0, "_runtime_config", lambda: (MODEL, EFFORT, CLI))
     monkeypatch.setattr(g0, "_codex_version", lambda: CLI)
+    monkeypatch.setattr(g0, "_assert_frozen_workspace", lambda *a: None)
     storage = MemoryStorage()
     executor = FakeExecutor(tmp_path)
     runner = g0.G0FixtureExecution(storage, executor)
@@ -402,3 +403,26 @@ def test_g0_startup_allows_fresh_owned_db_without_historical_replay(prepared):
     assert storage.initialized is True
     assert all("UPDATE" not in sql and "DELETE" not in sql for sql in sql_called)
     assert executor.created == []
+
+
+
+def test_frozen_workspace_checks_git_branch_head_remote_and_cleanliness(monkeypatch, tmp_path):
+    queries = []
+    def fake_run(argv, **kwargs):
+        assert kwargs["env"]["GIT_CONFIG_GLOBAL"] == "/dev/null"
+        assert kwargs["env"]["GIT_CONFIG_NOSYSTEM"] == "1"
+        assert argv[3:5] == ["-c", "core.hooksPath=/dev/null"]
+        queries.append(argv[-2:])
+        if argv[-2:] == ["rev-parse", "HEAD"]:
+            return SimpleNamespace(returncode=0, stdout=g0.SEED + "\n")
+        if argv[-2:] == ["branch", "--show-current"]:
+            return SimpleNamespace(returncode=0, stdout="ai/" + "a" * 12 + "\n")
+        if argv[-1] in {"remote", "--porcelain=v1"}:
+            return SimpleNamespace(returncode=0, stdout="")
+        raise AssertionError(argv)
+
+    monkeypatch.setattr(g0.subprocess, "run", fake_run)
+    g0._assert_frozen_workspace(tmp_path, "ai/" + "a" * 12)
+    assert len(queries) == 4
+    with pytest.raises(g0.G0GateError, match="clean frozen seed"):
+        g0._assert_frozen_workspace(tmp_path, "ai/wrong")
