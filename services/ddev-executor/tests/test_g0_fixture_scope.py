@@ -43,8 +43,7 @@ def test_g0_scope_rejects_legacy_project_before_touching_source(g0):
 def test_fixture_api_allowlist_denies_unowned_and_future_endpoints(g0):
     allowed = main.G0_FIXTURE_API_ROUTES
     assert ("GET", "/health") in allowed
-    assert ("POST", "/v1/workspaces") in allowed
-    assert ("POST", "/v1/phase") in allowed
+    assert allowed == frozenset({("GET", "/health")})
     for item in (
         ("POST", "/v1/cancel"),
         ("POST", "/v1/workspaces/orphan-resources"),
@@ -89,13 +88,18 @@ def test_scoped_http_denies_generic_mutation_and_pm_bridge(g0, monkeypatch):
             "job_id": "job123456", "project_id": "chonhac"
         }, headers=token)
         assert missing.status_code == 403
-        # The separate fixture is still PARKED; DDEV can never start from this API.
+        # Scope alone cannot enable a fixture workspace or any DDEV phase.
+        fixture_workspace = client.post("/v1/workspaces", json={
+            "job_id": "job123456", "project_id": FIXTURE
+        }, headers=token)
+        assert fixture_workspace.status_code == 403
         phase = client.post("/v1/phase", json={
             "job_id": "job123456", "project_id": FIXTURE,
             "workspace": "/nonexistent/g0", "phase": "preflight"
         }, headers=token)
-        assert phase.status_code == 409
-        assert "PARKED" in phase.json()["detail"]
+        assert phase.status_code == 403
+        assert client.get("/v1/project-state?project_id=" + FIXTURE,
+                          headers=token).status_code == 403
 
 
 @pytest.mark.parametrize("transform", [
