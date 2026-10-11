@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 
 import pytest
+from fastapi.testclient import TestClient
 
 from app import main, security
 
@@ -47,6 +48,7 @@ def test_runtime_process_hardening_is_noop_off_linux(monkeypatch) -> None:
 
 
 def test_lifespan_hardens_process_before_starting_engine_and_orchestrator(monkeypatch) -> None:
+    monkeypatch.delenv("PCP_RUNTIME_STARTUP_MODE", raising=False)
     events: list[str] = []
 
     def fake_harden() -> None:
@@ -84,3 +86,81 @@ def test_lifespan_hardens_process_before_starting_engine_and_orchestrator(monkey
         "orchestrator_stop",
         "engine_stop",
     ]
+
+
+@pytest.mark.parametrize("value", ["", "INSPECT", "disabled", " inspect ", "true"])
+def test_invalid_inspection_startup_mode_refuses_to_start(monkeypatch, value) -> None:
+    monkeypatch.setenv("PCP_RUNTIME_STARTUP_MODE", value)
+    calls = []
+    monkeypatch.setattr(main, "harden_runtime_process_secret_boundary", lambda: calls.append("harden"))
+
+    async def forbidden_start():
+        raise AssertionError("No engine, plan or publisher startup is allowed")
+
+    for service in (
+        main.engine,
+        main.plan_orchestrator,
+        main.progress_publisher,
+        main.job_status_publisher,
+    ):
+        monkeypatch.setattr(service, "start", forbidden_start)
+
+    async def exercise():
+        async with main.lifespan(main.app):
+            pytest.fail("Invalid startup mode must not yield an app")
+
+    with pytest.raises(RuntimeError, match="Invalid PCP_RUNTIME_STARTUP_MODE"):
+        asyncio.run(exercise())
+    assert calls == ["harden"]
+
+
+def test_inspection_startup_skips_all_services_and_blocks_all_nonhealth_routes(monkeypatch) -> None:
+    monkeypatch.setenv("PCP_RUNTIME_STARTUP_MODE", "inspect")
+    events = []
+    monkeypatch.setattr(main, "harden_runtime_process_secret_boundary", lambda: events.append("harden"))
+
+    async def forbidden_lifecycle():
+        raise AssertionError("Inspection must not start or stop durable Runtime services")
+
+    for service in (
+        main.engine,
+        main.plan_orchestrator,
+        main.progress_publisher,
+        main.job_status_publisher,
+    ):
+        monkeypatch.setattr(service, "start", forbidden_lifecycle)
+        monkeypatch.setattr(service, "stop", forbidden_lifecycle)
+
+    async def offline_health():
+        return False
+
+    monkeypatch.setattr(main.engine.router, "health", offline_health)
+    monkeypatch.setattr(main.engine.ddev, "health", offline_health)
+
+    with TestClient(main.app) as client:
+        health = client.get("/health")
+        assert health.status_code == 200
+        assert health.json()["status"] == "degraded"
+
+        for method, endpoint in (
+            ("GET", "/v1/jobs"),
+            ("GET", "/v1/plans/example/orchestration"),
+            ("GET", "/v1/dashboard"),
+            ("GET", "/openapi.json"),
+            ("POST", "/v1/jobs"),
+            ("POST", "/v1/pm-bridge/poll"),
+            ("POST", "/v1/orchestrator/tick"),
+            ("POST", "/v1/dashboard/preview/start"),
+        ):
+            result = client.request(method, endpoint)
+            assert result.status_code == 503, (method, endpoint, result.text)
+            assert "inspection mode" in result.json()["detail"]
+
+    assert events == ["harden"]
+
+
+def test_default_runtime_startup_mode_is_normal(monkeypatch) -> None:
+    monkeypatch.delenv("PCP_RUNTIME_STARTUP_MODE", raising=False)
+    assert main.runtime_startup_mode() == "normal"
+    monkeypatch.setenv("PCP_RUNTIME_STARTUP_MODE", "normal")
+    assert main.runtime_startup_mode() == "normal"
