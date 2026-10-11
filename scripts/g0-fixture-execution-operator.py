@@ -374,6 +374,40 @@ def status(repo: Path, fixture: Path, sha: str) -> dict:
     }
 
 
+def _verify_restore_targets() -> None:
+    """An interrupted scoped up may leave one G0 service absent or stopped.
+
+    Restore may recreate ONLY those two G0 names, and never an occupied
+    unrelated name. Do not require both services running after a partial up.
+    """
+    for svc in SERVICES:
+        name = g0.NAMES[svc]
+        if not g0.exists("container", name):
+            continue
+        data = g0.inspect("container", name)
+        labels = (data.get("Config") or {}).get("Labels") or {}
+        networks = (data.get("NetworkSettings") or {}).get("Networks") or {}
+        mounts = data.get("Mounts") or []
+        image = g0.inspect("image", g0.resource_names(auth.DEPLOYED_SHA)[svc])
+        if (
+            data.get("Name") != "/" + name
+            or labels.get("com.docker.compose.project") != g0.PROJECT
+            or labels.get("com.docker.compose.service") != svc
+            or data.get("Image") != image.get("Id")
+            or g0.NETWORK not in networks
+            or not set(networks).issubset({
+                g0.NETWORK, auth.G0_AUTH_NETWORKS["pcp"],
+            })
+            or any(
+                not isinstance(m, dict)
+                or m.get("Destination") == "/var/run/docker.sock"
+                or "/chonhac" in str(m.get("Source") or "")
+                for m in mounts
+            )
+        ):
+            raise g0.GateError("g0_partial_restore_target_not_owned")
+
+
 def restore(repo: Path, fixture: Path, sha: str, owner_approved: bool) -> dict:
     if not owner_approved:
         raise g0.GateError("g0_protected_restore_requires_owner")
@@ -388,7 +422,7 @@ def restore(repo: Path, fixture: Path, sha: str, owner_approved: bool) -> dict:
             or journal.get("state") not in {"claimed", "activated"}):
         raise g0.GateError("g0_restoration_journal_not_exact")
     auth.upgrader._require_empty_g0_job_store()
-    _verify_containers("inspect", allow_partial=True)
+    _verify_restore_targets()
     deployed, password, workspaces = g0.read_private_state(Path.home())
     if deployed != auth.DEPLOYED_SHA:
         raise g0.GateError("g0_restoration_image_source_changed")
