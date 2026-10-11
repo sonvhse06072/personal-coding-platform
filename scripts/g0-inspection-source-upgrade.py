@@ -340,15 +340,24 @@ def rollback(repo: Path, fixture: Path) -> dict[str, object]:
         raise g0.GateError("g0_upgrade_rollback_journal_untrusted")
     g0.require_local_docker_context()
     _, password, workspace = _owner_state()
-    # A partial failure may have upgraded one of the two containers.
+    if (g0.inspect("network", g0.NETWORK).get("Internal") is not True
+            or (g0.inspect("volume", g0.DATA_VOLUME).get("Labels") or {})
+            .get("com.docker.compose.project") != g0.PROJECT):
+        raise g0.GateError("g0_rollback_network_or_volume_not_owned")
+    _require_empty_g0_job_store()
+    # A partial failure may have upgraded, stopped, or removed one target.
+    # Absence is allowed only for these two exact names; Compose recreates it.
     for svc in TARGET_SERVICES:
+        if not g0.exists("container", g0.NAMES[svc]):
+            continue
         obj = g0.inspect("container", g0.NAMES[svc])
         labels = (obj.get("Config") or {}).get("Labels") or {}
         if (labels.get("com.docker.compose.project") != g0.PROJECT
                 or labels.get("com.docker.compose.service") != svc):
             raise g0.GateError("g0_rollback_container_not_owned")
-        if (obj.get("State") or {}).get("Running") is not True:
-            raise g0.GateError("g0_rollback_requires_running_inspection_container")
+        state = (obj.get("State") or {}).get("Status")
+        if state not in {"running", "exited", "created"}:
+            raise g0.GateError("g0_rollback_container_state_unexpected")
         recognized = False
         for candidate in (old, new):
             tag = g0.resource_names(candidate)[svc]
