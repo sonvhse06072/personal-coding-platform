@@ -296,3 +296,43 @@ def test_g0_delivery_is_disabled_without_separate_permission(monkeypatch):
             cfg, job_id="a" * 32, branch="ai/" + "a" * 12,
             source_commit="b" * 40,
         )
+
+
+
+def test_g0_privileged_delivery_rechecks_exact_committed_diff(monkeypatch, tmp_path):
+    allowed = next(iter(main.G0_ALLOWED_CHANGED_FILES))
+    calls = []
+    def fake_git(repo, *argv, **kwargs):
+        calls.append(argv)
+        if argv[:2] == ("status", "--porcelain"):
+            return ""
+        if argv[:2] == ("diff", "--name-only"):
+            return allowed
+        raise AssertionError(argv)
+    monkeypatch.setattr(main, "git", fake_git)
+    main._verify_g0_delivered_diff(tmp_path, main.G0_SOURCE_COMMIT, "b" * 40)
+    assert ("diff", "--name-only", main.G0_SOURCE_COMMIT, "b" * 40) in calls
+    assert all("push" not in cmd for cmd in calls)
+
+
+def test_g0_privileged_delivery_rejects_changes_outside_frozen_files(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr(
+        main, "git", lambda _repo, *argv, **kwargs:
+        "composer.lock" if "diff" in argv else ""
+    )
+    with pytest.raises(HTTPException, match="outside the frozen task"):
+        main._verify_g0_delivered_diff(
+            tmp_path, main.G0_SOURCE_COMMIT, "b" * 40,
+        )
+    monkeypatch.setattr(
+        main, "git", lambda _repo, *argv, **kwargs:
+        " M generated.txt" if "status" in argv else ""
+    )
+    with pytest.raises(HTTPException, match="must be clean"):
+        main._verify_g0_delivered_diff(
+            tmp_path, main.G0_SOURCE_COMMIT, "b" * 40,
+        )
+    with pytest.raises(HTTPException, match="source/commit identity invalid"):
+        main._verify_g0_delivered_diff(tmp_path, "a" * 40, "b" * 40)
