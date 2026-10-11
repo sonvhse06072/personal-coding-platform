@@ -252,9 +252,29 @@ def _read_continuation() -> dict | None:
     return auth.upgrader._read_json_secure(path)
 
 
+def _claim_continuation(data: dict) -> None:
+    """Atomically claim the ONE remaining direct attempt across processes."""
+    path = _continuation_path()
+    root = path.parent
+    _private_file_guard(root, is_dir=True)
+    if path.exists() or path.is_symlink():
+        raise g0.GateError("g0_direct_continuation_already_recorded_no_retry")
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError as exc:
+        raise g0.GateError("g0_direct_continuation_concurrently_claimed") from exc
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as file:
+            json.dump(data, file, sort_keys=True)
+    except OSError as exc:
+        raise g0.GateError("g0_direct_continuation_record_failed") from exc
+
+
 def _write_continuation(data: dict) -> None:
-    # Separate record; never change the original failed parity journal.
-    auth.upgrader._private_write(_continuation_path(), data)
+    # The original failed parity journal must remain unchanged.
+    path = _continuation_path()
+    _private_file_guard(path, is_dir=False)
+    auth.upgrader._private_write(path, data)
 
 
 def _direct_container_absent() -> None:
@@ -339,7 +359,7 @@ def direct(repo: Path, fixture: Path, sha: str) -> dict:
         "direct_completed": False,
         "ready_to_dispatch_g0d_t01": False,
     }
-    _write_continuation(entry)
+    _claim_continuation(entry)
     try:
         direct_result = _direct_one_call(repo, env)
     except g0.GateError as exc:
