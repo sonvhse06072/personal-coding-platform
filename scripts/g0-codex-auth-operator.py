@@ -182,9 +182,16 @@ def _validate_overlay() -> None:
             })
             if svc.get("working_dir") != "/g0/direct-workspace":
                 raise g0.GateError("g0_direct_working_directory_not_exact")
-        if mounts != wanted:
+        # Use explicit long-form tmpfs mounts. A short tmpfs string with
+        # comma-separated options passed basic config checks but the Docker
+        # daemon interpreted its size= option as a non-absolute mount path.
+        wanted.append({
+            "type": "tmpfs", "target": "/tmp",
+            "tmpfs": {"size": 134217728},
+        })
+        if mounts != wanted or "tmpfs" in svc:
             raise g0.GateError("g0_auth_mount_scope_changed")
-        if not svc.get("tmpfs") or svc.get("pids_limit") != 128:
+        if svc.get("pids_limit") != 128:
             raise g0.GateError("g0_auth_process_bounds_missing")
         if svc.get("mem_limit") != ("1024m" if has_workspace else "512m"):
             raise g0.GateError("g0_auth_mem_limit_changed")
@@ -264,10 +271,66 @@ def _compose(repo: Path) -> list[str]:
     ]
 
 
+def _verify_rendered_tmpfs_mounts(repo: Path, env: dict[str, str]) -> None:
+    """Validate actual Compose mount resolution without contacting the daemon.
+
+    Basic 'config --quiet' previously passed even though the Docker daemon
+    later rejected the rendered 'size=128m' path. Never echo rendered JSON:
+    it includes the dedicated G0 database password.
+    """
+    raw = g0.run(
+        _compose(repo) + ["config", "--format", "json"],
+        env=env, label="g0_auth_rendered_mount_check", timeout=30,
+    )
+    try:
+        rendered = json.loads(raw)
+        services = rendered["services"]
+    except (TypeError, ValueError, KeyError) as exc:
+        raise g0.GateError("g0_auth_rendered_compose_invalid") from exc
+    if not isinstance(services, dict):
+        raise g0.GateError("g0_auth_rendered_compose_invalid")
+    auths = {"auth_pcp": "/home/coder/.codex-g0",
+             "auth_direct": "/home/coder/.codex-direct"}
+    for name, auth_path in auths.items():
+        svc = services.get(name)
+        if not isinstance(svc, dict):
+            raise g0.GateError("g0_auth_rendered_service_missing")
+        mounts = svc.get("volumes")
+        if not isinstance(mounts, list) or len(mounts) != 2:
+            raise g0.GateError("g0_auth_rendered_mount_count_invalid")
+        types = {
+            m.get("target"): m for m in mounts if isinstance(m, dict)
+        }
+        if set(types) != {auth_path, "/tmp"}:
+            raise g0.GateError("g0_auth_rendered_mount_target_invalid")
+        auth = types[auth_path]
+        tmp = types["/tmp"]
+        if auth.get("type") != "bind" or (
+            tmp.get("type") != "tmpfs"
+            or not isinstance(tmp.get("tmpfs"), dict)
+            or tmp["tmpfs"].get("size") != 134217728
+        ):
+            raise g0.GateError("g0_auth_rendered_tmpfs_invalid")
+    # Direct has a different opt-in profile. Check it when it appears in the
+    # renderer (other profile filtering does not affect an auth-only login).
+    if "direct" in services:
+        mounts = services["direct"].get("volumes")
+        if not isinstance(mounts, list) or len(mounts) != 3:
+            raise g0.GateError("g0_direct_rendered_mount_count_invalid")
+        if {m.get("target") for m in mounts if isinstance(m, dict)} != {
+            "/home/coder/.codex-direct", "/g0/direct-workspace", "/tmp",
+        }:
+            raise g0.GateError("g0_direct_rendered_mount_target_invalid")
+        tmps = [m for m in mounts if isinstance(m, dict)
+                and m.get("target") == "/tmp"]
+        if (len(tmps) != 1 or tmps[0].get("type") != "tmpfs"
+                or (tmps[0].get("tmpfs") or {}).get("size") != 134217728):
+            raise g0.GateError("g0_direct_rendered_tmpfs_invalid")
+
+
 def preflight(repo: Path, fixture: Path, sha: str) -> dict:
     env, report = _context(repo, fixture, sha, require_prepared=False)
-    g0.run(_compose(repo) + ["config", "--quiet"],
-           env=env, label="g0_auth_compose_source_check", timeout=30)
+    _verify_rendered_tmpfs_mounts(repo, env)
     return {"status": "PASS", "phase": "g0_auth_preflight", **report}
 
 
@@ -306,8 +369,7 @@ def prepare(repo: Path, fixture: Path, sha: str) -> dict:
 
 def status(repo: Path, fixture: Path, sha: str) -> dict:
     env, report = _context(repo, fixture, sha, require_prepared=True)
-    g0.run(_compose(repo) + ["config", "--quiet"],
-           env=env, label="g0_auth_compose_prepared_check", timeout=30)
+    _verify_rendered_tmpfs_mounts(repo, env)
     return {
         "status": "PASS", "phase": "g0_auth_local_state",
         **report,
@@ -324,8 +386,7 @@ def device_login(repo: Path, fixture: Path, sha: str, arm: str) -> dict:
     # Preserve an existing authenticated profile instead of re-logging in.
     if _check_config(arm):
         raise g0.GateError("g0_auth_profile_already_has_cached_credentials")
-    g0.run(_compose(repo) + ["config", "--quiet"],
-           env=env, label="g0_login_compose_config", timeout=30)
+    _verify_rendered_tmpfs_mounts(repo, env)
     # Interactive output intentionally stays only on Owner's local WSL terminal.
     # Never capture or return OAuth URLs/codes or auth contents through GitHub.
     command = _compose(repo) + [
