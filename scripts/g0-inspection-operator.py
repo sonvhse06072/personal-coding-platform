@@ -371,14 +371,16 @@ def read_private_state(root: Path) -> tuple[str, str, Path]:
 
 
 PROBE_PY = """import json, sys, urllib.request, urllib.error
-base, expected, write_path, denial = sys.argv[1:]
+base, expected, guarded_path, method, denial = sys.argv[1:]
 with urllib.request.urlopen(base + "/health", timeout=12) as response:
     health = json.load(response)
 if health.get("status") != expected:
     raise SystemExit(2)
 try:
     urllib.request.urlopen(urllib.request.Request(
-        base + write_path, data=b"{}", method="POST"), timeout=12)
+        base + guarded_path,
+        data=b"{}" if method == "POST" else None, method=method,
+    ), timeout=12)
 except urllib.error.HTTPError as exc:
     if exc.code != int(denial):
         raise SystemExit(3)
@@ -417,13 +419,13 @@ def verify_inspection(repo: Path, env: dict[str, str]) -> dict[str, str | bool]:
         env=env, label="g0_db_ready", timeout=25)
     probes = {
         # Router has no API token mounted in inspection mode: route is 503.
-        "router": ("http://127.0.0.1:8090", "ok", "/v1/route", "503"),
-        "executor": ("http://127.0.0.1:8790", "degraded", "/v1/workspaces", "403"),
-        "runtime": ("http://127.0.0.1:8787", "degraded", "/v1/jobs", "503"),
+        "router": ("http://127.0.0.1:8090", "ok", "/v1/models", "GET", "503"),
+        "executor": ("http://127.0.0.1:8790", "degraded", "/v1/workspaces", "POST", "403"),
+        "runtime": ("http://127.0.0.1:8787", "degraded", "/v1/jobs", "POST", "503"),
     }
-    for svc, (url, status, path, code) in probes.items():
+    for svc, (url, status, path, method, code) in probes.items():
         run(cmd + [svc, "python3", "-c", PROBE_PY,
-                   url, status, path, code],
+                   url, status, path, method, code],
             env=env, label="g0_" + svc + "_inspection_health", timeout=30)
     return {
         "status": "PASS",
