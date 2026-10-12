@@ -171,6 +171,8 @@ def safe_env():
         "PCP_RUNTIME_STARTUP_MODE": "normal",
         "PCP_FULLPATH_PM_FINALIZATION_ENABLED": "owner-approved",
         "DATABASE_URL": "postgresql://fullpath:secret@fullpath-db:5432/fullpath",
+        "ROUTER_URL": "http://fullpath-router:8090",
+        "DDEV_EXECUTOR_URL": "http://fullpath-executor:8790",
     }
 
 
@@ -262,6 +264,14 @@ class FakeExecutor:
 def env(monkeypatch):
     monkeypatch.setattr(pm.os.path, "exists", lambda path: False)
     monkeypatch.setattr(pm, "project_config", lambda project_id: fake_project())
+    monkeypatch.setattr(pm, "projects_doc", lambda: {
+        "projects": {pm.PROJECT_ID: fake_project()},
+    })
+    monkeypatch.setattr(pm, "project_baselines_doc", lambda: {
+        "projects": {pm.PROJECT_ID: {
+            "active_revision": "fullpath-v1",
+        }},
+    })
     monkeypatch.setattr(pm, "resolve_project_baseline",
                         lambda project_id, revision: approved_baseline())
     return safe_env()
@@ -296,12 +306,33 @@ def test_pass_report_has_one_bounded_strict_marker():
     lambda d: d.update({"CODEX_HOME": "/home/coder/.codex"}),
     lambda d: d.update({"ANTIGRAVITY_BRIDGE_URL": "http://localhost"}),
     lambda d: d.update({"PCP_G0_EXECUTION_ENABLED": "owner-approved"}),
+    lambda d: d.update({"GITHUB_DELIVERY_TOKEN": "secret"}),
+    lambda d: d.update({"ROUTER_URL": "http://router:8090"}),
+    lambda d: d.update({"DDEV_EXECUTOR_URL": "http://ddev-executor:8790"}),
 ])
 def test_legacy_global_or_parked_runtime_rejected_without_db_touch(env, change):
     changed = deepcopy(env)
     change(changed)
     with pytest.raises(RuntimeError, match="not_authorized"):
         pm.require_isolated_review_environment(changed)
+
+
+def test_singleton_registry_blocks_foreign_project_before_db_read(env, monkeypatch):
+    monkeypatch.setattr(pm, "projects_doc", lambda: {
+        "projects": {
+            pm.PROJECT_ID: fake_project(),
+            "chonhac": {"path": "/forbidden"},
+        },
+    })
+    class ForbiddenStore:
+        def get(self, job_id):
+            raise AssertionError("foreign registry must not read any jobs")
+    executor = FakeExecutor()
+    with pytest.raises(RuntimeError, match="foreign_project_registry"):
+        asyncio.run(pm.FullpathPMReviewService(
+            ForbiddenStore(), executor,
+        ).finalize(JOB, request(), env=env))
+    assert executor.calls == []
 
 
 def test_only_owner_approved_new_fixture_can_finalize(env, monkeypatch):

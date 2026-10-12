@@ -19,10 +19,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .activity import status_transition_event
 from .baseline import resolve_project_baseline
-from .config import project_config
+from .config import project_config, projects_doc, project_baselines_doc
 from .fullpath_ci_deferred import WAITING_PM
 from .fullpath_fixture_safety import (
-    FIXED_ENV, PROJECT_ID, _database_uri,
+    FIXED_ENV, PROJECT_ID, _database_uri, _service_uri,
 )
 from .required_ci import required_ci_for_project, required_github_actions_pass
 from .storage import _insert_job_event, now
@@ -131,9 +131,17 @@ def require_isolated_review_environment(env: Mapping[str, str]) -> None:
     if (
         any(env.get(key) != val for key, val in required.items())
         or not _database_uri(env.get("DATABASE_URL", ""))
+        or not _service_uri(
+            env.get("ROUTER_URL", ""), host="fullpath-router", port=8090,
+        )
+        or not _service_uri(
+            env.get("DDEV_EXECUTOR_URL", ""), host="fullpath-executor",
+            port=8790,
+        )
         or any(env.get(key) for key in (
             "ANTIGRAVITY_BRIDGE_URL", "ANTIGRAVITY_BRIDGE_TOKEN",
             "PCP_G0_EXECUTION_ENABLED", "PCP_G0_DELIVERY_ENABLED",
+            "GITHUB_DELIVERY_TOKEN",
         ))
         or os.path.exists("/var/run/docker.sock")
     ):
@@ -328,6 +336,17 @@ class FullpathPMReviewService:
         require_isolated_review_environment(env if env is not None else os.environ)
         if not isinstance(job_id, str) or not _JOB.fullmatch(job_id):
             raise RuntimeError("pm_fullpath_job_id_invalid")
+        # Require an exact singleton project/baseline registry before any job
+        # store access, not merely the expected file path.
+        registered = projects_doc().get("projects")
+        registered_baselines = project_baselines_doc().get("projects")
+        if (
+            not isinstance(registered, dict)
+            or set(registered) != {PROJECT_ID}
+            or not isinstance(registered_baselines, dict)
+            or set(registered_baselines) != {PROJECT_ID}
+        ):
+            raise RuntimeError("pm_fullpath_foreign_project_registry")
         project = project_config(PROJECT_ID)
         review_policy = project.get("pm_standalone_review") or {}
         reviewer_login = (
