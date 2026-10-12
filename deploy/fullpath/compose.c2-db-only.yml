@@ -1,0 +1,71 @@
+# DEC-G0-F2D04C2-DB-ONLY-V1 — Owner-approved isolated DB stage.
+# This is a STANDALONE, single-service Compose file, NOT an override of
+# compose.source-only.yml. Do not combine both files or start other F2 services.
+# Never use this file without the separate owner-local resource preflight.
+name: pcp-f2-fullpath
+
+services:
+  fullpath-db:
+    container_name: pcp-f2-fullpath-fullpath-db-1
+    image: "${PCP_F2_POSTGRES_IMAGE:?preloaded_official_postgres16_exact_digest_required}"
+    pull_policy: never
+    restart: "no"
+    environment:
+      POSTGRES_DB: fullpath
+      POSTGRES_USER: fullpath_bootstrap_admin
+      POSTGRES_PASSWORD_FILE: /run/secrets/f2_db_admin_password
+      POSTGRES_INITDB_ARGS: "--auth-host=scram-sha-256"
+    secrets:
+      - source: f2_db_admin_password
+        target: f2_db_admin_password
+      - source: f2_db_app_password
+        target: f2_db_app_password
+    volumes:
+      - type: volume
+        source: fullpath-db-data
+        target: /var/lib/postgresql/data
+      - type: bind
+        source: ./db-c2-init-app-role.sql
+        target: /docker-entrypoint-initdb.d/10-f2-app-role.sql
+        read_only: true
+        bind:
+          create_host_path: false
+    networks:
+      - fullpath-private
+    # Official postgres:16 entrypoint initializes the fresh owned volume as
+    # root, then drops to the postgres OS account. Attest UID/GID on host.
+    # Do not replace this with an unverified rootless UID/GID configuration.
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 128
+    mem_limit: 512m
+    labels:
+      pcp.scope: f2-c2-db-only
+      pcp.authority: DEC-G0-F2D04C2-DB-ONLY-V1
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fullpath_bootstrap_admin -d fullpath"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+secrets:
+  f2_db_admin_password:
+    file: "${PCP_F2_DB_ADMIN_PASSWORD_FILE:?owner_local_admin_secret_file_required}"
+  f2_db_app_password:
+    file: "${PCP_F2_DB_APP_PASSWORD_FILE:?owner_local_app_secret_file_required}"
+
+volumes:
+  fullpath-db-data:
+    name: pcp-f2-fullpath-postgres-data
+    labels:
+      pcp.scope: f2-c2-db-only
+      pcp.authority: DEC-G0-F2D04C2-DB-ONLY-V1
+
+networks:
+  fullpath-private:
+    name: pcp-f2-fullpath-private
+    internal: true
+    labels:
+      pcp.scope: f2-c2-db-only
+      pcp.authority: DEC-G0-F2D04C2-DB-ONLY-V1
