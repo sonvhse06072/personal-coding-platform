@@ -47,3 +47,18 @@
 - **F2 còn thiếu:** fixture/source approved SHA mới; PostgreSQL app role + DB/volume thật; zero-history inventory attested sau schema setup; OCI/runtime ownership, Router/Executor/provider egress, privileged exact-SHA CI và operational activation độc lập. Không tháo parked entrypoint hoặc chạy model trước đó.
 
 **F2c source-only result không phải full PCP boot PASS.** Bước sau đánh giá đường scoped activation khi đủ ownership hoặc kết luận `FULLPATH_NOT_FEASIBLE` và tối giản PCP. G0 HOLD/NOT GO; giữ nguyên PR/seed G0D-T01, legacy PCP và Chợ Nhạc.
+
+## F2d-01 — Tách contract pre-schema / post-schema (source-only, không provisioning)
+
+**Phát hiện:** F2b `read_only_fresh_database_snapshot()` kiểm tra một DB nguyên sơ với `user_relation_count=0`; F2c trước đó nhận **cùng snapshot** đó và đồng thời tin một dictionary giả lập gồm chín inventory families bằng 0. Không thể đếm dữ liệu từ bảng thật trước khi cài schema, nên tổ hợp synthetic đó không chứng minh được readiness vận hành. `Storage.init()` hiện chứa `CREATE TABLE IF NOT EXISTS` **và** `UPDATE cp_execution_plans` nên cũng không phải bootstrap read-only hay ứng viên chạy bằng app role chưa có quyền DDL. Ngoài chín family còn có các bảng metadata/outbox/event/checkpoint; chưa có post-bootstrap inventory/schema allowlist đã xác nhận đầy đủ.
+
+**Sửa hợp đồng đánh giá trong `fullpath_scoped_boot.assess_scoped_fresh_boot`:**
+
+1. `database_snapshot` vẫn là **pre-schema**: DB `fullpath`, role `fullpath` không superuser, không table/function do người dùng tạo và không peer session.
+2. `post_schema_database_snapshot` là **đầu vào riêng, mới và bắt buộc nếu muốn source-shape valid**: cùng DB/role không superuser; relation count phải tăng từ 0 lên số nguyên dương, function count không âm, peer sessions bằng 0. Không được giả vờ snapshot pre-schema là inventory post-schema. Giá trị relation count synthetic **không** thay thế kiểm chứng allowlist object thật.
+3. `inventory` gồm đúng chín family nonnegative integer = 0, phản ánh trạng thái **sau schema** theo hợp đồng dự kiến. Kiểm chứng thực tế cần read-only/transaction-bound snapshot trên DB F2 đã được tạo độc lập, thêm kiểm kê đầy đủ mọi bảng/durable family, không tin dictionary model-provided.
+4. `bootstrap_phase_evidence_independently_verified=false` và `post_schema_owned_object_allowlist_verified=false` cố định trong source-only output; `status=STOP`, `startup_authorized=false`, `ready_to_dispatch=false` tuyệt đối không đổi. Kể cả synthetic checks toàn true vẫn không tạo token/permission cho normal Runtime.
+
+**Trình tự cần chứng minh *sau* protected operational approval:** new fixture/approved SHA, digest/volume/role/UID/egress → pre-schema read-only catalog với app role → migration bằng credential bootstrap **riêng, được giới hạn chỉ DB/volume F2**, rồi revoke/không cấp role DDL cho app → read-only post-schema catalog + exact approved schema object manifest + inventory trên mọi durable table, không dựa vào suy luận từ chín family → kiểm chứng safe Engine startup không gọi legacy global cancel/replay/PlanOrchestrator tick → CI/PM review và scoped rollback. Khác biệt giữa mẫu trước/sau phải được ràng buộc cùng DB/volume identity; không coi hai dictionary trong synthetic CI là bằng chứng identity thật.
+
+**Không thực thi** một bước DB, Docker, Runtime, Codex, provider, GitHub fixture provisioning hay Chợ Nhạc nào trong correction này. Bước kế tiếp vẫn là chuẩn bị Owner-scoped attestation/migration/rollback proposal; không bật Compose từ docs/source PR.
