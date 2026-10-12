@@ -14,6 +14,45 @@ from typing import Any
 
 from .fullpath_fixture_safety import PROJECT_ID, _database_uri
 
+# This is exact OWNER-APPROVED source metadata, not an activation signal.
+# Retain the old empty v1 candidate only for source-only backward compatibility.
+V2_BRANCH = "benchmark/fullpath-v2"
+V2_INACTIVE_BASELINE = {
+    "active_revision": None,
+    "revisions": {
+        "f2-c1-window-v2-2026-10-12": {
+            "status": "approved",
+            "source_commit": "3165b76d44b738c4709c3ca74f87297ff66dd397",
+            "authority": [
+                {"path": "README.md", "authority": "human_owner_protected"},
+                {"path": "docs/F2-T01.md", "authority": "human_owner_protected"},
+                {"path": ".github/workflows/validation.yml", "authority": "human_owner_protected"},
+                {"path": "composer.json", "authority": "human_owner_protected"},
+                {"path": "composer.lock", "authority": "human_owner_protected"},
+                {"path": "web/modules/custom/pcp_f2_fixture/src/WindowOverlapDetector.php", "authority": "mutable_execution"},
+                {"path": "web/modules/custom/pcp_f2_fixture/tests/src/Unit/WindowOverlapDetectorTest.php", "authority": "mutable_execution"},
+                {"path": "web/modules/custom/pcp_f2_fixture/tests/src/Kernel/WindowOverlapServiceTest.php", "authority": "mutable_execution"},
+            ],
+            "references": {
+                "goals": [{"path": "README.md"}],
+                "non_goals": [{"path": "README.md"}],
+                "requirements": [{"path": "docs/F2-T01.md"}],
+                "architecture_constraints": [{"path": "README.md"}],
+                "quality_policy": [
+                    {"path": "README.md"},
+                    {"path": ".github/workflows/validation.yml"},
+                ],
+                "security_policy": [
+                    {"path": "README.md"},
+                    {"path": ".github/workflows/validation.yml"},
+                ],
+                "budget_policy": [{"path": "docs/F2-T01.md"}],
+                "roadmap_frame": [{"path": "docs/F2-T01.md"}],
+            },
+        },
+    },
+}
+
 
 READ_ONLY_SNAPSHOT_SQL = """
 SELECT
@@ -97,7 +136,7 @@ def assess_fresh_fullpath_startup(
         isinstance(config, dict)
         and config.get("path")
         == "${CODING_PROJECTS_ROOT}/pcp-g0-fullpath-fixture"
-        and config.get("base_branch") == "benchmark/fullpath"
+        and config.get("base_branch") in {"benchmark/fullpath", V2_BRANCH}
         and isinstance(runtime, dict)
         and runtime.get("workspace_mode") == "isolated_clone"
         and runtime.get("exclusive_project_lease") is False
@@ -110,12 +149,24 @@ def assess_fresh_fullpath_startup(
         if isinstance(active, dict) and set(active) == {PROJECT_ID}
         else None
     )
-    # F2a source intentionally has no approved baseline. A future source-only
-    # assessment must NOT invent an approved SHA from G0D-T01.
-    checks["original_source_still_not_approved"] = bool(
-        isinstance(record, dict)
-        and record.get("active_revision") is None
-        and record.get("revisions") == {}
+    # An approved source frame is not an ACTIVE baseline or F2 startup.
+    # v1 has no revision; only the exact Owner-approved v2 metadata is accepted
+    # when paired with its new branch. Neither may access DB/host operations.
+    checks["reviewed_source_frame_is_inactive"] = bool(
+        isinstance(config, dict)
+        and (
+            (config.get("base_branch") == "benchmark/fullpath"
+             and record == {"active_revision": None, "revisions": {}})
+            or (config.get("base_branch") == V2_BRANCH
+                and record == V2_INACTIVE_BASELINE)
+        )
+    )
+    # Legacy fullpath_scoped_boot.py consumes the original check name.
+    # Keep its read-only bool contract until a separately approved successor:
+    # True now means the F2 SOURCE FRAME IS INACTIVE (v1 empty OR exact v2),
+    # not that an approved source SHA is absent. No boot is authorized.
+    checks["original_source_still_not_approved"] = (
+        checks["reviewed_source_frame_is_inactive"]
     )
     source_valid = all(checks.values())
     blockers = [

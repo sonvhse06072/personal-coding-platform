@@ -12,6 +12,7 @@ import pytest
 
 from app import fullpath_fixture_safety as parked
 from app import fullpath_fresh_startup as future
+from app import fullpath_scoped_boot as scoped_boot
 from app.engine_core import RuntimeEngineCore
 from app.plan_orchestrator import PlanOrchestrator as CoreOrchestrator
 from app.orchestrator_merge import PlanOrchestrator as MergeOrchestrator
@@ -161,7 +162,7 @@ def test_foreign_registry_and_direct_workspace_denied(alter):
     assert result["status"] == "STOP"
 
 
-def test_real_parked_f2_baseline_is_not_approved_yet():
+def test_real_parked_f2_baseline_source_still_cannot_start_runtime():
     import yaml
     from pathlib import Path
 
@@ -229,3 +230,123 @@ def test_pure_source_assessment_has_no_implicit_db_inspection(monkeypatch):
             database_url="postgresql://postgres@db:5432/postgres",
             connect=forbidden,
         )
+
+
+
+def approved_inactive_v2_candidate():
+    """New Owner-approved source metadata is not active or executable."""
+    _, projects, baselines = candidate()
+    projects["projects"][parked.PROJECT_ID]["base_branch"] = future.V2_BRANCH
+    baselines["projects"][parked.PROJECT_ID] = deepcopy(
+        future.V2_INACTIVE_BASELINE
+    )
+    return projects, baselines
+
+
+def test_owner_approved_inactive_v2_is_recognized_but_cannot_start():
+    projects, baselines = approved_inactive_v2_candidate()
+    before = deepcopy((projects, baselines))
+    entry = future.V2_INACTIVE_BASELINE
+    assert future.V2_BRANCH == "benchmark/fullpath-v2"
+    assert entry["active_revision"] is None
+    assert set(entry["revisions"]) == {"f2-c1-window-v2-2026-10-12"}
+    approved = entry["revisions"]["f2-c1-window-v2-2026-10-12"]
+    assert approved["status"] == "approved"
+    assert approved["source_commit"] == (
+        "3165b76d44b738c4709c3ca74f87297ff66dd397"
+    )
+    result = future.assess_fresh_fullpath_startup(
+        pristine(), projects, baselines,
+    )
+    assert result["source_snapshot_valid"] is True
+    assert result["checks"]["reviewed_source_frame_is_inactive"] is True
+    # Older scoped-boot consumer still expects the legacy key's bool.
+    assert result["checks"]["original_source_still_not_approved"] is True
+    assert result["status"] == "STOP"
+    assert result["full_runtime_start_allowed"] is False
+    assert all(result["effects_that_must_be_absent"].values())
+    assert result["new_resources_created"] == 0
+    assert result["model_calls_this_command"] == 0
+    assert (projects, baselines) == before
+
+
+@pytest.mark.parametrize("alter", [
+    lambda p, b: p.update(base_branch="benchmark/fullpath"),
+    lambda p, b: p.update(base_branch="benchmark/pcp"),
+    lambda p, b: b.update(revisions={}),
+    lambda p, b: b.update(active_revision="f2-c1-window-v2-2026-10-12"),
+    lambda p, b: b.update(active_revision="foreign"),
+    lambda p, b: b["revisions"]["f2-c1-window-v2-2026-10-12"].update(
+        source_commit="0" * 40
+    ),
+    lambda p, b: b["revisions"]["f2-c1-window-v2-2026-10-12"].update(
+        status="draft"
+    ),
+    lambda p, b: b["revisions"].update({"foreign": {}}),
+    lambda p, b: b["revisions"]["f2-c1-window-v2-2026-10-12"][
+        "authority"
+    ][0].update(authority="mutable_execution"),
+    lambda p, b: b["revisions"]["f2-c1-window-v2-2026-10-12"][
+        "references"
+    ]["requirements"][0].update(path="../old-g0"),
+])
+def test_v2_runtime_source_assessment_rejects_drift_and_active_revision(alter):
+    projects, baselines = approved_inactive_v2_candidate()
+    config = projects["projects"][parked.PROJECT_ID]
+    record = baselines["projects"][parked.PROJECT_ID]
+    alter(config, record)
+    result = future.assess_fresh_fullpath_startup(
+        pristine(), projects, baselines,
+    )
+    assert result["source_snapshot_valid"] is False
+    assert result["status"] == "STOP"
+    assert result["full_runtime_start_allowed"] is False
+    assert result["new_resources_created"] == 0
+
+
+@pytest.mark.parametrize("change", [
+    lambda p: p["runtime"].update(workspace_mode="direct"),
+    lambda p: p["runtime"].update(exclusive_project_lease=True),
+    lambda p: p["ddev"].update(enabled=True),
+    lambda p: p.update(path="/home/example/chonhac"),
+])
+def test_inactive_v2_does_not_relax_existing_workspace_and_ddev_denials(change):
+    projects, baselines = approved_inactive_v2_candidate()
+    change(projects["projects"][parked.PROJECT_ID])
+    result = future.assess_fresh_fullpath_startup(
+        pristine(), projects, baselines,
+    )
+    assert result["source_snapshot_valid"] is False
+    assert result["status"] == "STOP"
+    assert result["full_runtime_start_allowed"] is False
+
+
+
+def test_v2_inactive_source_remains_compatible_with_legacy_scoped_boot_reader():
+    # The untouched F2c assessment reads the old key. A source metadata
+    # approval is NOT permission for that layer to run any startup effects.
+    env, _, _ = candidate()
+    env["PCP_FULLPATH_SOURCE_ONLY"] = "true"
+    projects, baselines = approved_inactive_v2_candidate()
+    post_schema = pristine()
+    post_schema["user_relation_count"] = 12
+    before = deepcopy((env, projects, baselines, post_schema))
+    outcome = scoped_boot.assess_scoped_fresh_boot(
+        environment=env,
+        database_snapshot=pristine(),
+        projects_document=projects,
+        baselines_document=baselines,
+        inventory={name: 0 for name in scoped_boot.FRESH_INVENTORY},
+        post_schema_database_snapshot=post_schema,
+    )
+    assert outcome["source_contract_valid"] is True
+    assert outcome["checks"]["singleton_parked_fixture_only"] is True
+    assert outcome["status"] == "STOP"
+    assert outcome["startup_authorized"] is False
+    assert outcome["ready_to_dispatch"] is False
+    assert outcome["model_calls_this_command"] == 0
+    assert outcome["new_resources_created"] == 0
+    assert outcome["forbidden_effects"] == list(
+        scoped_boot.FORBIDDEN_STARTUP_EFFECTS
+    )
+    assert (env, projects, baselines, post_schema) == before

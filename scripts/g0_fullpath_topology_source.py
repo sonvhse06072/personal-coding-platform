@@ -22,6 +22,45 @@ PROJECT = "pcp-f2-fullpath"
 SERVICES = ("fullpath-db", "fullpath-router", "fullpath-executor", "fullpath-runtime")
 PROFILE = "owner-gated-f2-source"
 SOURCE_REQUIRED = ("projects.yml", "project-baselines.yml", "models.yml", "routing-policy.yml")
+# This is exact OWNER-APPROVED source metadata, not an activation signal.
+# Retain the old empty v1 candidate only for source-only backward compatibility.
+V2_BRANCH = "benchmark/fullpath-v2"
+V2_INACTIVE_BASELINE = {
+    "active_revision": None,
+    "revisions": {
+        "f2-c1-window-v2-2026-10-12": {
+            "status": "approved",
+            "source_commit": "3165b76d44b738c4709c3ca74f87297ff66dd397",
+            "authority": [
+                {"path": "README.md", "authority": "human_owner_protected"},
+                {"path": "docs/F2-T01.md", "authority": "human_owner_protected"},
+                {"path": ".github/workflows/validation.yml", "authority": "human_owner_protected"},
+                {"path": "composer.json", "authority": "human_owner_protected"},
+                {"path": "composer.lock", "authority": "human_owner_protected"},
+                {"path": "web/modules/custom/pcp_f2_fixture/src/WindowOverlapDetector.php", "authority": "mutable_execution"},
+                {"path": "web/modules/custom/pcp_f2_fixture/tests/src/Unit/WindowOverlapDetectorTest.php", "authority": "mutable_execution"},
+                {"path": "web/modules/custom/pcp_f2_fixture/tests/src/Kernel/WindowOverlapServiceTest.php", "authority": "mutable_execution"},
+            ],
+            "references": {
+                "goals": [{"path": "README.md"}],
+                "non_goals": [{"path": "README.md"}],
+                "requirements": [{"path": "docs/F2-T01.md"}],
+                "architecture_constraints": [{"path": "README.md"}],
+                "quality_policy": [
+                    {"path": "README.md"},
+                    {"path": ".github/workflows/validation.yml"},
+                ],
+                "security_policy": [
+                    {"path": "README.md"},
+                    {"path": ".github/workflows/validation.yml"},
+                ],
+                "budget_policy": [{"path": "docs/F2-T01.md"}],
+                "roadmap_frame": [{"path": "docs/F2-T01.md"}],
+            },
+        },
+    },
+}
+
 PARKED_BLOCKERS = (
     "new_f2_fixture_repository_and_approved_seed_absent",
     "fresh_db_volume_and_zero_history_unverified",
@@ -253,8 +292,9 @@ def assess(compose: Any, files: dict[str, Any]) -> dict[str, Any]:
     runtime = config.get("runtime") if isinstance(config, dict) else None
     checks["singleton_fixture_source_parked"] = bool(
         isinstance(project, dict) and set(project) == {PROJECT_ID}
+        and isinstance(config, dict)
         and config.get("path") == "${CODING_PROJECTS_ROOT}/pcp-g0-fullpath-fixture"
-        and config.get("base_branch") == "benchmark/fullpath"
+        and config.get("base_branch") in {"benchmark/fullpath", V2_BRANCH}
         and isinstance(autonomy, dict) and autonomy
         and all(value is False for value in autonomy.values())
         and isinstance(ddev, dict) and ddev.get("enabled") is False
@@ -271,9 +311,20 @@ def assess(compose: Any, files: dict[str, Any]) -> dict[str, Any]:
     )
     baselines = files.get("project-baselines.yml")
     baselines = baselines.get("projects") if isinstance(baselines, dict) else None
-    checks["new_fixture_baseline_deliberately_unapproved"] = bool(
-        isinstance(baselines, dict) and set(baselines) == {PROJECT_ID}
-        and baselines[PROJECT_ID] == {"active_revision": None, "revisions": {}}
+    baseline_entry = (
+        baselines.get(PROJECT_ID)
+        if isinstance(baselines, dict) and set(baselines) == {PROJECT_ID}
+        else None
+    )
+    # v1 and the Owner-approved inactive v2 must NEVER be mixed or activated.
+    checks["reviewed_source_frame_is_inactive"] = bool(
+        isinstance(config, dict)
+        and (
+            (config.get("base_branch") == "benchmark/fullpath"
+             and baseline_entry == {"active_revision": None, "revisions": {}})
+            or (config.get("base_branch") == V2_BRANCH
+                and baseline_entry == V2_INACTIVE_BASELINE)
+        )
     )
     models = files.get("models.yml")
     policy = files.get("routing-policy.yml")
