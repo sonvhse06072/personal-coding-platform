@@ -69,6 +69,18 @@ class RuntimeEngineCore:
         self.storage.init()
         self._stopping = False
         await self._reconcile_legacy_restart_effects()
+        self._spawn_engineering_worker()
+
+    def _spawn_engineering_worker(self) -> None:
+        """Launch the existing worker only; no schema or legacy recovery.
+
+        Future fresh F2 boot would need its own independently approved resource
+        attestation and explicit lifecycle gate *before* reaching this seam.
+        The current parked F2 identity cannot invoke this directly.
+        """
+        reject_parked_fullpath_side_effects()
+        if self.worker_task is not None:
+            raise RuntimeError("Engineering worker is already started")
         self.worker_task = asyncio.create_task(self._worker_loop())
 
     async def _reconcile_legacy_restart_effects(self) -> None:

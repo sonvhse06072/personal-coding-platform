@@ -8,7 +8,7 @@ Last reconciled: **2026-10-12**. **Canonical PCP #595 remains OPEN / G0 NOT GO.*
 
 **WSL/execution authority:** Owner proved isolated `pcp-g0d01` activation and GET-only health checks before the trials; original local G0 Runtime job and Direct journal/workspace must be preserved. **Legacy PCP PostgreSQL** has separately observed historical managed-project active lease/orchestration/pending WorkOrder evidence (2026-10-11 read-only snapshot); legacy Router/Runtime/Executor must NOT be started from those stale records. Strict managed-project no-touch, no shared-host Codex/DDEV/project lease manipulation. A source PR merge does not update deployed G0 images.
 
-**F2d-04A approved / F2d-04B source work; F2 PARKED:** #674 Executor deny-only F2 scope, #675 Storage schema/legacy recovery seam MERGED, exact CI PASS. F2d-04B-02 thêm optional per-repository guard cho privileged GitHubDelivery API, deny foreign repo before HTTP; default legacy unchanged. [F2 design T3](history/g0-02-f2d04-operational-decision-2026-10-12.md). F2 fixture GitHub 404, no owned DB/volume/provider egress/token/safe Engine evidence. #665 runner risk OPEN; G0 HOLD/NOT GO, G1 blocked.
+**F2d-04B source progress / F2 PARKED:** #674 deny-only F2 Executor, #675 Storage DDL/recovery split, #676 GitHubDelivery optional exact-repo API guard MERGED/CI PASS. F2d-04B-03 tách worker spawn và legacy planner/publishers nhưng vẫn cấm F2 activation/side effects. [F2 decision T3](history/g0-02-f2d04-operational-decision-2026-10-12.md). No approved F2 fixture/DB/volume/provider/token/egress; #665 runner isolation OPEN. G0 HOLD/NOT GO, G1 BLOCKED.
 
 ## Resume order
 
@@ -71,7 +71,7 @@ Chợ Nhạc GH-63 founder acceptance is a managed-project decision, not a PCP s
 ## Immediate next safe actions
 
 1. **#594 complete:** evidence [PR #612](https://github.com/sonvhse06072/personal-coding-platform/pull/612) merged; no further G0-01 code. Shared Chợ Nhạc dirty direct worktree and historical lease unresolved remain **no-touch** until separately authorized.
-2. **#595 F2d-04B-02:** review optional exact-repo GitHub API guard PR (chỉ code/tests/docs, no F2 token/route), chạy full hosted CI, review HEAD rồi merge nếu an toàn. Kế tiếp ưu tiên safe scoped Engine lifecycle và independent F2 resource/egress attestations. No WSL/Docker/DB/Codex/model/Chợ Nhạc/legacy PCP; activation/trust expansion vẫn cần protected authority.
+2. **#595 F2d-04B-03:** exact-head CI và PM review cho worker-only + legacy control-plane split; chỉ refactor, không cấp mode/permission F2. Kế tiếp cần independent fixture/DB/volume/token/egress proofs và approved scoped startup/rollback. Không WSL/Docker/DB/model/legacy PCP/Chợ Nhạc.
 3. **#493/#512 residual:** Executor **1.0.35 observed**, natural cold-start and remote recovery still unproven. No reason to restart just to update docs or repeat fixed source changes. The prior host `ddev restart` 900-second incident still requires bounded root-cause/rollback planning.
 4. **Chợ Nhạc writer protection:** GH-89 blocked durable PCP job exists while current direct worktree is **dirty Codex branch**. Do not checkout, stash, reset, resume, retire, cancel or overwrite that shared workspace from PCP audit. No Docker prune, replacement job or protected authority override. Only a fresh explicitly authorized single-writer/lease handoff can change this.
 

@@ -24,7 +24,7 @@ from .dashboard import _require_session, create_dashboard_router
 from .engine_telemetry import RuntimeEngine
 from .g0_fixture_execution import G0FixtureExecution, G0GateError
 from .fullpath_pm_review import FullpathPMReviewRequest, FullpathPMReviewService
-from .fullpath_fixture_safety import MODE as FULLPATH_CANDIDATE_MODE, parked_fullpath_environment, refuse_source_only_startup
+from .fullpath_fixture_safety import MODE as FULLPATH_CANDIDATE_MODE, parked_fullpath_environment, reject_parked_fullpath_side_effects, refuse_source_only_startup
 from .storage import Storage
 from .executor_client import DdevExecutorClient
 from .orchestrator_notifications import PlanOrchestrator
@@ -240,6 +240,26 @@ def runtime_startup_mode() -> str:
     return mode
 
 
+async def _start_legacy_control_plane() -> None:
+    """Preserve normal PlanOrchestrator tick and publisher startup.
+
+    No scheduler, plan replay or publisher belongs to a future direct-intake
+    fresh F2 worker startup. Parked F2 also blocks direct helper invocation.
+    """
+    reject_parked_fullpath_side_effects()
+    await plan_orchestrator.start()
+    await progress_publisher.start()
+    await job_status_publisher.start()
+
+
+async def _stop_legacy_control_plane() -> None:
+    """Unchanged normal teardown order; never a parked F2 operation."""
+    reject_parked_fullpath_side_effects()
+    await job_status_publisher.stop()
+    await progress_publisher.stop()
+    await plan_orchestrator.stop()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     harden_runtime_process_secret_boundary()
@@ -264,13 +284,9 @@ async def lifespan(app: FastAPI):
         # real DB/host cancel/replay/plan actions by changing one variable.
         refuse_source_only_startup()
     await engine.start()
-    await plan_orchestrator.start()
-    await progress_publisher.start()
-    await job_status_publisher.start()
+    await _start_legacy_control_plane()
     yield
-    await job_status_publisher.stop()
-    await progress_publisher.stop()
-    await plan_orchestrator.stop()
+    await _stop_legacy_control_plane()
     await engine.stop()
 
 
