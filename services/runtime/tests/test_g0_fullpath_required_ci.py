@@ -132,7 +132,8 @@ def test_strict_delivery_waits_then_accepts_only_exact_hosted_ci():
     "none", "success",
     {"state": "success", "repository": FULLPATH_FIXTURE_REPO},
     {**ci_evidence(), "actions_runs": []},
-    {**ci_evidence(), "commit": "a"*40},
+    {**ci_evidence(), "actions_runs": [{**ci_evidence()["actions_runs"][0],
+                                       "head_sha": "a"*40}]},
     {**ci_evidence(), "state": "success",
      "actions_runs": [{**ci_evidence()["actions_runs"][0], "name": "other"}]},
 ])
