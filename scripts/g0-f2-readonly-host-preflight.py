@@ -206,7 +206,7 @@ def main() -> int:
             "resource_mutations": 0,
             "model_calls": 0,
         }
-        if exc.kind is not None and exc.name is not None:
+        if exc.kind in RESOURCES and exc.name in RESOURCES[exc.kind]:
             # Safe diagnostics from reviewed F2 constants only; never include
             # raw Docker output, local paths, environment or credentials.
             data["blocked_resource"] = {
