@@ -23,6 +23,7 @@ from .job_status_publisher import JobStatusPublisher
 from .dashboard import _require_session, create_dashboard_router
 from .engine_telemetry import RuntimeEngine
 from .g0_fixture_execution import G0FixtureExecution, G0GateError
+from .fullpath_pm_review import FullpathPMReviewRequest, FullpathPMReviewService
 from .fullpath_fixture_safety import MODE as FULLPATH_CANDIDATE_MODE, refuse_source_only_startup
 from .storage import Storage
 from .executor_client import DdevExecutorClient
@@ -127,6 +128,7 @@ class ContinuityEventRequest(BaseModel):
 storage = TelemetryStorage()
 engine = RuntimeEngine(storage)
 g0_fixture_runner = G0FixtureExecution(Storage(), DdevExecutorClient())
+fullpath_pm_review = FullpathPMReviewService(storage, engine.ddev)
 pm_planner = PMPlanner(storage)
 collaboration_manager = engine.collaboration
 progress_handoffs = PlanProgressStore(storage)
@@ -643,6 +645,22 @@ async def execute_control_action(
         )
     except RuntimeError as exc:
         raise HTTPException(409, str(exc)) from exc
+
+
+@app.post("/v1/g0-fullpath/jobs/{job_id}/pm-review", dependencies=[Depends(auth)])
+async def finalize_fullpath_pm_review(
+    job_id: str, payload: FullpathPMReviewRequest,
+) -> dict[str, Any]:
+    """One exact-HEAD PM acceptance, with fresh GitHub proof and atomic state.
+
+    The future fixture must pass a separate full runtime/source identity guard.
+    This route is 503 in the non-executable fullpath candidate mode.
+    """
+    try:
+        return await fullpath_pm_review.finalize(job_id, payload)
+    except (RuntimeError, ValueError) as exc:
+        # Never echo GitHub review bodies, credentials, URLs or model output.
+        raise HTTPException(409, str(exc)[:200]) from exc
 
 
 @app.post("/v1/jobs", response_model=JobView, dependencies=[Depends(auth)])
