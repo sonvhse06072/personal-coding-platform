@@ -19,7 +19,9 @@ spec.loader.exec_module(fixture)
 def synthetic_home(tmp_path, monkeypatch):
     home = tmp_path / "home"
     home.mkdir()
-    monkeypatch.setattr(fixture.os, "geteuid", lambda: 1000)
+    # A disposable GitHub-hosted runner may use a different non-root UID.
+    # Match the ownership of the synthetic pytest directory, not a host ID.
+    monkeypatch.setattr(fixture.os, "geteuid", lambda: tmp_path.stat().st_uid)
     monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
     return home
 
