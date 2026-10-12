@@ -29,13 +29,16 @@ def inputs():
     return env, projects, baseline, inventory
 
 
-def assess(env=None, projects=None, baseline=None, inventory=None, catalog=None):
+_UNSET = object()
+
+
+def assess(env=None, projects=None, baseline=None, inventory=_UNSET, catalog=None):
     e, p, b, i = inputs()
     return f2c.assess_scoped_fresh_boot(
         environment=e if env is None else env,
         projects_document=p if projects is None else projects,
         baselines_document=b if baseline is None else baseline,
-        inventory=i if inventory is None else inventory,
+        inventory=i if inventory is _UNSET else inventory,
         database_snapshot=pristine() if catalog is None else catalog,
     )
 
@@ -200,6 +203,11 @@ def test_normal_legacy_restart_semantics_remain_unchanged(monkeypatch):
     class FakeStore:
         def init(self):
             calls.append("init")
+        def get(self, job_id):
+            return (
+                {"id": job_id, "status": "queued", "checkpoint": {}}
+                if job_id == "a" else None
+            )
         def list(self, limit=50):
             assert limit == 500
             calls.append("list")
