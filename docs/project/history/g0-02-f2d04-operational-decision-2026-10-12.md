@@ -1,6 +1,16 @@
 # G0-02 / F2d-04 — Quyết định khả thi và cổng operational cho PCP fullpath
 
-**Trạng thái:** `CHANGE PROPOSAL — CHƯA ĐƯỢC OWNER PHÊ DUYỆT`. Ngày 2026-10-12 (ICT). Canonical [#595](https://github.com/sonvhse06072/personal-coding-platform/issues/595), parent [#593](https://github.com/sonvhse06072/personal-coding-platform/issues/593). Source audited tại PCP `main@b3fd18f74fd8088415779abb260b36c4598bc17a`, sau F2d-03 [#672](https://github.com/sonvhse06072/personal-coding-platform/pull/672), 4/4 exact-head và post-merge CI PASS. Tài liệu này là T3 **đề xuất**, không phải protected ProjectBaseline mới, không cấp phép triển khai, không thay chính sách bảo mật và không chứng minh Runtime hoạt động.
+**Trạng thái:** `DEC-G0-F2D04A — OWNER APPROVED for bounded read-only preflight + source preparation`; **F2d-04B implementation of expanded authorization and F2d-04C activation remain NOT APPROVED**. Ngày 2026-10-12 (ICT). Canonical [#595](https://github.com/sonvhse06072/personal-coding-platform/issues/595), parent [#593](https://github.com/sonvhse06072/personal-coding-platform/issues/593). Source audited tại PCP `main@b3fd18f74fd8088415779abb260b36c4598bc17a`, sau F2d-03 [#672](https://github.com/sonvhse06072/personal-coding-platform/pull/672), 4/4 exact-head và post-merge CI PASS. Tài liệu này là T3 **đề xuất**, không phải protected ProjectBaseline mới, không cấp phép triển khai, không thay chính sách bảo mật và không chứng minh Runtime hoạt động.
+
+## Owner decision và tiến độ F2d-04A
+
+Owner đã xác nhận trong hội thoại Engineering PM 2026-10-12: “đồng ý phê duyệt” F2d-04A và ủy quyền PM tự quyết các lựa chọn kỹ thuật/build thường lệ với điều kiện giữ nguyên các tiêu chí PCP đã chốt. Quyết định này được ghi minh bạch vào [#595, comment 6123805789](https://github.com/sonvhse06072/personal-coding-platform/issues/595#issuecomment-6123805789); **không giả mạo một GitHub Owner approval độc lập**.
+
+**Đúng phạm vi phê duyệt:** read-only evidence qua những API hiện có, chuẩn bị/kiểm thử source patches, tự review/merge sửa chữa routine nếu các CI/review/authority gates đạt. Không suy ra quyền tự tạo host DB/volume/container, cài token/model/provider, điều khiển global Docker/Antigravity/Chợ Nhạc/legacy PCP hay kích hoạt pipeline. Việc thay đổi authorization/scope để thực sự thực thi F2, mở provider/GitHub network egress và provisioning có blast radius mới vẫn phải có exact review/protected authority và một quyết định operational riêng.
+
+**F2d-04A bounded candidate:** thay vì cho F2 scope rơi vào generic Executor path khi gỡ guard G0, bổ sung nhận diện **F2 root identity fail-closed**. Dưới toàn bộ dấu nhận diện F2 `PCP_EXECUTOR_PROJECT_SCOPE`, config/project/workspace roots chuẩn, mọi HTTP (kể cả health, docs và GitHub delivery), direct registry lookup và health vẫn trả 503; mọi lệch một marker cũng 503, không chạy Docker/Git/DB. Source preparation không tháo Compose `/bin/false`, không cấp quyền PR/provider. Đây là tiền đề để sau này thiết kế một **Executor-specific F2 allowlist** có thể review trước khi activation, không phải bản implementation mở quyền.
+
+**Giới hạn preflight:** GitHub live đã xác minh PCP main, CI, repo F2 trả 404/permission unknown, F2 static Compose và Source code; không có công cụ scope hợp lệ để đọc Docker metadata của WSL trong phiên này. **Host resource ownership/image digests/UID/egress do đó chưa được chứng minh**, không thay thế bằng fake evidence.
 
 ## Quyết định PM: dừng vòng lặp chỉ tăng synthetic tests
 

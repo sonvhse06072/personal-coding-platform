@@ -196,6 +196,38 @@ G0_DELIVERY_ROUTES = frozenset({
 })
 
 
+# Future F2 uses a DIFFERENT exact project and root identity from G0D-T01.
+# Recognition is intentionally deny-only: the F2 deployment is source-only
+# until an independently authorized successor explicitly implements operations.
+F2_PARKED_EXECUTOR_ENV = {
+    "PCP_EXECUTOR_PROJECT_SCOPE": "pcp-g0-fullpath-fixture",
+    "PROJECTS_FILE": "/fullpath/config/projects.yml",
+    "CODING_PROJECTS_ROOT": "/fullpath/sources",
+    "CODING_WORKSPACES_ROOT": "/fullpath/workspaces",
+    "CODING_DIRECT_PROJECT_ROOT": "/fullpath/direct-disabled",
+}
+
+
+def _f2_parked_executor_scope() -> bool:
+    """Recognize an F2 marker without creating a new privileged capability.
+
+    A single F2 marker means the *entire* expected identity must be present.
+    Flipping only the scope or startup environment cannot restore unscoped
+    endpoints. This source guard is not a host/network isolation attestation.
+    """
+    if not any(
+        os.getenv(key) == expected
+        for key, expected in F2_PARKED_EXECUTOR_ENV.items()
+    ):
+        return False
+    if any(
+        os.getenv(key) != expected
+        for key, expected in F2_PARKED_EXECUTOR_ENV.items()
+    ):
+        raise HTTPException(503, "F2 Executor source-only identity mismatch")
+    return True
+
+
 def _g0_fixture_activation_flag(name: str) -> bool:
     value = os.getenv(name, "")
     if not value:
@@ -262,6 +294,9 @@ def _validate_g0_registry(projects: Any) -> None:
 
 
 def load_projects() -> dict[str, Any]:
+    if _f2_parked_executor_scope():
+        # No read of an unapproved F2 mount or generic multi-project registry.
+        raise HTTPException(503, "F2 Executor remains source-only (PARKED)")
     with open(os.getenv("PROJECTS_FILE", "/config/projects.yml"), "r", encoding="utf-8") as handle:
         document = yaml.safe_load(handle) or {}
     if not isinstance(document, dict):
@@ -277,6 +312,8 @@ def expand(value: str) -> Path:
 
 
 def project(project_id: str) -> dict[str, Any]:
+    if _f2_parked_executor_scope():
+        raise HTTPException(503, "F2 Executor remains source-only (PARKED)")
     # This check also protects direct internal handler calls that bypass HTTP.
     if _g0_fixture_scoped() and project_id != G0_FIXTURE_PROJECT_ID:
         raise HTTPException(403, "Project outside isolated G0 Executor scope")
@@ -1449,6 +1486,13 @@ app = FastAPI(title="Constrained DDEV/Git Executor", version=DDEV_EXECUTOR_VERSI
 @app.middleware("http")
 async def fixture_only_http_scope(request: Request, call_next):
     try:
+        if _f2_parked_executor_scope():
+            # Deny ALL HTTP methods/paths, including health and API docs.
+            # The current F2 Compose still has entrypoint /bin/false.
+            return JSONResponse(
+                status_code=503,
+                content={"detail": "F2 Executor is source-only (PARKED)"},
+            )
         if _g0_fixture_scoped():
             # Re-read the small, mounted G0-only registry on every request.
             # A canonical/legacy multi-project mount must fail closed even
@@ -1568,6 +1612,9 @@ def sync_direct_base(payload: SyncDirectBaseRequest) -> dict[str, Any]:
 
 @app.get("/health")
 def health() -> dict[str, Any]:
+    if _f2_parked_executor_scope():
+        # Direct Python calls must not probe host Docker/DDEV either.
+        raise HTTPException(503, "F2 Executor is source-only (PARKED)")
     if _g0_fixture_scoped():
         # A PARKED fixture must not even probe the shared host Docker daemon.
         # The scoped registry is already validated by the HTTP middleware.
