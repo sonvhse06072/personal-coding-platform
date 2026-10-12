@@ -79,3 +79,20 @@ F1, F2a–c và F2d-01/02/03 đã hoàn thiện nhiều source/tests fail-closed
 **Regression yêu cầu:** thứ tự normal lifecycle (harden → engine → planner → publishers → serve → stop reverse) không đổi; worker-only không đọc storage/host, không duplicate task; mọi direct-call worker/legacy-controller helper trên env F2 phải fail trước DB/cancel/replay/tick; HTTP/lifespan/Engine guards của F2 trước đó vẫn chạy. Không tạo operator/worker mới, không update Compose, không gọi model/DB/Docker/GitHub delivery. Đây là executable source refactor, **không phải verified F2 startup** hoặc độc lập tài nguyên/credential.
 
 **F2 next real gate:** chỉ khi có owner-verified new fixture DB/volume/image + post-schema inventory, scoped Executor GitHub capabilities và safe provider egress, mới triển khai *separately approved* F2 lifecycle path để gọi worker mà không gọi các legacy lifecycle helpers; shutdown phải xử lý active job/workspace chỉ thuộc F2. Không biến direct-call private helper thành quyền bypass; F2 vẫn **PARKED**, G0 HOLD/NOT GO, G1 chưa kích hoạt.
+
+## F2d-05 — Read-only host resource noncollision preflight (source ready; chưa chạy trên WSL)
+
+**Mục đích có giá trị vận hành:** trước khi cấp quyền tạo F2, cần **bằng chứng thật từ local Docker daemon** rằng bốn tên container F2, volume `pcp-f2-fullpath-postgres-data` và hai network `pcp-f2-fullpath-private/provider` chưa bị chiếm dụng. Các source-only synthetic inventory không thể cung cấp bằng chứng đó.
+
+`scripts/g0-f2-readonly-host-preflight.py` là operator **chỉ có một command `inspect`**, không có `activate/repair/cleanup`. Script chỉ chạy `git rev-parse HEAD` ở **PCP checkout hiện tại**, `docker context inspect`, `docker container/volume/network inspect` đúng bảy F2 names và `docker container ls` có filter label `com.docker.compose.project=pcp-f2-fullpath`; không có Docker/DDEV lifecycle, shell, PostgreSQL, GitHub token, Codex/provider hay truy cập Chợ Nhạc. Docker context phải là local Unix socket, đúng override; lỗi quyền/daemon/không rõ response = STOP, không coi là tài nguyên không tồn tại. Report JSON **không xuất raw inspect payloads, stderr, Docker env, secret, home/user paths**. Nếu F2 names bị chiếm hoặc có label-container lạ, status vẫn STOP với collision list đã giới hạn. Trạng thái đạt noncollision vẫn **STOP / `operational_activation_authorized=false`**, vì chưa chứng minh ownership của resources sẽ tạo trong tương lai.
+
+**Để lấy bằng chứng thật, khi Human Owner có terminal WSL trong PCP checkout đã sync/có clean trusted HEAD, và Docker context hợp lệ**, sử dụng:
+
+```bash
+python3 scripts/g0-f2-readonly-host-preflight.py inspect --expected-sha <EXACT_PCP_MAIN_SHA>
+```
+
+**Phạm vi chứng minh:** chỉ snapshot noncollision tại thời điểm chạy, không xác minh repo F2 đã tồn tại, UID/GID, digest image, fresh DB history, bootstrap/app grants, network egress, single writer, runner access, provider quota hoặc bất kỳ fullpath startup nào. Github connector hiện trả 404 cho `sonvhse06072/pcp-g0-fullpath-fixture` (không kết luận chắc repo tuyệt đối không tồn tại). Vì chưa có kênh local WSL được xác nhận trong hội thoại này, CI kiểm tra script bằng fake subprocess **không được gọi là host proof**. Script chỉ được dùng trong DEC-G0-F2D04A read-only scope đã phê duyệt, không tự tạo F2d-04C operational permission.
+
+**Quyết định sau một lần host preflight thực tế:** nếu namespace không trống → STOP/reconcile provenance, tuyệt đối không xóa. Nếu trống → đề xuất duy nhất một bounded **Owner-protected** F2d-04C stage để tạo repo/seed riêng và các tài nguyên mới với exact ownership labels/UID/volume/image, token và bootstrap role riêng; đòi đủ independent attestation + rollback trước model. Không tiếp tục thêm synthetic-only startup guards khi fixture và provisioning gate chưa có. Nếu host provenance, GitHub egress/credential isolation hoặc safe Engine startup không khả thi với một Engine/Executor hiện có, chọn `FULLPATH_NOT_FEASIBLE` hoặc DEFER/SIMPLIFY theo business-value gate.
+
