@@ -8,7 +8,7 @@ Last reconciled: **2026-10-12**. **Canonical PCP #595 remains OPEN / G0 NOT GO.*
 
 **WSL/execution authority:** Owner proved isolated `pcp-g0d01` activation and GET-only health checks before the trials; original local G0 Runtime job and Direct journal/workspace must be preserved. **Legacy PCP PostgreSQL** has separately observed historical managed-project active lease/orchestration/pending WorkOrder evidence (2026-10-11 read-only snapshot); legacy Router/Runtime/Executor must NOT be started from those stale records. Strict managed-project no-touch, no shared-host Codex/DDEV/project lease manipulation. A source PR merge does not update deployed G0 images.
 
-**G0/F1 source implementation pending PR #656 (2026-10-12):** candidate `g0_fullpath_candidate` intentionally fails closed before normal RuntimeEngine/PlanOrchestrator, and every candidate HTTP endpoint returns 503. New pure admission contract/tests require a completely separate future fixture identity. **No full-path Runtime/model/DDEV/GitHub delivery activated.** After exact-head CI and source review/merge, next scoped work is to establish a *real hostless deterministic verifier + independent exact-SHA CI delivery* using the existing engine, or stop with an infeasibility decision. [Detailed source gate](history/g0-02-fullpath-source-admission-2026-10-12.md) · [PR #656](https://github.com/sonvhse06072/personal-coding-platform/pull/656).
+**G0/F1 PR #656:** full-path candidate fails closed before DB/Engine/plan/HTTP; no activation. Next: prove hostless verifier + scoped CI delivery or declare infeasible. [T3 gate](history/g0-02-fullpath-source-admission-2026-10-12.md).
 
 ## Resume order
 
