@@ -68,6 +68,16 @@ class RuntimeEngineCore:
             refuse_source_only_startup()
         self.storage.init()
         self._stopping = False
+        await self._reconcile_legacy_restart_effects()
+        self.worker_task = asyncio.create_task(self._worker_loop())
+
+    async def _reconcile_legacy_restart_effects(self) -> None:
+        """Original normal-Runtime reconciliation, isolated from F2 source.
+
+        Future F2 must not call this global-host cleanup/replay routine.
+        Its direct invocation is independently barred for parked F2 identity.
+        """
+        reject_parked_fullpath_side_effects()
         await cancel_all_antigravity_runs()
         for job in self.storage.list(limit=500):
             if job["status"] == "queued":
@@ -102,7 +112,6 @@ class RuntimeEngineCore:
                     self._release_terminal_direct_lease(owner_job_id)
         else:
             self.storage.reconcile_terminal_project_leases()
-        self.worker_task = asyncio.create_task(self._worker_loop())
 
     async def stop(self) -> None:
         reject_parked_fullpath_side_effects()
