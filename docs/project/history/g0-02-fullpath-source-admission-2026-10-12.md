@@ -26,3 +26,10 @@ Full PCP normal startup hiện có side effects mà không thể an toàn chạy
 **Stop policy:** nếu chỉ chạy full pipeline được bằng root Docker socket chung, bỏ deterministic verifier/CI, gọi global Antigravity cancel hoặc dựng parallel engine, lập No-Go/simplify proposal trong #595 thay vì cấp thêm model/nguồn lực.
 
 **Không đổi:** original G0D-T01 PCP/Direct jobs, journal, 2 fixture [PR #4](https://github.com/sonvhse06072/pcp-g0-drupal-fixture/pull/4)/[PR #5](https://github.com/sonvhse06072/pcp-g0-drupal-fixture/pull/5) và 2 frozen benchmark refs. Strict Chợ Nhạc/legacy PCP no-touch.
+
+## F1b — mandatory exact-HEAD GitHub Actions CI (source/tests, PR #657)
+
+- Existing Runtime delivery has an optional required_ci contract; its pure verifier requires an authenticated Executor GitHub Actions validation run from the exact fixture repository, on the exact 40-hex commit, with terminal success and no effective failures or conflicting evidence. A generic combined status, unrelated workflow, CI absence (ci_none) or insufficient reconcile_existing payload is a hard DeliveryError for the new fullpath fixture.
+- Scope is pinned to future project_id pcp-g0-fullpath-fixture; legacy projects and existing G0D-T01 delivery behavior remain unchanged. All model calls, container operations, PostgreSQL writes, Github delivery actions and CI network requests are synthetic/mocked in tests.
+- **Không gọi đây là verifier đầy đủ:** hosted CI can ultimately authorize accepted PR only after publication. Current normal local _verify() skips checks when ddev.enabled=false; the separate hostless pre-delivery requirement and new sandbox ownership are still unproven. g0_fullpath_candidate remains non-executable and all HTTP endpoints 503. No runtime/dev-ops activation authorized by this source merge.
+
