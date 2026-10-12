@@ -53,3 +53,10 @@ F1, F2a–c và F2d-01/02/03 đã hoàn thiện nhiều source/tests fail-closed
 **DEC-G0-F2D04A:** Cho phép **chỉ** vòng preflight read-only và chuẩn bị code/CI cho security-sensitive F2 design theo các giới hạn ở lựa chọn A; không phê duyệt provisioning/credential/Runtime startup/model use/Fullpath benchmark, không thay policy hay commit protected changes trước approval đối với exact paths/diff. Nếu chưa có quyết định này, dừng tại trạng thái **PROPOSAL READY / F2 PARKED**.
 
 **Tiêu chí kết thúc:** có Owner decision rõ ràng để đi tiếp theo A hoặc B; mọi thay đổi source sau đó qua review/CI/approved authority; F2 operational, G0 investment và G1 vẫn **HOLD/NOT GO/BLOCKED**. Không mở issue trùng #595.
+
+
+## F2d-04B-01 — Tách schema và legacy planning recovery trong Storage (source refactor)
+
+**Lựa chọn kỹ thuật PM trong quyền build routine đã được ủy quyền:** `services/runtime/app/storage.py::Storage.init()` trước đó trộn `conn.execute(DDL)` và `UPDATE cp_execution_plans ... status='interrupted'`. Refactor giữ **nguyên văn SQL, thứ tự và một transaction/commit** nhưng tách thành `_apply_core_schema_on_connection(conn)` và `_reconcile_legacy_planning_on_connection(conn)`. Private helper dùng existing connection của bên gọi, không tạo DB, không tự commit, không cấp quyền SQL mới. Regression tests xác minh trình tự, không tự commit khi chạy riêng DDL, và lỗi schema/recovery dừng trước commit. Không đổi `Storage.init()` public behavior hoặc `RuntimeEngineCore.start()`/lifespan.
+
+**Giá trị thực tế:** loại một chỗ trộn DDL+restart DML khỏi đường tiến tới bootstrap least-privilege mà không thay đổi hành vi ứng dụng đang chạy; đây là code refactor, không phải fake readiness. Còn các DDL ở 11 module khác, ControlAction/PlanProgress `INSERT/UPDATE`, bootstrap role/grants, full schema objects, fixture/DB ownership và host-global startup vẫn cần thiết kế và bằng chứng riêng. **Không có schema-only installer callable, F2 activation, permission hoặc operational approval mới được cấp**. No Chợ Nhạc/legacy operations. `F2 PARKED`, `G0 HOLD/NOT GO`.
