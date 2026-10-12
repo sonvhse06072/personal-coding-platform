@@ -473,9 +473,31 @@ def summarize_ci(signals: list[dict[str, Any]], combined_status: str) -> tuple[s
 
 
 class GitHubDelivery:
-    def __init__(self, token: str | None = None) -> None:
+    def __init__(
+        self, token: str | None = None, *, repository_scope: str | None = None,
+    ) -> None:
+        # Optional restriction for an independently approved, project-owned
+        # delivery credential. Omitted scope preserves all legacy callers.
+        if repository_scope is not None and not re.fullmatch(
+            r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository_scope
+        ):
+            raise ValueError("Invalid GitHub repository scope")
         self.token = token if token is not None else os.getenv("GITHUB_DELIVERY_TOKEN", "")
         self.base = "https://api.github.com"
+        self.repository_scope = repository_scope
+
+    def _require_repository_scope(self, repository: str) -> None:
+        # Check before opening an HTTP client or using a delivery credential.
+        # This is an app-level defense-in-depth check; the actual token must
+        # still be repository-scoped by the credential issuer.
+        if not isinstance(repository, str) or not re.fullmatch(
+            r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository
+        ):
+            raise RuntimeError("Invalid GitHub delivery repository")
+        if self.repository_scope is not None and (
+            repository.casefold() != self.repository_scope.casefold()
+        ):
+            raise RuntimeError("GitHub delivery repository outside authorized scope")
 
     @property
     def configured(self) -> bool:
@@ -495,6 +517,7 @@ class GitHubDelivery:
         return httpx.Client(timeout=30, headers=self.headers, follow_redirects=True)
 
     def assert_branch_commit(self, repository: str, branch: str, expected_commit: str) -> None:
+        self._require_repository_scope(repository)
         with self._client() as client:
             response = client.get(f"{self.base}/repos/{repository}/git/ref/heads/{branch}")
             response.raise_for_status()
@@ -551,6 +574,7 @@ class GitHubDelivery:
         expected_commit: str,
     ) -> dict[str, Any]:
         """Verify one exact delivered PR as eligible for same-job repair."""
+        self._require_repository_scope(repository)
         with self._client() as client:
             response = client.get(f"{self.base}/repos/{repository}/pulls/{pr_number}")
             if response.status_code == 404:
@@ -609,6 +633,7 @@ class GitHubDelivery:
         body: str,
         expected_pr_number: int | None = None,
     ) -> dict[str, Any]:
+        self._require_repository_scope(repository)
         owner = repository.split("/", 1)[0]
         self.assert_branch_commit(repository, branch, expected_commit)
         with self._client() as client:
@@ -698,6 +723,7 @@ class GitHubDelivery:
         same deterministic job branch are filtered by accepted-commit ancestry
         before ambiguity is decided.
         """
+        self._require_repository_scope(repository)
         owner = repository.split("/", 1)[0]
         with self._client() as client:
             lookup = client.get(
@@ -840,6 +866,7 @@ class GitHubDelivery:
         bounded delivery contract. Repositories that publish only Check Runs
         require a future GitHub App integration.
         """
+        self._require_repository_scope(repository)
         with self._client() as client:
             actions_response = client.get(
                 f"{self.base}/repos/{repository}/actions/runs",
