@@ -25,9 +25,9 @@ projects:
   pcp-g0-fullpath-fixture:
     active_revision: null
     revisions:
-      f2-c1-window-2026-10-12:
+      f2-c1-window-v2-2026-10-12:
         status: draft
-        source_commit: e59e6a2119c96a2dddb5b32f68ba178e0ac61140
+        source_commit: 3165b76d44b738c4709c3ca74f87297ff66dd397
         authority:
           - path: README.md
             authority: human_owner_protected
@@ -69,3 +69,17 @@ Lưu ý: `budget_policy` trong bản dự thảo hiện chỉ cho phép task fix
 3. **C3 protected first flight:** một job direct-intake F2 mới, model/quota/time budget đã duyệt, exact CI + PM review, ghi thất bại/repair thật; khác với Planner→WorkOrder full PCP benchmark. Không khởi chạy khi C1/C2 chưa complete.
 
 Không tạo dịch vụ/runner/orchestrator mới, không đọc/ghi Chợ Nhạc hoặc legacy PCP, không đụng fixture G0 cũ, không gọi model/Docker/DB. [#665](https://github.com/sonvhse06072/personal-coding-platform/issues/665) persistent CI runner isolation vẫn OPEN.
+
+## 4. F2-C1 CI chính xác PR HEAD — successor v2 (2026-10-12, source-only)
+
+**Lỗi được phát hiện trong log thật:** [fixture PR #1 CI #38277967715](https://github.com/sonvhse06072/pcp-g0-fullpath-fixture/actions/runs/38277967715) gắn với head SHA `7b11b427...` nhưng `actions/checkout` mặc định lấy `refs/remotes/pull/1/merge`. Đây không phải checkout đúng PR HEAD, dù cây source của PR HEAD và merge seed giống nhau. Không xóa/ghi lại kết quả Unit/Kernel đã PASS, nhưng **không gọi nó exact-checkout evidence**.
+
+**Đã sửa và kiểm chứng source:** [Fixture PR #3](https://github.com/sonvhse06072/pcp-g0-fullpath-fixture/pull/3) chỉ thay đổi `.github/workflows/validation.yml`: checkout với `ref: ${{ github.event.pull_request.head.sha }}`, `persist-credentials:false`; bắt buộc `git rev-parse HEAD` bằng event PR HEAD, kiểm tra dạng SHA trước khi chạy tests; bổ sung trigger cho nhánh `benchmark/fullpath-v2`. Giữ `pull_request`, permissions `contents:read`, runner `ubuntu-24.04`, Composer/PHPCS/Unit/Kernel, không `pull_request_target`, không token/secrets/provider/Runtime.
+
+[Hosted validation #38280904059](https://github.com/sonvhse06072/pcp-g0-fullpath-fixture/actions/runs/38280904059) trên head `8d3ccaacf8cfbd3e8e5a6d4eebc67842ff74cbbb` (**COMPLETED/SUCCESS**, attempt 1) ghi rõ `HEAD is now at 8d3ccaa` và `F2 fixture exact PR HEAD: 8d3ccaacf8cfbd3e8e5a6d4eebc67842ff74cbbb`; Composer/PHPCS/PHP syntax PASS, Unit 4/7 assertions, Kernel 1/3 assertions, một deprecation baseline. PM exact diff review ID `5493808815`, zero blocking findings. PR #3 MERGED thành `main@3165b76d44b738c4709c3ca74f87297ff66dd397`. PR head và merge commit đều có Git TREE `7534154555ee531c4772c2bc87cb3afdbef197f3`.
+
+**Hai seed tồn tại độc lập, không rewrite lịch sử:**
+- **v1** `benchmark/fullpath@e59e6a2119c96a2dddb5b32f68ba178e0ac61140` **FROZEN**, không fast-forward/force-push.
+- **v2** `benchmark/fullpath-v2@3165b76d44b738c4709c3ca74f87297ff66dd397` được tạo từ main sau #3, cho lần trial về sau. `compare v1→v2` xác nhận **chỉ khác file workflow CI**, không thay đổi Drupal/PHP, acceptance `docs/F2-T01.md`, dependency hoặc tests. New actual model trial vẫn chưa chạy. Old G0D-T01 `benchmark/pcp` và `benchmark/direct` vẫn không đụng tới.
+
+**Thay đổi trong đề xuất ProjectBaseline ở mục 2:** revision kế nhiệm **`f2-c1-window-v2-2026-10-12`** `status:draft`, `active_revision:null`, pin **v2** SHA `3165b76d44b738c4709c3ca74f87297ff66dd397` thay vì v1. Đây là đề xuất source frame mới, **không** là phê duyệt `human_owner_protected`; `config/fullpath-candidate/project-baselines.yml` và `projects.yml` **chưa sửa**. Khi đề nghị duyệt, phải chốt *cả* `base_branch:benchmark/fullpath-v2` và metadata đúng SHA, preserve v1; không dùng `active_revision: null` như quyền chạy. Mọi bước C2 provision/credentials/egress và C3 trial/benchmark vẫn cần protected Owner gates riêng; không có model, Docker hoặc DB operation trong C1 CI correction.
