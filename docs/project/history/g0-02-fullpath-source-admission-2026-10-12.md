@@ -58,3 +58,24 @@ Existing PMChatReviewService (pm_chat_review.py) attests GitHub reviews only for
 - Existing Executor read-only GitHub PR, Actions CI and PR review endpoints supply fresh live evidence; reject stale/wrong PR/repository/branch/source/head, missing hosted validation run or review made before CI completion. New exact v1 review marker has a strictly parsed PASS/no findings report binding project, job UUID, approved baseline/source SHA, PR, HEAD, diff hash and GitHub Actions run ID; allow only the explicitly configured project owner reviewer login. GitHub review metadata is bound to review ID, COMMENTED state, commit ID, submitted timestamp, author and URL. No agent-supplied review text is trusted.
 - Within a single existing Storage transaction, SELECT FOR UPDATE locks only the exactly identified future-fixture cp_jobs row. Verify the row remains waiting_human at awaiting_pm_exact_head_review with CI-first hosted quality and protected decision gates clear, then atomically update result, checkpoint and progress with a canonical GitHub PM receipt digest and status completed, appending normal job_completed activity. Identical receipt replay is read-only/idempotent; a conflicting receipt, changed job snapshot or concurrent completion fails closed. GitHub merge remains a SEPARATE privileged action, never inferred.
 - Regression tests fake every network/storage dependency, assert no live DB, host Docker, Codex, DDEV, other project or provider call. Important: no fresh fullpath fixture registry/DB/provider/network yet. Source CI and a callable route in normal mode do NOT constitute activation, and the G0D-T01 pair remains insufficient for G0 GO.
+
+## F2 handoff — isolated fullpath topology readiness, no activation
+
+**F1 COMPLETED (source-only):** [PR #656](https://github.com/sonvhse06072/personal-coding-platform/pull/656), [#657](https://github.com/sonvhse06072/personal-coding-platform/pull/657), [#658](https://github.com/sonvhse06072/personal-coding-platform/pull/658), [#659](https://github.com/sonvhse06072/personal-coding-platform/pull/659), [#660](https://github.com/sonvhse06072/personal-coding-platform/pull/660) reviewed/merged. The final #660 adds a direct-intake PM GitHub review bound to exact PR/HEAD/CI/baseline/diff, authorized reviewer, protected scope, and single-row atomic/idempotent completion. **These are source/tests, not a live PCP run.**
+
+**F2 readiness matrix / hard gates:**
+
+| Boundary | Required independent proof before activation |
+| --- | --- |
+| New fixture source and approval | New fixture repository/seed distinct from G0D-T01; exact approved ProjectBaseline and source commit; no managed project data |
+| Effective registry | Only the new pcp-g0-fullpath-fixture project id and baseline in the mounted files; no Chợ Nhạc or legacy projects |
+| PostgreSQL | Fresh DB/user/volume and unique private network; zero existing jobs, plans and leases before first Runtime normal startup; never migrate/copy history |
+| Router/provider | Separate Router host/credentials and Codex home; model+effort pinned; no cross-project quota or provider secrets in developer workspace |
+| Executor/workspaces | Source/checkout/workspace strictly fixture-owned, no global Docker socket/host DDEV or ambient GitHub token available to coding agent |
+| Normal Runtime side effects | Source/test proof no global Antigravity cancel-all, host preview or foreign replay; fail-closed on any stale/missing identity, then separate read-only live inspection |
+| Quality/delivery | Required exact-HEAD hosted Drupal Composer/PHPCS/Unit/Kernel CI via privileged Executor and genuine PM GitHub review; no ci_none or provisional local-tests-pass shortcut |
+| Rollback | Abort before model/DB mutation on any mismatch, preserve journal/checkpoints; cleanup only newly owned resources and never the original G0D-T01 or legacy PCP stack |
+
+**Operating order:** 1. review F2 source-only topology plus negative tests against real existing images; 2. independently verify no-cross-project mounts and startup side effects; 3. propose bounded actual pilot approval; 4. only then run ONE new task/arm with separate Direct control and accepted PR evidence; 5. never infer p50/p90 or G1 GO from a single technical sample. No run, credential provisioning, container start or model invocation is authorized by this handoff document.
+
+**Design stop condition:** if normal PCP requires mounting host Docker socket, canceling foreign Antigravity runs, relaxing deterministic verification/PM policy, replaying legacy DB state or building another orchestration engine, classify FULLPATH_NOT_READY and propose simplification/No-Go at [#595](https://github.com/sonvhse06072/personal-coding-platform/issues/595).
