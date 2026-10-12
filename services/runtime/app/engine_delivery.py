@@ -5,6 +5,8 @@ from copy import deepcopy
 from typing import Any
 
 from .delivery import DeliveryError, deliver_verified_work, pull_request_body
+from .fullpath_ci_deferred import ci_passed_awaiting_review, stage_delivery_update
+from .fullpath_fixture_safety import PROJECT_ID as FULLPATH_FIXTURE_PROJECT_ID
 from .required_ci import required_ci_for_project
 from .engine_verification import RuntimeEngine as ExecutionRuntimeEngine
 from .fingerprint import failure_fingerprint
@@ -45,6 +47,11 @@ class DeliveryAwareStorage:
 
     def update(self, job_id: str, **fields: Any) -> None:
         values = dict(fields)
+        if values.get("status") == "completed":
+            # Future fixture alone: no completed/passed state can escape before
+            # exact hosted CI and a separate trusted PM review action.
+            row = self.backend.get(job_id) or {}
+            values = stage_delivery_update(row, values)
         if self._requires_delivery(values):
             values["status"] = "delivering"
         self.backend.update(job_id, **values)
@@ -440,6 +447,40 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 # enforce the original repair/model/token/time budgets.
                 await super().run_job(job_id)
                 continue
+
+            if row.get("project_id") == FULLPATH_FIXTURE_PROJECT_ID:
+                # Even after hosted CI success, PM exact-HEAD code review is
+                # not interchangeable with automated CI. No synthetic user
+                # authorization or unconditional terminal "completed".
+                pending = ci_passed_awaiting_review(
+                    row=row, result=result, progress=progress,
+                    checkpoint=checkpoint, delivery=delivery,
+                )
+                if pending is None:
+                    self._block(
+                        job_id=job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                        reason="fullpath_hosted_ci_or_pr_provenance_invalid",
+                        last_failure=(
+                            "Full-path fixture cannot advance without an exact "
+                            "GitHub Actions and PR identity match."
+                        ),
+                        accepted_result=result,
+                        delivery=delivery,
+                    )
+                    return
+                result, progress, checkpoint = pending
+                checkpoint["last_failure"] = None
+                self.storage.update(
+                    job_id,
+                    status="waiting_human",
+                    result=result,
+                    progress=progress,
+                    checkpoint=checkpoint,
+                    error=None,
+                )
+                return
 
             result["delivery_finalized"] = True
             checkpoint["last_failure"] = None
