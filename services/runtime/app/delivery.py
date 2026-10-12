@@ -5,6 +5,8 @@ import os
 import time
 from typing import Any, Awaitable, Callable
 
+from .required_ci import required_github_actions_pass
+
 
 class DeliveryError(RuntimeError):
     def __init__(self, reason: str, message: str, metadata: dict[str, Any] | None = None) -> None:
@@ -63,6 +65,7 @@ async def deliver_verified_work(
     sleeper: Callable[[float], Awaitable[None]] = asyncio.sleep,
     poll_seconds: float | None = None,
     discovery_seconds: float | None = None,
+    required_ci: tuple[str, str] | None = None,
 ) -> dict[str, Any]:
     """Publish verified work and monitor CI without ever merging it.
 
@@ -76,6 +79,18 @@ async def deliver_verified_work(
         "branch": branch,
         "commit": commit,
     }
+    if required_ci is not None:
+        if (
+            not isinstance(required_ci, tuple) or len(required_ci) != 2
+            or not all(isinstance(value, str) and value for value in required_ci)
+            or not bool(permissions.get("push_ai_branch", False))
+            or not bool(permissions.get("create_pr", False))
+        ):
+            raise DeliveryError(
+                "required_hosted_ci_unavailable",
+                "Mandatory hosted CI requires an authorized branch and PR",
+                metadata,
+            )
     if not bool(permissions.get("push_ai_branch", False)):
         return metadata
 
@@ -92,6 +107,16 @@ async def deliver_verified_work(
             )
             if bool(observed.get("reconciled")):
                 reconciled = dict(observed.get("delivery") or {})
+                if required_ci is not None and not required_github_actions_pass(
+                    reconciled.get("ci") or {},
+                    repository=required_ci[0], commit=commit,
+                    workflow_name=required_ci[1],
+                ):
+                    raise DeliveryError(
+                        "required_exact_ci_unproven",
+                        "Reconciled delivery lacks required exact-HEAD GitHub Actions evidence",
+                        metadata,
+                    )
                 metadata["state"] = "ci_success"
                 metadata["reconciled_external_merge"] = True
                 metadata["pull_request"] = {
@@ -154,6 +179,15 @@ async def deliver_verified_work(
             elapsed = time.monotonic() - started
 
             if state == "success":
+                if required_ci is not None and not required_github_actions_pass(
+                    ci, repository=required_ci[0], commit=commit,
+                    workflow_name=required_ci[1],
+                ):
+                    raise DeliveryError(
+                        "required_exact_ci_unproven",
+                        "Generic CI success is not the required exact-HEAD hosted workflow",
+                        metadata,
+                    )
                 metadata["state"] = "ci_success"
                 return metadata
             if state == "failure":
@@ -162,6 +196,12 @@ async def deliver_verified_work(
             if state == "pending":
                 saw_signal = True
             elif state == "none" and not saw_signal and elapsed >= discovery:
+                if required_ci is not None:
+                    raise DeliveryError(
+                        "required_hosted_ci_missing",
+                        "No GitHub Actions run for the mandatory fixture workflow",
+                        metadata,
+                    )
                 metadata["state"] = "ci_none"
                 return metadata
 

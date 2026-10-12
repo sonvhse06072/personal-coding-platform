@@ -5,6 +5,7 @@ from copy import deepcopy
 from typing import Any
 
 from .delivery import DeliveryError, deliver_verified_work, pull_request_body
+from .required_ci import required_ci_for_project
 from .engine_verification import RuntimeEngine as ExecutionRuntimeEngine
 from .fingerprint import failure_fingerprint
 from .legacy_delivery_recovery import (
@@ -377,6 +378,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                     reconcile_existing=previous_delivery_attempts > 0,
                     expected_pr_number=expected_pr_number,
                     expected_previous_commit=expected_previous_commit,
+                    required_ci=required_ci_for_project(row["project_id"]),
                 )
             except DeliveryError as exc:
                 self._charge_delivery_time(progress, delivery_started)
