@@ -1,4 +1,4 @@
-"""F2c scoped first-boot planning with legacy Runtime behavior parity.
+"""F2c/F2d two-phase first-boot planning with legacy Runtime behavior parity.
 
 Synthetic-only: no PostgreSQL, Docker, provider, production workspace or GitHub.
 A source-valid cohort inventory NEVER activates the parked F2 Runtime.
@@ -32,7 +32,18 @@ def inputs():
 _UNSET = object()
 
 
-def assess(env=None, projects=None, baseline=None, inventory=_UNSET, catalog=None):
+def post_schema_catalog():
+    # Synthetic representation of an independently installed *fresh* schema.
+    # Its number is NOT a real schema manifest or authorization evidence.
+    catalog = pristine()
+    catalog["user_relation_count"] = 12
+    return catalog
+
+
+def assess(
+    env=None, projects=None, baseline=None, inventory=_UNSET, catalog=None,
+    post_catalog=_UNSET,
+):
     e, p, b, i = inputs()
     return f2c.assess_scoped_fresh_boot(
         environment=e if env is None else env,
@@ -40,6 +51,9 @@ def assess(env=None, projects=None, baseline=None, inventory=_UNSET, catalog=Non
         baselines_document=b if baseline is None else baseline,
         inventory=i if inventory is _UNSET else inventory,
         database_snapshot=pristine() if catalog is None else catalog,
+        post_schema_database_snapshot=(
+            post_schema_catalog() if post_catalog is _UNSET else post_catalog
+        ),
     )
 
 
@@ -59,7 +73,37 @@ def test_empty_f2_catalog_and_every_inventory_family_still_stop():
     assert outcome["new_resources_created"] == 0
     assert outcome["forbidden_effects"] == list(f2c.FORBIDDEN_STARTUP_EFFECTS)
     assert len(outcome["inventory_counts"]) == len(f2c.FRESH_INVENTORY)
+    assert outcome["pre_schema_user_relation_count"] == 0
+    assert outcome["post_schema_user_relation_count"] == 12
+    assert outcome["bootstrap_phase_evidence_independently_verified"] is False
+    assert outcome["post_schema_owned_object_allowlist_verified"] is False
+    assert "two_stage_bootstrap_provenance_and_schema_allowlist_missing" in outcome["blockers"]
     assert (env, projects, baseline, inventory) == saved
+
+
+@pytest.mark.parametrize("post", [None, {}, pristine(), []])
+def test_same_pristine_catalog_or_missing_post_schema_cannot_prove_f2d(post):
+    outcome = assess(post_catalog=post)
+    assert outcome["status"] == "STOP"
+    assert outcome["checks"]["post_schema_catalog_is_distinct_and_unprivileged"] is False
+    assert outcome["source_contract_valid"] is False
+    assert outcome["startup_authorized"] is False
+
+
+@pytest.mark.parametrize("field,value", [
+    ("database_name", "legacy"), ("database_role", "postgres"),
+    ("is_superuser", "on"), ("user_relation_count", 0),
+    ("user_relation_count", True), ("user_relation_count", "12"),
+    ("user_function_count", -1), ("user_function_count", False),
+    ("peer_session_count", 1), ("peer_session_count", "0"),
+])
+def test_post_schema_identity_privilege_or_untrusted_values_fail_closed(field, value):
+    post = post_schema_catalog()
+    post[field] = value
+    outcome = assess(post_catalog=post)
+    assert outcome["status"] == "STOP"
+    assert outcome["checks"]["post_schema_catalog_is_distinct_and_unprivileged"] is False
+    assert outcome["source_contract_valid"] is False
 
 
 @pytest.mark.parametrize("family", f2c.FRESH_INVENTORY)
