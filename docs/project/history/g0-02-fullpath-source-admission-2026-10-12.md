@@ -1,0 +1,28 @@
+# G0-02/F1 — Full PCP source admission: fail-closed, NOT a runnable pilot
+
+**Ngày:** 2026-10-12 (ICT). **Authority:** T3 design/implementation evidence under [PCP #595](https://github.com/sonvhse06072/personal-coding-platform/issues/595), direct Owner source/tests approval DEC-G0-FULLPATH-SOURCE-01 plus delegated routine technical decisions. **Không** có quyền từ tài liệu này để khởi chạy Runtime, dùng provider, DDEV hoặc đụng dữ liệu lịch sử.
+
+## Vấn đề cần giải quyết
+
+Bài thử G0D-T01 trước đã có 1 cặp code/CI hợp lệ nhưng 0 cặp end-to-end trơn tru; nhánh PCP dùng G0FixtureExecution rút gọn, không phải Planner/Router/RuntimeEngine/Verifier/Delivery thông thường. [T3 paired outcome](g0-02-first-paired-outcome-2026-10-12.md).
+
+Full PCP normal startup hiện có side effects mà không thể an toàn chạy trên legacy PostgreSQL: init/replay job, hủy Antigravity runs host, interrupt/reconcile leases và PlanOrchestrator.tick. Còn fixture G0D-T01 hiện thiếu DDEV-phase executor và privileged GitHub CI delivery, nên bật normal cũng không chứng minh final deterministic quality.
+
+## Source-only F1 implementation
+
+- **Mã nguồn:** services/runtime/app/fullpath_fixture_safety.py, main.py, engine_core.py.
+- **Chế độ proposal riêng:** PCP_RUNTIME_STARTUP_MODE=g0_fullpath_candidate; đây là **candidate source-only**, không phải chức năng đã kích hoạt. Lifespan và direct RuntimeEngineCore.start đều từ chối trước Storage.init, global Antigravity cancel-all, legacy work replay, DB leases hoặc scheduler tick. HTTP trả 503 cho mọi route kể cả health, không tạo ấn tượng sẵn sàng sai.
+- **Pure admission assessor:** assess_source_contract chỉ kiểm tra object nguồn YAML/env được truyền vào, không đọc secrets, không mở DB/socket, không gọi model. Cấm source/project/root trùng G0D-T01 hoặc global PCP; candidate project id pcp-g0-fullpath-fixture; độc lập DB hostname fullpath-db, database fullpath và user fullpath, Router/Executor host fullpath riêng, không host bridge, Docker socket hay GitHub token trong Runtime. Source mới phải có approved baseline và commit khác seed G0D-T01.
+- **Quyền vẫn parked:** tất cả autonomy=false; ddev.enabled=false. Một cấu hình candidate khớp tất cả điều kiện danh tính **vẫn STOP** vì còn ba gate chưa có bằng chứng: hostless deterministic verifier, privileged exact-SHA CI delivery và fixture/operational ownership. Không được hiểu các khóa cấu hình là bằng chứng kỹ thuật Docker isolation.
+- **Regression thực sự:** services/runtime/tests/test_g0_fullpath_source_gate.py kiểm chứng context synthetic, negative foreign project/old DB/old seed/global auth/sock, bypass HTTP/lifespan/direct engine.start, existing normal/G0 startup labels. CI của PCP chạy toàn bộ Runtime/Executor/Router/root suites.
+
+## Lộ trình kỹ thuật tiếp theo — tái sử dụng engine hiện hữu
+
+1. **F1b capability contract:** source-only xác định một Executor có thể chạy mandatory Drupal syntax/PHPCS/Unit+Kernel trên *fixture-owned* worktree mà không quyền Docker socket/host DDEV. Nếu không khả thi với image hiện có, document blocker & bounded separate-image capability cần có; không dùng hosted-CI success làm kết quả local DDEV.
+2. **F1c accepted-state wiring:** review normal Engine verification và Github delivery để *không đánh dấu completed khi required checks chưa thực thi*, giữ Router staffing/provider/effort/model/usage provenance và một direct-intake job. Chỉ nới module/endpoint đúng synthetic fixture sau khi negative tests minh chứng không reach unrelated project. Không copy G0FixtureExecution thành orchestrator thứ hai.
+3. **F2 isolated source-ready topology:** một Compose candidate mới, tên/volume/DB/workspaces/network/profiles mới; không reuse G0D-T01 runtime/DB/journals, không mount Chợ Nhạc/legacy repo, không host Docker socket, không global Codex/Antigravity secrets. Cần admission evidence từ actual image, command allowlist, privilege/mount/network và fresh empty durable state trước khi cho phép normal startup.
+4. **F3 live pilot:** chỉ sau source exact-head CI/review và **separate verified operational gates**, một task synthetic fixture mới (không replay G0D-T01), hai arm matched source/model/CLI/effort/acceptance/CI/review, đo chính xác task-cycle, tools, token/owner interventions; G0 NOT GO khi thiếu chứng cứ.
+
+**Stop policy:** nếu chỉ chạy full pipeline được bằng root Docker socket chung, bỏ deterministic verifier/CI, gọi global Antigravity cancel hoặc dựng parallel engine, lập No-Go/simplify proposal trong #595 thay vì cấp thêm model/nguồn lực.
+
+**Không đổi:** original G0D-T01 PCP/Direct jobs, journal, 2 fixture [PR #4](https://github.com/sonvhse06072/pcp-g0-drupal-fixture/pull/4)/[PR #5](https://github.com/sonvhse06072/pcp-g0-drupal-fixture/pull/5) và 2 frozen benchmark refs. Strict Chợ Nhạc/legacy PCP no-touch.

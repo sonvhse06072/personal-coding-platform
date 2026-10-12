@@ -23,6 +23,7 @@ from .job_status_publisher import JobStatusPublisher
 from .dashboard import _require_session, create_dashboard_router
 from .engine_telemetry import RuntimeEngine
 from .g0_fixture_execution import G0FixtureExecution, G0GateError
+from .fullpath_fixture_safety import MODE as FULLPATH_CANDIDATE_MODE, refuse_source_only_startup
 from .storage import Storage
 from .executor_client import DdevExecutorClient
 from .orchestrator_notifications import PlanOrchestrator
@@ -230,9 +231,9 @@ def _require_manual_collaboration_state(job_id: str) -> None:
 def runtime_startup_mode() -> str:
     """Explicit, opt-in inspection startup without any durable/runtime transitions."""
     mode = os.getenv("PCP_RUNTIME_STARTUP_MODE", "normal")
-    if mode not in {"normal", "inspect", "g0_fixture_run"}:
+    if mode not in {"normal", "inspect", "g0_fixture_run", FULLPATH_CANDIDATE_MODE}:
         raise RuntimeError(
-            "Invalid PCP_RUNTIME_STARTUP_MODE; expected normal, inspect or g0_fixture_run"
+            "Invalid PCP_RUNTIME_STARTUP_MODE; expected normal, inspect, g0_fixture_run or g0_fullpath_candidate"
         )
     return mode
 
@@ -253,6 +254,11 @@ async def lifespan(app: FastAPI):
         g0_fixture_runner.prepare_startup()
         yield
         return
+    if runtime_startup_mode() == FULLPATH_CANDIDATE_MODE:
+        # Do not enter normal Storage.init/cancel-all/replay/plan tick until a
+        # separately verified hostless deterministic verifier and CI delivery
+        # boundary is implemented. This source-only mode is NEVER executable.
+        refuse_source_only_startup()
     await engine.start()
     await plan_orchestrator.start()
     await progress_publisher.start()
@@ -272,6 +278,11 @@ app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan
 @app.middleware("http")
 async def inspection_mode_http_guard(request: Request, call_next):
     mode = runtime_startup_mode()
+    if mode == FULLPATH_CANDIDATE_MODE:
+        # Even a caller that bypasses lifespan cannot reach a generic route.
+        return JSONResponse(status_code=503, content={
+            "detail": "G0 full-path candidate is source-only, not activated"
+        })
     # GET handlers may also lazy-initialize mutable stores. Never expose the
     # normal dashboard, PM Bridge, planner, generic job or control endpoints.
     if mode == "inspect" and (
