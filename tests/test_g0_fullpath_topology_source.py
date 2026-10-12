@@ -274,3 +274,93 @@ def test_compose_is_static_yaml_not_host_mount_rendered(source):
     assert "pcp-g0d01-postgres-data" not in serialized
     assert "pull_policy: never" in serialized
     assert files["models.yml"]["models"] == {}
+
+
+def v2_source(source):
+    """Build the specific approved-but-INACTIVE v2 pair; do not edit real files."""
+    topo, files = deepcopy(source)
+    files["projects.yml"]["projects"][f2.PROJECT_ID]["base_branch"] = f2.V2_BRANCH
+    files["project-baselines.yml"]["projects"][f2.PROJECT_ID] = deepcopy(
+        f2.V2_INACTIVE_BASELINE
+    )
+    return topo, files
+
+
+def test_exact_owner_approved_inactive_v2_source_is_still_parked(source):
+    topo, files = v2_source(source)
+    original = deepcopy((topo, files))
+    assert f2.V2_BRANCH == "benchmark/fullpath-v2"
+    assert set(f2.V2_INACTIVE_BASELINE) == {"active_revision", "revisions"}
+    assert f2.V2_INACTIVE_BASELINE["active_revision"] is None
+    approved = f2.V2_INACTIVE_BASELINE["revisions"]
+    assert set(approved) == {"f2-c1-window-v2-2026-10-12"}
+    assert approved["f2-c1-window-v2-2026-10-12"]["source_commit"] == (
+        "3165b76d44b738c4709c3ca74f87297ff66dd397"
+    )
+    assert approved["f2-c1-window-v2-2026-10-12"]["status"] == "approved"
+    result = checked(topo, files)
+    assert result["source_topology_valid"] is True
+    assert result["checks"]["reviewed_source_frame_is_inactive"] is True
+    assert result["status"] == "STOP"
+    assert result["ready_for_operational_activation"] is False
+    assert result["full_runtime_start_allowed"] is False
+    assert (topo, files) == original
+
+
+@pytest.mark.parametrize("alter", [
+    # Mixing approved v2 source with the old branch or old empty source with
+    # the v2 branch must NEVER be silently accepted.
+    lambda p, b: p.update(base_branch="benchmark/fullpath"),
+    lambda p, b: b.update(revisions={}),
+    lambda p, b: b.update(active_revision="f2-c1-window-v2-2026-10-12"),
+    lambda p, b: b["revisions"]["f2-c1-window-v2-2026-10-12"].update(
+        status="draft"
+    ),
+    lambda p, b: b["revisions"]["f2-c1-window-v2-2026-10-12"].update(
+        source_commit="0" * 40
+    ),
+    lambda p, b: b["revisions"].update({"extra": {}}),
+    lambda p, b: b.update(extra_unapproved_key=True),
+    lambda p, b: b["revisions"]["f2-c1-window-v2-2026-10-12"][
+        "authority"
+    ][0].update(authority="mutable_execution"),
+    lambda p, b: b["revisions"]["f2-c1-window-v2-2026-10-12"][
+        "references"
+    ]["security_policy"][0].update(path="docs/untrusted.md"),
+])
+def test_inactive_v2_rejects_mixed_revision_drift_and_unauthorized_authority(
+    source, alter,
+):
+    topo, files = v2_source(source)
+    project = files["projects.yml"]["projects"][f2.PROJECT_ID]
+    baseline = files["project-baselines.yml"]["projects"][f2.PROJECT_ID]
+    alter(project, baseline)
+    result = checked(topo, files)
+    assert result["source_topology_valid"] is False
+    assert result["ready_for_operational_activation"] is False
+    assert result["full_runtime_start_allowed"] is False
+
+
+@pytest.mark.parametrize("alter", [
+    lambda p: p["autonomy"].update(allow_create_pr=True),
+    lambda p: p["autonomy"].update(allow_push_ai_branch=True),
+    lambda p: p["ddev"].update(enabled=True),
+    lambda p: p["runtime"].update(exclusive_project_lease=True),
+    lambda p: p["runtime"].update(workspace_mode="direct"),
+    lambda p: p["pm_standalone_review"].update(enabled=True),
+])
+def test_approved_but_inactive_v2_never_grants_execution_rights(source, alter):
+    topo, files = v2_source(source)
+    project = files["projects.yml"]["projects"][f2.PROJECT_ID]
+    alter(project)
+    result = checked(topo, files, "singleton_fixture_source_parked")
+    assert result["ready_for_operational_activation"] is False
+
+
+def test_old_v1_empty_baseline_cannot_claim_new_v2_branch(source):
+    topo, files = source
+    files["projects.yml"]["projects"][f2.PROJECT_ID][
+        "base_branch"
+    ] = f2.V2_BRANCH
+    outcome = checked(topo, files, "reviewed_source_frame_is_inactive")
+    assert outcome["full_runtime_start_allowed"] is False
