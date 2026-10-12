@@ -1,4 +1,4 @@
-"""F2c scoped first-boot decisions for the existing PCP RuntimeEngine.
+"""F2c/F2d source-only first-boot decisions for the existing PCP RuntimeEngine.
 
 This is an admission/effect *plan*, not an executable startup token. It cannot
 release the parked F2 Compose, create a database, schedule work or call a model.
@@ -50,14 +50,22 @@ def assess_scoped_fresh_boot(
     projects_document: Mapping[str, Any],
     baselines_document: Mapping[str, Any],
     inventory: Mapping[str, Any],
+    post_schema_database_snapshot: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Return a deterministic source-only STOP with explicit negative proof.
 
-    Callers must provide independently obtained F2-owned metadata. This pure
-    function never reads Postgres or attempts to prove resource ownership.
+    A pristine pre-schema catalog and a populated post-schema catalog CANNOT
+    be the same snapshot. Inventory is meaningful only after the schema exists.
+    Both snapshots are caller-provided source shapes, NOT independent proof of
+    a live migration, resource ownership, role grants or exact schema objects.
+    The function cannot authorize startup or call Postgres.
     """
     safe_env = environment if isinstance(environment, Mapping) else {}
     safe_db = database_snapshot if isinstance(database_snapshot, Mapping) else {}
+    post_db = (
+        post_schema_database_snapshot
+        if isinstance(post_schema_database_snapshot, Mapping) else {}
+    )
     safe_projects = projects_document if isinstance(projects_document, Mapping) else {}
     safe_baselines = baselines_document if isinstance(baselines_document, Mapping) else {}
     db = assess_fresh_fullpath_startup(
@@ -99,6 +107,22 @@ def assess_scoped_fresh_boot(
             and set(safe_projects.get("projects") or {}) == {PROJECT_ID}
             and set(safe_baselines.get("projects") or {}) == {PROJECT_ID}
         ),
+        "post_schema_catalog_is_distinct_and_unprivileged": (
+            post_db.get("database_name") == safe_db.get("database_name") == "fullpath"
+            and post_db.get("database_role") == safe_db.get("database_role") == "fullpath"
+            and post_db.get("is_superuser") == safe_db.get("is_superuser") == "off"
+            # A real fresh DB has zero user relations before installation;
+            # after installation it has tables. A synthetic inventory paired
+            # with the *same* pristine catalog is not evidence of a boot.
+            and type(safe_db.get("user_relation_count")) is int
+            and safe_db["user_relation_count"] == 0
+            and type(post_db.get("user_relation_count")) is int
+            and post_db["user_relation_count"] > 0
+            and type(post_db.get("user_function_count")) is int
+            and post_db["user_function_count"] >= 0
+            and type(post_db.get("peer_session_count")) is int
+            and post_db["peer_session_count"] == 0
+        ),
         "every_durable_family_known_and_empty": (
             isinstance(inventory, Mapping)
             and set(inventory) == set(FRESH_INVENTORY)
@@ -113,6 +137,10 @@ def assess_scoped_fresh_boot(
         "source_contract_valid": valid,
         "checks": checks,
         "inventory_counts": counts,
+        "pre_schema_user_relation_count": safe_db.get("user_relation_count"),
+        "post_schema_user_relation_count": post_db.get("user_relation_count"),
+        "bootstrap_phase_evidence_independently_verified": False,
+        "post_schema_owned_object_allowlist_verified": False,
         "forbidden_effects": list(FORBIDDEN_STARTUP_EFFECTS),
         "proposed_direct_intake_worker_only": True,
         "proposed_planner_and_work_order_launch": False,
@@ -129,6 +157,8 @@ def assess_scoped_fresh_boot(
                 "runtime_legacy_host_cancel_and_replay_not_enabled_in_f2",
                 "new_approved_fixture_and_real_ci_delivery_credentials_missing",
                 "oci_digest_provider_egress_and_single_writer_unverified",
+                "two_stage_bootstrap_provenance_and_schema_allowlist_missing",
+                "app_role_grants_and_schema_install_order_unverified",
             ]
         ),
     }
