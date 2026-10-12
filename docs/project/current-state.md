@@ -8,7 +8,7 @@ Last reconciled: **2026-10-12**. **Canonical PCP #595 remains OPEN / G0 NOT GO.*
 
 **WSL/execution authority:** Owner proved isolated `pcp-g0d01` activation and GET-only health checks before the trials; original local G0 Runtime job and Direct journal/workspace must be preserved. **Legacy PCP PostgreSQL** has separately observed historical managed-project active lease/orchestration/pending WorkOrder evidence (2026-10-11 read-only snapshot); legacy Router/Runtime/Executor must NOT be started from those stale records. Strict managed-project no-touch, no shared-host Codex/DDEV/project lease manipulation. A source PR merge does not update deployed G0 images.
 
-**F2d-05 read-only actual host preflight SOURCE / F2 PARKED:** #674–#677 merged/CI-green; Engine worker separated but no authorized F2 lifecycle. New bounded F2-only Docker resource noncollision script checks exact names/labels on Owner WSL only when run; this GitHub CI is NOT host proof. [F2 decision + steps T3](history/g0-02-f2d04-operational-decision-2026-10-12.md). No F2 fixture repo access, owned DB/volume/images, GitHub/provider credentials/egress/safe boot. G0 HOLD/NOT GO; G1 BLOCKED; runner #665 open.
+**F2d-05A WSL preflight STOP:** Owner supplied `f2_docker_absence_not_proven`, mutations/model calls 0; cause/target **not proven** because CLI response grammar was too narrow and output lacked F2 target. F2d-05A fixes exact Docker absence formats + sanitized blocker kind/name, preserves hard STOP and F2-only scope. [T3 decision](history/g0-02-f2d04-operational-decision-2026-10-12.md). F2 repo/DB/volume/egress/credentials unproven, #665 OPEN. G0 HOLD/NOT GO, G1 BLOCKED.
 
 ## Resume order
 
@@ -71,7 +71,7 @@ Chợ Nhạc GH-63 founder acceptance is a managed-project decision, not a PCP s
 ## Immediate next safe actions
 
 1. **#594 complete:** evidence [PR #612](https://github.com/sonvhse06072/personal-coding-platform/pull/612) merged; no further G0-01 code. Shared Chợ Nhạc dirty direct worktree and historical lease unresolved remain **no-touch** until separately authorized.
-2. **#595 F2d-05:** CI/review read-only WSL preflight script, no host access in chat. Next is one real Owner-WSL preflight and independent new fixture/DB/resource attestation **before** seeking narrowly scoped F2d-04C operational approval. Do not create/run Docker, database, provider, legacy PCP or Chợ Nhạc from this session. No more synthetic-only Runtime PRs without real resource evidence.
+2. **#595 F2d-05A:** exact-head CI/review parser diagnostic correction, then one Owner WSL read-only check with new main SHA. No blind retries; if STOP, inspect only named F2 target reported in sanitized JSON. No Docker mutations/DB/model/legacy PCP/Chợ Nhạc or operational activation. Do not open more synthetic Runtime PRs without host proof.
 3. **#493/#512 residual:** Executor **1.0.35 observed**, natural cold-start and remote recovery still unproven. No reason to restart just to update docs or repeat fixed source changes. The prior host `ddev restart` 900-second incident still requires bounded root-cause/rollback planning.
 4. **Chợ Nhạc writer protection:** GH-89 blocked durable PCP job exists while current direct worktree is **dirty Codex branch**. Do not checkout, stash, reset, resume, retire, cancel or overwrite that shared workspace from PCP audit. No Docker prune, replacement job or protected authority override. Only a fresh explicitly authorized single-writer/lease handoff can change this.
 

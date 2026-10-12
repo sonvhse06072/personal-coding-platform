@@ -47,6 +47,16 @@ CONTAINER_ID = re.compile(r"[0-9a-f]{12,64}\Z")
 class SafeStop(RuntimeError):
     """Do not proceed when the requested identity or read-only proof is unclear."""
 
+    def __init__(
+        self, blocker: str, *, kind: str | None = None,
+        name: str | None = None, error_class: str | None = None,
+    ) -> None:
+        super().__init__(blocker)
+        # Only constant, hardcoded F2 resource identities are surfaced.
+        self.kind = kind
+        self.name = name
+        self.error_class = error_class
+
 
 def _run(argv: tuple[str, ...]) -> subprocess.CompletedProcess[str]:
     if argv not in ALLOWED:
@@ -79,6 +89,37 @@ def _local_context(run: Callable[[tuple[str, ...]], Any]) -> None:
         raise SafeStop("docker_host_override_mismatch")
 
 
+def _known_absence_response(
+    kind: str, name: str, stderr: str, stdout: str,
+) -> bool:
+    """Accept exact Docker CLI missing-object evidence, never generic 404s.
+
+    Docker prints differing formats depending on resource kind/version:
+    'No such object: NAME', 'network NAME not found', or
+    'get NAME: no such volume'. Only an exact F2 resource name matches.
+    """
+    if stdout.strip() not in {"", "[]"}:
+        return False
+    message = stderr.strip()
+    if not message or len(message) > 350 or "\n" in message or "\r" in message:
+        return False
+    target = re.escape(name)
+    patterns = [
+        rf"(?:Error:|Error response from daemon:)\s*No such (?:object|{kind}):\s*{target}",
+    ]
+    if kind == "network":
+        patterns.append(
+            rf"Error response from daemon:\s*network {target} not found"
+        )
+    if kind == "volume":
+        patterns.extend((
+            rf"Error response from daemon:\s*get {target}: no such volume",
+            rf"Error response from daemon:\s*volume {target} not found",
+        ))
+    return any(re.fullmatch(pattern, message, flags=re.IGNORECASE)
+               for pattern in patterns)
+
+
 def _present(
     run: Callable[[tuple[str, ...]], Any], kind: str, name: str,
 ) -> bool:
@@ -92,16 +133,18 @@ def _present(
             raise SafeStop("f2_docker_metadata_invalid")
         return True
     if proc.returncode != 1:
-        raise SafeStop("f2_docker_inspection_unexpected_status")
-    # Only an explicit, exact "No such <kind/object>: <name>" is absence.
-    # Permission errors, daemon unavailability and ambiguous "not found"
-    # responses are NEVER evidence of an empty namespace.
-    match = re.search(
-        r"no such (?:object|" + kind + r"):\s*['\"]?([^\s'\"]+)",
-        str(proc.stderr or "").lower(),
-    )
-    if not match or match.group(1).strip("'\"") != name.lower():
-        raise SafeStop("f2_docker_absence_not_proven")
+        raise SafeStop(
+            "f2_docker_inspection_unexpected_status", kind=kind, name=name,
+            error_class="unexpected_exit_code",
+        )
+    # A foreign, ambiguous, permission or daemon error must NEVER prove
+    # absence. Report only the bounded F2 target, not Docker stderr.
+    if not _known_absence_response(kind, name, str(proc.stderr or ""),
+                                   str(proc.stdout or "")):
+        raise SafeStop(
+            "f2_docker_absence_not_proven", kind=kind, name=name,
+            error_class="unrecognized_or_ambiguous_docker_error",
+        )
     return False
 
 
@@ -163,6 +206,13 @@ def main() -> int:
             "resource_mutations": 0,
             "model_calls": 0,
         }
+        if exc.kind in RESOURCES and exc.name in RESOURCES[exc.kind]:
+            # Safe diagnostics from reviewed F2 constants only; never include
+            # raw Docker output, local paths, environment or credentials.
+            data["blocked_resource"] = {
+                "kind": exc.kind, "name": exc.name,
+            }
+            data["docker_error_class"] = exc.error_class or "unknown"
         code = 2
     print(json.dumps(data, sort_keys=True, indent=2))
     return code
