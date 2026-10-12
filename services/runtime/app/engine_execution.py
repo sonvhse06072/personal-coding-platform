@@ -12,6 +12,7 @@ from .adapters import build_adapter
 from .capability_context import agent_verification_capability_context
 from .config import project_config
 from .engine_core import RuntimeEngineCore
+from .fullpath_ci_deferred import fixture_deferred_verification
 from .evidence_packs import developer_repair_evidence_pack, pm_evidence_pack
 from .fingerprint import failure_fingerprint
 from .incident_learning import incident_learning_candidate
@@ -1669,6 +1670,15 @@ class RuntimeEngine(RuntimeEngineCore):
         started: float,
         progress: dict[str, Any],
     ) -> dict[str, Any]:
+        deferred = fixture_deferred_verification(
+            project_id,
+            ddev_enabled=bool(project.get("ddev", {}).get("enabled", False)),
+        )
+        if deferred is not None:
+            # This result can only advance internal model/reviewer flow; the
+            # DeliveryAwareStorage gate downgrades the persisted status to CI
+            # pending, and final PM acceptance remains blocked after hosted CI.
+            return deferred
         if not project.get("ddev", {}).get("enabled", False):
             return {"passed": True, "tests_passed": True, "tool_calls": 0, "test_runs": 0, "phases": []}
         phases = ["targeted_tests", "static_analysis"]

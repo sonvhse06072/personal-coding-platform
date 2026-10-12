@@ -8,7 +8,7 @@ Last reconciled: **2026-10-12**. **Canonical PCP #595 remains OPEN / G0 NOT GO.*
 
 **WSL/execution authority:** Owner proved isolated `pcp-g0d01` activation and GET-only health checks before the trials; original local G0 Runtime job and Direct journal/workspace must be preserved. **Legacy PCP PostgreSQL** has separately observed historical managed-project active lease/orchestration/pending WorkOrder evidence (2026-10-11 read-only snapshot); legacy Router/Runtime/Executor must NOT be started from those stale records. Strict managed-project no-touch, no shared-host Codex/DDEV/project lease manipulation. A source PR merge does not update deployed G0 images.
 
-**G0/F1 source:** #656 MERGED, full-path candidate non-executable before DB/Engine/plan/HTTP. [PR #657](https://github.com/sonvhse06072/personal-coding-platform/pull/657) adds strict exact-SHA hosted CI in delivery, source/CI review underway; hostless pre-delivery verifier and new sandbox still unproven. No activation. [T3 gate](history/g0-02-fullpath-source-admission-2026-10-12.md).
+**G0/F1 source:** #656/#657 MERGED (non-executable fullpath mode + exact-SHA hosted CI). [PR #658](https://github.com/sonvhse06072/personal-coding-platform/pull/658) adds honest CI-deferred verification and PM-review hold, source/CI pending. Fresh fixture/DB/Executor ownership and a reviewed PM finalization action remain unproven; no activation/model calls. [T3 gate](history/g0-02-fullpath-source-admission-2026-10-12.md).
 
 ## Resume order
 
