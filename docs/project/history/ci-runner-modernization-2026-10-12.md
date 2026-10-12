@@ -25,3 +25,13 @@ Initial hosted root suite caught a pre-existing test mock that assumed UID 1000.
 ## Evidence and remaining gates
 
 The protected CI PR must pass all four suites on GitHub-hosted infrastructure, and Guardian static where triggered. After merge, a small T1/T3-only PR should prove the fast path without any production change. Branch-protection metadata is unavailable through the integration; do not rename or omit old checks. GitHub-hosted minutes on this private repository may be billable. Confirm actual runner identity and workflow conclusions before reporting completion. No PCP legacy Runtime, Codex, fixture or Chợ Nhạc operation is part of this change.
+
+## Post-rollout integrity correction — trusted base checkers
+
+[PR #667](https://github.com/sonvhse06072/personal-coding-platform/pull/667) was independently validated on an ephemeral hosted PR runner and merged to `main@a046af354a6dee2f0728460233b646aed2d6b8c4`. Its exact-head [CI #38228350120](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/38228350120) confirmed `docs_only` in all three service jobs, no dependency installation or service test execution, while the unchanged four check contexts all returned SUCCESS; structure and document authority still ran (661 root tests).
+
+Security review then identified a **CI self-classification trust gap** in #666: the new PR scope classifier and the pre-existing document-authority script were executed from the *PR checkout*. A PR could rewrite either script in the same changeset it wanted to classify, gaining control of skip/authority results. The approved [#665](https://github.com/sonvhse06072/personal-coding-platform/issues/665) isolation/security workstream includes this corrective bound.
+
+[Corrective PR #668](https://github.com/sonvhse06072/personal-coding-platform/pull/668) requires both checks to execute the scripts taken from the exact `pull_request.base.sha` on the owner repository's `main` (not from PR head). Unknown base or classifier failure conservatively runs FULL service checks; the document authority gate fails closed if it cannot load its trusted base script. The workflow still runs PR test code only on ephemeral hosted Ubuntu, full regression on trusted main, preserves all four check contexts and uses no new credentials. Protected workflow changes use Owner-approved #665 scope and exact-head CI/review. Branch/ruleset enforcement could not be independently read through the integration and remains a separate policy limitation.
+
+This check is about *trusting CI decisions*, not marking historical tests obsolete; no runtime, provider, G0 job, fixture or Chợ Nhạc operations.
