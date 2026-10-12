@@ -3,7 +3,7 @@ version: 1
 projects:
   pcp-g0-fullpath-fixture:
     path: "${CODING_PROJECTS_ROOT}/pcp-g0-fullpath-fixture"
-    base_branch: benchmark/fullpath
+    base_branch: benchmark/fullpath-v2
     privacy:
       private_code: true
       allow_training_provider: false
