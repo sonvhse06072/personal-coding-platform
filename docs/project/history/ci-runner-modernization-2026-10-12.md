@@ -20,7 +20,7 @@ PCP main before the change: `f516c92413d8f9b9a3726839a2972cad59070d04`. [Run #38
 
 Initial hosted root suite caught a pre-existing test mock that assumed UID 1000. Its fixture now reads the owner of pytest's own temporary directory; production fixture-staging ownership checks were not weakened. The test-only correction remained in the same reviewed PR.
 
-**Fast-path proof:** This T1/T3-only PR intentionally changes no code, config or workflow. It must yield root structure/doc-authority PASS and three named service job SUCCESS statuses via explicit docs-only no-op steps; if any service runs actual tests or root is skipped, the scope policy has NOT been validated.
+**Fast-path proof:** This T1/T3-only PR intentionally changes no code, config or workflow. An absent pull_request workflow run is an Actions event-delivery blocker, never evidence that all checks passed. It must yield root structure/doc-authority PASS and three named service job SUCCESS statuses via explicit docs-only no-op steps; if any service runs actual tests or root is skipped, the scope policy has NOT been validated.
 
 ## Evidence and remaining gates
 
