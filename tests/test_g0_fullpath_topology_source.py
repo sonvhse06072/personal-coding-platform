@@ -359,6 +359,11 @@ def test_approved_but_inactive_v2_never_grants_execution_rights(source, alter):
 
 def test_old_v1_empty_baseline_cannot_claim_new_v2_branch(source):
     topo, files = source
+    # Always build the exact OLD empty v1 baseline as synthetic test input.
+    # The actual repo config may now legitimately be approved-but-INACTIVE v2.
+    files["project-baselines.yml"]["projects"][f2.PROJECT_ID] = {
+        "active_revision": None, "revisions": {},
+    }
     files["projects.yml"]["projects"][f2.PROJECT_ID][
         "base_branch"
     ] = f2.V2_BRANCH
