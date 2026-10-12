@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .adapters.antigravity import cancel_all_antigravity_runs
-from .fullpath_fixture_safety import MODE as FULLPATH_CANDIDATE_MODE, parked_fullpath_environment, refuse_source_only_startup
+from .fullpath_fixture_safety import MODE as FULLPATH_CANDIDATE_MODE, parked_fullpath_environment, reject_parked_fullpath_side_effects, refuse_source_only_startup
 from .config import project_config
 from .executor_client import DdevExecutorClient
 from .preview import PreviewManager
@@ -105,6 +105,7 @@ class RuntimeEngineCore:
         self.worker_task = asyncio.create_task(self._worker_loop())
 
     async def stop(self) -> None:
+        reject_parked_fullpath_side_effects()
         self._stopping = True
         tasks = list(self.active_jobs.items())
         for job_id, task in tasks:
@@ -128,6 +129,7 @@ class RuntimeEngineCore:
         self.worker_task = None
 
     async def enqueue(self, job_id: str) -> None:
+        reject_parked_fullpath_side_effects()
         marker = orchestrator_launch(self.storage.get(job_id) or {})
         if marker:
             if marker["state"] == "held":

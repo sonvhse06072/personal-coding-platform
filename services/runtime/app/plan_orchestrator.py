@@ -10,6 +10,7 @@ from datetime import timedelta
 from typing import Any
 
 from .config import project_config
+from .fullpath_fixture_safety import reject_parked_fullpath_side_effects
 from .storage import Storage, now
 from .work_order_checkpoints import (
     blocked_evidence_checkpoint_rows,
@@ -1500,12 +1501,14 @@ class PlanOrchestrator:
         self.poll_seconds = max(5.0, float(os.getenv("PLAN_ORCHESTRATOR_POLL_SECONDS", "15")))
 
     async def start(self) -> None:
+        reject_parked_fullpath_side_effects()
         self.store.ensure()
         self._stopping = False
         await self.tick()
         self._task = asyncio.create_task(self._loop())
 
     async def stop(self) -> None:
+        reject_parked_fullpath_side_effects()
         self._stopping = True
         if self._task:
             self._task.cancel()
@@ -1528,6 +1531,7 @@ class PlanOrchestrator:
                 continue
 
     async def tick(self) -> dict[str, Any]:
+        reject_parked_fullpath_side_effects()
         async with self._lock:
             self._ensure_progress_handoffs()
             registered = self.store.register_new_plans()

@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from .control_actions_attention import ControlActionService
+from .fullpath_fixture_safety import reject_parked_fullpath_side_effects
 from .legacy_adaptive_recovery import LegacyAdaptiveRecovery
 from .provider_capacity_recovery import ProviderCapacityRecovery
 from .orchestrator_merge import PlanOrchestrator as CorePlanOrchestrator
@@ -47,6 +48,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
             controls.orchestrator = self
 
     async def start(self) -> None:
+        reject_parked_fullpath_side_effects()
         self.store.ensure()
         self.controls.ensure()
         self._supersede_obsolete_attention()
@@ -57,6 +59,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
         await super().start()
 
     async def tick(self) -> dict[str, Any]:
+        reject_parked_fullpath_side_effects()
         async with self._notification_tick_lock:
             # Provider-capacity recovery has priority for already-blocked work:
             # authoritative post-failure quota evidence may reopen the exact same
