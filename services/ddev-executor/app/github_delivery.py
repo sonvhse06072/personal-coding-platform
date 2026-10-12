@@ -473,13 +473,23 @@ def summarize_ci(signals: list[dict[str, Any]], combined_status: str) -> tuple[s
 
 
 class GitHubDelivery:
+    @staticmethod
+    def _valid_repository_slug(repository: Any) -> bool:
+        if not isinstance(repository, str) or not re.fullmatch(
+            r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository
+        ):
+            return False
+        # The regex alone accepts "." and ".." path segments. Never let
+        # an explicitly scoped credential target URL-normalized traversal.
+        return all(".." not in part and part != "." for part in repository.split("/"))
+
     def __init__(
         self, token: str | None = None, *, repository_scope: str | None = None,
     ) -> None:
         # Optional restriction for an independently approved, project-owned
         # delivery credential. Omitted scope preserves all legacy callers.
-        if repository_scope is not None and not re.fullmatch(
-            r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository_scope
+        if repository_scope is not None and not self._valid_repository_slug(
+            repository_scope
         ):
             raise ValueError("Invalid GitHub repository scope")
         self.token = token if token is not None else os.getenv("GITHUB_DELIVERY_TOKEN", "")
@@ -490,9 +500,7 @@ class GitHubDelivery:
         # Check before opening an HTTP client or using a delivery credential.
         # This is an app-level defense-in-depth check; the actual token must
         # still be repository-scoped by the credential issuer.
-        if not isinstance(repository, str) or not re.fullmatch(
-            r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository
-        ):
+        if not self._valid_repository_slug(repository):
             raise RuntimeError("Invalid GitHub delivery repository")
         if self.repository_scope is not None and (
             repository.casefold() != self.repository_scope.casefold()
