@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .adapters.antigravity import cancel_all_antigravity_runs
+from .fullpath_fixture_safety import MODE as FULLPATH_CANDIDATE_MODE, refuse_source_only_startup
 from .config import project_config
 from .executor_client import DdevExecutorClient
 from .preview import PreviewManager
@@ -58,6 +59,10 @@ class RuntimeEngineCore:
         self._stopping = False
 
     async def start(self) -> None:
+        if os.getenv("PCP_RUNTIME_STARTUP_MODE") == FULLPATH_CANDIDATE_MODE:
+            # Direct method calls cannot bypass main.lifespan and accidentally
+            # mutate an arbitrary DB or call the global Antigravity cancel-all.
+            refuse_source_only_startup()
         self.storage.init()
         self._stopping = False
         await cancel_all_antigravity_runs()
