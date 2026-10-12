@@ -131,17 +131,34 @@ class Storage:
     def connect(self):
         return psycopg.connect(self.dsn, row_factory=dict_row)
 
-    def init(self) -> None:
-        with self.connect() as conn:
-            conn.execute(DDL)
-            conn.execute(
-                """UPDATE cp_execution_plans
+    @staticmethod
+    def _apply_core_schema_on_connection(conn: Any) -> None:
+        """Current core DDL only, within a caller-owned transaction.
+
+        Not an F2 schema installer: other Runtime DDL modules, bootstrap
+        privileges and resource ownership are NOT established by this helper.
+        """
+        conn.execute(DDL)
+
+    @staticmethod
+    def _reconcile_legacy_planning_on_connection(conn: Any) -> None:
+        """Preserve normal Runtime restart repair, never call for fresh F2."""
+        conn.execute(
+            """UPDATE cp_execution_plans
                 SET status='interrupted',
                     error='Runtime restarted during PM planning; submit a new planning request.',
                     updated_at=%s
                 WHERE status='planning'""",
-                (now(),),
-            )
+            (now(),),
+        )
+
+    def init(self) -> None:
+        # One transaction, unchanged legacy SQL and recovery ordering. Fresh F2
+        # cannot call init(): it requires a separately attested DB/role and
+        # reviewed schema-only installer, not legacy recovery.
+        with self.connect() as conn:
+            self._apply_core_schema_on_connection(conn)
+            self._reconcile_legacy_planning_on_connection(conn)
             conn.commit()
 
     def create(self, row: dict[str, Any]) -> None:

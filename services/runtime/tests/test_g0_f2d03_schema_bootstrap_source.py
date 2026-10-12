@@ -112,7 +112,12 @@ def test_all_three_original_dml_entries_are_quarantined_and_not_backfilled():
     assert "INSERT INTO cp_plan_progress_meta" in plan_progress_store.DDL
     # Legacy Storage.init and PlanOrchestratorStore.ensure still have durable
     # update/insert side effects that must not be called by fresh F2 bootstrap.
-    assert "UPDATE cp_execution_plans" in inspect.getsource(storage.Storage.init)
+    assert "UPDATE cp_execution_plans" in inspect.getsource(
+        storage.Storage._reconcile_legacy_planning_on_connection
+    )
+    assert "_reconcile_legacy_planning_on_connection" in inspect.getsource(
+        storage.Storage.init
+    )
     assert "INSERT INTO cp_plan_orchestrator_meta" in inspect.getsource(
         plan_orchestrator.PlanOrchestratorStore.ensure
     )
