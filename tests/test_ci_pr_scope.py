@@ -77,3 +77,19 @@ def test_test_workflow_retains_all_four_named_gates_and_hosted_pr_runner():
     assert "ci_pr_scope.py" in source
     assert "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" in source
     assert "actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97" in source
+
+def test_changed_pr_cannot_replace_its_own_scope_or_authority_checker():
+    source = (ROOT / ".github/workflows/tests.yml").read_text()
+    assert 'git show "$PR_BASE_SHA:scripts/ci_pr_scope.py"' in source
+    assert 'python3 "$trusted_classifier"' in source
+    assert 'git show "$DOC_BASE_SHA:scripts/check_project_doc_authority.py"' in source
+    assert 'python3 "$trusted_authority"' in source
+    assert '--repo-root "$GITHUB_WORKSPACE"' in source
+    assert 'PR_BASE_REF:' in source and 'PR_BASE_REPO:' in source
+    assert 'DOC_BASE_REF:' in source and 'DOC_BASE_REPO:' in source
+    assert '"$PR_BASE_REF" != "main"' in source
+    assert '"$DOC_BASE_REF" == "main"' in source
+    assert 'echo \'mode=full\' >> "$GITHUB_OUTPUT"' in source
+    assert '[[ "$(cat "$scoped")" == "mode=docs_only" ]]' in source
+    assert "python3 scripts/ci_pr_scope.py" not in source
+    assert "run: python scripts/check_project_doc_authority.py" not in source
