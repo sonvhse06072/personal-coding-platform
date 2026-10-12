@@ -1,6 +1,40 @@
-# No real fixture/source SHA has been approved. STOP is intentional.
+# DEC-G0-F2C1-BASELINE-V2: Owner-approved *source frame* only.
+# active_revision remains null: F2 Runtime/Executor/DB/model/egress remain PARKED.
 version: 1
 projects:
   pcp-g0-fullpath-fixture:
     active_revision: null
-    revisions: {}
+    revisions:
+      f2-c1-window-v2-2026-10-12:
+        status: approved
+        source_commit: 3165b76d44b738c4709c3ca74f87297ff66dd397
+        authority:
+          - path: README.md
+            authority: human_owner_protected
+          - path: docs/F2-T01.md
+            authority: human_owner_protected
+          - path: .github/workflows/validation.yml
+            authority: human_owner_protected
+          - path: composer.json
+            authority: human_owner_protected
+          - path: composer.lock
+            authority: human_owner_protected
+          - path: web/modules/custom/pcp_f2_fixture/src/WindowOverlapDetector.php
+            authority: mutable_execution
+          - path: web/modules/custom/pcp_f2_fixture/tests/src/Unit/WindowOverlapDetectorTest.php
+            authority: mutable_execution
+          - path: web/modules/custom/pcp_f2_fixture/tests/src/Kernel/WindowOverlapServiceTest.php
+            authority: mutable_execution
+        references:
+          goals: [{path: README.md}]
+          non_goals: [{path: README.md}]
+          requirements: [{path: docs/F2-T01.md}]
+          architecture_constraints: [{path: README.md}]
+          quality_policy:
+            - {path: README.md}
+            - {path: .github/workflows/validation.yml}
+          security_policy:
+            - {path: README.md}
+            - {path: .github/workflows/validation.yml}
+          budget_policy: [{path: docs/F2-T01.md}]
+          roadmap_frame: [{path: docs/F2-T01.md}]
