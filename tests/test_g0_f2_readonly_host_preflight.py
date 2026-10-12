@@ -66,7 +66,7 @@ def test_real_host_inventory_contract_is_named_f2_only_without_activation(monkey
     assert all(
         "pcp-f2-fullpath" in token or token in (
             "docker", "container", "network", "volume", "ls",
-            "inspect", "--all", "--quiet", "--filter",
+            "inspect", "context", "--all", "--quiet", "--filter",
             "git", "-C", "rev-parse", "HEAD", str(f2.ROOT),
         )
         for command in seen for token in command
