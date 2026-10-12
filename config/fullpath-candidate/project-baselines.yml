@@ -1,0 +1,6 @@
+# No real fixture/source SHA has been approved. STOP is intentional.
+version: 1
+projects:
+  pcp-g0-fullpath-fixture:
+    active_revision: null
+    revisions: {}

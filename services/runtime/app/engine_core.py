@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .adapters.antigravity import cancel_all_antigravity_runs
-from .fullpath_fixture_safety import MODE as FULLPATH_CANDIDATE_MODE, refuse_source_only_startup
+from .fullpath_fixture_safety import MODE as FULLPATH_CANDIDATE_MODE, parked_fullpath_environment, refuse_source_only_startup
 from .config import project_config
 from .executor_client import DdevExecutorClient
 from .preview import PreviewManager
@@ -59,9 +59,12 @@ class RuntimeEngineCore:
         self._stopping = False
 
     async def start(self) -> None:
-        if os.getenv("PCP_RUNTIME_STARTUP_MODE") == FULLPATH_CANDIDATE_MODE:
-            # Direct method calls cannot bypass main.lifespan and accidentally
-            # mutate an arbitrary DB or call the global Antigravity cancel-all.
+        if (
+            os.getenv("PCP_RUNTIME_STARTUP_MODE") == FULLPATH_CANDIDATE_MODE
+            or parked_fullpath_environment(os.environ)
+        ):
+            # Candidate-root identity may not be promoted to normal merely
+            # through an env switch; refuse BEFORE DB init/host cancellation.
             refuse_source_only_startup()
         self.storage.init()
         self._stopping = False

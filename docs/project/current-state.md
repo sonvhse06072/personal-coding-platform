@@ -8,7 +8,7 @@ Last reconciled: **2026-10-12**. **Canonical PCP #595 remains OPEN / G0 NOT GO.*
 
 **WSL/execution authority:** Owner proved isolated `pcp-g0d01` activation and GET-only health checks before the trials; original local G0 Runtime job and Direct journal/workspace must be preserved. **Legacy PCP PostgreSQL** has separately observed historical managed-project active lease/orchestration/pending WorkOrder evidence (2026-10-11 read-only snapshot); legacy Router/Runtime/Executor must NOT be started from those stale records. Strict managed-project no-touch, no shared-host Codex/DDEV/project lease manipulation. A source PR merge does not update deployed G0 images.
 
-**G0/F1 complete (#656–#660 MERGED):** CI-first standalone direct-intake → exact-HEAD Actions → PM review attestable/atomic completion now source/tested. Fullpath candidate remains NON-EXECUTABLE; no live job/model, DDEV, DB or deployment. Next **F2 isolation proof** for a NEW fixture, new DB/Router/Executor/credentials; no historical PCP/G0D-T01/Chợ Nhạc access. [T3](history/g0-02-fullpath-source-admission-2026-10-12.md).
+**G0/F1 complete (#656–#660):** deferred CI→PM review state source-tested. **F2a source PR #662** stages an INERT separate Compose/registry and negative tests; no fixture/DB/model launched. F2 live ownership, fresh image/secret/egress proof still missing. [F2 T3](history/g0-02-f2-source-topology-2026-10-12.md).
 
 ## Resume order
 
@@ -71,7 +71,7 @@ Chợ Nhạc GH-63 founder acceptance is a managed-project decision, not a PCP s
 ## Immediate next safe actions
 
 1. **#594 complete:** evidence [PR #612](https://github.com/sonvhse06072/personal-coding-platform/pull/612) merged; no further G0-01 code. Shared Chợ Nhạc dirty direct worktree and historical lease unresolved remain **no-touch** until separately authorized.
-2. **#595 F2 next:** Source-only F1 merged (#656–#660, CI green), no actual Runtime/test sample. Before any new model, prove independently owned new fixture/source/baseline, empty DB+volume, Router/Executor/provider/credential/workspace scope, safe normal startup without global Antigravity/legacy job replay, strict CI and PM confirmation. If normal engine cannot run without host-side effects or weaker QA, STOP and recommend a narrower product path. Legacy PCP, G0D-T01 and Chợ Nhạc remain no-touch.
+2. **#595 F2:** Review parked F2a Compose/static audit [T3](history/g0-02-f2-source-topology-2026-10-12.md) and tests. It forbids `normal` mode flips, foreign mounts/credentials and accidental lifecycle actions, but new fixture/approved seed/empty DB/image digest/CI authority/egress still **unproven**. No Runtime/model/Docker activation or Chợ Nhạc/legacy PCP/G0D-T01 operations. If a real safe normal pipeline is infeasible, propose No-Go/simplification.
 3. **#493/#512 residual:** Executor **1.0.35 observed**, natural cold-start and remote recovery still unproven. No reason to restart just to update docs or repeat fixed source changes. The prior host `ddev restart` 900-second incident still requires bounded root-cause/rollback planning.
 4. **Chợ Nhạc writer protection:** GH-89 blocked durable PCP job exists while current direct worktree is **dirty Codex branch**. Do not checkout, stash, reset, resume, retire, cancel or overwrite that shared workspace from PCP audit. No Docker prune, replacement job or protected authority override. Only a fresh explicitly authorized single-writer/lease handoff can change this.
 

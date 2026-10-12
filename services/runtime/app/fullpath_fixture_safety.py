@@ -180,6 +180,26 @@ def assess_source_contract(
     }
 
 
+def parked_fullpath_environment(env: Mapping[str, str]) -> bool:
+    """Detect a parked F2 topology even if someone flips startup_mode=normal.
+
+    Pure, conservative and independent of Runtime lifespan and DB access.
+    Legacy PCP is unaffected unless given F2's exact isolated config identity.
+    """
+    if env.get("PCP_FULLPATH_SOURCE_ONLY") == "true":
+        return True
+    for key in (
+        "PROJECTS_FILE", "PROJECT_BASELINES_FILE", "CODING_PROJECTS_ROOT",
+        "CODING_WORKSPACES_ROOT", "CODEX_HOME",
+    ):
+        if env.get(key) == FIXED_ENV[key]:
+            return True
+    try:
+        return urlsplit(env.get("DATABASE_URL", "")).hostname == "fullpath-db"
+    except ValueError:
+        return False
+
+
 def refuse_source_only_startup() -> None:
     """Block BEFORE Storage.init, cancel-all, replay, leases or plan tick."""
     raise FullPathCandidateNotReady(

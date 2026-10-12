@@ -1,0 +1,3 @@
+# Parked. Normal Router must NOT be activated with an empty policy.
+version: 21
+profiles: {}

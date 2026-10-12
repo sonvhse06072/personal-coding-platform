@@ -24,7 +24,7 @@ from .dashboard import _require_session, create_dashboard_router
 from .engine_telemetry import RuntimeEngine
 from .g0_fixture_execution import G0FixtureExecution, G0GateError
 from .fullpath_pm_review import FullpathPMReviewRequest, FullpathPMReviewService
-from .fullpath_fixture_safety import MODE as FULLPATH_CANDIDATE_MODE, refuse_source_only_startup
+from .fullpath_fixture_safety import MODE as FULLPATH_CANDIDATE_MODE, parked_fullpath_environment, refuse_source_only_startup
 from .storage import Storage
 from .executor_client import DdevExecutorClient
 from .orchestrator_notifications import PlanOrchestrator
@@ -256,10 +256,12 @@ async def lifespan(app: FastAPI):
         g0_fixture_runner.prepare_startup()
         yield
         return
-    if runtime_startup_mode() == FULLPATH_CANDIDATE_MODE:
-        # Do not enter normal Storage.init/cancel-all/replay/plan tick until a
-        # separately verified hostless deterministic verifier and CI delivery
-        # boundary is implemented. This source-only mode is NEVER executable.
+    if (
+        runtime_startup_mode() == FULLPATH_CANDIDATE_MODE
+        or parked_fullpath_environment(os.environ)
+    ):
+        # Even startup_mode=normal cannot promote an F2-rooted candidate into
+        # real DB/host cancel/replay/plan actions by changing one variable.
         refuse_source_only_startup()
     await engine.start()
     await plan_orchestrator.start()
@@ -280,8 +282,9 @@ app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan
 @app.middleware("http")
 async def inspection_mode_http_guard(request: Request, call_next):
     mode = runtime_startup_mode()
-    if mode == FULLPATH_CANDIDATE_MODE:
-        # Even a caller that bypasses lifespan cannot reach a generic route.
+    if mode == FULLPATH_CANDIDATE_MODE or parked_fullpath_environment(os.environ):
+        # Even a caller that bypasses lifespan or flips mode=normal cannot
+        # reach generic job, PM review or legacy administrative endpoints.
         return JSONResponse(status_code=503, content={
             "detail": "G0 full-path candidate is source-only, not activated"
         })
