@@ -161,6 +161,13 @@ def assess_fresh_fullpath_startup(
                 and record == V2_INACTIVE_BASELINE)
         )
     )
+    # Legacy fullpath_scoped_boot.py consumes the original check name.
+    # Keep its read-only bool contract until a separately approved successor:
+    # True now means the F2 SOURCE FRAME IS INACTIVE (v1 empty OR exact v2),
+    # not that an approved source SHA is absent. No boot is authorized.
+    checks["original_source_still_not_approved"] = (
+        checks["reviewed_source_frame_is_inactive"]
+    )
     source_valid = all(checks.values())
     blockers = [
         "source_" + name for name, passed in checks.items() if not passed
