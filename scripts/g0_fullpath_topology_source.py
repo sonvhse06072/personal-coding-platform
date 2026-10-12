@@ -80,7 +80,7 @@ RUNTIME_ENV = {
     "CODEX_HOME": "/home/coder/.codex-fullpath",
     "ROUTER_URL": "http://fullpath-router:8090",
     "DDEV_EXECUTOR_URL": "http://fullpath-executor:8790",
-    "DATABASE_URL": "postgresql://fullpath:${PCP_F2_DB_PASSWORD:?new_private_password_required}@fullpath-db:5432/fullpath",
+    "DATABASE_URL": "postgresql://fullpath:${PCP_F2_DB_APP_PASSWORD:?new_private_app_password_required}@fullpath-db:5432/fullpath",
     "ROUTER_API_TOKEN": "${PCP_F2_ROUTER_API_TOKEN:?private_f2_router_token}",
     "PLATFORM_INTERNAL_TOKEN": "${PCP_F2_INTERNAL_TOKEN:?private_f2_internal_token}",
     "RUNTIME_API_TOKEN": "${PCP_F2_RUNTIME_API_TOKEN:?private_f2_runtime_token}",
@@ -228,13 +228,15 @@ def assess(compose: Any, files: dict[str, Any]) -> dict[str, Any]:
         }.items()
     )
     checks["exact_inert_service_credentials"] = bool(service_map) and (
+        # PostgreSQL image bootstrap owner must never be Runtime's app role.
+
         service_map["fullpath-router"].get("environment") == ROUTER_ENV
         and service_map["fullpath-executor"].get("environment") == EXECUTOR_ENV
         and service_map["fullpath-runtime"].get("environment") == RUNTIME_ENV
         and service_map["fullpath-db"].get("environment") == {
-            "POSTGRES_USER": "fullpath", "POSTGRES_DB": "fullpath",
+            "POSTGRES_USER": "fullpath_bootstrap_admin", "POSTGRES_DB": "fullpath",
             "POSTGRES_PASSWORD":
-                "${PCP_F2_DB_PASSWORD:?new_private_password_required}",
+                "${PCP_F2_DB_ADMIN_PASSWORD:?new_private_admin_password_required}",
         }
         and not any(
             token in str(cfg) for cfg in service_map.values()

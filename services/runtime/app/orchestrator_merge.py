@@ -5,6 +5,7 @@ import json
 from typing import Any
 
 from .config import project_config
+from .fullpath_fixture_safety import reject_parked_fullpath_side_effects
 from .continuity import render_managed_section
 from .plan_orchestrator import PlanOrchestrator as CorePlanOrchestrator
 from .pm_merge import evaluate_pm_merge
@@ -49,6 +50,7 @@ class PlanOrchestrator(CorePlanOrchestrator):
             }
 
     async def start(self) -> None:
+        reject_parked_fullpath_side_effects()
         self.merge_audit.ensure()
         self.late_reviews.store.ensure()
         # Runtime startup follows RuntimeEngine.start(), which cancels host

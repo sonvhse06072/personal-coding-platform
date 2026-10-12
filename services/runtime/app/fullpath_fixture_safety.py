@@ -200,6 +200,17 @@ def parked_fullpath_environment(env: Mapping[str, str]) -> bool:
         return False
 
 
+def reject_parked_fullpath_side_effects() -> None:
+    """Reject direct Python lifecycle calls before ANY DB/host side effects."""
+    import os
+
+    if (
+        os.getenv("PCP_RUNTIME_STARTUP_MODE") == MODE
+        or parked_fullpath_environment(os.environ)
+    ):
+        refuse_source_only_startup()
+
+
 def refuse_source_only_startup() -> None:
     """Block BEFORE Storage.init, cancel-all, replay, leases or plan tick."""
     raise FullPathCandidateNotReady(

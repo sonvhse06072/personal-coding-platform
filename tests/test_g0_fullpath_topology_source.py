@@ -245,6 +245,26 @@ def test_readonly_cli_produces_sanitized_blockers_and_never_runs_docker():
         assert forbidden not in SCRIPT.read_text(encoding="utf-8")
 
 
+def test_future_db_bootstrap_superuser_is_separate_from_runtime_role(source):
+    topology, files = source
+    admin = topology["services"]["fullpath-db"]["environment"]
+    runtime = topology["services"]["fullpath-runtime"]["environment"]
+    assert admin["POSTGRES_USER"] == "fullpath_bootstrap_admin"
+    assert admin["POSTGRES_USER"] != runtime["DATABASE_URL"].split("://")[1].split(":")[0]
+    assert "PCP_F2_DB_ADMIN_PASSWORD" in admin["POSTGRES_PASSWORD"]
+    assert "PCP_F2_DB_APP_PASSWORD" in runtime["DATABASE_URL"]
+    assert "PCP_F2_DB_ADMIN_PASSWORD" not in str(runtime)
+    assert "PCP_F2_DB_APP_PASSWORD" not in str(admin)
+
+
+def test_swapping_app_and_db_bootstrap_secret_is_denied(source):
+    topo, docs = source
+    topo["services"]["fullpath-db"]["environment"]["POSTGRES_PASSWORD"] = (
+        topo["services"]["fullpath-runtime"]["environment"]["DATABASE_URL"]
+    )
+    checked(topo, docs, "exact_inert_service_credentials")
+
+
 def test_compose_is_static_yaml_not_host_mount_rendered(source):
     topology, files = source
     assert topology["name"] == "pcp-f2-fullpath"

@@ -20,9 +20,9 @@ services:
     entrypoint: ["/bin/false"]
     restart: "no"
     environment:
-      POSTGRES_USER: fullpath
+      POSTGRES_USER: fullpath_bootstrap_admin
       POSTGRES_DB: fullpath
-      POSTGRES_PASSWORD: "${PCP_F2_DB_PASSWORD:?new_private_password_required}"
+      POSTGRES_PASSWORD: "${PCP_F2_DB_ADMIN_PASSWORD:?new_private_admin_password_required}"
     volumes:
       - {type: volume, source: fullpath-db-data, target: /var/lib/postgresql/data}
     networks: [fullpath-private]
@@ -130,7 +130,7 @@ services:
       CODEX_HOME: /home/coder/.codex-fullpath
       ROUTER_URL: http://fullpath-router:8090
       DDEV_EXECUTOR_URL: http://fullpath-executor:8790
-      DATABASE_URL: "postgresql://fullpath:${PCP_F2_DB_PASSWORD:?new_private_password_required}@fullpath-db:5432/fullpath"
+      DATABASE_URL: "postgresql://fullpath:${PCP_F2_DB_APP_PASSWORD:?new_private_app_password_required}@fullpath-db:5432/fullpath"
       ROUTER_API_TOKEN: "${PCP_F2_ROUTER_API_TOKEN:?private_f2_router_token}"
       PLATFORM_INTERNAL_TOKEN: "${PCP_F2_INTERNAL_TOKEN:?private_f2_internal_token}"
       RUNTIME_API_TOKEN: "${PCP_F2_RUNTIME_API_TOKEN:?private_f2_runtime_token}"
