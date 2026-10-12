@@ -25,6 +25,7 @@ from .fullpath_fixture_safety import (
     FIXED_ENV, PROJECT_ID, _database_uri, _service_uri,
 )
 from .required_ci import required_ci_for_project, required_github_actions_pass
+from .scope_guard import changed_path_protected_signals
 from .storage import _insert_job_event, now
 
 
@@ -166,6 +167,13 @@ def require_eligible_job(
     pm_evidence = result.get("pm_evidence") or {}
     reviewer = result.get("review") or {}
     baseline = checkpoint.get("project_baseline") or {}
+    changed = (result.get("diff") or {}).get("changed_files")
+    analysis = row.get("repo_analysis") or {}
+    sensitive = (
+        "security_sensitive", "authentication_change",
+        "authorization_change", "destructive_migration",
+        "production_write",
+    )
     required = required_ci_for_project(PROJECT_ID)
     if not (
         _JOB.fullmatch(job_id)
@@ -191,6 +199,9 @@ def require_eligible_job(
         and not checkpoint.get("pending_pm_reassessment")
         and not checkpoint.get("pending_review_findings")
         and not checkpoint.get("pending_review_repair")
+        and isinstance(changed, list) and bool(changed)
+        and not changed_path_protected_signals(changed, checkpoint)
+        and not any(analysis.get(key) for key in sensitive)
         and not progress.get("important_decision_flags")
         and progress.get("required_checks_passed") is True
         and progress.get("tests_passed") is True

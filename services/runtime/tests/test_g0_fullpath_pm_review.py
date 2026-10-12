@@ -98,6 +98,13 @@ def job():
         "id": JOB, "project_id": pm.PROJECT_ID,
         "status": "waiting_human", "source_commit": SOURCE,
         "branch": "ai/fullpath-0123", "workspace": "/fullpath/workspaces/" + JOB,
+        "repo_analysis": {
+            "security_sensitive": False,
+            "authentication_change": False,
+            "authorization_change": False,
+            "destructive_migration": False,
+            "production_write": False,
+        },
         "checkpoint": {
             "acceptance_phase": WAITING_PM,
             "project_baseline": {"revision": "fullpath-v1", "source_commit": SOURCE},
@@ -356,6 +363,10 @@ def test_only_owner_approved_new_fixture_can_finalize(env, monkeypatch):
     lambda x: x["checkpoint"].update({"work_order": {"id": "WO-1"}}),
     lambda x: x["checkpoint"]["canonical_intake"].update({"mode": "planning"}),
     lambda x: x["checkpoint"]["project_baseline"].update({"source_commit": "c"*40}),
+    lambda x: x["repo_analysis"].update({"security_sensitive": True}),
+    lambda x: x["result"]["diff"].update({
+        "changed_files": [".github/workflows/validation.yml"],
+    }),
     lambda x: x["progress"].update({"required_checks_passed": False}),
     lambda x: x["progress"].update({"unexpected_scope": True}),
     lambda x: x["progress"].update({"important_decision_flags": ["destructive_migration"]}),
