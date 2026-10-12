@@ -12,6 +12,7 @@ import pytest
 
 from app import fullpath_fixture_safety as parked
 from app import fullpath_fresh_startup as future
+from app import fullpath_scoped_boot as scoped_boot
 from app.engine_core import RuntimeEngineCore
 from app.plan_orchestrator import PlanOrchestrator as CoreOrchestrator
 from app.orchestrator_merge import PlanOrchestrator as MergeOrchestrator
@@ -259,6 +260,8 @@ def test_owner_approved_inactive_v2_is_recognized_but_cannot_start():
     )
     assert result["source_snapshot_valid"] is True
     assert result["checks"]["reviewed_source_frame_is_inactive"] is True
+    # Older scoped-boot consumer still expects the legacy key's bool.
+    assert result["checks"]["original_source_still_not_approved"] is True
     assert result["status"] == "STOP"
     assert result["full_runtime_start_allowed"] is False
     assert all(result["effects_that_must_be_absent"].values())
@@ -316,3 +319,34 @@ def test_inactive_v2_does_not_relax_existing_workspace_and_ddev_denials(change):
     assert result["source_snapshot_valid"] is False
     assert result["status"] == "STOP"
     assert result["full_runtime_start_allowed"] is False
+
+
+
+def test_v2_inactive_source_remains_compatible_with_legacy_scoped_boot_reader():
+    # The untouched F2c assessment reads the old key. A source metadata
+    # approval is NOT permission for that layer to run any startup effects.
+    env, _, _ = candidate()
+    env["PCP_FULLPATH_SOURCE_ONLY"] = "true"
+    projects, baselines = approved_inactive_v2_candidate()
+    post_schema = pristine()
+    post_schema["user_relation_count"] = 12
+    before = deepcopy((env, projects, baselines, post_schema))
+    outcome = scoped_boot.assess_scoped_fresh_boot(
+        environment=env,
+        database_snapshot=pristine(),
+        projects_document=projects,
+        baselines_document=baselines,
+        inventory={name: 0 for name in scoped_boot.FRESH_INVENTORY},
+        post_schema_database_snapshot=post_schema,
+    )
+    assert outcome["source_contract_valid"] is True
+    assert outcome["checks"]["singleton_parked_fixture_only"] is True
+    assert outcome["status"] == "STOP"
+    assert outcome["startup_authorized"] is False
+    assert outcome["ready_to_dispatch"] is False
+    assert outcome["model_calls_this_command"] == 0
+    assert outcome["new_resources_created"] == 0
+    assert outcome["forbidden_effects"] == list(
+        scoped_boot.FORBIDDEN_STARTUP_EFFECTS
+    )
+    assert (env, projects, baselines, post_schema) == before
