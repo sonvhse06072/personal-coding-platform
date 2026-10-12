@@ -218,3 +218,92 @@ def test_unknown_candidate_like_mode_fails_closed(monkeypatch):
     monkeypatch.setenv("PCP_RUNTIME_STARTUP_MODE", "g0_fullpath_candidate_extra")
     with pytest.raises(RuntimeError, match="Invalid PCP_RUNTIME_STARTUP_MODE"):
         main.runtime_startup_mode()
+
+
+@pytest.mark.parametrize("indicator,value", [
+    ("PROJECTS_FILE", "/fullpath/config/projects.yml"),
+    ("PROJECT_BASELINES_FILE", "/fullpath/config/project-baselines.yml"),
+    ("CODING_PROJECTS_ROOT", "/fullpath/sources"),
+    ("CODING_WORKSPACES_ROOT", "/fullpath/workspaces"),
+    ("CODEX_HOME", "/home/coder/.codex-fullpath"),
+    ("DATABASE_URL", "postgresql://fullpath:pw@fullpath-db:5432/fullpath"),
+    ("PCP_FULLPATH_SOURCE_ONLY", "true"),
+])
+def test_parked_source_identity_detected_even_after_normal_mode_flip(
+    indicator, value, monkeypatch,
+):
+    monkeypatch.setenv("PCP_RUNTIME_STARTUP_MODE", "normal")
+    isolated = {indicator: value}
+    assert gate.parked_fullpath_environment(isolated) is True
+    assert main.runtime_startup_mode() == "normal"
+
+
+def test_existing_normal_root_does_not_accidentally_trigger_f2_detector():
+    assert gate.parked_fullpath_environment({
+        "PCP_RUNTIME_STARTUP_MODE": "normal",
+        "PROJECTS_FILE": "/config/projects.yml",
+        "PROJECT_BASELINES_FILE": "/config/project-baselines.yml",
+        "CODING_PROJECTS_ROOT": "/home/owner/projects",
+        "CODING_WORKSPACES_ROOT": "/home/owner/pcp-workspaces",
+        "DATABASE_URL": "postgresql://db:pw@db:5432/db",
+        "CODEX_HOME": "/home/coder/.codex",
+    }) is False
+
+
+def test_switched_normal_mode_still_denies_every_http_route(monkeypatch):
+    monkeypatch.setenv("PCP_RUNTIME_STARTUP_MODE", "normal")
+    monkeypatch.setenv("PROJECTS_FILE", "/fullpath/config/projects.yml")
+    monkeypatch.setenv("RUNTIME_API_TOKEN", "synthetic-token")
+    client = TestClient(main.app)
+    try:
+        for method, uri in (
+            ("GET", "/health"), ("GET", "/docs"), ("GET", "/v1/jobs"),
+            ("POST", "/v1/intake"), ("POST", "/v1/jobs"),
+            ("POST", "/v1/g0-fullpath/jobs/" + "a"*32 + "/pm-review"),
+            ("POST", "/v1/orchestrator/tick"),
+        ):
+            response = client.request(method, uri)
+            assert response.status_code == 503, (method, uri, response.status_code)
+    finally:
+        client.close()
+
+
+def test_switched_normal_mode_lifespan_blocks_before_engine_and_planner(
+    monkeypatch,
+):
+    monkeypatch.setenv("PCP_RUNTIME_STARTUP_MODE", "normal")
+    monkeypatch.setenv("CODEX_HOME", "/home/coder/.codex-fullpath")
+    calls = []
+    monkeypatch.setattr(main, "harden_runtime_process_secret_boundary",
+                        lambda: calls.append("harden"))
+    async def forbidden(*a, **k):
+        raise AssertionError("engine / PlanOrchestrator / publishers must not start")
+    for comp in (main.engine, main.plan_orchestrator, main.progress_publisher,
+                 main.job_status_publisher):
+        monkeypatch.setattr(comp, "start", forbidden)
+    async def exercise():
+        with pytest.raises(gate.FullPathCandidateNotReady, match="source-only"):
+            async with main.lifespan(main.app):
+                raise AssertionError("source-only mode entered")
+    asyncio.run(exercise())
+    assert calls == ["harden"]
+
+
+def test_switched_normal_mode_direct_engine_start_does_not_touch_storage(
+    monkeypatch,
+):
+    monkeypatch.setenv("PCP_RUNTIME_STARTUP_MODE", "normal")
+    monkeypatch.setenv("DATABASE_URL",
+                       "postgresql://fullpath:pw@fullpath-db:5432/fullpath")
+    touched = []
+    class FakeStore:
+        def init(self):
+            touched.append("storage.init")
+        def list(self, limit=50):
+            touched.append("storage.list")
+            return []
+    instance = RuntimeEngineCore(FakeStore())
+    with pytest.raises(gate.FullPathCandidateNotReady, match="source-only"):
+        asyncio.run(instance.start())
+    assert touched == []
+    assert instance.worker_task is None

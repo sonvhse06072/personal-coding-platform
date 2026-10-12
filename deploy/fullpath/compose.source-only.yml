@@ -1,0 +1,180 @@
+# F2 PARKED source contract. Not operational approval. Every service is
+# non-default-profiled AND has entrypoint /bin/false (including DB).
+# Future Owner-authorized activation requires a separate reviewed overlay.
+name: pcp-f2-fullpath
+
+x-f2-contract:
+  phase: source_only
+  status: parked
+  operational_activation_authorized: false
+  model_dispatch_allowed: false
+  historical_g0_reuse_allowed: false
+  provider_domain_egress_proven: false
+  privileged_github_delivery_proven: false
+
+services:
+  fullpath-db:
+    image: "${PCP_F2_POSTGRES_IMAGE:?preloaded_digest_required}"
+    pull_policy: never
+    profiles: [owner-gated-f2-source]
+    entrypoint: ["/bin/false"]
+    restart: "no"
+    environment:
+      POSTGRES_USER: fullpath
+      POSTGRES_DB: fullpath
+      POSTGRES_PASSWORD: "${PCP_F2_DB_PASSWORD:?new_private_password_required}"
+    volumes:
+      - {type: volume, source: fullpath-db-data, target: /var/lib/postgresql/data}
+    networks: [fullpath-private]
+    mem_limit: 512m
+
+  fullpath-router:
+    image: "${PCP_F2_ROUTER_IMAGE:?preloaded_digest_required}"
+    pull_policy: never
+    profiles: [owner-gated-f2-source]
+    entrypoint: ["/bin/false"]
+    restart: "no"
+    user: "${PCP_F2_UID:?new_nonroot_uid}:${PCP_F2_GID:?new_nonroot_gid}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 384m
+    environment:
+      ROUTER_MODELS_FILE: /fullpath/config/models.yml
+      ROUTER_POLICY_FILE: /fullpath/config/routing-policy.yml
+      ROUTER_PROJECTS_FILE: /fullpath/config/projects.yml
+      ROUTER_API_TOKEN: "${PCP_F2_ROUTER_API_TOKEN:?private_f2_router_token}"
+    volumes:
+      - type: bind
+        source: "${PCP_F2_CONFIG_ROOT:?new_f2_config_root}/models.yml"
+        target: /fullpath/config/models.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_CONFIG_ROOT:?new_f2_config_root}/routing-policy.yml"
+        target: /fullpath/config/routing-policy.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_CONFIG_ROOT:?new_f2_config_root}/projects.yml"
+        target: /fullpath/config/projects.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - {type: tmpfs, target: /tmp, tmpfs: {size: 67108864}}
+    networks: [fullpath-private]
+
+  fullpath-executor:
+    image: "${PCP_F2_EXECUTOR_IMAGE:?preloaded_digest_required}"
+    pull_policy: never
+    profiles: [owner-gated-f2-source]
+    entrypoint: ["/bin/false"]
+    restart: "no"
+    user: "${PCP_F2_UID:?new_nonroot_uid}:${PCP_F2_GID:?new_nonroot_gid}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 768m
+    environment:
+      HOME: /home/coder
+      PROJECTS_FILE: /fullpath/config/projects.yml
+      CODING_PROJECTS_ROOT: /fullpath/sources
+      CODING_WORKSPACES_ROOT: /fullpath/workspaces
+      CODING_DIRECT_PROJECT_ROOT: /fullpath/direct-disabled
+      PLATFORM_INTERNAL_TOKEN: "${PCP_F2_INTERNAL_TOKEN:?private_f2_internal_token}"
+      PCP_EXECUTOR_PROJECT_SCOPE: pcp-g0-fullpath-fixture
+    volumes:
+      - type: bind
+        source: "${PCP_F2_CONFIG_ROOT:?new_f2_config_root}/projects.yml"
+        target: /fullpath/config/projects.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_FIXTURE_ROOT:?new_f2_fixture_checkout_required}"
+        target: /fullpath/sources/pcp-g0-fullpath-fixture
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_WORKSPACE_ROOT:?new_f2_workspace_root_required}"
+        target: /fullpath/workspaces
+        bind: {create_host_path: false}
+      - {type: tmpfs, target: /tmp, tmpfs: {size: 134217728}}
+    networks: [fullpath-private]
+
+  fullpath-runtime:
+    image: "${PCP_F2_RUNTIME_IMAGE:?preloaded_digest_required}"
+    pull_policy: never
+    profiles: [owner-gated-f2-source]
+    entrypoint: ["/bin/false"]
+    restart: "no"
+    user: "${PCP_F2_UID:?new_nonroot_uid}:${PCP_F2_GID:?new_nonroot_gid}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 192
+    mem_limit: 1024m
+    environment:
+      HOME: /home/coder
+      PCP_RUNTIME_STARTUP_MODE: g0_fullpath_candidate
+      PCP_FULLPATH_SOURCE_ONLY: "true"
+      PCP_FULLPATH_OPERATIONAL_ACTIVATION: ""
+      PCP_FULLPATH_PM_FINALIZATION_ENABLED: ""
+      CODING_PROJECTS_ROOT: /fullpath/sources
+      CODING_WORKSPACES_ROOT: /fullpath/workspaces
+      CODING_DIRECT_PROJECT_ROOT: /fullpath/direct-disabled
+      PROJECTS_FILE: /fullpath/config/projects.yml
+      PROJECT_BASELINES_FILE: /fullpath/config/project-baselines.yml
+      MODELS_FILE: /fullpath/config/models.yml
+      ROUTING_POLICY_FILE: /fullpath/config/routing-policy.yml
+      CODEX_HOME: /home/coder/.codex-fullpath
+      ROUTER_URL: http://fullpath-router:8090
+      DDEV_EXECUTOR_URL: http://fullpath-executor:8790
+      DATABASE_URL: "postgresql://fullpath:${PCP_F2_DB_PASSWORD:?new_private_password_required}@fullpath-db:5432/fullpath"
+      ROUTER_API_TOKEN: "${PCP_F2_ROUTER_API_TOKEN:?private_f2_router_token}"
+      PLATFORM_INTERNAL_TOKEN: "${PCP_F2_INTERNAL_TOKEN:?private_f2_internal_token}"
+      RUNTIME_API_TOKEN: "${PCP_F2_RUNTIME_API_TOKEN:?private_f2_runtime_token}"
+    volumes:
+      - type: bind
+        source: "${PCP_F2_CONFIG_ROOT:?new_f2_config_root}/projects.yml"
+        target: /fullpath/config/projects.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_CONFIG_ROOT:?new_f2_config_root}/project-baselines.yml"
+        target: /fullpath/config/project-baselines.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_CONFIG_ROOT:?new_f2_config_root}/models.yml"
+        target: /fullpath/config/models.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_CONFIG_ROOT:?new_f2_config_root}/routing-policy.yml"
+        target: /fullpath/config/routing-policy.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_FIXTURE_ROOT:?new_f2_fixture_checkout_required}"
+        target: /fullpath/sources/pcp-g0-fullpath-fixture
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_WORKSPACE_ROOT:?new_f2_workspace_root_required}"
+        target: /fullpath/workspaces
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_AUTH_ROOT:?new_f2_provider_auth_required}"
+        target: /home/coder/.codex-fullpath
+        bind: {create_host_path: false}
+      - {type: tmpfs, target: /tmp, tmpfs: {size: 134217728}}
+    networks: [fullpath-private, fullpath-provider]
+
+volumes:
+  fullpath-db-data:
+    name: pcp-f2-fullpath-postgres-data
+
+networks:
+  fullpath-private: {name: pcp-f2-fullpath-private, internal: true}
+  fullpath-provider: {name: pcp-f2-fullpath-provider, internal: false}

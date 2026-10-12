@@ -1,0 +1,37 @@
+# F2 source-only singleton candidate. No approved work, no model/PR rights.
+version: 1
+projects:
+  pcp-g0-fullpath-fixture:
+    path: "${CODING_PROJECTS_ROOT}/pcp-g0-fullpath-fixture"
+    base_branch: benchmark/fullpath
+    privacy:
+      private_code: true
+      allow_training_provider: false
+      require_zero_retention: false
+    human_policy:
+      routine_review: true
+      important_decisions_only: true
+    pm_standalone_review:
+      enabled: false
+      reviewer_login: ""
+    autonomy:
+      allow_commit: false
+      allow_push_ai_branch: false
+      allow_create_pr: false
+      allow_auto_merge_low_risk: false
+      allow_production_deploy: false
+    runtime:
+      branch_prefix: ai
+      workspace_mode: isolated_clone
+      developer_permission_mode: bounded
+      exclusive_project_lease: false
+      max_diff_bytes: 60000
+      keep_workspace_on_success: true
+      keep_workspace_on_failure: true
+    ddev:
+      enabled: false
+      preflight: []
+      targeted_tests: []
+      static_analysis: []
+      full_tests: []
+      cleanup: []
