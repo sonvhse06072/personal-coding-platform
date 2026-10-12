@@ -8,7 +8,7 @@ Last reconciled: **2026-10-12**. **Canonical PCP #595 remains OPEN / G0 NOT GO.*
 
 **WSL/execution authority:** Owner proved isolated `pcp-g0d01` activation and GET-only health checks before the trials; original local G0 Runtime job and Direct journal/workspace must be preserved. **Legacy PCP PostgreSQL** has separately observed historical managed-project active lease/orchestration/pending WorkOrder evidence (2026-10-11 read-only snapshot); legacy Router/Runtime/Executor must NOT be started from those stale records. Strict managed-project no-touch, no shared-host Codex/DDEV/project lease manipulation. A source PR merge does not update deployed G0 images.
 
-**F2a–F2c #662–#664 MERGED. F2d PARKED:** F2d bootstrap contract phải phân biệt pre-schema DB trống và post-schema inventory (cùng role/DB, object allowlist), không coi snapshot synthetic là live proof. Vẫn thiếu approved fixture/baseline, fresh DB/volume/roles, OCI/UID/single-writer, Router/Executor/provider/egress, safe boot; không operational approval. [F2 T3](history/g0-02-f2-source-topology-2026-10-12.md), [CI audit](history/ci-post-migration-acceptance-2026-10-12.md).
+**F2a–F2c #662–#664 MERGED, F2d PARKED:** F2d-01 tách pre/post-schema. F2d-02 kiểm kê read-only **25 bảng/12 Runtime DDL modules** với kiểm tra drift, nhưng chưa chứng minh schema installer, privileges/indices/sequences, DB/volume ownership, OCI/UID, provider/CI và safe Engine; synthetic result vẫn STOP. [F2 T3](history/g0-02-f2-source-topology-2026-10-12.md). #665 runner isolation chưa được bảo đảm.
 
 ## Resume order
 
@@ -71,7 +71,7 @@ Chợ Nhạc GH-63 founder acceptance is a managed-project decision, not a PCP s
 ## Immediate next safe actions
 
 1. **#594 complete:** evidence [PR #612](https://github.com/sonvhse06072/personal-coding-platform/pull/612) merged; no further G0-01 code. Shared Chợ Nhạc dirty direct worktree and historical lease unresolved remain **no-touch** until separately authorized.
-2. **#595 F2d:** chốt pre/post-schema source contract + CI, sau đó only read-only design review cho independently attested new fixture/source/DB/role/volume/9-family+other durable tables, image/UID, single-writer, CI/provider egress và safe boot/rollback; protected Owner approval trước mọi operational change. **#665:** runner self-selection residual còn OPEN; không Chợ Nhạc/legacy PCP.
+2. **#595 F2d-03:** trình protected proposal cho fixture/baseline/DB/role/volume F2 mới, schema-only installer riêng và post-schema full-object/grants attestation, single-writer, provider egress, CI/PM, safe Engine no host-global cancel/replay và scoped rollback. Đến khi Owner chấp thuận: không Docker/Runtime/model/DB/legacy PCP/Chợ Nhạc.
 3. **#493/#512 residual:** Executor **1.0.35 observed**, natural cold-start and remote recovery still unproven. No reason to restart just to update docs or repeat fixed source changes. The prior host `ddev restart` 900-second incident still requires bounded root-cause/rollback planning.
 4. **Chợ Nhạc writer protection:** GH-89 blocked durable PCP job exists while current direct worktree is **dirty Codex branch**. Do not checkout, stash, reset, resume, retire, cancel or overwrite that shared workspace from PCP audit. No Docker prune, replacement job or protected authority override. Only a fresh explicitly authorized single-writer/lease handoff can change this.
 
