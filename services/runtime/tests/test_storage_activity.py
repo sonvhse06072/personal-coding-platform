@@ -202,3 +202,56 @@ def test_job_prefix_lookup_refuses_non_exact_hex_prefix():
 
     with pytest.raises(ValueError):
         storage.jobs_with_id_prefix("job-prefix")
+
+
+def test_normal_storage_init_keeps_schema_and_recovery_atomic():
+    """Existing normal Runtime still executes the original two SQL steps once."""
+    from datetime import datetime, timezone
+
+    connection = _Connection()
+    storage = _storage(connection)
+    storage.init()
+
+    assert len(connection.queries) == 2
+    assert connection.queries[0] == (" ".join(DDL.split()), None)
+    statement, params = connection.queries[1]
+    assert statement.startswith("UPDATE cp_execution_plans SET status='interrupted'")
+    assert "WHERE status='planning'" in statement
+    assert params is not None and len(params) == 1
+    assert isinstance(params[0], datetime)
+    assert params[0].tzinfo is timezone.utc
+    assert connection.commits == 1
+
+
+def test_schema_step_does_not_run_restart_dml_or_commit_on_its_own():
+    """Private refactor seam is only DDL; it creates no alternate installer."""
+    connection = _Connection()
+    Storage._apply_core_schema_on_connection(connection)
+    assert connection.queries == [(" ".join(DDL.split()), None)]
+    assert connection.commits == 0
+
+
+@pytest.mark.parametrize("fail_step", ["schema", "recovery"])
+def test_legacy_init_failure_cannot_partially_commit(fail_step):
+    """A failure still aborts before commit, keeping one legacy transaction."""
+    class FailingConnection(_Connection):
+        def execute(self, query, params=None):
+            compact = " ".join(query.split())
+            if fail_step == "schema" and compact == " ".join(DDL.split()):
+                raise RuntimeError("schema step failed")
+            if fail_step == "recovery" and compact.startswith(
+                "UPDATE cp_execution_plans SET status='interrupted'"
+            ):
+                raise RuntimeError("recovery step failed")
+            return super().execute(query, params)
+
+    conn = FailingConnection()
+    storage = _storage(conn)
+    with pytest.raises(RuntimeError, match="step failed"):
+        storage.init()
+    assert conn.commits == 0
+    statements = [sql for sql, _ in conn.queries]
+    if fail_step == "schema":
+        assert statements == []
+    else:
+        assert statements == [" ".join(DDL.split())]
