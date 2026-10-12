@@ -396,6 +396,20 @@ Evidence:
 Status: source implementation complete. Local Runtime rollout/acceptance and
 time-sensitive orchestration state belong in T1 rather than this episode.
 
+## 2026-10 — G0D-T01 reduced-path PCP/Direct coding outcome
+
+### Model completion is not clean process or product acceptance — #595 / fixture #2
+
+Outcome: one **code-valid paired Drupal output** (two independent GitHub-hosted CI/review PASS), **zero clean end-to-end pairs**; Direct original wrapper timeout preserved with read-only model/session and exact worktree forensic recovery.
+
+Durable lesson:
+- separate model terminal, code-quality acceptance, host wrapper exit, unattended delivery and product throughput;
+- do not count a connector-delivered blob-equivalent PR as original Codex process exit/automated PCP delivery;
+- G0 fixture-only Runtime bypasses normal PCP Planner/Router/Orchestrator/Verifier; representative product benchmark still pending and **G0 NOT GO**;
+- preserve immutable original journals, benchmark seed refs and approved project boundaries; no silent model retries or extra operator framework.
+
+Evidence: [T3 first paired outcome](g0-02-first-paired-outcome-2026-10-12.md), [PCP #595](https://github.com/sonvhse06072/personal-coding-platform/issues/595#issuecomment-6116517408), fixture [PR #4](https://github.com/sonvhse06072/pcp-g0-drupal-fixture/pull/4) / [PR #5](https://github.com/sonvhse06072/pcp-g0-drupal-fixture/pull/5).
+
 ## Retrieval guidance
 
 Use this file when the current task asks:
