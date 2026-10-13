@@ -1,0 +1,12 @@
+# F2 C3B source packaging only: no installation or networking steps.
+ARG PCP_F2_BASE_IMAGE
+FROM ${PCP_F2_BASE_IMAGE}
+ARG PCP_F2_SOURCE_SHA
+ARG PCP_F2_BASE_ID
+LABEL org.opencontainers.image.revision="${PCP_F2_SOURCE_SHA}" \
+      org.opencontainers.image.pcp.f2.base-id="${PCP_F2_BASE_ID}" \
+      org.opencontainers.image.pcp.f2.role="executor"
+WORKDIR /opt/pcp-f2
+COPY services/ddev-executor/app/ /opt/pcp-f2/app/
+ENV PYTHONPATH=/opt/pcp-f2
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8790"]
