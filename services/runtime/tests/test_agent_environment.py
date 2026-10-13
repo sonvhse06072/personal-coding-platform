@@ -35,11 +35,13 @@ def test_agent_subprocess_env_does_not_inherit_runtime_or_provider_secrets(monke
     seed_secrets(monkeypatch)
     monkeypatch.setenv("PATH", "/safe/bin")
     monkeypatch.setenv("HOME", "/home/coder")
+    monkeypatch.setenv("CODEX_HOME", "/home/coder/.codex-fullpath")
 
     env = agent_subprocess_env()
 
     assert env["PATH"] == "/safe/bin"
     assert env["HOME"] == "/home/coder"
+    assert env["CODEX_HOME"] == "/home/coder/.codex-fullpath"
     for key in {*INTERNAL_SECRETS, *PROVIDER_SECRETS}:
         assert key not in env
 
@@ -78,6 +80,7 @@ def test_opencode_provider_env_forwards_only_selected_provider(monkeypatch) -> N
 def test_run_command_uses_sanitized_agent_environment(monkeypatch, tmp_path: Path) -> None:
     seed_secrets(monkeypatch)
     monkeypatch.setenv("PATH", "/safe/bin")
+    monkeypatch.setenv("CODEX_HOME", "/home/coder/.codex-fullpath")
     captured: dict[str, object] = {}
 
     class FakeProcess:
@@ -107,6 +110,7 @@ def test_run_command_uses_sanitized_agent_environment(monkeypatch, tmp_path: Pat
     child_env = captured["env"]
     assert isinstance(child_env, dict)
     assert child_env["PATH"] == "/safe/bin"
+    assert child_env["CODEX_HOME"] == "/home/coder/.codex-fullpath"
     assert child_env["DEEPSEEK_API_KEY"] == "selected-secret"
     for key in INTERNAL_SECRETS:
         assert key not in child_env
