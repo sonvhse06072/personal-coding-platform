@@ -267,13 +267,13 @@ def test_one_exact_f2_resume_preserves_args_and_rejects_second(monkeypatch):
     assert len(calls) == 1
 
 
-@pytest.mark.parametrize("id,request", [
+@pytest.mark.parametrize("id,run_request", [
     ("a" * 32, None),
     (JOB, JobRunRequest(reroute=True)),
     (JOB, JobRunRequest(reset_transient_provider_failures=True)),
     (JOB, JobRunRequest(verification_only_after_pm_handoff=True)),
 ])
-def test_f2_resume_never_reopens_generic_controls(monkeypatch, id, request):
+def test_f2_resume_never_reopens_generic_controls(monkeypatch, id, run_request):
     f2_env(monkeypatch)
     monkeypatch.setattr(runtime_main.engine, "_f2_worker_only", True)
     monkeypatch.setattr(
@@ -281,4 +281,4 @@ def test_f2_resume_never_reopens_generic_controls(monkeypatch, id, request):
         lambda *_args, **_kw: pytest.fail("Disallowed F2 retry reached Engine"),
     )
     with pytest.raises(HTTPException):
-        asyncio.run(runtime_main.run_job(id, request))
+        asyncio.run(runtime_main.run_job(id, run_request))
