@@ -24,6 +24,12 @@ from .dashboard import _require_session, create_dashboard_router
 from .engine_telemetry import RuntimeEngine
 from .g0_fixture_execution import G0FixtureExecution, G0GateError
 from .fullpath_pm_review import FullpathPMReviewRequest, FullpathPMReviewService
+from .fullpath_worker_only import (
+    F2_WORKER_MODE, F2_V2_REVISION, F2_V2_SEED, F2WorkerNotReady,
+    require_f2_worker_environment, attest_f2_worker_database,
+    f2_direct_intake_route_allowed,
+)
+from .config import projects_doc, project_baselines_doc
 from .fullpath_fixture_safety import MODE as FULLPATH_CANDIDATE_MODE, parked_fullpath_environment, reject_parked_fullpath_side_effects, refuse_source_only_startup
 from .storage import Storage
 from .executor_client import DdevExecutorClient
@@ -127,6 +133,7 @@ class ContinuityEventRequest(BaseModel):
 
 storage = TelemetryStorage()
 engine = RuntimeEngine(storage)
+_f2_single_job_intake_lock = asyncio.Lock()
 g0_fixture_runner = G0FixtureExecution(Storage(), DdevExecutorClient())
 fullpath_pm_review = FullpathPMReviewService(storage, engine.ddev)
 pm_planner = PMPlanner(storage)
@@ -233,9 +240,9 @@ def _require_manual_collaboration_state(job_id: str) -> None:
 def runtime_startup_mode() -> str:
     """Explicit, opt-in inspection startup without any durable/runtime transitions."""
     mode = os.getenv("PCP_RUNTIME_STARTUP_MODE", "normal")
-    if mode not in {"normal", "inspect", "g0_fixture_run", FULLPATH_CANDIDATE_MODE}:
+    if mode not in {"normal", "inspect", "g0_fixture_run", FULLPATH_CANDIDATE_MODE, F2_WORKER_MODE}:
         raise RuntimeError(
-            "Invalid PCP_RUNTIME_STARTUP_MODE; expected normal, inspect, g0_fixture_run or g0_fullpath_candidate"
+            "Invalid PCP_RUNTIME_STARTUP_MODE; expected normal, inspect, g0_fixture_run, g0_fullpath_candidate or g0_fullpath_worker"
         )
     return mode
 
@@ -276,6 +283,20 @@ async def lifespan(app: FastAPI):
         g0_fixture_runner.prepare_startup()
         yield
         return
+    if runtime_startup_mode() == F2_WORKER_MODE:
+        # F2 direct-intake only. Attest the *already installed* fresh schema
+        # under the unprivileged DB role; do not call Storage.init/engine.start
+        # or PlanOrchestrator, host Antigravity cancellation or publishers.
+        proof = attest_f2_worker_database(
+            storage=storage, env=os.environ,
+            projects=projects_doc(), baselines=project_baselines_doc(),
+        )
+        await engine.start_fullpath_worker_only(proof)
+        try:
+            yield
+        finally:
+            await engine.stop_fullpath_worker_only()
+        return
     if (
         runtime_startup_mode() == FULLPATH_CANDIDATE_MODE
         or parked_fullpath_environment(os.environ)
@@ -298,7 +319,23 @@ app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan
 @app.middleware("http")
 async def inspection_mode_http_guard(request: Request, call_next):
     mode = runtime_startup_mode()
-    if mode == FULLPATH_CANDIDATE_MODE or parked_fullpath_environment(os.environ):
+    if mode == F2_WORKER_MODE:
+        # Middleware is required even when callers skip FastAPI lifespan.
+        try:
+            require_f2_worker_environment(os.environ)
+        except F2WorkerNotReady:
+            return JSONResponse(status_code=503, content={
+                "detail": "F2 worker-only environment not authorized"
+            })
+        if not getattr(engine, "_f2_worker_only", False):
+            return JSONResponse(status_code=503, content={
+                "detail": "F2 worker-only database and startup not attested"
+            })
+        if not f2_direct_intake_route_allowed(request.method, request.url.path):
+            return JSONResponse(status_code=403, content={
+                "detail": "F2 direct-intake only: forbidden endpoint"
+            })
+    elif mode == FULLPATH_CANDIDATE_MODE or parked_fullpath_environment(os.environ):
         # Even a caller that bypasses lifespan or flips mode=normal cannot
         # reach generic job, PM review or legacy administrative endpoints.
         return JSONResponse(status_code=503, content={
@@ -685,7 +722,27 @@ async def finalize_fullpath_pm_review(
 @app.post("/v1/jobs", response_model=JobView, dependencies=[Depends(auth)])
 async def create_job(payload: JobCreateRequest) -> JobView:
     try:
-        job_id = await _create_local_job_guarded(payload)
+        if runtime_startup_mode() == F2_WORKER_MODE:
+            require_f2_worker_environment(os.environ)
+            if not getattr(engine, "_f2_worker_only", False):
+                raise F2WorkerNotReady("F2 worker database not attested")
+            if not (
+                payload.project_id == "pcp-g0-fullpath-fixture"
+                and payload.work_order is None
+                and payload.task is not None
+                and payload.source_commit == F2_V2_SEED
+                and payload.baseline_revision == F2_V2_REVISION
+                and payload.auto_run is True
+                and payload.dry_run is False
+                and not payload.provider_state
+            ):
+                raise F2WorkerNotReady("F2 permits one exact v2 direct-intake task")
+            async with _f2_single_job_intake_lock:
+                if storage.list(limit=1):
+                    raise F2WorkerNotReady("F2 already has a job: preserve current evidence")
+                job_id = await _create_local_job_guarded(payload)
+        else:
+            job_id = await _create_local_job_guarded(payload)
     except (RuntimeError, KeyError, ValueError) as exc:
         raise HTTPException(422, str(exc)) from exc
     row = storage.get(job_id)

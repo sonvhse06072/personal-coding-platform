@@ -11,6 +11,10 @@ from typing import Any
 
 from .adapters.antigravity import cancel_all_antigravity_runs
 from .fullpath_fixture_safety import MODE as FULLPATH_CANDIDATE_MODE, parked_fullpath_environment, reject_parked_fullpath_side_effects, refuse_source_only_startup
+from .fullpath_worker_only import (
+    F2WorkerReady, F2_V2_SEED, F2_WORKER_MODE, F2WorkerNotReady,
+    require_f2_worker_environment,
+)
 from .config import project_config
 from .executor_client import DdevExecutorClient
 from .preview import PreviewManager
@@ -57,6 +61,7 @@ class RuntimeEngineCore:
         self.active_jobs: dict[str, asyncio.Task[None]] = {}
         self._queued_orchestrated_jobs: set[str] = set()
         self._stopping = False
+        self._f2_worker_only = False
 
     async def start(self) -> None:
         if (
@@ -70,6 +75,53 @@ class RuntimeEngineCore:
         self._stopping = False
         await self._reconcile_legacy_restart_effects()
         self._spawn_engineering_worker()
+
+    async def start_fullpath_worker_only(self, proof: F2WorkerReady) -> None:
+        """Launch ONLY the existing worker after independent F2 schema proof.
+
+        No Storage.init/DDL, global Antigravity cancel, replay, planner, or
+        external provider. F2 Runtime/Executor source-only Compose remains inert.
+        """
+        require_f2_worker_environment(os.environ)
+        if not isinstance(proof, F2WorkerReady) or (
+            proof.project_id != "pcp-g0-fullpath-fixture"
+            or proof.source_commit != F2_V2_SEED
+            or proof.database_name != "fullpath"
+        ):
+            raise F2WorkerNotReady("F2 worker startup proof invalid")
+        if self.worker_task is not None or self._f2_worker_only:
+            raise F2WorkerNotReady("F2 worker already started")
+        self._stopping = False
+        self._f2_worker_only = True
+        self.worker_task = asyncio.create_task(self._worker_loop())
+
+    async def stop_fullpath_worker_only(self) -> None:
+        """Cancel only this F2 worker's exact job; never call Executor cancel."""
+        require_f2_worker_environment(os.environ)
+        if not self._f2_worker_only:
+            raise F2WorkerNotReady("F2 worker not active")
+        self._stopping = True
+        tasks = list(self.active_jobs.items())
+        for job_id, task in tasks:
+            row = self.storage.get(job_id)
+            if row and row.get("project_id") != "pcp-g0-fullpath-fixture":
+                raise F2WorkerNotReady("F2 worker has foreign job identity")
+            if row and row.get("status") not in FINAL:
+                self.storage.update(
+                    job_id, status="interrupted",
+                    error="F2 worker stopped; explicit scoped recovery required.",
+                )
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*(task for _, task in tasks), return_exceptions=True)
+        if self.worker_task is not None:
+            self.worker_task.cancel()
+            try:
+                await self.worker_task
+            except asyncio.CancelledError:
+                pass
+        self.worker_task = None
+        self._f2_worker_only = False
 
     def _spawn_engineering_worker(self) -> None:
         """Launch the existing worker only; no schema or legacy recovery.
@@ -150,6 +202,17 @@ class RuntimeEngineCore:
         self.worker_task = None
 
     async def enqueue(self, job_id: str) -> None:
+        if getattr(self, "_f2_worker_only", False):
+            require_f2_worker_environment(os.environ)
+            row = self.storage.get(job_id)
+            if (not isinstance(row, dict)
+                    or row.get("project_id") != "pcp-g0-fullpath-fixture"
+                    or row.get("status") != "queued"
+                    or orchestrator_launch(row) is not None
+                    or self.active_jobs or not self.queue.empty()):
+                raise F2WorkerNotReady("F2 only permits one exact queued direct job")
+            await self.queue.put(job_id)
+            return
         reject_parked_fullpath_side_effects()
         marker = orchestrator_launch(self.storage.get(job_id) or {})
         if marker:
