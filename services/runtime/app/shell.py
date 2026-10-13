@@ -48,6 +48,8 @@ class CommandTimeoutError(RuntimeError):
 _SAFE_AGENT_ENV_KEYS = {
     "PATH",
     "HOME",
+    # Non-secret path to isolated Codex OAuth state; never forward token values.
+    "CODEX_HOME",
     "USER",
     "LOGNAME",
     "SHELL",
