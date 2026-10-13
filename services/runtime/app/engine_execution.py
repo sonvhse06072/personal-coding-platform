@@ -12,6 +12,11 @@ from .adapters import build_adapter
 from .capability_context import agent_verification_capability_context
 from .config import project_config
 from .engine_core import RuntimeEngineCore
+from .fullpath_worker_only import (
+    F2WorkerNotReady, F2_V2_REVISION, F2_V2_SEED,
+    require_f2_worker_environment,
+)
+from .fullpath_fixture_safety import PROJECT_ID as F2_PROJECT_ID
 from .fullpath_ci_deferred import fixture_deferred_verification
 from .evidence_packs import developer_repair_evidence_pack, pm_evidence_pack
 from .fingerprint import failure_fingerprint
@@ -232,6 +237,22 @@ class RuntimeEngine(RuntimeEngineCore):
             raise RuntimeError("Unknown job")
         if job["status"] != "queued":
             return
+        f2_worker = bool(getattr(self, "_f2_worker_only", False))
+        if f2_worker:
+            # Direct callers cannot route another project through the accepted
+            # F2 app-role DB even when they bypass HTTP middleware/enqueue.
+            require_f2_worker_environment(os.environ)
+            intake = (job.get("checkpoint") or {}).get("canonical_intake") or {}
+            if (
+                job.get("project_id") != F2_PROJECT_ID
+                or job.get("source_commit") != F2_V2_SEED
+                or intake.get("mode") != "direct"
+                or intake.get("bounded_direct") is not True
+                or intake.get("decomposition_required") is not False
+                or intake.get("baseline_revision") != F2_V2_REVISION
+                or orchestrator_launch(job) is not None
+            ):
+                raise F2WorkerNotReady("F2 worker refuses unaudited or foreign job")
         if orchestrator_launch(job):
             job = self.storage.claim_orchestrated_launch(job_id)
             if job is None:
@@ -332,7 +353,12 @@ class RuntimeEngine(RuntimeEngineCore):
             acquired_direct_lease = workspace_mode == "direct"
             try:
                 ws = await self.ddev.create_workspace(
-                    job_id=job_id, project_id=job["project_id"], ref=job.get("source_commit")
+                    job_id=job_id,
+                    project_id=job["project_id"],
+                    ref=job.get("source_commit"),
+                    # Exact F2 Executor explicitly rejects project_default.
+                    # Legacy PCP/G0 behavior remains unchanged.
+                    workspace_mode="isolated_clone" if f2_worker else "project_default",
                 )
             except Exception:
                 if acquired_direct_lease:

@@ -737,10 +737,24 @@ async def create_job(payload: JobCreateRequest) -> JobView:
                 and not payload.provider_state
             ):
                 raise F2WorkerNotReady("F2 permits one exact v2 direct-intake task")
+            # Require genuine canonical direct evidence, not a caller-declared
+            # label. Unknown or protected scope fails BEFORE any durable job
+            # insertion, provider call or workspace creation.
+            decision = classify_intake(
+                bounded_direct=True,
+                semantic=payload.task.semantic,
+                repo_hints=payload.repo_hints,
+            )
+            if decision.mode != "direct" or decision.decomposition_required:
+                raise F2WorkerNotReady(
+                    "F2 single-job trial requires canonical bounded direct intake"
+                )
             async with _f2_single_job_intake_lock:
                 if storage.list(limit=1):
                     raise F2WorkerNotReady("F2 already has a job: preserve current evidence")
-                job_id = await _create_local_job_guarded(payload)
+                job_id = await _create_local_job_guarded(
+                    payload, intake_decision=decision,
+                )
         else:
             job_id = await _create_local_job_guarded(payload)
     except (RuntimeError, KeyError, ValueError) as exc:
