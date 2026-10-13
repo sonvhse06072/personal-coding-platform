@@ -1,0 +1,354 @@
+# F2-T01 PROPOSAL ONLY; NOT the candidate active routing-policy. No provider/model call made.
+# One Codex model, fast profile, 2 model calls/15 min hard legacy budget, no failover.
+version: 21
+complexity_weights:
+  scope: 0.18
+  dependency_depth: 0.1
+  ambiguity: 0.14
+  architecture_impact: 0.14
+  verification_difficulty: 0.1
+  risk: 0.12
+  context_requirement: 0.1
+  novelty: 0.07
+  reasoning_requirement: 0.05
+adaptive_budget:
+  enabled: false
+  # Profile values are planning priors, not Human Owner continuation gates.
+  # Estimate/working/emergency thresholds remain telemetry for cumulative token,
+  # call/tool/test/iteration/repair and total-wall dimensions on effective
+  # adaptive WorkOrders. Hard monetary cost, provider quota/context enforcement,
+  # scope/anomaly/protected boundaries and per-operation timeouts remain
+  # independently fail-closed. Changed-file count is an adaptive work-shape
+  # signal with a bounded emergency ceiling; sensitive changed paths remain
+  # independent protected-decision gates.
+  estimate_min_ratio: 0.65
+  estimate_max_ratio: 1.35
+  working_headroom_ratio: 1.25
+  dimensions:
+    max_model_calls:
+      minimum: 2
+      hard_max: 40
+    max_input_tokens:
+      minimum: 250000
+      hard_max: 8000000
+    max_output_tokens:
+      minimum: 40000
+      hard_max: 1000000
+    max_tool_calls:
+      minimum: 10
+      hard_max: 400
+    max_iterations:
+      minimum: 2
+      hard_max: 24
+    max_repair_iterations:
+      minimum: 1
+      hard_max: 12
+    max_test_runs:
+      minimum: 2
+      hard_max: 40
+    max_wall_time_minutes:
+      minimum: 10
+      hard_max: 180
+    max_changed_files:
+      minimum: 2
+      hard_max: 90
+telemetry_calibration:
+  # Historical evidence may refine an estimate only after a meaningful sample.
+  # It never expands adaptive-budget hard maxima or protected decision policy.
+  minimum_sample_size: 5
+  multiplier_min: 0.75
+  multiplier_max: 1.75
+review_policy:
+  # PCP #562 Owner-approved fallback is *not* cross-provider independence.
+  # Used only for one late, exact-head PM merge recovery after explicitly
+  # confirmed cross-provider reviewer capacity is unavailable.
+  late_review_recovery:
+    same_provider_higher_tier_fallback_enabled: true
+  # Review spend is policy/calibration data, not a model identity decision.
+  # Router still staffs the logical reviewer role from current provider/model
+  # eligibility and Runtime remains responsible for deterministic acceptance.
+  profiles:
+    fast:
+      level: lightweight
+      required: false
+      conditional_on_strong_evidence: true
+      independent: false
+      different_model_required: false
+      different_provider_required: false
+      reason: routine work skips model review only when deterministic evidence is strong
+    standard:
+      level: standard
+      required: true
+      conditional_on_strong_evidence: false
+      independent: true
+      different_model_required: false
+      different_provider_required: false
+      reason: standard profile requires bounded independent Task Contract/diff review
+    complex:
+      level: strong
+      required: true
+      conditional_on_strong_evidence: false
+      independent: true
+      different_model_required: true
+      different_provider_required: false
+      reason: complex profile requires a stronger independent reviewer
+    critical:
+      level: critical
+      required: true
+      conditional_on_strong_evidence: false
+      independent: true
+      different_model_required: true
+      different_provider_required: true
+      reason: critical profile requires cross-provider review when eligible
+  high_impact:
+    architecture_impact_min: 70
+    risk_min: 85
+    flags:
+    - security_sensitive
+    - security_boundary_change
+    - authentication_change
+    - authorization_change
+    - secret_management_change
+    policy:
+      level: critical
+      required: true
+      conditional_on_strong_evidence: false
+      independent: true
+      different_model_required: true
+      different_provider_required: true
+      reason: security/architecture/high-risk work requires cross-provider review when eligible
+profiles:
+  fast:
+    max_score: 29
+    preferred_order_bonus: 0.14
+    analysis_depth: 1
+    planner: false
+    evaluator: false
+    reasoning_effort:
+      executor: medium
+    reasoning_ceiling:
+      executor: medium
+    max_model_calls: 2
+    max_tool_calls: 35
+    max_iterations: 2
+    max_repair_iterations: 1
+    max_escalations: 0
+    max_provider_failovers: 0
+    max_model_failovers: 0
+    max_test_runs: 1
+    max_wall_time_minutes: 15
+    hard_cost_usd: 0.5
+    soft_cost_usd: 0.25
+    max_changed_files: 3
+    executor_roles:
+    - executor
+    - fast_executor
+    preferred_executor_ids:
+    - codex_gpt6_luna
+    max_input_tokens: 250000
+    max_output_tokens: 40000
+  standard:
+    min_score: 30
+    max_score: 59
+    preferred_order_bonus: 0.14
+    analysis_depth: 1
+    planner: false
+    evaluator: false
+    reasoning_effort:
+      executor: low
+    reasoning_ceiling:
+      executor: medium
+    max_model_calls: 8
+    max_tool_calls: 80
+    max_iterations: 5
+    max_repair_iterations: 2
+    max_escalations: 1
+    max_provider_failovers: 2
+    max_model_failovers: 2
+    max_test_runs: 8
+    max_wall_time_minutes: 25
+    hard_cost_usd: 1.5
+    soft_cost_usd: 0.75
+    max_changed_files: 14
+    executor_roles:
+    - executor
+    - standard_executor
+    preferred_executor_ids:
+    - openrouter_qwen3_coder_free
+    - antigravity_free
+    - codex_gpt6_luna
+    - codex_gpt6_sol
+    - codex_terra
+    - antigravity_flash_high
+    - antigravity_gemini_pro
+    - codex_luna
+    max_input_tokens: 800000
+    max_output_tokens: 120000
+  complex:
+    min_score: 60
+    max_score: 79
+    analysis_depth: 2
+    planner: true
+    evaluator: true
+    reasoning_effort:
+      planner: medium
+      executor: medium
+      evaluator: low
+    reasoning_ceiling:
+      executor: high
+    max_model_calls: 15
+    max_tool_calls: 160
+    max_iterations: 8
+    max_repair_iterations: 4
+    max_escalations: 2
+    max_provider_failovers: 2
+    max_model_failovers: 2
+    max_test_runs: 14
+    max_wall_time_minutes: 60
+    hard_cost_usd: 5.0
+    soft_cost_usd: 2.5
+    max_changed_files: 30
+    planner_roles:
+    - planner
+    executor_roles:
+    - executor
+    - debugger
+    evaluator_roles:
+    - reviewer
+    preferred_planner_ids:
+    - codex_gpt61_sol
+    - antigravity_gemini_pro
+    - codex_gpt6_sol
+    - codex_terra
+    - antigravity_claude_sonnet
+    - antigravity_flash_high
+    - codex_sol
+    - antigravity_free
+    preferred_executor_ids:
+    - codex_gpt61_sol
+    - antigravity_free
+    - codex_gpt6_sol
+    - codex_terra
+    - antigravity_flash_high
+    - antigravity_gemini_pro
+    - antigravity_claude_sonnet
+    - codex_sol
+    preferred_evaluator_ids:
+    - antigravity_claude_sonnet
+    - openrouter_qwen3_coder_free
+    - antigravity_gemini_pro
+    - codex_gpt6_sol
+    - codex_terra
+    - codex_gpt61_sol
+    - antigravity_flash_high
+    - antigravity_free
+    max_input_tokens: 2000000
+    max_output_tokens: 300000
+  critical:
+    min_score: 80
+    analysis_depth: 3
+    planner: true
+    evaluator: true
+    reasoning_effort:
+      planner: high
+      executor: high
+      evaluator: medium
+    reasoning_ceiling:
+      executor: high
+    max_model_calls: 20
+    max_tool_calls: 220
+    max_iterations: 10
+    max_repair_iterations: 4
+    max_escalations: 2
+    max_provider_failovers: 2
+    max_model_failovers: 2
+    max_test_runs: 18
+    max_wall_time_minutes: 90
+    hard_cost_usd: 10.0
+    soft_cost_usd: 5.0
+    max_changed_files: 45
+    planner_roles:
+    - architecture
+    executor_roles:
+    - critical_executor
+    evaluator_roles:
+    - reviewer
+    preferred_planner_ids:
+    - codex_sol
+    - antigravity_gemini_pro
+    - frontier_codex
+    preferred_executor_ids:
+    - codex_sol
+    - frontier_codex
+    preferred_evaluator_ids:
+    - antigravity_claude_sonnet
+    - antigravity_gemini_pro
+    - codex_terra
+    - antigravity_flash_high
+    max_input_tokens: 4000000
+    max_output_tokens: 500000
+staffing_roles:
+  product_manager:
+    model_roles:
+    - product_manager
+    allowed_profiles:
+    - standard
+    - complex
+    - critical
+    preferred_ids:
+    - codex_gpt61_sol
+    - antigravity_gemini_pro
+    - codex_gpt6_sol
+    - codex_terra
+    - antigravity_claude_sonnet
+    - codex_sol
+    - antigravity_free
+critical_triggers:
+- destructive_migration
+- production_write
+- branch_protection_change
+- secret_management_change
+human_decision_triggers:
+- architecture_choice
+- product_ambiguity_high_impact
+- destructive_migration
+- production_write
+- major_dependency_addition
+- security_boundary_change
+- budget_exhausted_with_decision
+minimum_profile_overrides:
+  security_sensitive: complex
+  schema_change: complex
+  authentication_change: critical
+  authorization_change: critical
+  production_write: critical
+  destructive_migration: critical
+scoring:
+  capability_weight: 0.52
+  predicted_success_weight: 0.3
+  preferred_order_bonus: 0.08
+  free_cost_bonus: 0.06
+  subscription_cost_bonus: 0.04
+  ultra_low_cost_bonus: 0.03
+  premium_cost_penalty: 0.04
+  scarce_cost_penalty: 0.1
+  quota_pressure_penalty: 0.12
+  # Preserve a small provider allowance reserve instead of assigning new work
+  # to a bucket that is technically non-zero but operationally exhausted.
+  # quota_pressure is normalized 0..1, so 0.99 means >=99% used.
+  quota_near_exhaustion_threshold: 0.99
+  error_rate_penalty: 0.12
+  latency_penalty: 0.03
+  unhealthy_penalty: 1.0
+  fallback_unknown_success: 0.7
+anti_loop:
+  same_failure_fingerprint_limit: 2
+  no_progress_iterations: 2
+  diff_oscillation_limit: 2
+  scope_growth_ratio: 2.0
+  # Review-repair epochs are request-scoped anomaly windows. They do not reset
+  # cumulative progress and are independent from adaptive planning budgets.
+  review_repair_max_repair_cycles: 6
+  review_repair_max_verification_cycles: 8
+  escalation_monotonic: true
+  escalation_resets_budget: false

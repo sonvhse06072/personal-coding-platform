@@ -1,0 +1,39 @@
+# F2-T01 trial routing PROPOSAL ONLY. NEVER mount until reviewed issuer, quota and account gates.
+# gpt-6-luna is a PCP-declared Codex model, not externally authenticated here.
+version: 13
+models:
+  codex_gpt6_luna:
+    # Current fast Codex generation. PCP intentionally routes only explicit
+    # low..max effort even though upstream also supports none.
+    kind: agent
+    provider: openai
+    adapter: codex_cli
+    model: gpt-6-luna
+    reasoning_efforts:
+    - low
+    - medium
+
+    tier: balanced
+    cost_class: ultra_low
+    quota_group: codex_chatgpt_plus
+    allowed_profiles:
+    - fast
+    roles:
+    - explore
+    - executor
+    - repair
+    - reviewer
+    - test_writer
+    capabilities:
+      coding: 8
+      reasoning: 8
+      debugging: 7
+      planning: 7
+      review: 7
+      structured_output: 9
+      repo_exploration: 8
+    base_success: 0.87
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: true
