@@ -196,9 +196,9 @@ G0_DELIVERY_ROUTES = frozenset({
 })
 
 
-# Future F2 uses a DIFFERENT exact project and root identity from G0D-T01.
-# Recognition is intentionally deny-only: the F2 deployment is source-only
-# until an independently authorized successor explicitly implements operations.
+# F2 source is independently pinned to the NEW v2 fixture, never G0D-T01.
+# Live Compose is still /bin/false with this activation variable ABSENT.
+# The C3A code path is a future C3B attachment point, not an OCI permission.
 F2_PARKED_EXECUTOR_ENV = {
     "PCP_EXECUTOR_PROJECT_SCOPE": "pcp-g0-fullpath-fixture",
     "PROJECTS_FILE": "/fullpath/config/projects.yml",
@@ -206,19 +206,33 @@ F2_PARKED_EXECUTOR_ENV = {
     "CODING_WORKSPACES_ROOT": "/fullpath/workspaces",
     "CODING_DIRECT_PROJECT_ROOT": "/fullpath/direct-disabled",
 }
+F2_FIXTURE_REPOSITORY = "sonvhse06072/pcp-g0-fullpath-fixture"
+F2_FIXTURE_SOURCE = "3165b76d44b738c4709c3ca74f87297ff66dd397"
+F2_FIXTURE_BRANCH = "benchmark/fullpath-v2"
+F2_FIXTURE_PATH = Path("/fullpath/sources/pcp-g0-fullpath-fixture")
+F2_GIT_ONLY_ROUTES = frozenset({
+    ("GET", "/health"),
+    ("POST", "/v1/workspaces"),
+    ("POST", "/v1/publish-branch"),
+    ("POST", "/v1/github/pull-request"),
+    ("GET", "/v1/github/ci"),
+    ("POST", "/v1/github/reconcile-delivery"),
+    ("POST", "/v1/github/review-repair"),
+})
+F2_ALLOWED_CHANGED_FILES = frozenset({
+    "web/modules/custom/pcp_f2_fixture/src/WindowOverlapDetector.php",
+    "web/modules/custom/pcp_f2_fixture/tests/src/Unit/WindowOverlapDetectorTest.php",
+    "web/modules/custom/pcp_f2_fixture/tests/src/Kernel/WindowOverlapServiceTest.php",
+})
 
 
-def _f2_parked_executor_scope() -> bool:
-    """Recognize an F2 marker without creating a new privileged capability.
-
-    A single F2 marker means the *entire* expected identity must be present.
-    Flipping only the scope or startup environment cannot restore unscoped
-    endpoints. This source guard is not a host/network isolation attestation.
-    """
-    if not any(
+def _f2_scope_present() -> bool:
+    """Any F2 root marker implies ALL roots; a partial env fails closed."""
+    matched = any(
         os.getenv(key) == expected
         for key, expected in F2_PARKED_EXECUTOR_ENV.items()
-    ):
+    )
+    if not matched:
         return False
     if any(
         os.getenv(key) != expected
@@ -226,6 +240,98 @@ def _f2_parked_executor_scope() -> bool:
     ):
         raise HTTPException(503, "F2 Executor source-only identity mismatch")
     return True
+
+
+def _f2_git_only_scoped() -> bool:
+    if not _f2_scope_present():
+        return False
+    flag = os.getenv("PCP_F2_GIT_ONLY_ENABLED", "")
+    if not flag:
+        return False
+    if flag != "owner-approved":
+        raise HTTPException(503, "F2 Git-only activation value invalid")
+    if Path("/var/run/docker.sock").exists():
+        raise HTTPException(503, "F2 must never mount host Docker socket")
+    if any(os.getenv(k) for k in (
+        "PCP_G0_EXECUTION_ENABLED", "PCP_G0_DELIVERY_ENABLED",
+        "ANTIGRAVITY_BRIDGE_TOKEN", "PCP_FULLPATH_OPERATIONAL_ACTIVATION",
+    )):
+        raise HTTPException(503, "F2 cannot inherit legacy activation or provider secret")
+    return True
+
+
+def _f2_parked_executor_scope() -> bool:
+    """Existing parked source still denies every route, including direct calls."""
+    return _f2_scope_present() and not _f2_git_only_scoped()
+
+
+def _require_f2_source_repository(cfg: dict[str, Any]) -> None:
+    # Source mounts must be a pinned, immutable v2 clone and exact fixture origin.
+    raw = Path(os.path.expandvars(str(cfg.get("path", ""))))
+    if raw.is_symlink() or raw.resolve() != F2_FIXTURE_PATH:
+        raise HTTPException(403, "F2 source mount identity mismatch")
+    source = _configured_project_path(cfg)
+    if source != F2_FIXTURE_PATH or source.is_symlink():
+        raise HTTPException(403, "F2 source path identity mismatch")
+    if git(source, "rev-parse", "HEAD") != F2_FIXTURE_SOURCE:
+        raise HTTPException(409, "F2 fixture source differs from pinned v2 seed")
+    origin = remote_origin(source)
+    if github_repository_from_origin(origin or "") != F2_FIXTURE_REPOSITORY:
+        raise HTTPException(403, "F2 source remote is outside exact fixture repository")
+
+
+def _validate_f2_registry(projects: Any) -> None:
+    if not isinstance(projects, dict) or set(projects) != {"pcp-g0-fullpath-fixture"}:
+        raise HTTPException(503, "F2 requires singleton fixture registry")
+    cfg = projects["pcp-g0-fullpath-fixture"]
+    if not isinstance(cfg, dict) or (
+        cfg.get("path") != "${CODING_PROJECTS_ROOT}/pcp-g0-fullpath-fixture"
+        or cfg.get("base_branch") != F2_FIXTURE_BRANCH
+        or not isinstance(cfg.get("runtime"), dict)
+        or cfg["runtime"].get("workspace_mode") != "isolated_clone"
+        or cfg["runtime"].get("exclusive_project_lease") is not False
+        or cfg["runtime"].get("branch_prefix") != "ai"
+        or not isinstance(cfg.get("ddev"), dict)
+        or cfg["ddev"].get("enabled") is not False
+        or not isinstance(cfg.get("autonomy"), dict)
+        or not all(cfg["autonomy"].get(k) is True for k in (
+            "allow_commit", "allow_push_ai_branch", "allow_create_pr"
+        ))
+        or cfg["autonomy"].get("allow_auto_merge_low_risk") is not False
+        or cfg["autonomy"].get("allow_production_deploy") is not False
+    ):
+        raise HTTPException(503, "F2 candidate registry has not been separately activated")
+    _require_f2_source_repository(cfg)
+
+
+def _require_f2_delivery_contract(
+    cfg: dict[str, Any], *, job_id: str, branch: str,
+    source_commit: str | None = None,
+) -> None:
+    if not re.fullmatch(r"[0-9a-f]{32}", job_id):
+        raise HTTPException(403, "F2 delivery requires exact job UUID")
+    if branch != "ai/" + job_id[:12]:
+        raise HTTPException(403, "F2 branch must match the exact job")
+    if source_commit is not None and source_commit != F2_FIXTURE_SOURCE:
+        raise HTTPException(403, "F2 delivery source differs from pinned seed")
+    _require_f2_source_repository(cfg)
+
+
+def _verify_f2_delivered_diff(
+    workspace: Path, source_commit: str, expected_commit: str,
+) -> None:
+    if source_commit != F2_FIXTURE_SOURCE or not re.fullmatch(
+        r"[0-9a-f]{40}", expected_commit
+    ):
+        raise HTTPException(403, "F2 diff source/head identity invalid")
+    if git(workspace, "status", "--porcelain", check=False):
+        raise HTTPException(409, "F2 delivery workspace must be clean")
+    changed = git(
+        workspace, "diff", "--name-only", source_commit, expected_commit
+    ).splitlines()
+    if (not changed or len(changed) != len(set(changed))
+            or not set(changed).issubset(F2_ALLOWED_CHANGED_FILES)):
+        raise HTTPException(403, "F2 diff includes unapproved or missing source/test files")
 
 
 def _g0_fixture_activation_flag(name: str) -> bool:
@@ -271,6 +377,8 @@ def _require_g0_source_repository(cfg: dict[str, Any]) -> None:
 
 def _g0_fixture_scoped() -> bool:
     """Optional narrower executor surface; never a host Docker security boundary."""
+    if _f2_git_only_scoped():
+        return False
     scope = os.getenv("PCP_EXECUTOR_PROJECT_SCOPE", "")
     if not scope:
         return False
@@ -302,7 +410,9 @@ def load_projects() -> dict[str, Any]:
     if not isinstance(document, dict):
         raise HTTPException(503, "Invalid executor project registry")
     projects = document.get("projects", {})
-    if _g0_fixture_scoped():
+    if _f2_git_only_scoped():
+        _validate_f2_registry(projects)
+    elif _g0_fixture_scoped():
         _validate_g0_registry(projects)
     return projects
 
@@ -315,6 +425,8 @@ def project(project_id: str) -> dict[str, Any]:
     if _f2_parked_executor_scope():
         raise HTTPException(503, "F2 Executor remains source-only (PARKED)")
     # This check also protects direct internal handler calls that bypass HTTP.
+    if _f2_git_only_scoped() and project_id != "pcp-g0-fullpath-fixture":
+        raise HTTPException(403, "Project outside isolated F2 Executor scope")
     if _g0_fixture_scoped() and project_id != G0_FIXTURE_PROJECT_ID:
         raise HTTPException(403, "Project outside isolated G0 Executor scope")
     projects = load_projects()
@@ -955,7 +1067,11 @@ def _github_context(cfg: dict[str, Any]) -> tuple[GitHubDelivery, str]:
     repository = github_repository_from_origin(origin)
     if not repository:
         raise HTTPException(422, "Source origin is not a supported github.com repository")
-    delivery = GitHubDelivery()
+    if _f2_git_only_scoped() and repository != F2_FIXTURE_REPOSITORY:
+        raise HTTPException(403, "F2 GitHub origin outside fixture repository")
+    delivery = GitHubDelivery(
+        repository_scope=F2_FIXTURE_REPOSITORY if _f2_git_only_scoped() else None
+    )
     if not delivery.configured:
         raise HTTPException(503, "GITHUB_DELIVERY_TOKEN is not configured")
     return delivery, repository
@@ -977,6 +1093,8 @@ def _fetch_remote_base_head(
     fetch_target = origin
     fetch_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     if repository:
+        if _f2_git_only_scoped():
+            raise HTTPException(403, "F2 cannot run direct workspace base sync")
         delivery = GitHubDelivery()
         if not delivery.configured:
             raise HTTPException(
@@ -1493,7 +1611,14 @@ async def fixture_only_http_scope(request: Request, call_next):
                 status_code=503,
                 content={"detail": "F2 Executor is source-only (PARKED)"},
             )
-        if _g0_fixture_scoped():
+        if _f2_git_only_scoped():
+            # Inspect exact source registry even for /health; never touch host DDEV.
+            load_projects()
+            if (request.method, request.url.path) not in F2_GIT_ONLY_ROUTES:
+                return JSONResponse(
+                    status_code=403, content={"detail": "F2 Git-only endpoint denied"}
+                )
+        elif _g0_fixture_scoped():
             # Re-read the small, mounted G0-only registry on every request.
             # A canonical/legacy multi-project mount must fail closed even
             # for health; never assume a supplied project_id is trustworthy.
@@ -1615,6 +1740,17 @@ def health() -> dict[str, Any]:
     if _f2_parked_executor_scope():
         # Direct Python calls must not probe host Docker/DDEV either.
         raise HTTPException(503, "F2 Executor is source-only (PARKED)")
+    if _f2_git_only_scoped():
+        load_projects()
+        with _ACTIVE_LOCK:
+            active_jobs = len(_ACTIVE)
+        return {
+            "status": "ok", "service": "ddev-executor",
+            "version": DDEV_EXECUTOR_VERSION,
+            "ddev": "DISABLED", "docker": "not_probed",
+            "buildx": "not_probed", "active_jobs": active_jobs,
+            "github_delivery_configured": bool(os.getenv("GITHUB_DELIVERY_TOKEN")),
+        }
     if _g0_fixture_scoped():
         # A PARKED fixture must not even probe the shared host Docker daemon.
         # The scoped registry is already validated by the HTTP middleware.
@@ -1963,6 +2099,12 @@ def quiesce_workspace(payload: QuiesceWorkspaceRequest) -> dict[str, Any]:
 def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
     """Prepare either the configured direct repo or one isolated clone."""
     cfg = project(payload.project_id)
+    if _f2_git_only_scoped():
+        if (payload.ref != F2_FIXTURE_SOURCE
+                or payload.workspace_mode != "isolated_clone"
+                or not re.fullmatch(r"[0-9a-f]{32}", payload.job_id)):
+            raise HTTPException(403, "F2 requires exact pinned seed and isolated job UUID")
+        _require_f2_source_repository(cfg)
     if _g0_fixture_scoped():
         if not _g0_fixture_execution_enabled():
             raise HTTPException(403, "G0 workspace creation not approved")
@@ -2034,6 +2176,8 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
     source_commit = git(repo, "rev-parse", ref)
     root = Path(os.environ["CODING_WORKSPACES_ROOT"]).resolve()
     root.mkdir(parents=True, exist_ok=True)
+    if _f2_git_only_scoped() and any(root.iterdir()):
+        raise HTTPException(409, "F2 only allows one active isolated workspace")
     workspace = (root / payload.job_id).resolve()
     if not allowed_workspace(workspace) or workspace.parent != root:
         raise HTTPException(403, "Invalid workspace path")
@@ -2060,7 +2204,7 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
             git(workspace, "remote", "remove", "origin")
         git(workspace, "checkout", "-b", branch, source_commit)
         git(workspace, "update-ref", "-d", "refs/pcp/materialized-source", check=False)
-        if not _g0_fixture_scoped():
+        if not (_g0_fixture_scoped() or _f2_git_only_scoped()):
             _reconcile_workspace_ddev_identity(
                 workspace,
                 payload.job_id,
@@ -2125,6 +2269,11 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
     """Push exactly one verified AI branch without adding a remote to the workspace."""
     cfg = project(payload.project_id)
     scoped = _g0_fixture_scoped()
+    if _f2_git_only_scoped():
+        _require_f2_delivery_contract(
+            cfg, job_id=payload.job_id, branch=payload.branch,
+            source_commit=payload.source_commit,
+        )
     if scoped:
         _require_g0_delivery_contract(
             cfg, job_id=payload.job_id, branch=payload.branch,
@@ -2169,13 +2318,19 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
         raise HTTPException(409, "Expected commit is not descended from the job source commit")
     if scoped:
         _verify_g0_delivered_diff(workspace, source_commit, expected)
+    if _f2_git_only_scoped():
+        _verify_f2_delivered_diff(workspace, source_commit, expected)
 
     _, origin = _source_origin(cfg)
     repository = github_repository_from_origin(origin)
     push_target = origin
     push_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     if repository:
-        delivery = GitHubDelivery()
+        if _f2_git_only_scoped() and repository != F2_FIXTURE_REPOSITORY:
+            raise HTTPException(403, "F2 publishing origin outside fixture repository")
+        delivery = GitHubDelivery(
+            repository_scope=F2_FIXTURE_REPOSITORY if _f2_git_only_scoped() else None
+        )
         if not delivery.configured:
             raise HTTPException(503, "GITHUB_DELIVERY_TOKEN is not configured for GitHub publishing")
         push_target = github_push_url(repository)
@@ -2246,6 +2401,11 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
 def reconcile_delivery(payload: ReconcileDeliveryRequest) -> dict[str, Any]:
     """Observe an already-merged PR before retrying a preserved delivery."""
     cfg = project(payload.project_id)
+    if _f2_git_only_scoped():
+        _require_f2_delivery_contract(
+            cfg, job_id=payload.job_id, branch=payload.branch,
+            source_commit=payload.source_commit,
+        )
     autonomy = cfg.get("autonomy", {}) or {}
     if not bool(autonomy.get("allow_push_ai_branch", False)):
         raise HTTPException(403, "Project policy does not allow AI branch publishing")
@@ -2275,6 +2435,11 @@ def reconcile_delivery(payload: ReconcileDeliveryRequest) -> dict[str, Any]:
 def prepare_review_repair(payload: ReviewRepairRequest) -> dict[str, Any]:
     """Revalidate one delivered PR and restore its exact job branch for repair."""
     cfg = project(payload.project_id)
+    if _f2_git_only_scoped():
+        _require_f2_delivery_contract(
+            cfg, job_id=payload.job_id, branch=payload.branch,
+            source_commit=payload.source_commit,
+        )
     autonomy = cfg.get("autonomy", {}) or {}
     if not bool(autonomy.get("allow_push_ai_branch", False)):
         raise HTTPException(403, "Project policy does not allow AI branch publishing")
@@ -2362,6 +2527,10 @@ def prepare_review_repair(payload: ReviewRepairRequest) -> dict[str, Any]:
 @app.post("/v1/github/pull-request", dependencies=[Depends(auth)])
 def upsert_pull_request(payload: PullRequestRequest) -> dict[str, Any]:
     cfg = project(payload.project_id)
+    if _f2_git_only_scoped():
+        _require_f2_delivery_contract(
+            cfg, job_id=payload.job_id, branch=payload.branch,
+        )
     scoped = _g0_fixture_scoped()
     if scoped:
         _require_g0_delivery_contract(
@@ -2398,6 +2567,10 @@ def github_ci(
     commit: str = Query(..., min_length=7, max_length=64),
 ) -> dict[str, Any]:
     cfg = project(project_id)
+    if _f2_git_only_scoped():
+        _require_f2_source_repository(cfg)
+        if not re.fullmatch(r"[0-9a-f]{40}", commit):
+            raise HTTPException(403, "F2 CI requires exact SHA")
     scoped = _g0_fixture_scoped()
     if scoped:
         if not _g0_fixture_delivery_enabled():
