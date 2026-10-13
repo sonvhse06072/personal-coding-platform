@@ -352,14 +352,16 @@ class RuntimeEngine(RuntimeEngineCore):
         else:
             acquired_direct_lease = workspace_mode == "direct"
             try:
-                ws = await self.ddev.create_workspace(
-                    job_id=job_id,
-                    project_id=job["project_id"],
-                    ref=job.get("source_commit"),
-                    # Exact F2 Executor explicitly rejects project_default.
-                    # Legacy PCP/G0 behavior remains unchanged.
-                    workspace_mode="isolated_clone" if f2_worker else "project_default",
-                )
+                workspace_request = {
+                    "job_id": job_id,
+                    "project_id": job["project_id"],
+                    "ref": job.get("source_commit"),
+                }
+                if f2_worker:
+                    # F2 Executor refuses the default mode, while legacy
+                    # clients must retain their exact prior call signature.
+                    workspace_request["workspace_mode"] = "isolated_clone"
+                ws = await self.ddev.create_workspace(**workspace_request)
             except Exception:
                 if acquired_direct_lease:
                     self.storage.release_project_lease(str(job["project_id"]), job_id)
