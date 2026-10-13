@@ -23,7 +23,8 @@ def test_f2_offline_overlay_is_minimal_and_scope_bound(role):
     assert "WORKDIR /opt/pcp-f2" in lines
     assert "ENV PYTHONPATH=/opt/pcp-f2" in lines
     assert f'"--port", "{port}"' in "\n".join(lines)
-    assert not any(x.startswith(("RUN ", "ADD ", "ENTRYPOINT ", "ONBUILD ")) for x in lines)
+    assert not any(x.startswith(("RUN ", "ADD ", "ONBUILD ")) for x in lines)
+    assert [x for x in lines if x.startswith("ENTRYPOINT ")] == (["ENTRYPOINT []"] if role == "runtime" else [])
     assert len([x for x in lines if x.startswith("COPY ")]) == 1
     assert (ROOT / "services" / source / "app").is_dir()
 

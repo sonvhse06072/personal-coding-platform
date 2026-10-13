@@ -9,4 +9,7 @@ LABEL org.opencontainers.image.revision="${PCP_F2_SOURCE_SHA}" \
 WORKDIR /opt/pcp-f2
 COPY services/runtime/app/ /opt/pcp-f2/app/
 ENV PYTHONPATH=/opt/pcp-f2
+# The cached Node-based runtime image has an inherited docker-entrypoint.sh.
+# Do not invoke it in the F2 Python-only service image.
+ENTRYPOINT []
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8787"]
