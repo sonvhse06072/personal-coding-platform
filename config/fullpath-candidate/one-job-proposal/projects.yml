@@ -1,0 +1,37 @@
+# F2-T01 exact one-job ACTIVATION PROPOSAL only; DO NOT MOUNT before separate host gates.
+version: 1
+projects:
+  pcp-g0-fullpath-fixture:
+    path: "${CODING_PROJECTS_ROOT}/pcp-g0-fullpath-fixture"
+    base_branch: benchmark/fullpath-v2
+    privacy:
+      private_code: true
+      allow_training_provider: false
+      require_zero_retention: false
+    human_policy:
+      routine_review: true
+      important_decisions_only: true
+    pm_standalone_review:
+      enabled: true
+      reviewer_login: sonvhse06072
+    autonomy:
+      allow_commit: true
+      allow_push_ai_branch: true
+      allow_create_pr: true
+      allow_auto_merge_low_risk: false
+      allow_production_deploy: false
+    runtime:
+      branch_prefix: ai
+      workspace_mode: isolated_clone
+      developer_permission_mode: bounded
+      exclusive_project_lease: false
+      max_diff_bytes: 60000
+      keep_workspace_on_success: true
+      keep_workspace_on_failure: true
+    ddev:
+      enabled: false
+      preflight: []
+      targeted_tests: []
+      static_analysis: []
+      full_tests: []
+      cleanup: []
