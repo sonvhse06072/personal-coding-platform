@@ -76,7 +76,7 @@ def require_f2_worker_registry(
         raise F2WorkerNotReady("F2 worker fixture registry not singleton")
     cfg = records[PROJECT_ID]
     if not isinstance(cfg, dict) or (
-        cfg.get("path") != "\${CODING_PROJECTS_ROOT}/pcp-g0-fullpath-fixture"
+        cfg.get("path") != "${CODING_PROJECTS_ROOT}/pcp-g0-fullpath-fixture"
         or cfg.get("base_branch") != V2_BRANCH
         or not isinstance(cfg.get("runtime"), dict)
         or cfg["runtime"].get("workspace_mode") != "isolated_clone"
