@@ -7,7 +7,11 @@ name: pcp-f2-fullpath
 
 x-f2-c3b:
   status: not_activated
-  source_sha: 79f265aeb305be8b4b9d87af200730f9eb950fb2
+  source_sha: 82ca2c2b5990f55bd1cfd969f3154ab2cdea79bc
+  image_sources:
+    router: 79f265aeb305be8b4b9d87af200730f9eb950fb2
+    executor: 79f265aeb305be8b4b9d87af200730f9eb950fb2
+    runtime: 82ca2c2b5990f55bd1cfd969f3154ab2cdea79bc
   one_fixture: pcp-g0-fullpath-fixture
   max_parallel_jobs: 1
   private_postgres_preserved: true
@@ -115,7 +119,7 @@ services:
   fullpath-runtime:
     <<: *f2-hardening
     container_name: pcp-f2-fullpath-fullpath-runtime-1
-    image: pcp-f2-c3b-runtime:79f265aeb305
+    image: pcp-f2-c3b-runtime:82ca2c2b5990
     profiles: [owner-gated-c3b-one-job]
     user: "${PCP_F2_UID:?f2_unprivileged_uid_required}:${PCP_F2_GID:?f2_unprivileged_gid_required}"
     pids_limit: 192
