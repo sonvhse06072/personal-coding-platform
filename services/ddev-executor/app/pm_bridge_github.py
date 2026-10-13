@@ -56,6 +56,13 @@ def _project(project_id: str) -> dict[str, Any]:
 
 
 def _repository(project_id: str) -> tuple[GitHubDelivery, str]:
+    # The existing PM-read endpoints are reused by the C3A F2 PM finalizer.
+    # This local import avoids a cycle with main's included router. Scope BEFORE
+    # filesystem/GitHub access, even if called directly past HTTP middleware.
+    from . import main as executor_main
+    if executor_main._f2_git_only_scoped():
+        cfg = executor_main.project(project_id)
+        return executor_main._github_context(cfg)
     cfg = _project(project_id)
     raw_path = str(cfg.get("path", ""))
     path = Path(os.path.expanduser(os.path.expandvars(raw_path))).resolve()
