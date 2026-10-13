@@ -1,0 +1,218 @@
+# C3B SOURCE/OWNER-GATED ONLY. Standalone three-service plan.
+# Never combine with compose.source-only.yml or compose.c2-db-only.yml.
+# Existing accepted C2 PostgreSQL is NOT owned/recreated by this file.
+# No default service: every service requires explicit owner-gated profile.
+# A bridge with internal:false is outbound-capable, NOT domain allowlisting.
+name: pcp-f2-fullpath
+
+x-f2-c3b:
+  status: not_activated
+  source_sha: 79f265aeb305be8b4b9d87af200730f9eb950fb2
+  one_fixture: pcp-g0-fullpath-fixture
+  max_parallel_jobs: 1
+  private_postgres_preserved: true
+  provider_credentials_approved: false
+  github_credential_approved: false
+
+x-f2-hardening: &f2-hardening
+  pull_policy: never
+  restart: "no"
+  platform: linux/amd64
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+
+services:
+  fullpath-router:
+    <<: *f2-hardening
+    container_name: pcp-f2-fullpath-fullpath-router-1
+    image: pcp-f2-c3b-router:79f265aeb305
+    profiles: [owner-gated-c3b-one-job]
+    user: "${PCP_F2_UID:?f2_unprivileged_uid_required}:${PCP_F2_GID:?f2_unprivileged_gid_required}"
+    pids_limit: 128
+    mem_limit: 384m
+    environment:
+      ROUTER_MODELS_FILE: /fullpath/config/models.yml
+      ROUTER_POLICY_FILE: /fullpath/config/routing-policy.yml
+      ROUTER_PROJECTS_FILE: /fullpath/config/projects.yml
+      PYTHONDONTWRITEBYTECODE: "1"
+      ROUTER_API_TOKEN: "${PCP_F2_ROUTER_API_TOKEN:?fresh_f2_router_token_required}"
+    volumes:
+      - type: bind
+        source: "${PCP_F2_CONFIG_ROOT:?f2_only_config_root_required}/models.yml"
+        target: /fullpath/config/models.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_CONFIG_ROOT:?f2_only_config_root_required}/routing-policy.yml"
+        target: /fullpath/config/routing-policy.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_CONFIG_ROOT:?f2_only_config_root_required}/projects.yml"
+        target: /fullpath/config/projects.yml
+        read_only: true
+        bind: {create_host_path: false}
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=67108864"]
+    networks: [fullpath-private]
+    labels:
+      pcp.scope: f2-c3b-one-job
+      pcp.role: router
+
+  fullpath-executor:
+    <<: *f2-hardening
+    container_name: pcp-f2-fullpath-fullpath-executor-1
+    image: pcp-f2-c3b-executor:79f265aeb305
+    profiles: [owner-gated-c3b-one-job]
+    user: "${PCP_F2_UID:?f2_unprivileged_uid_required}:${PCP_F2_GID:?f2_unprivileged_gid_required}"
+    pids_limit: 128
+    mem_limit: 768m
+    environment:
+      HOME: /home/coder
+      PROJECTS_FILE: /fullpath/config/projects.yml
+      CODING_PROJECTS_ROOT: /fullpath/sources
+      CODING_WORKSPACES_ROOT: /fullpath/workspaces
+      CODING_DIRECT_PROJECT_ROOT: /fullpath/direct-disabled
+      PCP_EXECUTOR_PROJECT_SCOPE: pcp-g0-fullpath-fixture
+      PCP_F2_GIT_ONLY_ENABLED: "${PCP_F2_GIT_ONLY_ENABLED:-}"
+      PLATFORM_INTERNAL_TOKEN: "${PCP_F2_INTERNAL_TOKEN:?fresh_f2_internal_token_required}"
+      GIT_TERMINAL_PROMPT: "0"
+      PYTHONDONTWRITEBYTECODE: "1"
+      GIT_AUTHOR_NAME: "${PCP_F2_GIT_AUTHOR_NAME:?f2_git_identity_name_required}"
+      GIT_AUTHOR_EMAIL: "${PCP_F2_GIT_AUTHOR_EMAIL:?f2_git_identity_email_required}"
+      GIT_COMMITTER_NAME: "${PCP_F2_GIT_AUTHOR_NAME:?f2_git_identity_name_required}"
+      GIT_COMMITTER_EMAIL: "${PCP_F2_GIT_AUTHOR_EMAIL:?f2_git_identity_email_required}"
+    entrypoint:
+      - /bin/sh
+      - -euc
+      - |
+        test -r /run/secrets/f2_executor_github_token
+        export GITHUB_DELIVERY_TOKEN="$$(cat /run/secrets/f2_executor_github_token)"
+        test -n "$$GITHUB_DELIVERY_TOKEN"
+        exec uvicorn app.main:app --host 0.0.0.0 --port 8790
+    secrets: [f2_executor_github_token]
+    volumes:
+      - type: bind
+        source: "${PCP_F2_CONFIG_ROOT:?f2_only_config_root_required}/projects.yml"
+        target: /fullpath/config/projects.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_FIXTURE_ROOT:?exact_clean_f2_v2_checkout_required}"
+        target: /fullpath/sources/pcp-g0-fullpath-fixture
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_WORKSPACE_ROOT:?f2_only_workspace_root_required}"
+        target: /fullpath/workspaces
+        bind: {create_host_path: false}
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=134217728"]
+    networks: [fullpath-private, github-egress]
+    labels:
+      pcp.scope: f2-c3b-one-job
+      pcp.role: executor
+
+  fullpath-runtime:
+    <<: *f2-hardening
+    container_name: pcp-f2-fullpath-fullpath-runtime-1
+    image: pcp-f2-c3b-runtime:79f265aeb305
+    profiles: [owner-gated-c3b-one-job]
+    user: "${PCP_F2_UID:?f2_unprivileged_uid_required}:${PCP_F2_GID:?f2_unprivileged_gid_required}"
+    pids_limit: 192
+    mem_limit: 1024m
+    environment:
+      HOME: /home/coder
+      PCP_RUNTIME_STARTUP_MODE: g0_fullpath_worker
+      PCP_F2_WORKER_ONLY_ENABLED: "${PCP_F2_WORKER_ONLY_ENABLED:-}"
+      GIT_AUTHOR_NAME: "${PCP_F2_GIT_AUTHOR_NAME:?f2_git_identity_name_required}"
+      GIT_AUTHOR_EMAIL: "${PCP_F2_GIT_AUTHOR_EMAIL:?f2_git_identity_email_required}"
+      GIT_COMMITTER_NAME: "${PCP_F2_GIT_AUTHOR_NAME:?f2_git_identity_name_required}"
+      GIT_COMMITTER_EMAIL: "${PCP_F2_GIT_AUTHOR_EMAIL:?f2_git_identity_email_required}"
+      PYTHONDONTWRITEBYTECODE: "1"
+      PCP_FULLPATH_PM_FINALIZATION_ENABLED: "${PCP_F2_PM_FINALIZATION_ENABLED:-}"
+      PCP_FULLPATH_OPERATIONAL_ACTIVATION: ""
+      PCP_FULLPATH_SOURCE_ONLY: ""
+      CODING_PROJECTS_ROOT: /fullpath/sources
+      CODING_WORKSPACES_ROOT: /fullpath/workspaces
+      CODING_DIRECT_PROJECT_ROOT: /fullpath/direct-disabled
+      PROJECTS_FILE: /fullpath/config/projects.yml
+      PROJECT_BASELINES_FILE: /fullpath/config/project-baselines.yml
+      MODELS_FILE: /fullpath/config/models.yml
+      ROUTING_POLICY_FILE: /fullpath/config/routing-policy.yml
+      CODEX_HOME: /home/coder/.codex-fullpath
+      ROUTER_URL: http://fullpath-router:8090
+      DDEV_EXECUTOR_URL: http://fullpath-executor:8790
+      ROUTER_API_TOKEN: "${PCP_F2_ROUTER_API_TOKEN:?fresh_f2_router_token_required}"
+      PLATFORM_INTERNAL_TOKEN: "${PCP_F2_INTERNAL_TOKEN:?fresh_f2_internal_token_required}"
+      RUNTIME_API_TOKEN: "${PCP_F2_RUNTIME_API_TOKEN:?fresh_f2_runtime_token_required}"
+    entrypoint:
+      - /bin/sh
+      - -euc
+      - |
+        test -r /run/secrets/f2_runtime_app_password
+        export DATABASE_URL="postgresql://fullpath:$$(cat /run/secrets/f2_runtime_app_password)@fullpath-db:5432/fullpath"
+        exec uvicorn app.main:app --host 0.0.0.0 --port 8787
+    secrets: [f2_runtime_app_password]
+    volumes:
+      - type: bind
+        source: "${PCP_F2_CONFIG_ROOT:?f2_only_config_root_required}/projects.yml"
+        target: /fullpath/config/projects.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_CONFIG_ROOT:?f2_only_config_root_required}/project-baselines.yml"
+        target: /fullpath/config/project-baselines.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_CONFIG_ROOT:?f2_only_config_root_required}/models.yml"
+        target: /fullpath/config/models.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_CONFIG_ROOT:?f2_only_config_root_required}/routing-policy.yml"
+        target: /fullpath/config/routing-policy.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_FIXTURE_ROOT:?exact_clean_f2_v2_checkout_required}"
+        target: /fullpath/sources/pcp-g0-fullpath-fixture
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_WORKSPACE_ROOT:?f2_only_workspace_root_required}"
+        target: /fullpath/workspaces
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_F2_AUTH_ROOT:?separate_f2_provider_auth_root_required}"
+        target: /home/coder/.codex-fullpath
+        bind: {create_host_path: false}
+    tmpfs:
+      - "/tmp:rw,nosuid,nodev,size=134217728"
+      - "/home/coder/.cache:rw,nosuid,nodev,size=67108864"
+      - "/home/coder/.config:rw,nosuid,nodev,size=67108864"
+      - "/home/coder/.local:rw,nosuid,nodev,size=67108864"
+    networks: [fullpath-private, provider-egress]
+    labels:
+      pcp.scope: f2-c3b-one-job
+      pcp.role: runtime
+
+secrets:
+  f2_executor_github_token:
+    file: "${PCP_F2_GITHUB_TOKEN_FILE:?fixture_repo_only_token_file_required}"
+  f2_runtime_app_password:
+    # A NEW runtime-UID-readable private copy, not the 70:70 C2 DB init file.
+    file: "${PCP_F2_RUNTIME_DB_APP_PASSWORD_FILE:?new_f2_runtime_readable_password_file_required}"
+
+networks:
+  fullpath-private:
+    name: pcp-f2-fullpath-private
+    external: true
+  github-egress:
+    name: pcp-f2-fullpath-github-egress
+    internal: false
+    labels: {pcp.scope: f2-c3b-github-egress}
+  provider-egress:
+    name: pcp-f2-fullpath-provider-egress
+    internal: false
+    labels: {pcp.scope: f2-c3b-provider-egress}
