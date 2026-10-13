@@ -202,7 +202,7 @@ class RuntimeEngineCore:
         self.worker_task = None
 
     async def enqueue(self, job_id: str) -> None:
-        if self._f2_worker_only:
+        if getattr(self, "_f2_worker_only", False):
             require_f2_worker_environment(os.environ)
             row = self.storage.get(job_id)
             if (not isinstance(row, dict)
