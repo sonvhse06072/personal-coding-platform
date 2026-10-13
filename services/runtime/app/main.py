@@ -26,6 +26,7 @@ from .g0_fixture_execution import G0FixtureExecution, G0GateError
 from .fullpath_pm_review import FullpathPMReviewRequest, FullpathPMReviewService
 from .fullpath_worker_only import (
     F2_WORKER_MODE, F2_V2_REVISION, F2_V2_SEED, F2WorkerNotReady,
+    F2_REENTRY_JOB_ID, require_f2_exact_blocked_job,
     require_f2_worker_environment, attest_f2_worker_database,
     f2_direct_intake_route_allowed,
 )
@@ -892,17 +893,36 @@ async def advance_job_source(
 async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
     request = payload or JobRunRequest()
     try:
-        orchestration_resume = prepare_orchestrated_job_resume(plan_orchestrator.store, job_id)
-        row = await engine.resume(
-            job_id,
-            reset_transient_provider_failures=request.reset_transient_provider_failures,
-            reroute=request.reroute,
-            verification_only_after_pm_handoff=request.verification_only_after_pm_handoff,
-            _allow_failed_orchestrated_resume=bool(
-                orchestration_resume and orchestration_resume.get("reopen")
-            ),
-        )
-        reopen_orchestrated_job(plan_orchestrator.store, orchestration_resume, job_id)
+        if runtime_startup_mode() == F2_WORKER_MODE:
+            require_f2_worker_environment(os.environ)
+            if (
+                job_id != F2_REENTRY_JOB_ID
+                or not getattr(engine, "_f2_worker_only", False)
+                or request.reset_transient_provider_failures
+                or request.reroute
+                or request.verification_only_after_pm_handoff
+            ):
+                raise F2WorkerNotReady("F2 one-job resume is not authorized")
+            async with _f2_single_job_intake_lock:
+                # No planner/PM orchestration, provider-state reset, reroute,
+                # budget increase, replay or new job. A second request sees
+                # status=queued and fails the same exact blocked-row gate.
+                require_f2_exact_blocked_job(storage.get(job_id))
+                if engine.active_jobs or not engine.queue.empty():
+                    raise F2WorkerNotReady("F2 one-job worker is already active")
+                row = await engine.resume(job_id)
+        else:
+            orchestration_resume = prepare_orchestrated_job_resume(plan_orchestrator.store, job_id)
+            row = await engine.resume(
+                job_id,
+                reset_transient_provider_failures=request.reset_transient_provider_failures,
+                reroute=request.reroute,
+                verification_only_after_pm_handoff=request.verification_only_after_pm_handoff,
+                _allow_failed_orchestrated_resume=bool(
+                    orchestration_resume and orchestration_resume.get("reopen")
+                ),
+            )
+            reopen_orchestrated_job(plan_orchestrator.store, orchestration_resume, job_id)
     except RuntimeError as exc:
         raise runtime_error(exc) from exc
     return view(row)
