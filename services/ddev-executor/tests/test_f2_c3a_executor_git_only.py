@@ -64,8 +64,11 @@ def test_f2_source_registry_stays_parked_until_both_activation_and_policy(monkey
     for name, value in main.F2_PARKED_EXECUTOR_ENV.items():
         monkeypatch.setenv(name, value)
     monkeypatch.setenv("PCP_F2_GIT_ONLY_ENABLED", "owner-approved")
+    # CI runners legitimately have a Docker socket. Test the separately
+    # guarded registry policy directly without connecting to that socket.
+    source = yaml.safe_load(SEED_CONFIG.read_text(encoding="utf-8"))
     with pytest.raises(HTTPException) as error:
-        main.load_projects()
+        main._validate_f2_registry(source["projects"])
     assert error.value.status_code == 503
     assert "separately activated" in error.value.detail
 

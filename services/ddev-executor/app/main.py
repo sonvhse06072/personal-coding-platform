@@ -1069,8 +1069,9 @@ def _github_context(cfg: dict[str, Any]) -> tuple[GitHubDelivery, str]:
         raise HTTPException(422, "Source origin is not a supported github.com repository")
     if _f2_git_only_scoped() and repository != F2_FIXTURE_REPOSITORY:
         raise HTTPException(403, "F2 GitHub origin outside fixture repository")
-    delivery = GitHubDelivery(
-        repository_scope=F2_FIXTURE_REPOSITORY if _f2_git_only_scoped() else None
+    delivery = (
+        GitHubDelivery(repository_scope=F2_FIXTURE_REPOSITORY)
+        if _f2_git_only_scoped() else GitHubDelivery()
     )
     if not delivery.configured:
         raise HTTPException(503, "GITHUB_DELIVERY_TOKEN is not configured")
@@ -2328,8 +2329,9 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
     if repository:
         if _f2_git_only_scoped() and repository != F2_FIXTURE_REPOSITORY:
             raise HTTPException(403, "F2 publishing origin outside fixture repository")
-        delivery = GitHubDelivery(
-            repository_scope=F2_FIXTURE_REPOSITORY if _f2_git_only_scoped() else None
+        delivery = (
+            GitHubDelivery(repository_scope=F2_FIXTURE_REPOSITORY)
+            if _f2_git_only_scoped() else GitHubDelivery()
         )
         if not delivery.configured:
             raise HTTPException(503, "GITHUB_DELIVERY_TOKEN is not configured for GitHub publishing")
