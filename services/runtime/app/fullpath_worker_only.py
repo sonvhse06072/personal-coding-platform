@@ -132,7 +132,13 @@ def f2_direct_intake_route_allowed(method: str, path: str) -> bool:
         return True
     if method == "POST" and path == "/v1/jobs":
         return True
+    import re
+    if method == "POST" and re.fullmatch(
+        r"/v1/g0-fullpath/jobs/[0-9a-f]{32}/pm-review", path,
+    ):
+        # Never reveal a broader PM/plan/merge route. C3B must separately
+        # configure reviewer identity + activate v2 + enable this gate.
+        return os.getenv("PCP_FULLPATH_PM_FINALIZATION_ENABLED") == "owner-approved"
     if method == "GET" and path.startswith("/v1/jobs/"):
-        import re
         return re.fullmatch(r"/v1/jobs/[0-9a-f]{32}", path) is not None
     return False

@@ -226,6 +226,17 @@ F2_ALLOWED_CHANGED_FILES = frozenset({
 })
 
 
+def _f2_git_only_route_allowed(method: str, path: str) -> bool:
+    if (method, path) in F2_GIT_ONLY_ROUTES:
+        return True
+    if method != "GET":
+        return False
+    return bool(re.fullmatch(
+        r"/v1/github/pm-bridge/pulls/[1-9][0-9]*"
+        r"(?:/reviews/[1-9][0-9]*)?", path,
+    ))
+
+
 def _f2_scope_present() -> bool:
     """Any F2 root marker implies ALL roots; a partial env fails closed."""
     matched = any(
@@ -1615,7 +1626,7 @@ async def fixture_only_http_scope(request: Request, call_next):
         if _f2_git_only_scoped():
             # Inspect exact source registry even for /health; never touch host DDEV.
             load_projects()
-            if (request.method, request.url.path) not in F2_GIT_ONLY_ROUTES:
+            if not _f2_git_only_route_allowed(request.method, request.url.path):
                 return JSONResponse(
                     status_code=403, content={"detail": "F2 Git-only endpoint denied"}
                 )

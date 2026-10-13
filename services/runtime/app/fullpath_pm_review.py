@@ -24,6 +24,11 @@ from .fullpath_ci_deferred import WAITING_PM
 from .fullpath_fixture_safety import (
     FIXED_ENV, PROJECT_ID, _database_uri, _service_uri,
 )
+from .fullpath_worker_only import (
+    F2_WORKER_MODE, F2_V2_REVISION, F2_V2_SEED,
+    require_f2_worker_environment,
+)
+from .fullpath_fresh_startup import V2_BRANCH
 from .required_ci import required_ci_for_project, required_github_actions_pass
 from .scope_guard import changed_path_protected_signals
 from .storage import _insert_job_event, now
@@ -120,9 +125,16 @@ def _date(value: Any) -> datetime:
 
 
 def require_isolated_review_environment(env: Mapping[str, str]) -> None:
-    """No GitHub fetch and no database reads if invoked on a legacy stack."""
+    """No GitHub fetch and no DB read before exact isolated mode is checked."""
+    mode = env.get("PCP_RUNTIME_STARTUP_MODE")
+    if mode == F2_WORKER_MODE:
+        # F2 cannot inherit the historical standalone v1 normal startup gate.
+        # This never starts a worker or promotes the approved-but-INACTIVE v2.
+        require_f2_worker_environment(env)
     required = {
-        "PCP_RUNTIME_STARTUP_MODE": "normal",
+        "PCP_RUNTIME_STARTUP_MODE": (
+            F2_WORKER_MODE if mode == F2_WORKER_MODE else "normal"
+        ),
         "PCP_FULLPATH_PM_FINALIZATION_ENABLED": "owner-approved",
         **{
             key: val for key, val in FIXED_ENV.items()
@@ -152,6 +164,7 @@ def require_isolated_review_environment(env: Mapping[str, str]) -> None:
 def require_eligible_job(
     row: dict[str, Any], request: FullpathPMReviewRequest,
     *, job_id: str, baseline_source: str,
+    expected_base_branch: str = "benchmark/fullpath",
 ) -> None:
     """Fail closed on an unapproved standalone job or incomplete verification."""
     result = row.get("result") or {}
@@ -226,7 +239,7 @@ def require_eligible_job(
         and pr.get("repository") == required[0]
         and pr.get("head") == request.expected_head
         and pr.get("head_ref") == request.branch
-        and pr.get("base_ref") == "benchmark/fullpath"
+        and pr.get("base_ref") == expected_base_branch
         and pr.get("merged") is not True
         and reviewer.get("verdict") == "pass"
         and reviewer.get("protocol_valid") is not False
@@ -250,6 +263,7 @@ def validate_live_proof(
     pr: dict[str, Any],
     ci: dict[str, Any],
     review: dict[str, Any],
+    expected_base_branch: str = "benchmark/fullpath",
 ) -> dict[str, Any]:
     """Bind all external facts to original job and original GitHub review."""
     requirement = required_ci_for_project(PROJECT_ID)
@@ -264,7 +278,7 @@ def validate_live_proof(
         and pr.get("state") == "open" and pr.get("merged") is False
         and pr.get("head") == request.expected_head
         and pr.get("head_ref") == request.branch
-        and pr.get("base_ref") == "benchmark/fullpath"
+        and pr.get("base_ref") == expected_base_branch
         and pr.get("html_url") == f"https://github.com/{repo}/pull/{request.pr_number}"
         and required_github_actions_pass(
             ci, repository=repo, commit=request.expected_head,
@@ -344,7 +358,15 @@ class FullpathPMReviewService:
         self, job_id: str, request: FullpathPMReviewRequest,
         *, env: Mapping[str, str] | None = None,
     ) -> dict[str, Any]:
-        require_isolated_review_environment(env if env is not None else os.environ)
+        effective_env = env if env is not None else os.environ
+        require_isolated_review_environment(effective_env)
+        f2 = effective_env.get("PCP_RUNTIME_STARTUP_MODE") == F2_WORKER_MODE
+        if f2 and (
+            request.baseline_revision != F2_V2_REVISION
+            or request.source_commit != F2_V2_SEED
+        ):
+            raise RuntimeError("pm_fullpath_v2_source_revision_mismatch")
+        expected_base_branch = V2_BRANCH if f2 else "benchmark/fullpath"
         if not isinstance(job_id, str) or not _JOB.fullmatch(job_id):
             raise RuntimeError("pm_fullpath_job_id_invalid")
         # Require an exact singleton project/baseline registry before any job
@@ -369,12 +391,18 @@ class FullpathPMReviewService:
             or review_policy.get("enabled") is not True
             or not isinstance(reviewer_login, str)
             or not _LOGIN.fullmatch(reviewer_login)
-            or project.get("base_branch") != "benchmark/fullpath"
+            or project.get("base_branch") != expected_base_branch
             or (project.get("autonomy") or {}).get("allow_production_deploy") is not False
             or (project.get("runtime") or {}).get("workspace_mode") != "isolated_clone"
             or (project.get("ddev") or {}).get("enabled") is not False
         ):
             raise RuntimeError("pm_fullpath_review_project_authority_missing")
+        if f2:
+            # resolve_project_baseline(explicit_revision) permits approved but
+            # INACTIVE frames; enforce the separate protected promotion first.
+            active = (registered_baselines[PROJECT_ID] or {}).get("active_revision")
+            if active != F2_V2_REVISION:
+                raise RuntimeError("pm_fullpath_v2_baseline_still_inactive")
         baseline = resolve_project_baseline(PROJECT_ID, request.baseline_revision)
         if (
             baseline is None or baseline.revision != request.baseline_revision
@@ -391,6 +419,7 @@ class FullpathPMReviewService:
             require_eligible_job(
                 row, request, job_id=job_id,
                 baseline_source=baseline.source_commit,
+                expected_base_branch=expected_base_branch,
             )
         else:
             saved = (row.get("result") or {}).get("fullpath_pm_review") or {}
@@ -418,16 +447,19 @@ class FullpathPMReviewService:
         receipt = validate_live_proof(
             row, request, job_id=job_id, reviewer_login=reviewer_login,
             pr=pr, ci=ci, review=review,
+            expected_base_branch=expected_base_branch,
         )
         return self.commit_receipt(
             job_id=job_id, request=request,
             baseline_source=baseline.source_commit,
             original_digest=original_digest, receipt=receipt,
+            expected_base_branch=expected_base_branch,
         )
 
     def commit_receipt(
         self, *, job_id: str, request: FullpathPMReviewRequest,
         baseline_source: str, original_digest: str, receipt: dict[str, Any],
+        expected_base_branch: str = "benchmark/fullpath",
     ) -> dict[str, Any]:
         """DB transaction: serialize competing reviews; one receipt per job."""
         with self.storage.connect() as conn:
@@ -458,6 +490,7 @@ class FullpathPMReviewService:
             require_eligible_job(
                 locked, request, job_id=job_id,
                 baseline_source=baseline_source,
+                expected_base_branch=expected_base_branch,
             )
             result = deepcopy(current_result)
             checkpoint = deepcopy(locked.get("checkpoint") or {})
