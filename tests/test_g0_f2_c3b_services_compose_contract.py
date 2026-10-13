@@ -8,11 +8,12 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 C3B = ROOT / "deploy/fullpath/compose.c3b-services.yml"
 SOURCE = "79f265aeb305be8b4b9d87af200730f9eb950fb2"
+RUNTIME_SOURCE = "82ca2c2b5990f55bd1cfd969f3154ab2cdea79bc"
 TRIAL_PROFILE = "owner-gated-c3b-one-job"
 IMAGES = {
     "fullpath-router": f"pcp-f2-c3b-router:{SOURCE[:12]}",
     "fullpath-executor": f"pcp-f2-c3b-executor:{SOURCE[:12]}",
-    "fullpath-runtime": f"pcp-f2-c3b-runtime:{SOURCE[:12]}",
+    "fullpath-runtime": f"pcp-f2-c3b-runtime:{RUNTIME_SOURCE[:12]}",
 }
 
 
@@ -25,7 +26,10 @@ def test_c3b_contains_only_explicit_profiled_existing_services_and_exact_images(
     assert compose["name"] == "pcp-f2-fullpath"
     assert set(compose["services"]) == set(IMAGES)
     assert compose["x-f2-c3b"]["status"] == "not_activated"
-    assert compose["x-f2-c3b"]["source_sha"] == SOURCE
+    assert compose["x-f2-c3b"]["source_sha"] == RUNTIME_SOURCE
+    assert compose["x-f2-c3b"]["image_sources"] == {
+        "router": SOURCE, "executor": SOURCE, "runtime": RUNTIME_SOURCE,
+    }
 
     for name, image in IMAGES.items():
         cfg = compose["services"][name]
