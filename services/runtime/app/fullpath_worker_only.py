@@ -190,7 +190,7 @@ def _attest_f2_blocked_reentry(storage: Any, snapshot: Mapping[str, Any]) -> Non
             **snapshot, "table_counts": {name: 0 for name in POST_SCHEMA_TABLES},
         })["source_snapshot_valid"] is not True
     ):
-        raise F2WorkerNotReady("F2 re-entry table manifest/count mismatch")
+        raise F2WorkerNotReady("F2 DB lacks exact 25 empty tables; re-entry manifest/count mismatch")
 
     with storage.connect() as conn:
         conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
