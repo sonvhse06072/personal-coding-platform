@@ -526,8 +526,8 @@ def test_final_paid_model_call_completes_only_with_real_verification():
 @pytest.mark.parametrize("violation", [
     "checks_missing", "tests_pending", "agent_failed",
     "material_missing", "protected_decision", "unexpected_scope",
-    "changed_file_ceiling", "hard_cost", "input_token_ceiling",
-    "repair_budget", "provider_failover",
+    "changed_file_ceiling", "calls_exceeded", "iterations_exceeded",
+    "hard_cost", "input_token_ceiling", "repair_budget", "provider_failover",
 ])
 def test_final_call_never_overrides_independent_gates(violation):
     router, route, progress = _final_paid_call()
@@ -546,6 +546,10 @@ def test_final_call_never_overrides_independent_gates(violation):
         progress.unexpected_scope = True
     elif violation == "changed_file_ceiling":
         progress.changed_files = budget.max_changed_files + 1
+    elif violation == "calls_exceeded":
+        progress.model_calls = budget.max_model_calls + 1
+    elif violation == "iterations_exceeded":
+        progress.iteration = budget.max_iterations + 1
     elif violation == "hard_cost":
         progress.cost_usd = budget.hard_cost_usd
     elif violation == "input_token_ceiling":
