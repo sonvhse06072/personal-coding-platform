@@ -41,8 +41,14 @@ class Runner:
                     "ServerVersion": "28.1.1",
                 }), "",
             ),
-            ("docker", "container", "inspect", DOCKER_WEB): (
-                1, "", "Error: No such object: " + DOCKER_WEB,
+            ("docker", "container", "ls", "--all", "--format", "{{json .}}"): (
+                0, "", "",
+            ),
+            ("docker", "volume", "ls", "--format", "{{json .}}"): (
+                0, "", "",
+            ),
+            ("docker", "network", "ls", "--format", "{{json .}}"): (
+                0, json.dumps({"Name": "bridge", "Labels": ""}), "",
             ),
             ("ddev", "--version"): (0, "ddev v1.25.4", ""),
             ("ddev", "list", "-j"): (
@@ -92,6 +98,10 @@ def test_exact_clean_source_local_docker_mcp_and_no_collision_pass(state):
     assert report["ready_to_dispatch_new_job"] is False
     assert report["model_calls"] == 0
     assert report["docker_ddev_git_mutations"] == 0
+    assert report["disposable_docker_resources_absent_including_stopped"] is True
+    assert report["fixture_inventory"]["fixture_container_count"] == 0
+    assert report["fixture_inventory"]["fixture_volume_count"] == 0
+    assert report["disposable_writer_or_runtime_lease"] == "NOT_PROVEN_NO_JOB_DISPATCH"
     assert report["actual_ddev_web_socket_and_egress"] == "NOT_YET_PROVEN"
     assert all(
         tuple(argv) in runner.responses
@@ -113,10 +123,13 @@ def test_exact_clean_source_local_docker_mcp_and_no_collision_pass(state):
      "docker_context_not_local_unix"),
     (("docker", "info", "--format", "{{json .}}"),
      (1, "", "DOCKER_HOST incorrect"), "docker_engine_unreachable"),
-    (("docker", "container", "inspect", DOCKER_WEB),
-     (0, '[{"Id":"existing"}]', ""), "disposable_web_container_already_exists"),
+    (("docker", "container", "ls", "--all", "--format", "{{json .}}"),
+     (0, json.dumps({"Names": DOCKER_WEB, "Labels": "", "State": "exited"}), ""),
+     "disposable_containers_already_present"),
     (("docker", "container", "inspect", DOCKER_WEB),
      (1, "", "permission denied"), "disposable_container_absence_unproven"),
+    (("docker", "container", "ls", "--all", "--format", "{{json .}}"),
+     (1, "", "permission denied"), "docker_container_inventory_unavailable"),
     (("codex", "mcp", "--help"),
      (1, "", "unknown command"), "codex_mcp_subcommand_unavailable"),
 ])
@@ -184,3 +197,42 @@ def test_remote_docker_host_override_denied(state, monkeypatch):
 def test_ddev_registered_foreign_project_not_exposed(state):
     report = check(state)
     assert "existing-private-project" not in json.dumps(report)
+
+
+def test_renamed_labeled_fixture_container_detected_even_if_stopped(state):
+    _, runner = state
+    key = ("docker", "container", "ls", "--all", "--format", "{{json .}}")
+    runner.responses[key] = (0, json.dumps({
+        "Names": "unexpected-web-container",
+        "State": "exited",
+        "Labels": "com.ddev.site-name=pcp-g1-codex-smoke",
+    }), "")
+    with pytest.raises(g1.Stop, match="disposable_containers_already_present") as exc:
+        check(state)
+    assert exc.value.facts["fixture_container_states"] == ["exited"]
+    assert exc.value.facts["fixture_container_count"] == 1
+
+
+@pytest.mark.parametrize("kind,entry,reason", [
+    ("volume", {"Name": "ddev-pcp-g1-codex-smoke-mariadb", "Labels": ""},
+     "disposable_fixture_volume_or_network_already_present"),
+    ("network", {"Name": "unrelated-network", "Labels": "com.ddev.site-name=pcp-g1-codex-smoke"},
+     "disposable_fixture_volume_or_network_already_present"),
+])
+def test_targeted_volumes_and_networks_are_not_silently_reused(state, kind, entry, reason):
+    _, runner = state
+    key = ("docker", kind, "ls", "--format", "{{json .}}")
+    baseline = runner.responses[key][1]
+    runner.responses[key] = (0, baseline + ("\n" if baseline else "") + json.dumps(entry), "")
+    with pytest.raises(g1.Stop, match=reason) as exc:
+        check(state)
+    assert exc.value.facts["fixture_" + kind + "_count"] == 1
+
+
+def test_malformed_container_list_fails_without_inferring_absence(state):
+    _, runner = state
+    runner.responses[("docker", "container", "ls", "--all", "--format", "{{json .}}")] = (
+        0, "this is not JSON", "",
+    )
+    with pytest.raises(g1.Stop, match="docker_container_inventory_invalid"):
+        check(state)
