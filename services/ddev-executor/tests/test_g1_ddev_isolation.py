@@ -16,6 +16,11 @@ from app import main as executor
 def snapshot(tmp_path):
     ws = tmp_path / ("a" * 32)
     ws.mkdir()
+    ddev = ws / ".ddev"
+    ddev.mkdir()
+    (ddev / isolation.PRIVATE_CACHE_COMPOSE_FILE).write_text(
+        isolation.PRIVATE_CACHE_COMPOSE, encoding="utf-8",
+    )
     def container(name):
         return {
             "Name": "/" + name,
@@ -31,7 +36,12 @@ def snapshot(tmp_path):
                 "Privileged": False, "PidMode": "", "NetworkMode": "default",
             },
             "NetworkSettings": {"Networks": {isolation.PRIVATE_NETWORK: {}}},
-            "Mounts": [{"Source": str(ws), "Destination": "/var/www/html"}],
+            "Mounts": [
+                {"Source": str(ws), "Destination": "/var/www/html"},
+                {"Type": "volume", "Name": isolation.PRIVATE_CACHE_NAME,
+                 "Source": "/var/lib/docker/volumes/pcp-g1-smoke-cache/_data",
+                 "Destination": "/mnt/ddev-global-cache"},
+            ],
         }
     items = {
         isolation.WEB: container(isolation.WEB),
@@ -60,6 +70,8 @@ def test_exact_running_private_ddev_is_admitted(snapshot, monkeypatch):
     ("wrong_owner", "g1_ddev_container_identity_invalid"),
     ("docker_socket", "g1_ddev_sensitive_mount_denied"),
     ("ssh_agent", "g1_ddev_sensitive_mount_denied"),
+    ("shared_cache", "g1_ddev_global_cache_not_isolated"),
+    ("edited_cache_override", "g1_private_cache_compose_missing_or_changed"),
     ("control_token", "g1_ddev_privileged_environment_denied"),
     ("stopped", "g1_ddev_container_identity_invalid"),
     ("non_internal", "g1_private_network_not_internal"),
@@ -85,6 +97,14 @@ def test_cross_project_credentials_and_egress_fail_closed(
         web["Mounts"].append({
             "Source": "/some/ssh-agent/sock", "Destination": "/run/agent",
         })
+    elif change == "shared_cache":
+        cache = next(x for x in web["Mounts"]
+                     if x.get("Destination") == "/mnt/ddev-global-cache")
+        cache["Name"] = "ddev-global-cache"
+    elif change == "edited_cache_override":
+        (ws / ".ddev" / isolation.PRIVATE_CACHE_COMPOSE_FILE).write_text(
+            "services: {}\n", encoding="utf-8",
+        )
     elif change == "control_token":
         web["Config"]["Env"].append("PLATFORM_INTERNAL_TOKEN=hidden-value")
     elif change == "stopped":
@@ -111,7 +131,7 @@ def test_workspace_acquisition_does_not_write_g1_ddev_override(
 ):
     ws, _ = snapshot
     ddev = ws / ".ddev"
-    ddev.mkdir()
+    assert ddev.is_dir()  # synthetic snapshot already prepared it
     conf = ddev / "config.yaml"
     conf.write_text("reviewed fixture placeholder", encoding="utf-8")
     monkeypatch.setattr(executor, "git", lambda *_a, **_kw:
@@ -187,3 +207,12 @@ def test_g1_preflight_missing_isolation_cannot_start_ddev(
     )
     with pytest.raises(HTTPException, match="g1_ddev_network_not_isolated"):
         executor.phase(request)
+
+
+def test_inert_ssh_auth_sock_string_is_not_a_socket_capability(snapshot, monkeypatch):
+    ws, items = snapshot
+    items[isolation.WEB]["Config"]["Env"].append(
+        "SSH_AUTH_SOCK=/home/.ssh-agent/socket"
+    )
+    monkeypatch.setattr(isolation, "_inspect", lambda _kind, name: items[name])
+    isolation.require_g1_isolated_ddev(ws)
