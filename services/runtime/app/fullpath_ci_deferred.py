@@ -122,17 +122,53 @@ def fixture_ci_handoff_candidate(
     ):
         return False
 
+    # Router reassessment is skipped ONLY for this provisional CI handoff.
+    # Re-check independent legacy-hard budget dimensions here; otherwise a
+    # successful last Codex turn could accidentally bypass a real hard limit.
     for field, limit in (
         ("model_calls", "max_model_calls"),
         ("iteration", "max_iterations"),
         ("changed_files", "max_changed_files"),
+        ("input_tokens", "max_input_tokens"),
+        ("output_tokens", "max_output_tokens"),
+        ("tool_calls", "max_tool_calls"),
+        ("test_runs", "max_test_runs"),
+        ("repair_iterations", "max_repair_iterations"),
+        ("model_failovers", "max_model_failovers"),
+        ("provider_failovers", "max_provider_failovers"),
+        ("escalations", "max_escalations"),
     ):
         used, ceiling = progress.get(field), budget.get(limit)
         if (
             type(used) is not int or type(ceiling) is not int
-            or used < 1 or ceiling < 1 or used > ceiling
+            or used < 0 or ceiling < 0 or used > ceiling
         ):
             return False
+    for field in ("model_calls", "iteration", "changed_files"):
+        if progress[field] < 1 or budget[{
+            "model_calls": "max_model_calls",
+            "iteration": "max_iterations",
+            "changed_files": "max_changed_files",
+        }[field]] < 1:
+            return False
+    elapsed, wall_limit = (
+        progress.get("elapsed_minutes"), budget.get("max_wall_time_minutes")
+    )
+    if (
+        type(elapsed) not in (int, float)
+        or type(wall_limit) not in (int, float)
+        or not 0 <= elapsed < wall_limit
+    ):
+        return False
+    prior_review = checkpoint.get("last_review_report")
+    if (
+        prior_review is not None
+        and (
+            not isinstance(prior_review, dict)
+            or prior_review.get("verdict") in ("fail", "error")
+        )
+    ):
+        return False
     cost, hard_cost = progress.get("cost_usd"), budget.get("hard_cost_usd")
     if (
         type(cost) not in (int, float)
