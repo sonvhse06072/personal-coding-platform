@@ -61,6 +61,43 @@ from .work_order_checkpoints import orchestrator_launch, verification_checkpoint
 
 _VALID_WORKSPACE_MODES = {"direct", "isolated_clone"}
 
+# A G1 disposable fixture has an immutable, reviewed DDEV identity. Renaming
+# it to the generic per-job cp-* name silently dirties .ddev and causes the
+# independently gated Executor broker to reject the very same job. Only an
+# already-admitted singleton G1 Codex job may keep its pinned fixture name.
+_G1_PROJECT_ID = "pcp-benchmark-g1-smoke"
+_G1_DDEV_CONFIG = (
+    "# Disposable PCP G1 Codex broker smoke fixture, no hooks or custom mounts.\n"
+    "name: pcp-g1-codex-smoke\n"
+    "type: drupal11\n"
+    "docroot: web\n"
+    'php_version: "8.4"\n'
+    "webserver_type: nginx-fpm\n"
+    "database:\n"
+    "  type: mariadb\n"
+    '  version: "10.11"\n'
+    'nodejs_version: "24"\n'
+)
+
+
+def preserve_trusted_g1_ddev_name(
+    *, job_id: str, project_id: str, source_commit: str, workspace: Path,
+) -> bool:
+    """Keep exactly the admitted G1 seed name, never a foreign DDEV project."""
+    if project_id != _G1_PROJECT_ID:
+        return False
+    config = workspace / ".ddev" / "config.yaml"
+    try:
+        if config.is_symlink() or config.read_text(encoding="utf-8") != _G1_DDEV_CONFIG:
+            return False
+    except (OSError, UnicodeError):
+        return False
+    return trusted_codex_phase_broker(
+        job_id=job_id, project_id=project_id, source_commit=source_commit,
+        workspace=workspace, mode="execute", adapter="codex_cli",
+    ) is not None
+
+
 
 def reusable_passed_review(
     checkpoint: dict[str, Any],
@@ -437,6 +474,10 @@ class RuntimeEngine(RuntimeEngineCore):
             workspace_mode == "isolated_clone"
             and project.get("ddev", {}).get("enabled", False)
             and (workspace / ".ddev").exists()
+            and not preserve_trusted_g1_ddev_name(
+                job_id=job_id, project_id=job["project_id"],
+                source_commit=source_commit, workspace=workspace,
+            )
         ):
             safe_name = re.sub(r"[^a-z0-9-]", "-", f"cp-{job_id[:10]}")
             (workspace / ".ddev" / "config.coding-platform.yaml").write_text(
