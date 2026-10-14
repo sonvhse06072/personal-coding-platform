@@ -99,7 +99,7 @@ def test_persisted_job_and_workspace_identity_checked_before_command(
     }))
     monkeypatch.setattr(g1, "ROOT", root)
     monkeypatch.setattr(g1, "EVIDENCE", root / "node-continuation-evidence.json")
-    monkeypatch.setattr(g1.os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(g1.os, "geteuid", lambda: root.stat().st_uid)
     monkeypatch.setattr(g1, "REPO", tmp_path / "pcp")
     g1.REPO.mkdir()
     checks = []
@@ -107,14 +107,14 @@ def test_persisted_job_and_workspace_identity_checked_before_command(
         checks.append(tuple(argv))
         if argv[0] != "git":
             pytest.fail("Only read-only Git checks permitted")
-        if argv[2] == "rev-parse":
-            if argv[3] == "--show-toplevel":
+        if argv[3] == "rev-parse":
+            if argv[4] == "--show-toplevel":
                 return str(ws)
-            return "1" * 40 if argv[1] == str(g1.REPO) else g1.SOURCE
-        if argv[2] == "hash-object":
+            return "1" * 40 if argv[2] == str(g1.REPO) else g1.SOURCE
+        if argv[3] == "hash-object":
             return g1.DDEV_BLOB
-        if argv[2] == "branch":
-            return "main" if argv[1] == str(g1.REPO) else "ai/" + job[:12]
+        if argv[3] == "branch":
+            return "main" if argv[2] == str(g1.REPO) else "ai/" + job[:12]
         return ""
     monkeypatch.setattr(g1, "call", fake_call)
     seen = []
