@@ -27,7 +27,11 @@ GLOBAL_CONFIG = ".ddev/global_config.yaml"
 
 
 class Stop(RuntimeError):
-    """Bounded reason code, never raw stderr, host path or credentials."""
+    """Bounded reason code and optionally safe fixture-only evidence."""
+
+    def __init__(self, reason: str, **facts: Any) -> None:
+        super().__init__(reason)
+        self.facts = facts
 
 
 def _run(argv: list[str]) -> subprocess.CompletedProcess[str]:
@@ -119,22 +123,70 @@ def _ddev_projects(raw: str) -> list[dict[str, Any]]:
     return found[0]
 
 
-def _absent_web_container(
+def _docker_inventory_rows(
     runner: Callable[[list[str]], subprocess.CompletedProcess[str]],
-) -> None:
-    result = runner(["docker", "container", "inspect", WEB_CONTAINER])
-    if result.returncode == 0:
-        raise Stop("disposable_web_container_already_exists")
-    if result.returncode != 1 or result.stdout.strip():
-        raise Stop("disposable_container_absence_ambiguous")
-    message = result.stderr.strip()
-    target = re.escape(WEB_CONTAINER)
-    patterns = (
-        rf"(?:Error: |Error response from daemon: )?No such (?:object|container): {target}",
-        rf"(?:Error response from daemon: )?container {target} not found",
-    )
-    if not any(re.fullmatch(x, message, flags=re.IGNORECASE) for x in patterns):
-        raise Stop("disposable_container_absence_unproven")
+    kind: str,
+    argv: list[str],
+) -> list[dict[str, Any]]:
+    """Use successful Docker list results, never localized inspect error text."""
+    raw = _ok(runner, argv, f"docker_{kind}_inventory_unavailable")
+    rows: list[dict[str, Any]] = []
+    for line in raw.splitlines():
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as exc:
+            raise Stop(f"docker_{kind}_inventory_invalid") from exc
+        name = row.get("Names", row.get("Name")) if isinstance(row, dict) else None
+        if not isinstance(name, str) or not isinstance(row.get("Labels", ""), str):
+            raise Stop(f"docker_{kind}_inventory_invalid")
+        rows.append(row)
+    if kind == "network" and not rows:
+        # A functioning local Docker engine normally lists bridge/host/none.
+        raise Stop("docker_network_inventory_empty")
+    return rows
+
+
+def _fixture_inventory(
+    runner: Callable[[list[str]], subprocess.CompletedProcess[str]],
+) -> dict[str, Any]:
+    """Check stopped/running containers plus labeled/renamed fixture resources."""
+    commands = {
+        "container": ["docker", "container", "ls", "--all", "--format", "{{json .}}"],
+        "volume": ["docker", "volume", "ls", "--format", "{{json .}}"],
+        "network": ["docker", "network", "ls", "--format", "{{json .}}"],
+    }
+    counts: dict[str, int] = {}
+    states: set[str] = set()
+    for kind, argv in commands.items():
+        rows = _docker_inventory_rows(runner, kind, argv)
+        matched = [
+            row for row in rows
+            if any(
+                marker in (row.get("Names", row.get("Name", "")) + " " + row.get("Labels", "")).lower()
+                for marker in (DDEV_NAME, "pcp-benchmark-g1-smoke")
+            )
+        ]
+        counts[kind] = len(matched)
+        if kind == "container":
+            for row in matched:
+                state = row.get("State", "")
+                states.add(
+                    state.lower() if isinstance(state, str) and state.lower() in {
+                        "running", "exited", "created", "paused", "restarting", "dead", "removing",
+                    } else "unknown"
+                )
+
+    facts = {
+        "fixture_container_count": counts["container"],
+        "fixture_container_states": sorted(states),
+        "fixture_volume_count": counts["volume"],
+        "fixture_network_count": counts["network"],
+    }
+    if counts["container"]:
+        raise Stop("disposable_containers_already_present", **facts)
+    if counts["volume"] or counts["network"]:
+        raise Stop("disposable_fixture_volume_or_network_already_present", **facts)
+    return facts
 
 
 def read_only_readiness(
@@ -163,7 +215,7 @@ def read_only_readiness(
     if target.exists() or target.is_symlink():
         raise Stop("disposable_target_already_present")
     _docker_endpoint(runner)
-    _absent_web_container(runner)
+    inventory = _fixture_inventory(runner)
 
     _ok(runner, ["ddev", "--version"], "ddev_cli_unavailable")
     raw = _ok(runner, ["ddev", "list", "-j"], "ddev_registry_unavailable")
@@ -194,7 +246,10 @@ def read_only_readiness(
         "fixture_source_commit": FIXTURE_SHA,
         "fixture_ref": FIXTURE_REF,
         "docker_local_desktop": True,
+        "disposable_docker_resources_absent_including_stopped": True,
+        "fixture_inventory": inventory,
         "disposable_root_unoccupied": True,
+        "disposable_writer_or_runtime_lease": "NOT_PROVEN_NO_JOB_DISPATCH",
         "ddev_fixture_name_unoccupied": True,
         "codex_mcp_cli_detected": True,
         "other_registered_ddev_project_count": len(projects),
@@ -224,6 +279,7 @@ def main() -> int:
             "model_calls": 0,
             "ready_to_dispatch_new_job": False,
         }
+        result.update(exc.facts)
         code = 2
     print(json.dumps(result, indent=2, sort_keys=True))
     return code
