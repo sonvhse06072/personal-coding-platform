@@ -594,6 +594,8 @@ class RouterEngine:
             and not progress.important_decision_flags
             and not progress.unexpected_scope
             and progress.changed_files <= budget.max_changed_files
+            and progress.model_calls <= budget.max_model_calls
+            and progress.iteration <= budget.max_iterations
             and any(hit and reason in final_call_limits for hit, reason in hard_limits)
             and all(not hit or reason in final_call_limits for hit, reason in hard_limits)
         )
