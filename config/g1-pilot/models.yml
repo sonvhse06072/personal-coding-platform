@@ -1,0 +1,27 @@
+# G1 T01 trial-only singleton model allowlist, not installed globally.
+version: 1
+models:
+  codex_gpt6_luna:
+    kind: agent
+    provider: openai
+    adapter: codex_cli
+    model: gpt-6-luna
+    reasoning_efforts: [low, medium, high, xhigh, max]
+    tier: balanced
+    cost_class: ultra_low
+    quota_group: codex_chatgpt_plus
+    allowed_profiles: [fast]
+    roles: [executor, repair, test_writer]
+    capabilities:
+      coding: 8
+      reasoning: 8
+      debugging: 7
+      planning: 7
+      review: 7
+      structured_output: 9
+      repo_exploration: 8
+    base_success: 0.87
+    privacy:
+      private_code_allowed: true
+      training_allowed: false
+      zero_retention_supported: true
