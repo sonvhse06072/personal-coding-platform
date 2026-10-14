@@ -3018,6 +3018,12 @@ def _trusted_codex_dev_flags() -> tuple[str, str, str, str]:
     jid = os.getenv("PCP_TRUSTED_CODEX_JOB_ID", "")
     source = os.getenv("PCP_TRUSTED_CODEX_SOURCE_SHA", "")
     token = os.getenv("PCP_TRUSTED_CODEX_DEV_TOKEN", "")
+    deadline = os.getenv("PCP_TRUSTED_CODEX_DEADLINE_EPOCH", "")
+    if not (deadline.isascii() and deadline.isdecimal() and len(deadline) <= 12):
+        raise HTTPException(503, "Scoped developer capability has no finite deadline")
+    seconds_left = int(deadline) - int(time.time())
+    if not 0 < seconds_left <= 1800:
+        raise HTTPException(503, "Scoped developer capability expired or too long-lived")
     if not (
         re.fullmatch(r"pcp-benchmark-[a-z0-9-]{2,80}", pid)
         and re.fullmatch(r"[a-f0-9]{32}", jid)
