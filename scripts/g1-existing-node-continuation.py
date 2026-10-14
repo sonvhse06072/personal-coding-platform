@@ -70,9 +70,12 @@ def docker_identity(workspace: Path) -> str:
     try:
         contexts = json.loads(call(["docker", "context", "inspect"]))
         host = contexts[0]["Endpoints"]["docker"]["Host"]
+        override = os.getenv("DOCKER_HOST", "").strip()
         require(isinstance(contexts, list) and len(contexts) == 1
-                and host == "unix:///var/run/docker.sock"
-                and not os.getenv("DOCKER_HOST", "").strip(),
+                and isinstance(host, str) and host.startswith("unix://")
+                and Path(host.removeprefix("unix://")).resolve()
+                    == Path("/var/run/docker.sock").resolve()
+                and (not override or override == host),
                 "g1_docker_context_changed")
     except (ValueError, KeyError, IndexError, TypeError) as exc:
         raise Stop("g1_docker_context_unverifiable") from exc
