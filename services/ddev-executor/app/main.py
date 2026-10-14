@@ -2985,3 +2985,227 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
         commands=outputs,
         infrastructure=infrastructure,
     )
+
+
+# G1 disposable fixture tool surface. This is an opt-in broker capability, NOT
+# PLATFORM_INTERNAL_TOKEN and not an arbitrary host/Docker command executor.
+# The developer may learn the restricted token but it has no other API rights.
+_TRUSTED_DEV_PHASES = frozenset({
+    "targeted_tests", "static_analysis", "frontend_quality",
+})
+_TRUSTED_DEV_BINARIES = frozenset({
+    "php", "composer", "vendor/bin/phpunit", "vendor/bin/phpcs",
+    "npm", "node",
+})
+_TRUSTED_DEV_CALLS: dict[str, int] = {}
+_TRUSTED_DEV_CALLS_LOCK = threading.Lock()
+
+
+class TrustedCodexPhaseRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    job_id: str = Field(pattern=r"^[a-f0-9]{32}$")
+    project_id: str = Field(pattern=r"^pcp-benchmark-[a-z0-9-]{2,80}$")
+    workspace: str = Field(min_length=12, max_length=2000)
+    source_commit: str = Field(pattern=r"^[a-f0-9]{40}$")
+    phase: Literal["targeted_tests", "static_analysis", "frontend_quality"]
+
+
+def _trusted_codex_dev_flags() -> tuple[str, str, str, str]:
+    if os.getenv("PCP_TRUSTED_CODEX_BROKER_ENABLED") != "owner-approved":
+        raise HTTPException(503, "Trusted Codex broker is not activated")
+    pid = os.getenv("PCP_TRUSTED_CODEX_PROJECT_ID", "")
+    jid = os.getenv("PCP_TRUSTED_CODEX_JOB_ID", "")
+    source = os.getenv("PCP_TRUSTED_CODEX_SOURCE_SHA", "")
+    token = os.getenv("PCP_TRUSTED_CODEX_DEV_TOKEN", "")
+    if not (
+        re.fullmatch(r"pcp-benchmark-[a-z0-9-]{2,80}", pid)
+        and re.fullmatch(r"[a-f0-9]{32}", jid)
+        and re.fullmatch(r"[a-f0-9]{40}", source)
+        and re.fullmatch(r"[A-Za-z0-9_-]{40,128}", token)
+        and token not in {
+            os.getenv("PLATFORM_INTERNAL_TOKEN", ""),
+            os.getenv("GITHUB_DELIVERY_TOKEN", ""),
+            os.getenv("ROUTER_API_TOKEN", ""),
+            os.getenv("RUNTIME_API_TOKEN", ""),
+        }
+        and not os.getenv("PCP_EXECUTOR_PROJECT_SCOPE")
+        and not any(os.getenv(k) for k in (
+            "PCP_F2_GIT_ONLY_ENABLED", "PCP_G0_EXECUTION_ENABLED",
+            "PCP_G0_DELIVERY_ENABLED",
+        ))
+    ):
+        raise HTTPException(503, "Trusted Codex singleton identity not available")
+    return pid, jid, source, token
+
+
+def trusted_codex_dev_auth(
+    authorization: str | None = Header(default=None),
+) -> None:
+    _, _, _, expected = _trusted_codex_dev_flags()
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Missing scoped developer bearer")
+    if not secrets.compare_digest(
+        authorization.removeprefix("Bearer ").strip(), expected,
+    ):
+        raise HTTPException(401, "Invalid scoped developer bearer")
+
+
+def _trusted_dev_plan(payload: TrustedCodexPhaseRequest) -> tuple[Path, list[list[str]]]:
+    project_id, job_id, source_sha, _ = _trusted_codex_dev_flags()
+    if (
+        payload.project_id != project_id
+        or payload.job_id != job_id
+        or payload.source_commit != source_sha
+    ):
+        raise HTTPException(403, "Developer job/project/source mismatch")
+    registry = load_projects()
+    if set(registry) != {project_id}:
+        raise HTTPException(403, "Developer fixture registry is not singleton")
+    cfg = project(project_id)
+    runtime = cfg.get("runtime") or {}
+    autonomy = cfg.get("autonomy") or {}
+    ddev = cfg.get("ddev") or {}
+    if not (
+        isinstance(runtime, dict)
+        and runtime.get("developer_permission_mode") == "trusted_project"
+        and runtime.get("workspace_mode") == "isolated_clone"
+        and runtime.get("exclusive_project_lease") is False
+        and runtime.get("branch_prefix") == "ai"
+        and isinstance(ddev, dict) and ddev.get("enabled") is True
+        and isinstance(autonomy, dict)
+        and autonomy.get("allow_auto_merge_low_risk") is False
+        and autonomy.get("allow_production_deploy") is False
+    ):
+        raise HTTPException(403, "Developer fixture is not allowed to execute")
+
+    root_text = os.getenv("CODING_WORKSPACES_ROOT", "")
+    if not root_text:
+        raise HTTPException(503, "Dedicated developer workspaces root required")
+    root = Path(root_text).resolve()
+    raw = Path(payload.workspace)
+    target = root / job_id
+    if (
+        raw.is_symlink()
+        or target.is_symlink()
+        or raw.resolve() != target.resolve()
+        or target.resolve().parent != root
+        or not target.is_dir()
+        or not is_git_repo(target)
+    ):
+        raise HTTPException(403, "Developer workspace is not the exact isolated job")
+    if (
+        git(target, "rev-parse", "--show-toplevel") != str(target)
+        or git(target, "branch", "--show-current") != "ai/" + job_id[:12]
+        or git(target, "rev-parse", "HEAD") != source_sha
+    ):
+        raise HTTPException(403, "Developer workspace branch/source provenance changed")
+
+    # A DDEV configuration modified by the model could inject host hooks,
+    # arbitrary containers or Docker/socket mounts on the Executor host.
+    # This broker NEVER bootstraps/restarts DDEV and refuses changed .ddev files.
+    if git(target, "status", "--porcelain", "--", ".ddev", check=False):
+        raise HTTPException(403, "Developer DDEV configuration is dirty")
+    untracked = subprocess.run(
+        ["git", "-C", str(target), "ls-files", "--others",
+         "--exclude-standard", "--", ".ddev"],
+        capture_output=True, text=True,
+    )
+    if untracked.returncode != 0 or untracked.stdout.strip():
+        raise HTTPException(403, "Developer untracked DDEV configuration")
+    ddev_dir = target / ".ddev"
+    if ddev_dir.exists() and (
+        ddev_dir.is_symlink()
+        or any(path.is_symlink() for path in ddev_dir.rglob("*"))
+    ):
+        raise HTTPException(403, "Developer DDEV symlink refused")
+
+    tools = cfg.get("trusted_codex_tools") or {}
+    commands = tools.get(payload.phase) if isinstance(tools, dict) else None
+    if not isinstance(commands, list) or not 1 <= len(commands) <= 4:
+        raise HTTPException(403, "Phase has no approved bounded commands")
+    approved: list[list[str]] = []
+    for argv in commands:
+        if not (
+            isinstance(argv, list)
+            and 3 <= len(argv) <= 30
+            and all(isinstance(x, str) and 0 < len(x) <= 300
+                    and "\x00" not in x and "\n" not in x
+                    for x in argv)
+            and argv[:2] == ["ddev", "exec"]
+            and argv[2] in _TRUSTED_DEV_BINARIES
+        ):
+            raise HTTPException(403, "Trusted developer command not pre-approved")
+        approved.append(argv)
+    with _ACTIVE_LOCK:
+        if any(
+            jid != job_id and proc.poll() is None
+            for jid, proc in _ACTIVE.items()
+        ):
+            raise HTTPException(409, "A foreign Executor job is active")
+    return target, approved
+
+
+def _trusted_dev_env() -> dict[str, str]:
+    # The controlled Executor needs Docker access for "ddev exec", but code
+    # inside the DDEV application container never receives these host tokens.
+    # Scrub the Executor's sensitive credential names before subprocess entry.
+    return {
+        key: value for key, value in _ddev_subprocess_env().items()
+        if not any(part in key.upper() for part in (
+            "TOKEN", "SECRET", "PASSWORD", "API_KEY", "CREDENTIAL",
+        ))
+    }
+
+
+def _trusted_dev_redact(text: str) -> str:
+    value = text[-5000:]
+    for key, secret_value in os.environ.items():
+        if (
+            len(secret_value) >= 8
+            and any(term in key.upper() for term in (
+                "TOKEN", "SECRET", "PASSWORD", "API_KEY", "CREDENTIAL",
+            ))
+        ):
+            value = value.replace(secret_value, "[REDACTED]")
+    return value
+
+
+@app.post(
+    "/v1/codex-dev/phase",
+    dependencies=[Depends(trusted_codex_dev_auth)],
+)
+def trusted_codex_dev_phase(payload: TrustedCodexPhaseRequest) -> dict[str, Any]:
+    # The handler enforces all constraints independently of HTTP dependencies,
+    # so calling it directly cannot bypass the disposable fixture gate.
+    workspace, commands = _trusted_dev_plan(payload)
+    with _TRUSTED_DEV_CALLS_LOCK:
+        used = _TRUSTED_DEV_CALLS.get(payload.job_id, 0)
+        if used >= 8:
+            raise HTTPException(429, "Scoped developer phase-call ceiling reached")
+        _TRUSTED_DEV_CALLS[payload.job_id] = used + 1
+
+    outputs: list[dict[str, Any]] = []
+    for args in commands:
+        rc, stdout, stderr, timed_out = run_tracked(
+            payload.job_id, args, cwd=workspace, timeout=160,
+            env=_trusted_dev_env(),
+        )
+        outputs.append({
+            "command": args[2],
+            "returncode": rc,
+            "stdout": _trusted_dev_redact(stdout),
+            "stderr": _trusted_dev_redact(stderr),
+            "timed_out": timed_out,
+        })
+        if rc != 0 or timed_out:
+            break
+    return {
+        "job_id": payload.job_id, "project_id": payload.project_id,
+        "phase": payload.phase,
+        "passed": len(outputs) == len(commands)
+        and all(x["returncode"] == 0 and not x["timed_out"] for x in outputs),
+        "commands": outputs,
+        "tool_calls_used": used + 1,
+        "tool_calls_max": 8,
+    }
