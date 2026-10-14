@@ -220,10 +220,13 @@ def identity(expected_sha: str):
     )
     password = env_mapping(db).get("POSTGRES_PASSWORD", "")
     check(bool(password), "g1_disposable_db_password_missing")
+    db_full_id = db.get("Id")
+    check(isinstance(db_full_id, str) and len(db_full_id) == 64,
+          "g1_existing_postgres_container_id_invalid")
     web_id = inspect("container", "ddev-pcp-g1-codex-smoke-web").get("Id")
     ddev_db_id = inspect("container", "ddev-pcp-g1-codex-smoke-db").get("Id")
     check(bool(web_id) and bool(ddev_db_id), "g1_ddev_container_ids_missing")
-    return previous, job, ws, executor_id, dbid, web_id, ddev_db_id, password, old
+    return previous, job, ws, executor_id, dbid, db_full_id, web_id, ddev_db_id, password, old
 
 
 def configure(job: str, password: str) -> dict[str, str]:
@@ -322,7 +325,7 @@ def parse_phase(raw: str, job: str) -> dict[str, Any]:
 
 
 def execute(expected_sha: str) -> dict[str, Any]:
-    previous, job, ws, old_executor, dbid, webid, ddevdbid, password, old = identity(expected_sha)
+    previous, job, ws, old_executor, dbid, db_full_id, webid, ddevdbid, password, old = identity(expected_sha)
     env = configure(job, password)
     started = time.monotonic()
     save({
@@ -346,7 +349,7 @@ def execute(expected_sha: str) -> dict[str, Any]:
         and set((new.get("NetworkSettings") or {}).get("Networks") or {}) == {CONTROL},
         "g1_refreshed_executor_not_isolated",
     )
-    check(inspect("container", dbid).get("Id") == dbid
+    check(inspect("container", dbid).get("Id") == db_full_id
           and inspect("container", "ddev-pcp-g1-codex-smoke-web").get("Id") == webid
           and inspect("container", "ddev-pcp-g1-codex-smoke-db").get("Id") == ddevdbid,
           "g1_other_containers_changed")
