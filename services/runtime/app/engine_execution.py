@@ -17,7 +17,11 @@ from .fullpath_worker_only import (
     require_f2_worker_environment,
 )
 from .fullpath_fixture_safety import PROJECT_ID as F2_PROJECT_ID
-from .fullpath_ci_deferred import fixture_deferred_verification
+from .fullpath_ci_deferred import (
+    fixture_ci_handoff_candidate,
+    fixture_ci_handoff_ready,
+    fixture_deferred_verification,
+)
 from .evidence_packs import developer_repair_evidence_pack, pm_evidence_pack
 from .fingerprint import failure_fingerprint
 from .incident_learning import incident_learning_candidate
@@ -902,6 +906,20 @@ class RuntimeEngine(RuntimeEngineCore):
             else:
                 run_review = bool(strategy.get("evaluator"))
 
+            # F2 uses hosted CI + an exact-HEAD PM review. Do not spend an
+            # optional lightweight reviewer model call before those tests exist.
+            defer_f2_reviewer = fixture_ci_handoff_candidate(
+                project_id=job["project_id"],
+                worker_only=f2_worker,
+                verification=verification,
+                progress=progress,
+                strategy=strategy,
+                checkpoint=checkpoint,
+                diff=diff,
+            )
+            if defer_f2_reviewer:
+                run_review = False
+
             reuse_review = reusable_passed_review(
                 checkpoint,
                 verification,
@@ -1065,7 +1083,21 @@ class RuntimeEngine(RuntimeEngineCore):
                     self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
                     break
             elif verification["passed"] and strategy.get("evaluator") and not run_review:
-                if reuse_review:
+                if defer_f2_reviewer:
+                    checkpoint["last_review_report"] = {
+                        "verdict": "deferred",
+                        "summary": "F2 review pending exact-HEAD hosted CI and PM review",
+                        "finding_count": 0,
+                        "findings": [],
+                        "jit_context_used": False,
+                    }
+                    progress["review_deferred_hosted_ci"] = int(
+                        progress.get("review_deferred_hosted_ci", 0)
+                    ) + 1
+                    self.storage.update(
+                        job_id, progress=progress, checkpoint=checkpoint,
+                    )
+                elif reuse_review:
                     progress["review_reused_after_pm_staffing_failure"] = int(
                         progress.get("review_reused_after_pm_staffing_failure", 0)
                     ) + 1
@@ -1452,37 +1484,51 @@ class RuntimeEngine(RuntimeEngineCore):
                     return
 
             if progress["required_checks_passed"]:
-                effective_route = self._effective_route(route, executor_choice)
-                while True:
-                    reassess_progress = self._progress_for_reassessment(
-                        job_id=job_id,
-                        checkpoint=checkpoint,
-                        progress=progress,
-                    )
-                    reassess = await self.router.reassess({
-                        "route": effective_route,
-                        "progress": reassess_progress,
-                        "provider_state": provider_state,
-                    })
-                    action = reassess["action"]
-                    if action != "human_decision":
-                        break
-                    decision = dict(reassess.get("human_decision") or {})
-                    if not self._decision_approved(checkpoint, decision):
-                        self._pause_for_decision(
+                # A CI-deferred F2 fixture has no local test pass yet. Permit
+                # ONLY its pre-reviewed scoped code to enter the existing
+                # pending_hosted_ci delivery gate, never terminal acceptance.
+                if fixture_ci_handoff_ready(
+                    project_id=job["project_id"],
+                    worker_only=f2_worker,
+                    verification=verification,
+                    progress=progress,
+                    strategy=strategy,
+                    checkpoint=checkpoint,
+                    diff=diff,
+                ):
+                    action = "complete"
+                else:
+                    effective_route = self._effective_route(route, executor_choice)
+                    while True:
+                        reassess_progress = self._progress_for_reassessment(
                             job_id=job_id,
                             checkpoint=checkpoint,
                             progress=progress,
-                            decision=decision,
-                            route_history=route_history,
-                            source="reassessment",
                         )
-                        return
-                    approved = set(decision.get("triggers") or [])
-                    progress["important_decision_flags"] = [
-                        item for item in progress.get("important_decision_flags", []) if item not in approved
-                    ]
-                    self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
+                        reassess = await self.router.reassess({
+                            "route": effective_route,
+                            "progress": reassess_progress,
+                            "provider_state": provider_state,
+                        })
+                        action = reassess["action"]
+                        if action != "human_decision":
+                            break
+                        decision = dict(reassess.get("human_decision") or {})
+                        if not self._decision_approved(checkpoint, decision):
+                            self._pause_for_decision(
+                                job_id=job_id,
+                                checkpoint=checkpoint,
+                                progress=progress,
+                                decision=decision,
+                                route_history=route_history,
+                                source="reassessment",
+                            )
+                            return
+                        approved = set(decision.get("triggers") or [])
+                        progress["important_decision_flags"] = [
+                            item for item in progress.get("important_decision_flags", []) if item not in approved
+                        ]
+                        self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
 
                 if action == "complete":
                     commit_sha = None
