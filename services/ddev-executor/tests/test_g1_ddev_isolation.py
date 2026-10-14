@@ -131,7 +131,7 @@ def test_workspace_acquisition_does_not_write_g1_ddev_override(
 ):
     ws, _ = snapshot
     ddev = ws / ".ddev"
-    ddev.mkdir()
+    assert ddev.is_dir()  # synthetic snapshot already prepared it
     conf = ddev / "config.yaml"
     conf.write_text("reviewed fixture placeholder", encoding="utf-8")
     monkeypatch.setattr(executor, "git", lambda *_a, **_kw:
