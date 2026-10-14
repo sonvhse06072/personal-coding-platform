@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 from fastapi.testclient import TestClient
 
 from app import main as executor
@@ -122,7 +123,9 @@ def test_wrong_job_project_source_denied_before_command(fixture, monkeypatch, ch
     monkeypatch.setattr(executor, "run_tracked", lambda *_a, **_kw: pytest.fail(
         "Wrong scope must not execute any DDEV command",
     ))
-    with pytest.raises(HTTPException):
+    # Pydantic rejects foreign project names at the HTTP schema boundary;
+    # valid-looking but wrong fixture IDs reach the deeper scope check.
+    with pytest.raises((HTTPException, ValidationError)):
         executor._trusted_dev_plan(payload(fixture[0], **change))
 
 
