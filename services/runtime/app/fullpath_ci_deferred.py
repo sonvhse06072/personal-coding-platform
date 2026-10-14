@@ -21,6 +21,160 @@ DEFERRED_MODE = "hosted_ci_deferred"
 WAITING_PM = "awaiting_pm_exact_head_review"
 _SHA = re.compile(r"^[a-f0-9]{40}$")
 
+# Only the three paths in the approved F2-T01 source/acceptance contract.
+_F2_CI_FIRST_PATHS = frozenset({
+    "web/modules/custom/pcp_f2_fixture/src/WindowOverlapDetector.php",
+    "web/modules/custom/pcp_f2_fixture/tests/src/Unit/WindowOverlapDetectorTest.php",
+    "web/modules/custom/pcp_f2_fixture/tests/src/Kernel/WindowOverlapServiceTest.php",
+})
+_F2_CI_FIRST_DOD = frozenset({
+    "targeted_tests_pass", "static_analysis_pass",
+    "no_unexpected_scope", "material_change",
+})
+
+
+def fixture_ci_handoff_candidate(
+    *,
+    project_id: str,
+    worker_only: bool,
+    verification: dict[str, Any],
+    progress: dict[str, Any],
+    strategy: dict[str, Any],
+    checkpoint: dict[str, Any],
+    diff: dict[str, Any],
+) -> bool:
+    """Defer *optional* F2 reviewer spend to exact-HEAD hosted CI + PM review.
+
+    The provisional verification does not pass Unit/Kernel tests. Only an
+    in-scope, non-protected F2 fast WorkOrder can reach the existing mandatory
+    delivery/CI/independent-PM gates without spending another model call.
+    """
+    if project_id != PROJECT_ID or worker_only is not True:
+        return False
+    if not all(isinstance(v, dict) for v in (
+        verification, progress, strategy, checkpoint, diff,
+    )):
+        return False
+    if (
+        verification.get("verification_mode") != DEFERRED_MODE
+        or verification.get("passed") is not True
+        or verification.get("tests_passed") is not False
+        or verification.get("local_tests_executed") is not False
+        or verification.get("hosted_ci_pending") is not True
+        or verification.get("test_runs") != 0
+        or verification.get("phases") != []
+        or progress.get("tests_passed") is not False
+        or progress.get("test_runs") != 0
+        or progress.get("agent_succeeded") is not True
+        or progress.get("material_change_present") is not True
+        or progress.get("unexpected_scope") is not False
+        or progress.get("important_decision_flags") not in ([], None)
+        or progress.get("provider_failures") not in ([], None)
+        or diff.get("diff_truncated") is not False
+        or not isinstance(diff.get("diff_hash"), str)
+        or not re.fullmatch(r"[0-9a-f]{64}", diff["diff_hash"])
+        or any(checkpoint.get(k) for k in (
+            "pending_decision", "pending_pm_reassessment",
+            "pending_review_findings", "orchestrator_launch",
+        ))
+    ):
+        return False
+
+    paths = diff.get("changed_files")
+    if (
+        not isinstance(paths, list)
+        or not paths
+        or len(paths) > len(_F2_CI_FIRST_PATHS)
+        or not all(isinstance(p, str) for p in paths)
+        or len(paths) != len(set(paths))
+        or not set(paths).issubset(_F2_CI_FIRST_PATHS)
+        or type(diff.get("changed_file_count")) is not int
+        or diff["changed_file_count"] != len(paths)
+        or type(progress.get("changed_files")) is not int
+        or progress["changed_files"] != len(paths)
+    ):
+        return False
+
+    policy = strategy.get("review_policy")
+    decision = strategy.get("human_decision")
+    requirements = (strategy.get("definition_of_done") or {}).get("required")
+    permissions = strategy.get("permissions")
+    budget = strategy.get("budget")
+    if (
+        strategy.get("profile") != "fast"
+        or strategy.get("planner") is not None
+        or not isinstance(policy, dict)
+        or policy.get("level") != "lightweight"
+        or policy.get("required") is not False
+        or not isinstance(decision, dict)
+        or decision.get("required") is not False
+        or not isinstance(requirements, list)
+        or not all(isinstance(r, str) for r in requirements)
+        or not set(requirements).issubset(_F2_CI_FIRST_DOD)
+        or not isinstance(permissions, dict)
+        or not all(permissions.get(k) is True for k in (
+            "commit", "push_ai_branch", "create_pr",
+        ))
+        or permissions.get("auto_merge_low_risk") is not False
+        or permissions.get("production_deploy") is not False
+        or not isinstance(budget, dict)
+        or required_ci_for_project(project_id) is None
+    ):
+        return False
+
+    for field, limit in (
+        ("model_calls", "max_model_calls"),
+        ("iteration", "max_iterations"),
+        ("changed_files", "max_changed_files"),
+    ):
+        used, ceiling = progress.get(field), budget.get(limit)
+        if (
+            type(used) is not int or type(ceiling) is not int
+            or used < 1 or ceiling < 1 or used > ceiling
+        ):
+            return False
+    cost, hard_cost = progress.get("cost_usd"), budget.get("hard_cost_usd")
+    if (
+        type(cost) not in (int, float)
+        or type(hard_cost) not in (int, float)
+        or not 0 <= cost < hard_cost
+    ):
+        return False
+    return True
+
+
+def fixture_ci_handoff_ready(
+    *,
+    project_id: str,
+    worker_only: bool,
+    verification: dict[str, Any],
+    progress: dict[str, Any],
+    strategy: dict[str, Any],
+    checkpoint: dict[str, Any],
+    diff: dict[str, Any],
+) -> bool:
+    """Admit provisional completion ONLY for pending GitHub CI delivery.
+
+    The existing DeliveryAwareStorage immediately converts completion into
+    truthful pending_hosted_ci (tests_passed=False); exact CI + Human/PM review
+    are still required for durable acceptance.
+    """
+    return (
+        fixture_ci_handoff_candidate(
+            project_id=project_id,
+            worker_only=worker_only,
+            verification=verification,
+            progress=progress,
+            strategy=strategy,
+            checkpoint=checkpoint,
+            diff=diff,
+        )
+        and progress.get("required_checks_passed") is True
+        and isinstance(checkpoint.get("last_review_report"), dict)
+        and checkpoint["last_review_report"].get("verdict") == "deferred"
+        and checkpoint.get("acceptance_phase") in (None, "")
+    )
+
 
 def fixture_deferred_verification(
     project_id: str, *, ddev_enabled: bool
