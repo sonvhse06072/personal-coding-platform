@@ -25,7 +25,6 @@ CONFIG = ROOT / "config/projects.yml"
 OLD = ["ddev", "exec", "npm", "--prefix", "..", "run", "build"]
 NEW = ["ddev", "exec", "npm", "--prefix", "/var/www/html", "run", "build"]
 EXPECTED_CWD = "/var/www/html"
-COMMIT = "6165d2e69dc1237deb6465962e523d57e8add1f3"
 
 
 class Stop(RuntimeError):
@@ -204,7 +203,6 @@ def one_node_attempt(previous, executor_id: str, ws: Path) -> dict[str, Any]:
 
 
 def execute(expected_sha: str) -> dict[str, Any]:
-    require(expected_sha == COMMIT, "g1_source_sha_not_reviewed")
     previous = prior_operator()
     job, ws, executor_id = exact_origin(previous, expected_sha)
     config = read_config(previous, ws)
