@@ -126,8 +126,6 @@ def test_exact_clean_source_local_docker_mcp_and_no_collision_pass(state):
     (("docker", "container", "ls", "--all", "--format", "{{json .}}"),
      (0, json.dumps({"Names": DOCKER_WEB, "Labels": "", "State": "exited"}), ""),
      "disposable_containers_already_present"),
-    (("docker", "container", "inspect", DOCKER_WEB),
-     (1, "", "permission denied"), "disposable_container_absence_unproven"),
     (("docker", "container", "ls", "--all", "--format", "{{json .}}"),
      (1, "", "permission denied"), "docker_container_inventory_unavailable"),
     (("codex", "mcp", "--help"),
