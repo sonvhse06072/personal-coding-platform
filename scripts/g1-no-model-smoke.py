@@ -234,6 +234,54 @@ def create_private_cache(workspace: Path, env: dict[str, str]) -> None:
              "g1_managed_private_cache_must_not_dirty_source")
 
 
+def rendered_ddev_cache_preflight(env: dict[str, str]) -> None:
+    """Verify effective Compose will NOT mount the shared DDEV cache.
+
+    No DDEV service start. Stops before a global cache could be touched.
+    """
+    proof = r'''
+import os, subprocess, yaml
+from pathlib import Path
+root = Path(os.environ["CODING_WORKSPACES_ROOT"])
+job = os.environ["PCP_TRUSTED_CODEX_JOB_ID"]
+clean = {k:v for k,v in os.environ.items()
+         if not any(w in k.upper() for w in
+         ("TOKEN", "SECRET", "PASSWORD", "API_KEY", "CREDENTIAL"))}
+result = subprocess.run(["ddev", "utility", "compose-config"], cwd=root/job,
+                        env=clean, capture_output=True, text=True, timeout=90)
+if result.returncode:
+    raise SystemExit("STOP_RENDERED_COMPOSE_UNAVAILABLE")
+try:
+    doc = yaml.safe_load(result.stdout)
+    volumes = doc["volumes"]
+    if volumes["pcp-g1-private-cache"]["name"] != "pcp-g1-smoke-cache":
+        raise ValueError()
+    for service in ("web", "db"):
+        mounts = doc["services"][service]["volumes"]
+        found = []
+        for mount in mounts:
+            if isinstance(mount, dict):
+                src, dest = mount.get("source"), mount.get("target")
+            else:
+                src, _, dest = str(mount).partition(":")
+                dest = dest.split(":")[0]
+            if dest == "/mnt/ddev-global-cache":
+                found.append(src)
+        if found != ["pcp-g1-private-cache"]:
+            raise ValueError()
+except (KeyError, TypeError, ValueError, IndexError):
+    raise SystemExit("STOP_RENDERED_CACHE_NOT_ISOLATED")
+print("G1_RENDERED_PRIVATE_CACHE=PASS")
+'''
+    output = compose(
+        env, "g1_rendered_ddev_cache_contract", "run", "--rm",
+        "--no-deps", "-T", "pcp-dev-executor", "python3", "-c", proof,
+        timeout=160,
+    )
+    required(output.splitlines()[-1:] == ["G1_RENDERED_PRIVATE_CACHE=PASS"],
+             "g1_rendered_ddev_cache_contract_invalid")
+
+
 def docker_json(env: dict[str, str], kind: str, name: str) -> dict:
     raw = call(["docker", kind, "inspect", name], env, "docker_inspect")
     try:
@@ -409,6 +457,7 @@ def execute(expected: str) -> dict:
              and result.get("branch") == "ai/" + job[:12],
              "g1_workspace_provenance_mismatch")
     create_private_cache(workspace, env)
+    rendered_ddev_cache_preflight(env)
 
     # Operator-controlled start uses only reviewed fixture code, with isolated
     # global DDEV config (no router or SSH agent). No model runs before quarantine.
