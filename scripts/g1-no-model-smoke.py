@@ -35,10 +35,13 @@ class Stop(RuntimeError):
 def call(argv: list[str], env: dict[str, str], step: str, *,
          stdin: str | None = None, timeout: int = 100) -> str:
     try:
-        result = subprocess.run(
-            argv, input=stdin, text=True, capture_output=True, timeout=timeout,
-            check=False, env=env, stdin=subprocess.DEVNULL if stdin is None else None,
-        )
+        options = {
+            "input": stdin, "text": True, "capture_output": True,
+            "timeout": timeout, "check": False, "env": env,
+        }
+        if stdin is None:
+            options["stdin"] = subprocess.DEVNULL
+        result = subprocess.run(argv, **options)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise Stop(step + "_unavailable_or_timeout") from exc
     if result.returncode != 0:
