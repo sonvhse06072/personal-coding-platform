@@ -490,3 +490,78 @@ def test_model_level_unavailable_reroutes_without_disabling_provider():
     assert model_id in rerouted.rejected_candidates
     assert any('unavailable' in reason for reason in rerouted.rejected_candidates[model_id])
     assert provider
+
+
+def _final_paid_call():
+    router = make_engine()
+    route = router.route(base_request())
+    route.strategy.budget_mode = "legacy_hard"
+    route.strategy.definition_of_done["required"].append("material_change")
+    budget = route.strategy.budget
+    progress = ExecutionProgress(
+        model_calls=budget.max_model_calls,
+        iteration=budget.max_iterations,
+        changed_files=3,
+        tests_passed=True,
+        required_checks_passed=True,
+        agent_succeeded=True,
+        material_change_present=True,
+    )
+    return router, route, progress
+
+
+def test_final_paid_model_call_completes_only_with_real_verification():
+    router, route, progress = _final_paid_call()
+    budget = route.strategy.budget
+    before = (progress.model_calls, progress.iteration, progress.test_runs)
+    result = router.reassess(ReassessRequest(route=route, progress=progress))
+    assert result.action == "complete"
+    assert result.signals == ["done", "final_model_call_budget_used"]
+    assert result.remaining["model_calls"] == 0
+    assert result.remaining["iterations"] == 0
+    assert (progress.model_calls, progress.iteration, progress.test_runs) == before
+    assert progress.model_calls == budget.max_model_calls
+
+
+@pytest.mark.parametrize("violation", [
+    "checks_missing", "tests_pending", "agent_failed",
+    "material_missing", "protected_decision", "unexpected_scope",
+    "changed_file_ceiling", "hard_cost", "input_token_ceiling",
+    "repair_budget", "provider_failover",
+])
+def test_final_call_never_overrides_independent_gates(violation):
+    router, route, progress = _final_paid_call()
+    budget = route.strategy.budget
+    if violation == "checks_missing":
+        progress.required_checks_passed = False
+    elif violation == "tests_pending":
+        progress.tests_passed = False
+    elif violation == "agent_failed":
+        progress.agent_succeeded = False
+    elif violation == "material_missing":
+        progress.material_change_present = False
+    elif violation == "protected_decision":
+        progress.important_decision_flags = ["security_boundary_change"]
+    elif violation == "unexpected_scope":
+        progress.unexpected_scope = True
+    elif violation == "changed_file_ceiling":
+        progress.changed_files = budget.max_changed_files + 1
+    elif violation == "hard_cost":
+        progress.cost_usd = budget.hard_cost_usd
+    elif violation == "input_token_ceiling":
+        progress.input_tokens = budget.max_input_tokens
+    elif violation == "repair_budget":
+        progress.repair_iterations = budget.max_repair_iterations
+    elif violation == "provider_failover":
+        progress.provider_failovers = budget.max_provider_failovers + 1
+    result = router.reassess(ReassessRequest(route=route, progress=progress))
+    assert result.action != "complete"
+    assert "hard_budget_guard" in result.signals
+
+
+def test_exhausted_legacy_budget_without_final_dod_still_stops():
+    router, route, progress = _final_paid_call()
+    progress.tests_passed = False  # CI-deferred is NOT verified DoD.
+    assert router.reassess(ReassessRequest(
+        route=route, progress=progress,
+    )).reason == "model-call budget exhausted"
