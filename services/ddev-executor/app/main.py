@@ -19,6 +19,9 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 
+from .g1_ddev_isolation import (
+    PROJECT_ID as G1_PROJECT_ID, G1IsolationStop, require_g1_isolated_ddev,
+)
 from .github_delivery import (
     GitHubDelivery,
     github_git_env,
@@ -1024,6 +1027,7 @@ def _reconcile_workspace_ddev_identity(
     workspace: Path,
     job_id: str,
     *,
+    project_id: str = "",
     nodejs_version: str | None = None,
 ) -> Path | None:
     """Keep one deterministic private DDEV identity/runtime per workspace.
@@ -1034,6 +1038,23 @@ def _reconcile_workspace_ddev_identity(
     before every DDEV phase upgrades preserved/resumed workspaces in place.
     """
     ddev_dir = workspace / ".ddev"
+    if project_id == G1_PROJECT_ID:
+        # The G1 broker only accepts the immutable fixture config. Do not
+        # create the generic untracked identity override while acquiring its
+        # first workspace, running preflight, or quiescing it.
+        original = ddev_dir / "config.yaml"
+        override = ddev_dir / "config.coding-platform.yaml"
+        if (
+            not ddev_dir.is_dir()
+            or ddev_dir.is_symlink()
+            or original.is_symlink()
+            or not original.is_file()
+            or override.exists() or override.is_symlink()
+            or git(workspace, "hash-object", "--", ".ddev/config.yaml")
+            != "7a3e97a2a35fc8e67b67021365e7e91c448b52c9"
+        ):
+            raise HTTPException(409, "G1 immutable DDEV fixture identity mismatch")
+        return None
     if not ddev_dir.is_dir():
         return None
 
@@ -2078,6 +2099,7 @@ def quiesce_workspace(payload: QuiesceWorkspaceRequest) -> dict[str, Any]:
     _reconcile_workspace_ddev_identity(
         workspace,
         payload.job_id,
+        project_id=payload.project_id,
         nodejs_version=cfg.get("ddev", {}).get("workspace_nodejs_version"),
     )
 
@@ -2220,6 +2242,7 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
             _reconcile_workspace_ddev_identity(
                 workspace,
                 payload.job_id,
+                project_id=payload.project_id,
                 nodejs_version=cfg.get("ddev", {}).get("workspace_nodejs_version"),
             )
     except Exception:
@@ -2808,6 +2831,13 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
         payload.workspace,
         require_git=False,
     )
+    if payload.project_id == G1_PROJECT_ID:
+        # Never bootstrap DDEV implicitly in G1. The one disposable operator
+        # must start then quarantine its containers; every phase reattests.
+        try:
+            require_g1_isolated_ddev(workspace)
+        except G1IsolationStop as exc:
+            raise HTTPException(409, str(exc)) from None
 
     if _workspace_instance_mode(
         cfg,
@@ -2817,6 +2847,7 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
         _reconcile_workspace_ddev_identity(
             workspace,
             payload.job_id,
+            project_id=payload.project_id,
             nodejs_version=cfg.get("ddev", {}).get("workspace_nodejs_version"),
         )
 
@@ -2884,7 +2915,9 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
                 check=False,
             ).strip()
         )
-        reused_running_direct_ddev = False
+        # A G1 workspace has already passed Docker runtime attestation above;
+        # do not run the normal mutating ddev start/restart path.
+        reused_running_direct_ddev = payload.project_id == G1_PROJECT_ID
 
         if (
             workspace_mode == "direct"
@@ -3140,6 +3173,14 @@ def _trusted_dev_plan(payload: TrustedCodexPhaseRequest) -> tuple[Path, list[lis
                 raise HTTPException(403, "Developer DDEV config invalid") from exc
             if not isinstance(raw_config, dict) or "hooks" in raw_config:
                 raise HTTPException(403, "Developer DDEV hooks are forbidden")
+
+    if project_id == G1_PROJECT_ID:
+        if source_sha != "d4f4a56713e95f85ecc08c02bb43a5b5105a86a3":
+            raise HTTPException(403, "G1 fixture source SHA is not pinned")
+        try:
+            require_g1_isolated_ddev(target)
+        except G1IsolationStop as exc:
+            raise HTTPException(409, str(exc)) from None
 
     tools = cfg.get("trusted_codex_tools") or {}
     commands = tools.get(payload.phase) if isinstance(tools, dict) else None
