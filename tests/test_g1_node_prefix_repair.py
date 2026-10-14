@@ -76,7 +76,7 @@ def test_exact_singleton_config_cannot_be_broadened(tmp_path, monkeypatch):
         g1.read_config(previous, root / "workspaces/job")
     new["projects"]["chonhac"] = {}
     g1.CONFIG.write_text(json.dumps(new), encoding="utf-8")
-    with pytest.raises(g1.Stop, match="g1_trusted_phase_registry_drift"):
+    with pytest.raises(g1.Stop, match="g1_project_registry_not_singleton"):
         g1.read_config(previous, root / "workspaces/job")
 
 
