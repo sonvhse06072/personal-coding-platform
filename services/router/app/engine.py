@@ -580,6 +580,31 @@ class RouterEngine:
             (progress.elapsed_minutes >= budget.max_wall_time_minutes, "wall-time budget exhausted"),
             (progress.cost_usd >= budget.hard_cost_usd, "hard cost budget exhausted"),
         ]
+        material_required = "material_change" in route.strategy.definition_of_done.get("required", [])
+        material_ok = (not material_required) or progress.material_change_present
+        # A final already-paid-for and *fully verified* model turn may finish
+        # exactly at the call/iteration ceiling. No more model work is allowed.
+        # Other hard limits, protected decisions and unexpected scope still STOP.
+        final_call_limits = {"model-call budget exhausted", "iteration budget exhausted"}
+        verified_final_call = (
+            progress.required_checks_passed
+            and progress.tests_passed
+            and progress.agent_succeeded
+            and material_ok
+            and not progress.important_decision_flags
+            and not progress.unexpected_scope
+            and progress.changed_files <= budget.max_changed_files
+            and any(hit and reason in final_call_limits for hit, reason in hard_limits)
+            and all(not hit or reason in final_call_limits for hit, reason in hard_limits)
+        )
+        if verified_final_call:
+            return ReassessResponse(
+                action="complete",
+                reason="Definition-of-done passed on the final allowed model turn",
+                current_profile=route.strategy.profile,
+                remaining=remaining,
+                signals=["done", "final_model_call_budget_used"],
+            )
         for hit, reason in hard_limits:
             if hit:
                 return ReassessResponse(
@@ -590,7 +615,6 @@ class RouterEngine:
                     signals=["hard_budget_guard"],
                 )
 
-        material_required = "material_change" in route.strategy.definition_of_done.get("required", [])
         material_ok = (not material_required) or progress.material_change_present
         if progress.required_checks_passed and progress.tests_passed and progress.agent_succeeded and material_ok:
             return ReassessResponse(
