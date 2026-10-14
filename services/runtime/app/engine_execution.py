@@ -36,6 +36,7 @@ from .pm_reassessment import (
 )
 from .prompts import evaluator_prompt, execution_prompt, planning_prompt
 from .developer_permissions import trusted_local_developer_enabled
+from .trusted_codex_broker import trusted_codex_phase_broker
 from .repo import analyze_repo, commit_changes, diff_state
 from .review_repair_churn import record_observation as record_review_repair_churn_observation
 from .review import (
@@ -609,6 +610,33 @@ class RuntimeEngine(RuntimeEngineCore):
                 )
                 return
 
+            # Fail before charging a model turn when this fixture explicitly
+            # requests the trusted Codex broker but its exact job/source/workspace
+            # capability cannot be proven. Unrelated/legacy projects are inert.
+            developer_broker = None
+            if str(executor_choice.get("adapter") or "") == "codex_cli":
+                developer_broker = trusted_codex_phase_broker(
+                    job_id=job_id,
+                    project_id=job["project_id"],
+                    source_commit=source_commit,
+                    workspace=workspace,
+                    mode="execute",
+                    adapter="codex_cli",
+                )
+                if (
+                    os.getenv("PCP_TRUSTED_CODEX_BROKER_ENABLED") == "owner-approved"
+                    and job["project_id"] == os.getenv("PCP_TRUSTED_CODEX_PROJECT_ID")
+                    and developer_broker is None
+                ):
+                    self._block(
+                        job_id=job_id,
+                        progress=progress,
+                        checkpoint=checkpoint,
+                        reason="trusted_codex_broker_admission_denied",
+                        last_failure="One-job developer broker scope failed pre-inference",
+                    )
+                    return
+
             turn_start_diff = diff_state(
                 workspace,
                 max_diff,
@@ -633,6 +661,10 @@ class RuntimeEngine(RuntimeEngineCore):
                 self.storage,
                 self.ddev,
                 job_id,
+            )
+            adapter_extra = (
+                {"developer_broker": developer_broker}
+                if developer_broker is not None else {}
             )
             run = await adapter.run(
                 workspace=workspace,
@@ -659,6 +691,7 @@ class RuntimeEngine(RuntimeEngineCore):
                 ),
                 mode="execute",
                 timeout=self._remaining_seconds(strategy, started, 2400),
+                **adapter_extra,
             )
             self._record_usage(progress, executor_choice["id"], run.usage)
             self._record_agent_attempt(progress, executor_choice, run)
