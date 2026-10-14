@@ -80,6 +80,11 @@ def test_container_identity_rejected_before_network_mutation(monkeypatch, tmp_pa
                                   "com.ddev.approot": str(ws)}},
             "State": {"Running": True},
             "HostConfig": {"Privileged": False},
+            "Mounts": [{
+                "Name": "pcp-g1-smoke-cache",
+                "Source": "/var/lib/docker/volumes/pcp-g1-smoke-cache/_data",
+                "Destination": "/mnt/ddev-global-cache",
+            }],
         }
 
     monkeypatch.setattr(g1, "call", call)
@@ -120,3 +125,36 @@ def test_no_hidden_g0_chonhac_auto_model_or_global_cleanup():
         assert forbidden not in content
     assert "PCP_G1_BROKER_ENABLED" in content
     assert '"model_calls": 0' in content
+
+
+def test_one_private_cache_override_before_ddev_start(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspaces" / ("a" * 32)
+    (workspace / ".ddev").mkdir(parents=True)
+    info = workspace / ".git" / "info"
+    info.mkdir(parents=True)
+    (info / "exclude").write_text("# Fresh clone\n", encoding="utf-8")
+    commands = []
+
+    def fake_call(argv, _env, step, **_kw):
+        commands.append((list(argv), step))
+        assert step == "g1_private_cache_create"
+        return "pcp-g1-smoke-cache"
+
+    monkeypatch.setattr(g1, "call", fake_call)
+    monkeypatch.setattr(g1, "git", lambda *_a: "")
+    monkeypatch.setattr(g1, "REPO", ROOT)
+    g1.create_private_cache(workspace, {})
+    override = workspace / ".ddev/docker-compose.g1-smoke.yaml"
+    assert override.is_file()
+    assert "pcp-g1-smoke-cache" in override.read_text(encoding="utf-8")
+    assert ".ddev/docker-compose.g1-smoke.yaml" in (
+        info / "exclude"
+    ).read_text(encoding="utf-8")
+    assert commands == [([
+        "docker", "volume", "create",
+        "--label", "pcp.scope=g1-disposable-no-model",
+        "pcp-g1-smoke-cache",
+    ], "g1_private_cache_create")]
+
+    with pytest.raises(g1.Stop, match="g1_private_cache_override_collision"):
+        g1.create_private_cache(workspace, {})
