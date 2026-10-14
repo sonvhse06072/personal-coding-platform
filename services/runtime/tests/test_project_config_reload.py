@@ -180,3 +180,75 @@ def test_project_config_rejects_trusted_local_on_isolated_workspace(tmp_path, mo
 
     with pytest.raises(ValueError, match="trusted_local developer permission requires workspace_mode=direct"):
         config.project_config("demo")
+
+
+def test_trusted_project_contract_only_accepts_exact_disposable_g1(
+    tmp_path, monkeypatch,
+):
+    import yaml
+
+    config_file = tmp_path / "projects.yml"
+    project_path = tmp_path / "source"
+    project_path.mkdir()
+    monkeypatch.setenv("PROJECTS_FILE", str(config_file))
+
+    good = {
+        "path": str(project_path),
+        "runtime": {
+            "workspace_mode": "isolated_clone",
+            "exclusive_project_lease": False,
+            "developer_permission_mode": "trusted_project",
+        },
+        "ddev": {"enabled": True},
+    }
+    config_file.write_text(
+        yaml.safe_dump({"version": 1, "projects": {
+            "pcp-benchmark-g1-smoke": good,
+        }}), encoding="utf-8",
+    )
+    assert config.project_config("pcp-benchmark-g1-smoke")["runtime"][
+        "developer_permission_mode"
+    ] == "trusted_project"
+
+    for id_, case in [
+        ("chonhac", good),
+        ("pcp-benchmark-other", good),
+        ("pcp-benchmark-g1-smoke", {**good, "ddev": {"enabled": False}}),
+        ("pcp-benchmark-g1-smoke", {**good, "runtime": {
+            **good["runtime"], "workspace_mode": "direct",
+            "exclusive_project_lease": True,
+        }}),
+        ("pcp-benchmark-g1-smoke", {**good, "runtime": {
+            **good["runtime"], "exclusive_project_lease": True,
+        }}),
+    ]:
+        config_file.write_text(
+            yaml.safe_dump({"version": 1, "projects": {id_: case}}),
+            encoding="utf-8",
+        )
+        with pytest.raises(ValueError, match="trusted_project requires exact"):
+            config.project_config(id_)
+
+
+def test_trusted_project_is_not_trusted_local_host_execution(
+    tmp_path, monkeypatch,
+):
+    from app import developer_permissions
+
+    source = tmp_path / "source"
+    source.mkdir()
+    monkeypatch.setattr(developer_permissions, "projects_doc", lambda: {
+        "projects": {"pcp-benchmark-g1-smoke": {
+            "path": str(source),
+            "runtime": {
+                "workspace_mode": "isolated_clone",
+                "developer_permission_mode": "trusted_project",
+            },
+        }}
+    })
+    assert developer_permissions.trusted_local_developer_enabled(
+        source, "execute", adapter="codex_cli",
+    ) is False
+    assert developer_permissions.trusted_local_developer_enabled(
+        source, "repair", adapter="antigravity_host",
+    ) is False
