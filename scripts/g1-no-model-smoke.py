@@ -173,7 +173,10 @@ def files() -> None:
             "--standard=Drupal", "modules/custom/pcp_f2_fixture",
         ]],
         "frontend_quality": [[
-            "ddev", "exec", "npm", "--prefix", "..", "run", "build",
+            # Drupal 8+ DDEV web exec runs from /var/www/html by default;
+            # a relative .. prefix would select /var/www (npm ENOENT/254).
+            # Absolute path also works if the web working dir is overridden.
+            "ddev", "exec", "npm", "--prefix", "/var/www/html", "run", "build",
         ]],
     }
     project = {
