@@ -3125,6 +3125,21 @@ def _trusted_dev_plan(payload: TrustedCodexPhaseRequest) -> tuple[Path, list[lis
         or any(path.is_symlink() for path in ddev_dir.rglob("*"))
     ):
         raise HTTPException(403, "Developer DDEV symlink refused")
+    # DDEV supports pre/post-exec hooks, including exec-host. Such hooks would
+    # run outside the approved phase argv even for an unchanged fixture seed.
+    # The dedicated benchmark fixture must have NO project DDEV hooks.
+    if ddev_dir.exists():
+        for configuration in sorted(ddev_dir.glob("config*.yaml")) + sorted(
+            ddev_dir.glob("config*.yml")
+        ):
+            try:
+                if configuration.stat().st_size > 65536:
+                    raise HTTPException(403, "Developer DDEV config is too large")
+                raw_config = yaml.safe_load(configuration.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, yaml.YAMLError) as exc:
+                raise HTTPException(403, "Developer DDEV config invalid") from exc
+            if not isinstance(raw_config, dict) or "hooks" in raw_config:
+                raise HTTPException(403, "Developer DDEV hooks are forbidden")
 
     tools = cfg.get("trusted_codex_tools") or {}
     commands = tools.get(payload.phase) if isinstance(tools, dict) else None
