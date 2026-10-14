@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 
 import pytest
 
@@ -20,6 +21,7 @@ def scope(monkeypatch, tmp_path: Path):
     ws.mkdir()
     monkeypatch.setenv("CODING_WORKSPACES_ROOT", str(workspace_root))
     monkeypatch.setenv("PCP_TRUSTED_CODEX_BROKER_ENABLED", "owner-approved")
+    monkeypatch.setenv("PCP_TRUSTED_CODEX_DEADLINE_EPOCH", str(int(time.time()) + 900))
     monkeypatch.setenv("PCP_TRUSTED_CODEX_JOB_ID", JOB)
     monkeypatch.setenv("PCP_TRUSTED_CODEX_PROJECT_ID", PROJECT)
     monkeypatch.setenv("PCP_TRUSTED_CODEX_SOURCE_SHA", SHA)
@@ -121,4 +123,19 @@ def test_legacy_registry_or_production_permission_denied(scope, monkeypatch):
     monkeypatch.setattr(broker, "projects_doc", lambda: {"projects": {
         PROJECT: {}, "chonhac": {},
     }})
+    assert allowed(scope) is None
+
+
+@pytest.mark.parametrize("seconds_from_now", [-1, 0, 1801, 3600])
+def test_short_lived_broker_grant_expires_or_rejects_long_lived(scope, monkeypatch, seconds_from_now):
+    monkeypatch.setenv(
+        "PCP_TRUSTED_CODEX_DEADLINE_EPOCH",
+        str(int(time.time()) + seconds_from_now),
+    )
+    assert allowed(scope) is None
+
+
+@pytest.mark.parametrize("deadline", ["", "never", "-1", "123abc", "9" * 20])
+def test_invalid_broker_grant_deadline_fails_closed(scope, monkeypatch, deadline):
+    monkeypatch.setenv("PCP_TRUSTED_CODEX_DEADLINE_EPOCH", deadline)
     assert allowed(scope) is None
