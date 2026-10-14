@@ -200,6 +200,40 @@ def files() -> None:
                  json.dumps(baselines, indent=2) + "\n")
 
 
+def create_private_cache(workspace: Path, env: dict[str, str]) -> None:
+    """Add exactly one private cache override to the fresh job workspace.
+
+    Keep it outside Git status through this new clone's local info/exclude;
+    the Executor reattests its exact bytes before every privileged phase.
+    Never change any other DDEV project's shared cache or tracked fixture.
+    """
+    sys.path.insert(0, str(REPO / "services/ddev-executor"))
+    from app.g1_ddev_isolation import (
+        PRIVATE_CACHE_COMPOSE, PRIVATE_CACHE_COMPOSE_FILE, PRIVATE_CACHE_NAME,
+    )
+    ddev = workspace / ".ddev"
+    info = workspace / ".git" / "info" / "exclude"
+    required(
+        ddev.is_dir() and not ddev.is_symlink()
+        and info.is_file() and not info.is_symlink(),
+        "g1_workspace_git_or_ddev_structure_invalid",
+    )
+    target = ddev / PRIVATE_CACHE_COMPOSE_FILE
+    required(not target.exists() and not target.is_symlink(),
+             "g1_private_cache_override_collision")
+    volume = call([
+        "docker", "volume", "create",
+        "--label", "pcp.scope=g1-disposable-no-model",
+        PRIVATE_CACHE_NAME,
+    ], env, "g1_private_cache_create")
+    required(volume == PRIVATE_CACHE_NAME, "g1_private_cache_identity_invalid")
+    private_file(target, PRIVATE_CACHE_COMPOSE)
+    with info.open("a", encoding="utf-8") as handle:
+        handle.write("\n.ddev/" + PRIVATE_CACHE_COMPOSE_FILE + "\n")
+    required(not git(workspace, env, "status", "--porcelain"),
+             "g1_managed_private_cache_must_not_dirty_source")
+
+
 def docker_json(env: dict[str, str], kind: str, name: str) -> dict:
     raw = call(["docker", kind, "inspect", name], env, "docker_inspect")
     try:
@@ -231,7 +265,16 @@ def require_new_ddev(env: dict[str, str], workspace: Path) -> None:
                  and (doc.get("State") or {}).get("Running") is True
                  and (doc.get("HostConfig") or {}).get("Privileged") is False,
                  "fixture_runtime_identity_or_privilege_drift")
+        cache = [
+            mount for mount in (doc.get("Mounts") or [])
+            if mount.get("Destination") == "/mnt/ddev-global-cache"
+        ]
+        required(len(cache) == 1 and
+                 cache[0].get("Name") == "pcp-g1-smoke-cache",
+                 "g1_shared_ddev_cache_mount_found")
         for mount in doc.get("Mounts") or []:
+            required(mount.get("Name") != "ddev-global-cache",
+                     "g1_shared_ddev_cache_mount_found")
             origin = str(mount.get("Source") or "").lower()
             target = str(mount.get("Destination") or "").lower()
             required(not any(word in origin or word in target for word in (
@@ -365,13 +408,16 @@ def execute(expected: str) -> dict:
              and result.get("source_commit") == SOURCE
              and result.get("branch") == "ai/" + job[:12],
              "g1_workspace_provenance_mismatch")
+    create_private_cache(workspace, env)
 
     # Operator-controlled start uses only reviewed fixture code, with isolated
     # global DDEV config (no router or SSH agent). No model runs before quarantine.
     compose(env, "g1_ddev_single_start", "run", "--rm", "--no-deps", "-T",
             "pcp-dev-executor", "sh", "-c",
             'cd "$CODING_WORKSPACES_ROOT/$PCP_TRUSTED_CODEX_JOB_ID" && '
-            'exec ddev start -y', timeout=900)
+            'exec env -u PLATFORM_INTERNAL_TOKEN -u RUNTIME_API_TOKEN '
+            '-u ROUTER_API_TOKEN -u GITHUB_DELIVERY_TOKEN '
+            '-u PCP_TRUSTED_CODEX_DEV_TOKEN ddev start -y', timeout=900)
     quarantine(env, workspace)
 
     # Issue a new, single-job capability *after* setup. Not included in argv,
