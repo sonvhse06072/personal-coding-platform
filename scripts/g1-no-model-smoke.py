@@ -109,10 +109,28 @@ def inputs(expected: str) -> tuple[dict[str, str], str]:
     try:
         info = json.loads(context)
         endpoint = info[0]["Endpoints"]["docker"]["Host"]
-        required(len(info) == 1 and endpoint.startswith("unix://"),
+        required(len(info) == 1 and isinstance(endpoint, str)
+                 and endpoint.startswith("unix://"),
                  "remote_docker_context_denied")
-    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        # The setup's Executor mounts /var/run/docker.sock. Refuse any Docker
+        # CLI context pointing at a different local socket/daemon, even if the
+        # other context is also unix://. No implicit context switching.
+        required(Path(endpoint.removeprefix("unix://")).resolve()
+                 == socket.resolve(),
+                 "docker_socket_context_mismatch")
+        override = os.getenv("DOCKER_HOST", "").strip()
+        required(not override or override == endpoint,
+                 "docker_host_override_mismatch")
+    except (ValueError, KeyError, IndexError, TypeError, OSError) as exc:
         raise Stop("docker_context_invalid") from exc
+    try:
+        engine = json.loads(call(["docker", "info", "--format",
+                                  "{{json .}}"], env, "docker_engine"))
+        required("docker desktop" in str(engine.get("OperatingSystem", "")).lower()
+                 and bool(engine.get("ServerVersion")),
+                 "docker_desktop_engine_mismatch")
+    except (ValueError, TypeError) as exc:
+        raise Stop("docker_engine_metadata_invalid") from exc
     # No existing G1 setup resources may be adopted, reset or restarted.
     for kind, fmt in (
         ("container", ["container", "ls", "-a", "--format", "{{json .}}"]),
@@ -410,9 +428,9 @@ def execute(expected: str) -> dict:
     compose(env, "g1_postgres_start", "up", "-d", "--wait", "db", timeout=240)
 
     register = (
-        "import json; from app.storage import Storage; "
+        "import json; from app.telemetry_storage import TelemetryStorage; "
         "from app.engine import RuntimeEngine; "
-        "s=Storage(); s.init(); "
+        "s=TelemetryStorage(); s.init(); "
         "assert not s.list(limit=1), 'Dedicated G1 DB already has a job'; "
         "j=RuntimeEngine(s).create_job({"
         "'project_id':'pcp-benchmark-g1-smoke',"
@@ -477,6 +495,16 @@ def execute(expected: str) -> dict:
     compose(env, "g1_executor_start", "up", "-d", "pcp-dev-executor",
             timeout=120)
     no_model_mcp(env)
+    elapsed = round(time.monotonic() - began, 1)
+    # Overwrite only this script's already-owned private journal after the
+    # positive real phase. Never infer autonomous E2E from the no-model proof.
+    private_file(ROOT / "smoke-journal.success.tmp", json.dumps({
+        "job_id": job, "project_id": PROJECT, "source_sha": SOURCE,
+        "state": "mcp_executor_no_model_pass", "model_calls": 0,
+        "elapsed_seconds": elapsed,
+    }, indent=2) + "\n")
+    os.replace(ROOT / "smoke-journal.success.tmp",
+               ROOT / "smoke-journal.json")
     return {
         "status": "PASS_G1_REAL_MCP_EXECUTOR_NO_MODEL",
         "pcp_source_sha": expected,
@@ -487,7 +515,7 @@ def execute(expected: str) -> dict:
         "mcp_stdio_handshake": "PASS",
         "executor_frontend_quality": "PASS",
         "model_calls": 0,
-        "elapsed_seconds": round(time.monotonic() - began, 1),
+        "elapsed_seconds": elapsed,
         "ready_for_autonomous_e2e": False,
         "g0": "HOLD_NOT_GO",
     }
