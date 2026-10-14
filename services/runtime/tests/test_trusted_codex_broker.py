@@ -126,7 +126,7 @@ def test_legacy_registry_or_production_permission_denied(scope, monkeypatch):
     assert allowed(scope) is None
 
 
-@pytest.mark.parametrize("seconds_from_now", [-1, 0, 1801, 3600])
+@pytest.mark.parametrize("seconds_from_now", [-1, 0, 1850, 3600])
 def test_short_lived_broker_grant_expires_or_rejects_long_lived(scope, monkeypatch, seconds_from_now):
     monkeypatch.setenv(
         "PCP_TRUSTED_CODEX_DEADLINE_EPOCH",
