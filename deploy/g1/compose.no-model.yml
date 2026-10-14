@@ -1,0 +1,141 @@
+# G1 disposal-only no-model infrastructure; never reuse any F2 or legacy volumes.
+# All services are opt-in and absent by default.
+name: pcp-g1-smoke
+
+services:
+  db:
+    image: postgres:16-alpine
+    profiles: [g1-no-model]
+    restart: "no"
+    environment:
+      POSTGRES_USER: g1
+      POSTGRES_DB: g1
+      POSTGRES_PASSWORD: "${PCP_G1_DB_PASSWORD:?new_disposable_password_required}"
+    volumes:
+      - g1-db:/var/lib/postgresql/data
+    networks: [g1-control]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U g1 -d g1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    labels:
+      pcp.scope: g1-disposable-no-model
+
+  pcp-dev-executor:
+    build:
+      context: ../../services/ddev-executor
+      args:
+        DDEV_UID: "${PCP_G1_UID:?host_uid_required}"
+        DDEV_GID: "${PCP_G1_GID:?host_gid_required}"
+    profiles: [g1-no-model]
+    restart: "no"
+    user: "${PCP_G1_UID:?}:${PCP_G1_GID:?}"
+    group_add: ["${PCP_G1_SOCKET_GID:?socket_gid_required}"]
+    environment:
+      HOME: /home/coder
+      PROJECTS_FILE: /g1/config/projects.yml
+      CODING_PROJECTS_ROOT: "${PCP_G1_ROOT:?}"
+      CODING_WORKSPACES_ROOT: "${PCP_G1_ROOT:?}/workspaces"
+      CODING_DIRECT_PROJECT_ROOT: /g1/direct-disabled
+      DDEV_XDG_CONFIG_HOME: "${PCP_G1_ROOT:?}/xdg"
+      PLATFORM_INTERNAL_TOKEN: "${PCP_G1_INTERNAL_TOKEN:?}"
+      PCP_TRUSTED_CODEX_BROKER_ENABLED: "${PCP_G1_BROKER_ENABLED:-}"
+      PCP_TRUSTED_CODEX_PROJECT_ID: pcp-benchmark-g1-smoke
+      PCP_TRUSTED_CODEX_JOB_ID: "${PCP_G1_JOB_ID:-}"
+      PCP_TRUSTED_CODEX_SOURCE_SHA: d4f4a56713e95f85ecc08c02bb43a5b5105a86a3
+      PCP_TRUSTED_CODEX_DEV_TOKEN: "${PCP_G1_DEV_TOKEN:-}"
+      PCP_TRUSTED_CODEX_DEADLINE_EPOCH: "${PCP_G1_DEADLINE:-}"
+    volumes:
+      - type: bind
+        source: "${PCP_G1_ROOT:?}/source"
+        target: "${PCP_G1_ROOT:?}/source"
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_ROOT:?}/workspaces"
+        target: "${PCP_G1_ROOT:?}/workspaces"
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_ROOT:?}/xdg"
+        target: "${PCP_G1_ROOT:?}/xdg"
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_ROOT:?}/config/projects.yml"
+        target: /g1/config/projects.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        bind: {create_host_path: false}
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    networks: [g1-control]
+    labels:
+      pcp.scope: g1-disposable-no-model
+
+  runtime:
+    build:
+      context: ../../services/runtime
+      args:
+        CODEX_VERSION: "${PCP_G1_CODEX_VERSION:?installed_Codex_version_required}"
+        DDEV_UID: "${PCP_G1_UID:?}"
+        DDEV_GID: "${PCP_G1_GID:?}"
+    profiles: [g1-no-model]
+    restart: "no"
+    user: "${PCP_G1_UID:?}:${PCP_G1_GID:?}"
+    environment:
+      HOME: /home/coder
+      DATABASE_URL: "postgresql://g1:${PCP_G1_DB_PASSWORD:?}@db:5432/g1"
+      PROJECTS_FILE: /g1/config/projects.yml
+      PROJECT_BASELINES_FILE: /g1/config/project-baselines.yml
+      CODING_PROJECTS_ROOT: "${PCP_G1_ROOT:?}"
+      CODING_WORKSPACES_ROOT: "${PCP_G1_ROOT:?}/workspaces"
+      CODING_DIRECT_PROJECT_ROOT: /g1/direct-disabled
+      RUNTIME_API_TOKEN: "${PCP_G1_RUNTIME_TOKEN:?}"
+      PCP_DEV_BROKER_URL: http://pcp-dev-executor:8790
+      PCP_DEV_BROKER_TOKEN: "${PCP_G1_DEV_TOKEN:-}"
+      PCP_DEV_JOB_ID: "${PCP_G1_JOB_ID:-}"
+      PCP_DEV_PROJECT_ID: pcp-benchmark-g1-smoke
+      PCP_DEV_WORKSPACE: "${PCP_G1_ROOT:?}/workspaces/${PCP_G1_JOB_ID:-}"
+      PCP_DEV_SOURCE_SHA: d4f4a56713e95f85ecc08c02bb43a5b5105a86a3
+    volumes:
+      - type: bind
+        source: "${PCP_G1_ROOT:?}/source"
+        target: "${PCP_G1_ROOT:?}/source"
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_ROOT:?}/workspaces"
+        target: "${PCP_G1_ROOT:?}/workspaces"
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_ROOT:?}/config/projects.yml"
+        target: /g1/config/projects.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_ROOT:?}/config/project-baselines.yml"
+        target: /g1/config/project-baselines.yml
+        read_only: true
+        bind: {create_host_path: false}
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=67108864
+      - /home/coder/.cache:rw,nosuid,nodev,size=67108864
+      - /home/coder/.config:rw,nosuid,nodev,size=67108864
+      - /home/coder/.local:rw,nosuid,nodev,size=67108864
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    networks: [g1-control]
+    labels:
+      pcp.scope: g1-disposable-no-model
+
+volumes:
+  g1-db:
+    name: pcp-g1-smoke-postgres
+
+networks:
+  g1-control:
+    name: pcp-g1-smoke-control
+    internal: true
