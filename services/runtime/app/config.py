@@ -106,10 +106,23 @@ def project_config(project_id: str) -> dict[str, Any]:
     developer_permission_mode = str(
         runtime.get("developer_permission_mode") or "bounded"
     ).strip()
-    if developer_permission_mode not in {"bounded", "trusted_local"}:
+    if developer_permission_mode not in {"bounded", "trusted_local", "trusted_project"}:
         raise ValueError(
             f"Project {project_id} has unsupported runtime.developer_permission_mode: "
             f"{developer_permission_mode!r}"
+        )
+    # The first G1 rollout is a single disposable fixture, not a generic grant
+    # of trusted development access to other PCP projects. The separate broker
+    # validates the exact job/workspace/SHA/role and ephemeral token.
+    if developer_permission_mode == "trusted_project" and not (
+        project_id == "pcp-benchmark-g1-smoke"
+        and workspace_mode == "isolated_clone"
+        and not exclusive_project_lease
+        and (cfg.get("ddev") or {}).get("enabled") is True
+    ):
+        raise ValueError(
+            f"Project {project_id} trusted_project requires exact disposable G1 "
+            "fixture, isolated_clone workspace, no direct lease and DDEV enabled"
         )
     if workspace_mode == "direct" and not exclusive_project_lease:
         raise ValueError(
