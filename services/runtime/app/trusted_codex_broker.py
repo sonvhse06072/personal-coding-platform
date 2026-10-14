@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -60,6 +61,13 @@ def trusted_codex_phase_broker(
     token = os.getenv("PCP_TRUSTED_CODEX_DEV_TOKEN", "")
     url = os.getenv("PCP_TRUSTED_CODEX_BROKER_URL", "")
     root_text = os.getenv("CODING_WORKSPACES_ROOT", "")
+    deadline = os.getenv("PCP_TRUSTED_CODEX_DEADLINE_EPOCH", "")
+    now_epoch = int(time.time())
+    if not (deadline.isascii() and deadline.isdecimal() and len(deadline) <= 12):
+        return None
+    seconds_remaining = int(deadline) - now_epoch
+    if not 0 < seconds_remaining <= 1800:
+        return None
     if not (
         _DISPOSABLE.fullmatch(project_id)
         and configured_project == project_id
