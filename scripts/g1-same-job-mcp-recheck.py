@@ -346,8 +346,18 @@ def execute(expected_sha: str) -> dict[str, Any]:
           "g1_executor_image_changed")
     check(
         (new.get("State") or {}).get("Running") is True
-        and set((new.get("NetworkSettings") or {}).get("Networks") or {}) == {CONTROL},
+        and set((new.get("NetworkSettings") or {}).get("Networks") or {}) == {CONTROL}
+        and previous.docker_identity(ws) == executor,
         "g1_refreshed_executor_not_isolated",
+    )
+    fresh_env = env_mapping(new)
+    check(
+        fresh_env.get("PCP_TRUSTED_CODEX_BROKER_ENABLED") == "owner-approved"
+        and fresh_env.get("PCP_TRUSTED_CODEX_DEV_TOKEN") == env["PCP_G1_DEV_TOKEN"]
+        and fresh_env.get("PCP_TRUSTED_CODEX_JOB_ID") == job
+        and fresh_env.get("PCP_TRUSTED_CODEX_SOURCE_SHA") == PINNED_SOURCE
+        and fresh_env.get("PCP_TRUSTED_CODEX_DEADLINE_EPOCH") == env["PCP_G1_DEADLINE"],
+        "g1_new_capability_identity_invalid",
     )
     check(inspect("container", dbid).get("Id") == db_full_id
           and inspect("container", "ddev-pcp-g1-codex-smoke-web").get("Id") == webid
