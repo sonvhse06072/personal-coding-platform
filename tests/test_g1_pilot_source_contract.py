@@ -151,7 +151,7 @@ def test_all_credential_paths_are_new_and_provider_egress_is_not_allowlist():
 
 
 def test_doc_task_scoped_and_no_automatic_launch_commands():
-    body = (ROOT / "docs/project/g1-pilot-t01-parked-2026-10-15.md").read_text()
+    body = (ROOT / "docs/project/history/g1-pilot-t01-parked-2026-10-15.md").read_text()
     for term in (
         "intersectionMinutes", "benchmark/g1-codex-smoke-v1",
         "d4f4a56713e95f85ecc08c02bb43a5b5105a86a3",
