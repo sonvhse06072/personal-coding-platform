@@ -3018,6 +3018,12 @@ def _trusted_codex_dev_flags() -> tuple[str, str, str, str]:
     jid = os.getenv("PCP_TRUSTED_CODEX_JOB_ID", "")
     source = os.getenv("PCP_TRUSTED_CODEX_SOURCE_SHA", "")
     token = os.getenv("PCP_TRUSTED_CODEX_DEV_TOKEN", "")
+    deadline = os.getenv("PCP_TRUSTED_CODEX_DEADLINE_EPOCH", "")
+    if not (deadline.isascii() and deadline.isdecimal() and len(deadline) <= 12):
+        raise HTTPException(503, "Scoped developer capability has no finite deadline")
+    seconds_left = int(deadline) - int(time.time())
+    if not 0 < seconds_left <= 1800:
+        raise HTTPException(503, "Scoped developer capability expired or too long-lived")
     if not (
         re.fullmatch(r"pcp-benchmark-[a-z0-9-]{2,80}", pid)
         and re.fullmatch(r"[a-f0-9]{32}", jid)
@@ -3119,6 +3125,21 @@ def _trusted_dev_plan(payload: TrustedCodexPhaseRequest) -> tuple[Path, list[lis
         or any(path.is_symlink() for path in ddev_dir.rglob("*"))
     ):
         raise HTTPException(403, "Developer DDEV symlink refused")
+    # DDEV supports pre/post-exec hooks, including exec-host. Such hooks would
+    # run outside the approved phase argv even for an unchanged fixture seed.
+    # The dedicated benchmark fixture must have NO project DDEV hooks.
+    if ddev_dir.exists():
+        for configuration in sorted(ddev_dir.glob("config*.yaml")) + sorted(
+            ddev_dir.glob("config*.yml")
+        ):
+            try:
+                if configuration.stat().st_size > 65536:
+                    raise HTTPException(403, "Developer DDEV config is too large")
+                raw_config = yaml.safe_load(configuration.read_text(encoding="utf-8"))
+            except (OSError, UnicodeError, yaml.YAMLError) as exc:
+                raise HTTPException(403, "Developer DDEV config invalid") from exc
+            if not isinstance(raw_config, dict) or "hooks" in raw_config:
+                raise HTTPException(403, "Developer DDEV hooks are forbidden")
 
     tools = cfg.get("trusted_codex_tools") or {}
     commands = tools.get(payload.phase) if isinstance(tools, dict) else None

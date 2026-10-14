@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -26,6 +27,7 @@ def fixture(monkeypatch, tmp_path: Path):
     workspace.mkdir()
     monkeypatch.setenv("CODING_WORKSPACES_ROOT", str(root))
     monkeypatch.setenv("PCP_TRUSTED_CODEX_BROKER_ENABLED", "owner-approved")
+    monkeypatch.setenv("PCP_TRUSTED_CODEX_DEADLINE_EPOCH", str(int(time.time()) + 900))
     monkeypatch.setenv("PCP_TRUSTED_CODEX_PROJECT_ID", PROJECT)
     monkeypatch.setenv("PCP_TRUSTED_CODEX_JOB_ID", JOB)
     monkeypatch.setenv("PCP_TRUSTED_CODEX_SOURCE_SHA", SHA)
@@ -202,3 +204,50 @@ def test_at_most_eight_bounded_phase_calls(fixture, monkeypatch):
     with pytest.raises(HTTPException) as err:
         executor.trusted_codex_dev_phase(payload(ws))
     assert err.value.status_code == 429
+
+
+@pytest.mark.parametrize("seconds_from_now", [-10, 0, 1850, 3600])
+def test_scoped_developer_token_expired_or_overlong_denied(fixture, monkeypatch, seconds_from_now):
+    monkeypatch.setenv(
+        "PCP_TRUSTED_CODEX_DEADLINE_EPOCH",
+        str(int(time.time()) + seconds_from_now),
+    )
+    with pytest.raises(HTTPException) as exc:
+        executor.trusted_codex_dev_auth("Bearer " + DEV)
+    assert exc.value.status_code == 503
+
+
+@pytest.mark.parametrize("deadline", ["", "never", "9999999999999"])
+def test_invalid_expiry_never_grants_executor_capability(fixture, monkeypatch, deadline):
+    monkeypatch.setenv("PCP_TRUSTED_CODEX_DEADLINE_EPOCH", deadline)
+    with pytest.raises(HTTPException):
+        executor._trusted_codex_dev_flags()
+
+
+@pytest.mark.parametrize("config_text", [
+    "hooks:\n  pre-exec:\n    - exec-host: echo dangerous\n",
+    "hooks:\n  post-exec:\n    - exec: echo dangerous\n",
+])
+def test_ddev_exec_hooks_are_denied_before_any_process(fixture, monkeypatch, config_text):
+    ws = fixture[0]
+    ddev = ws / ".ddev"
+    ddev.mkdir()
+    (ddev / "config.yaml").write_text(config_text, encoding="utf-8")
+    monkeypatch.setattr(
+        executor, "run_tracked",
+        lambda *_a, **_kw: pytest.fail("DDEV hook must never launch a command"),
+    )
+    with pytest.raises(HTTPException, match="hooks"):
+        executor._trusted_dev_plan(payload(ws))
+
+
+def test_benign_ddev_config_without_hooks_still_allows_command(fixture):
+    ws = fixture[0]
+    ddev = ws / ".ddev"
+    ddev.mkdir()
+    (ddev / "config.yaml").write_text(
+        "type: drupal11\nname: safe-fixture\n", encoding="utf-8",
+    )
+    target, approved = executor._trusted_dev_plan(payload(ws))
+    assert target == ws
+    assert approved == fixture[2]["trusted_codex_tools"]["targeted_tests"]
