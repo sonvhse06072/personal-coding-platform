@@ -158,3 +158,20 @@ def test_one_private_cache_override_before_ddev_start(tmp_path, monkeypatch):
 
     with pytest.raises(g1.Stop, match="g1_private_cache_override_collision"):
         g1.create_private_cache(workspace, {})
+
+
+def test_rendered_cache_contract_must_pass_before_ddev_start(monkeypatch):
+    commands = []
+    def fake_compose(_env, label, *args, **kw):
+        commands.append((label, args))
+        assert label == "g1_rendered_ddev_cache_contract"
+        assert args[:4] == ("run", "--rm", "--no-deps", "-T")
+        assert args[4:7] == ("pcp-dev-executor", "python3", "-c")
+        assert "utility" in args[-1] and "compose-config" in args[-1]
+        return "G1_RENDERED_PRIVATE_CACHE=PASS"
+    monkeypatch.setattr(g1, "compose", fake_compose)
+    g1.rendered_ddev_cache_preflight({})
+    assert len(commands) == 1
+    monkeypatch.setattr(g1, "compose", lambda *_args, **_kw: "UNKNOWN")
+    with pytest.raises(g1.Stop, match="g1_rendered_ddev_cache_contract_invalid"):
+        g1.rendered_ddev_cache_preflight({})
