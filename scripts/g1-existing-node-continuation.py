@@ -65,6 +65,17 @@ def inspect(name: str) -> dict[str, Any]:
 
 
 def docker_identity(workspace: Path) -> str:
+    # Constrain the operator's Docker CLI to the reviewed local socket. Never
+    # allow a remote/alternate daemon merely because it also has G1 labels.
+    try:
+        contexts = json.loads(call(["docker", "context", "inspect"]))
+        host = contexts[0]["Endpoints"]["docker"]["Host"]
+        require(isinstance(contexts, list) and len(contexts) == 1
+                and host == "unix:///var/run/docker.sock"
+                and not os.getenv("DOCKER_HOST", "").strip(),
+                "g1_docker_context_changed")
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        raise Stop("g1_docker_context_unverifiable") from exc
     raw = call([
         "docker", "container", "ls", "--all",
         "--filter", "label=com.docker.compose.project=pcp-g1-smoke",
@@ -231,7 +242,7 @@ def run_bounded(argv: list[str]) -> dict[str, Any]:
     }
 
 
-def store(exact_job: str, data: dict[str, Any]) -> None:
+def store(data: dict[str, Any]) -> None:
     # Exclusive creation before execution; one invocation only, including
     # timeouts/unknown status. Preserve the original smoke journal untouched.
     os.umask(0o077)
@@ -257,7 +268,7 @@ def main() -> int:
     try:
         job, ws = workspace_identity(args.expected_pcp_sha)
         container = docker_identity(ws)
-        store(job, {
+        store({
             "state": "started", "job_id": job,
             "model_calls": 0, "mcp_replayed": False,
         })
