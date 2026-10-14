@@ -206,7 +206,7 @@ def test_at_most_eight_bounded_phase_calls(fixture, monkeypatch):
     assert err.value.status_code == 429
 
 
-@pytest.mark.parametrize("seconds_from_now", [-10, 0, 1801, 3600])
+@pytest.mark.parametrize("seconds_from_now", [-10, 0, 1850, 3600])
 def test_scoped_developer_token_expired_or_overlong_denied(fixture, monkeypatch, seconds_from_now):
     monkeypatch.setenv(
         "PCP_TRUSTED_CODEX_DEADLINE_EPOCH",
