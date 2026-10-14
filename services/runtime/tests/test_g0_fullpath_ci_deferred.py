@@ -17,6 +17,8 @@ from app.fullpath_ci_deferred import (
     DEFERRED_MODE,
     WAITING_PM,
     ci_passed_awaiting_review,
+    fixture_ci_handoff_candidate,
+    fixture_ci_handoff_ready,
     fixture_deferred_verification,
     stage_delivery_update,
 )
@@ -281,3 +283,174 @@ def test_real_delivery_engine_generic_ci_success_is_not_final():
         assert backend.row["result"]["accepted_result"]["commit"] == COMMIT
         assert backend.row["progress"]["required_checks_passed"] is False
     asyncio.run(scenario())
+
+
+F2_CHANGED_PATHS = [
+    "web/modules/custom/pcp_f2_fixture/src/WindowOverlapDetector.php",
+    "web/modules/custom/pcp_f2_fixture/tests/src/Unit/WindowOverlapDetectorTest.php",
+    "web/modules/custom/pcp_f2_fixture/tests/src/Kernel/WindowOverlapServiceTest.php",
+]
+
+
+def _f2_final_call_case():
+    """The exact F2-T01 output shape at 2/2, before any hosted CI/review."""
+    return {
+        "project_id": PROJECT_ID,
+        "worker_only": True,
+        "verification": fixture_deferred_verification(PROJECT_ID, ddev_enabled=False),
+        "progress": {
+            "model_calls": 2,
+            "iteration": 2,
+            "changed_files": 3,
+            "cost_usd": 0.0,
+            "test_runs": 0,
+            "tests_passed": False,
+            "required_checks_passed": False,
+            "agent_succeeded": True,
+            "material_change_present": True,
+            "unexpected_scope": False,
+            "important_decision_flags": [],
+            "provider_failures": [],
+        },
+        "strategy": {
+            "profile": "fast",
+            "planner": None,
+            "evaluator": {"id": "optional-reviewer", "model": "test-only"},
+            "review_policy": {
+                "level": "lightweight", "required": False,
+                "conditional_on_strong_evidence": True,
+            },
+            "human_decision": {"required": False},
+            "definition_of_done": {"required": [
+                "targeted_tests_pass", "static_analysis_pass",
+                "no_unexpected_scope", "material_change",
+            ]},
+            "permissions": {
+                "commit": True, "push_ai_branch": True, "create_pr": True,
+                "auto_merge_low_risk": False, "production_deploy": False,
+            },
+            "budget": {
+                "max_model_calls": 2, "max_iterations": 2,
+                "max_changed_files": 3, "hard_cost_usd": 0.5,
+            },
+        },
+        "checkpoint": {},
+        "diff": {
+            "changed_files": list(F2_CHANGED_PATHS),
+            "changed_file_count": 3,
+            "diff_hash": "a" * 64,
+            "diff_truncated": False,
+        },
+    }
+
+
+def test_exact_f2_final_call_defers_optional_reviewer_without_fake_test_pass():
+    candidate = _f2_final_call_case()
+    original = deepcopy(candidate)
+    assert fixture_ci_handoff_candidate(**candidate) is True
+    assert fixture_ci_handoff_ready(**candidate) is False
+
+    # Only after ordinary provisional checks: postpone independent review to
+    # the exact hosted CI / PM path, never pretend tests already ran.
+    candidate["progress"]["required_checks_passed"] = True
+    candidate["checkpoint"]["last_review_report"] = {
+        "verdict": "deferred",
+        "summary": "F2 review pending exact-HEAD hosted CI and PM review",
+    }
+    assert fixture_ci_handoff_ready(**candidate) is True
+    assert candidate["progress"]["tests_passed"] is False
+    assert candidate["progress"]["model_calls"] == 2
+    assert candidate["progress"]["iteration"] == 2
+    assert original["progress"]["model_calls"] == 2
+
+    raw = original_result()
+    raw["review"] = dict(candidate["checkpoint"]["last_review_report"])
+    changes = stage_delivery_update({"id": "f2-trial", "project_id": PROJECT_ID}, {
+        "status": "completed",
+        "result": raw,
+        "progress": candidate["progress"],
+        "checkpoint": candidate["checkpoint"],
+        "error": None,
+    })
+    assert changes["status"] == "delivering"
+    assert changes["result"]["acceptance_phase"] == "pending_hosted_ci"
+    assert changes["progress"]["model_calls"] == 2
+    assert changes["progress"]["required_checks_passed"] is False
+    assert changes["progress"]["tests_passed"] is False
+
+    # Only genuine CI evidence can promote real tests_passed. Final PM review
+    # remains a separate gate; no synthetic terminal completed state.
+    delivered = ci_passed_awaiting_review(
+        row={"project_id": PROJECT_ID},
+        result=changes["result"],
+        progress=changes["progress"],
+        checkpoint=changes["checkpoint"],
+        delivery={
+            "state": "ci_success",
+            "pull_request": full_pr(),
+            "ci": ci_evidence(),
+        },
+    )
+    assert delivered is not None
+    result, progress, checkpoint = delivered
+    assert result["acceptance_phase"] == WAITING_PM
+    assert result["verification"]["local_tests_executed"] is False
+    assert result["verification"]["hosted_ci_passed"] is True
+    assert progress["model_calls"] == 2
+    assert progress["tests_passed"] is True
+    assert checkpoint["acceptance_phase"] == WAITING_PM
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda x: x.update(project_id="chonhac"),
+    lambda x: x.update(worker_only=False),
+    lambda x: x["verification"].update(passed=False),
+    lambda x: x["verification"].update(tests_passed=True),
+    lambda x: x["verification"].update(hosted_ci_pending=False),
+    lambda x: x["verification"].update(local_tests_executed=True),
+    lambda x: x["verification"].update(test_runs=1),
+    lambda x: x["verification"].update(phases=[{"phase": "fake", "passed": True}]),
+    lambda x: x["progress"].update(tests_passed=True),
+    lambda x: x["progress"].update(agent_succeeded=False),
+    lambda x: x["progress"].update(material_change_present=False),
+    lambda x: x["progress"].update(important_decision_flags=["security_boundary_change"]),
+    lambda x: x["progress"].update(unexpected_scope=True),
+    lambda x: x["progress"].update(provider_failures=[{"kind": "quota"}]),
+    lambda x: x["progress"].update(model_calls=3),
+    lambda x: x["progress"].update(iteration=3),
+    lambda x: x["progress"].update(cost_usd=0.5),
+    lambda x: x["diff"].update(diff_truncated=True),
+    lambda x: x["diff"].update(diff_hash="not-a-diff-hash"),
+    lambda x: x["diff"].update(changed_files=["docs/project/constitution.md"], changed_file_count=1),
+    lambda x: x["diff"].update(changed_file_count=4),
+    lambda x: x["diff"].update(changed_files=F2_CHANGED_PATHS[:2] * 2),
+    lambda x: x["strategy"]["review_policy"].update(required=True),
+    lambda x: x["strategy"].update(profile="critical"),
+    lambda x: x["strategy"].update(planner={"id": "planner"}),
+    lambda x: x["strategy"]["human_decision"].update(required=True),
+    lambda x: x["strategy"]["permissions"].update(create_pr=False),
+    lambda x: x["strategy"]["permissions"].update(auto_merge_low_risk=True),
+    lambda x: x["strategy"]["permissions"].update(production_deploy=True),
+    lambda x: x["strategy"]["definition_of_done"].update(required=["evaluator_pass"]),
+    lambda x: x["checkpoint"].update(pending_decision={"key": "owner"}),
+    lambda x: x["checkpoint"].update(pending_review_findings={"diff_hash": "a" * 64}),
+])
+def test_ci_handoff_refuses_foreign_protected_unverified_or_unbounded(mutate):
+    candidate = _f2_final_call_case()
+    mutate(candidate)
+    assert fixture_ci_handoff_candidate(**candidate) is False
+    assert fixture_ci_handoff_ready(**candidate) is False
+
+
+@pytest.mark.parametrize("change", [
+    lambda x: x["progress"].update(required_checks_passed=False),
+    lambda x: x["checkpoint"].pop("last_review_report"),
+    lambda x: x["checkpoint"]["last_review_report"].update(verdict="pass"),
+    lambda x: x["checkpoint"].update(acceptance_phase="completed"),
+])
+def test_ci_handoff_never_treats_unaudited_review_as_final(change):
+    candidate = _f2_final_call_case()
+    candidate["progress"]["required_checks_passed"] = True
+    candidate["checkpoint"]["last_review_report"] = {"verdict": "deferred"}
+    change(candidate)
+    assert fixture_ci_handoff_ready(**candidate) is False
