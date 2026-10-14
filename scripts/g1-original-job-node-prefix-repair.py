@@ -9,6 +9,7 @@ Never replay original setup, start/stop DDEV, allocate a job or reissue tokens.
 from __future__ import annotations
 
 import argparse
+import fcntl
 import importlib.util
 import json
 import os
@@ -183,18 +184,31 @@ def replace_record(data: dict[str, Any]) -> None:
 
 
 def update_config(contents: dict[str, Any], project_id: str) -> None:
-    # Exactly one local G1 singleton tool-argv correction; never source Git,
-    # another project, Docker config, job/lease/DB, or shared credentials.
-    contents["projects"][project_id]["trusted_codex_tools"][
+    # Change ONLY the already verified singleton argv. The running G1 Executor
+    # has a read-only Docker FILE bind mount to this projects.yml inode. An
+    # os.replace() would leave the live Executor reading the OLD inode and the
+    # old broken argv. In-place write preserves the mount; no Docker restart.
+    # A private exclusive attempt record already exists, so ambiguity = STOP.
+    modified = json.loads(json.dumps(contents))
+    modified["projects"][project_id]["trusted_codex_tools"][
         "frontend_quality"] = [NEW]
-    temp = ROOT / "config/projects.g1-prefix-candidate.tmp"
-    os.umask(0o077)
-    with temp.open("x", encoding="utf-8") as f:
-        json.dump(contents, f, indent=2, ensure_ascii=False)
-        f.write("\n")
+    encoded = json.dumps(modified, indent=2, ensure_ascii=False) + "\n"
+    with CONFIG.open("r+", encoding="utf-8") as f:
+        try:
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as exc:
+            raise Stop("g1_config_concurrent_writer") from exc
+        # Refuse concurrent in-place changes, not just a changed inode.
+        f.seek(0)
+        require(json.load(f) == contents, "g1_registry_changed_during_repair")
+        f.seek(0)
+        f.write(encoded)
+        f.truncate()
         f.flush()
         os.fsync(f.fileno())
-    os.replace(temp, CONFIG)
+        fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+    require(json.loads(CONFIG.read_text(encoding="utf-8")) == modified,
+            "g1_corrected_registry_readback_mismatch")
 
 
 def one_node_attempt(previous, executor_id: str, ws: Path) -> dict[str, Any]:
