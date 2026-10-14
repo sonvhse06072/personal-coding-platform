@@ -37,8 +37,11 @@ class CodexAdapter(AgentAdapter):
     async def run(
         self, *, workspace: Path, prompt: str, mode: str, timeout: int,
         environment: dict[str, str] | None = None,
+        developer_broker: dict[str, str] | None = None,
     ) -> AgentRun:
         sandbox = "read-only" if mode in {"plan", "evaluate"} else "workspace-write"
+        if developer_broker is not None and mode not in {"execute", "repair"}:
+            raise ValueError("Scoped developer tools never run in plan/evaluate")
         # Runtime is non-interactive: a Codex approval prompt has no valid human
         # response channel. Make the policy explicit instead of inheriting mounted
         # user configuration. This does not broaden the sandbox; commands that need
@@ -62,6 +65,33 @@ class CodexAdapter(AgentAdapter):
         if sandbox == "workspace-write":
             argv += ["--config", "sandbox_workspace_write.network_access=false"]
         argv += ["--cd", str(workspace)]
+        # This is an opt-in, per-job, token-scoped MCP *tool*, not blanket
+        # Codex network/full-host access. The broker's bearer cannot authorize
+        # any normal Executor/GitHub/Runtime endpoints.
+        if developer_broker is not None:
+            from ..trusted_codex_mcp import _ENV as _BROKER_ENV
+            if set(developer_broker) != set(_BROKER_ENV):
+                raise ValueError("Invalid scoped Codex tool environment")
+            tool_file = Path(__file__).resolve().parent.parent / "trusted_codex_mcp.py"
+            if not tool_file.is_file():
+                raise ValueError("Trusted Codex MCP tool is unavailable")
+            argv += [
+                "--config", 'mcp_servers.pcp_dev.command="python3"',
+                "--config", 'mcp_servers.pcp_dev.args='
+                + json.dumps(["-u", str(tool_file)], separators=(",", ":")),
+                "--config", 'mcp_servers.pcp_dev.env_vars='
+                + json.dumps(list(_BROKER_ENV), separators=(",", ":")),
+                "--config", "mcp_servers.pcp_dev.required=true",
+                "--config", "mcp_servers.pcp_dev.tool_timeout_sec=180",
+                "--config", 'mcp_servers.pcp_dev.enabled_tools=["pcp_run_project_checks"]',
+            ]
+            environment = {**(environment or {}), **developer_broker}
+            prompt += (
+                "\n\nFor this one disposable fixture you can call "
+                "pcp_dev.pcp_run_project_checks (targeted_tests, static_analysis, "
+                "frontend_quality) within this same developer turn. "
+                "Do not attempt direct DDEV, network, Docker or privileged shell."
+            )
         if self.model and self.model not in {"auto", "subscription-auto", "subscription-managed", "frontier-subscription-managed"}:
             argv += ["--model", self.model]
         if self.reasoning_effort:
