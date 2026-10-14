@@ -31,7 +31,7 @@ def test_only_singleton_g1_config_and_omitted_shared_ddev(tmp_path, monkeypatch)
         "targeted_tests", "static_analysis", "frontend_quality",
     }
     assert cfg["trusted_codex_tools"]["frontend_quality"] == [[
-        "ddev", "exec", "npm", "--prefix", "..", "run", "build",
+        "ddev", "exec", "npm", "--prefix", "/var/www/html", "run", "build",
     ]]
     baseline = yaml.safe_load((tmp_path / "config/project-baselines.yml").read_text())
     rev = baseline["projects"]["pcp-benchmark-g1-smoke"]["revisions"][g1.BASELINE]
