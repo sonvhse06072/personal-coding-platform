@@ -249,7 +249,15 @@ def summarize_codex(raw: str) -> dict[str, Any]:
     return {"terminal": terminal or "UNOBSERVED", **normalized}
 
 
-def codex_turn(workspace: Path, task: dict[str, Any]) -> dict[str, Any]:
+def codex_auth_env() -> dict[str, str]:
+    """Return the same minimal credential environment for auth and coding."""
+    env = {k: v for k, v in os.environ.items() if k in SAFE_AGENT_ENV}
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    return env
+
+
+def codex_turn(workspace: Path, task: dict[str, Any], *,
+               env: dict[str, str] | None = None) -> dict[str, Any]:
     argv = [
         "codex", "exec", "--json", "--sandbox", "workspace-write",
         "--config", 'approval_policy="never"',
@@ -268,10 +276,9 @@ def codex_turn(workspace: Path, task: dict[str, Any]) -> dict[str, Any]:
           "G0/G1/F2 files or Chợ Nhạc. Do not commit, push, create PRs, "
           "run Docker, or access the network. Finish with concise findings."
     )
-    env = {k: v for k, v in os.environ.items() if k in SAFE_AGENT_ENV}
-    env["GIT_TERMINAL_PROMPT"] = "0"
     argv.append(prompt)
-    raw = command(argv, cwd=workspace, env=env, timeout=1200)
+    raw = command(argv, cwd=workspace,
+                  env=codex_auth_env() if env is None else env, timeout=1200)
     return summarize_codex(raw)
 
 
@@ -287,9 +294,11 @@ def run_task(repo: Path, issue: int, digest: str, *,
                 "allowed_paths": task["allowed_paths"],
                 "model_calls": 0}
     require(os.geteuid() != 0, "root_operator_denied")
-    # Fail before claiming a key/model budget if the native CLI is missing.
-    # No provider call or model spend; this is a version-only probe.
+    # Fail before claiming a key/model budget if Codex is missing or unauthenticated.
     command(["codex", "--version"], timeout=15)
+    codex_env = codex_auth_env()
+    command(["codex", "login", "status"], timeout=15,
+            env=codex_env)
     parent = ROOT.parent
     require(not parent.is_symlink() and not ROOT.is_symlink(),
             "pcp_light_root_symlink_denied")
@@ -319,7 +328,7 @@ def run_task(repo: Path, issue: int, digest: str, *,
             "pcp_light_workspace_provenance_failed")
     update(journal, "model_reserved", model_calls=1)
     started = time.monotonic()
-    result = codex_turn(workspace, task)  # Only one model turn; never retry.
+    result = codex_turn(workspace, task, env=codex_env)  # One turn; never retry.
     model_seconds = round(time.monotonic() - started, 1)
     update(journal, "model_finished", usage=result,
            elapsed_seconds=model_seconds)

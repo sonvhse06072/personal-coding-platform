@@ -209,6 +209,50 @@ class PCPFastHandoffTests(unittest.TestCase):
                 preflight.assert_called_once_with(["codex", "--version"], timeout=15)
             self.assertFalse(root.exists())
 
+    def test_missing_or_expired_auth_stops_before_any_claim_or_model(self):
+        for returncode in (1, 2):
+            with self.subTest(returncode=returncode), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp) / "jobs"
+                observed = []
+
+                def fake_command(argv, **kwargs):
+                    observed.append((argv, kwargs))
+                    if argv == ["codex", "login", "status"]:
+                        raise M.Stop("command_failed_codex_" + str(returncode))
+                    return "codex 1.2.3"
+
+                with patch.object(M, "ROOT", root), patch.object(
+                    M, "load_issue", return_value=GOOD_TASK
+                ), patch.object(M, "verify_checkout"), patch.object(
+                    M, "command", side_effect=fake_command
+                ), patch.object(M, "codex_turn") as model:
+                    with self.assertRaisesRegex(M.Stop, "command_failed_codex"):
+                        M.run_task(Path(tmp), 593, "a" * 64, execute=True)
+                model.assert_not_called()
+                self.assertFalse(root.exists())
+                self.assertEqual([call[0] for call in observed], [
+                    ["codex", "--version"], ["codex", "login", "status"],
+                ])
+                auth_env = observed[1][1]["env"]
+                self.assertEqual(auth_env, M.codex_auth_env())
+                for secret in ("GH_TOKEN", "GITHUB_TOKEN", "OPENAI_API_KEY",
+                               "PLATFORM_INTERNAL_TOKEN"):
+                    self.assertNotIn(secret, auth_env)
+
+    def test_auth_preflight_uses_same_sanitized_environment_as_turn(self):
+        with patch.dict(M.os.environ, {
+            "HOME": "/tmp/pcp-auth-home", "CODEX_HOME": "/tmp/pcp-auth-home/.codex",
+            "GH_TOKEN": "DO_NOT_FORWARD", "OPENAI_API_KEY": "DO_NOT_FORWARD",
+            "PLATFORM_INTERNAL_TOKEN": "DO_NOT_FORWARD",
+        }, clear=True):
+            env = M.codex_auth_env()
+            self.assertEqual(env["HOME"], "/tmp/pcp-auth-home")
+            self.assertEqual(env["CODEX_HOME"], "/tmp/pcp-auth-home/.codex")
+            self.assertEqual(env["GIT_TERMINAL_PROMPT"], "0")
+            self.assertNotIn("GH_TOKEN", env)
+            self.assertNotIn("OPENAI_API_KEY", env)
+            self.assertNotIn("PLATFORM_INTERNAL_TOKEN", env)
+
     def test_default_inspect_is_readonly_and_no_agent(self):
         with patch.object(M, "load_issue", return_value=GOOD_TASK), patch.object(
             M, "verify_checkout"
@@ -274,6 +318,8 @@ class PCPFastHandoffTests(unittest.TestCase):
     def test_one_shot_claim_then_successful_scoped_draft_pr(self):
         with tempfile.TemporaryDirectory() as temp:
             jroot = Path(temp) / "pcp-light" / "jobs"
+            jroot.parent.mkdir(mode=0o700)
+            jroot.parent.chmod(0o700)
             state = {"committed": False}
             ticket_paths = set(GOOD_TASK["allowed_paths"])
             def fake_cmd(argv, **kwargs):
@@ -327,6 +373,12 @@ class PCPFastHandoffTests(unittest.TestCase):
                     M.run_task(Path(temp), 593, "a" * 64, execute=True)
                 self.assertEqual(codex.call_count, 1)
             calls = [x.args[0] for x in commands.call_args_list]
+            self.assertEqual(calls[:2], [
+                ["codex", "--version"], ["codex", "login", "status"],
+            ])
+            self.assertEqual(commands.call_args_list[1].kwargs["timeout"], 15)
+            self.assertEqual(commands.call_args_list[1].kwargs["env"],
+                             codex.call_args.kwargs["env"])
             self.assertTrue(any(x[:3] == ["gh", "pr", "create"] for x in calls))
             self.assertTrue(any(x[:2] == ["codex", "--version"] for x in calls))
             self.assertFalse(any(x[:2] == ["python3", "-m"] for x in calls))
