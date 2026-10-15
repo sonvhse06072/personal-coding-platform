@@ -15,6 +15,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import re
+import stat
 import subprocess
 import time
 from typing import Any
@@ -165,6 +166,60 @@ def update(journal: Path, state: str, **values: Any) -> None:
     os.replace(temporary, journal)
 
 
+def ensure_private_job_root() -> None:
+    """Create/tighten ONLY ~/.pcp-light and its jobs dir, without recursion.
+
+    pathlib.mkdir(parents=True, mode=0700) creates intermediate parents using
+    default 0777 & umask (often 0755), which caused the pre-claim #729 STOP.
+    Pin a real, user-owned parent with O_NOFOLLOW and make all modes exact.
+    Never chmod a foreign owner, symlink, non-directory or unexpected mode.
+    Preserve all existing job content and journals byte-for-byte.
+    """
+    parent = ROOT.parent
+    require(not parent.is_symlink() and not ROOT.is_symlink(),
+            "pcp_light_root_symlink_denied")
+    if not parent.exists():
+        # Exactly one new directory, not parents=True or broad home changes.
+        parent.mkdir(mode=0o700)
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    try:
+        pfd = os.open(parent, flags)
+    except OSError as exc:
+        raise Stop("pcp_light_parent_not_real_directory") from exc
+    try:
+        owner = os.fstat(pfd)
+        require(stat.S_ISDIR(owner.st_mode)
+                and owner.st_uid == os.geteuid(),
+                "pcp_light_parent_not_owned")
+        mode = stat.S_IMODE(owner.st_mode)
+        require(mode in (0o700, 0o755),
+                "pcp_light_parent_unsafe_mode")
+        if mode == 0o755:
+            # Only the exact owned parent from the historical Python mkdir
+            # bug; this does NOT recurse into any old PCP-light job/worktree.
+            os.fchmod(pfd, 0o700)
+        require(stat.S_IMODE(os.fstat(pfd).st_mode) == 0o700,
+                "pcp_light_parent_not_private")
+        try:
+            os.mkdir(ROOT.name, mode=0o700, dir_fd=pfd)
+        except FileExistsError:
+            pass
+        try:
+            jfd = os.open(ROOT.name, flags, dir_fd=pfd)
+        except OSError as exc:
+            raise Stop("pcp_light_jobs_not_real_directory") from exc
+        try:
+            jobs = os.fstat(jfd)
+            require(stat.S_ISDIR(jobs.st_mode)
+                    and jobs.st_uid == os.geteuid()
+                    and stat.S_IMODE(jobs.st_mode) == 0o700,
+                    "pcp_light_root_not_private")
+        finally:
+            os.close(jfd)
+    finally:
+        os.close(pfd)
+
+
 def changed_paths(workspace: Path) -> set[str]:
     paths: set[str] = set()
     for args in (
@@ -299,17 +354,7 @@ def run_task(repo: Path, issue: int, digest: str, *,
     codex_env = codex_auth_env()
     command(["codex", "login", "status"], timeout=15,
             env=codex_env)
-    parent = ROOT.parent
-    require(not parent.is_symlink() and not ROOT.is_symlink(),
-            "pcp_light_root_symlink_denied")
-    if parent.exists():
-        require(parent.is_dir() and parent.stat().st_uid == os.geteuid()
-                and not (parent.stat().st_mode & 0o077),
-                "pcp_light_parent_not_private")
-    ROOT.mkdir(parents=True, mode=0o700, exist_ok=True)
-    require(ROOT.stat().st_uid == os.geteuid()
-            and not (ROOT.stat().st_mode & 0o077),
-            "pcp_light_root_not_private")
+    ensure_private_job_root()
     directory = ROOT / task["key"]
     directory.mkdir(mode=0o700, exist_ok=False)
     journal = directory / "journal.json"
