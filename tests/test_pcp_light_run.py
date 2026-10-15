@@ -9,6 +9,8 @@ from copy import deepcopy
 import hashlib
 import importlib.util
 import json
+import os
+import stat
 from pathlib import Path
 import subprocess
 import tempfile
@@ -252,6 +254,67 @@ class PCPFastHandoffTests(unittest.TestCase):
             self.assertNotIn("GH_TOKEN", env)
             self.assertNotIn("OPENAI_API_KEY", env)
             self.assertNotIn("PLATFORM_INTERNAL_TOKEN", env)
+
+    def test_first_use_creates_each_parent_private_not_0755(self):
+        with tempfile.TemporaryDirectory() as temp:
+            jobs = Path(temp) / ".pcp-light" / "jobs"
+            with patch.object(M, "ROOT", jobs):
+                M.ensure_private_job_root()
+            self.assertEqual(stat.S_IMODE(jobs.parent.stat().st_mode), 0o700)
+            self.assertEqual(stat.S_IMODE(jobs.stat().st_mode), 0o700)
+            self.assertEqual(jobs.parent.stat().st_uid, os.geteuid())
+            self.assertEqual(jobs.stat().st_uid, os.geteuid())
+
+    def test_owned_0755_parent_narrows_without_touching_existing_jobs(self):
+        with tempfile.TemporaryDirectory() as temp:
+            jobs = Path(temp) / ".pcp-light" / "jobs"
+            jobs.mkdir(parents=True, mode=0o700)
+            parent = jobs.parent
+            parent.chmod(0o755)
+            historical = jobs / "historic-725"
+            historical.mkdir(mode=0o700)
+            journal = historical / "journal.json"
+            journal.write_text("UNCHANGED-ORIGINAL-JOURNAL", encoding="utf-8")
+            before = journal.read_bytes()
+            before_mode = stat.S_IMODE(historical.stat().st_mode)
+            with patch.object(M, "ROOT", jobs):
+                M.ensure_private_job_root()
+            self.assertEqual(stat.S_IMODE(parent.stat().st_mode), 0o700)
+            self.assertEqual(stat.S_IMODE(jobs.stat().st_mode), 0o700)
+            self.assertEqual(stat.S_IMODE(historical.stat().st_mode), before_mode)
+            self.assertEqual(journal.read_bytes(), before)
+
+    def test_unexpected_permissions_or_symlink_stop_without_chmod(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            jobs = root / ".pcp-light" / "jobs"
+            jobs.mkdir(parents=True, mode=0o700)
+            parent = jobs.parent
+            parent.chmod(0o750)
+            with patch.object(M, "ROOT", jobs):
+                with self.assertRaisesRegex(M.Stop, "parent_unsafe_mode"):
+                    M.ensure_private_job_root()
+            self.assertEqual(stat.S_IMODE(parent.stat().st_mode), 0o750)
+            parent.chmod(0o700)
+            redirect = root / "linked-parent"
+            redirect.symlink_to(parent, target_is_directory=True)
+            with patch.object(M, "ROOT", redirect / "jobs"):
+                with self.assertRaisesRegex(M.Stop, "root_symlink_denied"):
+                    M.ensure_private_job_root()
+            self.assertTrue(redirect.is_symlink())
+
+    def test_foreign_owned_parent_refused_no_chmod(self):
+        with tempfile.TemporaryDirectory() as temp:
+            jobs = Path(temp) / ".pcp-light" / "jobs"
+            jobs.mkdir(parents=True, mode=0o700)
+            parent = jobs.parent
+            parent.chmod(0o755)
+            with patch.object(M, "ROOT", jobs), patch.object(
+                M.os, "geteuid", return_value=os.geteuid() + 10000
+            ):
+                with self.assertRaisesRegex(M.Stop, "parent_not_owned"):
+                    M.ensure_private_job_root()
+            self.assertEqual(stat.S_IMODE(parent.stat().st_mode), 0o755)
 
     def test_default_inspect_is_readonly_and_no_agent(self):
         with patch.object(M, "load_issue", return_value=GOOD_TASK), patch.object(
