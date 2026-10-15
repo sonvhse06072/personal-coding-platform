@@ -179,6 +179,20 @@ def lifespan_seconds(state: dict[str, Any]) -> float:
         raise Stop("g1_direct_proxy_lifetime_unparseable") from exc
 
 
+def require_expired_window(state: dict[str, Any]) -> float:
+    require(
+        state.get("Running") is False
+        and state.get("ExitCode") == 1
+        and state.get("OOMKilled") is False
+        and not state.get("Error"),
+        "g1_direct_proxy_not_cleanly_expired",
+    )
+    elapsed = lifespan_seconds(state)
+    require(MIN_EXPIRED_SECONDS <= elapsed <= MAX_EXPIRED_SECONDS,
+            "g1_direct_proxy_did_not_exit_by_20m_window")
+    return elapsed
+
+
 def attest_existing(expected_sha: str, old, recovery) -> tuple[str, str, str]:
     require(re.fullmatch(r"[a-f0-9]{40}", expected_sha) is not None
             and os.geteuid() != 0,
@@ -296,9 +310,7 @@ def attest_existing(expected_sha: str, old, recovery) -> tuple[str, str, str]:
         and mounts[0].get("RW") is False,
         "g1_direct_existing_stopped_proxy_identity_or_scope_changed",
     )
-    elapsed = lifespan_seconds(state)
-    require(MIN_EXPIRED_SECONDS <= elapsed <= MAX_EXPIRED_SECONDS,
-            "g1_direct_proxy_did_not_exit_by_20m_window")
+    elapsed = require_expired_window(state)
     # An unrelated source branch/container/network/volume may never be adopted.
     listings = output([
         "docker", "ps", "--all", "--filter",
