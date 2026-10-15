@@ -354,6 +354,10 @@ def code_scope() -> tuple[bool, list[str]]:
                          "--name-only"]).splitlines())
     changed.update(read(["git", "-C", str(WS), "ls-files", "--others",
                          "--exclude-standard"]).splitlines())
+    # Git status normally omits files listed in .gitignore. An agent must not
+    # hide unexpected new files inside ignored directories.
+    changed.update(read(["git", "-C", str(WS), "ls-files", "--others",
+                         "--ignored", "--exclude-standard"]).splitlines())
     # The task requires both a new method AND focused tests, not just an
     # apparently successful Codex turn with zero or one changed file.
     return changed == ALLOW, sorted(changed)
