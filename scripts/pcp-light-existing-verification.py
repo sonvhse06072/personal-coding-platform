@@ -3,13 +3,14 @@
 
 Reuses the ORIGINAL Codex-edited worktree and journal. No Codex, no new job,
 no new worktree, no Docker/PCP Runtime, no package install, no cleanup/retry.
-The host's Python does NOT need pytest: run the exact changed unittest-based
-PCP-light test file, then let GitHub-hosted CI prove the FULL pytest suite.
+No unreviewed Codex test code is executed on Owner WSL. Locally attest Python
+syntax and exact scope; draft PR runs the FULL pytest suite on isolated hosted CI.
 Any STOP leaves original code and both evidence files unchanged/preserved.
 """
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -33,10 +34,7 @@ ROOT = Path.home() / ".pcp-light" / "jobs" / KEY
 WORKSPACE = ROOT / "workspace"
 JOURNAL = ROOT / "journal.json"
 EVIDENCE = ROOT / "verification-continuation-v1.json"
-UNTEST = ("python3", "-B", "-m", "unittest", "discover",
-          "-s", "tests", "-p", "test_pcp_light_run.py", "-v")
 SHA_RE = re.compile(r"[a-f0-9]{40}\Z")
-TEST_COUNT_RE = re.compile(r"\bRan\s+([1-9][0-9]*)\s+tests?\s+in\b")
 PR_RE = re.compile(
     r"https://github\.com/sonvhse06072/personal-coding-platform/pull/[0-9]+\Z"
 )
@@ -196,16 +194,18 @@ def preflight(repo: Path, expected_main: str) -> dict[str, Any]:
     }
 
 
-def result_of_unittest(run: subprocess.CompletedProcess[str]) -> int:
-    # unittest writes summary to stderr. Do not print raw failures/tracebacks.
-    combined = (run.stdout or "") + "\n" + (run.stderr or "")
-    matches = TEST_COUNT_RE.findall(combined)
-    require(run.returncode == 0 and len(matches) == 1
-            and bool(re.search(r"(?m)^OK(?:\s+\([^)]*\))?\s*$", combined)),
-            "pcp_light_focused_unittest_not_passed")
-    number = int(matches[0])
-    require(1 <= number <= 500, "pcp_light_unittest_count_invalid")
-    return number
+def validate_python_syntax(workspace: Path) -> int:
+    """Parse (NEVER import/execute) Codex-edited Python in original worktree."""
+    for relative in sorted(FILES):
+        p = workspace / relative
+        require(p.is_file() and not p.is_symlink()
+                and p.stat().st_size <= 262144,
+                "pcp_light_changed_python_invalid_file")
+        try:
+            ast.parse(p.read_text(encoding="utf-8"), filename=relative)
+        except (OSError, SyntaxError, UnicodeError, ValueError) as exc:
+            raise Stop("pcp_light_generated_python_syntax_invalid") from exc
+    return len(FILES)
 
 
 def deliver(repo: Path, expected_main: str) -> dict[str, Any]:
@@ -217,11 +217,12 @@ def deliver(repo: Path, expected_main: str) -> dict[str, Any]:
         "operator_main_sha": expected_main, "model_calls_added": 0,
         "changed_paths": snapshot["changed_paths"],
     })
-    env = {**os.environ, "PYTHONDONTWRITEBYTECODE": "1",
-           "GIT_TERMINAL_PROMPT": "0"}
-    beginning = time.monotonic()
-    result = command(list(UNTEST), cwd=WORKSPACE, env=env, timeout=240)
-    tests_run = result_of_unittest(result)
+    started = time.monotonic()
+    checked_count = validate_python_syntax(WORKSPACE)
+    evidence("source_syntax_passed", syntax_files_checked=checked_count,
+             local_checks_elapsed_seconds=round(time.monotonic()-started, 1))
+    # Untrusted Codex-generated tests NEVER execute on the Owner host.
+    # Full pytest is mandatory on GitHub-hosted PR CI before PM acceptance.
     # Tests may themselves touch files. Re-attest before Git staging.
     changed = inspect_changed_paths(WORKSPACE)
     validate_scope(changed,
@@ -231,8 +232,6 @@ def deliver(repo: Path, expected_main: str) -> dict[str, Any]:
                    symlinks=any((WORKSPACE / x).is_symlink()
                                 or not (WORKSPACE / x).is_file()
                                 for x in changed))
-    evidence("focused_unittest_passed", tests_run=tests_run,
-             test_elapsed_seconds=round(time.monotonic()-beginning, 1))
     checked(["git", "-C", str(WORKSPACE), "diff", "--check"], timeout=25)
     checked(["git", "-C", str(WORKSPACE), "add", "--", *sorted(FILES)])
     checked(["git", "-C", str(WORKSPACE), "diff", "--cached", "--check"])
@@ -262,9 +261,10 @@ def deliver(repo: Path, expected_main: str) -> dict[str, Any]:
             "without another model turn. Source parent: " + BASE + ". "
             "Verified original Owner issue SHA256 " + ISSUE_SHA256 + ". "
             "Zero additional model calls. Original journal preserved. "
-            "Local stdlib unittest focused gate: " + str(tests_run) +
-            " tests PASS. Full hosted pytest CI and PM exact-head "
-            "review required before acceptance/merge. No auto deployment."
+            "Two changed Python files syntax-checked only; no generated "
+            "test code executed on Owner WSL. Full hosted pytest CI "
+            "and PM exact-head review required before acceptance/merge. "
+            "No auto deployment."
         ),
     ], cwd=WORKSPACE, timeout=90)
     require(PR_RE.fullmatch(pr) is not None,
@@ -274,8 +274,8 @@ def deliver(repo: Path, expected_main: str) -> dict[str, Any]:
         "status": "PCP_LIGHT_725_DRAFT_PR_AWAITING_HOSTED_CI",
         "original_model_calls": 1,
         "additional_model_calls": 0, "candidate_sha": commit_sha,
-        "pr": pr, "focused_unittest_pass": tests_run,
-        "hosted_full_ci": "PENDING", "original_journal_preserved": True,
+        "pr": pr, "syntax_files_checked": checked_count,
+        "local_tests_executed": 0, "hosted_full_ci": "PENDING", "original_journal_preserved": True,
     }
 
 
