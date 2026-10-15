@@ -520,14 +520,29 @@ def execute(expected: str) -> dict[str, object]:
         "s=TelemetryStorage();j=os.environ['PCP_TRUSTED_CODEX_JOB_ID'];"
         "asyncio.run(RuntimeEngine(s).run_job(j));"
         "r=s.get(j) or {};p=r.get('progress') or {};"
+        "a=[v.get('usage') or {} for v in (p.get('agent_attempts') or [])"
+        " if isinstance(v,dict)];"
+        "t=lambda k:sum(int(v.get(k) or 0) for v in a);"
         "print(json.dumps({'job_id':j,'workspace':r.get('workspace'),"
         "'branch':r.get('branch'),'status':r.get('status'),"
-        "'model_calls':p.get('model_calls',0)}))"
+        "'model_calls':p.get('model_calls',0),"
+        "'repair_iterations':p.get('repair_iterations',0),"
+        "'test_runs':p.get('test_runs',0),"
+        "'tool_calls':p.get('tool_calls',0),"
+        "'input_tokens':t('gross_input_tokens'),"
+        "'cached_input_tokens':t('cached_input_tokens'),"
+        "'output_tokens':t('output_tokens')}))"
     )
     began_run = time.monotonic()
     result = runtime(env, "g1_pcp_real_engine_execute", code, timeout=1800)
     elapsed = round(time.monotonic() - began_run, 1)
     calls = result.get("model_calls")
+    counts = {k: result.get(k) for k in (
+        "input_tokens", "cached_input_tokens", "output_tokens",
+        "repair_iterations", "test_runs", "tool_calls")}
+    check(all(type(value) is int and 0 <= value <= 10_000_000
+              for value in counts.values()),
+          "g1_pcp_model_usage_evidence_invalid")
     check(result.get("job_id") == job
           and result.get("workspace") == str(ws)
           and result.get("branch") == "ai/" + job[:12],
@@ -535,18 +550,19 @@ def execute(expected: str) -> dict[str, object]:
     check(type(calls) is int and 1 <= calls <= 2,
           "g1_pcp_model_calls_missing_or_overbudget")
     journal("coding_finished", job_id=job, model_calls=calls,
-            engine_elapsed_seconds=elapsed, engine_status=result.get("status"))
+            engine_elapsed_seconds=elapsed, engine_status=result.get("status"),
+            **counts)
     check(focused_checks(env, ws), "g1_pcp_focused_php_tests_failed")
     head = verify_commit(env, ws)
     journal("commit_verified", job_id=job, model_calls=calls,
             candidate_sha=head, focused_tests="PASS",
-            engine_elapsed_seconds=elapsed)
+            engine_elapsed_seconds=elapsed, **counts)
     run(["git", "-C", str(ws), "push", REPO_URL,
          "HEAD:refs/heads/ai/" + job[:12]],
         env, "g1_pcp_exact_branch_push", timeout=180)
     journal("pushed", job_id=job, model_calls=calls,
             candidate_sha=head, branch="ai/" + job[:12],
-            focused_tests="PASS", engine_elapsed_seconds=elapsed)
+            focused_tests="PASS", engine_elapsed_seconds=elapsed, **counts)
     run(["gh", "workflow", "run", "validation.yml",
          "--repo", "sonvhse06072/pcp-g0-fullpath-fixture",
          "--ref", "main", "-f", "candidate_sha=" + head],
@@ -555,12 +571,12 @@ def execute(expected: str) -> dict[str, object]:
     journal("ci_dispatched", job_id=job, model_calls=calls,
             candidate_sha=head, branch="ai/" + job[:12],
             focused_tests="PASS", engine_elapsed_seconds=elapsed,
-            operator_elapsed_seconds=total)
+            operator_elapsed_seconds=total, **counts)
     return {"status": "G1_PCP_CANDIDATE_PUSHED_CI_DISPATCHED",
             "job_id": job, "branch": "ai/" + job[:12], "commit": head,
             "model": "gpt-6-luna", "reasoning": "medium",
             "model_calls": calls, "engine_elapsed_seconds": elapsed,
-            "operator_elapsed_seconds": total,
+            "operator_elapsed_seconds": total, **counts,
             "focused_tests": "PASS", "hosted_ci": "DISPATCHED_NOT_VERIFIED",
             "pm_accepted_pr": False, "g0": "HOLD_NOT_GO"}
 
