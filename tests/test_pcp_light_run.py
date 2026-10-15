@@ -419,6 +419,109 @@ class PCPFastHandoffTests(unittest.TestCase):
         self.assertIn("preserve required tests", prompt)
         self.assertIn("Do not commit, push", prompt)
 
+    def test_draft_pr_evidence_carries_verified_numbers_not_raw_secrets(self):
+        task = {
+            **GOOD_TASK,
+            "goal": "SECRET_GOAL_AND_UNTRUSTED_RAW_TASK_DETAILS",
+        }
+        report = {
+            "terminal": "turn.completed",
+            "input_tokens": 628952,
+            "cached_input_tokens": 534016,
+            "uncached_input_tokens": 94936,
+            "output_tokens": 4029,
+            "cached_input_share_percent": 84.9,
+            "raw_agent_output": "SECRET_AGENT_LOG",
+            "environment": {"GITHUB_TOKEN": "SECRET_TOKEN"},
+        }
+        footprint = {
+            "required_authority_bytes": 177448,
+            "required_authority_files_present": 7,
+            "required_authority_files_expected": 7,
+            "allowlisted_existing_source_bytes": 20000,
+            "allowlisted_existing_files": 2,
+            "prompt_utf8_bytes": 1090,
+            "raw_document": "SECRET_CONTEXT_TEXT",
+        }
+        body = M.draft_pr_evidence_body(
+            issue=730, digest="a" * 64, task=task, commit="b" * 40,
+            changed=set(GOOD_TASK["allowed_paths"]),
+            model_seconds=48.8, model_result=report,
+            python_files=list(GOOD_TASK["allowed_paths"]),
+            footprint=footprint,
+        )
+        data = json.loads(body.split(chr(96) * 3 + "json\n", 1)[1]
+                          .split("\n" + chr(96) * 3, 1)[0])
+        self.assertEqual(data["schema"], "pcp-light-pr-evidence-v1")
+        self.assertEqual(data["task"]["issue"], 730)
+        self.assertEqual(data["task"]["candidate_sha"], "b" * 40)
+        self.assertEqual(data["task"]["base_sha"], SOURCE)
+        self.assertEqual(data["coding"]["input_tokens"], 628952)
+        self.assertEqual(data["coding"]["cached_input_tokens"], 534016)
+        self.assertEqual(data["coding"]["uncached_input_tokens"], 94936)
+        self.assertEqual(data["coding"]["cached_input_share_percent"], 84.9)
+        self.assertEqual(data["coding"]["model_elapsed_seconds"], 48.8)
+        self.assertEqual(data["coding"]["provider_cash_cost"], "UNAVAILABLE")
+        self.assertEqual(data["verification"]["hosted_full_ci"], "PENDING")
+        self.assertEqual(data["verification"]["local_tests_executed"], 0)
+        self.assertEqual(data["verification"]["changed_paths"],
+                         sorted(GOOD_TASK["allowed_paths"]))
+        self.assertEqual(data["context_metadata"]["required_authority_bytes"], 177448)
+        for leaked in (
+            "SECRET_GOAL_AND_UNTRUSTED_RAW_TASK_DETAILS",
+            "SECRET_AGENT_LOG", "SECRET_TOKEN", "SECRET_CONTEXT_TEXT",
+        ):
+            self.assertNotIn(leaked, body)
+        self.assertIn("mandatory before merge", body)
+        self.assertNotIn("pytest passed", body.lower())
+
+    def test_missing_metrics_remain_null_and_do_not_block_draft(self):
+        report = M.draft_pr_evidence_body(
+            issue=594, digest="f" * 64, task=GOOD_TASK,
+            commit="b" * 40, changed=set(GOOD_TASK["allowed_paths"]),
+            model_seconds=0.1,
+            model_result={"terminal": "turn.completed",
+                          "input_tokens": False,
+                          "cached_input_tokens": -1,
+                          "cached_input_share_percent": float("nan"),
+                          "raw_exception": "NEVER_PRINT"},
+            python_files=["tests/test_pcp_light_run.py"],
+            footprint={},
+        )
+        obj = json.loads(report.split(chr(96) * 3 + "json\n", 1)[1]
+                         .split("\n" + chr(96) * 3, 1)[0])
+        self.assertIsNone(obj["coding"]["input_tokens"])
+        self.assertIsNone(obj["coding"]["cached_input_tokens"])
+        self.assertIsNone(obj["coding"]["uncached_input_tokens"])
+        self.assertIsNone(obj["coding"]["cached_input_share_percent"])
+        self.assertIsNone(obj["context_metadata"]["required_authority_bytes"])
+        self.assertNotIn("NEVER_PRINT", report)
+
+    def test_pr_body_refuses_outside_scope_or_unpinned_candidate(self):
+        def make(**changes):
+            args = {
+                "issue": 594, "digest": "f" * 64, "task": GOOD_TASK,
+                "commit": "b" * 40,
+                "changed": set(GOOD_TASK["allowed_paths"]),
+                "model_seconds": 1.0, "model_result": {},
+                "python_files": ["tests/test_pcp_light_run.py"],
+                "footprint": {},
+            }
+            args.update(changes)
+            return M.draft_pr_evidence_body(**args)
+        for changed in (
+            {"changed": {".github/workflows/unapproved.yml"}},
+            {"changed": set()},
+            {"commit": "UNPINNED"},
+            {"digest": "not-sha256"},
+            {"model_seconds": float("inf")},
+        ):
+            with self.subTest(changed=changed):
+                with self.assertRaisesRegex(
+                    M.Stop, "pcp_light_pr_evidence_not_scoped"
+                ):
+                    make(**changed)
+
     def test_model_invocation_uses_explicit_sandbox_and_no_host_tokens(self):
         with patch.object(M, "command", return_value=json.dumps({
             "type": "turn.completed", "usage": {
@@ -513,7 +616,17 @@ class PCPFastHandoffTests(unittest.TestCase):
             self.assertEqual(commands.call_args_list[1].kwargs["timeout"], 15)
             self.assertEqual(commands.call_args_list[1].kwargs["env"],
                              codex.call_args.kwargs["env"])
-            self.assertTrue(any(x[:3] == ["gh", "pr", "create"] for x in calls))
+            gh = [x for x in calls if x[:3] == ["gh", "pr", "create"]]
+            self.assertEqual(len(gh), 1)
+            body = gh[0][gh[0].index("--body") + 1]
+            evidence = json.loads(body.split(chr(96) * 3 + "json\n", 1)[1]
+                                  .split("\n" + chr(96) * 3, 1)[0])
+            self.assertEqual(evidence["task"]["candidate_sha"], "b" * 40)
+            self.assertEqual(evidence["coding"]["model_calls"], 1)
+            self.assertEqual(evidence["coding"]["input_tokens"], 20)
+            self.assertEqual(evidence["coding"]["output_tokens"], 2)
+            self.assertEqual(evidence["verification"]["hosted_full_ci"], "PENDING")
+            self.assertEqual(evidence["verification"]["local_tests_executed"], 0)
             self.assertTrue(any(x[:2] == ["codex", "--version"] for x in calls))
             self.assertFalse(any(x[:2] == ["python3", "-m"] for x in calls))
             self.assertTrue(any("worktree" in x for x in calls))
