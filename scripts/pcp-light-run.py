@@ -12,6 +12,7 @@ import argparse
 import ast
 import hashlib
 import json
+import math
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -383,6 +384,97 @@ def summarize_codex(raw: str) -> dict[str, Any]:
     return {"terminal": terminal or "UNOBSERVED", **normalized}
 
 
+def draft_pr_evidence_body(
+    *, issue: int, digest: str, task: dict[str, Any],
+    commit: str, changed: set[str], model_seconds: float,
+    model_result: dict[str, Any], python_files: list[str],
+    footprint: dict[str, int],
+) -> str:
+    """Publish bounded metadata on the draft PR, not raw model/host output.
+
+    This lets PM inspect completion evidence directly in GitHub without a
+    second Owner copy/paste of terminal JSON. PR text is informative, NOT a
+    signed proof, hosted-CI result or approval to merge. Include no task goal,
+    prompts, paths outside the approved diff, environment, credentials or logs.
+    """
+    require(type(issue) is int and issue > 0
+            and isinstance(digest, str)
+            and DIGEST_RE.fullmatch(digest) is not None
+            and isinstance(commit, str)
+            and SHA_RE.fullmatch(commit) is not None
+            and bool(changed)
+            and changed.issubset(set(task["allowed_paths"]))
+            and all(allowed_path(path) for path in changed)
+            and type(model_seconds) in {int, float}
+            and math.isfinite(model_seconds) and model_seconds >= 0,
+            "pcp_light_pr_evidence_not_scoped")
+
+    def safe_int(value: Any) -> int | None:
+        return value if type(value) is int and value >= 0 else None
+
+    usage = model_result if isinstance(model_result, dict) else {}
+    share = usage.get("cached_input_share_percent")
+    share = (
+        share if type(share) in {int, float}
+        and math.isfinite(share) and 0 <= share <= 100 else None
+    )
+    authority = {
+        key: safe_int(footprint.get(key))
+        for key in (
+            "required_authority_bytes",
+            "required_authority_files_present",
+            "required_authority_files_expected",
+            "allowlisted_existing_source_bytes",
+            "allowlisted_existing_files",
+            "prompt_utf8_bytes",
+        )
+    }
+    evidence = {
+        "schema": "pcp-light-pr-evidence-v1",
+        "task": {
+            "issue": issue,
+            "issue_body_sha256": digest,
+            "key": task["key"],
+            "base_sha": task["base_sha"],
+            "candidate_sha": commit,
+            "model": task["model"],
+            "reasoning": task["reasoning"],
+        },
+        "coding": {
+            "model_calls": 1,
+            "terminal": "turn.completed",
+            "model_elapsed_seconds": round(model_seconds, 1),
+            "input_tokens": safe_int(usage.get("input_tokens")),
+            "cached_input_tokens": safe_int(usage.get("cached_input_tokens")),
+            "uncached_input_tokens": safe_int(usage.get("uncached_input_tokens")),
+            "output_tokens": safe_int(usage.get("output_tokens")),
+            "cached_input_share_percent": share,
+            "provider_cash_cost": "UNAVAILABLE",
+        },
+        "verification": {
+            "changed_paths": sorted(changed),
+            "python_syntax_files_checked": len(python_files),
+            "local_tests_executed": 0,
+            "hosted_full_ci": "PENDING",
+            "pm_review": "PENDING",
+        },
+        "context_metadata": authority,
+    }
+    return (
+        "PCP-light one-shot coding delivery for issue #" + str(issue) + ".\n"
+        "The following are bounded host-reported facts for PM triage, not "
+        "independent attestation or final acceptance.\n\n"
+        "## Execution evidence\n\n"
+        "```json\n" + json.dumps(evidence, sort_keys=True, indent=2)
+        + "\n```\n\n"
+        "**Quality gate:** Generated Python was AST-parsed only; no local "
+        "tests were executed on Owner WSL. Full isolated GitHub-hosted "
+        "exact-HEAD PR CI and PM code review are mandatory before merge. "
+        "No automatic merge or deployment. Raw authority file bytes are "
+        "not model token counts; reported tokens are not a USD bill."
+    )
+
+
 def codex_auth_env() -> dict[str, str]:
     """Return the same minimal credential environment for auth and coding."""
     env = {k: v for k, v in os.environ.items() if k in SAFE_AGENT_ENV}
@@ -487,19 +579,17 @@ def run_task(repo: Path, issue: int, digest: str, *,
     command(["git", "-C", str(workspace), "push", "origin",
              f"HEAD:refs/heads/{branch}"], timeout=150)
     update(journal, "pushed", commit=commit)
+    description = draft_pr_evidence_body(
+        issue=issue, digest=digest, task=task, commit=commit,
+        changed=changed, model_seconds=model_seconds,
+        model_result=result, python_files=python_files,
+        footprint=footprint,
+    )
     pr = command([
         "gh", "pr", "create", "--repo", REPOSITORY,
         "--draft", "--base", "main", "--head", branch,
         "--title", f"PCP-light: {task['key']}",
-        "--body", (
-            f"PCP-light Owner-authorized issue #{issue}; "
-            f"body SHA-256 {digest}; source {task['base_sha']}; "
-            f"model {task['model']} / {task['reasoning']}. "
-            "One model turn; generated Python AST syntax checks only. "
-            "Local tests NOT executed; mandatory full pytest must PASS "
-            "on isolated GitHub-hosted exact-HEAD PR CI, then PM review. "
-            "No automatic merge or deployment."
-        ),
+        "--body", description,
     ], cwd=workspace, timeout=90)
     require(pr.startswith(f"https://github.com/{REPOSITORY}/pull/"),
             "pcp_light_pr_url_not_verified")
