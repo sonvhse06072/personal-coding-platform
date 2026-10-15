@@ -73,6 +73,33 @@ model-reported token counts, not billable USD or the total human-attention
 cost. Token evidence is stored with the one-use job journal, and reporting
 does **not** call the model again or contact the provider.
 
+## PM handoff through the existing draft PR
+
+A successful one-turn PCP-light coding operation now places a small
+`pcp-light-pr-evidence-v1` JSON report **directly in the draft PR body**
+(using the existing `gh pr create` operation, not an extra API request):
+approved issue/body SHA-256, source/candidate SHA, model/effort, one model
+call and elapsed seconds, reported input/cached/uncached/output token counts,
+raw authority byte footprint, approved changed paths, AST-only source check,
+local tests **0** and hosted full CI **PENDING**. If counters are missing or
+malformed, their fields are `null`, not zero. Cash billing is
+`UNAVAILABLE`, not guessed from quota or token counts.
+
+The report is built from fixed allowlisted **numeric and identity metadata**.
+No task prompt/goal, provider conversation, environment values, credentials,
+paths beyond the approved changed files, or raw test logs are copied.
+This helps the PM find the PR and assess the delivery from GitHub directly,
+without requiring Owner to copy the same successful run's JSON back into chat.
+The owner still invokes the operator once for any new approved task; the
+existence of a PR does not create an automated watcher or merge permission.
+
+**The PR body is informative, not an independent attestation:** anyone with
+permission to edit a PR description can modify it. PM must still check the
+real PR HEAD, one-parent diff/scope, **hosted full PR CI** and required review
+before merging. For a STOP *before draft creation*, there is no PR to inspect;
+the Owner should provide only the sanitized STOP code, preserving the
+original worktree/journal with **no retries**.
+
 ## Speed/quality decision
 
 This operator deliberately reuses `gh`, existing Codex auth, Git worktrees and GitHub Actions. No new PostgreSQL, DDEV, Router, Executor, proxy, workflow scheduler, Python dependency installer or generic agent framework. The local `pytest` stop in the original #725 trial drove this **CI-first verification policy**: make source-scope/AST checks locally, run full tests in isolated hosted PR CI instead. This avoids executing unreviewed generated tests on the Owner host and prevents a post-model `No module named pytest` blocker. A genuine result should be compared to plain direct Codex using accepted PR, end-to-end elapsed time, model tokens and count of Owner interventions. Do not claim p50/p90 or savings from a single run. G0 #595 remains HOLD / NOT GO.
