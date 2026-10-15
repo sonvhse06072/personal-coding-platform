@@ -38,6 +38,21 @@ def test_direct_action_exact_model_effort_and_no_docker_capability():
     assert not any("GITHUB_TOKEN" in v for v in args)
 
 
+def test_container_preflight_checks_auth_and_live_tls_before_model():
+    args = g1.direct_container_gate_argv()
+    assert args[:7] == (
+        "run", "--rm", "--no-deps", "-T", "--entrypoint",
+        "python3", "direct",
+    )
+    probe = args[-1]
+    assert "codex','login','status" in probe
+    assert "api.github.com:443" in probe
+    assert "response.startswith(b'HTTP/1.1 403')" in probe
+    assert "chatgpt.com:443" in probe
+    assert "ssl.create_default_context()" in probe
+    assert "G1_DIRECT_CONTAINER_AUTH_AND_EGRESS=PASS" in probe
+
+
 def test_direct_proxy_is_one_fixed_service_one_model_window():
     args = list(g1.proxy_argv())
     assert args[:3] == ["run", "-d", "--no-deps"]
@@ -87,7 +102,7 @@ def test_only_two_allowed_fixture_paths_are_in_scope(tmp_path, monkeypatch):
         if args[-2:] == ["rev-parse", "HEAD"]:
             return head
         if args[-2:] == ["diff", "--name-only"]:
-            return next(iter(g1.ALLOW))
+            return "\n".join(sorted(g1.ALLOW))
         if args[-3:] == ["--others", "--exclude-standard"]:
             return ""
         return ""
