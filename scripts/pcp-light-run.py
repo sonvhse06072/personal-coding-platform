@@ -66,9 +66,12 @@ def allowed_path(value: Any) -> bool:
     if not isinstance(value, str) or len(value) > 240 or "\\" in value:
         return False
     path = PurePosixPath(value)
-    if path.is_absolute() or ".." in path.parts or path.as_posix() != value:
+    if path.is_absolute() or ".." in value or path.as_posix() != value:
         return False
-    return value.endswith((".py", ".md")) and value.startswith(ALLOWED_PREFIXES)
+    if value.startswith(ALLOWED_PREFIXES[:2]) and len(path.parts) != 2:
+        return False
+    return (value.endswith((".py", ".md"))
+            and value.startswith(ALLOWED_PREFIXES))
 
 
 def parse_issue(raw: dict[str, Any], issue: int, digest: str) -> dict[str, Any]:
@@ -104,6 +107,7 @@ def parse_issue(raw: dict[str, Any], issue: int, digest: str) -> dict[str, Any]:
             and SHA_RE.fullmatch(item["base_sha"]) is not None
             and isinstance(item["model"], str)
             and MODEL_RE.fullmatch(item["model"]) is not None
+            and isinstance(item["reasoning"], str)
             and item["reasoning"] in {"low", "medium", "high", "xhigh"}
             and isinstance(item["goal"], str)
             and 20 <= len(item["goal"]) <= 8000,
@@ -141,7 +145,9 @@ def verify_checkout(path: Path, base_sha: str) -> None:
             "pcp_light_main_sha_or_dirty")
     require(git(path, "remote", "get-url", "origin") in {
         f"https://github.com/{REPOSITORY}.git",
+        f"https://github.com/{REPOSITORY}",
         f"git@github.com:{REPOSITORY}.git",
+        f"git@github.com:{REPOSITORY}",
     }, "pcp_light_origin_denied")
 
 
@@ -258,6 +264,8 @@ def run_task(repo: Path, issue: int, digest: str, *,
     require(result["terminal"] == "turn.completed",
             "pcp_light_codex_not_completed")
     changed = changed_paths(workspace)
+    deleted = git(workspace, "diff", "--diff-filter=D", "--name-only", "HEAD")
+    require(not deleted, "pcp_light_deletion_denied")
     require(bool(changed) and changed.issubset(set(task["allowed_paths"]))
             and any(x.startswith("tests/test_pcp_light_") for x in changed),
             "pcp_light_diff_outside_scope_or_missing_tests")
