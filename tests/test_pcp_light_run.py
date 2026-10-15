@@ -1,0 +1,241 @@
+"""No-model tests for PCP-light GitHub -> native Codex handoff.
+
+Every command, agent/provider, filesystem mutation and gh API is mocked unless
+explicitly using a fresh temporary directory owned only by this test.
+"""
+from __future__ import annotations
+
+from copy import deepcopy
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+from unittest.mock import patch
+
+
+ROOT = Path(__file__).resolve().parents[1]
+FILE = ROOT / "scripts/pcp-light-run.py"
+
+
+def module():
+    spec = importlib.util.spec_from_file_location("pcp_light_runner", FILE)
+    assert spec and spec.loader
+    instance = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(instance)
+    return instance
+
+
+M = module()
+SOURCE = "a" * 40
+GOOD_TASK = {
+    "version": 1, "key": "simple-bounded-fix", "base_sha": SOURCE,
+    "model": "gpt-6-luna", "reasoning": "medium",
+    "goal": "Implement one bounded new PCP-light adapter behavior and its tests.",
+    "allowed_paths": ["scripts/pcp-light-run.py", "tests/test_pcp_light_run.py"],
+}
+
+
+def issue(task=None, *, author=None, approved=True):
+    body = M.MARKER + "\n" + json.dumps(task or GOOD_TASK, sort_keys=True)
+    doc = {
+        "number": 593, "state": "open",
+        "user": {"login": author or M.AUTHOR},
+        "labels": ([{"name": M.ISSUE_LABEL}] if approved else []),
+        "body": body,
+    }
+    digest = hashlib.sha256(body.encode()).hexdigest()
+    return doc, digest
+
+
+class PCPFastHandoffTests(unittest.TestCase):
+    def test_owner_only_exact_comment_schema_and_sha(self):
+        good, digest = issue()
+        task = M.parse_issue(good, 593, digest)
+        self.assertEqual(task["key"], GOOD_TASK["key"])
+        self.assertEqual(task["base_sha"], SOURCE)
+        for mutant, marker in (
+            ({**good, "number": 592}, "github_issue_identity_denied"),
+            ({**good, "user": {"login": "attacker"}}, "github_issue_identity_denied"),
+            ({**good, "labels": []}, "github_issue_not_approved"),
+            ({**good, "state": "closed"}, "github_issue_identity_denied"),
+            ({**good, "pull_request": {}}, "github_issue_identity_denied"),
+        ):
+            with self.subTest(marker=marker):
+                with self.assertRaisesRegex(M.Stop, marker):
+                    M.parse_issue(mutant, 593, digest)
+        with self.assertRaisesRegex(M.Stop, "github_issue_body_changed"):
+            M.parse_issue(good, 593, "a" * 64)
+
+    def test_no_arbitrary_paths_or_reserved_legacy_project(self):
+        for path in [
+            "../data.py", ".github/workflows/test.yml",
+            "scripts/g1-pcp-t01-one-shot.py", "services/runtime/app/main.py",
+            "docs/project/architecture.md", "scripts/pcp-light-../env.py",
+            "tests/test_pcp_light_../../private.py",
+            "/home/sonvh/chonhac/src.py",
+        ]:
+            with self.subTest(path=path):
+                self.assertFalse(M.allowed_path(path))
+        for key in ("g1-retry", "f2-replay", "chonhac-ticket", "g0-recovery"):
+            doc, digest = issue({**GOOD_TASK, "key": key})
+            with self.assertRaisesRegex(M.Stop, "handoff_field_invalid"):
+                M.parse_issue(doc, 593, digest)
+        doc, digest = issue({
+            **GOOD_TASK, "allowed_paths": ["scripts/pcp-light-run.py"],
+        })
+        with self.assertRaisesRegex(M.Stop, "handoff_allowed_files_invalid"):
+            M.parse_issue(doc, 593, digest)
+
+    def test_handoff_requires_supported_model_and_effort(self):
+        for model in ("", "codex --danger", "gpt-6;rm -rf", "../../../cmd"):
+            doc, digest = issue({**GOOD_TASK, "model": model})
+            with self.subTest(model=model), self.assertRaises(M.Stop):
+                M.parse_issue(doc, 593, digest)
+        doc, digest = issue({**GOOD_TASK, "reasoning": "unbounded"})
+        with self.assertRaisesRegex(M.Stop, "handoff_field_invalid"):
+            M.parse_issue(doc, 593, digest)
+
+    def test_default_inspect_is_readonly_and_no_agent(self):
+        with patch.object(M, "load_issue", return_value=GOOD_TASK), patch.object(
+            M, "verify_checkout"
+        ) as checkout, patch.object(M, "codex_turn") as agent, patch.object(
+            M, "command"
+        ) as run, patch.object(M, "ROOT") as root:
+            response = M.run_task(Path("/some/pcp"), 593, "a" * 64)
+        self.assertEqual(response["status"], "PCP_LIGHT_HANDOFF_VERIFIED_NO_MODEL")
+        self.assertEqual(response["model_calls"], 0)
+        checkout.assert_called_once()
+        agent.assert_not_called()
+        run.assert_not_called()
+        self.assertEqual(root.mkdir.call_count, 0)
+
+    def test_checkout_identity_and_dirty_worktree_denied(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp)
+            def git_ok(_, *args):
+                return {
+                    ("rev-parse", "--show-toplevel"): str(repo),
+                    ("branch", "--show-current"): "main",
+                    ("rev-parse", "HEAD"): SOURCE,
+                    ("status", "--porcelain"): "",
+                    ("remote", "get-url", "origin"):
+                        "git@github.com:sonvhse06072/personal-coding-platform.git",
+                }.get(args, "unknown")
+            with patch.object(M, "git", side_effect=git_ok):
+                M.verify_checkout(repo, SOURCE)
+            def git_bad(_, *args):
+                if args == ("status", "--porcelain"):
+                    return " M dangerous.py"
+                return git_ok(_, *args)
+            with patch.object(M, "git", side_effect=git_bad):
+                with self.assertRaisesRegex(M.Stop, "pcp_light_main_sha_or_dirty"):
+                    M.verify_checkout(repo, SOURCE)
+
+    def test_model_invocation_uses_explicit_sandbox_and_no_host_tokens(self):
+        with patch.object(M, "command", return_value=json.dumps({
+            "type": "turn.completed", "usage": {
+                "input_tokens": 100, "cached_input_tokens": 20, "output_tokens": 15,
+            }
+        })) as runner, patch.dict(M.os.environ, {
+            "GH_TOKEN": "SECRET_DO_NOT_FORWARD",
+            "OPENAI_API_KEY": "SECRET_DO_NOT_FORWARD",
+            "PLATFORM_INTERNAL_TOKEN": "SECRET_DO_NOT_FORWARD",
+            "HOME": "/tmp/pcp-light-auth"
+        }):
+            response = M.codex_turn(Path("/tmp/pcp-task"), GOOD_TASK)
+        argv = runner.call_args.args[0]
+        env = runner.call_args.kwargs["env"]
+        self.assertEqual(argv[:2], ["codex", "exec"])
+        self.assertIn("workspace-write", argv)
+        self.assertIn("sandbox_workspace_write.network_access=false", argv)
+        self.assertIn('approval_policy="never"', argv)
+        self.assertIn('model_reasoning_effort="medium"', argv)
+        self.assertIn("gpt-6-luna", argv)
+        self.assertEqual(response["terminal"], "turn.completed")
+        self.assertEqual(response["cached_input_tokens"], 20)
+        for key in ("GH_TOKEN", "OPENAI_API_KEY", "PLATFORM_INTERNAL_TOKEN"):
+            self.assertNotIn(key, env)
+        self.assertIn("Do not commit, push", argv[-1])
+
+    def test_one_shot_claim_then_successful_scoped_draft_pr(self):
+        with tempfile.TemporaryDirectory() as temp:
+            jroot = Path(temp) / "pcp-light" / "jobs"
+            state = {"committed": False}
+            ticket_paths = set(GOOD_TASK["allowed_paths"])
+            def fake_cmd(argv, **kwargs):
+                if "commit" in argv:
+                    state["committed"] = True
+                if argv[:3] == ["gh", "pr", "create"]:
+                    return f"https://github.com/{M.REPOSITORY}/pull/900"
+                return ""
+            def fake_git(workspace, *args):
+                if args == ("rev-parse", "HEAD"):
+                    return "b" * 40 if state["committed"] else SOURCE
+                if args == ("rev-parse", "HEAD^"):
+                    return SOURCE
+                if args == ("branch", "--show-current"):
+                    return "ai/pcp-light/simple-bounded-fix"
+                if args in (("status", "--porcelain"),):
+                    return ""
+                if args[:2] == ("diff", "--name-only") and len(args) == 4:
+                    return "\n".join(sorted(ticket_paths))
+                return ""
+            with patch.object(M, "ROOT", jroot), patch.object(
+                M.os, "geteuid", return_value=1000
+            ), patch.object(M, "load_issue", return_value=GOOD_TASK), patch.object(
+                M, "verify_checkout"
+            ), patch.object(M, "command", side_effect=fake_cmd) as commands, patch.object(
+                M, "git", side_effect=fake_git
+            ), patch.object(M, "codex_turn", return_value={
+                "terminal": "turn.completed", "input_tokens": 20,
+                "cached_input_tokens": 4, "output_tokens": 2,
+            }) as codex, patch.object(M, "changed_paths", return_value=ticket_paths):
+                result = M.run_task(
+                    Path(temp), 593, "a" * 64, execute=True,
+                )
+                self.assertEqual(result["status"], "PCP_LIGHT_DRAFT_PR_PENDING_CI_PM")
+                self.assertEqual(result["model_calls"], 1)
+                codex.assert_called_once()
+                self.assertEqual(json.loads(
+                    (jroot / GOOD_TASK["key"] / "journal.json").read_text()
+                )["state"], "draft_pr_created")
+                with self.assertRaises(FileExistsError):
+                    M.run_task(Path(temp), 593, "a" * 64, execute=True)
+                self.assertEqual(codex.call_count, 1)
+            calls = [x.args[0] for x in commands.call_args_list]
+            self.assertTrue(any(x[:3] == ["gh", "pr", "create"] for x in calls))
+            self.assertTrue(any(x[:2] == ["python3", "-m"] for x in calls))
+            self.assertTrue(any("worktree" in x for x in calls))
+
+    def test_unapproved_diff_stops_before_commit_or_push(self):
+        with tempfile.TemporaryDirectory() as temp:
+            jroot = Path(temp) / "jobs"
+            with patch.object(M, "ROOT", jroot), patch.object(
+                M.os, "geteuid", return_value=1000
+            ), patch.object(M, "load_issue", return_value=GOOD_TASK), patch.object(
+                M, "verify_checkout"
+            ), patch.object(M, "command", return_value="") as cmds, patch.object(
+                M, "git", side_effect=lambda _, *a:
+                SOURCE if a == ("rev-parse", "HEAD")
+                else "ai/pcp-light/simple-bounded-fix"
+                if a == ("branch", "--show-current") else ""
+            ), patch.object(M, "codex_turn", return_value={
+                "terminal": "turn.completed"
+            }), patch.object(M, "changed_paths", return_value={
+                ".github/workflows/unsafe.yml"
+            }):
+                with self.assertRaisesRegex(M.Stop, "diff_outside_scope"):
+                    M.run_task(Path(temp), 593, "a" * 64, execute=True)
+                record = json.loads((jroot / GOOD_TASK["key"] /
+                                     "journal.json").read_text())
+                self.assertEqual(record["state"], "model_finished")
+                self.assertEqual(record["model_calls"], 1)
+                self.assertFalse(any("commit" in x.args[0] or "push" in x.args[0]
+                                     for x in cmds.call_args_list))
+
+
+if __name__ == "__main__":
+    unittest.main()
