@@ -9,8 +9,8 @@ import pytest
 from app import trusted_codex_broker as broker
 
 JOB = "a" * 32
-SHA = "b" * 40
-PROJECT = "pcp-benchmark-synthetic"
+SHA = "d4f4a56713e95f85ecc08c02bb43a5b5105a86a3"
+PROJECT = "pcp-benchmark-g1-smoke"
 
 
 @pytest.fixture
