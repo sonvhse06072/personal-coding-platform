@@ -9,6 +9,8 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+
+import yaml
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -123,6 +125,20 @@ class PilotOneShotContractTests(unittest.TestCase):
         self.assertNotIn("\n  direct:\n", text)
         self.assertIn("wait_for", text)
         self.assertIn("timeout=1800", text)
+
+    def test_only_private_postgres_gets_bootstrap_permissions(self) -> None:
+        doc = yaml.safe_load(OVERLAY.read_text(encoding="utf-8"))
+        services = doc["services"]
+        self.assertFalse(services["db"]["read_only"])
+        self.assertIn("CHOWN", services["db"]["cap_add"])
+        self.assertIn("SETUID", services["db"]["cap_add"])
+        self.assertIn("pg_isready", str(services["db"]["healthcheck"]))
+        self.assertIn("8090/health", str(services["router"]["healthcheck"]))
+        self.assertIn("8790/health", str(services["executor"]["healthcheck"]))
+        for name in ("router", "executor", "runtime"):
+            self.assertNotIn("read_only", services[name])
+            self.assertNotIn("privileged", services[name])
+        self.assertNotIn("direct", services)
 
     def test_runtime_image_excludes_legacy_opencode(self) -> None:
         text = DOCKERFILE.read_text(encoding="utf-8")
