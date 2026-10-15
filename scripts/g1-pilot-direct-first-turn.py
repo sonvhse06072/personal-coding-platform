@@ -254,6 +254,34 @@ def proxy_argv() -> tuple[str, ...]:
     )
 
 
+def direct_container_gate_argv() -> tuple[str, ...]:
+    """Check mounted auth and live proxy in the exact direct Docker network.
+
+    No model call; does not expose token contents or send HTTP payloads.
+    """
+    probe = (
+        "import socket,ssl,subprocess;"
+        "p=subprocess.run(['codex','login','status'],capture_output=True,"
+        "text=True,timeout=15,check=False);"
+        "assert p.returncode==0 and 'Logged in using ChatGPT' in p.stdout;"
+        "connect=lambda h: socket.create_connection(('g1-pilot-direct-proxy',"
+        "3128),timeout=12);"
+        "s=connect('api.github.com');s.sendall(b'CONNECT api.github.com:443 "
+        "HTTP/1.1\\r\\nHost: api.github.com:443\\r\\n\\r\\n');"
+        "response=s.recv(256);assert response.startswith(b'HTTP/1.1 403');s.close();"
+        "s=connect('chatgpt.com');s.sendall(b'CONNECT chatgpt.com:443 "
+        "HTTP/1.1\\r\\nHost: chatgpt.com:443\\r\\n\\r\\n');"
+        "response=s.recv(256);assert response.startswith(b'HTTP/1.1 200');"
+        "s=ssl.create_default_context().wrap_socket(s,server_hostname='chatgpt.com');"
+        "assert s.version() is not None;s.close();"
+        "print('G1_DIRECT_CONTAINER_AUTH_AND_EGRESS=PASS')"
+    )
+    return (
+        "run", "--rm", "--no-deps", "-T",
+        "--entrypoint", "python3", "direct", "-c", probe,
+    )
+
+
 def codex_argv() -> tuple[str, ...]:
     return (
         "run", "--rm", "--no-deps", "-T", "--entrypoint", "codex",
@@ -324,7 +352,9 @@ def code_scope() -> tuple[bool, list[str]]:
     changed = set(read(["git", "-C", str(WS), "diff", "--name-only"]).splitlines())
     changed.update(read(["git", "-C", str(WS), "ls-files", "--others",
                          "--exclude-standard"]).splitlines())
-    return bool(changed and changed.issubset(ALLOW)), sorted(changed)
+    # The task requires both a new method AND focused tests, not just an
+    # apparently successful Codex turn with zero or one changed file.
+    return changed == ALLOW, sorted(changed)
 
 
 def execute(expected: str) -> dict[str, Any]:
@@ -352,6 +382,14 @@ def execute(expected: str) -> dict[str, Any]:
     # The role-scoped proxy has no OAuth/GitHub secrets and no published ports.
     checked_compose(env, *proxy_argv(), timeout=90)
     check_proxy_identity()
+    # The same private direct container must see its independent Codex auth,
+    # refuse an unapproved GitHub CONNECT, and complete an authenticated TLS
+    # handshake to the exact approved ChatGPT hostname through the proxy.
+    # This gate makes NO Codex model call and does not disclose credentials.
+    gate = compose(env, *direct_container_gate_argv(), timeout=65)
+    require(gate.returncode == 0 and
+            "G1_DIRECT_CONTAINER_AUTH_AND_EGRESS=PASS" in gate.stdout,
+            "g1_direct_container_auth_or_proxy_gate_failed")
     # ONE model call, no automatic retries even for auth/provider failures.
     save({
         "state": "model_launched", "lane": "direct", "seed": SEED,
@@ -360,10 +398,17 @@ def execute(expected: str) -> dict[str, Any]:
     launched = compose(env, *codex_argv(), timeout=LIMIT_SECONDS + 90)
     observed = summarise_codex(launched)
     scope_ok, changed = code_scope()
+    class_file = WS / "web/modules/custom/pcp_f2_fixture/src/WindowOverlapDetector.php"
+    unit_file = WS / "web/modules/custom/pcp_f2_fixture/tests/src/Unit/WindowOverlapDetectorTest.php"
+    material = (
+        class_file.is_file() and unit_file.is_file()
+        and "function intersectionMinutes(" in class_file.read_text(encoding="utf-8")
+        and "intersectionMinutes(" in unit_file.read_text(encoding="utf-8")
+    )
     approved = (
         observed["returncode"] == 0
         and observed["terminal"] == "turn.completed"
-        and scope_ok
+        and scope_ok and material
         and invoke(["git", "-C", str(WS), "diff", "--check"]).returncode == 0
     )
     commit = ""
