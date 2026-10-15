@@ -123,7 +123,8 @@ services:
     tmpfs:
       - "/tmp:rw,nosuid,nodev,size=67108864"
       - "/home/coder/.cache:rw,nosuid,nodev,size=33554432"
-    networks: [g1-pilot-control, g1-pilot-github-egress]
+    # Outbound restricted to an independently scoped GitHub CONNECT proxy.
+    networks: [g1-pilot-control]
     labels: {pcp.scope: g1-pilot-parked, pcp.role: executor}
 
   runtime:
@@ -192,7 +193,8 @@ services:
       - "/home/coder/.cache:rw,nosuid,nodev,size=33554432"
       - "/home/coder/.config:rw,nosuid,nodev,size=33554432"
       - "/home/coder/.local:rw,nosuid,nodev,size=33554432"
-    networks: [g1-pilot-control, g1-pilot-provider-egress]
+    # No direct provider Internet route: internal proxy is the only exit.
+    networks: [g1-pilot-control]
     labels: {pcp.scope: g1-pilot-parked, pcp.role: runtime}
 
   direct:
@@ -218,7 +220,8 @@ services:
       - "/tmp:rw,nosuid,nodev,size=67108864"
       - "/home/coder/.cache:rw,nosuid,nodev,size=33554432"
       - "/home/coder/.config:rw,nosuid,nodev,size=33554432"
-    networks: [g1-pilot-direct-provider-egress]
+    # Different internal network and credentials from PCP/Executor.
+    networks: [g1-pilot-direct-control]
     labels: {pcp.scope: g1-pilot-parked, pcp.role: direct}
 
 secrets:
@@ -234,7 +237,11 @@ networks:
   g1-pilot-control:
     name: pcp-g1-pilot-control
     internal: true
-  # Outbound-capable DOES NOT imply domain allowlisting or approved egress.
+  # This parked file never attaches a model/service directly to egress.
+  # Only the separately guarded proxy overlay can join these networks.
+  g1-pilot-direct-control:
+    name: pcp-g1-pilot-direct-control
+    internal: true
   g1-pilot-provider-egress:
     name: pcp-g1-pilot-provider-egress
     internal: false
