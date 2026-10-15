@@ -1,0 +1,193 @@
+"""Fully offline tests for the read-only PCP-light PR readiness reporter."""
+from __future__ import annotations
+
+import hashlib
+import importlib.util
+import json
+from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+SPEC = importlib.util.spec_from_file_location(
+    "pcp_light_pr_review", ROOT / "scripts/pcp-light-pr-review.py"
+)
+review = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(review)
+
+REPO = review.REPO
+HEAD = "a" * 40
+BASE = "b" * 40
+ISSUE_BODY = "Approved task\n\nAllowed files (modify ONLY these):\n- `scripts/tool.py`\n- `tests/test_tool.py`\n"
+DIGEST = hashlib.sha256(ISSUE_BODY.encode()).hexdigest()
+
+
+def valid_responses():
+    return {
+        f"repos/{REPO}/pulls/12": {
+            "number": 12, "state": "open", "merged": False,
+            "user": {"login": "sonvhse06072"}, "author_association": "OWNER",
+            "head": {"sha": HEAD, "repo": {"full_name": REPO}},
+            "base": {"sha": BASE, "repo": {"full_name": REPO}},
+            # This mutable PR body deliberately claims false success.
+            "body": '{"ci":"SUCCESS","merged":true,"commit":"' + "f" * 40 + '"}',
+        },
+        f"repos/{REPO}/issues/9": {
+            "number": 9, "user": {"login": "sonvhse06072"},
+            "author_association": "OWNER", "body": ISSUE_BODY,
+        },
+        f"repos/{REPO}/compare/{BASE}...{HEAD}": {
+            "status": "ahead", "ahead_by": 1, "commits": [{"sha": HEAD}],
+        },
+        f"repos/{REPO}/pulls/12/files?per_page=100": [
+            {"filename": "scripts/tool.py"}, {"filename": "tests/test_tool.py"},
+        ],
+        f"repos/{REPO}/actions/workflows/tests.yml/runs?head_sha={HEAD}&event=pull_request&per_page=100": {
+            "workflow_runs": [{"id": 88, "run_number": 17, "name": "tests",
+                               "event": "pull_request", "head_sha": HEAD,
+                               "status": "completed", "conclusion": "success"}],
+        },
+        f"repos/{REPO}/actions/runs/88/jobs?per_page=100": {
+            "jobs": [{"name": name, "status": "completed", "conclusion": "success"}
+                     for name in review.REQUIRED_JOBS],
+        },
+    }
+
+
+class GhMock:
+    def __init__(self, responses=None):
+        self.responses = valid_responses() if responses is None else responses
+        self.calls = []
+
+    def __call__(self, argv, **kwargs):
+        self.calls.append((argv, kwargs))
+        assert argv[:3] == ["gh", "api", "--method"]
+        assert argv[3] == "GET"
+        endpoint = argv[4]
+        if endpoint not in self.responses:
+            return SimpleNamespace(returncode=1, stdout="", stderr="secret token leaked")
+        return SimpleNamespace(returncode=0,
+                               stdout=json.dumps(self.responses[endpoint]), stderr="")
+
+
+@pytest.fixture
+def gh(monkeypatch):
+    mock = GhMock()
+    monkeypatch.setattr(review.subprocess, "run", mock)
+    return mock
+
+
+def run(**kwargs):
+    return review.report(kwargs.get("pr", 12), kwargs.get("head", HEAD),
+                         kwargs.get("base", BASE), kwargs.get("issue", 9),
+                         kwargs.get("digest", DIGEST))
+
+
+def test_exact_sha_and_live_api_facts_are_ready(gh):
+    result = run()
+    assert result["status"] == "READY_FOR_PM_REVIEW"
+    assert result["head_sha"] == HEAD and result["base_sha"] == BASE
+    assert result["required_jobs"] == {name: "SUCCESS" for name in review.REQUIRED_JOBS}
+    assert result["authorization"].startswith("NONE;")
+    assert len(gh.calls) == 6
+
+
+def test_wrong_pr_repository_is_not_ready(gh):
+    gh.responses[f"repos/{REPO}/pulls/12"]["head"]["repo"]["full_name"] = "attacker/other"
+    assert run()["reason"] == "pull_request_repository_mismatch"
+
+
+def test_original_issue_must_be_owner_authored(gh):
+    gh.responses[f"repos/{REPO}/issues/9"]["user"]["login"] = "someone-else"
+    assert run()["reason"] == "original_issue_not_owner_authored"
+
+
+def test_mutable_forged_pr_body_cannot_supply_ci_or_commit_proof(gh):
+    result = run()
+    assert result["ready"] is True
+    assert result["head_sha"] == HEAD
+    assert result["required_jobs"]["structure-tests"] == "SUCCESS"
+
+
+@pytest.mark.parametrize("mutation,reason", [
+    (lambda d: d.update({"ahead_by": 2, "commits": [{"sha": HEAD}, {"sha": "c" * 40}]}),
+     "candidate_not_exactly_one_commit_after_base"),
+    (lambda d: d.update({"status": "behind", "ahead_by": 0, "commits": []}),
+     "candidate_not_exactly_one_commit_after_base"),
+])
+def test_wrong_commit_count_is_not_ready(gh, mutation, reason):
+    mutation(gh.responses[f"repos/{REPO}/compare/{BASE}...{HEAD}"])
+    assert run()["reason"] == reason
+
+
+def test_stale_base_is_not_ready(gh):
+    assert run(base="c" * 40)["reason"] == "pull_request_base_sha_mismatch"
+
+
+def test_duplicate_changed_paths_are_not_ready(gh):
+    gh.responses[f"repos/{REPO}/pulls/12/files?per_page=100"].append(
+        {"filename": "tests/test_tool.py"})
+    assert run()["reason"] == "changed_paths_duplicate"
+
+
+def test_bad_issue_digest_is_not_ready(gh):
+    assert run(digest="0" * 64)["reason"] == "original_issue_body_digest_mismatch"
+
+
+def test_non_owner_issue_is_not_ready(gh):
+    gh.responses[f"repos/{REPO}/issues/9"]["author_association"] = "COLLABORATOR"
+    assert run()["reason"] == "original_issue_not_owner_authored"
+
+
+@pytest.mark.parametrize("job_change,reason", [
+    ("missing", "required_ci_job_missing_or_duplicate"),
+    ("failed", "required_ci_job_not_success"),
+    ("skipped", "required_ci_job_not_success"),
+    ("partial", "required_ci_job_missing_or_duplicate"),
+    ("queued", "required_ci_jobs_pending"),
+])
+def test_missing_failed_partial_skipped_or_pending_ci_is_never_green(gh, job_change, reason):
+    jobs = gh.responses[f"repos/{REPO}/actions/runs/88/jobs?per_page=100"]["jobs"]
+    if job_change == "missing":
+        jobs.pop()
+    elif job_change == "partial":
+        jobs[:] = jobs[:2]
+    elif job_change == "failed":
+        jobs[0]["conclusion"] = "failure"
+    elif job_change == "skipped":
+        jobs[0]["conclusion"] = "skipped"
+    else:
+        jobs[0]["status"] = "queued"
+    result = run()
+    assert result["reason"] == reason
+    assert result["status"] == ("PENDING" if job_change == "queued" else "NOT_READY")
+
+
+def test_pr_body_cannot_override_live_failed_ci(gh):
+    gh.responses[f"repos/{REPO}/actions/runs/88/jobs?per_page=100"]["jobs"][0]["conclusion"] = "failure"
+    assert run()["ready"] is False
+
+
+def test_queued_run_with_not_yet_created_jobs_is_pending(gh):
+    runs_key = f"repos/{REPO}/actions/workflows/tests.yml/runs?head_sha={HEAD}&event=pull_request&per_page=100"
+    gh.responses[runs_key]["workflow_runs"][0]["status"] = "queued"
+    gh.responses[f"repos/{REPO}/actions/runs/88/jobs?per_page=100"]["jobs"] = []
+    result = run()
+    assert result["status"] == "PENDING"
+    assert result["reason"] == "required_ci_jobs_pending"
+
+
+def test_all_requests_are_fixed_get_only_calls(gh):
+    run()
+    assert all(call[0][:4] == ["gh", "api", "--method", "GET"] for call in gh.calls)
+    assert all(call[1]["stdin"] is review.subprocess.DEVNULL for call in gh.calls)
+
+
+@pytest.mark.parametrize("kwargs", [
+    {"head": "a" * 39}, {"base": "G" * 40}, {"digest": "xyz"},
+    {"pr": True}, {"issue": 0},
+])
+def test_invalid_explicit_pins_fail_before_github_calls(gh, kwargs):
+    assert run(**kwargs)["ready"] is False
+    assert gh.calls == []
