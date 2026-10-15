@@ -315,11 +315,15 @@ def attest_existing(expected_sha: str, old, recovery) -> tuple[str, str, str]:
     for name in EXPECTED_NETS:
         network = inspect("network", name)
         peers = network.get("Containers") or {}
+        connected = {value.get("Name") for value in peers.values()
+                     if isinstance(value, dict)}
+        # Docker releases a stopped container's network endpoints. Require
+        # zero peers or ONLY this exact previously-attested proxy; accepting
+        # another project/DDEV container here would be a scope escape.
         require(network.get("Name") == name and
                 network.get("Internal") is
                     (name == "pcp-g1-pilot-direct-control")
-                and {value.get("Name") for value in peers.values()
-                     if isinstance(value, dict)} == {PROXY_NAME},
+                and connected.issubset({PROXY_NAME}),
                 "g1_direct_existing_network_peer_or_scope_drift")
     return match.group(1), container_id, str(round(elapsed, 1))
 
@@ -392,6 +396,14 @@ def execute(expected_sha: str) -> dict[str, Any]:
             and set((after.get("NetworkSettings") or {}).get("Networks") or {}) ==
                 EXPECTED_NETS,
             "g1_direct_same_proxy_not_running_on_exact_network")
+    for name in EXPECTED_NETS:
+        network = inspect("network", name)
+        peers = network.get("Containers") or {}
+        require(
+            {v.get("Name") for v in peers.values() if isinstance(v, dict)}
+                == {PROXY_NAME},
+            "g1_direct_restarted_proxy_foreign_network_peer",
+        )
     env = recovery.prepared_env(version, old)
     gate = recovery.compose(
         env, "run", "--rm", "--no-deps", "-T", "--entrypoint", "python3",
