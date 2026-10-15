@@ -12,10 +12,29 @@ x-g1-t01-operation:
 services:
   db:
     entrypoint: null
+    # Only this new private PostgreSQL needs an initialized writable data dir.
+    # The source-only parked Compose remains inert with /bin/false.
+    read_only: false
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U g1pilot -d g1pilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
   router:
     entrypoint: null
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8090/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
   executor:
     entrypoint: null
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8790/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
     networks:
       g1-pilot-control:
         aliases: [pcp-dev-executor]
