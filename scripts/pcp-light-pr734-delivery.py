@@ -273,7 +273,91 @@ def preflight(repo: Path, expected_main: str) -> dict[str, Any]:
         "original_journal_sha256": hashlib.sha256(original_journal).hexdigest(),
         "model_elapsed_seconds": data.get("elapsed_seconds"),
         "original_file_sha256": hashlib.sha256(source).hexdigest(),
+        "usage": {
+            k: data["usage"].get(k)
+            for k in (
+                "input_tokens", "cached_input_tokens",
+                "uncached_input_tokens", "output_tokens",
+                "cached_input_share_percent",
+            )
+        },
+        "context_footprint": data.get("context_footprint", {}),
     }
+
+
+def draft_pr_body(state: dict[str, Any], candidate_sha: str) -> str:
+    """Metadata only: carry existing #734 model evidence to the draft PR."""
+    require(SHA_RE.fullmatch(candidate_sha) is not None,
+            "pcp_light_734_candidate_sha_invalid")
+    usage = state.get("usage") if isinstance(state.get("usage"), dict) else {}
+    sizes = state.get("context_footprint")
+    sizes = sizes if isinstance(sizes, dict) else {}
+
+    def token(name: str) -> int | None:
+        item = usage.get(name)
+        return item if type(item) is int and item >= 0 else None
+
+    share = usage.get("cached_input_share_percent")
+    if type(share) not in {int, float} or not math.isfinite(share):
+        share = None
+    elif not 0 <= share <= 100:
+        share = None
+
+    elapsed = state.get("model_elapsed_seconds")
+    if type(elapsed) not in {int, float} or not math.isfinite(elapsed):
+        elapsed = None
+    elif elapsed < 0:
+        elapsed = None
+    evidence = {
+        "schema": "pcp-light-pr-evidence-v1",
+        "issue": ISSUE,
+        "issue_body_sha256": BODY_SHA256,
+        "base_sha": BASE,
+        "candidate_sha": candidate_sha,
+        "branch": BRANCH,
+        "model_calls": 1,
+        "additional_model_calls": 0,
+        "terminal": "turn.completed",
+        "model_elapsed_seconds": elapsed,
+        "input_tokens": token("input_tokens"),
+        "cached_input_tokens": token("cached_input_tokens"),
+        "uncached_input_tokens": token("uncached_input_tokens"),
+        "output_tokens": token("output_tokens"),
+        "cached_input_share_percent": share,
+        "provider_cash_cost": "UNAVAILABLE",
+        "approved_changed_paths": sorted(FILES),
+        "repair": "one_new_blank_line_at_eof",
+        "python_ast_semantics": "UNCHANGED",
+        "local_tests_executed": 0,
+        "hosted_full_ci": "PENDING",
+        "pm_review": "PENDING",
+        "context_metadata": {
+            key: val if type(val) is int and val >= 0 else None
+            for key, val in sizes.items()
+            if key in {
+                "required_authority_bytes",
+                "required_authority_files_present",
+                "required_authority_files_expected",
+                "allowlisted_existing_source_bytes",
+                "allowlisted_existing_files",
+                "prompt_utf8_bytes",
+            }
+        },
+    }
+    return (
+        "PCP-light #734 one-turn Codex output, delivered with ONE "
+        "bounded ZERO-MODEL same-worktree whitespace correction. "
+        "Original journal preserved in state source_checked. "
+        "Existing Codex file bytes privately snapshotted. "
+        "Metadata is informative, not signed attestation.\n\n"
+        "## Execution evidence\n\n```json\n"
+        + json.dumps(evidence, sort_keys=True, indent=2)
+        + "\n```\n\n"
+        "**Quality gate:** Full GitHub-hosted exact-HEAD PR CI "
+        "and human PM source review are mandatory before merge; "
+        "no local generated tests were executed on Owner WSL. "
+        "No automatic merge, deployment, model rerun or cash-cost claim."
+    )
 
 
 def deliver(repo: Path, expected_main: str) -> dict[str, Any]:
@@ -294,9 +378,10 @@ def deliver(repo: Path, expected_main: str) -> dict[str, Any]:
     except OSError as exc:
         raise Stop("pcp_light_734_eof_write_failed") from exc
 
-    require(not git_ok("diff", "--no-ext-diff", "--name-only")
-            .replace(warning_path, "").strip(),
-            "pcp_light_734_unexpected_unstaged_change")
+    require(
+        set(git_ok("diff", "--no-ext-diff", "--name-only").splitlines())
+        == {warning_path},
+        "pcp_light_734_unexpected_unstaged_change")
     checked(["git", "-C", str(WS), "add", "--", warning_path])
     result = git("diff", "--cached", "--no-ext-diff", "--check")
     require(result.returncode == 0 and not result.stdout and not result.stderr,
@@ -326,18 +411,7 @@ def deliver(repo: Path, expected_main: str) -> dict[str, Any]:
     checked(["git", "-C", str(WS), "push", "origin",
              "HEAD:refs/heads/" + BRANCH], timeout=140)
     receipt("pushed", candidate_sha=commit_sha)
-    body = (
-        "PCP-light #734 original one-call Codex output delivered through a "
-        "separate, one-use ZERO-MODEL recovery. Source parent: " + BASE +
-        ". Owner issue body SHA-256: " + BODY_SHA256 + ". "
-        "Original journal preserved in state source_checked, 1 model call. "
-        "One verified new-blank-line-at-EOF index warning was removed "
-        "without modifying Python AST. Original bytes backed up in the "
-        "private existing job directory. Scope: exactly two allowed files. "
-        "Local generated tests NOT executed. "
-        "Full isolated GitHub-hosted exact-HEAD PR CI, PM source review "
-        "and explicit merge decision still mandatory. No auto merge/deploy."
-    )
+    body = draft_pr_body(state, commit_sha)
     pr_url = checked([
         "gh", "pr", "create", "--repo", REPO,
         "--draft", "--base", "main", "--head", BRANCH,
