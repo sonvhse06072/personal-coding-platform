@@ -1,0 +1,83 @@
+# SOURCE-ONLY G1-T01 egress proposal. Compose with the PARKED base only
+# for source inspection. Neither base nor overlay is an activation command.
+name: pcp-g1-pilot
+
+x-g1-pilot-egress-contract:
+  status: parked
+  activation_approved: false
+  proxy_connect_only: true
+  client_direct_provider_egress: false
+  client_direct_github_egress: false
+  independent_direct_provider_proxy: true
+  provider_domain_scope_proven_live: false
+  github_domain_scope_proven_live: false
+
+x-g1-egress-parked: &g1-egress-parked
+  image: python:3.13-alpine
+  profiles: [g1-pilot-parked]
+  entrypoint: ["/bin/false"]
+  command: ["python3", "-u", "/g1/egress_connect_proxy.py"]
+  restart: "no"
+  read_only: true
+  user: "65534:65534"
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  pids_limit: 64
+  mem_limit: 128m
+  tmpfs: ["/tmp:rw,nosuid,nodev,size=16777216"]
+  volumes:
+    - type: bind
+      source: "${PCP_G1_PILOT_REPO_ROOT:?exact_clean_pcp_repo_root}/deploy/g1/egress_connect_proxy.py"
+      target: /g1/egress_connect_proxy.py
+      read_only: true
+      bind: {create_host_path: false}
+
+services:
+  runtime:
+    # No direct egress interface: only internal proxy CONNECT is possible.
+    networks: [g1-pilot-control]
+    environment:
+      HTTPS_PROXY: http://g1-pilot-provider-proxy:3128
+      HTTP_PROXY: http://g1-pilot-provider-proxy:3128
+      https_proxy: http://g1-pilot-provider-proxy:3128
+      http_proxy: http://g1-pilot-provider-proxy:3128
+      NO_PROXY: localhost,127.0.0.1,db,router,executor,pcp-dev-executor
+      no_proxy: localhost,127.0.0.1,db,router,executor,pcp-dev-executor
+
+  executor:
+    networks: [g1-pilot-control]
+    environment:
+      HTTPS_PROXY: http://g1-pilot-github-proxy:3128
+      HTTP_PROXY: http://g1-pilot-github-proxy:3128
+      https_proxy: http://g1-pilot-github-proxy:3128
+      http_proxy: http://g1-pilot-github-proxy:3128
+      NO_PROXY: localhost,127.0.0.1,db,router,runtime
+      no_proxy: localhost,127.0.0.1,db,router,runtime
+
+  direct:
+    networks: [g1-pilot-direct-control]
+    environment:
+      HTTPS_PROXY: http://g1-pilot-direct-proxy:3128
+      HTTP_PROXY: http://g1-pilot-direct-proxy:3128
+      https_proxy: http://g1-pilot-direct-proxy:3128
+      http_proxy: http://g1-pilot-direct-proxy:3128
+      NO_PROXY: localhost,127.0.0.1
+      no_proxy: localhost,127.0.0.1
+
+  g1-pilot-provider-proxy:
+    <<: *g1-egress-parked
+    environment: {G1_EGRESS_ROLE: provider}
+    networks: [g1-pilot-control, g1-pilot-provider-egress]
+    labels: {pcp.scope: g1-pilot-parked, pcp.role: provider-egress-proxy}
+
+  g1-pilot-github-proxy:
+    <<: *g1-egress-parked
+    environment: {G1_EGRESS_ROLE: github}
+    networks: [g1-pilot-control, g1-pilot-github-egress]
+    labels: {pcp.scope: g1-pilot-parked, pcp.role: github-egress-proxy}
+
+  g1-pilot-direct-proxy:
+    <<: *g1-egress-parked
+    environment: {G1_EGRESS_ROLE: provider}
+    networks: [g1-pilot-direct-control, g1-pilot-direct-provider-egress]
+    labels: {pcp.scope: g1-pilot-parked, pcp.role: direct-provider-egress-proxy}
