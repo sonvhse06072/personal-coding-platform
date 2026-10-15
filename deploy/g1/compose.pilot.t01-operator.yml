@@ -16,6 +16,9 @@ services:
     entrypoint: null
   executor:
     entrypoint: null
+    networks:
+      g1-pilot-control:
+        aliases: [pcp-dev-executor]
     environment:
       PCP_G1_PILOT_IDENTITY_ENABLED: owner-approved
       PCP_TRUSTED_CODEX_BROKER_ENABLED: "${PCP_G1_PILOT_BROKER_ENABLED:-}"
@@ -41,7 +44,7 @@ services:
       PCP_TRUSTED_CODEX_SOURCE_SHA: d4f4a56713e95f85ecc08c02bb43a5b5105a86a3
       PCP_TRUSTED_CODEX_DEV_TOKEN: "${PCP_G1_PILOT_DEV_TOKEN:-}"
       PCP_TRUSTED_CODEX_DEADLINE_EPOCH: "${PCP_G1_PILOT_DEADLINE:-}"
-      PCP_TRUSTED_CODEX_BROKER_URL: http://executor:8790
+      PCP_TRUSTED_CODEX_BROKER_URL: http://pcp-dev-executor:8790
       CODING_PROJECTS_ROOT: "${PCP_G1_PILOT_ROOT:?new_pilot_root_required}"
       CODING_WORKSPACES_ROOT: "${PCP_G1_PILOT_ROOT:?}/workspaces"
       CODING_DIRECT_PROJECT_ROOT: /pilot/direct-disabled
@@ -51,4 +54,7 @@ services:
       ROUTING_POLICY_FILE: /pilot/config/routing-policy.yml
       PCP_RUNTIME_STARTUP_MODE: inspect
   g1-pilot-provider-proxy:
-    entrypoint: null
+    # A finite proxy lifetime; the operator never starts an unbounded gateway.
+    entrypoint: [python3, -u, -c]
+    command:
+      - "import asyncio,importlib.util;s=importlib.util.spec_from_file_location('g1_ep','/g1/egress_connect_proxy.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m);asyncio.run(asyncio.wait_for(m.serve('provider'),timeout=1800))"
