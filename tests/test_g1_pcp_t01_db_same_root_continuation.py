@@ -83,7 +83,7 @@ class G1PcpDbContinuationTests(unittest.TestCase):
             proof = self.rec.launch_db_once(self.old, {"SAFE": "1"})
         self.assertEqual(proof["exit_code"], 0)
         args = sent.call_args.args[0]
-        self.assertEqual(args[-4:], ["-d", "--no-deps", "db"][-4:])
+        self.assertEqual(args[-4:], ["up", "-d", "--no-deps", "db"])
         self.assertIn("up", args)
         self.assertNotIn("--wait", args)
         self.assertNotIn("--force-recreate", args)
