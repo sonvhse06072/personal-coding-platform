@@ -33,7 +33,8 @@ def test_reviewed_capsule_is_strictly_parked_and_model_is_singleton():
 @pytest.fixture
 def capsule(tmp_path):
     for path in (g1.COMPOSE, g1.MODELS, g1.POLICY, g1.TEMPLATE,
-                 g1.EGRESS, g1.PROXY_SOURCE):
+                 g1.EGRESS, g1.PROXY_SOURCE,
+                 g1.DIRECT_BUILD, g1.DIRECT_DOCKERFILE):
         source, dest = ROOT / path, tmp_path / path
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, dest)
@@ -91,6 +92,17 @@ def mutate(root, path, callback):
      lambda v: v["services"]["direct"]["networks"].append(
          "g1-pilot-direct-provider-egress"),
      "g1_pilot_service_not_inert_or_isolated"),
+    (g1.DIRECT_BUILD,
+     lambda v: v["x-g1-direct-build-contract"].update(
+         model_dispatch_enabled=True),
+     "g1_direct_build_overlay_not_parked_or_singleton"),
+    (g1.DIRECT_BUILD,
+     lambda v: v["services"]["direct"]["build"].update(
+         dockerfile="services/runtime/Dockerfile"),
+     "g1_direct_build_scope_or_image_changed"),
+    (g1.DIRECT_BUILD,
+     lambda v: v["services"].update({"runtime": {}}),
+     "g1_direct_build_overlay_not_parked_or_singleton"),
     (g1.COMPOSE,
      lambda v: v["networks"]["g1-pilot-direct-control"].update(internal=False),
      "g1_pilot_control_network_not_internal"),
@@ -196,6 +208,21 @@ def test_all_credential_paths_are_new_and_provider_egress_is_not_allowlist():
     # The parked execution topology cannot be started by a profile alone.
     assert all(x["entrypoint"] == ["/bin/false"]
                for x in compose["services"].values())
+
+
+def test_direct_codex_image_has_no_runtime_python_or_opencode_dependencies(
+    capsule,
+):
+    doc = (capsule / g1.DIRECT_DOCKERFILE).read_text(encoding="utf-8")
+    assert "FROM node:22-bookworm-slim" in doc
+    assert "opencode-ai" not in doc
+    assert "requirements-dev" not in doc
+    assert "COPY app" not in doc
+    assert "COPY tests" not in doc
+    file = capsule / g1.DIRECT_DOCKERFILE
+    file.write_text(doc + "\\nRUN npm install -g opencode-ai@latest\\n")
+    with pytest.raises(g1.PilotStop, match="g1_direct_dockerfile_unreviewed"):
+        g1.validate(capsule)
 
 
 def test_doc_task_scoped_and_no_automatic_launch_commands():
