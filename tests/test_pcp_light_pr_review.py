@@ -19,8 +19,22 @@ SPEC.loader.exec_module(review)
 REPO = review.REPO
 HEAD = "a" * 40
 BASE = "b" * 40
-ISSUE_BODY = "Approved task\n\nAllowed files (modify ONLY these):\n- `scripts/tool.py`\n- `tests/test_tool.py`\n"
-DIGEST = hashlib.sha256(ISSUE_BODY.encode()).hexdigest()
+ISSUE_TASK = {
+    "version": 1,
+    "key": "pr-readiness-report-v1",
+    "base_sha": BASE,
+    "model": "gpt-6-luna",
+    "reasoning": "medium",
+    "goal": "Implement a read-only readiness report, giữ đủ quyền và bằng chứng.",
+    "allowed_paths": [
+        "scripts/pcp-light-pr-review.py",
+        "tests/test_pcp_light_pr_review.py",
+    ],
+}
+ISSUE_BODY = review.MARKER + "\n" + json.dumps(
+    ISSUE_TASK, sort_keys=True, ensure_ascii=False, indent=2
+)
+DIGEST = hashlib.sha256(ISSUE_BODY.encode("utf-8")).hexdigest()
 
 
 def valid_responses():
@@ -28,20 +42,24 @@ def valid_responses():
         f"repos/{REPO}/pulls/12": {
             "number": 12, "state": "open", "merged": False,
             "user": {"login": "sonvhse06072"}, "author_association": "OWNER",
-            "head": {"sha": HEAD, "repo": {"full_name": REPO}},
+            "head": {"sha": HEAD, "ref": "ai/pcp-light/pr-readiness-report-v1",
+                     "repo": {"full_name": REPO}},
             "base": {"sha": BASE, "repo": {"full_name": REPO}},
             # This mutable PR body deliberately claims false success.
             "body": '{"ci":"SUCCESS","merged":true,"commit":"' + "f" * 40 + '"}',
         },
         f"repos/{REPO}/issues/9": {
-            "number": 9, "user": {"login": "sonvhse06072"},
+            "number": 9, "state": "open", "user": {"login": "sonvhse06072"},
             "author_association": "OWNER", "body": ISSUE_BODY,
         },
         f"repos/{REPO}/compare/{BASE}...{HEAD}": {
-            "status": "ahead", "ahead_by": 1, "commits": [{"sha": HEAD}],
+            "status": "ahead", "ahead_by": 1, "behind_by": 0,
+            "merge_base_commit": {"sha": BASE},
+            "commits": [{"sha": HEAD}],
         },
         f"repos/{REPO}/pulls/12/files?per_page=100": [
-            {"filename": "scripts/tool.py"}, {"filename": "tests/test_tool.py"},
+            {"filename": "scripts/pcp-light-pr-review.py", "status": "added"},
+            {"filename": "tests/test_pcp_light_pr_review.py", "status": "added"},
         ],
         f"repos/{REPO}/actions/workflows/tests.yml/runs?head_sha={HEAD}&event=pull_request&per_page=100": {
             "workflow_runs": [{"id": 88, "run_number": 17, "name": "tests",
@@ -88,6 +106,8 @@ def test_exact_sha_and_live_api_facts_are_ready(gh):
     result = run()
     assert result["status"] == "READY_FOR_PM_REVIEW"
     assert result["head_sha"] == HEAD and result["base_sha"] == BASE
+    assert result["original_source_sha"] == BASE
+    assert result["changed_paths"] == sorted(ISSUE_TASK["allowed_paths"])
     assert result["required_jobs"] == {name: "SUCCESS" for name in review.REQUIRED_JOBS}
     assert result["authorization"].startswith("NONE;")
     assert len(gh.calls) == 6
@@ -101,6 +121,71 @@ def test_wrong_pr_repository_is_not_ready(gh):
 def test_original_issue_must_be_owner_authored(gh):
     gh.responses[f"repos/{REPO}/issues/9"]["user"]["login"] = "someone-else"
     assert run()["reason"] == "original_issue_not_owner_authored"
+
+
+def test_real_owner_marker_json_issue_has_valid_scope(gh):
+    assert ISSUE_BODY.startswith(review.MARKER)
+    assert review.issue_allowed_paths(ISSUE_BODY) == ISSUE_TASK["allowed_paths"]
+    assert run()["status"] == "READY_FOR_PM_REVIEW"
+
+
+def test_current_pr_base_can_move_after_a_reviewed_helper_merges(gh):
+    # Source parent is immutable in the issue; GitHub PR base is moving main.
+    newest_main = "c" * 40
+    gh.responses[f"repos/{REPO}/pulls/12"]["base"]["sha"] = newest_main
+    result = run(base=newest_main)
+    assert result["ready"] is True
+    assert result["base_sha"] == newest_main
+    assert result["original_source_sha"] == BASE
+    assert f"repos/{REPO}/compare/{BASE}...{HEAD}" in (
+        call[0][4] for call in gh.calls
+    )
+
+
+def test_wrong_pr_author_or_original_branch_is_rejected(gh):
+    key = f"repos/{REPO}/pulls/12"
+    gh.responses[key]["user"]["login"] = "outsider"
+    assert run()["reason"] == "pull_request_author_mismatch"
+    gh.responses[key]["user"]["login"] = "sonvhse06072"
+    gh.responses[key]["head"]["ref"] = "ai/pcp-light/different-job"
+    assert run()["reason"] == "pull_request_branch_mismatch"
+
+
+def test_closed_original_issue_or_wrong_marker_is_rejected(gh):
+    key = f"repos/{REPO}/issues/9"
+    gh.responses[key]["state"] = "closed"
+    assert run()["reason"] == "original_issue_not_owner_authored"
+    gh.responses[key]["state"] = "open"
+    gh.responses[key]["body"] = "Allowed files:\n- scripts/a.py\n- tests/b.py"
+    digest = hashlib.sha256(gh.responses[key]["body"].encode()).hexdigest()
+    assert run(digest=digest)["reason"] == "original_issue_marker_invalid"
+
+
+def test_issue_duplicate_paths_and_unapproved_paths_fail_closed(gh):
+    key = f"repos/{REPO}/issues/9"
+    for paths in (
+        ["scripts/pcp-light-pr-review.py"] * 2,
+        ["scripts/pcp-light-pr-review.py", "tests/test_unrelated.py"],
+        ["scripts/pcp-light-pr-review.py", "tests/test_pcp_light_../x.py"],
+    ):
+        issue = {**ISSUE_TASK, "allowed_paths": paths}
+        raw = review.MARKER + "\n" + json.dumps(issue, sort_keys=True)
+        gh.responses[key]["body"] = raw
+        digest = hashlib.sha256(raw.encode()).hexdigest()
+        assert run(digest=digest)["reason"] == "original_issue_allowed_paths_invalid"
+
+
+def test_candidate_source_parent_is_not_pr_base_tip(gh):
+    key = f"repos/{REPO}/compare/{BASE}...{HEAD}"
+    gh.responses[key]["merge_base_commit"] = {"sha": "f" * 40}
+    assert run()["reason"] == "candidate_not_exactly_one_commit_after_base"
+
+
+def test_removed_or_renamed_allowed_test_is_not_ready(gh):
+    key = f"repos/{REPO}/pulls/12/files?per_page=100"
+    for status in ("removed", "renamed"):
+        gh.responses[key][1]["status"] = status
+        assert run()["reason"] == "changed_path_status_not_allowed"
 
 
 def test_mutable_forged_pr_body_cannot_supply_ci_or_commit_proof(gh):
@@ -127,7 +212,7 @@ def test_stale_base_is_not_ready(gh):
 
 def test_duplicate_changed_paths_are_not_ready(gh):
     gh.responses[f"repos/{REPO}/pulls/12/files?per_page=100"].append(
-        {"filename": "tests/test_tool.py"})
+        {"filename": "tests/test_pcp_light_pr_review.py", "status": "added"})
     assert run()["reason"] == "changed_paths_duplicate"
 
 
