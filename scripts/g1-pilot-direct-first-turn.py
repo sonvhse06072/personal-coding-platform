@@ -145,9 +145,17 @@ def identity(expected: str) -> tuple[str, Path, Path]:
                   "--format", "{{.ID}}"]) == "",
             "g1_direct_existing_pilot_container_denied")
     for kind, name in (
+        ("network", "pcp-g1-pilot-control"),
+        ("network", "pcp-g1-pilot-provider-egress"),
+        ("network", "pcp-g1-pilot-github-egress"),
         ("network", "pcp-g1-pilot-direct-control"),
         ("network", "pcp-g1-pilot-direct-provider-egress"),
         ("volume", "pcp-g1-pilot-postgres"),
+        ("volume", "pcp-g1-pilot-cache"),
+        ("container", "ddev-pcp-g1-codex-pilot-web"),
+        ("container", "ddev-pcp-g1-codex-pilot-db"),
+        ("container", "ddev-pcp-g1-codex-direct-web"),
+        ("container", "ddev-pcp-g1-codex-direct-db"),
     ):
         existing = invoke(["docker", kind, "inspect", name], timeout=15)
         require(existing.returncode != 0,
