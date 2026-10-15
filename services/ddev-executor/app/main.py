@@ -25,7 +25,6 @@ from .g1_ddev_isolation import (
 from .g1_pilot_ddev_identity import (
     PROJECT_ID as G1_PILOT_ID,
     SOURCE_SHA as G1_PILOT_SHA,
-    SOURCE_DDEV_BLOB as G1_PILOT_SOURCE_DDEV_BLOB,
     require_pilot_workspace_identity,
     require_g1_pilot_isolated_ddev,
 )
