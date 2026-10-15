@@ -25,7 +25,6 @@ ROOT = Path.home() / ".pcp-g1-pilot"
 PCP = Path(__file__).resolve().parents[1]
 OLD_SMOKE = Path.home() / ".pcp-g1-smoke"
 SEED = "d4f4a56713e95f85ecc08c02bb43a5b5105a86a3"
-G1_MAIN = "f2fd1a1cccb30a37ae695b7ba05c21c8738573d4"
 REPOSITORY = "sonvhse06072/pcp-g0-fullpath-fixture"
 BRANCH = "ai/g1-direct-t01-20261015"
 WS = ROOT / "direct-workspace"
@@ -87,7 +86,10 @@ def read(argv: list[str], *, timeout: int = 20,
 
 
 def identity(expected: str) -> tuple[str, Path, Path]:
-    require(expected == G1_MAIN, "g1_direct_unreviewed_pcp_sha")
+    # Caller pins the reviewed MERGE SHA, which is unknown when source PR
+    # is authored. Require exact clean main and a 40-hex argument.
+    require(re.fullmatch(r"[0-9a-f]{40}", expected) is not None,
+            "g1_direct_unreviewed_pcp_sha")
     require(os.geteuid() != 0, "g1_direct_no_root_operator")
     require(
         read(["git", "-C", str(PCP), "rev-parse", "HEAD"]) == expected
