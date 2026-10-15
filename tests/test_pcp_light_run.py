@@ -202,8 +202,8 @@ class PCPFastHandoffTests(unittest.TestCase):
                     return "\n".join(sorted(ticket_paths))
                 return ""
             with patch.object(M, "ROOT", jroot), patch.object(
-                M.os, "geteuid", return_value=1000
-            ), patch.object(M, "load_issue", return_value=GOOD_TASK), patch.object(
+                M, "load_issue", return_value=GOOD_TASK
+            ), patch.object(
                 M, "verify_checkout"
             ), patch.object(M, "command", side_effect=fake_cmd) as commands, patch.object(
                 M, "git", side_effect=fake_git
@@ -232,8 +232,8 @@ class PCPFastHandoffTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             jroot = Path(temp) / "jobs"
             with patch.object(M, "ROOT", jroot), patch.object(
-                M.os, "geteuid", return_value=1000
-            ), patch.object(M, "load_issue", return_value=GOOD_TASK), patch.object(
+                M, "load_issue", return_value=GOOD_TASK
+            ), patch.object(
                 M, "verify_checkout"
             ), patch.object(M, "command", return_value="") as cmds, patch.object(
                 M, "git", side_effect=lambda _, *a:
