@@ -19,6 +19,8 @@ ROOT = Path(__file__).resolve().parents[1]
 COMPOSE = "deploy/g1/compose.pilot.parked.yml"
 MODELS = "config/g1-pilot/models.yml"
 POLICY = "config/g1-pilot/routing-policy.yml"
+EGRESS = "deploy/g1/compose.pilot.egress.parked.yml"
+PROXY_SOURCE = "deploy/g1/egress_connect_proxy.py"
 TEMPLATE = "config/g1-pilot/projects.pcp.template.yml"
 SERVICES = {"db", "router", "executor", "runtime", "direct"}
 PROJECT = "pcp-benchmark-g1-pilot"
@@ -27,9 +29,9 @@ IMAGE = "gpt-6-luna"
 NETWORKS = {
     "db": {"g1-pilot-control"},
     "router": {"g1-pilot-control"},
-    "executor": {"g1-pilot-control", "g1-pilot-github-egress"},
-    "runtime": {"g1-pilot-control", "g1-pilot-provider-egress"},
-    "direct": {"g1-pilot-direct-provider-egress"},
+    "executor": {"g1-pilot-control"},
+    "runtime": {"g1-pilot-control"},
+    "direct": {"g1-pilot-direct-control"},
 }
 
 
@@ -123,12 +125,21 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     require(isinstance(services, dict) and set(services) == SERVICES,
             "g1_pilot_unexpected_services")
     networks = doc.get("networks") or {}
-    require(set(networks) == set().union(*NETWORKS.values()),
-            "g1_pilot_network_set_changed")
+    require(
+        set(networks) == set().union(*NETWORKS.values(), {
+            "g1-pilot-provider-egress",
+            "g1-pilot-github-egress",
+            "g1-pilot-direct-provider-egress",
+        }),
+        "g1_pilot_network_set_changed",
+    )
     require(
         networks["g1-pilot-control"].get("internal") is True
+        and networks["g1-pilot-direct-control"].get("internal") is True
         and all(networks[k].get("internal") is False
-                for k in networks if k != "g1-pilot-control"),
+                for k in networks if k not in {
+                    "g1-pilot-control", "g1-pilot-direct-control",
+                }),
         "g1_pilot_control_network_not_internal",
     )
     for k, net in networks.items():
@@ -246,6 +257,7 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
                 and p.get("planner") is False and p.get("evaluator") is False
                 for p in profiles.values()),
             "g1_pilot_other_profile_escalation")
+    validate_egress(root)
     return {
         "status": "PASS_G1_PILOT_SOURCE_PARKED",
         "model": IMAGE,
@@ -258,6 +270,101 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
         "next_gate": "SEPARATE_PILOT_WORKSPACE_IDENTITY_AND_PROVIDER_GITHUB_AUTH",
     }
 
+
+
+def validate_egress(root: Path) -> None:
+    """Only proxy services may join public Docker networks.
+
+    The checker always classifies the resulting overlay as PARKED, even if
+    all allowlists match. Live DNS/egress and provider auth are separate gates.
+    """
+    overlay = load(root, EGRESS)
+    source = root / PROXY_SOURCE
+    require(source.is_file() and not source.is_symlink(),
+            "g1_pilot_proxy_source_missing")
+    contract = overlay.get("x-g1-pilot-egress-contract") or {}
+    require(
+        overlay.get("name") == "pcp-g1-pilot"
+        and contract.get("status") == "parked"
+        and contract.get("activation_approved") is False
+        and contract.get("proxy_connect_only") is True
+        and contract.get("client_direct_provider_egress") is False
+        and contract.get("client_direct_github_egress") is False
+        and contract.get("independent_direct_provider_proxy") is True
+        and contract.get("provider_domain_scope_proven_live") is False
+        and contract.get("github_domain_scope_proven_live") is False,
+        "g1_pilot_egress_overlay_not_parked",
+    )
+    cfg = overlay.get("services") or {}
+    proxies = {
+        "g1-pilot-provider-proxy": (
+            "provider", {"g1-pilot-control", "g1-pilot-provider-egress"},
+        ),
+        "g1-pilot-github-proxy": (
+            "github", {"g1-pilot-control", "g1-pilot-github-egress"},
+        ),
+        "g1-pilot-direct-proxy": (
+            "provider", {
+                "g1-pilot-direct-control",
+                "g1-pilot-direct-provider-egress",
+            },
+        ),
+    }
+    require(
+        set(cfg) == {"runtime", "executor", "direct", *proxies},
+        "g1_pilot_egress_overlay_service_set_changed",
+    )
+    for client, expected_network, expected_proxy in (
+        ("runtime", "g1-pilot-control", "g1-pilot-provider-proxy"),
+        ("executor", "g1-pilot-control", "g1-pilot-github-proxy"),
+        ("direct", "g1-pilot-direct-control", "g1-pilot-direct-proxy"),
+    ):
+        service = cfg[client]
+        env = service.get("environment") or {}
+        proxy = f"http://{expected_proxy}:3128"
+        require(
+            service.get("networks") == [expected_network]
+            and all(env.get(k) == proxy
+                    for k in ("HTTP_PROXY", "HTTPS_PROXY",
+                              "http_proxy", "https_proxy"))
+            and env.get("NO_PROXY") == env.get("no_proxy")
+            and "localhost" in str(env.get("NO_PROXY"))
+            and not service.get("ports")
+            and not service.get("secrets")
+            and not service.get("volumes")
+            and not service.get("entrypoint"),
+            "g1_pilot_client_proxy_not_scoped",
+        )
+    for name, (role, networks) in proxies.items():
+        service = cfg[name]
+        env = service.get("environment") or {}
+        entries = mounts(service)
+        require(
+            service.get("profiles") == ["g1-pilot-parked"]
+            and service.get("entrypoint") == ["/bin/false"]
+            and service.get("command") == [
+                "python3", "-u", "/g1/egress_connect_proxy.py",
+            ]
+            and service.get("image") == "python:3.13-alpine"
+            and service.get("read_only") is True
+            and service.get("restart") == "no"
+            and service.get("cap_drop") == ["ALL"]
+            and service.get("security_opt") == ["no-new-privileges:true"]
+            and service.get("user") == "65534:65534"
+            and not service.get("ports")
+            and not service.get("privileged")
+            and not service.get("network_mode")
+            and not service.get("secrets")
+            and set(service.get("networks") or []) == networks
+            and env == {"G1_EGRESS_ROLE": role}
+            and len(entries) == 1
+            and entries[0].get("target") == "/g1/egress_connect_proxy.py"
+            and entries[0].get("read_only") is True
+            and "PCP_G1_PILOT_REPO_ROOT:?" in str(entries[0].get("source") or "")
+            and (service.get("labels") or {}).get("pcp.scope") ==
+                "g1-pilot-parked",
+            "g1_pilot_proxy_identity_changed",
+        )
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
