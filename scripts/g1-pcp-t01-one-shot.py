@@ -441,6 +441,15 @@ def execute(expected: str) -> dict[str, object]:
     env["PCP_G1_PILOT_JOB_ID"] = job
     journal("job_created", job_id=job, model_calls=0)
     ws = create_workspace(env, job)
+    # Install the frozen fixture lockfile with a disposable Composer container.
+    # It gets ONLY this G1 workspace, not Docker socket, auth, DDEV global
+    # cache or another project's network/volumes. Needed for PHPUnit/PHPCS.
+    run(["docker", "run", "--rm", "--network", "bridge", "--user",
+         str(os.geteuid()) + ":" + str(os.getegid()),
+         "--mount", "type=bind,source=" + str(ws) + ",target=/app",
+         "--workdir", "/app", "composer:2", "install",
+         "--no-interaction", "--prefer-dist", "--no-progress"],
+        env, "g1_pcp_frozen_composer_dependencies", timeout=1200)
     run(["docker", "volume", "create", "--label", "pcp.scope=g1-pilot-only",
          "pcp-g1-pilot-cache"], env, "g1_pcp_private_cache")
     compose(env, "g1_pcp_ddev_start", "run", "--rm", "--no-deps",
@@ -528,6 +537,14 @@ def main() -> int:
                           "resources_and_journal_preserved": True,
                           "direct_and_smoke_untouched": True,
                           "f2_and_chonhac_untouched": True}, sort_keys=True))
+        return 2
+    except Exception as exc:
+        # Never print a traceback containing process environments or secrets.
+        # Unexpected outcomes remain STOP on the original one-use journal.
+        print(json.dumps({"status": "STOP_G1_PCP_T01",
+                          "blocker": "g1_pcp_unclassified_" + type(exc).__name__,
+                          "no_automatic_retry": True,
+                          "resources_and_journal_preserved": True}, sort_keys=True))
         return 2
 
 
