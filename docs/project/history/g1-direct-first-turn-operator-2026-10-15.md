@@ -31,3 +31,16 @@ Chỉ sau PM review/exact CI/merge, **một** `scripts/g1-pilot-direct-preserved
 
 Một lượt direct code PASS chỉ tạo **commit local**, chưa phải PR hoặc hosted CI, chưa đủ chốt thắng/thua. G0 #595 tiếp tục HOLD / NOT GO.
 
+
+## 1.2. STOP pre-model lần hai — proxy đã dừng, không khởi tạo mới
+
+Owner chạy continuation #718 và nhận `STOP_G1_DIRECT_PRESERVED_CONTINUATION` tại `g1_direct_inside_container_auth_or_egress_failed`, `model_calls=0`, `no_new_workspace=true`, `original_journal_unchanged=true`. Read-only triage tiếp theo: direct-only image scope PASS, auth root direct metadata PASS, proxy label và hai mạng G1 direct PASS, **proxy_running=false**. Container preflight đã bị chặn trước kiểm tra `auth.json` bên trong, `codex login status`, Github CONNECT deny và TLS ChatGPT; không có bằng chứng nào rằng login/token sai.
+
+**Nguồn gốc có thể:** lệnh tạo proxy `proxy_argv()` chạy `asyncio.wait_for(m.serve('provider'), timeout=1200)`, nghĩa là proxy dự kiến tự dừng sau 20 phút. Đây vẫn là **giả thuyết cần attestation**: mã thoát, `StartedAt` và `FinishedAt` phải chứng minh thời gian trong khoảng 1.140–1.320 giây, không OOM và không lỗi Docker.
+
+**Một continuation tiếp theo, không làm lại stage cũ:** `scripts/g1-direct-existing-proxy-expiry-continuation.py`. Phải có original journal `started/attempts=0`, second journal `continuation_started/model_calls=0`, workspace direct sạch/đúng seed SHA/branch, auth root PCP/direct riêng biệt, image direct-only đúng version và chỉ **một** container pilot: proxy cũ có exact labels/source mount/entrypoint/command/image/user/read-only/network. Kiểm tra tuổi thọ trước khi ghi marker mới. Nếu proxy dừng sớm hoặc vì OOM, STOP mà không chạy lại container/model. Nếu đúng timeout 20 phút, ghi marker exclusive mới rồi dùng **`docker container start pcp-g1-pilot-direct-proxy-operator`** để khởi động lại **CHÍNH ID CONTAINER ĐÓ**, tuyệt đối không Compose run/up/recreate, không tạo volume/network/proxy hoặc động vào smoke/F2/Chợ Nhạc.
+
+Bước tiếp theo trong cùng operator: một container direct tạm để kiểm tra riêng `auth.json` có đọc được (metadata, không xuất file), `codex login status` kết hợp stdout+stderr, DNS proxy, Github CONNECT phải 403, ChatGPT CONNECT phải 200 và TLS certificate/hostname phải xác thực. Mỗi lỗi được phân loại vào `failed_at` và cờ boolean đã lọc; STOP giữ journal, workspace và container. **Chỉ khi tất cả PASS** mới lưu `model_launched` rồi thử **duy nhất một** model Codex Luna Medium trên hai path PHP đã chốt; giới hạn thời gian model 1.080 giây để không vượt cửa sổ proxy 1.200 giây. Không retry, thay đổi model/effort, ghi log token, tạo PR hoặc auto merge. Mã thành công chỉ có thể là local commit, chưa phải CI/PR hay G0 GO.
+
+Nếu sau source merge và postmerge exact CI, Owner chỉ cần chạy đúng một operator mới trên local PCP sạch tại exact merge SHA. Hai operator #717/#718 vẫn coi đã tiêu thụ và không chạy lại. `G0 #595 HOLD / NOT GO` vẫn áp dụng.
+
