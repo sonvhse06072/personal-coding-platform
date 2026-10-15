@@ -215,7 +215,10 @@ def validate_rendered_db(m, env: dict[str, str]) -> None:
         db_networks = db.get("networks") or {}
         check(db.get("image") == "postgres:16-alpine"
               and db.get("entrypoint") in (None, [], ["docker-entrypoint.sh"])
-              and db.get("read_only") is False
+              # Compose config JSON omits the default (writable) false.
+              # Treat absence as false, but NEVER admit true, null, strings
+              # or another non-boolean value. Docker inspect reattests it.
+              and db.get("read_only", False) is False
               and "CHOWN" in (db.get("cap_add") or [])
               and volume.get("name") == VOLUME
               and network.get("name") == NETWORK
