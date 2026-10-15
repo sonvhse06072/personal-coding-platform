@@ -156,6 +156,12 @@ class PCPExistingVerificationTests(unittest.TestCase):
             outcome = root / "verification-continuation-v1.json"
             ws = root / "workspace"
             ws.mkdir()
+            # Keep real changed-file safety guard in place: the mock job has
+            # both actual regular allowed files (never symlinks).
+            for relative in V.FILES:
+                target = ws / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("pass\n", encoding="utf-8")
             repo = root / "pcp"
             repo.mkdir()
             history = []
