@@ -44,3 +44,12 @@ Bước tiếp theo trong cùng operator: một container direct tạm để ki�
 
 Nếu sau source merge và postmerge exact CI, Owner chỉ cần chạy đúng một operator mới trên local PCP sạch tại exact merge SHA. Hai operator #717/#718 vẫn coi đã tiêu thụ và không chạy lại. `G0 #595 HOLD / NOT GO` vẫn áp dụng.
 
+
+## 1.3. Bằng chứng cuối: late asyncio timeout 1334.16 giây, không phải crash
+
+Owner cung cấp **read-only evidence** của chính `pcp-g1-pilot-direct-proxy-operator`: `lifetime_seconds=1334.16`, `lifetime_class=LATE_EXIT`, `exit_code=1`, `exception_classes=["ASYNC_TIMEOUT"]`, `traceback_present=true`, `oom_killed=false`, `proxy_identity_valid=true`, `third_attempt_marker_exists=false`. Operator #719 dừng ở gate giới hạn 1.320 giây, **chưa viết attempt marker, chưa start container và model_calls=0**. `asyncio.wait_for(serve(provider), timeout=1200)` được ghi rõ trong lệnh đã kiểm tra từ container. Lệch thời gian Docker vs wait_for chưa xác định được chi tiết (có thể liên quan cleanup/cancellation/scheduling), nhưng lớp nguyên nhân **late Python asyncio TimeoutError** đã được xác nhận. Không được gán lỗi này cho Codex OAuth hay provider billing.
+
+**Sửa source tối thiểu:** giữ khoảng chuẩn 1.140–1.320 giây; chỉ thêm đường admission cho late exit 1.320–1.400 giây nếu log từ **đúng immutable container ID** (tối đa 160 dòng, không in raw) có traceback Python asyncio và **dòng exception cuối cùng chính xác `TimeoutError`**. Không có log phù hợp hoặc `ExitCode != 1`, OOM, chạy quá 1.400 giây, tên/provenance/network lệch thì vẫn STOP. Cơ chế này không tăng tuổi thọ proxy, không sửa image, không nới Internet và không cho Docker start tự động. Sau exact source PR/CI/merge, Owner có thể gọi **một lượt thủ công** phiên bản đã sửa của cùng operator #719, vì lượt trước đã dừng trước mọi thay đổi và file attempt mới vẫn chưa được tạo. Nó sẽ tái xác minh toàn bộ resource và ghi marker exclusive trước khi thao tác; tuyệt đối không gọi các operator #717/#718 đã tiêu thụ.
+
+Nếu admission mới PASS, phần còn lại không thay đổi: start chính proxy cũ; kiểm tra auth và TLS có phân loại; chỉ sau PASS mới một lượt Codex trên workspace hiện hữu. Nếu STOP, không chạy lại. **G0 #595 vẫn HOLD / NOT GO**.
+
