@@ -77,6 +77,8 @@ def allowed_path(value: Any) -> bool:
 def parse_issue(raw: dict[str, Any], issue: int, digest: str) -> dict[str, Any]:
     """One Owner-authored issue + exact body digest; --execute is explicit."""
     require(DIGEST_RE.fullmatch(digest) is not None, "invalid_issue_body_digest")
+    require(isinstance(raw, dict) and isinstance(raw.get("user"), dict),
+            "github_issue_invalid_shape")
     require(type(raw.get("number")) is int and raw["number"] == issue
             and raw.get("state") == "open"
             and "pull_request" not in raw
@@ -148,9 +150,10 @@ def verify_checkout(path: Path, base_sha: str) -> None:
 
 
 def write_once(path: Path, value: dict[str, Any]) -> None:
-    with path.open("x", encoding="utf-8") as f:
-        f.write(json.dumps(value, sort_keys=True) + "\n")
-    path.chmod(0o600)
+    # Exclusive private file from its first byte, not chmod-after-write.
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        stream.write(json.dumps(value, sort_keys=True) + "\n")
 
 
 def update(journal: Path, state: str, **values: Any) -> None:
@@ -181,6 +184,8 @@ def summarize_codex(raw: str) -> dict[str, Any]:
         try:
             event = json.loads(line)
         except ValueError:
+            continue
+        if not isinstance(event, dict):
             continue
         kind = event.get("type")
         if kind in {"turn.completed", "turn.failed"}:
@@ -235,7 +240,14 @@ def run_task(repo: Path, issue: int, digest: str, *,
     parent = ROOT.parent
     require(not parent.is_symlink() and not ROOT.is_symlink(),
             "pcp_light_root_symlink_denied")
+    if parent.exists():
+        require(parent.is_dir() and parent.stat().st_uid == os.geteuid()
+                and not (parent.stat().st_mode & 0o077),
+                "pcp_light_parent_not_private")
     ROOT.mkdir(parents=True, mode=0o700, exist_ok=True)
+    require(ROOT.stat().st_uid == os.geteuid()
+            and not (ROOT.stat().st_mode & 0o077),
+            "pcp_light_root_not_private")
     directory = ROOT / task["key"]
     directory.mkdir(mode=0o700, exist_ok=False)
     journal = directory / "journal.json"
