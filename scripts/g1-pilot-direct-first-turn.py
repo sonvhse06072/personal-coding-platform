@@ -350,6 +350,8 @@ def code_scope() -> tuple[bool, list[str]]:
             and read(["git", "-C", str(WS), "rev-parse", "HEAD"]) == SEED,
             "g1_direct_source_or_branch_changed")
     changed = set(read(["git", "-C", str(WS), "diff", "--name-only"]).splitlines())
+    changed.update(read(["git", "-C", str(WS), "diff", "--cached",
+                         "--name-only"]).splitlines())
     changed.update(read(["git", "-C", str(WS), "ls-files", "--others",
                          "--exclude-standard"]).splitlines())
     # The task requires both a new method AND focused tests, not just an
@@ -395,7 +397,9 @@ def execute(expected: str) -> dict[str, Any]:
         "state": "model_launched", "lane": "direct", "seed": SEED,
         "model": MODEL, "effort": EFFORT, "attempts": 1,
     }, initial=False)
+    model_started = time.monotonic()
     launched = compose(env, *codex_argv(), timeout=LIMIT_SECONDS + 90)
+    model_elapsed = round(time.monotonic() - model_started, 1)
     observed = summarise_codex(launched)
     scope_ok, changed = code_scope()
     class_file = WS / "web/modules/custom/pcp_f2_fixture/src/WindowOverlapDetector.php"
@@ -410,6 +414,7 @@ def execute(expected: str) -> dict[str, Any]:
         and observed["terminal"] == "turn.completed"
         and scope_ok and material
         and invoke(["git", "-C", str(WS), "diff", "--check"]).returncode == 0
+        and invoke(["git", "-C", str(WS), "diff", "--cached", "--check"]).returncode == 0
     )
     commit = ""
     if approved:
@@ -426,6 +431,8 @@ def execute(expected: str) -> dict[str, Any]:
         "state": "completed", "lane": "direct", "model": MODEL,
         "effort": EFFORT, "seed": SEED, "attempts": 1,
         "model_calls": 1, "elapsed_seconds": round(time.monotonic() - started, 1),
+        "model_elapsed_seconds": model_elapsed,
+        "setup_elapsed_seconds": round(model_started - started, 1),
         "returncode": observed["returncode"],
         "terminal": observed["terminal"],
         "token_usage": observed["usage"],
@@ -444,7 +451,8 @@ def execute(expected: str) -> dict[str, Any]:
         "status": ("PASS_G1_DIRECT_CODE_READY_FOR_CI"
                    if approved else "STOP_G1_DIRECT_TURN_UNACCEPTED"),
         **{key: evidence[key] for key in (
-            "lane", "model_calls", "elapsed_seconds", "returncode",
+            "lane", "model_calls", "elapsed_seconds",
+            "model_elapsed_seconds", "setup_elapsed_seconds", "returncode",
             "terminal", "token_usage", "scope_ok", "changed_paths",
             "local_commit", "github_pr", "hosted_ci", "accepted",
             "pcp_lane_model_calls", "ready_for_autonomous_e2e",
