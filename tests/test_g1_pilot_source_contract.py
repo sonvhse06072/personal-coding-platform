@@ -32,7 +32,8 @@ def test_reviewed_capsule_is_strictly_parked_and_model_is_singleton():
 
 @pytest.fixture
 def capsule(tmp_path):
-    for path in (g1.COMPOSE, g1.MODELS, g1.POLICY, g1.TEMPLATE):
+    for path in (g1.COMPOSE, g1.MODELS, g1.POLICY, g1.TEMPLATE,
+                 g1.EGRESS, g1.PROXY_SOURCE):
         source, dest = ROOT / path, tmp_path / path
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, dest)
@@ -86,6 +87,33 @@ def mutate(root, path, callback):
      lambda v: v["services"]["runtime"]["networks"].append(
          "g1-pilot-github-egress"),
      "g1_pilot_service_not_inert_or_isolated"),
+    (g1.COMPOSE,
+     lambda v: v["services"]["direct"]["networks"].append(
+         "g1-pilot-direct-provider-egress"),
+     "g1_pilot_service_not_inert_or_isolated"),
+    (g1.COMPOSE,
+     lambda v: v["networks"]["g1-pilot-direct-control"].update(internal=False),
+     "g1_pilot_control_network_not_internal"),
+    (g1.EGRESS,
+     lambda v: v["services"]["runtime"]["networks"].append(
+         "g1-pilot-provider-egress"),
+     "g1_pilot_client_proxy_not_scoped"),
+    (g1.EGRESS,
+     lambda v: v["services"]["direct"]["environment"].update(
+         HTTPS_PROXY="http://g1-pilot-provider-proxy:3128"),
+     "g1_pilot_client_proxy_not_scoped"),
+    (g1.EGRESS,
+     lambda v: v["services"]["g1-pilot-provider-proxy"].update(
+         entrypoint=["python3"]),
+     "g1_pilot_proxy_identity_changed"),
+    (g1.EGRESS,
+     lambda v: v["services"]["g1-pilot-github-proxy"]["environment"].update(
+         G1_EGRESS_ROLE="provider"),
+     "g1_pilot_proxy_identity_changed"),
+    (g1.EGRESS,
+     lambda v: v["x-g1-pilot-egress-contract"].update(
+         activation_approved=True),
+     "g1_pilot_egress_overlay_not_parked"),
     (g1.COMPOSE,
      lambda v: v["services"]["runtime"].update(
          secrets=["g1_pilot_repo_github_token"]),
@@ -158,6 +186,10 @@ def test_all_credential_paths_are_new_and_provider_egress_is_not_allowlist():
     names = [v["name"] for v in compose["networks"].values()]
     assert all(x.startswith("pcp-g1-pilot-") for x in names)
     assert "pcp-g1-smoke-control" not in names
+    assert compose["services"]["executor"]["networks"] == ["g1-pilot-control"]
+    assert compose["services"]["runtime"]["networks"] == ["g1-pilot-control"]
+    assert compose["services"]["direct"]["networks"] == ["g1-pilot-direct-control"]
+    assert compose["networks"]["g1-pilot-direct-control"]["internal"] is True
     assert compose["services"]["runtime"]["environment"]["CODEX_HOME"] != (
         compose["services"]["direct"]["environment"]["CODEX_HOME"]
     )
