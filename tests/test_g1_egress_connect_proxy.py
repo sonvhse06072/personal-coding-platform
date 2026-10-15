@@ -101,8 +101,6 @@ def test_dns_mixed_public_and_private_answers_refused():
     (lambda r: bytes([23]) + r[1:], "tls_client_hello_required"),
     (lambda r: r[:5] + bytes([2]) + r[6:], "tls_client_hello_invalid"),
     (lambda r: r[:3] + b"\xff\xff" + r[5:], "tls_record_size_invalid"),
-    (lambda r: r.replace(b"chatgpt.com", b"chatgpt.con"),
-     "tls_sni_missing_or_multiple"),
 ])
 def test_tls_handshake_refuses_malformed_or_different_server_names(
     change, reason,
@@ -112,8 +110,12 @@ def test_tls_handshake_refuses_malformed_or_different_server_names(
 
 
 def test_valid_but_wrong_sni_cannot_be_accepted_as_a_connect_host():
+    # Parsing a structurally valid unrelated hostname is not itself an
+    # error. The tunnel compares its value with the exact CONNECT target,
+    # then drops the connection before forwarding the TLS ClientHello.
     assert proxy.tls_client_hello_sni(hello("api.openai.com")) != "chatgpt.com"
     assert proxy.tls_client_hello_sni(hello("api.github.com")) != "github.com"
+    assert proxy.tls_client_hello_sni(hello("chatgpt.con")) != "chatgpt.com"
 
 
 def test_no_auth_or_proxy_auth_in_connect_handshake():
