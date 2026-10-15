@@ -1,0 +1,21 @@
+# PARKED G1-T01 direct-only BUILD overlay. No service activation here.
+# Only one deterministic image for the preserved direct lane.
+name: pcp-g1-pilot
+
+x-g1-direct-build-contract:
+  status: parked
+  only_service: direct
+  original_stop: g1_direct_compose_operation_failed
+  source_journal_preserved: true
+  model_dispatch_enabled: false
+
+services:
+  direct:
+    image: "${PCP_G1_PILOT_RUNTIME_IMAGE:?reviewed_direct_codex_image_required}"
+    build:
+      context: ../../
+      dockerfile: deploy/g1/Dockerfile.direct-codex
+      args:
+        CODEX_VERSION: "${PCP_G1_PILOT_CODEX_VERSION:?exact_codex_cli_version_required}"
+        DDEV_UID: "${PCP_G1_PILOT_UID:?exact_unprivileged_uid_required}"
+        DDEV_GID: "${PCP_G1_PILOT_GID:?exact_unprivileged_gid_required}"
