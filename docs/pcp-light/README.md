@@ -35,17 +35,17 @@ python3 scripts/pcp-light-run.py \
   --repo-root /home/sonvh/personal-coding-platform-v1
 ```
 
-Default mode **only validates** Github issue identity/label/body digest and current clean exact `main`. It does not create a workspace, issue model tokens, connect to PCP services, or mutate git.
+Default mode **only validates** GitHub issue identity/body digest and current clean exact `main`. It does not create a workspace, issue model tokens, connect to PCP services, or mutate git.
 
 Only an explicit `--execute` on that same command authorizes a **one-shot**:
 1. Claim `~/.pcp-light/jobs/<key>/journal.json` exclusively before any new workspace/model action.
 2. Create a new **PCP-light-only** git worktree at exact pinned source and branch `ai/pcp-light/<key>`; do not touch existing G1/F2/Direct worktrees or Chợ Nhạc.
-3. Make exactly **one Codex CLI** coding call with sandbox `workspace-write`, no workspace network, no approval prompts, no inherited GitHub/provider/internal token env.
-4. Require Codex terminal `turn.completed`, an actual change only within the allowlist including tests, and passing PCP Python source tests. No automatic model repair/retry.
-5. Host operator stages/commits exactly changed files, pushes only the new AI branch and opens a **draft PR**. No auto-merge/deploy. PM verifies exact PR HEAD/CI and makes the merge decision separately.
+3. Fail fast with `codex --version` **before** reserving a journal or model turn if the native CLI is unavailable. Then make exactly **one Codex CLI** coding call with sandbox `workspace-write`, no workspace network, no approval prompts, no inherited GitHub/provider/internal token env.
+4. Require Codex terminal `turn.completed`, actual changes only within the allowlist including tests, no deletions/symlinks, and **AST syntax parsing of changed Python source without executing it** on Owner WSL. The runner records an exact focused-test command for audit only. **No `pytest` package is required locally; do not install, import or execute agent-generated tests on Owner WSL.** No automatic model repair/retry.
+5. Host operator stages/commits exactly changed files, pushes only the new AI branch and opens a **draft PR**. **Full repository pytest on isolated GitHub-hosted PR CI is mandatory**, then PM review exact HEAD and only afterwards an explicit merge decision. A source syntax pass or draft PR is **not** a test/CI pass. No auto-merge/deploy.
 
-Any STOP, provider failure, timeout, dirty/mismatched git source or unexpected change preserves the journal/worktree for triage. **Never rerun a claimed key or cleanup/reset to bypass STOP.** In particular this tool must not be used to revive G1-T01. Actual pilot Codex/CI acceptance remains **UNPROVEN** until Owner executes an independently scoped approved issue. A green source-only PR is not a proven runtime model call.
+Any STOP, provider failure, timeout, dirty/mismatched git source or unexpected change preserves the journal/worktree for triage. **Never rerun a claimed key or cleanup/reset to bypass STOP.** In particular this tool must not be used to revive G1-T01. A draft PR is only a delivery artifact. Its hosted CI can fail; when it does, the original job remains preserved and **no blind Codex retry** is allowed. The separately accepted #725 result does not prove unattended generic PCP-light autonomy or G0 Direct/full-PCP parity.
 
 ## Speed/quality decision
 
-This operator deliberately reuses `gh`, existing Codex auth, Git worktrees and GitHub Actions. No new PostgreSQL, DDEV, Router, Executor, proxy, workflow scheduler or generic agent framework. A real result should be compared to plain direct Codex using accepted PR, end-to-end elapsed time, model tokens and count of Owner interventions. Do not claim p50/p90 or savings from a single run. G0 #595 remains HOLD / NOT GO.
+This operator deliberately reuses `gh`, existing Codex auth, Git worktrees and GitHub Actions. No new PostgreSQL, DDEV, Router, Executor, proxy, workflow scheduler, Python dependency installer or generic agent framework. The local `pytest` stop in the original #725 trial drove this **CI-first verification policy**: make source-scope/AST checks locally, run full tests in isolated hosted PR CI instead. This avoids executing unreviewed generated tests on the Owner host and prevents a post-model `No module named pytest` blocker. A genuine result should be compared to plain direct Codex using accepted PR, end-to-end elapsed time, model tokens and count of Owner interventions. Do not claim p50/p90 or savings from a single run. G0 #595 remains HOLD / NOT GO.

@@ -9,6 +9,7 @@ The explicit --execute operation is one-use and stops without retry/cleanup.
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -198,6 +199,32 @@ def pytest_argv(test_paths: list[str]) -> list[str]:
             *sorted(test_paths)]
 
 
+def check_generated_sources(workspace: Path, changed: set[str]) -> list[str]:
+    """AST-parse changed Python without importing or executing generated code.
+
+    Full test execution belongs to GitHub-hosted PR CI, not Owner WSL.
+    Require every changed path to remain a regular allowlisted file, including
+    Markdown, and bound the input size before reading any Python source.
+    """
+    require(bool(changed) and all(allowed_path(x) for x in changed),
+            "pcp_light_source_scope_invalid")
+    python_files: list[str] = []
+    for relative in sorted(changed):
+        target = workspace / relative
+        require(target.is_file() and not target.is_symlink()
+                and target.stat().st_size <= 262144,
+                "pcp_light_source_not_regular_or_too_large")
+        if not relative.endswith(".py"):
+            continue
+        try:
+            ast.parse(target.read_text(encoding="utf-8"), filename=relative)
+        except (OSError, UnicodeError, SyntaxError, ValueError) as exc:
+            raise Stop("pcp_light_generated_python_syntax_invalid") from exc
+        python_files.append(relative)
+    require(bool(python_files), "pcp_light_generated_python_missing")
+    return python_files
+
+
 def summarize_codex(raw: str) -> dict[str, Any]:
     terminal = ""
     usage: dict[str, Any] = {}
@@ -260,6 +287,9 @@ def run_task(repo: Path, issue: int, digest: str, *,
                 "allowed_paths": task["allowed_paths"],
                 "model_calls": 0}
     require(os.geteuid() != 0, "root_operator_denied")
+    # Fail before claiming a key/model budget if the native CLI is missing.
+    # No provider call or model spend; this is a version-only probe.
+    command(["codex", "--version"], timeout=15)
     parent = ROOT.parent
     require(not parent.is_symlink() and not ROOT.is_symlink(),
             "pcp_light_root_symlink_denied")
@@ -303,9 +333,15 @@ def run_task(repo: Path, issue: int, digest: str, *,
     require(bool(changed) and changed.issubset(set(task["allowed_paths"]))
             and any(x.startswith("tests/test_pcp_light_") for x in changed),
             "pcp_light_diff_outside_scope_or_missing_tests")
-    tests = changed_test_paths(changed)
-    command(pytest_argv(tests), cwd=workspace, timeout=300)
-    update(journal, "tests_passed", changed_paths=sorted(changed))
+    focused_tests = changed_test_paths(changed)
+    # Build a safe, test-specific command for audit only; DO NOT execute it on
+    # the Owner's WSL host. The earlier #725 stop was missing local pytest.
+    # GitHub-hosted PR CI remains the authoritative *full* pytest gate.
+    expected_test_argv = pytest_argv(focused_tests)
+    python_files = check_generated_sources(workspace, changed)
+    update(journal, "source_checked", changed_paths=sorted(changed),
+           syntax_checked_paths=python_files, local_tests_executed=0,
+           focused_test_argv=expected_test_argv, hosted_full_ci="PENDING")
     command(["git", "-C", str(workspace), "add", "--", *sorted(changed)])
     command(["git", "-C", str(workspace), "diff", "--cached", "--check"])
     command([
@@ -330,8 +366,9 @@ def run_task(repo: Path, issue: int, digest: str, *,
             f"PCP-light Owner-authorized issue #{issue}; "
             f"body SHA-256 {digest}; source {task['base_sha']}; "
             f"model {task['model']} / {task['reasoning']}. "
-            "One model turn; scoped Python tests passed. "
-            "Draft pending exact-HEAD CI and PM review. "
+            "One model turn; generated Python AST syntax checks only. "
+            "Local tests NOT executed; mandatory full pytest must PASS "
+            "on isolated GitHub-hosted exact-HEAD PR CI, then PM review. "
             "No automatic merge or deployment."
         ),
     ], cwd=workspace, timeout=90)
@@ -341,7 +378,10 @@ def run_task(repo: Path, issue: int, digest: str, *,
     return {"status": "PCP_LIGHT_DRAFT_PR_PENDING_CI_PM",
             "issue": issue, "branch": branch, "commit": commit,
             "pr": pr, "model_calls": 1,
-            "model_elapsed_seconds": model_seconds, **result}
+            "model_elapsed_seconds": model_seconds,
+            "syntax_files_checked": len(python_files),
+            "local_tests_executed": 0,
+            "hosted_full_ci": "PENDING", **result}
 
 
 def main() -> int:
