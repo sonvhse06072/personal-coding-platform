@@ -32,9 +32,12 @@ EXPECTED_NETS = {
     "pcp-g1-pilot-direct-control",
     "pcp-g1-pilot-direct-provider-egress",
 }
-# Only observed ~1200s expiry is eligible; early crashes are NOT retried.
+# Early crashes are never retries. 1320–1400s is permitted ONLY for an
+# attested final Python asyncio.TimeoutError from THIS exact stopped proxy,
+# not a general relaxation of the 1200s configured service deadline.
 MIN_EXPIRED_SECONDS = 1140
 MAX_EXPIRED_SECONDS = 1320
+MAX_VERIFIED_ASYNC_TIMEOUT_SECONDS = 1400
 MAX_MODEL_SECONDS = 1080
 ALLOWED_STAGES = (
     "AUTH_FILE", "CODEX_LOGIN_STATUS", "PROXY_DNS", "GITHUB_DENY",
@@ -179,7 +182,9 @@ def lifespan_seconds(state: dict[str, Any]) -> float:
         raise Stop("g1_direct_proxy_lifetime_unparseable") from exc
 
 
-def require_expired_window(state: dict[str, Any]) -> float:
+def require_expired_window(
+    state: dict[str, Any], *, verified_late_timeout: bool = False,
+) -> float:
     require(
         state.get("Running") is False
         and state.get("ExitCode") == 1
@@ -188,9 +193,35 @@ def require_expired_window(state: dict[str, Any]) -> float:
         "g1_direct_proxy_not_cleanly_expired",
     )
     elapsed = lifespan_seconds(state)
-    require(MIN_EXPIRED_SECONDS <= elapsed <= MAX_EXPIRED_SECONDS,
+    normal_expiry = MIN_EXPIRED_SECONDS <= elapsed <= MAX_EXPIRED_SECONDS
+    late_with_proof = (
+        MAX_EXPIRED_SECONDS < elapsed <= MAX_VERIFIED_ASYNC_TIMEOUT_SECONDS
+        and verified_late_timeout is True
+    )
+    require(normal_expiry or late_with_proof,
             "g1_direct_proxy_did_not_exit_by_20m_window")
     return elapsed
+
+
+def verify_original_async_timeout(container_id: str) -> bool:
+    """Verify ONLY original container's terminal Python timeout, no log output.
+
+    A generic substring match is insufficient: require the LAST exception
+    line to be the bare TimeoutError and a Python traceback of asyncio.
+    """
+    proc = command([
+        "docker", "logs", "--tail", "160", container_id,
+    ], timeout=20)
+    if proc.returncode != 0:
+        return False
+    raw = (proc.stdout + "\n" + proc.stderr)[-32768:]
+    lines = [line.strip() for line in raw.splitlines() if line.strip()]
+    return bool(
+        lines and lines[-1] == "TimeoutError"
+        and "Traceback (most recent call last):" in raw
+        and "asyncio" in raw
+        and "wait_for" in raw
+    )
 
 
 def attest_existing(expected_sha: str, old, recovery) -> tuple[str, str, str]:
@@ -310,7 +341,13 @@ def attest_existing(expected_sha: str, old, recovery) -> tuple[str, str, str]:
         and mounts[0].get("RW") is False,
         "g1_direct_existing_stopped_proxy_identity_or_scope_changed",
     )
-    elapsed = require_expired_window(state)
+    observed_elapsed = lifespan_seconds(state)
+    # A late exit requires independently attested terminal asyncio timeout.
+    # Never read any other project's logs and never print raw log output.
+    late_proof = False
+    if MAX_EXPIRED_SECONDS < observed_elapsed <= MAX_VERIFIED_ASYNC_TIMEOUT_SECONDS:
+        late_proof = verify_original_async_timeout(container_id)
+    elapsed = require_expired_window(state, verified_late_timeout=late_proof)
     # An unrelated source branch/container/network/volume may never be adopted.
     listings = output([
         "docker", "ps", "--all", "--filter",
