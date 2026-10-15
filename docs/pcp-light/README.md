@@ -4,7 +4,7 @@ This is a **new workstream**, not a resume/replacement for frozen G1-T01, F2, or
 
 ## GitHub handoff
 
-Create a *new* PCP issue as the approved Owner account, add the **`pcp-light-approved` label**, and use an issue body consisting of exactly one marker followed by a JSON object:
+Create a *new* PCP issue using the Owner GitHub account; the issue body must contain exactly one marker followed by one JSON object:
 
 ```text
 <!-- coding-platform:pcp-light:v1 -->
@@ -22,7 +22,7 @@ Create a *new* PCP issue as the approved Owner account, add the **`pcp-light-app
 }
 ```
 
-No model is selected by the operator: PM/Owner pins the exact model and effort in the issue. Accepted effort: `low`, `medium`, `high`, `xhigh`. Only 1–4 explicitly named `scripts/pcp-light-*.py`, `tests/test_pcp_light_*.py` and `docs/pcp-light/*.md` files are allowed. An explicit test path is required. The full issue body SHA-256 must also be pinned **independently** in the Owner's local invocation, e.g. from a checked PM handoff, so an edited/unapproved issue cannot change the task.
+No model is selected by the operator: PM/Owner pins the exact model and effort in the issue. An explicit local `--execute` and a separately pinned exact body SHA-256 are the two execution gates; no additional GitHub label needs provisioning. Accepted effort: `low`, `medium`, `high`, `xhigh`. Only 1–4 explicitly named `scripts/pcp-light-*.py`, `tests/test_pcp_light_*.py` and `docs/pcp-light/*.md` files are allowed. An explicit test path is required. The full issue body SHA-256 must also be pinned **independently** in the Owner's local invocation, e.g. from a checked PM handoff, so an edited/unapproved issue cannot change the task.
 
 ## Operator (WSL Ubuntu, with authenticated `gh` and Codex)
 
