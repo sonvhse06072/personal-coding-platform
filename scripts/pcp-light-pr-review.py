@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from pathlib import PurePosixPath
 import re
 import subprocess
 import sys
@@ -12,6 +13,8 @@ from typing import Any
 
 REPO = "sonvhse06072/personal-coding-platform"
 OWNER = "sonvhse06072"
+MARKER = "<!-- coding-platform:pcp-light:v1 -->"
+ALLOWED_PREFIXES = ("scripts/pcp-light-", "tests/test_pcp_light_", "docs/pcp-light/")
 SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST_RE = re.compile(r"[0-9a-f]{64}\Z")
 REQUIRED_JOBS = (
@@ -53,34 +56,65 @@ def exact_int(value: Any, label: str) -> int:
     return value
 
 
-def issue_allowed_paths(body: Any) -> list[str]:
-    if not isinstance(body, str):
-        raise NotReady("issue_body_invalid")
-    lines = body.splitlines()
-    headers = [i for i, line in enumerate(lines)
-               if re.fullmatch(r"\s*Allowed (?:files|paths)(?: \(modify ONLY these\))?:\s*", line, re.I)]
-    if len(headers) != 1:
-        raise NotReady("issue_allowed_paths_missing_or_ambiguous")
-    paths: list[str] = []
-    for line in lines[headers[0] + 1:]:
-        if not line.strip():
-            if paths:
-                break
-            continue
-        match = re.fullmatch(r"\s*[-*]\s+`?([^`\s]+)`?\s*", line)
-        if not match:
-            if paths:
-                break
-            raise NotReady("issue_allowed_paths_malformed")
-        paths.append(match.group(1))
-    if not paths or len(paths) != len(set(paths)):
-        raise NotReady("issue_allowed_paths_empty_or_duplicate")
-    for path in paths:
-        if (path.startswith("/") or "\\" in path or ".." in path.split("/")
-                or any(ord(c) < 32 or ord(c) == 127 for c in path)):
-            raise NotReady("issue_allowed_paths_malformed")
-    return paths
+def issue_contract(body: Any) -> dict[str, Any]:
+    """Require the actual immutable PCP-light v1 marker + exact JSON schema.
 
+    The original one-shot coding runner consumes *this* contract, not a
+    free-form Markdown 'Allowed files' section. A valid Owner issue may name
+    a source parent older than the current PR base tip after a repair-source
+    PR has merged; those two distinct Git commit identities stay separate.
+    """
+    if not isinstance(body, str) or len(body.encode("utf-8")) > 16000:
+        raise NotReady("original_issue_body_invalid")
+    if (not body.lstrip().startswith(MARKER)
+            or body.count(MARKER) != 1):
+        raise NotReady("original_issue_marker_invalid")
+    try:
+        data = json.loads(body.strip()[len(MARKER):].strip())
+    except (TypeError, ValueError) as exc:
+        raise NotReady("original_issue_json_invalid") from exc
+    if (not isinstance(data, dict)
+            or set(data) != {
+                "version", "key", "base_sha", "model", "reasoning",
+                "goal", "allowed_paths",
+            }
+            or type(data["version"]) is not int
+            or data["version"] != 1
+            or not isinstance(data["key"], str)
+            or re.fullmatch(r"[a-z][a-z0-9-]{2,39}", data["key"]) is None
+            or data["key"].startswith(("g0-", "g1-", "f2-", "chonhac-"))
+            or not isinstance(data["base_sha"], str)
+            or SHA_RE.fullmatch(data["base_sha"]) is None
+            or not isinstance(data["model"], str)
+            or re.fullmatch(r"gpt-[a-z0-9][a-z0-9._-]{2,63}",
+                            data["model"]) is None
+            or data["reasoning"] not in {"low", "medium", "high", "xhigh"}
+            or not isinstance(data["goal"], str)
+            or not 20 <= len(data["goal"]) <= 8000):
+        raise NotReady("original_issue_contract_invalid")
+    paths = data["allowed_paths"]
+    if (not isinstance(paths, list)
+            or not 1 <= len(paths) <= 4
+            or any(not isinstance(path, str) for path in paths)
+            or len(set(paths)) != len(paths)
+            or not any(path.startswith("tests/test_pcp_light_")
+                       for path in paths)):
+        raise NotReady("original_issue_allowed_paths_invalid")
+    for value in paths:
+        path = PurePosixPath(value)
+        if (len(value) > 240 or "\\" in value or path.is_absolute()
+                or ".." in path.parts or path.as_posix() != value
+                or not value.startswith(ALLOWED_PREFIXES)
+                or not value.endswith((".py", ".md"))
+                or (value.startswith(ALLOWED_PREFIXES[:2])
+                    and len(path.parts) != 2)):
+            raise NotReady("original_issue_allowed_paths_invalid")
+    return data
+
+
+def issue_allowed_paths(body: Any) -> list[str]:
+    """Return exact Owner-approved paths, refusing all other representations."""
+    return issue_contract(body)["allowed_paths"]
 
 def validate_sha(value: str, label: str) -> str:
     if not isinstance(value, str) or SHA_RE.fullmatch(value) is None:
@@ -99,6 +133,9 @@ def validate_pr(pr_number: int, expected_head: str, expected_base: str,
         raise NotReady("pull_request_repository_mismatch")
     if pr.get("merged") is not False or pr.get("state") != "open":
         raise NotReady("pull_request_not_open_unmerged")
+    if (not isinstance(pr.get("user"), dict)
+            or pr["user"].get("login") != OWNER):
+        raise NotReady("pull_request_author_mismatch")
     head = ((pr.get("head") or {}).get("sha"))
     base = ((pr.get("base") or {}).get("sha"))
     if head != expected_head:
@@ -108,6 +145,8 @@ def validate_pr(pr_number: int, expected_head: str, expected_base: str,
 
     issue = get_json("repos/{}/issues/{}".format(REPO, issue_number))
     if (not isinstance(issue, dict) or issue.get("number") != issue_number
+            or issue.get("state") != "open"
+            or "pull_request" in issue
             or (issue.get("user") or {}).get("login") != OWNER
             or issue.get("author_association") != "OWNER"):
         raise NotReady("original_issue_not_owner_authored")
@@ -115,14 +154,28 @@ def validate_pr(pr_number: int, expected_head: str, expected_base: str,
     actual_digest = hashlib.sha256(body.encode("utf-8")).hexdigest() if isinstance(body, str) else ""
     if actual_digest != issue_digest:
         raise NotReady("original_issue_body_digest_mismatch")
-    allowed = issue_allowed_paths(body)
+    contract = issue_contract(body)
+    allowed = contract["allowed_paths"]
+    source_parent = contract["base_sha"]
+    expected_branch = "ai/pcp-light/" + contract["key"]
+    if (not isinstance(pr.get("head"), dict)
+            or pr["head"].get("ref") != expected_branch):
+        raise NotReady("pull_request_branch_mismatch")
 
-    compare = get_json("repos/{}/compare/{}...{}".format(REPO, expected_base, expected_head))
+    # GitHub PR base.sha is the CURRENT tip of main; an approved one-shot
+    # candidate can retain its original (OLDER) pinned source parent if
+    # a PM-reviewed helper was merged in the meantime. Compare the one-turn
+    # candidate to that original source, NOT to a moving PR base tip.
+    compare = get_json("repos/{}/compare/{}...{}".format(
+        REPO, source_parent, expected_head))
     commits = compare.get("commits") if isinstance(compare, dict) else None
     if (not isinstance(compare, dict) or compare.get("status") != "ahead"
-            or compare.get("ahead_by") != 1 or not isinstance(commits, list)
+            or compare.get("ahead_by") != 1 or compare.get("behind_by") != 0
+            or not isinstance(commits, list)
             or len(commits) != 1 or not isinstance(commits[0], dict)
-            or (commits[0].get("sha") != expected_head)):
+            or commits[0].get("sha") != expected_head
+            or not isinstance(compare.get("merge_base_commit"), dict)
+            or compare["merge_base_commit"].get("sha") != source_parent):
         raise NotReady("candidate_not_exactly_one_commit_after_base")
 
     files_doc = get_json("repos/{}/pulls/{}/files?per_page=100".format(REPO, pr_number))
@@ -132,6 +185,8 @@ def validate_pr(pr_number: int, expected_head: str, expected_base: str,
     for entry in files_doc:
         if not isinstance(entry, dict) or not isinstance(entry.get("filename"), str):
             raise NotReady("changed_path_evidence_invalid")
+        if entry.get("status") not in {"added", "modified"}:
+            raise NotReady("changed_path_status_not_allowed")
         paths.append(entry["filename"])
     if len(paths) != len(set(paths)):
         raise NotReady("changed_paths_duplicate")
@@ -140,7 +195,11 @@ def validate_pr(pr_number: int, expected_head: str, expected_base: str,
     if not any(path.startswith("tests/") for path in paths):
         raise NotReady("changed_test_missing")
 
-    return {"head_sha": head, "base_sha": base, "changed_paths": sorted(paths)}
+    return {
+        "head_sha": head, "base_sha": base,
+        "original_source_sha": source_parent,
+        "changed_paths": sorted(paths),
+    }
 
 
 def validate_ci(head: str) -> dict[str, str]:
