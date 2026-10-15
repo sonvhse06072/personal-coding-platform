@@ -128,6 +128,66 @@ async def read_connect(reader: asyncio.StreamReader,
     raise ProxyStop("too_many_headers")
 
 
+def tls_client_hello_sni(record: bytes) -> str:
+    """Reject SNI swapping on shared public IPs; pass TLS bytes unchanged.
+
+    Only one bounded TLS ClientHello record is accepted. ECH/fragmented
+    handshakes fail closed rather than opening an unverified tunnel.
+    """
+    if len(record) < 9 or record[0] != 22 or record[1] != 3:
+        raise ProxyStop("tls_client_hello_required")
+    length = int.from_bytes(record[3:5], "big")
+    if not 4 <= length <= 16384 or length != len(record) - 5:
+        raise ProxyStop("tls_record_size_invalid")
+    body = memoryview(record)[5:]
+    if body[0] != 1 or int.from_bytes(body[1:4], "big") != len(body) - 4:
+        raise ProxyStop("tls_client_hello_invalid")
+    pos = 4
+
+    def read(n: int) -> bytes:
+        nonlocal pos
+        if n < 0 or pos + n > len(body):
+            raise ProxyStop("tls_client_hello_truncated")
+        data = bytes(body[pos:pos + n])
+        pos += n
+        return data
+
+    read(2 + 32)  # legacy version and random
+    read(int.from_bytes(read(1), "big"))   # session ID
+    read(int.from_bytes(read(2), "big"))   # cipher suites
+    read(int.from_bytes(read(1), "big"))   # compression methods
+    ext_size = int.from_bytes(read(2), "big")
+    ext_end = pos + ext_size
+    if ext_end != len(body):
+        raise ProxyStop("tls_extensions_invalid")
+    names = []
+    while pos < ext_end:
+        ext_kind = int.from_bytes(read(2), "big")
+        ext_data = read(int.from_bytes(read(2), "big"))
+        if ext_kind != 0:
+            continue
+        if len(ext_data) < 5 or int.from_bytes(ext_data[:2], "big") != len(ext_data) - 2:
+            raise ProxyStop("tls_sni_extension_invalid")
+        # Only one DNS SNI hostname, no IP, unknown name types or padding.
+        index = 2
+        while index < len(ext_data):
+            if index + 3 > len(ext_data):
+                raise ProxyStop("tls_sni_extension_invalid")
+            kind = ext_data[index]
+            size = int.from_bytes(ext_data[index + 1:index + 3], "big")
+            index += 3
+            if kind != 0 or size == 0 or index + size > len(ext_data):
+                raise ProxyStop("tls_sni_extension_invalid")
+            try:
+                names.append(ext_data[index:index + size].decode("ascii"))
+            except UnicodeDecodeError as exc:
+                raise ProxyStop("tls_sni_not_ascii") from exc
+            index += size
+    if pos != ext_end or len(names) != 1:
+        raise ProxyStop("tls_sni_missing_or_multiple")
+    return names[0]
+
+
 async def forward(reader: asyncio.StreamReader,
                   writer: asyncio.StreamWriter) -> None:
     while True:
@@ -153,6 +213,21 @@ async def tunnel(client_reader: asyncio.StreamReader,
         client_writer.write(RESPONSE_OK)
         await client_writer.drain()
         connected = True
+        # Read and verify the TLS ClientHello SNI before forwarding any
+        # application bytes. HTTP CONNECT host alone is not a true domain
+        # allowlist on multi-tenant CDN IPs.
+        header = await asyncio.wait_for(client_reader.readexactly(5),
+                                        timeout=CONNECT_TIMEOUT)
+        record_length = int.from_bytes(header[3:5], "big")
+        if not 4 <= record_length <= 16384:
+            raise ProxyStop("tls_record_size_invalid")
+        hello = header + await asyncio.wait_for(
+            client_reader.readexactly(record_length), timeout=CONNECT_TIMEOUT,
+        )
+        if tls_client_hello_sni(hello) != hostname:
+            raise ProxyStop("tls_sni_does_not_match_connect")
+        upstream_writer.write(hello)
+        await upstream_writer.drain()
         a = asyncio.create_task(forward(client_reader, upstream_writer))
         b = asyncio.create_task(forward(upstream_reader, client_writer))
         done, pending = await asyncio.wait({a, b}, return_when=asyncio.FIRST_COMPLETED)
@@ -164,7 +239,8 @@ async def tunnel(client_reader: asyncio.StreamReader,
                 task.result()
             except (OSError, ConnectionError, asyncio.TimeoutError):
                 pass
-    except (ProxyStop, OSError, ConnectionError, asyncio.TimeoutError, UnicodeError):
+    except (ProxyStop, OSError, ConnectionError, asyncio.TimeoutError,
+            UnicodeError, ValueError, asyncio.IncompleteReadError):
         if not connected:
             client_writer.write(RESPONSE_BAD if upstream_writer is None
                                 else RESPONSE_GATEWAY)
