@@ -1,0 +1,44 @@
+# PARKED: copied only to a new G1 pilot root after independently reviewed
+# workspace, auth, network and DDEV identities. Not a live project registry.
+version: 1
+projects:
+  pcp-benchmark-g1-pilot:
+    path: ${PCP_G1_PILOT_ROOT}/source
+    base_branch: benchmark/g1-codex-smoke-v1
+    privacy:
+      private_code: true
+      allow_training_provider: false
+      require_zero_retention: true
+    human_policy:
+      routine_review: false
+      important_decisions_only: true
+    autonomy:
+      allow_commit: true
+      allow_push_ai_branch: false
+      allow_create_pr: false
+      allow_auto_merge_low_risk: false
+      allow_production_deploy: false
+    runtime:
+      pilot_identity: g1-t01-pcp
+      developer_permission_mode: trusted_project
+      workspace_mode: isolated_clone
+      exclusive_project_lease: false
+      branch_prefix: ai
+      max_diff_bytes: 30000
+      keep_workspace_on_success: true
+      keep_workspace_on_failure: true
+    ddev:
+      enabled: true
+      preflight: []
+      targeted_tests: []
+      static_analysis: []
+      frontend_quality: []
+      full_tests: []
+      cleanup: []
+    trusted_codex_tools:
+      targeted_tests:
+        - [ddev, exec, php, vendor/bin/phpunit, -c, web/core/phpunit.xml.dist, web/modules/custom/pcp_f2_fixture/tests/src/Unit]
+      static_analysis:
+        - [ddev, exec, php, vendor/bin/phpcs, --standard=Drupal, web/modules/custom/pcp_f2_fixture]
+      frontend_quality:
+        - [ddev, exec, npm, --prefix, /var/www/html, run, build]
