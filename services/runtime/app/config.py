@@ -114,8 +114,17 @@ def project_config(project_id: str) -> dict[str, Any]:
     # The first G1 rollout is a single disposable fixture, not a generic grant
     # of trusted development access to other PCP projects. The separate broker
     # validates the exact job/workspace/SHA/role and ephemeral token.
+    smoke_identity = project_id == "pcp-benchmark-g1-smoke"
+    pilot_identity = (
+        project_id == "pcp-benchmark-g1-pilot"
+        and os.getenv("PCP_G1_PILOT_IDENTITY_ENABLED") == "owner-approved"
+        and runtime.get("pilot_identity") == "g1-t01-pcp"
+        and cfg.get("base_branch") == "benchmark/g1-codex-smoke-v1"
+        and (cfg.get("autonomy") or {}).get("allow_auto_merge_low_risk") is False
+        and (cfg.get("autonomy") or {}).get("allow_production_deploy") is False
+    )
     if developer_permission_mode == "trusted_project" and not (
-        project_id == "pcp-benchmark-g1-smoke"
+        (smoke_identity or pilot_identity)
         and workspace_mode == "isolated_clone"
         and not exclusive_project_lease
         and (cfg.get("ddev") or {}).get("enabled") is True
