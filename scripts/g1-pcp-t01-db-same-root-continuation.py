@@ -137,12 +137,41 @@ def safe_checkpoint(env: dict[str, str], expected: str, m) -> str:
                  "refs/remotes/").splitlines()
     check(bool(refs) and all(x.endswith("/" + m.BRANCH) for x in refs),
           "g1_db_direct_solution_ref_leak")
-    check((ROOT / "config/projects.yml").is_file()
-          and (ROOT / "config/project-baselines.yml").is_file()
-          and (ROOT / "config/models.yml").is_file()
-          and (ROOT / "config/routing-policy.yml").is_file()
-          and (ROOT / "disabled-github-token").is_file(),
-          "g1_db_original_operator_configs_missing")
+    owned = [ROOT / "config" / x for x in (
+        "projects.yml", "project-baselines.yml", "models.yml",
+        "routing-policy.yml")]
+    owned.append(ROOT / "disabled-github-token")
+    check(all(x.is_file() and not x.is_symlink()
+              and x.stat().st_uid == os.geteuid() for x in owned),
+          "g1_db_original_operator_configs_missing_or_unsafe")
+    # Refuse project policy/mount/allowed command drift before issuing any
+    # credential or Docker write. Match byte-exact private bootstrap outputs.
+    template = (PCP / "config/g1-pilot/projects.pcp.template.yml").read_text()
+    placeholder = "$" + "{PCP_G1_PILOT_ROOT}"
+    expected_project = template.replace(placeholder, str(ROOT)).replace(
+        "php, vendor/bin/phpunit, -c, web/core/phpunit.xml.dist, web/modules/custom/pcp_f2_fixture/tests/src/Unit",
+        "php, ../vendor/bin/phpunit, -c, core/phpunit.xml.dist, modules/custom/pcp_f2_fixture/tests/src/Unit",
+    ).replace(
+        "php, vendor/bin/phpcs, --standard=Drupal, web/modules/custom/pcp_f2_fixture",
+        "php, ../vendor/bin/phpcs, --standard=Drupal, modules/custom/pcp_f2_fixture",
+    )
+    check((ROOT / "config/projects.yml").read_text() == expected_project,
+          "g1_db_original_project_scope_changed")
+    for name in ("models.yml", "routing-policy.yml"):
+        check((ROOT / "config" / name).read_text()
+              == (PCP / "config/g1-pilot" / name).read_text(),
+              "g1_db_model_or_routing_policy_drift")
+    try:
+        baseline = json.loads((ROOT / "config/project-baselines.yml").read_text())
+        one = baseline["projects"][m.PROJECT]
+        rev = one["revisions"][m.REVISION]
+        check(set(baseline["projects"]) == {m.PROJECT}
+              and one["active_revision"] == m.REVISION
+              and rev["source_commit"] == SEED
+              and rev["status"] == "approved",
+              "g1_db_original_baseline_drift")
+    except (ValueError, KeyError, TypeError) as exc:
+        raise Stop("g1_db_original_baseline_invalid") from exc
     check(not call(["docker", "container", "ls", "-a",
                     "--filter", "label=com.docker.compose.project=pcp-g1-pilot",
                     "--filter", "label=com.docker.compose.service=db",
@@ -157,9 +186,19 @@ def safe_checkpoint(env: dict[str, str], expected: str, m) -> str:
           and (m.HOME / "direct-workspace").is_dir()
           and (m.HOME / "auth/direct").is_dir(),
           "g1_db_separate_lane_identity_missing")
-    check(not call(["docker", "context", "show"], env,
-                   "g1_db_context").startswith("remote"),
-          "g1_db_remote_context_denied")
+    socket = Path("/var/run/docker.sock")
+    check(socket.is_socket(), "g1_db_docker_socket_unavailable")
+    try:
+        ctx = json.loads(call(["docker", "context", "inspect"], env,
+                              "g1_db_docker_context"))
+        host = ctx[0]["Endpoints"]["docker"]["Host"]
+        check(len(ctx) == 1 and isinstance(host, str)
+              and host.startswith("unix://")
+              and Path(host.removeprefix("unix://")).resolve() == socket.resolve()
+              and os.getenv("DOCKER_HOST", "") in ("", host),
+              "g1_db_remote_or_mismatched_docker_denied")
+    except (KeyError, IndexError, TypeError, ValueError, OSError) as exc:
+        raise Stop("g1_db_docker_context_invalid") from exc
     # Never silently select a new model/CLI: use the pinned Direct image label.
     return m.direct_version(env)
 
@@ -172,13 +211,20 @@ def validate_rendered_db(m, env: dict[str, str]) -> None:
         db = config["services"]["db"]
         volume = config["volumes"]["g1-pilot-db"]
         network = config["networks"]["g1-pilot-control"]
+        mounts = db.get("volumes") or []
+        db_networks = db.get("networks") or {}
         check(db.get("image") == "postgres:16-alpine"
               and db.get("entrypoint") in (None, [], ["docker-entrypoint.sh"])
               and db.get("read_only") is False
               and "CHOWN" in (db.get("cap_add") or [])
               and volume.get("name") == VOLUME
               and network.get("name") == NETWORK
-              and network.get("internal") is True,
+              and network.get("internal") is True
+              and set(db_networks) == {"g1-pilot-control"}
+              and any(isinstance(v, dict)
+                      and v.get("source") == "g1-pilot-db"
+                      and v.get("target") == "/var/lib/postgresql/data"
+                      for v in mounts),
               "g1_db_rendered_db_contract_not_safe")
     except (KeyError, ValueError, TypeError) as exc:
         raise Stop("g1_db_rendered_compose_invalid") from exc
@@ -293,7 +339,11 @@ def execute(expected: str) -> dict[str, Any]:
     m.journal("database_healthy", model_calls=0,
               **proof, original_journal_preserved=True)
     started = time.monotonic()
-    return m.continue_after_database(env, started)
+    try:
+        return m.continue_after_database(env, started)
+    except m.Stop as exc:
+        # The reviewed original operator only raises fixed, sanitized codes.
+        raise Stop("g1_db_original_postdb_" + str(exc)) from None
 
 
 def main() -> int:
