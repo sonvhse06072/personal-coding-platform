@@ -377,6 +377,44 @@ def isolate_ddev(env: dict[str, str], workspace: Path) -> None:
     require_g1_pilot_isolated_ddev(workspace)
 
 
+def provider_gate(env: dict[str, str]) -> None:
+    """Pre-model live PCP-only proxy/TLS and outbound-GitHub denial proof."""
+    probe = r'''
+import json
+import socket
+import ssl
+from contextlib import closing
+
+facts = {"proxy_dns": False, "github_denied": False,
+         "chatgpt_connect": False, "chatgpt_tls": False}
+host = "g1-pilot-provider-proxy"
+port = 3128
+try:
+    socket.getaddrinfo(host, port)
+    facts["proxy_dns"] = True
+    with closing(socket.create_connection((host, port), timeout=12)) as sock:
+        sock.settimeout(12)
+        sock.sendall(b"CONNECT api.github.com:443 HTTP/1.1\r\n"
+                     b"Host: api.github.com:443\r\n\r\n")
+        facts["github_denied"] = sock.recv(256).startswith(b"HTTP/1.1 403")
+    with closing(socket.create_connection((host, port), timeout=12)) as sock:
+        sock.settimeout(12)
+        sock.sendall(b"CONNECT chatgpt.com:443 HTTP/1.1\r\n"
+                     b"Host: chatgpt.com:443\r\n\r\n")
+        facts["chatgpt_connect"] = sock.recv(256).startswith(b"HTTP/1.1 200")
+        if facts["chatgpt_connect"]:
+            with ssl.create_default_context().wrap_socket(
+                    sock, server_hostname="chatgpt.com") as tls:
+                facts["chatgpt_tls"] = tls.version() is not None
+except (OSError, ssl.SSLError, TimeoutError, ValueError):
+    pass
+print(json.dumps({"passed": all(facts.values()), "checks": facts}))
+'''
+    result = runtime(env, "g1_pcp_proxy_egress_check", probe, timeout=80)
+    check(result.get("passed") is True,
+          "g1_pcp_provider_proxy_or_tls_gate_failed")
+
+
 def focused_checks(env: dict[str, str], ws: Path) -> bool:
     code = (
         "import json,os,urllib.request;"
@@ -404,6 +442,8 @@ def verify_commit(env: dict[str, str], ws: Path) -> str:
     paths.update(git(env, ws, "diff", "--name-only").splitlines())
     paths.update(git(env, ws, "diff", "--cached", "--name-only").splitlines())
     check(paths == ALLOWED, "g1_pcp_code_or_tests_missing_or_out_of_scope")
+    check(not git(env, ws, "ls-files", "--others", "--exclude-standard"),
+          "g1_pcp_untracked_source_outside_exact_scope")
     head = git(env, ws, "rev-parse", "HEAD")
     if head == SEED:
         run(["git", "-C", str(ws), "diff", "--check"], env,
@@ -466,6 +506,7 @@ def execute(expected: str) -> dict[str, object]:
                     "runtime", "login", "status", timeout=75)
     check("Logged in using ChatGPT" in login,
           "g1_pcp_independent_codex_login_missing")
+    provider_gate(env)
     env["PCP_G1_PILOT_DEV_TOKEN"] = secrets.token_urlsafe(48)
     env["PCP_G1_PILOT_DEADLINE"] = str(int(time.time()) + 1750)
     env["PCP_G1_PILOT_BROKER_ENABLED"] = "owner-approved"
