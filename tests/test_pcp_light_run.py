@@ -70,6 +70,23 @@ class PCPFastHandoffTests(unittest.TestCase):
         with self.assertRaisesRegex(M.Stop, "github_issue_body_changed"):
             M.parse_issue({**good, "body": good["body"] + " edited"}, 593, digest)
 
+    def test_invalid_gh_shape_and_jsonl_do_not_escape_stop(self):
+        _, digest = issue()
+        with self.assertRaisesRegex(M.Stop, "github_issue_invalid_shape"):
+            M.parse_issue([], 593, digest)
+        self.assertEqual(M.summarize_codex('[]\n{"type":"turn.failed"}'),
+                         {"terminal": "turn.failed", "input_tokens": None,
+                          "cached_input_tokens": None, "output_tokens": None})
+
+    def test_claimed_journal_is_exclusive_and_private_from_creation(self):
+        with tempfile.TemporaryDirectory() as folder:
+            doc = Path(folder) / "receipt.json"
+            M.write_once(doc, {"state": "claimed", "model_calls": 0})
+            self.assertEqual(doc.stat().st_mode & 0o077, 0)
+            with self.assertRaises(FileExistsError):
+                M.write_once(doc, {"state": "replacement"})
+            self.assertEqual(json.loads(doc.read_text())["state"], "claimed")
+
     def test_no_arbitrary_paths_or_reserved_legacy_project(self):
         for path in [
             "../data.py", ".github/workflows/test.yml",
