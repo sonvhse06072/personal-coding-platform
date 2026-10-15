@@ -46,6 +46,33 @@ Only an explicit `--execute` on that same command authorizes a **one-shot**:
 
 Any STOP, provider failure, timeout, dirty/mismatched git source or unexpected change preserves the journal/worktree for triage. **Never rerun a claimed key or cleanup/reset to bypass STOP.** In particular this tool must not be used to revive G1-T01. A draft PR is only a delivery artifact. Its hosted CI can fail; when it does, the original job remains preserved and **no blind Codex retry** is allowed. The separately accepted #725 result does not prove unattended generic PCP-light autonomy or G0 Direct/full-PCP parity.
 
+## Context and token evidence (no extra model call)
+
+Both the default read-only handoff and the eventual one-turn result now include
+`context_footprint`: **raw file sizes only** for `AGENTS.md`, five required
+authority documents and `README.md`; byte sizes for existing allowlisted
+source files; and the task prompt's UTF-8 byte count. The runner uses file
+metadata (`lstat`) rather than reading documents or following symlinks.
+This is a **minimum documented authority footprint**, not proof of the bytes
+Codex actually read, not a token estimator, and not a quota or STOP condition.
+Other task-relevant documents can add to the actual context.
+
+The Codex prompt explicitly keeps the mandatory `AGENTS.md` reading order.
+After that first reading it encourages targeted searches, bounded line ranges
+and avoiding repeated full-document output; **no authority, test or security
+requirement is skipped**. Token savings are a hypothesis until measured on
+comparable accepted tasks.
+
+At `turn.completed`, validated `input_tokens`, `cached_input_tokens`
+and `output_tokens` are reported alongside derived
+`uncached_input_tokens = input - cached` and
+`cached_input_share_percent`. Missing, inconsistent or malformed usage
+produces `null` derived fields, never fabricated zero. Cached input tokens
+are included in input totals and must **not** be added twice. These are
+model-reported token counts, not billable USD or the total human-attention
+cost. Token evidence is stored with the one-use job journal, and reporting
+does **not** call the model again or contact the provider.
+
 ## Speed/quality decision
 
 This operator deliberately reuses `gh`, existing Codex auth, Git worktrees and GitHub Actions. No new PostgreSQL, DDEV, Router, Executor, proxy, workflow scheduler, Python dependency installer or generic agent framework. The local `pytest` stop in the original #725 trial drove this **CI-first verification policy**: make source-scope/AST checks locally, run full tests in isolated hosted PR CI instead. This avoids executing unreviewed generated tests on the Owner host and prevents a post-model `No module named pytest` blocker. A genuine result should be compared to plain direct Codex using accepted PR, end-to-end elapsed time, model tokens and count of Owner interventions. Do not claim p50/p90 or savings from a single run. G0 #595 remains HOLD / NOT GO.
