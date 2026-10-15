@@ -81,7 +81,11 @@ def safe_addresses(rows: list[tuple]) -> list[str]:
             address = ipaddress.ip_address(row[4][0])
         except (ValueError, TypeError) as exc:
             raise ProxyStop("dns_result_invalid") from exc
-        if not address.is_global:
+        # ipaddress.is_global is True for some multicast prefixes on
+        # certain Python versions. Multicast/reserved/unspecified are never
+        # acceptable remote HTTPS origins, even if is_global says True.
+        if (not address.is_global or address.is_multicast
+                or address.is_reserved or address.is_unspecified):
             raise ProxyStop("nonpublic_destination_denied")
         addresses.append(str(address))
     return list(dict.fromkeys(addresses))
