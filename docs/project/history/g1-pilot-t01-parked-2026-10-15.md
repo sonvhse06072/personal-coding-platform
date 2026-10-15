@@ -54,3 +54,13 @@
 `python3 scripts/g1-pilot-source-contract.py` đọc ba YAML source và xác nhận trạng thái PARKED/boundaries/model budget; không gọi Docker, network, provider hay Codex. Đây là **CI source contract** chứ không phải runtime preflight và cũng không là yêu cầu Owner phải chạy thêm. Khi các gate chưa chứng minh, kết quả `PASS_G1_PILOT_SOURCE_PARKED` luôn đi kèm `ready_for_model_dispatch=false`.
 
 **Quy tắc STOP:** mọi tên resource, SHA, access scope, credentials, model/effort hay Docker inspect không khớp ⇒ giữ nguyên trạng thái, không retry, không xóa/đổi job cũ, không fallback host full access. Bảo toàn journal gốc, không ghi log token.
+
+## 6. Ranh giới egress triển khai ở bước tiếp theo (source-only)
+
+[Proxy CONNECT](../../../deploy/g1/egress_connect_proxy.py) và [overlay PARKED](../../../deploy/g1/compose.pilot.egress.parked.yml) tách mạng provider/GitHub khỏi mọi client. `runtime` và `executor` chỉ còn `g1-pilot-control` internal, `direct` chỉ có `g1-pilot-direct-control` internal. Chỉ ba proxy, chạy nonroot và có cả mạng private + mạng outbound độc lập, mới có thể kết nối ra ngoài khi được duyệt riêng.
+
+Chính sách không phải `internal:false` đơn thuần: proxy chỉ chấp nhận CONNECT HTTPS/443 tới danh sách FQDN chính xác (provider: `chatgpt.com`, `auth.openai.com`, `api.openai.com`; GitHub: `github.com`, `api.github.com`, `codeload.github.com`, `uploads.github.com`), từ chối IP riêng/loopback/metadata/link-local do DNS trả về, và xác thực SNI trong TLS ClientHello khớp hostname CONNECT. Không chấp nhận proxy credential trong request line/headers, không đọc/decrypt/ghi log payload TLS. Nếu CLI yêu cầu host/provider mới, STOP để review mở danh sách thay vì dùng wildcard.
+
+**Đây là thiết kế và kiểm thử source; chưa có kiểm chứng Docker/network/ChatGPT login thật.** Proxy và mọi client vẫn `entrypoint=/bin/false`, `PCP_RUNTIME_STARTUP_MODE=inspect`, broker pilot mặc định OFF. Thực tế có thể cần thêm endpoints cho Codex OAuth/refresh, cần quan sát lỗi đã lọc trước khi duyệt bổ sung. Web/db DDEV vẫn phải ở mạng nội bộ hoàn toàn riêng và không được nhận token/credentials. Không thay thế việc chứng minh tên project, workspace, UID, secrets và token GitHub repo-only.
+
+**Next gate duy nhất:** một operator opt-in, giới hạn cho hai lane, phải chứng minh Codex auth root độc lập, egress proxy hoạt động và kết nối bị từ chối theo allowlist, cùng scope GitHub push/PR. Chỉ sau đó mới cho phép một cặp Codex G1-T01; không chạy lại smoke cũ hoặc gia tăng privileges của Chợ Nhạc/F2.
