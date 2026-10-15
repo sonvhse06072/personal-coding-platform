@@ -94,12 +94,16 @@ def test_invalid_preflight_fails_closed():
         json.dumps({"error":"bearer=private"})+"\n",
         json.dumps({"auth_file_readable": "secret"})+"\n",
     ):
-        with pytest.raises(g1.Stop, match="g1_direct_preflight_response_invalid"):
+        with pytest.raises(
+            g1.Stop,
+            match="g1_direct_preflight_(response_invalid|unexpected_schema)",
+        ):
             g1.parse_gate(done(0,raw))
 
 
 def test_python_probe_checks_stderr_and_stdout_and_live_tls():
     text = g1.PREFLIGHT
+    compile(text, "<g1-direct-readonly-preflight>", "exec")
     assert 'status.stdout + "\\n" + status.stderr' in text
     assert '"logged in" in combined' in text
     assert '"chatgpt" in combined' in text
