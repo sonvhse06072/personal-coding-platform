@@ -116,6 +116,28 @@ class PCPFastHandoffTests(unittest.TestCase):
         with self.assertRaisesRegex(M.Stop, "handoff_field_invalid"):
             M.parse_issue(doc, 593, digest)
 
+    def test_pytest_argv_is_exactly_one_changed_allowlisted_test(self):
+        self.assertEqual(M.pytest_argv(["tests/test_pcp_light_run.py"]), [
+            "python3", "-m", "pytest", "-q", "-p", "no:cacheprovider",
+            "tests/test_pcp_light_run.py",
+        ])
+
+    def test_pytest_argv_sorts_multiple_changed_allowlisted_tests(self):
+        self.assertEqual(M.pytest_argv([
+            "tests/test_pcp_light_zeta.py", "tests/test_pcp_light_alpha.py",
+        ]), [
+            "python3", "-m", "pytest", "-q", "-p", "no:cacheprovider",
+            "tests/test_pcp_light_alpha.py", "tests/test_pcp_light_zeta.py",
+        ])
+
+    def test_pytest_argv_refuses_empty_or_nonallowlisted_selection(self):
+        for paths in ([], ["tests"], ["tests/test_other.py"],
+                      ["tests/test_pcp_light_notes.md"],
+                      ["tests/test_pcp_light_run.py", "tests/test_pcp_light_run.py"]):
+            with self.subTest(paths=paths), self.assertRaisesRegex(
+                    M.Stop, "pcp_light_changed_tests_missing_or_invalid"):
+                M.pytest_argv(paths)
+
     def test_default_inspect_is_readonly_and_no_agent(self):
         with patch.object(M, "load_issue", return_value=GOOD_TASK), patch.object(
             M, "verify_checkout"
