@@ -88,6 +88,7 @@ services:
       PLATFORM_INTERNAL_TOKEN: "${PCP_G1_PILOT_INTERNAL_TOKEN:?new_pilot_internal_token_required}"
       # Hard OFF, even with an otherwise valid token supplied from the shell.
       PCP_TRUSTED_CODEX_BROKER_ENABLED: ""
+      PCP_G1_PILOT_IDENTITY_ENABLED: ""
       PCP_TRUSTED_CODEX_PROJECT_ID: pcp-benchmark-g1-pilot
       PCP_TRUSTED_CODEX_JOB_ID: ""
       PCP_TRUSTED_CODEX_SOURCE_SHA: ""
@@ -150,6 +151,7 @@ services:
       PLATFORM_INTERNAL_TOKEN: "${PCP_G1_PILOT_INTERNAL_TOKEN:?}"
       RUNTIME_API_TOKEN: "${PCP_G1_PILOT_RUNTIME_TOKEN:?new_pilot_runtime_token_required}"
       PCP_TRUSTED_CODEX_BROKER_ENABLED: ""
+      PCP_G1_PILOT_IDENTITY_ENABLED: ""
       GIT_TERMINAL_PROMPT: "0"
     volumes:
       - type: bind
