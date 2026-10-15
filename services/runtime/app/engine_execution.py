@@ -84,6 +84,14 @@ def preserve_trusted_g1_ddev_name(
     *, job_id: str, project_id: str, source_commit: str, workspace: Path,
 ) -> bool:
     """Keep exactly the admitted G1 seed name, never a foreign DDEV project."""
+    if project_id == "pcp-benchmark-g1-pilot":
+        # The pinned pilot base retains the smoke seed config.yaml, but a
+        # separate operator-owned DDEV name+cache override is mandatory.
+        # Broker checks exact SHA, singleton job/registry and both files.
+        return trusted_codex_phase_broker(
+            job_id=job_id, project_id=project_id, source_commit=source_commit,
+            workspace=workspace, mode="execute", adapter="codex_cli",
+        ) is not None
     if project_id != _G1_PROJECT_ID:
         return False
     config = workspace / ".ddev" / "config.yaml"

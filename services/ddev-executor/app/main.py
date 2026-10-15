@@ -22,6 +22,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from .g1_ddev_isolation import (
     PROJECT_ID as G1_PROJECT_ID, G1IsolationStop, require_g1_isolated_ddev,
 )
+from .g1_pilot_ddev_identity import (
+    PROJECT_ID as G1_PILOT_ID,
+    SOURCE_SHA as G1_PILOT_SHA,
+    require_pilot_workspace_identity,
+    require_g1_pilot_isolated_ddev,
+)
 from .github_delivery import (
     GitHubDelivery,
     github_git_env,
@@ -1054,6 +1060,17 @@ def _reconcile_workspace_ddev_identity(
             != "7a3e97a2a35fc8e67b67021365e7e91c448b52c9"
         ):
             raise HTTPException(409, "G1 immutable DDEV fixture identity mismatch")
+        return None
+    if project_id == G1_PILOT_ID:
+        # The pilot operator, not the generic Executor, writes the ONLY two
+        # reviewed overlay files. During acquisition they may both be absent;
+        # after operator isolation they must be byte-for-byte unchanged.
+        if os.getenv("PCP_G1_PILOT_IDENTITY_ENABLED") != "owner-approved":
+            raise HTTPException(403, "G1 pilot identity gate is OFF")
+        try:
+            require_pilot_workspace_identity(workspace, prepared=False)
+        except G1IsolationStop as exc:
+            raise HTTPException(409, str(exc)) from None
         return None
     if not ddev_dir.is_dir():
         return None
@@ -2831,11 +2848,16 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
         payload.workspace,
         require_git=False,
     )
-    if payload.project_id == G1_PROJECT_ID:
-        # Never bootstrap DDEV implicitly in G1. The one disposable operator
-        # must start then quarantine its containers; every phase reattests.
+    if payload.project_id in {G1_PROJECT_ID, G1_PILOT_ID}:
+        # Both exact G1 identities prohibit implicit DDEV start/restart. The
+        # separate operator must quarantine only its own web/db before phase.
         try:
-            require_g1_isolated_ddev(workspace)
+            if payload.project_id == G1_PROJECT_ID:
+                require_g1_isolated_ddev(workspace)
+            else:
+                if os.getenv("PCP_G1_PILOT_IDENTITY_ENABLED") != "owner-approved":
+                    raise HTTPException(403, "G1 pilot identity gate is OFF")
+                require_g1_pilot_isolated_ddev(workspace)
         except G1IsolationStop as exc:
             raise HTTPException(409, str(exc)) from None
 
@@ -2917,7 +2939,7 @@ def phase(payload: PhaseRequest) -> PhaseResponse:
         )
         # A G1 workspace has already passed Docker runtime attestation above;
         # do not run the normal mutating ddev start/restart path.
-        reused_running_direct_ddev = payload.project_id == G1_PROJECT_ID
+        reused_running_direct_ddev = payload.project_id in {G1_PROJECT_ID, G1_PILOT_ID}
 
         if (
             workspace_mode == "direct"
@@ -3181,6 +3203,20 @@ def _trusted_dev_plan(payload: TrustedCodexPhaseRequest) -> tuple[Path, list[lis
             require_g1_isolated_ddev(target)
         except G1IsolationStop as exc:
             raise HTTPException(409, str(exc)) from None
+    elif project_id == G1_PILOT_ID:
+        if (
+            os.getenv("PCP_G1_PILOT_IDENTITY_ENABLED") != "owner-approved"
+            or source_sha != G1_PILOT_SHA
+            or runtime.get("pilot_identity") != "g1-t01-pcp"
+            or cfg.get("base_branch") != "benchmark/g1-codex-smoke-v1"
+        ):
+            raise HTTPException(403, "G1 pilot identity admission denied")
+        try:
+            require_g1_pilot_isolated_ddev(target)
+        except G1IsolationStop as exc:
+            raise HTTPException(409, str(exc)) from None
+    else:
+        raise HTTPException(403, "Foreign benchmark has no trusted tool identity")
 
     tools = cfg.get("trusted_codex_tools") or {}
     commands = tools.get(payload.phase) if isinstance(tools, dict) else None

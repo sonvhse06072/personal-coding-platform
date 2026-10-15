@@ -13,8 +13,8 @@ from fastapi.testclient import TestClient
 from app import main as executor
 
 JOB = "a" * 32
-SHA = "b" * 40
-PROJECT = "pcp-benchmark-synthetic"
+SHA = "d4f4a56713e95f85ecc08c02bb43a5b5105a86a3"
+PROJECT = "pcp-benchmark-g1-smoke"
 DEV = "c" * 48
 INTERNAL = "d" * 48
 
@@ -67,6 +67,9 @@ def fixture(monkeypatch, tmp_path: Path):
     registry = {PROJECT: cfg}
     monkeypatch.setattr(executor, "load_projects", lambda: registry)
     monkeypatch.setattr(executor, "is_git_repo", lambda _path: True)
+    # The accepted smoke's live Docker attestation has its own negative tests;
+    # fake only the hardware boundary here to exercise existing auth/phase rules.
+    monkeypatch.setattr(executor, "require_g1_isolated_ddev", lambda _path: None)
     monkeypatch.setattr(executor, "git", lambda _path, *args, **_kw: (
         str(workspace) if "--show-toplevel" in args else
         "ai/" + JOB[:12] if "--show-current" in args else

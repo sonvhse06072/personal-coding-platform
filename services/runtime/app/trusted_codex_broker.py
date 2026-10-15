@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import hashlib
 import subprocess
 import time
 from pathlib import Path
@@ -18,6 +19,26 @@ from .config import projects_doc
 _JOB = re.compile(r"^[a-f0-9]{32}$")
 _SHA = re.compile(r"^[a-f0-9]{40}$")
 _DISPOSABLE = re.compile(r"^pcp-benchmark-[a-z0-9-]{2,80}$")
+_SMOKE_ID = "pcp-benchmark-g1-smoke"
+_PILOT_ID = "pcp-benchmark-g1-pilot"
+_SEED_SHA = "d4f4a56713e95f85ecc08c02bb43a5b5105a86a3"
+_PILOT_DDEV_SEED_SHA = "7a3e97a2a35fc8e67b67021365e7e91c448b52c9"
+_PILOT_NAME_OVERRIDE = "override_config: true\nname: pcp-g1-codex-pilot\n"
+_PILOT_CACHE_FILE = "docker-compose.g1-pilot.yaml"
+_PILOT_CACHE_COMPOSE = (
+    "# G1-T01 private DDEV cache; never model editable.\n"
+    "services:\n"
+    "  web:\n"
+    "    volumes:\n"
+    "      - g1-pilot-private-cache:/mnt/ddev-global-cache\n"
+    "  db:\n"
+    "    volumes:\n"
+    "      - g1-pilot-private-cache:/mnt/ddev-global-cache\n"
+    "volumes:\n"
+    "  g1-pilot-private-cache:\n"
+    "    external: true\n"
+    "    name: pcp-g1-pilot-cache\n"
+)
 _ALLOWED_HOSTS = frozenset({"ddev-executor", "pcp-dev-executor"})
 _PROTECTED_ENV = (
     "PLATFORM_INTERNAL_TOKEN", "ROUTER_API_TOKEN",
@@ -106,6 +127,46 @@ def trusted_codex_phase_broker(
     except (OSError, RuntimeError):
         return None
 
+    if project_id not in {_SMOKE_ID, _PILOT_ID}:
+        return None
+    if project_id == _PILOT_ID:
+        if (
+            os.getenv("PCP_G1_PILOT_IDENTITY_ENABLED") != "owner-approved"
+            or source_commit != _SEED_SHA
+        ):
+            return None
+        # Runtime reads only its job workspace. The executor performs its own
+        # independent Docker attestation at each phase. This is a source-only
+        # admission check, not evidence that a model may be dispatched.
+        ddev = workspace / ".ddev"
+        try:
+            seed = (ddev / "config.yaml").read_bytes()
+            blob = hashlib.sha1(
+                b"blob " + str(len(seed)).encode() + b"\0" + seed
+            ).hexdigest()
+            if blob != _PILOT_DDEV_SEED_SHA or ddev.is_symlink():
+                return None
+            overrides = {
+                "config.g1-pilot.yaml": _PILOT_NAME_OVERRIDE,
+                _PILOT_CACHE_FILE: _PILOT_CACHE_COMPOSE,
+            }
+            for name, exact in overrides.items():
+                f = ddev / name
+                if f.is_symlink() or f.read_text(encoding="utf-8") != exact:
+                    return None
+            if any(p.is_symlink() for p in ddev.rglob("*")):
+                return None
+            if (ddev / "commands").exists() or (ddev / "hooks").exists():
+                return None
+            if ({p.name for p in ddev.glob("config*.y*ml")} -
+                {"config.yaml", "config.g1-pilot.yaml"}):
+                return None
+            if ({p.name for p in ddev.glob("docker-compose*.y*ml")} -
+                {_PILOT_CACHE_FILE}):
+                return None
+        except (OSError, UnicodeError):
+            return None
+
     registry = projects_doc().get("projects")
     if not isinstance(registry, dict) or set(registry) != {project_id}:
         return None
@@ -123,6 +184,12 @@ def trusted_codex_phase_broker(
         and isinstance(autonomy, dict)
         and autonomy.get("allow_auto_merge_low_risk") is False
         and autonomy.get("allow_production_deploy") is False
+    ):
+        return None
+
+    if project_id == _PILOT_ID and not (
+        runtime.get("pilot_identity") == "g1-t01-pcp"
+        and project.get("base_branch") == "benchmark/g1-codex-smoke-v1"
     ):
         return None
 

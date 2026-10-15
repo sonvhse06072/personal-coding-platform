@@ -32,7 +32,7 @@ def test_reviewed_capsule_is_strictly_parked_and_model_is_singleton():
 
 @pytest.fixture
 def capsule(tmp_path):
-    for path in (g1.COMPOSE, g1.MODELS, g1.POLICY):
+    for path in (g1.COMPOSE, g1.MODELS, g1.POLICY, g1.TEMPLATE):
         source, dest = ROOT / path, tmp_path / path
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, dest)
@@ -55,6 +55,22 @@ def mutate(root, path, callback):
      lambda v: v["services"]["runtime"]["environment"].update(
          PCP_RUNTIME_STARTUP_MODE="normal"),
      "g1_pilot_runtime_not_default_off"),
+    (g1.COMPOSE,
+     lambda v: v["services"]["executor"]["environment"].update(
+         PCP_G1_PILOT_IDENTITY_ENABLED="owner-approved"),
+     "g1_pilot_runtime_not_default_off"),
+    (g1.TEMPLATE,
+     lambda v: v["projects"].update({"chonhac": {}}),
+     "g1_pilot_project_template_not_singleton"),
+    (g1.TEMPLATE,
+     lambda v: v["projects"]["pcp-benchmark-g1-pilot"]["runtime"].update(
+         pilot_identity="g1-t02"),
+     "g1_pilot_project_template_scope_broadened"),
+    (g1.TEMPLATE,
+     lambda v: v["projects"]["pcp-benchmark-g1-pilot"][
+         "trusted_codex_tools"].update(
+         frontend_quality=[["ddev", "exec", "bash", "docker ps"]]),
+     "g1_pilot_project_phase_command_drift"),
     (g1.COMPOSE,
      lambda v: v["services"]["executor"]["environment"].update(
          PCP_TRUSTED_CODEX_BROKER_ENABLED="owner-approved"),
