@@ -419,6 +419,130 @@ class PCPFastHandoffTests(unittest.TestCase):
         self.assertIn("preserve required tests", prompt)
         self.assertIn("Do not commit, push", prompt)
 
+    def test_git_quality_one_eof_warning_ast_preserved_and_snapshot_private(self):
+        # Disposable git repo only; no Owner code or WSL job access.
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "disposable"
+            repo.mkdir()
+            job = Path(tmp) / "new-job"
+            job.mkdir(mode=0o700)
+            subprocess.run(["git", "init", "-q", str(repo)],
+                           check=True, capture_output=True)
+            paths = set(GOOD_TASK["allowed_paths"])
+            originals = {}
+            for name in sorted(paths):
+                path = repo / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                content = (
+                    b"def safe():\n    return {'text': 'keep  spaces'}\n\n"
+                    if name == "scripts/pcp-light-run.py"
+                    else b"def test_safe():\n    assert True\n"
+                )
+                path.write_bytes(content)
+                originals[name] = content
+            subprocess.run(["git", "-C", str(repo), "add", "--", *sorted(paths)],
+                           check=True, capture_output=True)
+            initial = subprocess.run(
+                ["git", "-C", str(repo), "diff", "--cached", "--check"],
+                check=False, capture_output=True, text=True)
+            self.assertEqual(initial.returncode, 2)
+            self.assertEqual(len(initial.stdout.splitlines()), 1)
+            fixed = M.staged_git_quality_gate(repo, paths, job)
+            self.assertEqual(fixed, ["scripts/pcp-light-run.py"])
+            changed = repo / "scripts/pcp-light-run.py"
+            self.assertEqual(changed.read_bytes(),
+                             originals["scripts/pcp-light-run.py"].rstrip(b"\n") + b"\n")
+            self.assertEqual((repo / "tests/test_pcp_light_run.py").read_bytes(),
+                             originals["tests/test_pcp_light_run.py"])
+            snapshot = job / (
+                "eof-original-" +
+                hashlib.sha256(b"scripts/pcp-light-run.py").hexdigest() +
+                ".snapshot"
+            )
+            self.assertEqual(snapshot.read_bytes(),
+                             originals["scripts/pcp-light-run.py"])
+            self.assertEqual(stat.S_IMODE(snapshot.stat().st_mode), 0o600)
+            after = subprocess.run(
+                ["git", "-C", str(repo), "diff", "--cached", "--check"],
+                check=False, capture_output=True, text=True)
+            self.assertEqual(after.returncode, 0)
+            self.assertFalse(after.stdout or after.stderr)
+
+    def test_staged_git_quality_accepts_clean_without_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "disposable"
+            repo.mkdir()
+            job = Path(tmp) / "job"
+            job.mkdir(mode=0o700)
+            subprocess.run(["git", "init", "-q", str(repo)],
+                           check=True, capture_output=True)
+            for name in GOOD_TASK["allowed_paths"]:
+                target = repo / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(b"pass\n")
+            subprocess.run(
+                ["git", "-C", str(repo), "add", "--",
+                 *GOOD_TASK["allowed_paths"]],
+                check=True, capture_output=True)
+            self.assertEqual(
+                M.staged_git_quality_gate(
+                    repo, set(GOOD_TASK["allowed_paths"]), job), [])
+            self.assertEqual(list(job.iterdir()), [])
+
+    def test_staged_git_quality_rejects_unsafe_warnings_without_repair(self):
+        scenarios = (
+            ("trailing", b"def f():\n    return 1   \n", b"pass\n"),
+            ("two_eofs", b"def f():\n    return 1\n\n", b"pass\n\n"),
+            ("syntax", b"def broken(:\n\n", b"pass\n"),
+        )
+        for name, a, b in scenarios:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
+                repo = Path(tmp) / "disposable"
+                repo.mkdir()
+                job = Path(tmp) / "job"
+                job.mkdir(mode=0o700)
+                subprocess.run(["git", "init", "-q", str(repo)],
+                               check=True, capture_output=True)
+                first, second = GOOD_TASK["allowed_paths"]
+                for relative, content in ((first, a), (second, b)):
+                    p = repo / relative
+                    p.parent.mkdir(parents=True, exist_ok=True)
+                    p.write_bytes(content)
+                subprocess.run(
+                    ["git", "-C", str(repo), "add", "--", first, second],
+                    check=True, capture_output=True)
+                with self.assertRaises(M.Stop):
+                    M.staged_git_quality_gate(repo, {first, second}, job)
+                self.assertEqual((repo / first).read_bytes(), a)
+                self.assertEqual((repo / second).read_bytes(), b)
+                self.assertEqual(list(job.iterdir()), [])
+
+    def test_staged_git_quality_preexisting_snapshot_blocks_without_rewrite(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp) / "disposable"
+            repo.mkdir()
+            job = Path(tmp) / "job"
+            job.mkdir(mode=0o700)
+            subprocess.run(["git", "init", "-q", str(repo)],
+                           check=True, capture_output=True)
+            names = GOOD_TASK["allowed_paths"]
+            for name in names:
+                p = repo / name
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(b"pass\n\n" if name == names[0] else b"pass\n")
+            subprocess.run(["git", "-C", str(repo), "add", "--", *names],
+                           check=True, capture_output=True)
+            snapshot = job / (
+                "eof-original-" +
+                hashlib.sha256(names[0].encode()).hexdigest() + ".snapshot"
+            )
+            snapshot.write_bytes(b"PRESERVE")
+            original = (repo / names[0]).read_bytes()
+            with self.assertRaises(FileExistsError):
+                M.staged_git_quality_gate(repo, set(names), job)
+            self.assertEqual((repo / names[0]).read_bytes(), original)
+            self.assertEqual(snapshot.read_bytes(), b"PRESERVE")
+
     def test_draft_pr_evidence_carries_verified_numbers_not_raw_secrets(self):
         task = {
             **GOOD_TASK,
@@ -464,6 +588,8 @@ class PCPFastHandoffTests(unittest.TestCase):
         self.assertEqual(data["coding"]["provider_cash_cost"], "UNAVAILABLE")
         self.assertEqual(data["verification"]["hosted_full_ci"], "PENDING")
         self.assertEqual(data["verification"]["local_tests_executed"], 0)
+        self.assertEqual(data["verification"]["git_staged_quality"], "PASS")
+        self.assertEqual(data["verification"]["eof_normalized_paths"], [])
         self.assertEqual(data["verification"]["changed_paths"],
                          sorted(GOOD_TASK["allowed_paths"]))
         self.assertEqual(data["context_metadata"]["required_authority_bytes"], 177448)
@@ -586,7 +712,9 @@ class PCPFastHandoffTests(unittest.TestCase):
                 M, "changed_paths", return_value=ticket_paths
             ), patch.object(
                 M, "check_generated_sources", return_value=sorted(ticket_paths)
-            ) as syntax:
+            ) as syntax, patch.object(
+                M, "staged_git_quality_gate", return_value=[]
+            ) as quality:
                 result = M.run_task(
                     Path(temp), 593, "a" * 64, execute=True,
                 )
@@ -603,6 +731,12 @@ class PCPFastHandoffTests(unittest.TestCase):
                 syntax.assert_called_once_with(
                     jroot / GOOD_TASK["key"] / "workspace", ticket_paths
                 )
+                quality.assert_called_once_with(
+                    jroot / GOOD_TASK["key"] / "workspace",
+                    ticket_paths, jroot / GOOD_TASK["key"],
+                )
+                self.assertEqual(result["git_staged_quality"], "PASS")
+                self.assertEqual(result["eof_normalized_paths"], [])
                 self.assertEqual(json.loads(
                     (jroot / GOOD_TASK["key"] / "journal.json").read_text()
                 )["state"], "draft_pr_created")
