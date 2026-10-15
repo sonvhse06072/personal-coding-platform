@@ -123,6 +123,45 @@ class G1PcpDbContinuationTests(unittest.TestCase):
                                         "rendered_db_contract_not_safe"):
                 self.rec.validate_rendered_db(self.old, {})
 
+    def test_rendered_db_omitted_readonly_is_writable_docker_default(self):
+        # Real Owner read-only Compose config omits read_only=false. A missing
+        # optional flag is Docker's writable default; it must not STOP G1.
+        db = {
+            "image": "postgres:16-alpine",
+            "entrypoint": None,
+            "cap_add": ["CHOWN"],
+            "networks": {"g1-pilot-control": None},
+            "volumes": [{"type": "volume", "source": "g1-pilot-db",
+                         "target": "/var/lib/postgresql/data"}],
+        }
+        rendered = {
+            "services": {"db": db},
+            "volumes": {"g1-pilot-db": {"name": self.rec.VOLUME}},
+            "networks": {"g1-pilot-control": {
+                "name": self.rec.NETWORK, "internal": True}},
+        }
+        with patch.object(self.old, "compose",
+                          return_value=json.dumps(rendered)) as compose:
+            self.rec.validate_rendered_db(self.old, {})
+            compose.assert_called_once()
+        # Preserve the strong negative behavior. Null, int, string, true
+        # and the parked entrypoint do NOT mean writable false.
+        for unsafe in (True, None, "false", 0, 1):
+            with self.subTest(unsafe=repr(unsafe)):
+                db["read_only"] = unsafe
+                with patch.object(self.old, "compose",
+                                  return_value=json.dumps(rendered)):
+                    with self.assertRaisesRegex(
+                            self.rec.Stop, "rendered_db_contract_not_safe"):
+                        self.rec.validate_rendered_db(self.old, {})
+        del db["read_only"]
+        db["entrypoint"] = ["/bin/false"]
+        with patch.object(self.old, "compose",
+                          return_value=json.dumps(rendered)):
+            with self.assertRaisesRegex(self.rec.Stop,
+                                        "rendered_db_contract_not_safe"):
+                self.rec.validate_rendered_db(self.old, {})
+
     def test_db_readonly_health_attestation_requires_exact_provenance(self):
         good = {
             "Name": "/" + self.rec.DB,
