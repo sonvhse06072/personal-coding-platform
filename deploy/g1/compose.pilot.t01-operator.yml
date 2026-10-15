@@ -1,0 +1,79 @@
+# G1-T01: consumed only by the ONE owner-invoked operator, not a deployment.
+# The separately committed compose.pilot.parked.yml remains default-OFF.
+# No direct-control service, no production resources, no shared DDEV network.
+name: pcp-g1-pilot
+
+x-g1-t01-operation:
+  scope: one-pcp-coding-job
+  seed: d4f4a56713e95f85ecc08c02bb43a5b5105a86a3
+  direct-service-started: false
+  no-automatic-retry: true
+
+services:
+  db:
+    entrypoint: null
+    # Only this new private PostgreSQL needs an initialized writable data dir.
+    # The source-only parked Compose remains inert with /bin/false.
+    read_only: false
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETUID, SETGID]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U g1pilot -d g1pilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+  router:
+    entrypoint: null
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8090/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+  executor:
+    entrypoint: null
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8790/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+    networks:
+      g1-pilot-control:
+        aliases: [pcp-dev-executor]
+    environment:
+      PCP_G1_PILOT_IDENTITY_ENABLED: owner-approved
+      PCP_TRUSTED_CODEX_BROKER_ENABLED: "${PCP_G1_PILOT_BROKER_ENABLED:-}"
+      PCP_TRUSTED_CODEX_PROJECT_ID: pcp-benchmark-g1-pilot
+      PCP_TRUSTED_CODEX_JOB_ID: "${PCP_G1_PILOT_JOB_ID:-}"
+      PCP_TRUSTED_CODEX_SOURCE_SHA: d4f4a56713e95f85ecc08c02bb43a5b5105a86a3
+      PCP_TRUSTED_CODEX_DEV_TOKEN: "${PCP_G1_PILOT_DEV_TOKEN:-}"
+      PCP_TRUSTED_CODEX_DEADLINE_EPOCH: "${PCP_G1_PILOT_DEADLINE:-}"
+  runtime:
+    image: pcp-g1-pilot-runtime-t01
+    build:
+      context: ../../
+      dockerfile: deploy/g1/Dockerfile.pilot-runtime
+      args:
+        CODEX_VERSION: "${PCP_G1_PILOT_CODEX_VERSION:?pin_codex_version}"
+        DDEV_UID: "${PCP_G1_PILOT_UID:?pin_uid}"
+        DDEV_GID: "${PCP_G1_PILOT_GID:?pin_gid}"
+    environment:
+      PCP_G1_PILOT_IDENTITY_ENABLED: owner-approved
+      PCP_TRUSTED_CODEX_BROKER_ENABLED: "${PCP_G1_PILOT_BROKER_ENABLED:-}"
+      PCP_TRUSTED_CODEX_PROJECT_ID: pcp-benchmark-g1-pilot
+      PCP_TRUSTED_CODEX_JOB_ID: "${PCP_G1_PILOT_JOB_ID:-}"
+      PCP_TRUSTED_CODEX_SOURCE_SHA: d4f4a56713e95f85ecc08c02bb43a5b5105a86a3
+      PCP_TRUSTED_CODEX_DEV_TOKEN: "${PCP_G1_PILOT_DEV_TOKEN:-}"
+      PCP_TRUSTED_CODEX_DEADLINE_EPOCH: "${PCP_G1_PILOT_DEADLINE:-}"
+      PCP_TRUSTED_CODEX_BROKER_URL: http://pcp-dev-executor:8790
+      CODING_PROJECTS_ROOT: "${PCP_G1_PILOT_ROOT:?new_pilot_root_required}"
+      CODING_WORKSPACES_ROOT: "${PCP_G1_PILOT_ROOT:?}/workspaces"
+      CODING_DIRECT_PROJECT_ROOT: /pilot/direct-disabled
+      PROJECTS_FILE: /pilot/config/projects.yml
+      PROJECT_BASELINES_FILE: /pilot/config/project-baselines.yml
+      MODELS_FILE: /pilot/config/models.yml
+      ROUTING_POLICY_FILE: /pilot/config/routing-policy.yml
+      PCP_RUNTIME_STARTUP_MODE: inspect
+  g1-pilot-provider-proxy:
+    # A finite proxy lifetime; the operator never starts an unbounded gateway.
+    entrypoint: [python3, -u, -c]
+    command:
+      - "import asyncio,importlib.util;s=importlib.util.spec_from_file_location('g1_ep','/g1/egress_connect_proxy.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m);asyncio.run(asyncio.wait_for(m.serve('provider'),timeout=1800))"
