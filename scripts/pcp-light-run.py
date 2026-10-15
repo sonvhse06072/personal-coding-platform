@@ -175,6 +175,29 @@ def changed_paths(workspace: Path) -> set[str]:
     return paths - {""}
 
 
+def changed_test_paths(paths: set[str]) -> list[str]:
+    """Return only exact allowlisted PCP-light test files from a proven diff."""
+    tests = sorted(path for path in paths
+                   if path.startswith("tests/test_pcp_light_")
+                   and path.endswith(".py"))
+    require(bool(tests) and all(allowed_path(path) for path in tests),
+            "pcp_light_changed_tests_missing_or_invalid")
+    return tests
+
+
+def pytest_argv(test_paths: list[str]) -> list[str]:
+    """Build the fixed pytest command from exact PCP-light test paths only."""
+    require(bool(test_paths)
+            and len(set(test_paths)) == len(test_paths)
+            and all(isinstance(path, str)
+                    and path.startswith("tests/test_pcp_light_")
+                    and path.endswith(".py") and allowed_path(path)
+                    for path in test_paths),
+            "pcp_light_changed_tests_missing_or_invalid")
+    return ["python3", "-m", "pytest", "-q", "-p", "no:cacheprovider",
+            *sorted(test_paths)]
+
+
 def summarize_codex(raw: str) -> dict[str, Any]:
     terminal = ""
     usage: dict[str, Any] = {}
@@ -280,8 +303,8 @@ def run_task(repo: Path, issue: int, digest: str, *,
     require(bool(changed) and changed.issubset(set(task["allowed_paths"]))
             and any(x.startswith("tests/test_pcp_light_") for x in changed),
             "pcp_light_diff_outside_scope_or_missing_tests")
-    command(["python3", "-m", "pytest", "-q", "-p", "no:cacheprovider", "tests"],
-            cwd=workspace, timeout=300)
+    tests = changed_test_paths(changed)
+    command(pytest_argv(tests), cwd=workspace, timeout=300)
     update(journal, "tests_passed", changed_paths=sorted(changed))
     command(["git", "-C", str(workspace), "add", "--", *sorted(changed)])
     command(["git", "-C", str(workspace), "diff", "--cached", "--check"])
