@@ -21,7 +21,6 @@ from typing import Any
 REPOSITORY = "sonvhse06072/personal-coding-platform"
 AUTHOR = "sonvhse06072"
 MARKER = "<!-- coding-platform:pcp-light:v1 -->"
-ISSUE_LABEL = "pcp-light-approved"
 ROOT = Path.home() / ".pcp-light" / "jobs"
 MODEL_RE = re.compile(r"gpt-[a-z0-9][a-z0-9._-]{2,63}\Z")
 KEY_RE = re.compile(r"[a-z][a-z0-9-]{2,39}\Z")
@@ -52,9 +51,10 @@ def command(argv: list[str], *, cwd: Path | None = None,
             text=True, timeout=timeout, check=False,
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise Stop("command_unavailable_or_timeout") from exc
+        raise Stop("command_unavailable_or_timeout_" + argv[0]) from exc
     if completed.returncode:
-        raise Stop("command_failed")
+        raise Stop("command_failed_" + argv[0] + "_" +
+                   str(completed.returncode))
     return completed.stdout.strip()
 
 
@@ -75,17 +75,13 @@ def allowed_path(value: Any) -> bool:
 
 
 def parse_issue(raw: dict[str, Any], issue: int, digest: str) -> dict[str, Any]:
-    """Only a pinned, Owner-authored issue can authorize one limited ticket."""
+    """One Owner-authored issue + exact body digest; --execute is explicit."""
     require(DIGEST_RE.fullmatch(digest) is not None, "invalid_issue_body_digest")
     require(type(raw.get("number")) is int and raw["number"] == issue
             and raw.get("state") == "open"
             and "pull_request" not in raw
             and (raw.get("user") or {}).get("login") == AUTHOR,
             "github_issue_identity_denied")
-    labels = raw.get("labels") or []
-    require(isinstance(labels, list)
-            and ISSUE_LABEL in {x.get("name") for x in labels if isinstance(x, dict)},
-            "github_issue_not_approved")
     body = raw.get("body")
     require(isinstance(body, str) and len(body.encode("utf-8")) <= 16000
             and body.count(MARKER) == 1 and body.lstrip().startswith(MARKER),
@@ -259,11 +255,14 @@ def run_task(repo: Path, issue: int, digest: str, *,
     update(journal, "model_reserved", model_calls=1)
     started = time.monotonic()
     result = codex_turn(workspace, task)  # Only one model turn; never retry.
+    model_seconds = round(time.monotonic() - started, 1)
     update(journal, "model_finished", usage=result,
-           elapsed_seconds=round(time.monotonic() - started, 1))
+           elapsed_seconds=model_seconds)
     require(result["terminal"] == "turn.completed",
             "pcp_light_codex_not_completed")
     changed = changed_paths(workspace)
+    require(not any((workspace / name).is_symlink() for name in changed),
+            "pcp_light_changed_symlink_denied")
     deleted = git(workspace, "diff", "--diff-filter=D", "--name-only", "HEAD")
     require(not deleted, "pcp_light_deletion_denied")
     require(bool(changed) and changed.issubset(set(task["allowed_paths"]))
@@ -306,7 +305,8 @@ def run_task(repo: Path, issue: int, digest: str, *,
     update(journal, "draft_pr_created", pr=pr)
     return {"status": "PCP_LIGHT_DRAFT_PR_PENDING_CI_PM",
             "issue": issue, "branch": branch, "commit": commit,
-            "pr": pr, "model_calls": 1, **result}
+            "pr": pr, "model_calls": 1,
+            "model_elapsed_seconds": model_seconds, **result}
 
 
 def main() -> int:
