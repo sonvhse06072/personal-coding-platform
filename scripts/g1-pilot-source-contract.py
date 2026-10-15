@@ -21,6 +21,8 @@ MODELS = "config/g1-pilot/models.yml"
 POLICY = "config/g1-pilot/routing-policy.yml"
 EGRESS = "deploy/g1/compose.pilot.egress.parked.yml"
 PROXY_SOURCE = "deploy/g1/egress_connect_proxy.py"
+DIRECT_BUILD = "deploy/g1/compose.pilot.direct-build.parked.yml"
+DIRECT_DOCKERFILE = "deploy/g1/Dockerfile.direct-codex"
 TEMPLATE = "config/g1-pilot/projects.pcp.template.yml"
 SERVICES = {"db", "router", "executor", "runtime", "direct"}
 PROJECT = "pcp-benchmark-g1-pilot"
@@ -258,6 +260,7 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
                 for p in profiles.values()),
             "g1_pilot_other_profile_escalation")
     validate_egress(root)
+    validate_direct_build(root)
     return {
         "status": "PASS_G1_PILOT_SOURCE_PARKED",
         "model": IMAGE,
@@ -365,6 +368,67 @@ def validate_egress(root: Path) -> None:
                 "g1-pilot-parked",
             "g1_pilot_proxy_identity_changed",
         )
+
+
+def validate_direct_build(root: Path) -> None:
+    """Only a PARKED direct-only image, never a new PCP Runtime."""
+    overlay = load(root, DIRECT_BUILD)
+    contract = overlay.get("x-g1-direct-build-contract") or {}
+    require(
+        overlay.get("name") == "pcp-g1-pilot"
+        and contract.get("status") == "parked"
+        and contract.get("only_service") == "direct"
+        and contract.get("original_stop") == "g1_direct_compose_operation_failed"
+        and contract.get("source_journal_preserved") is True
+        and contract.get("model_dispatch_enabled") is False
+        and set(overlay.get("services") or {}) == {"direct"},
+        "g1_direct_build_overlay_not_parked_or_singleton",
+    )
+    service = overlay["services"]["direct"]
+    build = service.get("build") or {}
+    require(
+        service.get("image") ==
+            "${PCP_G1_PILOT_RUNTIME_IMAGE:?reviewed_direct_codex_image_required}"
+        and set(service) == {"image", "build"}
+        and isinstance(build, dict)
+        and set(build) == {"context", "dockerfile", "args"}
+        and build.get("context") == "../../"
+        and build.get("dockerfile") == "deploy/g1/Dockerfile.direct-codex"
+        and build.get("args") == {
+            "CODEX_VERSION":
+                "${PCP_G1_PILOT_CODEX_VERSION:?exact_codex_cli_version_required}",
+            "DDEV_UID":
+                "${PCP_G1_PILOT_UID:?exact_unprivileged_uid_required}",
+            "DDEV_GID":
+                "${PCP_G1_PILOT_GID:?exact_unprivileged_gid_required}",
+        },
+        "g1_direct_build_scope_or_image_changed",
+    )
+    file = root / DIRECT_DOCKERFILE
+    require(file.is_file() and not file.is_symlink(),
+            "g1_direct_build_dockerfile_unavailable")
+    source = file.read_text(encoding="utf-8")
+    # Only Dockerfile instructions change the built image; comments such as
+    # "No OpenCode" are documentation, not an install instruction.
+    active = "\n".join(
+        line.strip() for line in source.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    )
+    require(
+        "FROM node:22-bookworm-slim" in active
+        and 'npm install -g "@openai/codex@${CODEX_VERSION}"' in active
+        and 'org.opencontainers.image.pcp.g1-scope="direct-control-only"' in active
+        and "apt-get install" in active
+        and "python3" in active
+        and "git" in active
+        and "ripgrep" in active
+        and all(forbidden not in active.lower() for forbidden in (
+            "opencode", "requirements-dev", "copy app", "copy tests",
+            "github_delivery_token", "openai_api_key", "docker.sock",
+            "ssh-agent", "curl|sh", "chmod 777", "entrypoint",
+        )),
+        "g1_direct_dockerfile_unreviewed_dependencies_or_privileges",
+    )
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
