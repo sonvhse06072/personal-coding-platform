@@ -23,21 +23,21 @@ _SMOKE_ID = "pcp-benchmark-g1-smoke"
 _PILOT_ID = "pcp-benchmark-g1-pilot"
 _SEED_SHA = "d4f4a56713e95f85ecc08c02bb43a5b5105a86a3"
 _PILOT_DDEV_SEED_SHA = "7a3e97a2a35fc8e67b67021365e7e91c448b52c9"
-_PILOT_NAME_OVERRIDE = "override_config: true\\nname: pcp-g1-codex-pilot\\n"
+_PILOT_NAME_OVERRIDE = "override_config: true\nname: pcp-g1-codex-pilot\n"
 _PILOT_CACHE_FILE = "docker-compose.g1-pilot.yaml"
 _PILOT_CACHE_COMPOSE = (
-    "# G1-T01 private DDEV cache; never model editable.\\n"
-    "services:\\n"
-    "  web:\\n"
-    "    volumes:\\n"
-    "      - g1-pilot-private-cache:/mnt/ddev-global-cache\\n"
-    "  db:\\n"
-    "    volumes:\\n"
-    "      - g1-pilot-private-cache:/mnt/ddev-global-cache\\n"
-    "volumes:\\n"
-    "  g1-pilot-private-cache:\\n"
-    "    external: true\\n"
-    "    name: pcp-g1-pilot-cache\\n"
+    "# G1-T01 private DDEV cache; never model editable.\n"
+    "services:\n"
+    "  web:\n"
+    "    volumes:\n"
+    "      - g1-pilot-private-cache:/mnt/ddev-global-cache\n"
+    "  db:\n"
+    "    volumes:\n"
+    "      - g1-pilot-private-cache:/mnt/ddev-global-cache\n"
+    "volumes:\n"
+    "  g1-pilot-private-cache:\n"
+    "    external: true\n"
+    "    name: pcp-g1-pilot-cache\n"
 )
 _ALLOWED_HOSTS = frozenset({"ddev-executor", "pcp-dev-executor"})
 _PROTECTED_ENV = (
@@ -142,7 +142,7 @@ def trusted_codex_phase_broker(
         try:
             seed = (ddev / "config.yaml").read_bytes()
             blob = hashlib.sha1(
-                b"blob " + str(len(seed)).encode() + b"\\0" + seed
+                b"blob " + str(len(seed)).encode() + b"\0" + seed
             ).hexdigest()
             if blob != _PILOT_DDEV_SEED_SHA or ddev.is_symlink():
                 return None
