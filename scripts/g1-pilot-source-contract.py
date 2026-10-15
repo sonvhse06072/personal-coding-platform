@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 COMPOSE = "deploy/g1/compose.pilot.parked.yml"
 MODELS = "config/g1-pilot/models.yml"
 POLICY = "config/g1-pilot/routing-policy.yml"
+TEMPLATE = "config/g1-pilot/projects.pcp.template.yml"
 SERVICES = {"db", "router", "executor", "runtime", "direct"}
 PROJECT = "pcp-benchmark-g1-pilot"
 MODEL = "codex_gpt6_luna"
@@ -65,6 +66,35 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     doc = load(root, COMPOSE)
     cfg = load(root, MODELS)
     policy = load(root, POLICY)
+    project_template = load(root, TEMPLATE)
+
+    require(
+        project_template.get("version") == 1
+        and set(project_template.get("projects") or {}) == {PROJECT},
+        "g1_pilot_project_template_not_singleton",
+    )
+    project_cfg = project_template["projects"][PROJECT]
+    runtime_cfg = project_cfg.get("runtime") or {}
+    autonomy_cfg = project_cfg.get("autonomy") or {}
+    require(
+        project_cfg.get("base_branch") == "benchmark/g1-codex-smoke-v1"
+        and project_cfg.get("path") == "${PCP_G1_PILOT_ROOT}/source"
+        and runtime_cfg.get("developer_permission_mode") == "trusted_project"
+        and runtime_cfg.get("pilot_identity") == "g1-t01-pcp"
+        and runtime_cfg.get("workspace_mode") == "isolated_clone"
+        and runtime_cfg.get("exclusive_project_lease") is False
+        and project_cfg.get("ddev", {}).get("enabled") is True
+        and autonomy_cfg.get("allow_auto_merge_low_risk") is False
+        and autonomy_cfg.get("allow_production_deploy") is False
+        and autonomy_cfg.get("allow_push_ai_branch") is False
+        and autonomy_cfg.get("allow_create_pr") is False,
+        "g1_pilot_project_template_scope_broadened",
+    )
+    require(
+        project_cfg.get("trusted_codex_tools", {}).get("frontend_quality") ==
+        [["ddev", "exec", "npm", "--prefix", "/var/www/html", "run", "build"]],
+        "g1_pilot_project_phase_command_drift",
+    )
 
     contract = doc.get("x-g1-pilot-contract") or {}
     require(
@@ -131,7 +161,9 @@ def validate(root: Path = ROOT) -> dict[str, Any]:
     direct = services["direct"]
     require(runtime["environment"].get("PCP_RUNTIME_STARTUP_MODE") == "inspect"
             and runtime["environment"].get("PCP_TRUSTED_CODEX_BROKER_ENABLED") == ""
-            and executor["environment"].get("PCP_TRUSTED_CODEX_BROKER_ENABLED") == "",
+            and executor["environment"].get("PCP_TRUSTED_CODEX_BROKER_ENABLED") == ""
+            and runtime["environment"].get("PCP_G1_PILOT_IDENTITY_ENABLED") == ""
+            and executor["environment"].get("PCP_G1_PILOT_IDENTITY_ENABLED") == "",
             "g1_pilot_runtime_not_default_off")
     require(router["environment"].get("ROUTER_MODELS_FILE") ==
             "/pilot/config/models.yml"
