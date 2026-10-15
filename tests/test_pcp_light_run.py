@@ -78,7 +78,9 @@ class PCPFastHandoffTests(unittest.TestCase):
             M.parse_issue([], 593, digest)
         self.assertEqual(M.summarize_codex('[]\n{"type":"turn.failed"}'),
                          {"terminal": "turn.failed", "input_tokens": None,
-                          "cached_input_tokens": None, "output_tokens": None})
+                          "cached_input_tokens": None, "output_tokens": None,
+                          "uncached_input_tokens": None,
+                          "cached_input_share_percent": None})
 
     def test_claimed_journal_is_exclusive_and_private_from_creation(self):
         with tempfile.TemporaryDirectory() as folder:
@@ -325,6 +327,8 @@ class PCPFastHandoffTests(unittest.TestCase):
             response = M.run_task(Path("/some/pcp"), 593, "a" * 64)
         self.assertEqual(response["status"], "PCP_LIGHT_HANDOFF_VERIFIED_NO_MODEL")
         self.assertEqual(response["model_calls"], 0)
+        self.assertIn("context_footprint", response)
+        self.assertEqual(response["context_footprint"]["required_authority_files_expected"], 7)
         checkout.assert_called_once()
         agent.assert_not_called()
         run.assert_not_called()
@@ -351,6 +355,69 @@ class PCPFastHandoffTests(unittest.TestCase):
             with patch.object(M, "git", side_effect=git_bad):
                 with self.assertRaisesRegex(M.Stop, "pcp_light_main_sha_or_dirty"):
                     M.verify_checkout(repo, SOURCE)
+
+    def test_token_evidence_uncached_and_cached_ratio_matches_actual_turn(self):
+        # Owner's accepted #729 telemetry: reporting only, not billed cash.
+        event = json.dumps({
+            "type": "turn.completed",
+            "usage": {"input_tokens": 628952,
+                      "cached_input_tokens": 534016,
+                      "output_tokens": 4029},
+        })
+        result = M.summarize_codex(event)
+        self.assertEqual(result["uncached_input_tokens"], 94936)
+        self.assertEqual(result["cached_input_share_percent"], 84.9)
+        self.assertEqual(result["input_tokens"], 628952)
+        self.assertEqual(result["output_tokens"], 4029)
+        self.assertNotIn("price_usd", result)
+
+    def test_missing_or_inconsistent_usage_is_unknown_not_zero(self):
+        for usage in (
+            {"input_tokens": 2, "cached_input_tokens": 3},
+            {"input_tokens": 5, "cached_input_tokens": -1},
+            {"input_tokens": 5},
+            {"input_tokens": False, "cached_input_tokens": 0},
+            ["not", "a", "usage", "dict"],
+        ):
+            with self.subTest(usage=usage):
+                result = M.summarize_codex(json.dumps({
+                    "type": "turn.completed", "usage": usage,
+                }))
+                self.assertIsNone(result["uncached_input_tokens"])
+                self.assertIsNone(result["cached_input_share_percent"])
+
+    def test_static_context_footprint_counts_bytes_without_following_symlinks(self):
+        with tempfile.TemporaryDirectory() as temp:
+            repo = Path(temp)
+            for relative, data in (
+                ("AGENTS.md", b"a" * 11),
+                ("README.md", b"b" * 13),
+                ("docs/project/constitution.md", b"c" * 17),
+                ("scripts/pcp-light-run.py", b"x" * 19),
+                ("tests/test_pcp_light_run.py", b"y" * 23),
+            ):
+                p = repo / relative
+                p.parent.mkdir(parents=True, exist_ok=True)
+                p.write_bytes(data)
+            # A linked authority path must not be followed for context sizes.
+            (repo / "docs/project/architecture.md").symlink_to(repo / "README.md")
+            result = M.context_footprint(repo, GOOD_TASK)
+            self.assertEqual(result["required_authority_files_present"], 3)
+            self.assertEqual(result["required_authority_files_expected"], 7)
+            self.assertEqual(result["required_authority_bytes"], 11 + 13 + 17)
+            self.assertEqual(result["allowlisted_existing_files"], 2)
+            self.assertEqual(result["allowlisted_existing_source_bytes"], 19 + 23)
+            self.assertEqual(result["prompt_utf8_bytes"],
+                             len(M.codex_prompt(GOOD_TASK).encode("utf-8")))
+
+    def test_prompt_never_bypasses_mandatory_agent_reading(self):
+        prompt = M.codex_prompt(GOOD_TASK)
+        self.assertIn(GOOD_TASK["goal"], prompt)
+        self.assertIn("AGENTS.md required reading order", prompt)
+        self.assertIn("do not skip these reads", prompt)
+        self.assertIn("avoid repeatedly dumping", prompt)
+        self.assertIn("preserve required tests", prompt)
+        self.assertIn("Do not commit, push", prompt)
 
     def test_model_invocation_uses_explicit_sandbox_and_no_host_tokens(self):
         with patch.object(M, "command", return_value=json.dumps({
@@ -425,6 +492,10 @@ class PCPFastHandoffTests(unittest.TestCase):
                 self.assertEqual(result["local_tests_executed"], 0)
                 self.assertEqual(result["hosted_full_ci"], "PENDING")
                 self.assertEqual(result["syntax_files_checked"], 2)
+                self.assertEqual(result["context_footprint"]["required_authority_files_expected"], 7)
+                self.assertIn("context_footprint", json.loads(
+                    (jroot / GOOD_TASK["key"] / "journal.json").read_text()
+                ))
                 codex.assert_called_once()
                 syntax.assert_called_once_with(
                     jroot / GOOD_TASK["key"] / "workspace", ticket_paths
