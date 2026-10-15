@@ -292,6 +292,128 @@ def check_generated_sources(workspace: Path, changed: set[str]) -> list[str]:
     return python_files
 
 
+def staged_git_quality_gate(
+    workspace: Path, changed: set[str], directory: Path,
+) -> list[str]:
+    """Require staged Git quality, with ONE precisely bounded EOF fix.
+
+    The #734 real pilot completed its model turn, but Git --check exited 2
+    for a new blank line at EOF. Do not spend another model turn, bypass
+    --check, or normalize arbitrary whitespace. Only remove surplus
+    terminating LF bytes from ONE approved Python file if its full AST is
+    identical. Preserve original bytes privately before the first write.
+    Any unsupported warning or unexpected index state remains a hard STOP.
+    """
+    require(bool(changed) and all(allowed_path(x) for x in changed),
+            "pcp_light_quality_scope_invalid")
+    require(
+        set(git(workspace, "diff", "--cached", "--name-only").splitlines())
+        == changed
+        and not git(workspace, "diff", "--name-only")
+        and not git(workspace, "ls-files", "--others", "--exclude-standard"),
+        "pcp_light_quality_index_or_worktree_drift",
+    )
+
+    def git_check() -> subprocess.CompletedProcess[str]:
+        try:
+            return subprocess.run(
+                ["git", "-C", str(workspace),
+                 "diff", "--cached", "--check"],
+                stdin=subprocess.DEVNULL, capture_output=True,
+                text=True, check=False, timeout=40,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise Stop("pcp_light_git_quality_unavailable_or_timeout") from exc
+
+    original_gate = git_check()
+    if original_gate.returncode == 0:
+        require(not original_gate.stdout and not original_gate.stderr,
+                "pcp_light_git_quality_unexpected_output")
+        return []
+
+    warnings = original_gate.stdout.splitlines()
+    if (original_gate.returncode != 2 or original_gate.stderr
+            or len(warnings) != 1):
+        raise Stop("pcp_light_git_quality_unrecognized")
+    match = re.fullmatch(
+        r"(.+):([1-9][0-9]*): new blank line at EOF\.", warnings[0])
+    if match is None:
+        raise Stop("pcp_light_git_quality_unrecognized")
+    relative = match.group(1)
+    require(relative in changed and allowed_path(relative)
+            and relative.endswith(".py"),
+            "pcp_light_git_quality_warning_outside_scope")
+
+    target = workspace / relative
+    require(target.is_file() and not target.is_symlink(),
+            "pcp_light_git_quality_file_invalid")
+    before_stat = target.stat()
+    require(stat.S_ISREG(before_stat.st_mode)
+            and before_stat.st_uid == os.geteuid()
+            and 0 < before_stat.st_size <= 262144,
+            "pcp_light_git_quality_file_invalid")
+    original = target.read_bytes()
+    require(len(original) == before_stat.st_size
+            and b"\r" not in original and original.endswith(b"\n\n"),
+            "pcp_light_git_quality_eof_not_simple")
+    corrected = original.rstrip(b"\n") + b"\n"
+    try:
+        old_ast = ast.dump(ast.parse(original), include_attributes=False)
+        new_ast = ast.dump(ast.parse(corrected), include_attributes=False)
+    except (SyntaxError, TypeError, ValueError) as exc:
+        raise Stop("pcp_light_git_quality_ast_invalid") from exc
+    require(old_ast == new_ast and original != corrected,
+            "pcp_light_git_quality_semantic_drift")
+
+    require(directory.is_dir() and not directory.is_symlink()
+            and directory.stat().st_uid == os.geteuid()
+            and stat.S_IMODE(directory.stat().st_mode) == 0o700,
+            "pcp_light_git_quality_private_job_invalid")
+    snapshot = directory / (
+        "eof-original-" + hashlib.sha256(
+            relative.encode("utf-8")).hexdigest() + ".snapshot"
+    )
+    # Exclusive private original-byte evidence is created BEFORE modification.
+    fd = os.open(
+        snapshot, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+        0o600)
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(original)
+        stream.flush()
+        os.fsync(stream.fileno())
+
+    # Do not truncate until the opened descriptor's inode/owner is attested.
+    fd = os.open(target, os.O_WRONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, "wb") as stream:
+        info = os.fstat(stream.fileno())
+        require(
+            stat.S_ISREG(info.st_mode)
+            and info.st_uid == os.geteuid()
+            and info.st_ino == before_stat.st_ino
+            and info.st_dev == before_stat.st_dev,
+            "pcp_light_git_quality_target_swapped",
+        )
+        stream.truncate(0)
+        stream.write(corrected)
+        stream.flush()
+        os.fsync(stream.fileno())
+
+    command(["git", "-C", str(workspace), "add", "--", relative])
+    after = git_check()
+    require(
+        after.returncode == 0 and not after.stdout and not after.stderr,
+        "pcp_light_git_quality_fix_not_passed",
+    )
+    require(
+        set(git(workspace, "diff", "--cached", "--name-only").splitlines())
+        == changed
+        and not git(workspace, "diff", "--name-only")
+        and not git(workspace, "ls-files", "--others", "--exclude-standard"),
+        "pcp_light_quality_scope_drift_after_fix",
+    )
+    return [relative]
+
+
 def codex_prompt(task: dict[str, Any]) -> str:
     """Short task-specific prompt compatible with root AGENTS.md authority."""
     return (
@@ -389,6 +511,7 @@ def draft_pr_evidence_body(
     commit: str, changed: set[str], model_seconds: float,
     model_result: dict[str, Any], python_files: list[str],
     footprint: dict[str, int],
+    eof_normalized_paths: list[str] | None = None,
 ) -> str:
     """Publish bounded metadata on the draft PR, not raw model/host output.
 
@@ -457,6 +580,8 @@ def draft_pr_evidence_body(
             "local_tests_executed": 0,
             "hosted_full_ci": "PENDING",
             "pm_review": "PENDING",
+            "git_staged_quality": "PASS",
+            "eof_normalized_paths": sorted(eof_normalized_paths or []),
         },
         "context_metadata": authority,
     }
@@ -564,7 +689,10 @@ def run_task(repo: Path, issue: int, digest: str, *,
            syntax_checked_paths=python_files, local_tests_executed=0,
            focused_test_argv=expected_test_argv, hosted_full_ci="PENDING")
     command(["git", "-C", str(workspace), "add", "--", *sorted(changed)])
-    command(["git", "-C", str(workspace), "diff", "--cached", "--check"])
+    repaired_paths = staged_git_quality_gate(workspace, changed, directory)
+    update(journal, "quality_checked",
+           git_staged_quality="PASS",
+           eof_normalized_paths=repaired_paths)
     command([
         "git", "-C", str(workspace), "-c", "core.hooksPath=/dev/null",
         "commit", "-m", f"feat(pcp-light): {task['key']}",
@@ -583,7 +711,7 @@ def run_task(repo: Path, issue: int, digest: str, *,
         issue=issue, digest=digest, task=task, commit=commit,
         changed=changed, model_seconds=model_seconds,
         model_result=result, python_files=python_files,
-        footprint=footprint,
+        footprint=footprint, eof_normalized_paths=repaired_paths,
     )
     pr = command([
         "gh", "pr", "create", "--repo", REPOSITORY,
@@ -601,6 +729,8 @@ def run_task(repo: Path, issue: int, digest: str, *,
             "syntax_files_checked": len(python_files),
             "local_tests_executed": 0,
             "hosted_full_ci": "PENDING",
+            "git_staged_quality": "PASS",
+            "eof_normalized_paths": repaired_paths,
             "context_footprint": footprint, **result}
 
 
