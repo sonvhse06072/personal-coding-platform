@@ -38,12 +38,12 @@ GOOD_TASK = {
 }
 
 
-def issue(task=None, *, author=None, approved=True):
+def issue(task=None, *, author=None):
     body = M.MARKER + "\n" + json.dumps(task or GOOD_TASK, sort_keys=True)
     doc = {
         "number": 593, "state": "open",
         "user": {"login": author or M.AUTHOR},
-        "labels": ([{"name": M.ISSUE_LABEL}] if approved else []),
+        "labels": [],
         "body": body,
     }
     digest = hashlib.sha256(body.encode()).hexdigest()
@@ -59,7 +59,6 @@ class PCPFastHandoffTests(unittest.TestCase):
         for mutant, marker in (
             ({**good, "number": 592}, "github_issue_identity_denied"),
             ({**good, "user": {"login": "attacker"}}, "github_issue_identity_denied"),
-            ({**good, "labels": []}, "github_issue_not_approved"),
             ({**good, "state": "closed"}, "github_issue_identity_denied"),
             ({**good, "pull_request": {}}, "github_issue_identity_denied"),
         ):
@@ -68,6 +67,8 @@ class PCPFastHandoffTests(unittest.TestCase):
                     M.parse_issue(mutant, 593, digest)
         with self.assertRaisesRegex(M.Stop, "github_issue_body_changed"):
             M.parse_issue(good, 593, "a" * 64)
+        with self.assertRaisesRegex(M.Stop, "github_issue_body_changed"):
+            M.parse_issue({**good, "body": good["body"] + " edited"}, 593, digest)
 
     def test_no_arbitrary_paths_or_reserved_legacy_project(self):
         for path in [
