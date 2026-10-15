@@ -105,7 +105,10 @@ class G1PcpDbContinuationTests(unittest.TestCase):
         good = {
             "services": {"db": {
                 "image": "postgres:16-alpine", "entrypoint": None,
-                "read_only": False, "cap_add": ["CHOWN"]}},
+                "read_only": False, "cap_add": ["CHOWN"],
+                "networks": {"g1-pilot-control": None},
+                "volumes": [{"type": "volume", "source": "g1-pilot-db",
+                             "target": "/var/lib/postgresql/data"}]}},
             "volumes": {"g1-pilot-db": {"name": self.rec.VOLUME}},
             "networks": {"g1-pilot-control": {
                 "name": self.rec.NETWORK, "internal": True}},
