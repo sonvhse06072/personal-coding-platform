@@ -408,18 +408,24 @@ def validate_direct_build(root: Path) -> None:
     require(file.is_file() and not file.is_symlink(),
             "g1_direct_build_dockerfile_unavailable")
     source = file.read_text(encoding="utf-8")
+    # Only Dockerfile instructions change the built image; comments such as
+    # "No OpenCode" are documentation, not an install instruction.
+    active = "\n".join(
+        line.strip() for line in source.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    )
     require(
-        "FROM node:22-bookworm-slim" in source
-        and 'npm install -g "@openai/codex@${CODEX_VERSION}"' in source
-        and 'org.opencontainers.image.pcp.g1-scope="direct-control-only"' in source
-        and "apt-get install" in source
-        and "python3" in source
-        and "git" in source
-        and "ripgrep" in source
-        and all(forbidden not in source.lower() for forbidden in (
-            "opencode", "requirements-dev", "COPY app", "COPY tests",
-            "GITHUB_DELIVERY_TOKEN", "OPENAI_API_KEY", "docker.sock",
-            "ssh-agent", "curl|sh", "chmod 777", "ENTRYPOINT",
+        "FROM node:22-bookworm-slim" in active
+        and 'npm install -g "@openai/codex@${CODEX_VERSION}"' in active
+        and 'org.opencontainers.image.pcp.g1-scope="direct-control-only"' in active
+        and "apt-get install" in active
+        and "python3" in active
+        and "git" in active
+        and "ripgrep" in active
+        and all(forbidden not in active.lower() for forbidden in (
+            "opencode", "requirements-dev", "copy app", "copy tests",
+            "github_delivery_token", "openai_api_key", "docker.sock",
+            "ssh-agent", "curl|sh", "chmod 777", "entrypoint",
         )),
         "g1_direct_dockerfile_unreviewed_dependencies_or_privileges",
     )
