@@ -116,6 +116,16 @@ def test_only_two_allowed_fixture_paths_are_in_scope(tmp_path, monkeypatch):
     ok, files = g1.code_scope()
     assert ok is False
     assert "UNTRACKED_OUT_OF_SCOPE.env" in files
+    monkeypatch.setattr(g1, "read", lambda args, **kw: (
+        ".env" if "--ignored" in args else fake_read(args, **kw)
+    ))
+    ignored_ok, ignored_files = g1.code_scope()
+    assert ignored_ok is False and ".env" in ignored_files
+    monkeypatch.setattr(g1, "read", lambda args, **kw: (
+        "composer.json" if "--cached" in args else fake_read(args, **kw)
+    ))
+    staged_ok, staged_files = g1.code_scope()
+    assert staged_ok is False and "composer.json" in staged_files
 
 
 def test_attempt_record_written_exclusively_and_cannot_retry(tmp_path, monkeypatch):
