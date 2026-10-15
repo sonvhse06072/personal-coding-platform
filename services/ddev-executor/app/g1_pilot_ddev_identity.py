@@ -69,7 +69,6 @@ def require_pilot_workspace_identity(workspace: Path, *, prepared: bool) -> None
             raise G1IsolationStop("g1_pilot_unknown_ddev_override_denied")
         name_override = ddev / OVERRIDE_FILE
         cache_override = ddev / CACHE_FILE
-        actual = {name_override.is_file(), cache_override.is_file()}
         if name_override.exists() != cache_override.exists():
             raise G1IsolationStop("g1_pilot_partial_override_denied")
         if prepared and (not name_override.is_file() or not cache_override.is_file()):
