@@ -40,6 +40,7 @@ def test_only_expected_20_minute_time_window_accepts(duration):
 @pytest.mark.parametrize("state,reason", [
     (lifetime(4), "g1_direct_proxy_did_not_exit_by_20m_window"),
     (lifetime(1360), "g1_direct_proxy_did_not_exit_by_20m_window"),
+    (lifetime(1400.01), "g1_direct_proxy_did_not_exit_by_20m_window"),
     (lifetime(1200,exit_code=137), "g1_direct_proxy_not_cleanly_expired"),
     (lifetime(1200,running=True), "g1_direct_proxy_not_cleanly_expired"),
     (lifetime(1200,oom=True), "g1_direct_proxy_not_cleanly_expired"),
@@ -49,6 +50,71 @@ def test_early_crash_active_oom_and_other_termination_do_not_restart(
 ):
     with pytest.raises(g1.Stop, match=reason):
         g1.require_expired_window(state)
+
+
+
+def test_owner_observed_1334_seconds_requires_exact_timeout_proof():
+    value = 1334.16
+    with pytest.raises(g1.Stop, match="g1_direct_proxy_did_not_exit_by_20m_window"):
+        g1.require_expired_window(lifetime(value))
+    assert g1.require_expired_window(
+        lifetime(value), verified_late_timeout=True
+    ) == value
+    for elapsed in (1139, 1401, 1800):
+        with pytest.raises(g1.Stop, match="g1_direct_proxy_did_not_exit_by_20m_window"):
+            g1.require_expired_window(
+                lifetime(elapsed), verified_late_timeout=True
+            )
+    for state in (
+        lifetime(value,exit_code=137),
+        lifetime(value,running=True),
+        lifetime(value,oom=True),
+    ):
+        with pytest.raises(g1.Stop, match="g1_direct_proxy_not_cleanly_expired"):
+            g1.require_expired_window(state, verified_late_timeout=True)
+
+
+def test_only_terminal_original_asyncio_traceback_authorizes_late_exit(monkeypatch):
+    expected_id = "a" * 64
+    seen = []
+    log = (
+        "Traceback (most recent call last):\n"
+        "  File '/usr/local/lib/python3.13/asyncio/tasks.py', line 489, in wait_for\n"
+        "    return fut.result()\n"
+        "asyncio.exceptions.CancelledError\n"
+        "\nDuring handling of the above exception, another exception occurred:\n"
+        "Traceback (most recent call last):\n"
+        "  File '<string>', line 1, in <module>\n"
+        "    asyncio.run(asyncio.wait_for(m.serve('provider'),timeout=1200))\n"
+        "TimeoutError\n"
+    )
+    def fake_command(args, **_kw):
+        seen.append(args)
+        return done(0,"",log)
+    monkeypatch.setattr(g1, "command", fake_command)
+    assert g1.verify_original_async_timeout(expected_id) is True
+    assert seen == [["docker", "logs", "--tail", "160", expected_id]]
+
+    for result in (
+        done(0, "", "Traceback (most recent call last):\nRuntimeError\n"),
+        done(0, "", "TimeoutError\n"),
+        done(0, "", log + "PermissionError\n"),
+        done(1, "", log),
+    ):
+        monkeypatch.setattr(g1, "command", lambda *a, **k: result)
+        assert g1.verify_original_async_timeout(expected_id) is False
+
+
+def test_late_timeout_proof_does_not_authorize_any_new_resource_or_auto_retry():
+    source = SOURCE.read_text(encoding="utf-8")
+    assert "verify_original_async_timeout(container_id)" in source
+    assert "MAX_VERIFIED_ASYNC_TIMEOUT_SECONDS = 1400" in source
+    assert source.count('"docker", "container", "start", PROXY_NAME') == 1
+    assert '"model_launched"' in source
+    assert 'verified_late_timeout=late_proof' in source
+    assert "docker logs --follow" not in source
+    assert "docker compose up" not in source
+    assert "shutil.rmtree(" not in source
 
 
 def preflight(*, fail=None) -> subprocess.CompletedProcess[str]:
