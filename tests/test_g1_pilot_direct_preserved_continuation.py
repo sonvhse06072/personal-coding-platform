@@ -158,6 +158,7 @@ def test_wrong_original_journal_does_not_run_any_docker_build(
     monkeypatch.setattr(g1, "PCP", tmp_path / "pcp")
     monkeypatch.setattr(g1, "read", lambda args, **_kw:
                         "main" if args[-2:] == ["branch", "--show-current"]
+                        else "" if args[-2:] == ["status", "--porcelain"]
                         else "a" * 40)
     monkeypatch.setattr(g1, "run", lambda *a, **kw:
                         pytest.fail("no model/Docker/Compose after used journal"))
