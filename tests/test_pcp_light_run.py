@@ -138,6 +138,77 @@ class PCPFastHandoffTests(unittest.TestCase):
                     M.Stop, "pcp_light_changed_tests_missing_or_invalid"):
                 M.pytest_argv(paths)
 
+    def test_generated_python_ast_does_not_execute_code(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            for relative in GOOD_TASK["allowed_paths"]:
+                file = base / relative
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text(
+                    "raise RuntimeError('WOULD_RUN_IF_IMPORTED')\n"
+                    "def safe(): return 42\n",
+                    encoding="utf-8",
+                )
+            self.assertEqual(
+                M.check_generated_sources(base, set(GOOD_TASK["allowed_paths"])),
+                sorted(GOOD_TASK["allowed_paths"]),
+            )
+            test = base / "tests/test_pcp_light_run.py"
+            test.write_text("def syntax_error(\n", encoding="utf-8")
+            with self.assertRaisesRegex(
+                M.Stop, "pcp_light_generated_python_syntax_invalid"
+            ):
+                M.check_generated_sources(base, set(GOOD_TASK["allowed_paths"]))
+
+    def test_generated_source_guards_symlink_missing_oversized_and_scope(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            for relative in GOOD_TASK["allowed_paths"]:
+                file = base / relative
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text("pass\n", encoding="utf-8")
+            test = base / "tests/test_pcp_light_run.py"
+            test.unlink()
+            with self.assertRaisesRegex(M.Stop, "source_not_regular"):
+                M.check_generated_sources(base, set(GOOD_TASK["allowed_paths"]))
+            test.symlink_to(base / "scripts/pcp-light-run.py")
+            with self.assertRaisesRegex(M.Stop, "source_not_regular"):
+                M.check_generated_sources(base, set(GOOD_TASK["allowed_paths"]))
+            test.unlink()
+            test.write_text("x" * 262145, encoding="utf-8")
+            with self.assertRaisesRegex(M.Stop, "source_not_regular"):
+                M.check_generated_sources(base, set(GOOD_TASK["allowed_paths"]))
+            with self.assertRaisesRegex(M.Stop, "pcp_light_source_scope_invalid"):
+                M.check_generated_sources(base, {".github/workflows/tests.yml"})
+
+    def test_ci_first_gate_keeps_untrusted_tests_off_owner_host(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            for relative in GOOD_TASK["allowed_paths"]:
+                file = base / relative
+                file.parent.mkdir(parents=True, exist_ok=True)
+                file.write_text("pass\n", encoding="utf-8")
+            sources = M.check_generated_sources(base, set(GOOD_TASK["allowed_paths"]))
+            self.assertEqual(set(sources), set(GOOD_TASK["allowed_paths"]))
+            self.assertEqual(M.pytest_argv(["tests/test_pcp_light_run.py"])[-1],
+                             "tests/test_pcp_light_run.py")
+
+    def test_missing_native_codex_fails_before_claim_without_model(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "jobs"
+            with patch.object(M, "ROOT", root), patch.object(
+                M, "load_issue", return_value=GOOD_TASK
+            ), patch.object(M, "verify_checkout"), patch.object(
+                M, "command", side_effect=M.Stop("command_unavailable_or_timeout_codex")
+            ) as preflight, patch.object(M, "codex_turn") as model:
+                with self.assertRaisesRegex(
+                    M.Stop, "command_unavailable_or_timeout_codex"
+                ):
+                    M.run_task(Path(tmp), 593, "a" * 64, execute=True)
+                model.assert_not_called()
+                preflight.assert_called_once_with(["codex", "--version"], timeout=15)
+            self.assertFalse(root.exists())
+
     def test_default_inspect_is_readonly_and_no_agent(self):
         with patch.object(M, "load_issue", return_value=GOOD_TASK), patch.object(
             M, "verify_checkout"
@@ -232,13 +303,23 @@ class PCPFastHandoffTests(unittest.TestCase):
             ), patch.object(M, "codex_turn", return_value={
                 "terminal": "turn.completed", "input_tokens": 20,
                 "cached_input_tokens": 4, "output_tokens": 2,
-            }) as codex, patch.object(M, "changed_paths", return_value=ticket_paths):
+            }) as codex, patch.object(
+                M, "changed_paths", return_value=ticket_paths
+            ), patch.object(
+                M, "check_generated_sources", return_value=sorted(ticket_paths)
+            ) as syntax:
                 result = M.run_task(
                     Path(temp), 593, "a" * 64, execute=True,
                 )
                 self.assertEqual(result["status"], "PCP_LIGHT_DRAFT_PR_PENDING_CI_PM")
                 self.assertEqual(result["model_calls"], 1)
+                self.assertEqual(result["local_tests_executed"], 0)
+                self.assertEqual(result["hosted_full_ci"], "PENDING")
+                self.assertEqual(result["syntax_files_checked"], 2)
                 codex.assert_called_once()
+                syntax.assert_called_once_with(
+                    jroot / GOOD_TASK["key"] / "workspace", ticket_paths
+                )
                 self.assertEqual(json.loads(
                     (jroot / GOOD_TASK["key"] / "journal.json").read_text()
                 )["state"], "draft_pr_created")
@@ -247,7 +328,8 @@ class PCPFastHandoffTests(unittest.TestCase):
                 self.assertEqual(codex.call_count, 1)
             calls = [x.args[0] for x in commands.call_args_list]
             self.assertTrue(any(x[:3] == ["gh", "pr", "create"] for x in calls))
-            self.assertTrue(any(x[:2] == ["python3", "-m"] for x in calls))
+            self.assertTrue(any(x[:2] == ["codex", "--version"] for x in calls))
+            self.assertFalse(any(x[:2] == ["python3", "-m"] for x in calls))
             self.assertTrue(any("worktree" in x for x in calls))
 
     def test_unapproved_diff_stops_before_commit_or_push(self):
