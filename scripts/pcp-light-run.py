@@ -29,6 +29,17 @@ KEY_RE = re.compile(r"[a-z][a-z0-9-]{2,39}\Z")
 SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
 DIGEST_RE = re.compile(r"[0-9a-f]{64}\Z")
 ALLOWED_PREFIXES = ("scripts/pcp-light-", "tests/test_pcp_light_", "docs/pcp-light/")
+# Minimum authority reading explicitly required by root AGENTS.md. These
+# sizes are a repository footprint, NOT proof the model read those bytes.
+REQUIRED_AGENT_CONTEXT = (
+    "AGENTS.md",
+    "docs/project/constitution.md",
+    "docs/project/architecture.md",
+    "docs/project/operating-model.md",
+    "docs/project/roadmap.md",
+    "docs/project/current-state.md",
+    "README.md",
+)
 SAFE_AGENT_ENV = frozenset({
     "HOME", "PATH", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE",
     "CODEX_HOME", "SSL_CERT_FILE", "SSL_CERT_DIR", "TMPDIR",
@@ -280,6 +291,59 @@ def check_generated_sources(workspace: Path, changed: set[str]) -> list[str]:
     return python_files
 
 
+def codex_prompt(task: dict[str, Any]) -> str:
+    """Short task-specific prompt compatible with root AGENTS.md authority."""
+    return (
+        f"Implement this one approved PCP-light engineering task:\n{task['goal']}\n\n"
+        f"Allowed files (modify ONLY these):\n"
+        + "\n".join(f"- {x}" for x in task["allowed_paths"])
+        + "\nDo not edit any other file, including .git, config, "
+          "G0/G1/F2 files or Chợ Nhạc. Do not commit, push, create PRs, "
+          "run Docker, or access the network. Finish with concise findings."
+        + "\n\nContext efficiency: Follow the AGENTS.md required reading order "
+          "and all applicable authority documents; do not skip these reads. "
+          "After initial reading, avoid repeatedly dumping entire unchanged "
+          "documents or repository listings. Use precise line ranges, "
+          "targeted searches and focused diffs; preserve required tests "
+          "and validation."
+    )
+
+
+def context_footprint(repo: Path, task: dict[str, Any]) -> dict[str, int]:
+    """Capture static context *bytes*, never claimed as model input tokens.
+
+    Uses only lstat metadata from the pinned, clean PCP checkout; never reads
+    authority docs, follows symlinks, logs their content or starts a model.
+    """
+    authority_bytes = authority_files = allowed_bytes = allowed_files = 0
+    for relative in REQUIRED_AGENT_CONTEXT:
+        try:
+            info = (repo / relative).lstat()
+        except OSError:
+            continue
+        if stat.S_ISREG(info.st_mode):
+            authority_bytes += info.st_size
+            authority_files += 1
+    for relative in task["allowed_paths"]:
+        if not allowed_path(relative):
+            continue
+        try:
+            info = (repo / relative).lstat()
+        except OSError:
+            continue
+        if stat.S_ISREG(info.st_mode):
+            allowed_bytes += info.st_size
+            allowed_files += 1
+    return {
+        "required_authority_bytes": authority_bytes,
+        "required_authority_files_present": authority_files,
+        "required_authority_files_expected": len(REQUIRED_AGENT_CONTEXT),
+        "allowlisted_existing_source_bytes": allowed_bytes,
+        "allowlisted_existing_files": allowed_files,
+        "prompt_utf8_bytes": len(codex_prompt(task).encode("utf-8")),
+    }
+
+
 def summarize_codex(raw: str) -> dict[str, Any]:
     terminal = ""
     usage: dict[str, Any] = {}
@@ -297,10 +361,25 @@ def summarize_codex(raw: str) -> dict[str, Any]:
             terminal = kind
             if kind == "turn.completed":
                 usage = (event.get("usage") or {})
+    if not isinstance(usage, dict):
+        usage = {}
     normalized = {}
     for name in ("input_tokens", "cached_input_tokens", "output_tokens"):
         v = usage.get(name)
         normalized[name] = v if type(v) is int and v >= 0 else None
+    input_tokens = normalized["input_tokens"]
+    cached_tokens = normalized["cached_input_tokens"]
+    if (input_tokens is not None and cached_tokens is not None
+            and cached_tokens <= input_tokens):
+        normalized["uncached_input_tokens"] = input_tokens - cached_tokens
+        normalized["cached_input_share_percent"] = (
+            round(100 * cached_tokens / input_tokens, 1)
+            if input_tokens > 0 else None
+        )
+    else:
+        # Absence/inconsistent usage must remain UNKNOWN, not fabricated 0.
+        normalized["uncached_input_tokens"] = None
+        normalized["cached_input_share_percent"] = None
     return {"terminal": terminal or "UNOBSERVED", **normalized}
 
 
@@ -323,14 +402,7 @@ def codex_turn(workspace: Path, task: dict[str, Any], *,
         "--cd", str(workspace), "--model", task["model"],
         "--config", f'model_reasoning_effort="{task["reasoning"]}"',
     ]
-    prompt = (
-        f"Implement this one approved PCP-light engineering task:\n{task['goal']}\n\n"
-        f"Allowed files (modify ONLY these):\n"
-        + "\n".join(f"- {x}" for x in task["allowed_paths"])
-        + "\nDo not edit any other file, including .git, config, "
-          "G0/G1/F2 files or Chợ Nhạc. Do not commit, push, create PRs, "
-          "run Docker, or access the network. Finish with concise findings."
-    )
+    prompt = codex_prompt(task)
     argv.append(prompt)
     raw = command(argv, cwd=workspace,
                   env=codex_auth_env() if env is None else env, timeout=1200)
@@ -341,12 +413,14 @@ def run_task(repo: Path, issue: int, digest: str, *,
              execute: bool = False) -> dict[str, Any]:
     task = load_issue(issue, digest)
     verify_checkout(repo, task["base_sha"])
+    footprint = context_footprint(repo, task)
     if not execute:
         return {"status": "PCP_LIGHT_HANDOFF_VERIFIED_NO_MODEL",
                 "issue": issue, "key": task["key"],
                 "base_sha": task["base_sha"],
                 "model": task["model"], "reasoning": task["reasoning"],
                 "allowed_paths": task["allowed_paths"],
+                "context_footprint": footprint,
                 "model_calls": 0}
     require(os.geteuid() != 0, "root_operator_denied")
     # Fail before claiming a key/model budget if Codex is missing or unauthenticated.
@@ -364,6 +438,7 @@ def run_task(repo: Path, issue: int, digest: str, *,
         "issue": issue, "body_sha256": digest, "key": task["key"],
         "base_sha": task["base_sha"], "branch": branch,
         "state": "claimed", "model_calls": 0,
+        "context_footprint": footprint,
     })
     command(["git", "-C", str(repo), "worktree", "add", "-b",
              branch, str(workspace), task["base_sha"]], timeout=100)
@@ -435,7 +510,8 @@ def run_task(repo: Path, issue: int, digest: str, *,
             "model_elapsed_seconds": model_seconds,
             "syntax_files_checked": len(python_files),
             "local_tests_executed": 0,
-            "hosted_full_ci": "PENDING", **result}
+            "hosted_full_ci": "PENDING",
+            "context_footprint": footprint, **result}
 
 
 def main() -> int:
