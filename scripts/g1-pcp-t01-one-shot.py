@@ -477,6 +477,18 @@ def execute(expected: str) -> dict[str, object]:
             "runtime", "router", "executor", timeout=1800)
     compose(env, "g1_pcp_database_start", "up", "-d", "--wait",
             "db", timeout=260)
+    return continue_after_database(env, started)
+
+
+def continue_after_database(
+    env: dict[str, str], started: float,
+) -> dict[str, object]:
+    """Complete the ORIGINAL one-job trial after its own DB is healthy.
+
+    The initial operator and the evidence-bound same-root continuation share
+    this exact downstream path. This function does not admit any job or grant
+    permission: callers MUST independently attest the pilot DB and journal.
+    """
     job = add_job(env)
     env["PCP_G1_PILOT_JOB_ID"] = job
     journal("job_created", job_id=job, model_calls=0)
