@@ -1,0 +1,253 @@
+# NEW G1 coding pilot candidate. Completely separate from pcp-g1-smoke.
+# SOURCE-ONLY / PARKED: all services are opt-in AND entrypoint=/bin/false.
+# This is NOT a startable model lane and MUST NOT be combined with
+# compose.no-model.yml, F2, legacy PCP or Chợ Nhạc compose files.
+name: pcp-g1-t02
+
+x-g1-t02-contract:
+  status: parked
+  allowed_project_id: pcp-benchmark-g1-t02
+  accepted_smoke_job_reused: false
+  model_dispatch_enabled: false
+  independent_ddev_identities_proven: false
+  provider_auth_provisioned: false
+  provider_egress_domain_allowlist_proven: false
+  github_token_repo_scope_proven: false
+  github_delivery_enabled: false
+  direct_control_separated: true
+  autonomous_e2e_proven: false
+  benchmark_go: false
+
+x-g1-parked: &g1-parked
+  profiles: [g1-t02-parked]
+  entrypoint: ["/bin/false"]
+  restart: "no"
+  read_only: true
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  pids_limit: 128
+
+services:
+  db:
+    <<: *g1-parked
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: g1t02
+      POSTGRES_DB: g1t02
+      POSTGRES_PASSWORD: "${PCP_G1_T02_DB_PASSWORD:?new_pilot_only_password_required}"
+    volumes:
+      - g1-t02-db:/var/lib/postgresql/data
+    networks: [g1-t02-control]
+    labels: {pcp.scope: g1-t02-parked, pcp.role: db}
+
+  router:
+    <<: *g1-parked
+    build:
+      context: ../../services/router
+    environment:
+      ROUTER_MODELS_FILE: /pilot/config/models.yml
+      ROUTER_POLICY_FILE: /pilot/config/routing-policy.yml
+      ROUTER_PROJECTS_FILE: /pilot/config/projects.yml
+      ROUTER_API_TOKEN: "${PCP_G1_T02_ROUTER_TOKEN:?new_pilot_router_token_required}"
+    volumes:
+      - type: bind
+        source: "${PCP_G1_T02_ROOT:?fresh_separate_pilot_root_required}/config/models.yml"
+        target: /pilot/config/models.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_T02_ROOT:?}/config/routing-policy.yml"
+        target: /pilot/config/routing-policy.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_T02_ROOT:?}/config/projects.yml"
+        target: /pilot/config/projects.yml
+        read_only: true
+        bind: {create_host_path: false}
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=33554432"]
+    networks: [g1-t02-control]
+    labels: {pcp.scope: g1-t02-parked, pcp.role: router}
+
+  executor:
+    <<: *g1-parked
+    build:
+      context: ../../services/ddev-executor
+      args:
+        DDEV_UID: "${PCP_G1_T02_UID:?unprivileged_pilot_uid_required}"
+        DDEV_GID: "${PCP_G1_T02_GID:?unprivileged_pilot_gid_required}"
+    user: "${PCP_G1_T02_UID:?}:${PCP_G1_T02_GID:?}"
+    group_add: ["${PCP_G1_T02_SOCKET_GID:?separate_socket_group_required}"]
+    environment:
+      HOME: /home/coder
+      PROJECTS_FILE: /pilot/config/projects.yml
+      CODING_PROJECTS_ROOT: "${PCP_G1_T02_ROOT:?}"
+      CODING_WORKSPACES_ROOT: "${PCP_G1_T02_ROOT:?}/workspaces"
+      CODING_DIRECT_PROJECT_ROOT: /pilot/direct-disabled
+      DDEV_XDG_CONFIG_HOME: "${PCP_G1_T02_ROOT:?}/xdg"
+      PLATFORM_INTERNAL_TOKEN: "${PCP_G1_T02_INTERNAL_TOKEN:?new_pilot_internal_token_required}"
+      # Hard OFF, even with an otherwise valid token supplied from the shell.
+      PCP_TRUSTED_CODEX_BROKER_ENABLED: ""
+      PCP_G1_T02_IDENTITY_ENABLED: ""
+      PCP_TRUSTED_CODEX_PROJECT_ID: pcp-benchmark-g1-t02
+      PCP_TRUSTED_CODEX_JOB_ID: ""
+      PCP_TRUSTED_CODEX_SOURCE_SHA: ""
+      PCP_TRUSTED_CODEX_DEV_TOKEN: ""
+      PCP_TRUSTED_CODEX_DEADLINE_EPOCH: ""
+      GIT_TERMINAL_PROMPT: "0"
+    secrets: [g1_t02_repo_github_token]
+    volumes:
+      - type: bind
+        source: "${PCP_G1_T02_ROOT:?}/source"
+        target: "${PCP_G1_T02_ROOT:?}/source"
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_T02_ROOT:?}/workspaces"
+        target: "${PCP_G1_T02_ROOT:?}/workspaces"
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_T02_ROOT:?}/xdg"
+        target: "${PCP_G1_T02_ROOT:?}/xdg"
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_T02_ROOT:?}/config/projects.yml"
+        target: /pilot/config/projects.yml
+        read_only: true
+        bind: {create_host_path: false}
+      # Only G1 pilot Executor gets the Docker socket. Never Runtime/Router/direct.
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        bind: {create_host_path: false}
+    tmpfs:
+      - "/tmp:rw,nosuid,nodev,size=67108864"
+      - "/home/coder/.cache:rw,nosuid,nodev,size=33554432"
+    # Outbound restricted to an independently scoped GitHub CONNECT proxy.
+    networks: [g1-t02-control]
+    labels: {pcp.scope: g1-t02-parked, pcp.role: executor}
+
+  runtime:
+    <<: *g1-parked
+    build:
+      context: ../../services/runtime
+      args:
+        CODEX_VERSION: "${PCP_G1_T02_CODEX_VERSION:?exact_reviewed_codex_cli_version_required}"
+        DDEV_UID: "${PCP_G1_T02_UID:?}"
+        DDEV_GID: "${PCP_G1_T02_GID:?}"
+    user: "${PCP_G1_T02_UID:?}:${PCP_G1_T02_GID:?}"
+    environment:
+      HOME: /home/coder
+      CODEX_HOME: /home/coder/.codex-g1-t02
+      # Second independent stop: even replacing entrypoint cannot run Engine.
+      PCP_RUNTIME_STARTUP_MODE: inspect
+      DATABASE_URL: "postgresql://g1t02:${PCP_G1_T02_DB_PASSWORD:?}@db:5432/g1t02"
+      PROJECTS_FILE: /pilot/config/projects.yml
+      PROJECT_BASELINES_FILE: /pilot/config/project-baselines.yml
+      MODELS_FILE: /pilot/config/models.yml
+      ROUTING_POLICY_FILE: /pilot/config/routing-policy.yml
+      ROUTER_URL: http://router:8090
+      DDEV_EXECUTOR_URL: http://executor:8790
+      ROUTER_API_TOKEN: "${PCP_G1_T02_ROUTER_TOKEN:?}"
+      PLATFORM_INTERNAL_TOKEN: "${PCP_G1_T02_INTERNAL_TOKEN:?}"
+      RUNTIME_API_TOKEN: "${PCP_G1_T02_RUNTIME_TOKEN:?new_pilot_runtime_token_required}"
+      PCP_TRUSTED_CODEX_BROKER_ENABLED: ""
+      PCP_G1_T02_IDENTITY_ENABLED: ""
+      GIT_TERMINAL_PROMPT: "0"
+    volumes:
+      - type: bind
+        source: "${PCP_G1_T02_ROOT:?}/source"
+        target: "${PCP_G1_T02_ROOT:?}/source"
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_T02_ROOT:?}/workspaces"
+        target: "${PCP_G1_T02_ROOT:?}/workspaces"
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_T02_ROOT:?}/config/projects.yml"
+        target: /pilot/config/projects.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_T02_ROOT:?}/config/project-baselines.yml"
+        target: /pilot/config/project-baselines.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_T02_ROOT:?}/config/models.yml"
+        target: /pilot/config/models.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_T02_ROOT:?}/config/routing-policy.yml"
+        target: /pilot/config/routing-policy.yml
+        read_only: true
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_T02_PCP_CODEX_AUTH_DIR:?fresh_pcp_only_auth_dir_required}"
+        target: /home/coder/.codex-g1-t02
+        bind: {create_host_path: false}
+    tmpfs:
+      - "/tmp:rw,nosuid,nodev,size=67108864"
+      - "/home/coder/.cache:rw,nosuid,nodev,size=33554432"
+      - "/home/coder/.config:rw,nosuid,nodev,size=33554432"
+      - "/home/coder/.local:rw,nosuid,nodev,size=33554432"
+    # No direct provider Internet route: internal proxy is the only exit.
+    networks: [g1-t02-control]
+    labels: {pcp.scope: g1-t02-parked, pcp.role: runtime}
+
+  direct:
+    <<: *g1-parked
+    # Distinct provider identity and independent clone; no PCP control plane.
+    image: "${PCP_G1_T02_RUNTIME_IMAGE:?reviewed_pilot_runtime_image_required}"
+    user: "${PCP_G1_T02_UID:?}:${PCP_G1_T02_GID:?}"
+    working_dir: /pilot/direct-workspace
+    environment:
+      HOME: /home/coder
+      CODEX_HOME: /home/coder/.codex-g1-direct
+      GIT_TERMINAL_PROMPT: "0"
+    volumes:
+      - type: bind
+        source: "${PCP_G1_T02_DIRECT_WORKSPACE_DIR:?fresh_direct_clone_required}"
+        target: /pilot/direct-workspace
+        bind: {create_host_path: false}
+      - type: bind
+        source: "${PCP_G1_T02_DIRECT_CODEX_AUTH_DIR:?fresh_direct_only_auth_dir_required}"
+        target: /home/coder/.codex-g1-direct
+        bind: {create_host_path: false}
+    tmpfs:
+      - "/tmp:rw,nosuid,nodev,size=67108864"
+      - "/home/coder/.cache:rw,nosuid,nodev,size=33554432"
+      - "/home/coder/.config:rw,nosuid,nodev,size=33554432"
+    # Different internal network and credentials from PCP/Executor.
+    networks: [g1-t02-direct-control]
+    labels: {pcp.scope: g1-t02-parked, pcp.role: direct}
+
+secrets:
+  g1_t02_repo_github_token:
+    # NEW single-repo token, read by Executor ONLY after explicit activation.
+    file: "${PCP_G1_T02_GITHUB_TOKEN_FILE:?new_repo_scoped_git_token_file_required}"
+
+volumes:
+  g1-t02-db:
+    name: pcp-g1-t02-postgres
+
+networks:
+  g1-t02-control:
+    name: pcp-g1-t02-control
+    internal: true
+  # This parked file never attaches a model/service directly to egress.
+  # Only the separately guarded proxy overlay can join these networks.
+  g1-t02-direct-control:
+    name: pcp-g1-t02-direct-control
+    internal: true
+  g1-t02-provider-egress:
+    name: pcp-g1-t02-provider-egress
+    internal: false
+  g1-t02-github-egress:
+    name: pcp-g1-t02-github-egress
+    internal: false
+  g1-t02-direct-provider-egress:
+    name: pcp-g1-t02-direct-provider-egress
+    internal: false

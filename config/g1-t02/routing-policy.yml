@@ -1,0 +1,102 @@
+# G1-T02: pinned single-task routing policy. Other profiles intentionally
+# have NO eligible models because models.yml allows only "fast".
+version: 1
+adaptive_budget:
+  enabled: false
+complexity_weights:
+  scope: 0.18
+  dependency_depth: 0.10
+  ambiguity: 0.14
+  architecture_impact: 0.14
+  verification_difficulty: 0.10
+  risk: 0.12
+  context_requirement: 0.10
+  novelty: 0.07
+  reasoning_requirement: 0.05
+review_policy:
+  profiles:
+    fast:
+      level: lightweight
+      required: false
+      conditional_on_strong_evidence: true
+      independent: true
+      different_model_required: false
+      different_provider_required: false
+      reason: single G1 trial uses exact-head hosted CI plus PM review
+    standard:
+      level: standard
+      required: true
+    complex:
+      level: strong
+      required: true
+    critical:
+      level: critical
+      required: true
+profiles:
+  fast: &g1_fast
+    max_score: 29
+    analysis_depth: 1
+    planner: false
+    evaluator: false
+    reasoning_effort: {executor: medium}
+    reasoning_ceiling: {executor: medium}
+    max_model_calls: 2
+    max_input_tokens: 240000
+    max_output_tokens: 30000
+    max_tool_calls: 8
+    max_iterations: 2
+    max_repair_iterations: 1
+    max_escalations: 0
+    max_provider_failovers: 0
+    max_model_failovers: 0
+    max_test_runs: 3
+    max_wall_time_minutes: 20
+    hard_cost_usd: 0.50
+    soft_cost_usd: 0.25
+    max_changed_files: 2
+    executor_roles: [executor]
+    preferred_executor_ids: [codex_gpt6_luna]
+  standard:
+    <<: *g1_fast
+    min_score: 30
+    max_score: 59
+  complex:
+    <<: *g1_fast
+    min_score: 60
+    max_score: 79
+  critical:
+    <<: *g1_fast
+    min_score: 80
+critical_triggers:
+  - destructive_migration
+  - production_write
+  - branch_protection_change
+  - secret_management_change
+human_decision_triggers:
+  - architecture_choice
+  - destructive_migration
+  - production_write
+  - security_boundary_change
+  - budget_exhausted_with_decision
+minimum_profile_overrides:
+  security_sensitive: complex
+  schema_change: complex
+  authentication_change: critical
+  authorization_change: critical
+  production_write: critical
+  destructive_migration: critical
+scoring:
+  capability_weight: 0.52
+  predicted_success_weight: 0.30
+  preferred_order_bonus: 0.08
+  subscription_cost_bonus: 0.04
+  ultra_low_cost_bonus: 0.03
+  unhealthy_penalty: 1.0
+  fallback_unknown_success: 0.70
+anti_loop:
+  same_failure_fingerprint_limit: 1
+  no_progress_iterations: 1
+  diff_oscillation_limit: 1
+  scope_growth_ratio: 1.10
+  escalation_monotonic: true
+  escalation_resets_budget: false
