@@ -23,6 +23,8 @@ REQUIRED_JOBS = (
     "python-tests (services/runtime)",
     "python-tests (services/ddev-executor)",
 )
+MAX_REPAIR_COMMITS = 4
+MAX_COMMIT_FILES = 300  # GitHub's per-commit response is capped at 300 files.
 
 
 class NotReady(Exception):
@@ -170,13 +172,58 @@ def validate_pr(pr_number: int, expected_head: str, expected_base: str,
         REPO, source_parent, expected_head))
     commits = compare.get("commits") if isinstance(compare, dict) else None
     if (not isinstance(compare, dict) or compare.get("status") != "ahead"
-            or compare.get("ahead_by") != 1 or compare.get("behind_by") != 0
+            or type(compare.get("ahead_by")) is not int
+            or not 1 <= compare["ahead_by"] <= MAX_REPAIR_COMMITS
+            or type(compare.get("behind_by")) is not int
+            or compare["behind_by"] != 0
             or not isinstance(commits, list)
-            or len(commits) != 1 or not isinstance(commits[0], dict)
-            or commits[0].get("sha") != expected_head
+            or len(commits) != compare["ahead_by"]
+            or type(compare.get("total_commits")) is not int
+            or compare.get("total_commits") != compare["ahead_by"]
             or not isinstance(compare.get("merge_base_commit"), dict)
             or compare["merge_base_commit"].get("sha") != source_parent):
-        raise NotReady("candidate_not_exactly_one_commit_after_base")
+        raise NotReady("candidate_commit_chain_invalid")
+
+    commit_shas: list[str] = []
+    for commit in commits:
+        if not isinstance(commit, dict):
+            raise NotReady("candidate_commit_chain_invalid")
+        commit_shas.append(validate_sha(commit.get("sha"), "candidate_commit_sha"))
+    if (len(set(commit_shas)) != len(commit_shas)
+            or commit_shas[-1] != expected_head):
+        raise NotReady("candidate_commit_chain_invalid")
+
+    # A one-commit candidate retains its original fast path. For repairs, get
+    # each immutable commit object once: its parent list proves linear ancestry
+    # and its bounded files list catches reverted out-of-scope edits.
+    if len(commit_shas) > 1:
+        previous = source_parent
+        for commit_sha in commit_shas:
+            detail = get_json("repos/{}/commits/{}".format(REPO, commit_sha))
+            parents = detail.get("parents") if isinstance(detail, dict) else None
+            changed = detail.get("files") if isinstance(detail, dict) else None
+            if (not isinstance(detail, dict) or detail.get("sha") != commit_sha
+                    or not isinstance(parents, list) or len(parents) != 1
+                    or not isinstance(parents[0], dict)
+                    or parents[0].get("sha") != previous):
+                raise NotReady("candidate_commit_parent_chain_invalid")
+            if (not isinstance(changed, list) or not changed
+                    or len(changed) >= MAX_COMMIT_FILES):
+                raise NotReady("commit_changed_paths_missing_or_unbounded")
+            seen: set[str] = set()
+            for entry in changed:
+                if (not isinstance(entry, dict)
+                        or not isinstance(entry.get("filename"), str)):
+                    raise NotReady("commit_changed_path_evidence_invalid")
+                path = entry["filename"]
+                if path in seen:
+                    raise NotReady("commit_changed_paths_duplicate")
+                seen.add(path)
+                if entry.get("status") not in {"added", "modified"}:
+                    raise NotReady("commit_changed_path_status_not_allowed")
+                if path not in allowed:
+                    raise NotReady("commit_changed_paths_outside_original_issue_scope")
+            previous = commit_sha
 
     files_doc = get_json("repos/{}/pulls/{}/files?per_page=100".format(REPO, pr_number))
     if not isinstance(files_doc, list) or not files_doc or len(files_doc) >= 100:
@@ -199,6 +246,9 @@ def validate_pr(pr_number: int, expected_head: str, expected_base: str,
         "head_sha": head, "base_sha": base,
         "original_source_sha": source_parent,
         "changed_paths": sorted(paths),
+        "commit_count": len(commit_shas),
+        "original_first_commit_sha": commit_shas[0],
+        "repair_chain_needs_independent_review": len(commit_shas) > 1,
     }
 
 
@@ -261,7 +311,9 @@ def report(pr_number: int, head: str, base: str, issue_number: int, digest: str)
             raise NotReady("issue_body_sha256_invalid")
         facts = validate_pr(pr_number, head, base, issue_number, digest)
         ci = validate_ci(head)
-        return {"status": "READY_FOR_PM_REVIEW", "ready": True,
+        status = ("READY_FOR_PM_REVIEW_WITH_REPAIRS"
+                  if facts["commit_count"] > 1 else "READY_FOR_PM_REVIEW")
+        return {"status": status, "ready": True,
                 "pr": pr_number, "issue": issue_number, **facts,
                 "workflow": "tests", "required_jobs": ci,
                 "authorization": "NONE; PM code review and all normal gates remain required"}
