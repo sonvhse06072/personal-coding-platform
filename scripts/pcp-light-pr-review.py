@@ -25,6 +25,9 @@ REQUIRED_JOBS = (
 )
 MAX_REPAIR_COMMITS = 4
 MAX_COMMIT_FILES = 300  # GitHub's per-commit response is capped at 300 files.
+HOSTED_RUNNER_RE = re.compile(r"GitHub Actions [0-9]+\Z")
+HOSTED_STEP = "Verify ephemeral GitHub-hosted runner"
+ROOT_PYTEST_STEP = "Run python -m pytest -q -p no:cacheprovider tests"
 
 
 class NotReady(Exception):
@@ -252,6 +255,16 @@ def validate_pr(pr_number: int, expected_head: str, expected_base: str,
     }
 
 
+def _step_passed(steps: Any, name: str) -> bool:
+    """Require exactly one real completed/success step, never a skipped no-op."""
+    if not isinstance(steps, list):
+        return False
+    found = [step for step in steps
+             if isinstance(step, dict) and step.get("name") == name]
+    return (len(found) == 1 and found[0].get("status") == "completed"
+            and found[0].get("conclusion") == "success")
+
+
 def validate_ci(head: str) -> dict[str, str]:
     runs_doc = get_json(
         "repos/{}/actions/workflows/tests.yml/runs?head_sha={}&event=pull_request&per_page=100".format(REPO, head)
@@ -273,6 +286,11 @@ def validate_ci(head: str) -> dict[str, str]:
     jobs = jobs_doc.get("jobs") if isinstance(jobs_doc, dict) else None
     if not isinstance(jobs, list):
         raise NotReady("tests_workflow_jobs_invalid")
+    if (run.get("status") == "completed"
+            and (type(jobs_doc.get("total_count")) is not int
+                 or jobs_doc["total_count"] != len(REQUIRED_JOBS)
+                 or len(jobs) != len(REQUIRED_JOBS))):
+        raise NotReady("required_ci_job_missing_or_duplicate")
     by_name: dict[str, list[dict[str, Any]]] = {}
     for job in jobs:
         if isinstance(job, dict) and isinstance(job.get("name"), str):
@@ -293,6 +311,18 @@ def validate_ci(head: str) -> dict[str, str]:
         elif job.get("conclusion") != "success":
             raise NotReady("required_ci_job_not_success")
         else:
+            runner = job.get("runner_name")
+            if (not isinstance(runner, str)
+                    or HOSTED_RUNNER_RE.fullmatch(runner) is None
+                    or job.get("runner_group_name") != "GitHub Actions"):
+                raise NotReady("required_ci_runner_not_hosted")
+            steps = job.get("steps")
+            if not _step_passed(steps, HOSTED_STEP):
+                raise NotReady("required_ci_hosted_attestation_not_success")
+            test_step = (ROOT_PYTEST_STEP if name == "structure-tests"
+                         else "Run tests")
+            if not _step_passed(steps, test_step):
+                raise NotReady("required_ci_pytest_not_executed")
             outcomes[name] = "SUCCESS"
     if run.get("status") == "completed" and run.get("conclusion") != "success":
         raise NotReady("tests_workflow_run_not_success")
