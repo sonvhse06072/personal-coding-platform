@@ -378,6 +378,8 @@ def test_t1_stays_compact_and_does_not_accumulate_completed_chronology():
     assert len(content.splitlines()) <= 250
     assert "## Active PCP issues and owner attention" in content
     assert "## Immediate next safe actions" in content
+    # Runtime continuity publication relies on this stable T1 safety heading.
+    assert "## Standing safety boundary" in content
     assert "## Historical accepted platform / local state snapshot" not in content
     assert "## Generation-1 execution — active" not in content
     assert "GitHub/Runtime" in content
