@@ -132,8 +132,10 @@ def validate(pr_number: int, merge_sha: str, run_id: int) -> dict[str, Any]:
             or run.get("name") != "tests"
             or run.get("path") != WORKFLOW_PATH
             or run.get("event") != "push"
+            or run.get("head_branch") != "main"
             or run.get("head_sha") != merge_sha
-            or _repo_name(run.get("repository")) != REPO):
+            or _repo_name(run.get("repository")) != REPO
+            or _repo_name(run.get("head_repository")) != REPO):
         raise NotVerified("postmerge_workflow_identity_mismatch")
     attempt = require_id(run.get("run_attempt"), "workflow_attempt_invalid")
     if run.get("status") != "completed":
