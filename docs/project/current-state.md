@@ -20,16 +20,16 @@ Last reconciled: **2026-10-16 (GitHub source/CI, not local deployment)**. PCP `m
 - **#665 residual security risk remains OPEN:** a PR-controlled workflow may target the persistent runner; independent runner registration/workflow access isolation and branch protection/required status enforcement were not established (GitHub reported `main protected:false`, ruleset query permissions limited). Never claim all untrusted PRs are host-isolated. Changing persistent runner scope or trusted push-main CI needs an independently approved safe operational decision; do not change it as a T1 documentation task.
 - [#493](https://github.com/sonvhse06072/personal-coding-platform/issues/493) retains natural Executor 1.0.35 cold-start/provenance acceptance; [#512](https://github.com/sonvhse06072/personal-coding-platform/issues/512) retains remote-control/Guardian natural outage-recovery proof; [#524](https://github.com/sonvhse06072/personal-coding-platform/issues/524) is a **permanent Guardian audit channel**, not a coding ticket. Do not synthesize outages or restart services merely to close these.
 
-## Priorities and backlog boundaries
+## Active PCP issues and owner attention
 
 - [#593 PCP completion program](https://github.com/sonvhse06072/personal-coding-platform/issues/593) governs outcome, autonomy, owner attention and cost. [#594](https://github.com/sonvhse06072/personal-coding-platform/issues/594) G0 audit completed; #595 investment gate remains HOLD, #596 existing G1 pilot FROZEN. #597–#599, G2 #600–#605, and G3 #606–#610 are **planned**, not dispatched by this doc. [#588](https://github.com/sonvhse06072/personal-coding-platform/issues/588) future Project Discovery is DEFERRED. Historical duplicate planning tickets #586/#587/#589/#590 closed **without** implying all capabilities are implemented or leases released.
 - Next practical PCP-light task must solve an observed defect/owner-cost bottleneck, not be created merely for synthetic throughput or toolchain testing. Before new work, measure accepted task outcomes, owner interventions, source and PR CI, real elapsed time, model-reported cached/uncached/input/output and cash **if available**. A PR body is useful telemetry but not independent verification; original journal provenance and live GitHub facts outrank it.
 - Do not claim local PCP source has fast-forwarded to the newest GitHub SHA, or Runtime has rolled out, from a merge/CI result. One task/worktree writer at a time; preserve original journals on STOP and never run blind recovery.
 
-## Resume procedure
+## Immediate next safe actions
 
 1. Read repository `AGENTS.md`, `docs/project/README.md`, then this T1, with relevant topical T2 and T3 only; read `README.md` for operational commands. [Context contract](context-memory-architecture.md) specifies authority tiers; standalone Context Composer is not automatically Runtime-integrated.
-2. Recheck live GitHub main/issue/PR/CI and the exact local branch/worktree/job/lease before any write, PM review/merge or new Owner WSL `--execute`. Review actual diff/tests. Keep source/CI success separate from deployed Runtime/fixture evidence.
+2. Recheck live GitHub/Runtime evidence: main/issue/PR/CI and the exact local branch/worktree/job/lease before any write, PM review/merge or new Owner WSL `--execute`. Review actual diff/tests. Keep source/CI success separate from deployed Runtime/fixture evidence.
 3. If no natural new task exists, do not create a placeholder PCP-light task or retry frozen G1/F2. T1 updates are mutable evidence (via reviewed `ai/*` PR); protected T0/T2, CI, budgets, baselines and security need genuine Human Owner approval.
 
 ## Historical managed-project continuity (NOT current Chợ Nhạc runtime status)
