@@ -67,10 +67,17 @@ def test_test_workflow_retains_all_four_named_gates_and_hosted_pr_runner():
     assert set(matrix) == {
         "services/runtime", "services/router", "services/ddev-executor"
     }
+    # CP-665 Option A: both PR and trusted main must use hosted runners.
+    assert "  push:\\n    branches: [main]\\n  pull_request:".replace("\\n", "\n") in source
+    assert "self-hosted" not in source
     for job in config["jobs"].values():
-        assert "ubuntu-24.04" in str(job["runs-on"])
-        assert "self-hosted" in str(job["runs-on"])
-        assert "github.event_name == 'pull_request'" in str(job["runs-on"])
+        assert job["runs-on"] == "ubuntu-24.04"
+        checks = [step for step in job["steps"]
+                  if step.get("name") == "Verify ephemeral GitHub-hosted runner"]
+        assert len(checks) == 1
+        assert "if" not in checks[0]  # Must run on PR and push, never be skipped.
+        assert 'test "${RUNNER_ENVIRONMENT:-}" = github-hosted' in checks[0]["run"]
+        assert 'test "${RUNNER_OS:-}" = Linux' in checks[0]["run"]
     assert "pull_request_target" not in source
     assert "persist-credentials: false" in source
     assert "Enforce direct-PM documentation authority" in source
