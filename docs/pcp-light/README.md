@@ -139,7 +139,16 @@ delete, rename, foreign intermediate edit, truncated list and chains longer
 than four fail closed even if the final aggregate diff looks clean. The normal
 final PR diff, changed-test requirement, owner issue marker/JSON/body digest,
 PR author/repository/branch/base checks and all four hosted tests.yml jobs on
-the exact current HEAD remain required. The mutable PR body supplies no proof.
+the exact current HEAD remain required. **The readiness gate inspects actual
+GitHub-hosted runner identity and successful unconditional runner-attestation
+steps, plus successful full pytest steps for all four named jobs.** A service
+job can report `SUCCESS` when its `docs_only` no-op succeeds but pytest is
+`skipped`; that is **NOT READY** for a PCP-light code PR. The real #740
+docs-only workflow had this shape, and its postmerge Runtime suite later found
+a regression. The new check reuses the same job-data GET without another
+GitHub API request and preserves queued-run `PENDING` semantics. A green PR
+never substitutes for full postmerge acceptance. The mutable PR body supplies
+no proof.
 
 The repaired-chain status is only a readiness report. A human must review each
 commit's code and the exact final diff, and exact-head hosted CI must pass
