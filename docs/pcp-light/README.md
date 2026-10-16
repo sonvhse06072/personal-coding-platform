@@ -86,6 +86,25 @@ local tests **0** and hosted full CI **PENDING**. If counters are missing or
 malformed, their fields are `null`, not zero. Cash billing is
 `UNAVAILABLE`, not guessed from quota or token counts.
 
+### Host-operator elapsed time (no extra calls)
+
+On future successful new-task runs, the existing PR-body evidence adds
+`operator_pre_pr_elapsed_seconds`, measured from entering the one-use
+operator through issue verification, Codex authentication/worktree setup,
+model execution, AST/Git validation, commit and push, **immediately before**
+`gh pr create`. This is not model elapsed time and intentionally excludes
+PR creation network time, GitHub-hosted CI, PM review, Owner wait and
+provider cash billing. It is verified finite, nonnegative and cannot be
+shorter than the reported model elapsed time.
+
+The private same-job journal and sanitized final operator JSON additionally
+record `operator_elapsed_seconds` through successful draft PR creation,
+including that `gh pr create` call. No additional provider call, API call,
+new workspace, local pytest, prompts, logs or credentials are collected.
+Legacy PRs and missing operator-duration evidence stay **unknown** rather
+than being assigned fabricated zero. Compare these separate phases only on
+naturally needed new tasks; do not claim end-to-end ROI from operator time.
+
 The report is built from fixed allowlisted **numeric and identity metadata**.
 No task prompt/goal, provider conversation, environment values, credentials,
 paths beyond the approved changed files, or raw test logs are copied.
