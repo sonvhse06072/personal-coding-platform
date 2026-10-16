@@ -145,6 +145,45 @@ The repaired-chain status is only a readiness report. A human must review each
 commit's code and the exact final diff, and exact-head hosted CI must pass
 before merge. It does not claim PM approval or autonomous first-pass success.
 
+### Read-only postmerge CI attestation
+
+After PM has already reviewed and merged a PCP PR, use the existing
+authenticated `gh` CLI to independently verify the exact merged SHA and full
+`push main` CI. The new PCP-light helper is strictly read-only and works for a
+normal merged PCP source PR, **not** just a PCP-light one-shot issue:
+
+```bash
+python3 scripts/pcp-light-postmerge.py \
+  --pr PR_NUMBER \
+  --expected-merge-sha FULL_40_HEX_MERGE_SHA \
+  --run-id EXACT_TESTS_WORKFLOW_RUN_ID
+```
+
+This checker pins the merged PR identity, Owner and repository, exact merge
+commit, main target, the `tests` workflow path and **push** trigger on that
+commit, then fetches all four required full-test jobs from the latest attempt.
+It refuses pending/failed CI, missing or duplicate jobs, skipped tests, a
+self-hosted or unverified runner, and forged success claims in mutable PR text.
+Unlike the premerge `pcp-light-pr-review.py`, this is for a **completed**
+merge, not draft PR approval.
+
+The output is `POSTMERGE_CI_VERIFIED` on validated CI only; otherwise it
+returns `PENDING` or `NOT_VERIFIED` with a sanitized STOP reason and
+nonzero exit status. An accepted CI result does **not** approve a merge,
+establish GitHub branch protection, deploy local PCP Runtime or measure
+Direct-vs-full-PCP parity. All actions are fixed `gh api --method GET` calls
+without a retry, model call, credential disclosure or host-service operation.
+
+Where real job timestamps are available, the report includes separate full
+workflow elapsed seconds, per-job elapsed seconds and
+`estimated_rounded_runner_minutes` (sum of individually rounded hosted job
+durations). Missing timestamps produce `null` instead of invented zero,
+and **provider cash cost remains `UNAVAILABLE`**. Do not confuse this
+estimate with GitHub's billed minutes or CI critical-path time. Historical
+negative evidence includes PCP PR #740, whose PR-head checks passed but whose
+original merged Runtime suite failed; later corrective PR #741 has its own
+separate successful postmerge proof.
+
 ## Speed/quality decision
 
 This operator deliberately reuses `gh`, existing Codex auth, Git worktrees and GitHub Actions. No new PostgreSQL, DDEV, Router, Executor, proxy, workflow scheduler, Python dependency installer or generic agent framework. The local `pytest` stop in the original #725 trial drove this **CI-first verification policy**: make source-scope/AST checks locally, run full tests in isolated hosted PR CI instead. This avoids executing unreviewed generated tests on the Owner host and prevents a post-model `No module named pytest` blocker. A genuine result should be compared to plain direct Codex using accepted PR, end-to-end elapsed time, model tokens and count of Owner interventions. Do not claim p50/p90 or savings from a single run. G0 #595 remains HOLD / NOT GO.
