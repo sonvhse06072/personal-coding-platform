@@ -67,8 +67,19 @@ def valid_responses():
                                "status": "completed", "conclusion": "success"}],
         },
         f"repos/{REPO}/actions/runs/88/jobs?per_page=100": {
-            "jobs": [{"name": name, "status": "completed", "conclusion": "success"}
-                     for name in review.REQUIRED_JOBS],
+            "total_count": len(review.REQUIRED_JOBS),
+            "jobs": [{
+                "name": name, "status": "completed", "conclusion": "success",
+                "runner_name": f"GitHub Actions {1000002630 + index}",
+                "runner_group_name": "GitHub Actions",
+                "steps": [
+                    {"name": review.HOSTED_STEP, "status": "completed",
+                     "conclusion": "success"},
+                    {"name": (review.ROOT_PYTEST_STEP
+                              if name == "structure-tests" else "Run tests"),
+                     "status": "completed", "conclusion": "success"},
+                ],
+            } for index, name in enumerate(review.REQUIRED_JOBS)],
         },
     }
 
@@ -324,6 +335,74 @@ def test_missing_failed_partial_skipped_or_pending_ci_is_never_green(gh, job_cha
     result = run()
     assert result["reason"] == reason
     assert result["status"] == ("PENDING" if job_change == "queued" else "NOT_READY")
+
+
+@pytest.mark.parametrize("mutation,reason", [
+    ("selfhosted_runner", "required_ci_runner_not_hosted"),
+    ("untrusted_runner_group", "required_ci_runner_not_hosted"),
+    ("hosted_check_missing", "required_ci_hosted_attestation_not_success"),
+    ("hosted_check_skipped", "required_ci_hosted_attestation_not_success"),
+    ("hosted_check_duplicate", "required_ci_hosted_attestation_not_success"),
+    ("pytest_step_skipped", "required_ci_pytest_not_executed"),
+    ("pytest_step_failed", "required_ci_pytest_not_executed"),
+    ("pytest_step_missing", "required_ci_pytest_not_executed"),
+    ("pytest_step_duplicate", "required_ci_pytest_not_executed"),
+    ("job_total_truncated", "required_ci_job_missing_or_duplicate"),
+    ("job_total_boolean", "required_ci_job_missing_or_duplicate"),
+])
+def test_four_green_job_conclusions_are_not_sufficient_ci_proof(
+    gh, mutation, reason,
+):
+    evidence = gh.responses[f"repos/{REPO}/actions/runs/88/jobs?per_page=100"]
+    job = evidence["jobs"][1]  # Router full pytest required.
+    if mutation == "selfhosted_runner":
+        job["runner_name"] = "SonVH"
+    elif mutation == "untrusted_runner_group":
+        job["runner_group_name"] = "Default"
+    elif mutation == "hosted_check_missing":
+        job["steps"].pop(0)
+    elif mutation == "hosted_check_skipped":
+        job["steps"][0]["conclusion"] = "skipped"
+    elif mutation == "hosted_check_duplicate":
+        job["steps"].append(dict(job["steps"][0]))
+    elif mutation == "pytest_step_skipped":
+        job["steps"][1]["conclusion"] = "skipped"
+    elif mutation == "pytest_step_failed":
+        job["steps"][1]["conclusion"] = "failure"
+    elif mutation == "pytest_step_missing":
+        job["steps"].pop(1)
+    elif mutation == "pytest_step_duplicate":
+        job["steps"].append(dict(job["steps"][1]))
+    elif mutation == "job_total_truncated":
+        evidence["total_count"] = 5
+    else:
+        evidence["total_count"] = True
+    # Source PR still reports completed SUCCESS and all four job conclusions
+    # SUCCESS; attestations/actual full test execution must govern readiness.
+    assert all(item["conclusion"] == "success" for item in evidence["jobs"])
+    outcome = run()
+    assert outcome["status"] == "NOT_READY"
+    assert outcome["reason"] == reason
+
+
+def test_real_740_docs_only_false_green_cannot_pass_pcp_light_readiness(gh):
+    # PR #740 had 4/4 job SUCCESS but three services skipped real pytest.
+    evidence = gh.responses[f"repos/{REPO}/actions/runs/88/jobs?per_page=100"]
+    for job in evidence["jobs"]:
+        if job["name"] == "structure-tests":
+            continue
+        job["steps"][1]["conclusion"] = "skipped"
+        job["steps"].append({
+            "name": "T1/T3 document-only PR - service suite not applicable",
+            "status": "completed", "conclusion": "success",
+        })
+    assert run()["reason"] == "required_ci_pytest_not_executed"
+
+
+def test_structure_root_pytest_must_actually_run(gh):
+    evidence = gh.responses[f"repos/{REPO}/actions/runs/88/jobs?per_page=100"]
+    evidence["jobs"][0]["steps"][1]["conclusion"] = "skipped"
+    assert run()["reason"] == "required_ci_pytest_not_executed"
 
 
 def test_pr_body_cannot_override_live_failed_ci(gh):
