@@ -66,6 +66,7 @@ _VALID_WORKSPACE_MODES = {"direct", "isolated_clone"}
 # independently gated Executor broker to reject the very same job. Only an
 # already-admitted singleton G1 Codex job may keep its pinned fixture name.
 _G1_PROJECT_ID = "pcp-benchmark-g1-smoke"
+_G1_T02_ID = "pcp-benchmark-g1-t02"
 _G1_DDEV_CONFIG = (
     "# Disposable PCP G1 Codex broker smoke fixture, no hooks or custom mounts.\n"
     "name: pcp-g1-codex-smoke\n"
@@ -84,7 +85,7 @@ def preserve_trusted_g1_ddev_name(
     *, job_id: str, project_id: str, source_commit: str, workspace: Path,
 ) -> bool:
     """Keep exactly the admitted G1 seed name, never a foreign DDEV project."""
-    if project_id == "pcp-benchmark-g1-pilot":
+    if project_id in {"pcp-benchmark-g1-pilot", _G1_T02_ID}:
         # The pinned pilot base retains the smoke seed config.yaml, but a
         # separate operator-owned DDEV name+cache override is mandatory.
         # Broker checks exact SHA, singleton job/registry and both files.
@@ -487,6 +488,13 @@ class RuntimeEngine(RuntimeEngineCore):
                 source_commit=source_commit, workspace=workspace,
             )
         ):
+            if job["project_id"] == _G1_T02_ID:
+                self._block(
+                    job_id=job_id, progress=progress, checkpoint=checkpoint,
+                    reason="g1_t02_identity_not_admitted",
+                    last_failure="Fresh T02 project has no admitted capability",
+                )
+                return
             safe_name = re.sub(r"[^a-z0-9-]", "-", f"cp-{job_id[:10]}")
             (workspace / ".ddev" / "config.coding-platform.yaml").write_text(
                 f"name: {safe_name}\n", encoding="utf-8"
