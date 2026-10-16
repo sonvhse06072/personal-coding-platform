@@ -82,10 +82,12 @@ def allowed_path(value: Any) -> bool:
     path = PurePosixPath(value)
     if path.is_absolute() or ".." in value or path.as_posix() != value:
         return False
-    if value.startswith(ALLOWED_PREFIXES[:2]) and len(path.parts) != 2:
-        return False
-    return (value.endswith((".py", ".md"))
-            and value.startswith(ALLOWED_PREFIXES))
+    if len(path.parts) == 2 and path.parts[0] == "scripts":
+        return path.parts[1].startswith("pcp-light-") and path.parts[1].endswith(".py")
+    if len(path.parts) == 2 and path.parts[0] == "tests":
+        return path.parts[1].startswith("test_pcp_light_") and path.parts[1].endswith(".py")
+    return (len(path.parts) >= 3 and path.parts[:2] == ("docs", "pcp-light")
+            and path.parts[-1].endswith(".md"))
 
 
 def parse_issue(raw: dict[str, Any], issue: int, digest: str) -> dict[str, Any]:
@@ -128,7 +130,8 @@ def parse_issue(raw: dict[str, Any], issue: int, digest: str) -> dict[str, Any]:
     require(isinstance(paths, list) and 1 <= len(paths) <= 4
             and len(set(map(str, paths))) == len(paths)
             and all(allowed_path(x) for x in paths)
-            and any(x.startswith("tests/test_pcp_light_") for x in paths),
+            and any(x.startswith("tests/test_pcp_light_") and x.endswith(".py")
+                    for x in paths),
             "handoff_allowed_files_invalid")
     return item
 

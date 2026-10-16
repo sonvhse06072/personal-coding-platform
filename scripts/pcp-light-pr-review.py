@@ -103,18 +103,31 @@ def issue_contract(body: Any) -> dict[str, Any]:
             or any(not isinstance(path, str) for path in paths)
             or len(set(paths)) != len(paths)
             or not any(path.startswith("tests/test_pcp_light_")
+                       and path.endswith(".py")
                        for path in paths)):
         raise NotReady("original_issue_allowed_paths_invalid")
     for value in paths:
         path = PurePosixPath(value)
         if (len(value) > 240 or "\\" in value or path.is_absolute()
                 or ".." in path.parts or path.as_posix() != value
-                or not value.startswith(ALLOWED_PREFIXES)
-                or not value.endswith((".py", ".md"))
-                or (value.startswith(ALLOWED_PREFIXES[:2])
-                    and len(path.parts) != 2)):
+                or not allowed_path(value)):
             raise NotReady("original_issue_allowed_paths_invalid")
     return data
+
+
+def allowed_path(value: Any) -> bool:
+    """Match the PCP-light v1 path/type contract exactly."""
+    if not isinstance(value, str) or len(value) > 240 or "\\" in value:
+        return False
+    path = PurePosixPath(value)
+    if path.is_absolute() or ".." in path.parts or path.as_posix() != value:
+        return False
+    if len(path.parts) == 2 and path.parts[0] == "scripts":
+        return path.parts[1].startswith("pcp-light-") and path.parts[1].endswith(".py")
+    if len(path.parts) == 2 and path.parts[0] == "tests":
+        return path.parts[1].startswith("test_pcp_light_") and path.parts[1].endswith(".py")
+    return (len(path.parts) >= 3 and path.parts[:2] == ("docs", "pcp-light")
+            and path.parts[-1].endswith(".md"))
 
 
 def issue_allowed_paths(body: Any) -> list[str]:
