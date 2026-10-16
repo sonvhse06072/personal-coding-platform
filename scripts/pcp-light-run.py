@@ -512,6 +512,7 @@ def draft_pr_evidence_body(
     model_result: dict[str, Any], python_files: list[str],
     footprint: dict[str, int],
     eof_normalized_paths: list[str] | None = None,
+    operator_pre_pr_elapsed_seconds: float | None = None,
 ) -> str:
     """Publish bounded metadata on the draft PR, not raw model/host output.
 
@@ -529,7 +530,11 @@ def draft_pr_evidence_body(
             and changed.issubset(set(task["allowed_paths"]))
             and all(allowed_path(path) for path in changed)
             and type(model_seconds) in {int, float}
-            and math.isfinite(model_seconds) and model_seconds >= 0,
+            and math.isfinite(model_seconds) and model_seconds >= 0
+            and (operator_pre_pr_elapsed_seconds is None or (
+                type(operator_pre_pr_elapsed_seconds) in {int, float}
+                and math.isfinite(operator_pre_pr_elapsed_seconds)
+                and operator_pre_pr_elapsed_seconds >= model_seconds)),
             "pcp_light_pr_evidence_not_scoped")
 
     def safe_int(value: Any) -> int | None:
@@ -567,6 +572,10 @@ def draft_pr_evidence_body(
             "model_calls": 1,
             "terminal": "turn.completed",
             "model_elapsed_seconds": round(model_seconds, 1),
+            "operator_pre_pr_elapsed_seconds": (
+                round(operator_pre_pr_elapsed_seconds, 1)
+                if operator_pre_pr_elapsed_seconds is not None else None
+            ),
             "input_tokens": safe_int(usage.get("input_tokens")),
             "cached_input_tokens": safe_int(usage.get("cached_input_tokens")),
             "uncached_input_tokens": safe_int(usage.get("uncached_input_tokens")),
@@ -596,7 +605,9 @@ def draft_pr_evidence_body(
         "tests were executed on Owner WSL. Full isolated GitHub-hosted "
         "exact-HEAD PR CI and PM code review are mandatory before merge. "
         "No automatic merge or deployment. Raw authority file bytes are "
-        "not model token counts; reported tokens are not a USD bill."
+        "not model token counts; reported tokens are not a USD bill. "
+        "Operator pre-PR elapsed excludes GitHub PR creation, CI, "
+        "PM review and Owner wait."
     )
 
 
@@ -628,6 +639,7 @@ def codex_turn(workspace: Path, task: dict[str, Any], *,
 
 def run_task(repo: Path, issue: int, digest: str, *,
              execute: bool = False) -> dict[str, Any]:
+    operator_started = time.monotonic()
     task = load_issue(issue, digest)
     verify_checkout(repo, task["base_sha"])
     footprint = context_footprint(repo, task)
@@ -707,11 +719,13 @@ def run_task(repo: Path, issue: int, digest: str, *,
     command(["git", "-C", str(workspace), "push", "origin",
              f"HEAD:refs/heads/{branch}"], timeout=150)
     update(journal, "pushed", commit=commit)
+    pre_pr_elapsed_seconds = round(time.monotonic() - operator_started, 1)
     description = draft_pr_evidence_body(
         issue=issue, digest=digest, task=task, commit=commit,
         changed=changed, model_seconds=model_seconds,
         model_result=result, python_files=python_files,
         footprint=footprint, eof_normalized_paths=repaired_paths,
+        operator_pre_pr_elapsed_seconds=pre_pr_elapsed_seconds,
     )
     pr = command([
         "gh", "pr", "create", "--repo", REPOSITORY,
@@ -721,11 +735,16 @@ def run_task(repo: Path, issue: int, digest: str, *,
     ], cwd=workspace, timeout=90)
     require(pr.startswith(f"https://github.com/{REPOSITORY}/pull/"),
             "pcp_light_pr_url_not_verified")
-    update(journal, "draft_pr_created", pr=pr)
+    operator_elapsed_seconds = round(time.monotonic() - operator_started, 1)
+    update(journal, "draft_pr_created", pr=pr,
+           operator_elapsed_seconds=operator_elapsed_seconds,
+           operator_pre_pr_elapsed_seconds=pre_pr_elapsed_seconds)
     return {"status": "PCP_LIGHT_DRAFT_PR_PENDING_CI_PM",
             "issue": issue, "branch": branch, "commit": commit,
             "pr": pr, "model_calls": 1,
             "model_elapsed_seconds": model_seconds,
+            "operator_pre_pr_elapsed_seconds": pre_pr_elapsed_seconds,
+            "operator_elapsed_seconds": operator_elapsed_seconds,
             "syntax_files_checked": len(python_files),
             "local_tests_executed": 0,
             "hosted_full_ci": "PENDING",

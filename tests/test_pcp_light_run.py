@@ -571,6 +571,7 @@ class PCPFastHandoffTests(unittest.TestCase):
             issue=730, digest="a" * 64, task=task, commit="b" * 40,
             changed=set(GOOD_TASK["allowed_paths"]),
             model_seconds=48.8, model_result=report,
+            operator_pre_pr_elapsed_seconds=65.2,
             python_files=list(GOOD_TASK["allowed_paths"]),
             footprint=footprint,
         )
@@ -585,6 +586,7 @@ class PCPFastHandoffTests(unittest.TestCase):
         self.assertEqual(data["coding"]["uncached_input_tokens"], 94936)
         self.assertEqual(data["coding"]["cached_input_share_percent"], 84.9)
         self.assertEqual(data["coding"]["model_elapsed_seconds"], 48.8)
+        self.assertEqual(data["coding"]["operator_pre_pr_elapsed_seconds"], 65.2)
         self.assertEqual(data["coding"]["provider_cash_cost"], "UNAVAILABLE")
         self.assertEqual(data["verification"]["hosted_full_ci"], "PENDING")
         self.assertEqual(data["verification"]["local_tests_executed"], 0)
@@ -620,6 +622,7 @@ class PCPFastHandoffTests(unittest.TestCase):
         self.assertIsNone(obj["coding"]["cached_input_tokens"])
         self.assertIsNone(obj["coding"]["uncached_input_tokens"])
         self.assertIsNone(obj["coding"]["cached_input_share_percent"])
+        self.assertIsNone(obj["coding"]["operator_pre_pr_elapsed_seconds"])
         self.assertIsNone(obj["context_metadata"]["required_authority_bytes"])
         self.assertNotIn("NEVER_PRINT", report)
 
@@ -641,6 +644,10 @@ class PCPFastHandoffTests(unittest.TestCase):
             {"commit": "UNPINNED"},
             {"digest": "not-sha256"},
             {"model_seconds": float("inf")},
+            {"operator_pre_pr_elapsed_seconds": -1},
+            {"operator_pre_pr_elapsed_seconds": float("nan")},
+            {"operator_pre_pr_elapsed_seconds": False},
+            {"operator_pre_pr_elapsed_seconds": 0.5},
         ):
             with self.subTest(changed=changed):
                 with self.assertRaisesRegex(
@@ -720,6 +727,10 @@ class PCPFastHandoffTests(unittest.TestCase):
                 )
                 self.assertEqual(result["status"], "PCP_LIGHT_DRAFT_PR_PENDING_CI_PM")
                 self.assertEqual(result["model_calls"], 1)
+                self.assertGreaterEqual(result["operator_elapsed_seconds"],
+                                        result["operator_pre_pr_elapsed_seconds"])
+                self.assertGreaterEqual(result["operator_pre_pr_elapsed_seconds"],
+                                        result["model_elapsed_seconds"])
                 self.assertEqual(result["local_tests_executed"], 0)
                 self.assertEqual(result["hosted_full_ci"], "PENDING")
                 self.assertEqual(result["syntax_files_checked"], 2)
@@ -757,6 +768,8 @@ class PCPFastHandoffTests(unittest.TestCase):
                                   .split("\n" + chr(96) * 3, 1)[0])
             self.assertEqual(evidence["task"]["candidate_sha"], "b" * 40)
             self.assertEqual(evidence["coding"]["model_calls"], 1)
+            self.assertEqual(evidence["coding"]["operator_pre_pr_elapsed_seconds"],
+                             result["operator_pre_pr_elapsed_seconds"])
             self.assertEqual(evidence["coding"]["input_tokens"], 20)
             self.assertEqual(evidence["coding"]["output_tokens"], 2)
             self.assertEqual(evidence["verification"]["hosted_full_ci"], "PENDING")
