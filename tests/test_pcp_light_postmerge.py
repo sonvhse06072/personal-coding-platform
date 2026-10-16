@@ -226,6 +226,22 @@ def test_full_job_requires_exactly_one_successful_test_step(gh):
     assert check()["reason"] == "required_full_tests_not_executed"
 
 
+def test_malformed_nested_identity_fails_closed_instead_of_crashing(gh):
+    gh.responses[PR_KEY]["base"]["repo"] = "invalid-shape"
+    assert check()["reason"] == "pull_request_repository_or_author_mismatch"
+    gh.responses[PR_KEY] = valid_response()[PR_KEY]
+    gh.responses[RUN_KEY]["repository"] = ["invalid-shape"]
+    assert check()["reason"] == "postmerge_workflow_identity_mismatch"
+
+
+def test_github_boolean_identity_cannot_masquerade_as_integer(gh):
+    gh.responses[RUN_KEY]["id"] = True
+    assert check()["reason"] == "postmerge_workflow_identity_mismatch"
+    gh.responses[RUN_KEY] = valid_response()[RUN_KEY]
+    gh.responses[JOBS_KEY]["total_count"] = True
+    assert check()["reason"] == "required_jobs_missing_duplicate_or_truncated"
+
+
 def test_cli_reports_sanitized_json_and_nonzero_for_failed_gate(gh, capsys):
     assert post.main(["--pr", str(PR_NUMBER), "--expected-merge-sha",
                       MERGE_SHA, "--run-id", str(RUN_ID)]) == 0
