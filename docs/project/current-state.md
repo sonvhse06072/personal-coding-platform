@@ -49,7 +49,9 @@ The following legacy automated continuity block is retained for existing parser 
 - This section is mutable execution state only. Durable architecture/policy changes still require their normal reviewed Git path.
 <!-- PCP:CONTINUITY:END -->
 
-## Chợ Nhạc strict no-touch / historical job preservation
+## Standing safety boundary
+
+**Chợ Nhạc strict no-touch / historical job preservation.**
 
 Owner's PCP-side prohibition remains active: no PCP agent, PM Bridge, Guardian, Codex task, workflow or diagnostic may mutate or inspect the Chợ Nhạc repository, shared worktree, DDEV, DB, lease, secrets, deployment or its existing jobs as a side effect of PCP work. Historical Chợ Nhạc GH-89 job `08ae925693b85379b11a54e4dc26121e` and an old managed-project lease were observed blocked/uncertain; no status is inferred now, and no reset/cancel/replacement is allowed. This **operational** no-touch rule does not falsely claim a deployed technical denylist. PCP-light is explicitly **PCP-repository-only** and does not inherit any Chợ Nhạc writer privilege.
 
