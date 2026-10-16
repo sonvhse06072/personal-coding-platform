@@ -22,6 +22,7 @@ def agent_verification_capability_context(
     mode: str,
     project: dict[str, Any],
     verification: dict[str, Any] | None = None,
+    scoped_developer_broker: bool = False,
 ) -> dict[str, Any] | None:
     """Build bounded prompt context from adapter, project and final evidence."""
     capability_method = getattr(adapter, "invocation_capabilities", None)
@@ -112,4 +113,11 @@ def agent_verification_capability_context(
     if len(unavailable_capabilities) > 1:
         result["capability_phases"] = capability_phases
         result["reasons"] = capability_reasons
+    # This is a *prompt hint* about an independently admitted, scoped tool,
+    # never an assertion that the local sandbox gained PHP/network or that
+    # any Executor check passed. Never derive this flag from project prose.
+    if (scoped_developer_broker is True
+            and mode in {"execute", "repair"}
+            and getattr(adapter, "name", None) == "codex_cli"):
+        result["scoped_developer_tool"] = "pcp_dev.pcp_run_project_checks"
     return result
