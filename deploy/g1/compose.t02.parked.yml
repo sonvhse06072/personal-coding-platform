@@ -95,7 +95,7 @@ services:
       PCP_TRUSTED_CODEX_DEV_TOKEN: ""
       PCP_TRUSTED_CODEX_DEADLINE_EPOCH: ""
       GIT_TERMINAL_PROMPT: "0"
-    secrets: [g1_pilot_repo_github_token]
+    secrets: [g1_t02_repo_github_token]
     volumes:
       - type: bind
         source: "${PCP_G1_T02_ROOT:?}/source"
@@ -225,7 +225,7 @@ services:
     labels: {pcp.scope: g1-t02-parked, pcp.role: direct}
 
 secrets:
-  g1_pilot_repo_github_token:
+  g1_t02_repo_github_token:
     # NEW single-repo token, read by Executor ONLY after explicit activation.
     file: "${PCP_G1_T02_GITHUB_TOKEN_FILE:?new_repo_scoped_git_token_file_required}"
 
