@@ -101,6 +101,31 @@ before merging. For a STOP *before draft creation*, there is no PR to inspect;
 the Owner should provide only the sanitized STOP code, preserving the
 original worktree/journal with **no retries**.
 
+### Read-only PR readiness report
+
+`scripts/pcp-light-pr-review.py` is a report-only check; it never approves,
+merges, retries or mutates GitHub. Its normal one-commit path remains
+`READY_FOR_PM_REVIEW`. It also recognizes a bounded linear chain of 2–4 commits
+from the immutable Owner issue `base_sha` to the explicitly pinned open PR HEAD,
+reported as `READY_FOR_PM_REVIEW_WITH_REPAIRS`. For that result it records the
+first candidate commit and chain length and sets
+`repair_chain_needs_independent_review=true`.
+
+The chain must be exactly ahead of its source with no behind commits, the exact
+source merge base, matching ahead/total/list counts, unique SHAs, one exact
+parent per commit in sequence and the pinned HEAD last. Each repair commit's
+actual changed-file list is fetched through a fixed GitHub GET and must be
+complete, bounded and entirely within the immutable issue allowlist; merge,
+delete, rename, foreign intermediate edit, truncated list and chains longer
+than four fail closed even if the final aggregate diff looks clean. The normal
+final PR diff, changed-test requirement, owner issue marker/JSON/body digest,
+PR author/repository/branch/base checks and all four hosted tests.yml jobs on
+the exact current HEAD remain required. The mutable PR body supplies no proof.
+
+The repaired-chain status is only a readiness report. A human must review each
+commit's code and the exact final diff, and exact-head hosted CI must pass
+before merge. It does not claim PM approval or autonomous first-pass success.
+
 ## Speed/quality decision
 
 This operator deliberately reuses `gh`, existing Codex auth, Git worktrees and GitHub Actions. No new PostgreSQL, DDEV, Router, Executor, proxy, workflow scheduler, Python dependency installer or generic agent framework. The local `pytest` stop in the original #725 trial drove this **CI-first verification policy**: make source-scope/AST checks locally, run full tests in isolated hosted PR CI instead. This avoids executing unreviewed generated tests on the Owner host and prevents a post-model `No module named pytest` blocker. A genuine result should be compared to plain direct Codex using accepted PR, end-to-end elapsed time, model tokens and count of Owner interventions. Do not claim p50/p90 or savings from a single run. G0 #595 remains HOLD / NOT GO.

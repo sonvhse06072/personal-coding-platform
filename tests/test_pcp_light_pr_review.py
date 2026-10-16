@@ -53,7 +53,7 @@ def valid_responses():
             "author_association": "OWNER", "body": ISSUE_BODY,
         },
         f"repos/{REPO}/compare/{BASE}...{HEAD}": {
-            "status": "ahead", "ahead_by": 1, "behind_by": 0,
+            "status": "ahead", "ahead_by": 1, "total_commits": 1, "behind_by": 0,
             "merge_base_commit": {"sha": BASE},
             "commits": [{"sha": HEAD}],
         },
@@ -108,6 +108,9 @@ def test_exact_sha_and_live_api_facts_are_ready(gh):
     assert result["head_sha"] == HEAD and result["base_sha"] == BASE
     assert result["original_source_sha"] == BASE
     assert result["changed_paths"] == sorted(ISSUE_TASK["allowed_paths"])
+    assert result["commit_count"] == 1
+    assert result["original_first_commit_sha"] == HEAD
+    assert result["repair_chain_needs_independent_review"] is False
     assert result["required_jobs"] == {name: "SUCCESS" for name in review.REQUIRED_JOBS}
     assert result["authorization"].startswith("NONE;")
     assert len(gh.calls) == 6
@@ -178,7 +181,7 @@ def test_issue_duplicate_paths_and_unapproved_paths_fail_closed(gh):
 def test_candidate_source_parent_is_not_pr_base_tip(gh):
     key = f"repos/{REPO}/compare/{BASE}...{HEAD}"
     gh.responses[key]["merge_base_commit"] = {"sha": "f" * 40}
-    assert run()["reason"] == "candidate_not_exactly_one_commit_after_base"
+    assert run()["reason"] == "candidate_commit_chain_invalid"
 
 
 def test_removed_or_renamed_allowed_test_is_not_ready(gh):
@@ -197,13 +200,87 @@ def test_mutable_forged_pr_body_cannot_supply_ci_or_commit_proof(gh):
 
 @pytest.mark.parametrize("mutation,reason", [
     (lambda d: d.update({"ahead_by": 2, "commits": [{"sha": HEAD}, {"sha": "c" * 40}]}),
-     "candidate_not_exactly_one_commit_after_base"),
+     "candidate_commit_chain_invalid"),
     (lambda d: d.update({"status": "behind", "ahead_by": 0, "commits": []}),
-     "candidate_not_exactly_one_commit_after_base"),
+     "candidate_commit_chain_invalid"),
 ])
 def test_wrong_commit_count_is_not_ready(gh, mutation, reason):
     mutation(gh.responses[f"repos/{REPO}/compare/{BASE}...{HEAD}"])
     assert run()["reason"] == reason
+
+
+def install_three_commit_chain(gh):
+    # Models PR #736's reported shape: original candidate + two PM repairs,
+    # rooted at its immutable Owner-approved source SHA.
+    source = "86d34a495f87bb17a07fb18fc8ec64cbe4c6ecef"
+    shas = ["1" * 40, "2" * 40, "3" * 40]
+    issue = {**ISSUE_TASK, "base_sha": source}
+    body = review.MARKER + "\n" + json.dumps(issue, sort_keys=True, ensure_ascii=False)
+    gh.responses[f"repos/{REPO}/issues/9"]["body"] = body
+    gh.responses[f"repos/{REPO}/pulls/12"]["head"]["sha"] = shas[-1]
+    gh.responses[f"repos/{REPO}/compare/{source}...{shas[-1]}"] = {
+        "status": "ahead", "ahead_by": 3, "total_commits": 3,
+        "behind_by": 0, "merge_base_commit": {"sha": source},
+        "commits": [{"sha": sha} for sha in shas],
+    }
+    for index, sha in enumerate(shas):
+        parent = source if index == 0 else shas[index - 1]
+        gh.responses[f"repos/{REPO}/commits/{sha}"] = {
+            "sha": sha, "parents": [{"sha": parent}],
+            "files": [{"filename": path, "status": "modified"}
+                      for path in ISSUE_TASK["allowed_paths"]],
+        }
+    gh.responses[f"repos/{REPO}/actions/workflows/tests.yml/runs?head_sha={shas[-1]}&event=pull_request&per_page=100"] = {
+        "workflow_runs": [{"id": 88, "run_number": 17, "name": "tests",
+                           "event": "pull_request", "head_sha": shas[-1],
+                           "status": "completed", "conclusion": "success"}],
+    }
+    return source, shas, hashlib.sha256(body.encode("utf-8")).hexdigest()
+
+
+def test_pr736_three_commit_linear_repair_chain_is_ready_for_independent_review(gh):
+    source, shas, digest = install_three_commit_chain(gh)
+    result = run(head=shas[-1], digest=digest)
+    assert result["status"] == "READY_FOR_PM_REVIEW_WITH_REPAIRS"
+    assert result["original_source_sha"] == source
+    assert result["original_first_commit_sha"] == shas[0]
+    assert result["commit_count"] == 3
+    assert result["repair_chain_needs_independent_review"] is True
+    assert result["required_jobs"] == {name: "SUCCESS" for name in review.REQUIRED_JOBS}
+    commit_gets = [call for call in gh.calls if "/commits/" in call[0][4]]
+    assert len(commit_gets) == 3
+    assert all(call[0][:4] == ["gh", "api", "--method", "GET"] for call in commit_gets)
+
+
+def test_repair_chain_rejects_non_linear_and_foreign_intermediate_edits(gh):
+    _, shas, digest = install_three_commit_chain(gh)
+    first = gh.responses[f"repos/{REPO}/commits/{shas[0]}"]
+    first["parents"].append({"sha": "4" * 40})
+    assert run(head=shas[-1], digest=digest)["reason"] == "candidate_commit_parent_chain_invalid"
+    first["parents"] = [{"sha": "86d34a495f87bb17a07fb18fc8ec64cbe4c6ecef"}]
+    first["files"].append({"filename": "docs/project/constitution.md", "status": "modified"})
+    assert run(head=shas[-1], digest=digest)["reason"] == "commit_changed_paths_outside_original_issue_scope"
+
+
+def test_repair_chain_rejects_stale_parent_head_base_and_count_mismatch(gh):
+    source, shas, digest = install_three_commit_chain(gh)
+    key = f"repos/{REPO}/commits/{shas[1]}"
+    gh.responses[key]["parents"] = [{"sha": "4" * 40}]
+    assert run(head=shas[-1], digest=digest)["reason"] == "candidate_commit_parent_chain_invalid"
+    gh.responses[key]["parents"] = [{"sha": shas[0]}]
+    compare_key = f"repos/{REPO}/compare/{source}...{shas[-1]}"
+    gh.responses[compare_key]["total_commits"] = 2
+    assert run(head=shas[-1], digest=digest)["reason"] == "candidate_commit_chain_invalid"
+
+
+def test_repair_chain_rejects_truncated_or_overlong_commit_file_lists(gh):
+    _, shas, digest = install_three_commit_chain(gh)
+    gh.responses[f"repos/{REPO}/commits/{shas[0]}"]["files"] = []
+    assert run(head=shas[-1], digest=digest)["reason"] == "commit_changed_paths_missing_or_unbounded"
+    gh.responses[f"repos/{REPO}/commits/{shas[0]}"]["files"] = [
+        {"filename": "tests/test_pcp_light_pr_review.py", "status": "modified"}
+    ] * 300
+    assert run(head=shas[-1], digest=digest)["reason"] == "commit_changed_paths_missing_or_unbounded"
 
 
 def test_stale_base_is_not_ready(gh):
