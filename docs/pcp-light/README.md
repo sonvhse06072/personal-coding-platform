@@ -169,8 +169,9 @@ python3 scripts/pcp-light-postmerge.py \
 ```
 
 This checker pins the merged PR identity, Owner and repository, exact merge
-commit, main target, the `tests` workflow path and **push** trigger on that
-commit, then fetches all four required full-test jobs from the latest attempt.
+commit, main target, the `tests` workflow path, **push** trigger, actual
+`head_branch=main` and same-repository `head_repository` on the run, then
+fetches all four required full-test jobs from the latest attempt.
 It refuses pending/failed CI, missing or duplicate jobs, skipped tests, a
 self-hosted or unverified runner, and forged success claims in mutable PR text.
 Unlike the premerge `pcp-light-pr-review.py`, this is for a **completed**
