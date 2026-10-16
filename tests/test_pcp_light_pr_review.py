@@ -181,12 +181,41 @@ def test_issue_duplicate_paths_and_unapproved_paths_fail_closed(gh):
         ["scripts/pcp-light-pr-review.py"] * 2,
         ["scripts/pcp-light-pr-review.py", "tests/test_unrelated.py"],
         ["scripts/pcp-light-pr-review.py", "tests/test_pcp_light_../x.py"],
+        ["scripts/pcp-light-pr-review.md", "tests/test_pcp_light_pr_review.py"],
+        ["scripts/pcp-light-pr-review.py", "tests/test_pcp_light_fake.md"],
+        ["scripts/pcp-light-pr-review.py", "docs/pcp-light/tool.py"],
     ):
         issue = {**ISSUE_TASK, "allowed_paths": paths}
         raw = review.MARKER + "\n" + json.dumps(issue, sort_keys=True)
         gh.responses[key]["body"] = raw
         digest = hashlib.sha256(raw.encode()).hexdigest()
         assert run(digest=digest)["reason"] == "original_issue_allowed_paths_invalid"
+
+
+def test_issue_accepts_python_tests_and_nested_markdown_docs(gh):
+    paths = ["scripts/pcp-light-pr-review.py",
+             "tests/test_pcp_light_pr_review.py",
+             "docs/pcp-light/nested/guide.md"]
+    issue = {**ISSUE_TASK, "allowed_paths": paths}
+    body = review.MARKER + "\n" + json.dumps(issue, sort_keys=True)
+    assert review.issue_allowed_paths(body) == paths
+    key = f"repos/{REPO}/issues/9"
+    gh.responses[key]["body"] = body
+    assert run(digest=hashlib.sha256(body.encode()).hexdigest())["status"] == (
+        "READY_FOR_PM_REVIEW"
+    )
+
+
+def test_markdown_pseudo_test_issue_can_never_report_ready(gh):
+    issue = {**ISSUE_TASK, "allowed_paths": [
+        "scripts/pcp-light-pr-review.py", "tests/test_pcp_light_fake.md",
+    ]}
+    body = review.MARKER + "\n" + json.dumps(issue, sort_keys=True)
+    key = f"repos/{REPO}/issues/9"
+    gh.responses[key]["body"] = body
+    result = run(digest=hashlib.sha256(body.encode()).hexdigest())
+    assert result["status"] == "NOT_READY"
+    assert result["reason"] == "original_issue_allowed_paths_invalid"
 
 
 def test_candidate_source_parent_is_not_pr_base_tip(gh):

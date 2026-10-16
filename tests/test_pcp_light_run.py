@@ -101,6 +101,28 @@ class PCPFastHandoffTests(unittest.TestCase):
         ]:
             with self.subTest(path=path):
                 self.assertFalse(M.allowed_path(path))
+        for path in (
+            "scripts/pcp-light-notes.md", "tests/test_pcp_light_notes.md",
+            "docs/pcp-light/tool.py", "scripts/nested/pcp-light-tool.py",
+            "tests/nested/test_pcp_light_tool.py",
+        ):
+            with self.subTest(path=path):
+                self.assertFalse(M.allowed_path(path))
+        for path in (
+            "scripts/pcp-light-tool.py", "tests/test_pcp_light_tool.py",
+            "docs/pcp-light/guide.md", "docs/pcp-light/nested/guide.md",
+        ):
+            with self.subTest(path=path):
+                self.assertTrue(M.allowed_path(path))
+        doc, digest = issue({**GOOD_TASK, "allowed_paths": [
+            "scripts/pcp-light-run.py", "tests/test_pcp_light_run.py",
+            "docs/pcp-light/nested/guide.md",
+        ]})
+        self.assertEqual(
+            M.parse_issue(doc, 593, digest)["allowed_paths"],
+            ["scripts/pcp-light-run.py", "tests/test_pcp_light_run.py",
+             "docs/pcp-light/nested/guide.md"],
+        )
         for key in ("g1-retry", "f2-replay", "chonhac-ticket", "g0-recovery"):
             doc, digest = issue({**GOOD_TASK, "key": key})
             with self.assertRaisesRegex(M.Stop, "handoff_field_invalid"):
@@ -110,6 +132,39 @@ class PCPFastHandoffTests(unittest.TestCase):
         })
         with self.assertRaisesRegex(M.Stop, "handoff_allowed_files_invalid"):
             M.parse_issue(doc, 593, digest)
+
+    def test_mixed_extensions_and_markdown_pseudo_test_fail_issue_admission(self):
+        for paths in (
+            ["scripts/pcp-light-run.py", "tests/test_pcp_light_fake.md"],
+            ["scripts/pcp-light-notes.md", "tests/test_pcp_light_run.py"],
+            ["docs/pcp-light/tool.py", "tests/test_pcp_light_run.py"],
+            ["scripts/pcp-light-run.py", "docs/pcp-light/nested/guide.md"],
+            ["scripts/pcp-light-run.py", "scripts/pcp-light-run.py"],
+            ["scripts/pcp-light-run.py", "tests/test_pcp_light_../escape.py"],
+        ):
+            doc, digest = issue({**GOOD_TASK, "allowed_paths": paths})
+            with self.subTest(paths=paths), self.assertRaisesRegex(
+                    M.Stop, "handoff_allowed_files_invalid"):
+                M.parse_issue(doc, 593, digest)
+
+    def test_invalid_issue_stops_before_claim_worktree_or_codex_call(self):
+        task = {**GOOD_TASK, "allowed_paths": [
+            "scripts/pcp-light-run.py", "tests/test_pcp_light_fake.md",
+        ]}
+        doc, digest = issue(task)
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "jobs"
+            with patch.object(M, "ROOT", root), patch.object(
+                M, "load_issue", side_effect=lambda _issue, _digest:
+                M.parse_issue(doc, 593, digest)
+            ), patch.object(M, "command") as commands, patch.object(
+                M, "codex_turn"
+            ) as model:
+                with self.assertRaisesRegex(M.Stop, "handoff_allowed_files_invalid"):
+                    M.run_task(Path(tmp), 593, digest, execute=True)
+                commands.assert_not_called()
+                model.assert_not_called()
+            self.assertFalse(root.exists())
 
     def test_handoff_requires_supported_model_and_effort(self):
         for model in ("", "codex --danger", "gpt-6;rm -rf", "../../../cmd"):
