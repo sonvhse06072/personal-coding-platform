@@ -49,7 +49,8 @@ def get_json(endpoint: str) -> Any:
         )
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise NotVerified("github_get_unavailable_or_timeout") from exc
-    if proc.returncode or len(proc.stdout) > MAX_RESPONSE_CHARS:
+    if (proc.returncode or not isinstance(proc.stdout, str)
+            or len(proc.stdout) > MAX_RESPONSE_CHARS):
         raise NotVerified("github_get_failed_or_unbounded")
     try:
         return json.loads(proc.stdout)
@@ -67,6 +68,10 @@ def sha(value: Any) -> str:
     if not isinstance(value, str) or SHA_RE.fullmatch(value) is None:
         raise NotVerified("expected_merge_sha_invalid")
     return value
+
+
+def _repo_name(value: Any) -> str | None:
+    return value.get("full_name") if isinstance(value, dict) else None
 
 
 def _timestamp(value: Any) -> datetime | None:
@@ -106,7 +111,8 @@ def validate(pr_number: int, merge_sha: str, run_id: int) -> dict[str, Any]:
     merge_sha = sha(merge_sha)
 
     pr = get_json(f"repos/{REPO}/pulls/{pr_number}")
-    if not isinstance(pr, dict) or pr.get("number") != pr_number:
+    if (not isinstance(pr, dict) or type(pr.get("number")) is not int
+            or pr.get("number") != pr_number):
         raise NotVerified("pull_request_identity_mismatch")
     base = pr.get("base") if isinstance(pr.get("base"), dict) else {}
     head = pr.get("head") if isinstance(pr.get("head"), dict) else {}
@@ -116,17 +122,18 @@ def validate(pr_number: int, merge_sha: str, run_id: int) -> dict[str, Any]:
     if (not isinstance(pr.get("user"), dict)
             or pr["user"].get("login") != OWNER
             or base.get("ref") != "main"
-            or (base.get("repo") or {}).get("full_name") != REPO
-            or (head.get("repo") or {}).get("full_name") != REPO):
+            or _repo_name(base.get("repo")) != REPO
+            or _repo_name(head.get("repo")) != REPO):
         raise NotVerified("pull_request_repository_or_author_mismatch")
 
     run = get_json(f"repos/{REPO}/actions/runs/{run_id}")
-    if (not isinstance(run, dict) or run.get("id") != run_id
+    if (not isinstance(run, dict) or type(run.get("id")) is not int
+            or run.get("id") != run_id
             or run.get("name") != "tests"
             or run.get("path") != WORKFLOW_PATH
             or run.get("event") != "push"
             or run.get("head_sha") != merge_sha
-            or (run.get("repository") or {}).get("full_name") != REPO):
+            or _repo_name(run.get("repository")) != REPO):
         raise NotVerified("postmerge_workflow_identity_mismatch")
     attempt = require_id(run.get("run_attempt"), "workflow_attempt_invalid")
     if run.get("status") != "completed":
