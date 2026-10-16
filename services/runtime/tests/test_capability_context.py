@@ -288,6 +288,79 @@ def test_codex_context_keeps_capabilities_separate_when_both_are_unavailable():
     assert "  - targeted_tests" in prompt
 
 
+def test_scoped_codex_broker_hint_only_after_independent_execute_admission():
+    project = {
+        "ddev": {
+            "enabled": True,
+            "frontend_quality": ["opaque project-owned frontend check"],
+            "targeted_tests": ["opaque project-owned PHP test"],
+            "verification_phase_capabilities": {
+                "frontend_quality": {"requires": ["local_listener"]},
+                "targeted_tests": {"requires": ["php_runtime"]},
+            },
+        },
+    }
+    adapter = CodexAdapter("gpt-6-luna", "medium")
+
+    admitted = agent_verification_capability_context(
+        adapter, mode="execute", project=project,
+        scoped_developer_broker=True,
+    )
+    assert admitted is not None
+    assert admitted["unavailable_capabilities"] == [
+        "local_listener", "php_runtime",
+    ]
+    assert admitted["scoped_developer_tool"] == "pcp_dev.pcp_run_project_checks"
+    prompt = _execution_prompt(admitted)
+    assert "pcp_dev.pcp_run_project_checks" in prompt
+    assert "already admitted, job-scoped Executor broker" in prompt
+    assert "No direct PHP" in prompt
+    assert "Do not attempt direct local listeners" in prompt
+    assert "Final Runtime/DDEV verification remains authoritative" in prompt
+    assert "Do not attempt or repeatedly retry PHP, PHPCS" not in prompt
+    assert "opaque project-owned PHP test" not in prompt
+    assert "opaque project-owned frontend check" not in prompt
+    assert "PCP_DEV_BROKER_TOKEN" not in prompt
+
+    denied = agent_verification_capability_context(
+        adapter, mode="execute", project=project,
+    )
+    assert denied is not None
+    assert "scoped_developer_tool" not in denied
+    assert "pcp_dev.pcp_run_project_checks" not in _execution_prompt(denied)
+    assert "Do not attempt or repeatedly retry PHP, PHPCS" in _execution_prompt(denied)
+
+
+@pytest.mark.parametrize("mode", ["plan", "evaluate"])
+def test_scoped_broker_cannot_be_advertised_to_non_developer_modes(mode):
+    adapter = CodexAdapter("gpt-6-luna")
+    context = agent_verification_capability_context(
+        adapter, mode=mode, project=_php_project(),
+        scoped_developer_broker=True,
+        verification={"phases": [{
+            "phase": "targeted_tests", "required_for_final": True,
+        }]},
+    )
+    if context is not None:
+        assert "scoped_developer_tool" not in context
+        assert "pcp_dev.pcp_run_project_checks" not in (
+            _evaluator_prompt(context) if mode == "evaluate"
+            else _execution_prompt(context)
+        )
+
+
+def test_scoped_broker_flag_does_not_advertise_tool_to_foreign_adapter():
+    context = agent_verification_capability_context(
+        OpenCodeAdapter("openrouter/cohere/north-mini-code:free"),
+        mode="execute",
+        project=_php_project(),
+        scoped_developer_broker=True,
+    )
+    assert context is not None
+    assert "scoped_developer_tool" not in context
+    assert "pcp_dev.pcp_run_project_checks" not in _execution_prompt(context)
+
+
 class ExplicitlyConstrainedAdapter(AgentAdapter):
     def invocation_capabilities(self, mode: str) -> InvocationCapabilities:
         return InvocationCapabilities(

@@ -94,6 +94,11 @@ def _capability_boundary_lines(
         phase_map[next(iter(unavailable))] = all_phases
 
     lines = ["", "AGENT CAPABILITY BOUNDARY:"]
+    broker_admitted = (
+        not evaluator
+        and context.get("scoped_developer_tool")
+        == "pcp_dev.pcp_run_project_checks"
+    )
 
     listener_phases = phase_map.get("local_listener") or []
     if "local_listener" in unavailable and listener_phases:
@@ -104,6 +109,12 @@ def _capability_boundary_lines(
             lines += [
                 "Do not attempt or repeatedly retry recreating those listener-dependent checks in this invocation.",
                 "Judge the authoritative Runtime/DDEV verification evidence for these required phases:",
+            ]
+        elif broker_admitted:
+            lines += [
+                "Do not attempt direct local listeners, network access, DDEV or host commands.",
+                "For a configured frontend_quality phase only, you may request pcp_dev.pcp_run_project_checks through the already admitted, job-scoped Executor broker; the Executor can still deny it.",
+                "Runtime/ddev-executor owns these listener-dependent verification phases when they are applicable:",
             ]
         else:
             lines += [
@@ -121,6 +132,12 @@ def _capability_boundary_lines(
             lines += [
                 "Do not attempt or repeatedly retry recreating PHP-dependent checks in this invocation.",
                 "Judge the authoritative Runtime/DDEV verification evidence for these required PHP-dependent phases:",
+            ]
+        elif broker_admitted:
+            lines += [
+                "No direct PHP, PHPCS, PHPUnit, PHPStan, DDEV, Docker or shell escalation is permitted in this sandbox.",
+                "For configured targeted_tests or static_analysis only, you may request pcp_dev.pcp_run_project_checks via the separately admitted job-scoped Executor broker; do not assume the phase exists or that a denied/failed tool call passed.",
+                "Runtime/ddev-executor owns these PHP-dependent verification phases when they are applicable:",
             ]
         else:
             lines += [

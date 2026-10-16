@@ -731,6 +731,7 @@ class RuntimeEngine(RuntimeEngineCore):
                         adapter,
                         mode="execute",
                         project=project,
+                        scoped_developer_broker=developer_broker is not None,
                     ),
                     trusted_local_developer=trusted_local_developer_enabled(
                         workspace,
