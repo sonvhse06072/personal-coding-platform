@@ -53,8 +53,10 @@ def valid_response():
         },
         RUN_KEY: {
             "id": RUN_ID, "name": "tests", "path": post.WORKFLOW_PATH,
-            "event": "push", "head_sha": MERGE_SHA,
+            "event": "push", "head_branch": "main",
+            "head_sha": MERGE_SHA,
             "repository": {"full_name": REPO},
+            "head_repository": {"full_name": REPO},
             "status": "completed", "conclusion": "success",
             "run_attempt": 1,
             "created_at": "2026-10-16T09:02:04Z",
@@ -137,6 +139,16 @@ def test_740_failed_runtime_postmerge_cannot_be_accepted(gh):
      "postmerge_workflow_identity_mismatch"),
     (lambda d: d[RUN_KEY].update(event="pull_request"),
      "postmerge_workflow_identity_mismatch"),
+    (lambda d: d[RUN_KEY].update(head_branch="feature"),
+     "postmerge_workflow_identity_mismatch"),
+    (lambda d: d[RUN_KEY].update(head_branch=None),
+     "postmerge_workflow_identity_mismatch"),
+    (lambda d: d[RUN_KEY].pop("head_branch"),
+     "postmerge_workflow_identity_mismatch"),
+    (lambda d: d[RUN_KEY]["head_repository"].update(full_name="attacker/fork"),
+     "postmerge_workflow_identity_mismatch"),
+    (lambda d: d[RUN_KEY].update(head_repository=["malformed"]),
+     "postmerge_workflow_identity_mismatch"),
     (lambda d: d[RUN_KEY].update(path=".github/workflows/other.yml"),
      "postmerge_workflow_identity_mismatch"),
     (lambda d: d[RUN_KEY].update(name="pretend-tests"),
@@ -181,6 +193,15 @@ def test_pending_run_does_not_claim_acceptance(gh):
 def test_retry_attempt_is_reported_not_hidden(gh):
     gh.responses[RUN_KEY]["run_attempt"] = 2
     assert check()["run_attempt"] == 2
+
+
+def test_real_postmerge_747_provenance_requires_main(gh):
+    # Real #747 full hosted push/main had both head_branch=main and
+    # head_repository=the private PCP repository (run 38890561213).
+    result = check()
+    assert result["verified"] is True
+    gh.responses[RUN_KEY]["head_branch"] = "ai/feature-only"
+    assert check()["reason"] == "postmerge_workflow_identity_mismatch"
 
 
 def test_missing_or_invalid_timestamps_report_unknown_without_fabrication(gh):
