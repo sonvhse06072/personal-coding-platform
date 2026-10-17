@@ -21,6 +21,7 @@ _SHA = re.compile(r"^[a-f0-9]{40}$")
 _DISPOSABLE = re.compile(r"^pcp-benchmark-[a-z0-9-]{2,80}$")
 _SMOKE_ID = "pcp-benchmark-g1-smoke"
 _PILOT_ID = "pcp-benchmark-g1-pilot"
+_T02_ID = "pcp-benchmark-g1-t02"
 _SEED_SHA = "d4f4a56713e95f85ecc08c02bb43a5b5105a86a3"
 _PILOT_DDEV_SEED_SHA = "7a3e97a2a35fc8e67b67021365e7e91c448b52c9"
 _PILOT_NAME_OVERRIDE = "override_config: true\nname: pcp-g1-codex-pilot\n"
@@ -38,6 +39,22 @@ _PILOT_CACHE_COMPOSE = (
     "  g1-pilot-private-cache:\n"
     "    external: true\n"
     "    name: pcp-g1-pilot-cache\n"
+)
+_T02_NAME_OVERRIDE = "override_config: true\nname: pcp-g1-codex-t02\n"
+_T02_CACHE_FILE = "docker-compose.g1-t02.yaml"
+_T02_CACHE_COMPOSE = (
+    "# G1-T02 private DDEV cache; never model editable.\n"
+    "services:\n"
+    "  web:\n"
+    "    volumes:\n"
+    "      - g1-t02-private-cache:/mnt/ddev-global-cache\n"
+    "  db:\n"
+    "    volumes:\n"
+    "      - g1-t02-private-cache:/mnt/ddev-global-cache\n"
+    "volumes:\n"
+    "  g1-t02-private-cache:\n"
+    "    external: true\n"
+    "    name: pcp-g1-t02-cache\n"
 )
 _ALLOWED_HOSTS = frozenset({"ddev-executor", "pcp-dev-executor"})
 _PROTECTED_ENV = (
@@ -127,7 +144,7 @@ def trusted_codex_phase_broker(
     except (OSError, RuntimeError):
         return None
 
-    if project_id not in {_SMOKE_ID, _PILOT_ID}:
+    if project_id not in {_SMOKE_ID, _PILOT_ID, _T02_ID}:
         return None
     if project_id == _PILOT_ID:
         if (
@@ -167,6 +184,45 @@ def trusted_codex_phase_broker(
         except (OSError, UnicodeError):
             return None
 
+    if project_id == _T02_ID:
+        # T02 cannot inherit T01 identity; both flags and DDEV overrides
+        # are independent, and live Docker attestation remains Executor-owned.
+        if (os.getenv("PCP_G1_T02_IDENTITY_ENABLED") != "owner-approved"
+                or source_commit != _SEED_SHA):
+            return None
+        ddev = workspace / ".ddev"
+        try:
+            if ddev.is_symlink() or not ddev.is_dir():
+                return None
+            seed = ddev / "config.yaml"
+            if seed.is_symlink():
+                return None
+            data = seed.read_bytes()
+            blob = hashlib.sha1(
+                b"blob " + str(len(data)).encode() + b"\0" + data
+            ).hexdigest()
+            if blob != _PILOT_DDEV_SEED_SHA:
+                return None
+            for name, expected_text in {
+                "config.g1-t02.yaml": _T02_NAME_OVERRIDE,
+                _T02_CACHE_FILE: _T02_CACHE_COMPOSE,
+            }.items():
+                item = ddev / name
+                if item.is_symlink() or item.read_text(encoding="utf-8") != expected_text:
+                    return None
+            if (ddev / "commands").exists() or (ddev / "hooks").exists():
+                return None
+            if any(item.is_symlink() for item in ddev.rglob("*")):
+                return None
+            if ({item.name for item in ddev.glob("config*.y*ml")}
+                    - {"config.yaml", "config.g1-t02.yaml"}):
+                return None
+            if ({item.name for item in ddev.glob("docker-compose*.y*ml")}
+                    - {_T02_CACHE_FILE}):
+                return None
+        except (OSError, UnicodeError):
+            return None
+
     registry = projects_doc().get("projects")
     if not isinstance(registry, dict) or set(registry) != {project_id}:
         return None
@@ -190,6 +246,15 @@ def trusted_codex_phase_broker(
     if project_id == _PILOT_ID and not (
         runtime.get("pilot_identity") == "g1-t01-pcp"
         and project.get("base_branch") == "benchmark/g1-codex-smoke-v1"
+    ):
+        return None
+
+    if project_id == _T02_ID and not (
+        runtime.get("pilot_identity") == "g1-t02-pcp"
+        and project.get("base_branch") == "benchmark/g1-codex-smoke-v1"
+        and all(autonomy.get(k) is False for k in (
+            "allow_commit", "allow_push_ai_branch", "allow_create_pr"
+        ))
     ):
         return None
 
