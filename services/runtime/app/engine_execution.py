@@ -84,7 +84,7 @@ def preserve_trusted_g1_ddev_name(
     *, job_id: str, project_id: str, source_commit: str, workspace: Path,
 ) -> bool:
     """Keep exactly the admitted G1 seed name, never a foreign DDEV project."""
-    if project_id == "pcp-benchmark-g1-pilot":
+    if project_id in {"pcp-benchmark-g1-pilot", "pcp-benchmark-g1-t02"}:
         # The pinned pilot base retains the smoke seed config.yaml, but a
         # separate operator-owned DDEV name+cache override is mandatory.
         # Broker checks exact SHA, singleton job/registry and both files.
