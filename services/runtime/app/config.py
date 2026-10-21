@@ -123,8 +123,34 @@ def project_config(project_id: str) -> dict[str, Any]:
         and (cfg.get("autonomy") or {}).get("allow_auto_merge_low_risk") is False
         and (cfg.get("autonomy") or {}).get("allow_production_deploy") is False
     )
+    # G1-T02 uses a fresh, separately owner-gated identity. Registration
+    # alone does not approve a ProjectBaseline, live broker, or model dispatch;
+    # the separate broker still pins the immutable fixture source SHA.
+    t02_autonomy = cfg.get("autonomy")
+    t02_identity = (
+        project_id == "pcp-benchmark-g1-t02"
+        and os.getenv("PCP_G1_T02_IDENTITY_ENABLED") == "owner-approved"
+        and runtime.get("pilot_identity") == "g1-t02-pcp"
+        and cfg.get("base_branch") == "benchmark/g1-codex-smoke-v1"
+        and runtime.get("workspace_mode") == "isolated_clone"
+        and runtime.get("exclusive_project_lease") is False
+        and runtime.get("branch_prefix") == "ai"
+        and isinstance(cfg.get("ddev"), dict)
+        and cfg["ddev"].get("enabled") is True
+        and isinstance(t02_autonomy, dict)
+        and all(
+            t02_autonomy.get(permission) is False
+            for permission in (
+                "allow_commit",
+                "allow_push_ai_branch",
+                "allow_create_pr",
+                "allow_auto_merge_low_risk",
+                "allow_production_deploy",
+            )
+        )
+    )
     if developer_permission_mode == "trusted_project" and not (
-        (smoke_identity or pilot_identity)
+        (smoke_identity or pilot_identity or t02_identity)
         and workspace_mode == "isolated_clone"
         and not exclusive_project_lease
         and (cfg.get("ddev") or {}).get("enabled") is True

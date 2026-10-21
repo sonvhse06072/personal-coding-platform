@@ -1,6 +1,7 @@
 """G1-T02 Runtime broker is scoped to a new source-only identity; no model."""
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 import time
 
@@ -163,10 +164,133 @@ def test_t02_immutable_source_workspace_and_permissions(scope, monkeypatch, tmp_
     assert request(ws, **args) is None
 
 
-def test_runtime_project_config_still_fails_closed_for_t02(scope, monkeypatch):
+def test_runtime_project_config_requires_exact_t02_registration(scope, monkeypatch):
     _, project = scope
     monkeypatch.setattr(config, "projects_doc",
                         lambda: {"projects": {PROJECT: project}})
-    # This source-only PR MUST NOT rewrite project_config's T01-only trust rule.
+    admitted = config.project_config(PROJECT)
+    assert admitted["base_branch"] == "benchmark/g1-codex-smoke-v1"
+    assert admitted["runtime"]["pilot_identity"] == "g1-t02-pcp"
+    assert admitted["runtime"]["developer_permission_mode"] == "trusted_project"
+    assert admitted["runtime"]["workspace_mode"] == "isolated_clone"
+    assert admitted["runtime"]["exclusive_project_lease"] is False
+    assert admitted["ddev"]["enabled"] is True
+    assert all(admitted["autonomy"][key] is False for key in (
+        "allow_commit", "allow_push_ai_branch", "allow_create_pr",
+        "allow_auto_merge_low_risk", "allow_production_deploy",
+    ))
+    # Registration returns only inert configuration; it neither issues a
+    # broker token nor establishes an approved baseline or starts DDEV.
+    assert "PCP_DEV_BROKER_TOKEN" not in admitted
+    assert "PLATFORM_INTERNAL_TOKEN" not in admitted
+
+
+@pytest.mark.parametrize("case", [
+    "flag_missing", "flag_wrong", "pilot_identity_wrong",
+    "pilot_identity_missing", "base_branch_wrong", "base_branch_missing",
+    "workspace_mode_direct", "workspace_mode_missing", "lease_true",
+    "lease_missing", "branch_prefix_wrong", "branch_prefix_missing",
+    "ddev_disabled", "ddev_missing", "autonomy_missing",
+    "allow_commit", "allow_push_ai_branch", "allow_create_pr",
+    "allow_auto_merge_low_risk", "allow_production_deploy",
+    "commit_permission_missing", "push_permission_missing",
+    "pr_permission_missing", "merge_permission_missing",
+    "deploy_permission_missing",
+])
+def test_runtime_project_config_t02_rejects_unauthorized_variants(
+    scope, monkeypatch, case,
+):
+    _, project = scope
+    monkeypatch.setattr(config, "projects_doc",
+                        lambda: {"projects": {PROJECT: project}})
+    if case == "flag_missing":
+        monkeypatch.delenv("PCP_G1_T02_IDENTITY_ENABLED")
+    elif case == "flag_wrong":
+        monkeypatch.setenv("PCP_G1_T02_IDENTITY_ENABLED", "true")
+    elif case == "pilot_identity_wrong":
+        project["runtime"]["pilot_identity"] = "g1-t01-pcp"
+    elif case == "pilot_identity_missing":
+        del project["runtime"]["pilot_identity"]
+    elif case == "base_branch_wrong":
+        project["base_branch"] = "main"
+    elif case == "base_branch_missing":
+        del project["base_branch"]
+    elif case == "workspace_mode_direct":
+        project["runtime"]["workspace_mode"] = "direct"
+        project["runtime"]["exclusive_project_lease"] = True
+    elif case == "workspace_mode_missing":
+        del project["runtime"]["workspace_mode"]
+    elif case == "lease_true":
+        project["runtime"]["exclusive_project_lease"] = True
+    elif case == "lease_missing":
+        del project["runtime"]["exclusive_project_lease"]
+    elif case == "branch_prefix_wrong":
+        project["runtime"]["branch_prefix"] = "other"
+    elif case == "branch_prefix_missing":
+        del project["runtime"]["branch_prefix"]
+    elif case == "ddev_disabled":
+        project["ddev"]["enabled"] = False
+    elif case == "ddev_missing":
+        del project["ddev"]
+    elif case == "autonomy_missing":
+        del project["autonomy"]
+    elif case in {
+        "allow_commit", "allow_push_ai_branch", "allow_create_pr",
+        "allow_auto_merge_low_risk", "allow_production_deploy",
+    }:
+        project["autonomy"][case] = True
+    else:
+        missing = {
+            "commit_permission_missing": "allow_commit",
+            "push_permission_missing": "allow_push_ai_branch",
+            "pr_permission_missing": "allow_create_pr",
+            "merge_permission_missing": "allow_auto_merge_low_risk",
+            "deploy_permission_missing": "allow_production_deploy",
+        }
+        del project["autonomy"][missing[case]]
     with pytest.raises(ValueError, match="trusted_project requires exact"):
         config.project_config(PROJECT)
+
+
+def test_runtime_project_config_t02_flag_never_admits_foreign_pilot(
+    scope, monkeypatch,
+):
+    _, t02 = scope
+    pilot = deepcopy(t02)
+    pilot["runtime"]["pilot_identity"] = "g1-t01-pcp"
+    monkeypatch.setattr(config, "projects_doc", lambda: {
+        "projects": {"pcp-benchmark-g1-pilot": pilot},
+    })
+    monkeypatch.delenv("PCP_G1_PILOT_IDENTITY_ENABLED", raising=False)
+    # An enabled T02 flag must not silently enable the consumed T01 project.
+    with pytest.raises(ValueError, match="trusted_project requires exact"):
+        config.project_config("pcp-benchmark-g1-pilot")
+    with pytest.raises(KeyError, match="Unknown project_id"):
+        config.project_config("pcp-benchmark-g1-foreign")
+
+
+def test_runtime_project_config_preserves_smoke_and_t01_behavior(
+    scope, monkeypatch,
+):
+    _, template = scope
+    smoke = deepcopy(template)
+    pilot = deepcopy(template)
+    pilot["runtime"]["pilot_identity"] = "g1-t01-pcp"
+    monkeypatch.setattr(config, "projects_doc", lambda: {"projects": {
+        "pcp-benchmark-g1-smoke": smoke,
+        "pcp-benchmark-g1-pilot": pilot,
+    }})
+    monkeypatch.delenv("PCP_G1_T02_IDENTITY_ENABLED", raising=False)
+    monkeypatch.setenv("PCP_G1_PILOT_IDENTITY_ENABLED", "owner-approved")
+    assert config.project_config(
+        "pcp-benchmark-g1-smoke"
+    )["runtime"]["developer_permission_mode"] == "trusted_project"
+    assert config.project_config(
+        "pcp-benchmark-g1-pilot"
+    )["runtime"]["developer_permission_mode"] == "trusted_project"
+    monkeypatch.delenv("PCP_G1_PILOT_IDENTITY_ENABLED")
+    with pytest.raises(ValueError, match="trusted_project requires exact"):
+        config.project_config("pcp-benchmark-g1-pilot")
+    assert config.project_config(
+        "pcp-benchmark-g1-smoke"
+    )["runtime"]["developer_permission_mode"] == "trusted_project"
