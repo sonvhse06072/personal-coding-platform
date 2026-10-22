@@ -1068,3 +1068,318 @@ def test_reconcile_merged_delivery_fails_closed_on_ambiguous_merged_history(monk
             source_commit=source,
             expected_commit=expected,
         )
+
+# G1-T02 dispatch provenance regression: tested offline, no network.
+from copy import deepcopy
+from app.github_delivery import (
+    ALLOWED_PATHS, CONSUMED_G1_T01_CANDIDATES, FIXTURE_REPO,
+    REQUIRED_STEPS, SEED_SHA, WORKFLOW_BLOB_SHA, WORKFLOW_ID,
+    ProvenanceDenied, verify_candidate_dispatch,
+)
+import pytest
+
+CANDIDATE = "acbd1234567890abcdef1234567890abcdef1234"
+MAIN_RUN_HEAD = "2c2c68fbebad94043d49527a67a4218664257ebc"
+JOB_ID = "f" * 32
+RUN_ID = 987654321
+
+
+def candidate_log(candidate: str = CANDIDATE) -> str:
+    return "\n".join((
+        "2026-10-21T01:00:00Z ##[group]Run set -euo pipefail",
+        "2026-10-21T01:00:01Z shell: /usr/bin/bash -e {0}",
+        "2026-10-21T01:00:02Z env:",
+        "2026-10-21T01:00:03Z   EXPECTED_HEAD: " + candidate,
+        "2026-10-21T01:00:04Z ##[endgroup]",
+        "2026-10-21T01:00:05Z Fixture exact candidate/PR HEAD: " + candidate,
+        "2026-10-21T01:00:06Z ##[group]Run set -euo pipefail",
+        "2026-10-21T01:00:07Z shell: /usr/bin/bash -e {0}",
+        "2026-10-21T01:00:08Z ##[endgroup]",
+        "2026-10-21T01:00:09Z G1-T01 immutable seed and exactly two changed PHP paths: PASS",
+    ))
+
+
+def fixture() -> dict:
+    run = {
+        "id": RUN_ID,
+        "event": "workflow_dispatch",
+        "name": "validation",
+        "path": ".github/workflows/validation.yml",
+        "workflow_id": WORKFLOW_ID,
+        "head_branch": "main",
+        "head_sha": MAIN_RUN_HEAD,
+        "status": "completed",
+        "conclusion": "success",
+        "run_attempt": 1,
+        "repository": {"full_name": FIXTURE_REPO},
+        "head_repository": {"full_name": FIXTURE_REPO},
+        "actor": {"login": "sonvhse06072"},
+        "triggering_actor": {"login": "sonvhse06072"},
+        "html_url": f"https://github.com/{FIXTURE_REPO}/actions/runs/{RUN_ID}",
+    }
+    steps = [
+        {"name": name, "status": "completed", "conclusion": "success"}
+        for name in REQUIRED_STEPS
+    ]
+    return {
+        "candidate_sha": CANDIDATE,
+        "git_commit": {"sha": CANDIDATE, "parents": [{"sha": SEED_SHA}]},
+        "seed_comparison": {
+            "base_commit": {"sha": SEED_SHA},
+            "status": "ahead", "ahead_by": 1, "behind_by": 0,
+            "total_commits": 1, "commits": [{"sha": CANDIDATE}],
+            "files": [{"filename": name, "status": "modified"}
+                      for name in sorted(ALLOWED_PATHS)],
+        },
+        "workflow_run": run,
+        "workflow_blob_at_run_head": WORKFLOW_BLOB_SHA,
+        "run_jobs": [{
+            "id": 123, "run_id": RUN_ID, "name": "fixture-validation",
+            "status": "completed", "conclusion": "success", "steps": steps,
+        }],
+        "job_log": candidate_log(),
+        "expected_run_id": RUN_ID,
+        "job_id": JOB_ID,
+        "branch_name": "ai/" + JOB_ID[:12],
+        "remote_branch_sha": CANDIDATE,
+    }
+
+
+def deny_code(obj: dict, code: str):
+    with pytest.raises(ProvenanceDenied, match=f"^{code}$"):
+        verify_candidate_dispatch(**obj)
+
+
+def test_synthetic_happy_path_requires_trusted_run_and_waits_for_pm():
+    result = verify_candidate_dispatch(**fixture())
+    assert result.candidate_sha == CANDIDATE
+    assert result.workflow_run_head_sha == MAIN_RUN_HEAD
+    assert result.workflow_run_head_sha != result.candidate_sha
+    assert result.source_sha == SEED_SHA
+    assert result.workflow_run_id == RUN_ID
+    assert result.verdict == "CI_VERIFIED_WAITING_PM_REVIEW"
+
+
+def test_consumed_g1_t01_candidate_cannot_be_a_t02_candidate():
+    historical = "78f2beeb4604659b95893bfd8f1e019a9b4e094e"
+    assert historical in CONSUMED_G1_T01_CANDIDATES
+    obj = fixture()
+    obj["candidate_sha"] = historical
+    obj["git_commit"]["sha"] = historical
+    obj["seed_comparison"]["commits"][0]["sha"] = historical
+    obj["remote_branch_sha"] = historical
+    obj["job_log"] = candidate_log(historical)
+    deny_code(obj, "consumed_historical_candidate_denied")
+
+
+@pytest.mark.parametrize("key,value,code", [
+    ("candidate_sha", "short", "candidate_sha_invalid"),
+    ("branch_name", "ai/foreign", "fresh_job_branch_identity_mismatch"),
+    ("remote_branch_sha", "a" * 40, "fresh_job_branch_identity_mismatch"),
+    ("job_id", "old", "fresh_job_branch_identity_mismatch"),
+    ("expected_run_id", RUN_ID + 1, "workflow_run_id_not_pinned"),
+    ("workflow_blob_at_run_head", "a" * 40, "workflow_source_blob_changed"),
+])
+def test_invalid_outer_boundary_fails_closed(key, value, code):
+    obj = fixture()
+    obj[key] = value
+    deny_code(obj, code)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("event", "pull_request"),
+    ("status", "in_progress"),
+    ("conclusion", "failure"),
+    ("name", "bogus"),
+    ("workflow_id", 1),
+    ("path", ".github/workflows/other.yml"),
+    ("head_branch", "feature/other"),
+    ("head_sha", "garbage"),
+    ("run_attempt", 2),
+    ("id", True),
+    ("repository", {"full_name": "other/repo"}),
+    ("head_repository", {"full_name": "other/repo"}),
+    ("actor", {"login": "other"}),
+    ("triggering_actor", {"login": "other"}),
+    ("html_url", "https://malicious.example/redirect"),
+])
+def test_wrong_dispatch_run_fails_closed(field, value):
+    obj = fixture()
+    obj["workflow_run"][field] = value
+    deny_code(obj, "workflow_dispatch_run_untrusted")
+
+
+@pytest.mark.parametrize("modify,code", [
+    (lambda x: x["git_commit"].update(sha="f" * 40), "commit_sha_mismatch"),
+    (lambda x: x["git_commit"].update(parents=[]), "not_single_seed_parent"),
+    (lambda x: x["git_commit"].update(parents=[{"sha": SEED_SHA}, {"sha": SEED_SHA}]), "not_single_seed_parent"),
+    (lambda x: x["git_commit"].update(parents=[{"sha": "f" * 40}]), "not_single_seed_parent"),
+    (lambda x: x["seed_comparison"].update(total_commits=2), "seed_compare_not_one_commit"),
+    (lambda x: x["seed_comparison"].update(ahead_by=2), "seed_compare_not_one_commit"),
+    (lambda x: x["seed_comparison"].update(behind_by=1), "seed_compare_not_one_commit"),
+    (lambda x: x["seed_comparison"].update(commits=[]), "compare_commit_list_invalid"),
+    (lambda x: x["seed_comparison"].update(status="diverged"), "seed_compare_not_one_commit"),
+    (lambda x: x["seed_comparison"]["files"][0].update(filename=".github/workflows/validation.yml"), "candidate_changed_paths_not_exact"),
+    (lambda x: x["seed_comparison"]["files"].append({"filename": "extra.php", "status": "modified"}), "candidate_changed_paths_not_exact"),
+    (lambda x: x["seed_comparison"]["files"][0].update(status="added"), "candidate_changed_paths_not_exact"),
+])
+def test_candidate_git_scope_denies_untrusted_diff(modify, code):
+    obj = fixture()
+    modify(obj)
+    deny_code(obj, code)
+
+
+@pytest.mark.parametrize("modify,code", [
+    (lambda x: x["run_jobs"].clear(), "workflow_job_count_not_exact"),
+    (lambda x: x["run_jobs"].append(deepcopy(x["run_jobs"][0])), "workflow_job_count_not_exact"),
+    (lambda x: x["run_jobs"][0].update(name="other"), "fixture_validation_job_missing"),
+    (lambda x: x["run_jobs"][0].update(run_id=999), "fixture_validation_job_missing"),
+    (lambda x: x["run_jobs"][0].update(conclusion="failure"), "fixture_validation_job_missing"),
+    (lambda x: x["run_jobs"][0]["steps"][3].update(conclusion="skipped"), "required_job_step_not_executed"),
+    (lambda x: x["run_jobs"][0]["steps"].pop(), "required_job_step_missing_or_duplicate"),
+    (lambda x: x["run_jobs"][0]["steps"].reverse(), "required_job_step_order_wrong"),
+])
+def test_workflow_job_validation_steps_must_have_executed(modify, code):
+    obj = fixture()
+    modify(obj)
+    deny_code(obj, code)
+
+
+@pytest.mark.parametrize("alter,code", [
+    (lambda s: s.replace(CANDIDATE, "0" * 40), "candidate_sha_not_bound_to_dispatch"),
+    (lambda s: s.replace("EXPECTED_HEAD: " + CANDIDATE, "EXPECTED_HEAD: " + CANDIDATE + "\n  EXPECTED_HEAD: " + CANDIDATE), "workflow_dispatch_input_ambiguous"),
+    (lambda s: s.replace("Fixture exact candidate/PR HEAD: " + CANDIDATE, "Fixture exact candidate/PR HEAD: " + CANDIDATE + "\nFixture exact candidate/PR HEAD: " + CANDIDATE), "candidate_checkout_marker_ambiguous"),
+    (lambda s: s.replace("G1-T01 immutable seed and exactly two changed PHP paths: PASS", "missing"), "seed_scope_marker_ambiguous"),
+    (lambda s: s.replace("##[group]Run set -euo pipefail", "other", 1), "marker_not_in_pinned_pre_validation_steps"),
+])
+def test_job_log_must_match_both_authentic_pre_validation_steps(alter, code):
+    obj = fixture()
+    obj["job_log"] = alter(obj["job_log"])
+    deny_code(obj, code)
+
+
+@pytest.mark.parametrize("field", [
+    "candidate_sha", "git_commit", "seed_comparison", "workflow_run",
+    "workflow_blob_at_run_head", "run_jobs", "job_log",
+    "expected_run_id", "job_id", "branch_name", "remote_branch_sha",
+])
+@pytest.mark.parametrize("invalid", [None, 0, True, False, [], {}, "", "invalid", "a" * 1024])
+def test_untrusted_malformed_top_level_values_always_fail_closed(field, invalid):
+    obj = fixture()
+    obj[field] = invalid
+    with pytest.raises(ProvenanceDenied):
+        verify_candidate_dispatch(**obj)
+
+def test_t02_source_ci_never_uses_candidate_as_workflow_run_main_head(monkeypatch):
+    from app.github_delivery import GitHubDelivery, g1_t02_ci_status
+    class Response:
+        is_success = True
+        content = b""
+        text = ""
+        def __init__(self, payload):
+            self.payload = payload
+        def json(self):
+            return self.payload
+        def raise_for_status(self):
+            pass
+    class FakeHTTP:
+        def __init__(self):
+            self.urls = []
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def get(self, url, params=None):
+            self.urls.append((url, params))
+            if "/actions/workflows/382343098/runs" in url:
+                assert params == {"event": "workflow_dispatch", "per_page": 100}
+                return Response({"workflow_runs": [], "total_count": 0})
+            pytest.fail("unexpected GitHub read")
+    client = FakeHTTP()
+    delivery = GitHubDelivery(token="synthetic", repository_scope=FIXTURE_REPO)
+    monkeypatch.setattr(delivery, "_client", lambda: client)
+    result = g1_t02_ci_status(
+        delivery, repository=FIXTURE_REPO,
+        candidate_sha=CANDIDATE, job_id=JOB_ID,
+    )
+    assert result["state"] == "pending"
+    assert result["g1_t02_dispatch"] is None
+    assert client.urls and "head_sha" not in str(client.urls)
+
+
+def test_seed_marker_from_later_php_output_is_denied():
+    obj = fixture()
+    obj['job_log'] = obj['job_log'].replace(
+        '2026-10-21T01:00:09Z G1-T01',
+        '2026-10-21T01:00:09Z ##[group]Run PHP tests\n'
+        '2026-10-21T01:00:10Z G1-T01',
+    )
+    deny_code(obj, 'marker_not_in_pinned_pre_validation_steps')
+
+
+@pytest.mark.parametrize('conclusion', ['success', 'failure', 'failed_checkout'])
+def test_candidate_dispatch_history_cannot_hide_duplicate_or_failed_run(monkeypatch, conclusion):
+    from app.github_delivery import g1_t02_ci_status
+    obj = fixture()
+    other = deepcopy(obj['workflow_run'])
+    other.update(id=RUN_ID + 1, conclusion='failure' if conclusion == 'failed_checkout' else conclusion)
+    runs = [obj['workflow_run'], other]
+
+    def respond(request):
+        path = request.url.path
+        if path.endswith('/runs'):
+            return httpx.Response(200, json={'workflow_runs': runs, 'total_count': 2})
+        if path.endswith('/jobs'):
+            run_id = int(path.split('/')[-2])
+            jobs = deepcopy(obj['run_jobs'])
+            jobs[0]['run_id'] = run_id
+            return httpx.Response(200, json={'jobs': jobs, 'total_count': 1})
+        if path.endswith('/logs'):
+            log = obj['job_log']
+            if conclusion == 'failed_checkout':
+                log = '  EXPECTED_HEAD: ' + CANDIDATE
+            return httpx.Response(200, text=log)
+        pytest.fail('unexpected API read: ' + path)
+
+    delivery = GitHubDelivery(token='synthetic', repository_scope=FIXTURE_REPO)
+    monkeypatch.setattr(delivery, '_client', lambda: httpx.Client(transport=httpx.MockTransport(respond)))
+    result = g1_t02_ci_status(delivery, repository=FIXTURE_REPO,
+                              candidate_sha=CANDIDATE, job_id=JOB_ID)
+    assert result['state'] == 'failure'
+    assert result['g1_t02_reason'] == 'g1_t02_ambiguous_candidate_dispatch'
+
+
+def test_authenticated_t02_ci_read_binds_workflow_main_to_candidate(monkeypatch):
+    from app.github_delivery import WORKFLOW_PATH, g1_t02_ci_status
+    obj = fixture()
+    seen = []
+
+    def respond(request):
+        path = request.url.path
+        seen.append(path)
+        if path.endswith('/runs'):
+            payload = {'workflow_runs': [obj['workflow_run']], 'total_count': 1}
+        elif path.endswith('/jobs'):
+            payload = {'jobs': obj['run_jobs'], 'total_count': 1}
+        elif path.endswith('/logs'):
+            return httpx.Response(200, text=obj['job_log'])
+        elif '/contents/' in path:
+            assert request.url.params['ref'] == MAIN_RUN_HEAD
+            assert path.endswith(WORKFLOW_PATH)
+            payload = {'sha': WORKFLOW_BLOB_SHA}
+        elif '/git/commits/' in path:
+            payload = obj['git_commit']
+        elif '/compare/' in path:
+            payload = obj['seed_comparison']
+        elif '/branches/' in path:
+            payload = {'commit': {'sha': CANDIDATE}}
+        else:
+            pytest.fail('unexpected API read: ' + path)
+        return httpx.Response(200, json=payload)
+
+    delivery = GitHubDelivery(token='synthetic', repository_scope=FIXTURE_REPO)
+    monkeypatch.setattr(delivery, '_client', lambda: httpx.Client(transport=httpx.MockTransport(respond)))
+    result = g1_t02_ci_status(delivery, repository=FIXTURE_REPO,
+                              candidate_sha=CANDIDATE, job_id=JOB_ID)
+    assert result['state'] == 'success'
+    assert result['g1_t02_dispatch']['workflow_run_head_sha'] == MAIN_RUN_HEAD
+    assert result['g1_t02_dispatch']['candidate_sha'] == CANDIDATE
+    assert len(seen) == 7

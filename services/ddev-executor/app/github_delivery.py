@@ -1067,3 +1067,399 @@ class GitHubDelivery:
                 "failure_text": _failure_text(effective["effective_failures"]),
                 "audit_failure_text": _failure_text(effective["failures"]),
             }
+
+# G1-T02 source-only, default-OFF candidate workflow attestation.
+# No dispatch, token issuance or PM authorization.
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+
+FIXTURE_REPO = "sonvhse06072/pcp-g0-fullpath-fixture"
+PROJECT_ID = "pcp-benchmark-g1-t02"
+# Historical G1-T01 direct candidate is evidence only; never a fresh T02 arm.
+CONSUMED_G1_T01_CANDIDATES = frozenset({
+    "78f2beeb4604659b95893bfd8f1e019a9b4e094e",
+})
+SEED_SHA = "d4f4a56713e95f85ecc08c02bb43a5b5105a86a3"
+WORKFLOW_PATH = ".github/workflows/validation.yml"
+WORKFLOW_NAME = "validation"
+WORKFLOW_ID = 382343098
+WORKFLOW_BLOB_SHA = "a098e80472afc8dc628723bd26cc72204d8f3faf"
+WORKFLOW_RUN_ACTOR = "sonvhse06072"
+WORKFLOW_JOB = "fixture-validation"
+ALLOWED_PATHS = frozenset({
+    "web/modules/custom/pcp_f2_fixture/src/WindowOverlapDetector.php",
+    "web/modules/custom/pcp_f2_fixture/tests/src/Unit/WindowOverlapDetectorTest.php",
+})
+REQUIRED_STEPS = (
+    "Verify exact supplied head before running tests",
+    "Verify G1-T01 direct/PCP pair is seed-based and two-file scoped",
+    "Verify dependency lock",
+    "Install locked Drupal 11 dependencies",
+    "Verify Drupal, PHPUnit and PHPCS",
+    "PHP syntax",
+    "Drupal coding standard",
+    "Drupal Unit tests",
+    "Drupal Kernel tests",
+)
+_SHA = re.compile(r"^[0-9a-f]{40}$")
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+_EXPECTED_LINE = re.compile(r"\s+EXPECTED_HEAD: ([0-9a-f]{40})\s*$")
+_VERIFIED_LINE = re.compile(
+    r"Fixture exact candidate/PR HEAD: ([0-9a-f]{40})\s*$"
+)
+_SEED_OK_LINE = re.compile(
+    r"G1-T01 immutable seed and exactly two changed PHP paths: PASS\s*$"
+)
+
+
+class ProvenanceDenied(ValueError):
+    """Internal audit-only code; never includes secret values or raw job logs."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+def _require(ok: bool, reason: str) -> None:
+    if not ok:
+        raise ProvenanceDenied(reason)
+
+
+def _sha(text: Any) -> bool:
+    return isinstance(text, str) and bool(_SHA.fullmatch(text))
+
+
+def _dict(value: Any) -> Mapping[str, Any]:
+    return value if isinstance(value, Mapping) else {}
+
+
+def _one_marker(log: str, pattern: re.Pattern[str], code: str) -> tuple[str, int]:
+    hits = []
+    for number, line in enumerate(_ANSI.sub("", log).splitlines()):
+        match = pattern.search(line)
+        if match:
+            hits.append((match.group(1) if match.groups() else "PASS", number))
+    _require(len(hits) == 1, code)
+    return hits[0]
+
+
+def _proof_from_log(job_log: str, candidate_sha: str) -> None:
+    """Use pinned workflow's early *pre-PHP* steps, not arbitrary test output.
+
+    Logs alone are NEVER an attestation. The separately supplied GitHub run,
+    workflow blob, job step metadata and git objects must also be verified.
+    """
+    _require(isinstance(job_log, str) and 0 < len(job_log) <= 3_000_000,
+             "job_log_unreadable")
+    text = _ANSI.sub("", job_log)
+    expected, expected_i = _one_marker(
+        text, _EXPECTED_LINE, "workflow_dispatch_input_ambiguous")
+    verified, verified_i = _one_marker(
+        text, _VERIFIED_LINE, "candidate_checkout_marker_ambiguous")
+    _, seed_i = _one_marker(
+        text, _SEED_OK_LINE, "seed_scope_marker_ambiguous")
+    _require(expected == candidate_sha and verified == candidate_sha,
+             "candidate_sha_not_bound_to_dispatch")
+    _require(expected_i < verified_i < seed_i,
+             "workflow_validation_step_order_wrong")
+    lines = text.splitlines()
+    # The trusted checkout step must be followed by the first two pinned
+    # verification shell steps. A later PHPUnit/PHPCS print must not qualify.
+    step_begin = [i for i, s in enumerate(lines)
+                  if "##[group]Run set -euo pipefail" in s]
+    _require(len(step_begin) >= 2 and
+             step_begin[0] < expected_i < verified_i < step_begin[1] < seed_i,
+             "marker_not_in_pinned_pre_validation_steps")
+    # Every subsequent group starts a new log region. In particular, test
+    # output cannot supply the seed marker for an earlier verification step.
+    next_groups = [i for i, line in enumerate(lines)
+                   if i > step_begin[1] and "##[group]" in line]
+    _require(not next_groups or seed_i < next_groups[0],
+             "marker_not_in_pinned_pre_validation_steps")
+
+
+def _candidate_git_integrity(*, candidate_sha: str,
+                             git_commit: Mapping[str, Any],
+                             comparison: Mapping[str, Any]) -> None:
+    _require(_sha(candidate_sha), "candidate_sha_invalid")
+    _require(candidate_sha not in CONSUMED_G1_T01_CANDIDATES,
+             "consumed_historical_candidate_denied")
+    _require(_dict(git_commit).get("sha") == candidate_sha,
+             "commit_sha_mismatch")
+    parents = git_commit.get("parents")
+    _require(isinstance(parents, list) and len(parents) == 1 and
+             _dict(parents[0]).get("sha") == SEED_SHA,
+             "not_single_seed_parent")
+    compare = _dict(comparison)
+    commits = compare.get("commits")
+    _require(isinstance(commits, list) and len(commits) == 1,
+             "compare_commit_list_invalid")
+    _require(compare.get("status") == "ahead" and
+             type(compare.get("ahead_by")) is int and
+             compare["ahead_by"] == 1 and
+             type(compare.get("behind_by")) is int and
+             compare["behind_by"] == 0 and
+             type(compare.get("total_commits")) is int and
+             compare["total_commits"] == 1 and
+             _dict(compare.get("base_commit")).get("sha") == SEED_SHA and
+             _dict(commits[0]).get("sha") == candidate_sha,
+             "seed_compare_not_one_commit")
+    files = compare.get("files")
+    _require(isinstance(files, list) and len(files) == 2 and
+             all(isinstance(f, dict) and f.get("status") == "modified"
+                 for f in files) and
+             {f.get("filename") for f in files} == ALLOWED_PATHS,
+             "candidate_changed_paths_not_exact")
+
+
+def _run_identity(run: Mapping[str, Any],
+                  workflow_blob: str) -> None:
+    run = _dict(run)
+    _require(type(run.get("id")) is int and run["id"] > 0 and
+             run.get("event") == "workflow_dispatch" and
+             run.get("name") == WORKFLOW_NAME and
+             run.get("path") == WORKFLOW_PATH and
+             run.get("workflow_id") == WORKFLOW_ID and
+             run.get("head_branch") == "main" and
+             _sha(run.get("head_sha")) and
+             run.get("status") == "completed" and
+             run.get("conclusion") == "success" and
+             type(run.get("run_attempt")) is int and
+             run.get("run_attempt") == 1 and
+             _dict(run.get("repository")).get("full_name") == FIXTURE_REPO and
+             _dict(run.get("head_repository")).get("full_name") == FIXTURE_REPO and
+             _dict(run.get("actor")).get("login") == WORKFLOW_RUN_ACTOR and
+             _dict(run.get("triggering_actor")).get("login") == WORKFLOW_RUN_ACTOR and
+             run.get("html_url") ==
+             f"https://github.com/{FIXTURE_REPO}/actions/runs/{run.get('id')}",
+             "workflow_dispatch_run_untrusted")
+    # This must be the GitHub CONTENTS API blob SHA at run.head_sha, not
+    # the current main branch, not a self-reported payload from the model.
+    _require(workflow_blob == WORKFLOW_BLOB_SHA,
+             "workflow_source_blob_changed")
+
+
+def _job_steps(run: Mapping[str, Any], job: Mapping[str, Any]) -> None:
+    job = _dict(job)
+    _require(job.get("name") == WORKFLOW_JOB and
+             job.get("run_id") == run.get("id") and
+             job.get("status") == "completed" and
+             job.get("conclusion") == "success" and
+             type(job.get("id")) is int and job["id"] > 0,
+             "fixture_validation_job_missing")
+    steps = job.get("steps")
+    _require(isinstance(steps, list), "job_steps_missing")
+    _require(all(isinstance(step, dict) for step in steps), "job_steps_invalid")
+    names = [step.get("name") for step in steps]
+    positions = []
+    for required in REQUIRED_STEPS:
+        _require(names.count(required) == 1,
+                 "required_job_step_missing_or_duplicate")
+        position = names.index(required)
+        step = steps[position]
+        _require(step.get("status") == "completed" and
+                 step.get("conclusion") == "success",
+                 "required_job_step_not_executed")
+        positions.append(position)
+    _require(positions == sorted(positions), "required_job_step_order_wrong")
+
+
+@dataclass(frozen=True)
+class VerifiedCandidate:
+    """Audit output only. NEVER a token, dispatch permission or PM approval."""
+    repository: str
+    candidate_sha: str
+    source_sha: str
+    workflow_run_id: int
+    workflow_run_head_sha: str
+    workflow_blob_sha: str
+    verdict: str = "CI_VERIFIED_WAITING_PM_REVIEW"
+
+
+def verify_candidate_dispatch(*,
+                              candidate_sha: str,
+                              git_commit: Mapping[str, Any],
+                              seed_comparison: Mapping[str, Any],
+                              workflow_run: Mapping[str, Any],
+                              workflow_blob_at_run_head: str,
+                              run_jobs: Sequence[Mapping[str, Any]],
+                              job_log: str,
+                              expected_run_id: int,
+                              job_id: str,
+                              branch_name: str,
+                              remote_branch_sha: str) -> VerifiedCandidate:
+    """Validate ONE caller-selected run; never infer current authorization.
+
+    The privileged Executor will need to fetch every input independently from
+    GitHub's read API, scoped to the immutable fixture repo; this function
+    performs no I/O. Caller must reject ambiguous candidate-bearing runs too.
+    """
+    _require(_sha(candidate_sha), "candidate_sha_invalid")
+    _require(isinstance(job_id, str) and
+             re.fullmatch(r"[0-9a-f]{32}", job_id) is not None and
+             branch_name == "ai/" + job_id[:12] and
+             remote_branch_sha == candidate_sha,
+             "fresh_job_branch_identity_mismatch")
+    _candidate_git_integrity(candidate_sha=candidate_sha,
+                             git_commit=git_commit,
+                             comparison=seed_comparison)
+    _run_identity(workflow_run, workflow_blob_at_run_head)
+    _require(type(expected_run_id) is int and
+             workflow_run.get("id") == expected_run_id,
+             "workflow_run_id_not_pinned")
+    _require(isinstance(run_jobs, (list, tuple)) and len(run_jobs) == 1,
+             "workflow_job_count_not_exact")
+    _job_steps(workflow_run, run_jobs[0])
+    _proof_from_log(job_log, candidate_sha)
+    return VerifiedCandidate(
+        repository=FIXTURE_REPO,
+        candidate_sha=candidate_sha,
+        source_sha=SEED_SHA,
+        workflow_run_id=expected_run_id,
+        workflow_run_head_sha=str(workflow_run["head_sha"]),
+        workflow_blob_sha=WORKFLOW_BLOB_SHA,
+    )
+
+def g1_t02_ci_status(delivery: GitHubDelivery, *, repository: str,
+                     candidate_sha: str, job_id: str) -> dict[str, Any]:
+    """Require a unique, previously dispatched, immutable-seed fixture run.
+
+    Only the privileged Executor should call this method with its scoped
+    GitHubDelivery client. Every object is fetched from GitHub, never Codex.
+    A missing run remains pending, never ci_none or accepted.
+    """
+    from urllib.parse import quote
+
+    def stopped(reason: str) -> dict[str, Any]:
+        return {
+            "state": "pending" if reason == "candidate_dispatch_not_found" else "failure",
+            "repository": FIXTURE_REPO,
+            "commit": candidate_sha,
+            "g1_t02_reason": reason,
+            "g1_t02_dispatch": None,
+            "actions_runs": [],
+            "effective_failures": ([{"reason": reason}]
+                                   if reason != "candidate_dispatch_not_found" else []),
+        }
+
+    if not (delivery.repository_scope == FIXTURE_REPO and
+            repository == FIXTURE_REPO and _sha(candidate_sha) and
+            isinstance(job_id, str) and
+            re.fullmatch(r"[a-f0-9]{32}", job_id) and
+            candidate_sha not in CONSUMED_G1_T01_CANDIDATES):
+        return stopped("g1_t02_ci_scope_denied")
+    branch = "ai/" + job_id[:12]
+    try:
+        with delivery._client() as client:
+            def get(url: str, *, params: dict | None = None) -> Any:
+                response = client.get(f"{delivery.base}/repos/{FIXTURE_REPO}/{url}",
+                                      params=params)
+                response.raise_for_status()
+                return response.json()
+
+            # Do not rely on runs filtered by candidate SHA: workflow_dispatch
+            # head_sha is the workflow's MAIN SHA, not its candidate input.
+            page = get(
+                f"actions/workflows/{WORKFLOW_ID}/runs",
+                params={"event": "workflow_dispatch", "per_page": 100},
+            )
+            if not isinstance(page, dict):
+                return stopped("g1_t02_workflow_list_invalid")
+            runs = page.get("workflow_runs")
+            total = page.get("total_count")
+            # Refuse incomplete pagination/ambiguous backlogs. Operator must
+            # separately review a completed run instead of guessing.
+            if (not isinstance(runs, list) or type(total) is not int
+                    or total > 100 or len(runs) != total):
+                return stopped("g1_t02_dispatch_history_incomplete")
+            if any(not isinstance(run, dict) for run in runs):
+                return stopped("g1_t02_workflow_list_invalid")
+            if any(run.get("status") != "completed" for run in runs):
+                return stopped("g1_t02_dispatch_not_terminal")
+            matches = []
+            for run in runs:
+                if (run.get("event") != "workflow_dispatch"
+                        or run.get("name") != WORKFLOW_NAME
+                        or run.get("workflow_id") != WORKFLOW_ID):
+                    return stopped("g1_t02_workflow_identity_mismatch")
+                # Inspect failed runs too: a newer failed candidate dispatch
+                # must not be hidden by an older green run of that candidate.
+                run_id = run.get("id")
+                if type(run_id) is not int or run_id <= 0:
+                    return stopped("g1_t02_run_id_invalid")
+                jobs_result = get(f"actions/runs/{run_id}/jobs",
+                                  params={"per_page": 100, "filter": "latest"})
+                jobs = jobs_result.get("jobs") if isinstance(jobs_result, dict) else None
+                count = jobs_result.get("total_count") if isinstance(jobs_result, dict) else None
+                if not (isinstance(jobs, list) and type(count) is int
+                        and count == 1 and len(jobs) == 1):
+                    return stopped("g1_t02_job_collection_ambiguous")
+                job = jobs[0]
+                if not isinstance(job, dict) or type(job.get("id")) is not int:
+                    return stopped("g1_t02_job_identity_invalid")
+                response = client.get(
+                    f"{delivery.base}/repos/{FIXTURE_REPO}/actions/jobs/{job['id']}/logs"
+                )
+                if not response.is_success or len(response.content) > 3_000_000:
+                    return stopped("g1_t02_job_log_unavailable")
+                log = response.text
+                # Candidate log marker is only a cheap filter. The complete
+                # independent verifier below authenticates ALL GitHub objects.
+                found = re.findall(
+                    r"(?:Fixture exact candidate/PR HEAD:|EXPECTED_HEAD:)\s*([0-9a-f]{40})",
+                    log,
+                )
+                if candidate_sha not in found:
+                    continue
+                matches.append((run, jobs, log))
+
+            if len(matches) > 1:
+                return stopped("g1_t02_ambiguous_candidate_dispatch")
+            if not matches:
+                return stopped("candidate_dispatch_not_found")
+            run, jobs, log = matches[0]
+            workflow = get("contents/" + WORKFLOW_PATH,
+                           params={"ref": str(run.get("head_sha") or "")})
+            commit = get("git/commits/" + candidate_sha)
+            compare = get("compare/" + SEED_SHA + "..." + candidate_sha)
+            ref = get("branches/" + quote(branch, safe="/"))
+            if not isinstance(ref, dict):
+                return stopped("g1_t02_candidate_branch_unreadable")
+            remote_sha = _dict(ref.get("commit")).get("sha")
+            verified = verify_candidate_dispatch(
+                candidate_sha=candidate_sha,
+                git_commit=commit,
+                seed_comparison=compare,
+                workflow_run=run,
+                workflow_blob_at_run_head=_dict(workflow).get("sha"),
+                run_jobs=jobs,
+                job_log=log,
+                expected_run_id=run["id"],
+                job_id=job_id,
+                branch_name=branch,
+                remote_branch_sha=remote_sha,
+            )
+    except ProvenanceDenied as exc:
+        return stopped(exc.code)
+    except (ValueError, TypeError, KeyError, OSError, httpx.HTTPError):
+        return stopped("g1_t02_verified_github_api_unavailable")
+    return {
+        "state": "success",
+        "repository": verified.repository,
+        "commit": verified.candidate_sha,
+        "g1_t02_dispatch": {
+            "verdict": verified.verdict,
+            "source_sha": verified.source_sha,
+            "candidate_sha": verified.candidate_sha,
+            "workflow_run_id": verified.workflow_run_id,
+            "workflow_run_head_sha": verified.workflow_run_head_sha,
+            "workflow_blob_sha": verified.workflow_blob_sha,
+            "job_id": job_id,
+            "branch": branch,
+            "repository": verified.repository,
+        },
+        "actions_runs": [],
+        "effective_failures": [],
+        "trusted_contract_invalid": False,
+        "trusted_order_ambiguous": False,
+    }

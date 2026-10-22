@@ -138,14 +138,22 @@ def project_config(project_id: str) -> dict[str, Any]:
         and isinstance(cfg.get("ddev"), dict)
         and cfg["ddev"].get("enabled") is True
         and isinstance(t02_autonomy, dict)
-        and all(
-            t02_autonomy.get(permission) is False
-            for permission in (
-                "allow_commit",
-                "allow_push_ai_branch",
-                "allow_create_pr",
-                "allow_auto_merge_low_risk",
-                "allow_production_deploy",
+        and all(t02_autonomy.get(key) is False for key in (
+            "allow_auto_merge_low_risk", "allow_production_deploy",
+        ))
+        # Explicit second T02-only flag; the PARKED template is unchanged.
+        and (
+            (
+                os.getenv("PCP_G1_T02_DELIVERY_ENABLED") == "owner-approved"
+                and all(t02_autonomy.get(key) is True for key in (
+                    "allow_commit", "allow_push_ai_branch", "allow_create_pr",
+                ))
+            )
+            or (
+                os.getenv("PCP_G1_T02_DELIVERY_ENABLED") != "owner-approved"
+                and all(t02_autonomy.get(key) is False for key in (
+                    "allow_commit", "allow_push_ai_branch", "allow_create_pr",
+                ))
             )
         )
     )

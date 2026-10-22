@@ -252,9 +252,20 @@ def trusted_codex_phase_broker(
     if project_id == _T02_ID and not (
         runtime.get("pilot_identity") == "g1-t02-pcp"
         and project.get("base_branch") == "benchmark/g1-codex-smoke-v1"
-        and all(autonomy.get(k) is False for k in (
-            "allow_commit", "allow_push_ai_branch", "allow_create_pr"
-        ))
+        and (
+            (
+                os.getenv("PCP_G1_T02_DELIVERY_ENABLED") == "owner-approved"
+                and all(autonomy.get(k) is True for k in (
+                    "allow_commit", "allow_push_ai_branch", "allow_create_pr",
+                ))
+            )
+            or (
+                os.getenv("PCP_G1_T02_DELIVERY_ENABLED") != "owner-approved"
+                and all(autonomy.get(k) is False for k in (
+                    "allow_commit", "allow_push_ai_branch", "allow_create_pr",
+                ))
+            )
+        )
     ):
         return None
 

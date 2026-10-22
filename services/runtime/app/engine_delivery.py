@@ -7,7 +7,12 @@ from typing import Any
 from .delivery import DeliveryError, deliver_verified_work, pull_request_body
 from .fullpath_ci_deferred import ci_passed_awaiting_review, stage_delivery_update
 from .fullpath_fixture_safety import PROJECT_ID as FULLPATH_FIXTURE_PROJECT_ID
-from .required_ci import required_ci_for_project
+from .required_ci import (
+    G1_T02_PROJECT, G1_T02_DISPATCH_POLICY, required_ci_for_project,
+    required_github_actions_pass,
+)
+import os
+import re
 from .engine_verification import RuntimeEngine as ExecutionRuntimeEngine
 from .fingerprint import failure_fingerprint
 from .legacy_delivery_recovery import (
@@ -52,6 +57,37 @@ class DeliveryAwareStorage:
             # exact hosted CI and a separate trusted PM review action.
             row = self.backend.get(job_id) or {}
             values = stage_delivery_update(row, values)
+            if row.get("project_id") == G1_T02_PROJECT and not (
+                (values.get("result") or {}).get("dry_run")
+            ):
+                result = values.get("result") or {}
+                strategy = (result.get("route") or {}).get("strategy") or {}
+                rights = strategy.get("permissions") or {}
+                if not (
+                    os.getenv("PCP_G1_T02_IDENTITY_ENABLED") == "owner-approved"
+                    and os.getenv("PCP_G1_T02_DELIVERY_ENABLED") == "owner-approved"
+                    and all(rights.get(key) is True for key in (
+                        "commit", "push_ai_branch", "create_pr",
+                    ))
+                    and rights.get("auto_merge_low_risk") is False
+                    and rights.get("production_deploy") is False
+                    and isinstance(result.get("commit"), str)
+                    and re.fullmatch(r"[0-9a-f]{40}", result["commit"])
+                    # A previously finalized result cannot be re-admitted.
+                    and result.get("delivery_finalized") is not True
+                ):
+                    values["status"] = "blocked"
+                    values["error"] = "g1_t02_delivery_admission_denied"
+                    values["result"] = {
+                        "reason": "g1_t02_delivery_admission_denied",
+                        # Preserve audit without exposing a resumable
+                        # accepted_result to delivery-recovery machinery.
+                        "provisional_result": deepcopy(result),
+                    }
+                else:
+                    # Persist an explicit non-final result without changing caller input.
+                    values["result"] = {**result, "delivery_finalized": False}
+                    values["status"] = "delivering"
         if self._requires_delivery(values):
             values["status"] = "delivering"
         self.backend.update(job_id, **values)
@@ -410,6 +446,16 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 ci = delivery.get("ci") or {}
                 failure_text = str(ci.get("failure_text") or "GitHub CI failed")[-30000:]
                 last_failure = f"GitHub CI failed for verified commit {commit}:\n{failure_text}"[-30000:]
+                if row.get("project_id") == G1_T02_PROJECT:
+                    # T02 permits one seed-parented candidate, not the generic
+                    # multi-commit repair loop or a fresh model turn on bad proof.
+                    self._block(
+                        job_id=job_id, progress=progress, checkpoint=checkpoint,
+                        reason="g1_t02_dispatch_ci_failed",
+                        last_failure=last_failure, delivery=delivery,
+                        accepted_result=result,
+                    )
+                    return
                 if self._ci_failure_class(delivery) == "infrastructure":
                     checkpoint["last_failure"] = last_failure
                     checkpoint["delivery"] = delivery
@@ -447,6 +493,56 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 # enforce the original repair/model/token/time budgets.
                 await super().run_job(job_id)
                 continue
+
+            if row.get("project_id") == G1_T02_PROJECT:
+                # A verified commit, dispatched workflow and an authenticated
+                # CI result still do not constitute a PM acceptance or merge.
+                requirement = required_ci_for_project(G1_T02_PROJECT)
+                pr = delivery.get("pull_request") or {}
+                proof = (delivery.get("ci") or {}).get("g1_t02_dispatch") or {}
+                if not (
+                    requirement is not None
+                    and requirement[1] == G1_T02_DISPATCH_POLICY
+                    and isinstance(commit, str)
+                    and re.fullmatch(r"[0-9a-f]{40}", commit)
+                    and delivery.get("state") == "ci_success"
+                    and required_github_actions_pass(
+                        delivery.get("ci") or {}, repository=requirement[0],
+                        commit=commit, workflow_name=requirement[1],
+                    )
+                    and type(pr.get("number")) is int and pr["number"] > 0
+                    and pr.get("repository") == requirement[0]
+                    and pr.get("head") == commit
+                    and proof.get("job_id") == job_id
+                    and proof.get("branch") == row.get("branch")
+                    and row.get("source_commit") == proof.get("source_sha")
+                    and pr.get("head_ref") == row.get("branch")
+                    and pr.get("base_ref") == "benchmark/g1-codex-smoke-v1"
+                    and pr.get("state") == "open"
+                    and pr.get("merged") is not True
+                ):
+                    self._block(
+                        job_id=job_id, progress=progress,
+                        checkpoint=checkpoint,
+                        reason="g1_t02_dispatch_ci_or_pr_unverified",
+                        last_failure="T02 requires exact candidate dispatch and PR proof",
+                        accepted_result=result,
+                        delivery=delivery,
+                    )
+                    return
+                result["acceptance_phase"] = "waiting_pm_review"
+                result["delivery_finalized"] = False
+                result["verification"] = {
+                    **(result.get("verification") or {}),
+                    "hosted_ci_passed": True,
+                    "hosted_ci_commit": commit,
+                }
+                checkpoint["acceptance_phase"] = "waiting_pm_review"
+                self.storage.update(
+                    job_id, status="waiting_human", result=result,
+                    progress=progress, checkpoint=checkpoint, error=None,
+                )
+                return
 
             if row.get("project_id") == FULLPATH_FIXTURE_PROJECT_ID:
                 # Even after hosted CI success, PM exact-HEAD code review is

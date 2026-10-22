@@ -191,3 +191,36 @@ def test_legacy_ci_none_behavior_is_unchanged():
     kwargs = common_kwargs(ddev, PERMISSIONS)
     result = asyncio.run(deliver_verified_work(**kwargs))
     assert result["state"] == "ci_none"
+
+def test_g1_t02_requires_distinct_workflow_dispatch_policy():
+    from app.required_ci import (
+        G1_T02_PROJECT, G1_T02_DISPATCH_POLICY, G1_T02_FIXTURE_REPO,
+        required_ci_for_project, required_github_actions_pass,
+    )
+    assert required_ci_for_project(G1_T02_PROJECT) == (
+        G1_T02_FIXTURE_REPO, G1_T02_DISPATCH_POLICY,
+    )
+    assert required_ci_for_project(PROJECT_ID) == REQUIRED
+    proof = {
+        "state": "success", "repository": G1_T02_FIXTURE_REPO,
+        "commit": HEAD,
+        "g1_t02_dispatch": {
+            "verdict": "CI_VERIFIED_WAITING_PM_REVIEW",
+            "source_sha": "d4f4a56713e95f85ecc08c02bb43a5b5105a86a3",
+            "candidate_sha": HEAD,
+            "workflow_blob_sha": "a098e80472afc8dc628723bd26cc72204d8f3faf",
+            "workflow_run_id": 312,
+            "workflow_run_head_sha": "c" * 40,
+            "job_id": "f" * 32, "branch": "ai/" + "f" * 12,
+            "repository": G1_T02_FIXTURE_REPO,
+        },
+    }
+    assert required_github_actions_pass(
+        proof, repository=G1_T02_FIXTURE_REPO,
+        commit=HEAD, workflow_name=G1_T02_DISPATCH_POLICY,
+    )
+    proof["g1_t02_dispatch"]["candidate_sha"] = "0" * 40
+    assert not required_github_actions_pass(
+        proof, repository=G1_T02_FIXTURE_REPO,
+        commit=HEAD, workflow_name=G1_T02_DISPATCH_POLICY,
+    )

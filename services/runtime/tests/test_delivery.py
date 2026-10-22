@@ -970,3 +970,88 @@ def test_legacy_delivery_still_blocks_after_total_wall_threshold():
             strategy,
             {"elapsed_minutes": 10.1},
         )
+
+def test_g1_t02_delivery_storage_requires_all_owner_bound_rights(monkeypatch):
+    from app.engine_delivery import DeliveryAwareStorage
+    class Backend:
+        def __init__(self): self.row = {"project_id": "pcp-benchmark-g1-t02"}
+        def get(self, job_id): return self.row
+        def update(self, job_id, **fields): self.row.update(fields)
+    backend = Backend()
+    proxy = DeliveryAwareStorage(backend)
+    result = {
+        "status": "accepted", "commit": "e" * 40,
+        "route": {"strategy": {"permissions": {
+            "commit": True, "push_ai_branch": True, "create_pr": True,
+            "auto_merge_low_risk": False, "production_deploy": False,
+        }}},
+    }
+    monkeypatch.setenv("PCP_G1_T02_IDENTITY_ENABLED", "owner-approved")
+    monkeypatch.delenv("PCP_G1_T02_DELIVERY_ENABLED", raising=False)
+    proxy.update("j", status="completed", result=result)
+    assert backend.row["status"] == "blocked"
+    assert backend.row["result"]["reason"] == "g1_t02_delivery_admission_denied"
+    monkeypatch.setenv("PCP_G1_T02_DELIVERY_ENABLED", "owner-approved")
+    proxy.update("j", status="completed", result=result)
+    assert backend.row["status"] == "delivering"
+    assert backend.row["result"]["delivery_finalized"] is not True
+
+
+@pytest.mark.parametrize('defect', [None, 'foreign_job', 'foreign_branch', 'foreign_source',
+                                    'closed_pr', 'wrong_base', 'failure'])
+def test_t02_delivery_requires_current_identity_and_stops_for_pm(monkeypatch, defect):
+    from copy import deepcopy
+    from app.required_ci import G1_T02_PROJECT, G1_T02_FIXTURE_REPO
+    jid = 'f' * 32
+    commit = 'b' * 40
+    source = 'd4f4a56713e95f85ecc08c02bb43a5b5105a86a3'
+    branch = 'ai/' + jid[:12]
+    result = accepted_result()
+    result['branch'] = branch
+    result['route']['strategy']['permissions'].update(
+        commit=True, auto_merge_low_risk=False, production_deploy=False)
+    proof = {
+        'verdict': 'CI_VERIFIED_WAITING_PM_REVIEW',
+        'repository': G1_T02_FIXTURE_REPO, 'candidate_sha': commit,
+        'source_sha': source,
+        'workflow_blob_sha': 'a098e80472afc8dc628723bd26cc72204d8f3faf',
+        'workflow_run_id': 123, 'workflow_run_head_sha': 'c' * 40,
+        'job_id': jid, 'branch': branch,
+    }
+    ci = {'state': 'success', 'repository': G1_T02_FIXTURE_REPO,
+          'commit': commit, 'g1_t02_dispatch': proof}
+    pr = {'number': 42, 'repository': G1_T02_FIXTURE_REPO, 'head': commit,
+          'head_ref': branch, 'base_ref': 'benchmark/g1-codex-smoke-v1', 'state': 'open'}
+    if defect == 'foreign_job':
+        proof.update(job_id='e' * 32, branch='ai/' + 'e' * 12)
+    elif defect == 'foreign_branch':
+        pr['head_ref'] = 'ai/foreign'
+    elif defect == 'closed_pr':
+        pr['state'] = 'closed'
+    elif defect == 'wrong_base':
+        pr['base_ref'] = 'main'
+    elif defect == 'failure':
+        ci.update(state='failure', failure_text='candidate validation failed')
+    backend = MemoryStorage({
+        'id': jid, 'project_id': G1_T02_PROJECT, 'status': 'queued',
+        'branch': branch, 'source_commit': source if defect != 'foreign_source' else 'a' * 40,
+        'workspace': '/synthetic/' + jid, 'result': result,
+        'task': {'title': 'synthetic T02'}, 'checkpoint': {},
+        'progress': {'elapsed_minutes': 0.0, 'model_calls': 1, 'repair_iterations': 0},
+    })
+    monkeypatch.setenv('PCP_G1_T02_IDENTITY_ENABLED', 'owner-approved')
+    monkeypatch.setenv('PCP_G1_T02_DELIVERY_ENABLED', 'owner-approved')
+
+    async def no_model(*args, **kwargs):
+        pytest.fail('T02 delivery must not invoke the coding engine')
+
+    monkeypatch.setattr(engine_delivery_module.ExecutionRuntimeEngine, 'run_job', no_model)
+    engine = RuntimeEngine(backend)
+    engine.ddev = FakeDdev([deepcopy(ci)], pr_result=pr)
+    asyncio.run(engine.run_job(jid))
+    assert backend.row['status'] == ('waiting_human' if defect is None else 'blocked')
+    assert backend.row['progress']['model_calls'] == 1
+    assert backend.row['progress']['repair_iterations'] == 0
+    if defect is None:
+        assert backend.row['result']['acceptance_phase'] == 'waiting_pm_review'
+        assert backend.row['result']['delivery_finalized'] is False

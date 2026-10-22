@@ -39,6 +39,10 @@ from .github_delivery import (
     github_git_env,
     github_push_url,
     github_repository_from_origin,
+    g1_t02_ci_status,
+    FIXTURE_REPO as G1_T02_DELIVERY_REPO,
+    SEED_SHA as G1_T02_DELIVERY_SEED,
+    ALLOWED_PATHS as G1_T02_DELIVERY_PATHS,
 )
 from .pm_bridge_github import router as pm_bridge_github_router
 
@@ -1126,6 +1130,129 @@ def _source_origin(cfg: dict[str, Any]) -> tuple[Path, str]:
     return source_repo, origin
 
 
+# G1-T02: separate, default-off capability for exactly one NEW disposable
+# fixture candidate. This does not provision any token, job or Docker service.
+def _require_t02_delivery_identity(
+    cfg: dict[str, Any], *, job_id: str, branch: str,
+) -> None:
+    flags_ok = (
+        os.getenv("PCP_G1_T02_IDENTITY_ENABLED") == "owner-approved"
+        and os.getenv("PCP_G1_T02_DELIVERY_ENABLED") == "owner-approved"
+        and os.getenv("PCP_TRUSTED_CODEX_PROJECT_ID") == G1_T02_ID
+        and os.getenv("PCP_TRUSTED_CODEX_SOURCE_SHA") == G1_T02_DELIVERY_SEED
+        and os.getenv("PCP_TRUSTED_CODEX_JOB_ID") == job_id
+    )
+    rights = cfg.get("autonomy") if isinstance(cfg, dict) else None
+    runtime = cfg.get("runtime") if isinstance(cfg, dict) else None
+    ddev = cfg.get("ddev") if isinstance(cfg, dict) else None
+    if not (
+        flags_ok and re.fullmatch(r"[a-f0-9]{32}", job_id)
+        and branch == "ai/" + job_id[:12]
+        and isinstance(rights, dict)
+        and all(rights.get(p) is True for p in (
+            "allow_commit", "allow_push_ai_branch", "allow_create_pr",
+        ))
+        and all(rights.get(p) is False for p in (
+            "allow_auto_merge_low_risk", "allow_production_deploy",
+        ))
+        and isinstance(runtime, dict)
+        and runtime.get("pilot_identity") == "g1-t02-pcp"
+        and runtime.get("developer_permission_mode") == "trusted_project"
+        and runtime.get("workspace_mode") == "isolated_clone"
+        and runtime.get("exclusive_project_lease") is False
+        and runtime.get("branch_prefix") == "ai"
+        and isinstance(ddev, dict) and ddev.get("enabled") is True
+        and cfg.get("base_branch") == "benchmark/g1-codex-smoke-v1"
+        and set(load_projects()) == {G1_T02_ID}
+    ):
+        raise HTTPException(403, "G1 T02 delivery capability not authorized")
+    # Git remote comes ONLY from the project-owned pinned fixture source.
+    # A foreign git origin is denied before any publication/network call.
+    # Check the configured path before _source_origin resolves symlinks.
+    source = Path(os.path.expanduser(os.path.expandvars(str(cfg.get("path", "")))))
+    if source.is_symlink():
+        raise HTTPException(403, "G1 T02 delivery source repository mismatch")
+    _, origin = _source_origin(cfg)
+    if github_repository_from_origin(origin) != G1_T02_DELIVERY_REPO:
+        raise HTTPException(403, "G1 T02 delivery source repository mismatch")
+
+
+def _verify_t02_local_candidate(
+    workspace: Path, source_sha: str, candidate_sha: str,
+) -> None:
+    """All checks are read-only local Git commands, before any push."""
+    if (
+        source_sha != G1_T02_DELIVERY_SEED
+        or not re.fullmatch(r"[a-f0-9]{40}", candidate_sha)
+        or candidate_sha == "78f2beeb4604659b95893bfd8f1e019a9b4e094e"
+        or git(workspace, "status", "--porcelain", "--untracked-files=all")
+        or git(workspace, "rev-list", "--parents", "-n", "1", candidate_sha)
+           != candidate_sha + " " + G1_T02_DELIVERY_SEED
+        or git(workspace, "rev-list", "--count",
+               G1_T02_DELIVERY_SEED + ".." + candidate_sha) != "1"
+    ):
+        raise HTTPException(403, "G1 T02 candidate parent/worktree invalid")
+    changes = git(workspace, "diff", "--name-status",
+                  G1_T02_DELIVERY_SEED, candidate_sha).splitlines()
+    expected = {"M\t" + path for path in G1_T02_DELIVERY_PATHS}
+    if len(changes) != 2 or set(changes) != expected:
+        raise HTTPException(403, "G1 T02 candidate changed paths invalid")
+    git(workspace, "diff", "--check", G1_T02_DELIVERY_SEED, candidate_sha)
+
+
+def _verify_t02_remote_candidate(
+    delivery: GitHubDelivery, repository: str,
+    candidate_sha: str, branch: str,
+) -> None:
+    """Privileged GitHub READ verification before an existing PR mutation."""
+    if (delivery.repository_scope != G1_T02_DELIVERY_REPO
+            or repository != G1_T02_DELIVERY_REPO
+            or not re.fullmatch(r"[a-f0-9]{40}", candidate_sha)
+            or not re.fullmatch(r"ai/[a-f0-9]{12}", branch)
+            or candidate_sha == "78f2beeb4604659b95893bfd8f1e019a9b4e094e"):
+        raise HTTPException(403, "G1 T02 remote candidate identity invalid")
+    try:
+        with delivery._client() as client:
+            def get(path: str) -> dict:
+                response = client.get(
+                    f"{delivery.base}/repos/{repository}/{path}"
+                )
+                response.raise_for_status()
+                return response.json()
+            remote = get("branches/" + branch)
+            commit = get("git/commits/" + candidate_sha)
+            compare = get("compare/" + G1_T02_DELIVERY_SEED + "..." + candidate_sha)
+    except (httpx.HTTPError, ValueError, OSError, TypeError):
+        raise HTTPException(503, "G1 T02 remote candidate unavailable") from None
+    if not (
+        isinstance(remote, dict) and isinstance(remote.get("commit"), dict)
+        and remote["commit"].get("sha") == candidate_sha
+        and isinstance(commit, dict) and commit.get("sha") == candidate_sha
+        and isinstance(commit.get("parents"), list)
+        and len(commit["parents"]) == 1
+        and isinstance(commit["parents"][0], dict)
+        and commit["parents"][0].get("sha") == G1_T02_DELIVERY_SEED
+        and isinstance(compare, dict)
+        and compare.get("status") == "ahead"
+        and type(compare.get("ahead_by")) is int and compare["ahead_by"] == 1
+        and type(compare.get("behind_by")) is int and compare["behind_by"] == 0
+        and type(compare.get("total_commits")) is int and compare["total_commits"] == 1
+        and isinstance(compare.get("base_commit"), dict)
+        and compare["base_commit"].get("sha") == G1_T02_DELIVERY_SEED
+        and isinstance(compare.get("commits"), list)
+        and len(compare["commits"]) == 1
+        and isinstance(compare["commits"][0], dict)
+        and compare["commits"][0].get("sha") == candidate_sha
+        and isinstance(compare.get("files"), list)
+        and len(compare["files"]) == 2
+        and all(isinstance(x, dict) and isinstance(x.get("filename"), str)
+                for x in compare["files"])
+        and {x.get("filename") for x in compare["files"]} == G1_T02_DELIVERY_PATHS
+        and all(x.get("status") == "modified" for x in compare["files"])
+    ):
+        raise HTTPException(403, "G1 T02 remote candidate ancestry/scope invalid")
+
+
 def _github_context(cfg: dict[str, Any]) -> tuple[GitHubDelivery, str]:
     _, origin = _source_origin(cfg)
     repository = github_repository_from_origin(origin)
@@ -1135,7 +1262,10 @@ def _github_context(cfg: dict[str, Any]) -> tuple[GitHubDelivery, str]:
         raise HTTPException(403, "F2 GitHub origin outside fixture repository")
     delivery = (
         GitHubDelivery(repository_scope=F2_FIXTURE_REPOSITORY)
-        if _f2_git_only_scoped() else GitHubDelivery()
+        if _f2_git_only_scoped() else
+        GitHubDelivery(repository_scope=G1_T02_DELIVERY_REPO)
+        if (cfg.get("runtime") or {}).get("pilot_identity") == "g1-t02-pcp"
+        else GitHubDelivery()
     )
     if not delivery.configured:
         raise HTTPException(503, "GITHUB_DELIVERY_TOKEN is not configured")
@@ -2335,6 +2465,9 @@ def _require_g0_delivery_contract(
 def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
     """Push exactly one verified AI branch without adding a remote to the workspace."""
     cfg = project(payload.project_id)
+    if payload.project_id == G1_T02_ID:
+        _require_t02_delivery_identity(cfg, job_id=payload.job_id,
+                                       branch=payload.branch)
     scoped = _g0_fixture_scoped()
     if _f2_git_only_scoped():
         _require_f2_delivery_contract(
@@ -2387,9 +2520,17 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
         _verify_g0_delivered_diff(workspace, source_commit, expected)
     if _f2_git_only_scoped():
         _verify_f2_delivered_diff(workspace, source_commit, expected)
+    if payload.project_id == G1_T02_ID:
+        _verify_t02_local_candidate(workspace, source_commit, expected)
+        try:
+            require_g1_t02_isolated_ddev(workspace)
+        except G1IsolationStop as exc:
+            raise HTTPException(403, "G1 T02 delivery isolation invalid") from exc
 
     _, origin = _source_origin(cfg)
     repository = github_repository_from_origin(origin)
+    if payload.project_id == G1_T02_ID and repository != G1_T02_DELIVERY_REPO:
+        raise HTTPException(403, "G1 T02 delivery source repository mismatch")
     push_target = origin
     push_env = {**os.environ, "GIT_TERMINAL_PROMPT": "0"}
     if repository:
@@ -2397,7 +2538,9 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
             raise HTTPException(403, "F2 publishing origin outside fixture repository")
         delivery = (
             GitHubDelivery(repository_scope=F2_FIXTURE_REPOSITORY)
-            if _f2_git_only_scoped() else GitHubDelivery()
+            if _f2_git_only_scoped() else
+            GitHubDelivery(repository_scope=G1_T02_DELIVERY_REPO)
+            if payload.project_id == G1_T02_ID else GitHubDelivery()
         )
         if not delivery.configured:
             raise HTTPException(503, "GITHUB_DELIVERY_TOKEN is not configured for GitHub publishing")
@@ -2468,6 +2611,8 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
 @app.post("/v1/github/reconcile-delivery", dependencies=[Depends(auth)])
 def reconcile_delivery(payload: ReconcileDeliveryRequest) -> dict[str, Any]:
     """Observe an already-merged PR before retrying a preserved delivery."""
+    if payload.project_id == G1_T02_ID:
+        raise HTTPException(403, "T02 delivery reconciliation requires separate approval")
     cfg = project(payload.project_id)
     if _f2_git_only_scoped():
         _require_f2_delivery_contract(
@@ -2502,6 +2647,8 @@ def reconcile_delivery(payload: ReconcileDeliveryRequest) -> dict[str, Any]:
 @app.post("/v1/github/review-repair", dependencies=[Depends(auth)])
 def prepare_review_repair(payload: ReviewRepairRequest) -> dict[str, Any]:
     """Revalidate one delivered PR and restore its exact job branch for repair."""
+    if payload.project_id == G1_T02_ID:
+        raise HTTPException(403, "T02 review repair requires separate approval")
     cfg = project(payload.project_id)
     if _f2_git_only_scoped():
         _require_f2_delivery_contract(
@@ -2595,6 +2742,9 @@ def prepare_review_repair(payload: ReviewRepairRequest) -> dict[str, Any]:
 @app.post("/v1/github/pull-request", dependencies=[Depends(auth)])
 def upsert_pull_request(payload: PullRequestRequest) -> dict[str, Any]:
     cfg = project(payload.project_id)
+    if payload.project_id == G1_T02_ID:
+        _require_t02_delivery_identity(cfg, job_id=payload.job_id,
+                                       branch=payload.branch)
     if _f2_git_only_scoped():
         _require_f2_delivery_contract(
             cfg, job_id=payload.job_id, branch=payload.branch,
@@ -2612,6 +2762,9 @@ def upsert_pull_request(payload: PullRequestRequest) -> dict[str, Any]:
         raise HTTPException(403, "Project policy does not allow pull-request creation")
     _validate_ai_branch(cfg, payload.branch)
     delivery, repository = _github_context(cfg)
+    if payload.project_id == G1_T02_ID:
+        _verify_t02_remote_candidate(delivery, repository, payload.expected_commit,
+                                     payload.branch)
     base_branch = str(cfg.get("base_branch", "main"))
     try:
         result = delivery.upsert_pull_request(
@@ -2635,6 +2788,13 @@ def github_ci(
     commit: str = Query(..., min_length=7, max_length=64),
 ) -> dict[str, Any]:
     cfg = project(project_id)
+    if project_id == G1_T02_ID:
+        jid = os.getenv("PCP_TRUSTED_CODEX_JOB_ID", "")
+        _require_t02_delivery_identity(cfg, job_id=jid,
+                                       branch="ai/" + jid[:12])
+        delivery, repo = _github_context(cfg)
+        return g1_t02_ci_status(delivery, repository=repo,
+                                candidate_sha=commit, job_id=jid)
     if _f2_git_only_scoped():
         _require_f2_source_repository(cfg)
         if not re.fullmatch(r"[0-9a-f]{40}", commit):
@@ -3240,9 +3400,16 @@ def _trusted_dev_plan(payload: TrustedCodexPhaseRequest) -> tuple[Path, list[lis
             or source_sha != G1_T02_SHA
             or runtime.get("pilot_identity") != "g1-t02-pcp"
             or cfg.get("base_branch") != "benchmark/g1-codex-smoke-v1"
-            or any(autonomy.get(key) is not False for key in (
-                "allow_commit", "allow_push_ai_branch", "allow_create_pr"
-            ))
+            or not (
+                (os.getenv("PCP_G1_T02_DELIVERY_ENABLED") == "owner-approved"
+                 and all(autonomy.get(key) is True for key in (
+                     "allow_commit", "allow_push_ai_branch", "allow_create_pr",
+                 )))
+                or (os.getenv("PCP_G1_T02_DELIVERY_ENABLED") != "owner-approved"
+                    and all(autonomy.get(key) is False for key in (
+                        "allow_commit", "allow_push_ai_branch", "allow_create_pr",
+                    )))
+            )
         ):
             raise HTTPException(403, "G1 T02 identity admission denied")
         try:

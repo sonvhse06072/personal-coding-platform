@@ -294,3 +294,52 @@ def test_runtime_project_config_preserves_smoke_and_t01_behavior(
     assert config.project_config(
         "pcp-benchmark-g1-smoke"
     )["runtime"]["developer_permission_mode"] == "trusted_project"
+
+# G1-T02 source-only delivery admission: no live credential, model or Docker.
+@pytest.mark.parametrize("identity,delivery,rights,expected", [
+    (True, True, (True, True, True), True),
+    (True, False, (False, False, False), True),
+    (True, False, (True, True, True), False),
+    (True, True, (False, False, False), False),
+    (True, True, (True, False, True), False),
+    (True, True, (False, True, True), False),
+    (True, True, (True, True, False), False),
+    (False, True, (True, True, True), False),
+])
+def test_t02_delivery_source_policy_is_separate_from_old_pilot(
+    scope, monkeypatch, identity, delivery, rights, expected,
+):
+    ws, project = scope
+    monkeypatch.setattr(config, "projects_doc", lambda: {"projects": {PROJECT: project}})
+    monkeypatch.setenv("PCP_G1_T02_IDENTITY_ENABLED",
+                       "owner-approved" if identity else "")
+    monkeypatch.setenv("PCP_G1_T02_DELIVERY_ENABLED",
+                       "owner-approved" if delivery else "")
+    for key, value in zip((
+        "allow_commit", "allow_push_ai_branch", "allow_create_pr",
+    ), rights):
+        project["autonomy"][key] = value
+    if expected:
+        admitted = config.project_config(PROJECT)
+        assert admitted["runtime"]["pilot_identity"] == "g1-t02-pcp"
+        assert (request(ws) is not None) is True
+    else:
+        with pytest.raises(ValueError, match="trusted_project requires exact"):
+            config.project_config(PROJECT)
+        assert request(ws) is None
+
+
+def test_t02_no_auto_merge_or_production_even_with_delivery_source_flag(
+    scope, monkeypatch,
+):
+    ws, project = scope
+    monkeypatch.setenv("PCP_G1_T02_DELIVERY_ENABLED", "owner-approved")
+    monkeypatch.setattr(config, "projects_doc", lambda: {"projects": {PROJECT: project}})
+    for key in ("allow_commit", "allow_push_ai_branch", "allow_create_pr"):
+        project["autonomy"][key] = True
+    for forbidden in ("allow_auto_merge_low_risk", "allow_production_deploy"):
+        project["autonomy"][forbidden] = True
+        with pytest.raises(ValueError, match="trusted_project requires exact"):
+            config.project_config(PROJECT)
+        assert request(ws) is None
+        project["autonomy"][forbidden] = False
