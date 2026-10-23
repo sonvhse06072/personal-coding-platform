@@ -270,6 +270,90 @@ def local_source_issue(
     }
 
 
+@router.get("/local-source/candidates", dependencies=[Depends(auth)])
+def local_source_candidates(
+    project_id: str = Query(..., min_length=1, max_length=200),
+    per_page: int = Query(10, ge=1, le=10),
+) -> dict[str, Any]:
+    """Bounded GET-only discovery. A GitHub label is NEVER job authorization.
+
+    A separate digest-pinned PM admission receipt is mandatory before a
+    candidate can even be considered for a future worker.
+    """
+    if (project_id != PCP_LOCAL_PROJECT_ID
+            or os.getenv("PCP_LOCAL_TASK_SOURCE_ENABLED", "") != "owner-approved"):
+        raise HTTPException(403, "PCP local source discovery is disabled")
+    if type(per_page) is not int or not 1 <= per_page <= 10:
+        raise HTTPException(422, "PCP local candidate limit invalid")
+    from . import main as executor_main
+    if executor_main._f2_git_only_scoped() or executor_main._g0_fixture_scoped():
+        raise HTTPException(403, "Protected historical executor scope")
+    cfg = _project(project_id)
+    if cfg.get("base_branch") != "main":
+        raise HTTPException(403, "PCP local project base not approved")
+    delivery, repository = _repository(project_id)
+    if repository != PCP_LOCAL_REPOSITORY:
+        raise HTTPException(403, "PCP local repository identity mismatch")
+    try:
+        with delivery._client() as client:
+            response = client.get(
+                f"{delivery.base}/repos/{PCP_LOCAL_REPOSITORY}/issues",
+                params={
+                    "state": "open", "labels": "pcp-local-ready",
+                    "per_page": per_page, "page": 1,
+                    "sort": "created", "direction": "asc",
+                },
+            )
+            response.raise_for_status()
+            raw_issues = response.json()
+            branch = client.get(
+                f"{delivery.base}/repos/{PCP_LOCAL_REPOSITORY}/branches/main"
+            )
+            branch.raise_for_status()
+            raw_main = branch.json()
+        current_sha = (raw_main.get("commit") or {}).get("sha")
+        if (not isinstance(raw_issues, list)
+                or len(raw_issues) > per_page
+                or not isinstance(current_sha, str)
+                or _LOCAL_SHA.fullmatch(current_sha) is None):
+            raise ValueError("upstream identity")
+        candidates = []
+        for item in raw_issues:
+            if not isinstance(item, dict):
+                raise ValueError("upstream issue shape")
+            if item.get("pull_request"):
+                continue
+            if item.get("state") != "open":
+                continue
+            author = (item.get("user") or {}).get("login")
+            if author != "sonvhse06072":
+                continue
+            number, body = item.get("number"), item.get("body")
+            if (type(number) is not int or number < 1
+                    or not isinstance(body, str)
+                    or len(body.encode("utf-8")) > 16000
+                    or item.get("html_url")
+                    != f"https://github.com/{PCP_LOCAL_REPOSITORY}/issues/{number}"):
+                raise ValueError("candidate mismatch")
+            if "<!-- coding-platform:pcp-remote-source:v1 -->" not in body:
+                continue
+            candidates.append({
+                "number": number,
+                "body_sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
+                "html_url": item["html_url"],
+                "status": "UNTRUSTED_CANDIDATE_NOT_AUTHORIZED",
+            })
+    except (httpx.HTTPError, RuntimeError, ValueError, TypeError, KeyError, AttributeError) as exc:
+        raise HTTPException(502, "PCP local candidate scan failed") from exc
+    return {
+        "project_id": PCP_LOCAL_PROJECT_ID,
+        "repository": PCP_LOCAL_REPOSITORY,
+        "main_sha": current_sha,
+        "candidates": candidates,
+        "can_dispatch": False,
+    }
+
+
 @router.get("/pulls/{pr_number}", dependencies=[Depends(auth)])
 def pull_request(
     pr_number: int,
