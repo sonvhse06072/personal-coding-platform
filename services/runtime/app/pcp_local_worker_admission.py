@@ -142,6 +142,7 @@ def check_worker_admission(
         model["adapter"] == "codex_cli"
         and isinstance(model["model"], str)
         and MODEL_RE.fullmatch(model["model"]) is not None
+        and isinstance(model["effort"], str)
         and model["effort"] in {"low", "medium", "high", "xhigh"}
         and isinstance(model["installed_cli_version"], str)
         and VERSION_RE.fullmatch(model["installed_cli_version"]) is not None
