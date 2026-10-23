@@ -16,6 +16,12 @@ from pydantic import BaseModel, ConfigDict, Field
 from .baseline import resolve_project_baseline
 from .config import _default_config_file, project_config
 from .pm_control import CONTROL_MARKER, PMControlEventStore, parse_pm_control_comment
+from .pcp_local_task_queue import (
+    PROJECT_ID as PCP_LOCAL_PROJECT_ID,
+    LocalSourceQueueStore,
+    TaskStop,
+    verify_issue as verify_pcp_local_issue,
+)
 from .pm_planning import (
     PMPlanProposal,
     PMTicket,
@@ -64,6 +70,19 @@ class PMBridgePollRequest(BaseModel):
     project_id: str = Field(min_length=1, max_length=200)
 
 
+class LocalSourceCheckRequest(BaseModel):
+    """Owner-pinned source metadata, not permission for a local worker."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    project_id: Literal["pcp-local"]
+    issue_number: int = Field(ge=1, le=2_147_483_647)
+    body_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    base_sha: str = Field(pattern=r"^[0-9a-f]{40}$")
+    baseline_revision: str = Field(
+        min_length=1, max_length=100, pattern=r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$"
+    )
+
+
 class PMBridgeGitHubClient:
     def __init__(self) -> None:
         self.base = os.getenv("DDEV_EXECUTOR_URL", "http://ddev-executor:8790").rstrip("/")
@@ -92,6 +111,23 @@ class PMBridgeGitHubClient:
             )
             _raise_executor_error(response)
             return response.json()
+
+
+    async def local_source_issue(self, *, issue_number: int) -> dict[str, Any]:
+        """Exact read-only Executor route; no GitHub token reaches Runtime."""
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.get(
+                f"{self.base}/v1/github/pm-bridge/local-source/issues/{issue_number}",
+                params={"project_id": PCP_LOCAL_PROJECT_ID},
+                headers=self.headers,
+            )
+            if not response.is_success:
+                # Unlike older generic PM paths, do not reflect issue/token data.
+                raise TaskStop("executor_local_source_unavailable")
+            value = response.json()
+            if not isinstance(value, dict):
+                raise TaskStop("executor_local_source_invalid")
+            return value
 
 
 def _raise_executor_error(response: httpx.Response) -> None:
@@ -235,13 +271,47 @@ class PMBridgeService:
         events: PMBridgeEventStore | None = None,
         control_events: PMControlEventStore | None = None,
         control_dispatcher: Any | None = None,
+        local_receipts: LocalSourceQueueStore | None = None,
     ) -> None:
         self.storage = storage
         self.github = github or PMBridgeGitHubClient()
         self.events = events or PMBridgeEventStore(storage)
         self.control_events = control_events or PMControlEventStore(storage)
         self.control_dispatcher = control_dispatcher
+        self.local_receipts = local_receipts or LocalSourceQueueStore(storage)
         self._lock = asyncio.Lock()
+
+    async def check_local_source(self, request: LocalSourceCheckRequest) -> dict[str, Any]:
+        """B2.1 only: validate and record, with NO job/model dispatch."""
+        if (os.getenv("PCP_LOCAL_TASK_SOURCE_ENABLED", "") != "owner-approved"
+                or request.project_id != PCP_LOCAL_PROJECT_ID):
+            raise TaskStop("pcp_local_source_disabled")
+        project = project_config(PCP_LOCAL_PROJECT_ID)
+        if (not isinstance(project, dict) or project.get("base_branch") != "main"
+                or not isinstance(project.get("path"), str)):
+            raise TaskStop("pcp_local_project_not_approved")
+        approved = resolve_project_baseline(
+            PCP_LOCAL_PROJECT_ID, request.baseline_revision
+        )
+        if (approved is None
+                or approved.project_id != PCP_LOCAL_PROJECT_ID
+                or approved.revision != request.baseline_revision):
+            raise TaskStop("pcp_local_baseline_not_approved")
+        # The Executor must independently scope GitHub to PCP and fetch main.
+        issue = await self.github.local_source_issue(
+            issue_number=request.issue_number
+        )
+        task = verify_pcp_local_issue(
+            issue,
+            issue_number=request.issue_number,
+            body_sha256=request.body_sha256,
+            base_sha=request.base_sha,
+            baseline_revision=approved.revision,
+            baseline_source_commit=approved.source_commit,
+        )
+        # Atomic unique receipt, never a call to create_job/run_job.
+        created = self.local_receipts.record(task)
+        return task.status(created=created)
 
     async def poll_project(self, project_id: str) -> dict[str, Any]:
         async with self._lock:
@@ -551,6 +621,19 @@ _service = PMBridgeService(_storage)
 
 def configure_control_dispatcher(dispatcher: Any) -> None:
     _service.control_dispatcher = dispatcher
+
+
+@router.post("/local-source/check")
+async def check_local_source(payload: LocalSourceCheckRequest) -> dict[str, Any]:
+    """Explicit authenticated source receipt only; feature defaults OFF."""
+    try:
+        return await _service.check_local_source(payload)
+    except TaskStop as exc:
+        raise HTTPException(403 if exc.code == "pcp_local_source_disabled"
+                            else 422, exc.code) from exc
+    except (KeyError, RuntimeError, ValueError, httpx.HTTPError) as exc:
+        # Prevent leaking GitHub/ProjectBaseline details into caller response.
+        raise HTTPException(422, "pcp_local_source_check_failed") from exc
 
 
 @router.post("/poll")

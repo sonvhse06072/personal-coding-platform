@@ -583,3 +583,172 @@ def test_control_dispatch_failure_is_terminal_and_not_replayed(monkeypatch):
     assert "stale target" in first["controls_failed"][0]["error"]
     assert service.control_events.rows[("demo", 200)]["status"] == "failed"
     assert second["controls_skipped"] == [200]
+
+
+# B2.1 source queue: no existing PM plan/control flow may gain new authority.
+def _local_source_test_payload(**changes):
+    from app.pcp_local_task_queue import MARKER
+    import hashlib
+    task = {
+        "version": 1, "key": "pcp-bounded-source",
+        "base_sha": "c" * 40,
+        "goal": "Make one small PCP source-only change and include regression tests.",
+        "allowed_paths": ["scripts/pcp-light-new.py", "tests/test_pcp_light_new.py"],
+        "mode": "github_source_pr_only",
+    }
+    body = MARKER + "\n" + json.dumps(task)
+    source = {
+        "project_id": "pcp-local",
+        "repository": "sonvhse06072/personal-coding-platform",
+        "number": 700, "author": "sonvhse06072", "state": "open",
+        "is_pull_request": False,
+        "html_url": "https://github.com/sonvhse06072/personal-coding-platform/issues/700",
+        "main_sha": "c" * 40, "body": body,
+    }
+    source.update(changes)
+    return source, pm_bridge.LocalSourceCheckRequest(
+        project_id="pcp-local", issue_number=700,
+        body_sha256=hashlib.sha256(body.encode()).hexdigest(),
+        base_sha="c" * 40, baseline_revision="v1",
+    )
+
+
+def test_pcp_source_feature_flag_absent_stops_before_any_git_or_db(monkeypatch):
+    from app.pcp_local_task_queue import TaskStop
+
+    monkeypatch.delenv("PCP_LOCAL_TASK_SOURCE_ENABLED", raising=False)
+    github = type("GH", (), {
+        "local_source_issue": lambda *args, **kwargs: (_ for _ in ()).throw(
+            AssertionError("GitHub must remain untouched when OFF"))
+    })()
+    receipts = type("R", (), {
+        "record": lambda *args: (_ for _ in ()).throw(
+            AssertionError("Receipts must remain untouched when OFF"))
+    })()
+    service = pm_bridge.PMBridgeService(
+        FakeStorage(), github=github, local_receipts=receipts,
+    )
+    _, request = _local_source_test_payload()
+    with __import__("pytest").raises(TaskStop, match="pcp_local_source_disabled"):
+        asyncio.run(service.check_local_source(request))
+
+
+def test_pcp_source_malformed_flag_denies_without_expanding_permissions(monkeypatch):
+    from app.pcp_local_task_queue import TaskStop
+
+    monkeypatch.setenv("PCP_LOCAL_TASK_SOURCE_ENABLED", "true")
+    service = pm_bridge.PMBridgeService(FakeStorage())
+    _, request = _local_source_test_payload()
+    with __import__("pytest").raises(TaskStop, match="pcp_local_source_disabled"):
+        asyncio.run(service.check_local_source(request))
+
+
+def _enabled_pcp_local_service(monkeypatch, *, source_changes=None,
+                               registered=True, approved=True):
+    from app.pcp_local_task_queue import TaskStop
+    monkeypatch.setenv("PCP_LOCAL_TASK_SOURCE_ENABLED", "owner-approved")
+
+    project_calls = []
+    def fake_project(project_id):
+        project_calls.append(project_id)
+        return {"base_branch": "main" if registered else "develop",
+                "path": "/fresh/pcp-source"}
+
+    def fake_baseline(project_id, revision=None):
+        if not approved:
+            return None
+        return baseline().model_copy(update={"project_id": "pcp-local"})
+
+    monkeypatch.setattr(pm_bridge, "project_config", fake_project)
+    monkeypatch.setattr(pm_bridge, "resolve_project_baseline", fake_baseline)
+
+    source, payload = _local_source_test_payload(**(source_changes or {}))
+    github_calls = []
+    async def fetch(*, issue_number):
+        github_calls.append(issue_number)
+        return source
+
+    gh = type("GH", (), {"local_source_issue": staticmethod(fetch)})()
+
+    class Receipts:
+        def __init__(self):
+            self.seen = set()
+            self.calls = []
+        def record(self, task):
+            self.calls.append(task)
+            key = (task.repository, task.issue_number, task.body_sha256)
+            if key in self.seen:
+                return False
+            self.seen.add(key)
+            return True
+
+    receipts = Receipts()
+    service = pm_bridge.PMBridgeService(
+        FakeStorage(), github=gh, local_receipts=receipts
+    )
+    return service, payload, github_calls, project_calls, receipts
+
+
+def test_pcp_local_source_contract_records_only_pending_without_job(monkeypatch):
+    service, payload, github_calls, project_calls, receipts = (
+        _enabled_pcp_local_service(monkeypatch)
+    )
+    result = asyncio.run(service.check_local_source(payload))
+    assert result["status"] == "SOURCE_RECORDED_NOT_DISPATCHED"
+    assert result["new_receipt"] is True
+    assert result["queue_state"] == "pending"
+    assert result["worker_enabled"] is False
+    assert result["can_publish_or_merge"] is False
+    assert result["model_calls"] == 0
+    assert github_calls == [700]
+    assert project_calls == ["pcp-local"]
+    assert len(receipts.calls) == 1
+    assert receipts.calls[0].baseline_source_commit == "a" * 40
+
+
+def test_pcp_local_source_duplicate_does_not_claim_another_job(monkeypatch):
+    service, payload, _, _, receipts = _enabled_pcp_local_service(monkeypatch)
+    assert asyncio.run(service.check_local_source(payload))["new_receipt"] is True
+    again = asyncio.run(service.check_local_source(payload))
+    assert again["new_receipt"] is False
+    assert again["model_calls"] == 0
+    assert len(receipts.seen) == 1
+
+
+def test_pcp_local_source_foreign_origin_denied_before_durable_write(monkeypatch):
+    from app.pcp_local_task_queue import TaskStop
+    service, payload, gh_calls, _, receipts = _enabled_pcp_local_service(
+        monkeypatch, source_changes={"repository": "sonvhse06072/chonhac"}
+    )
+    with __import__("pytest").raises(TaskStop, match="github_identity_or_main_changed"):
+        asyncio.run(service.check_local_source(payload))
+    assert gh_calls == [700]
+    assert receipts.calls == []
+
+
+def test_pcp_local_source_requires_registered_main_and_approved_baseline(monkeypatch):
+    from app.pcp_local_task_queue import TaskStop
+    service, payload, gh_calls, _, receipts = _enabled_pcp_local_service(
+        monkeypatch, registered=False
+    )
+    with __import__("pytest").raises(TaskStop, match="pcp_local_project_not_approved"):
+        asyncio.run(service.check_local_source(payload))
+    assert not gh_calls and not receipts.calls
+    service, payload, gh_calls, _, receipts = _enabled_pcp_local_service(
+        monkeypatch, approved=False
+    )
+    with __import__("pytest").raises(TaskStop, match="pcp_local_baseline_not_approved"):
+        asyncio.run(service.check_local_source(payload))
+    assert not gh_calls and not receipts.calls
+
+
+def test_pcp_local_source_stale_head_and_pr_metadata_never_record(monkeypatch):
+    from app.pcp_local_task_queue import TaskStop
+    for changes in ({"main_sha": "d" * 40}, {"is_pull_request": True},
+                    {"state": "closed"}, {"author": "foreign"}):
+        service, payload, _, _, receipts = _enabled_pcp_local_service(
+            monkeypatch, source_changes=changes
+        )
+        with __import__("pytest").raises(TaskStop):
+            asyncio.run(service.check_local_source(payload))
+        assert receipts.calls == []
