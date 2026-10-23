@@ -27,7 +27,7 @@ Last reconciled: **2026-10-23, source merged; NOT Runtime deployment.** [PR #760
 
 GitHub/Runtime evidence remains separate; Runtime was not queried.
 
-**Next safe action:** Owner WSL PCP source may fast-forward to GitHub `main@2c6348d69cf64c611762b1a188f69db57b3af907` after clean-branch checks; this does not deploy Runtime. No further T02 source changes are required for the accepted PR. Live #752 remains **PARKED / NOT DISPATCHED** until separately reviewed isolation, egress, credentials, baseline, budget and protected activation gates; P2 workflow-history liveness remains. Do not retry/bypass the safety-blocked egress overlay. G0 #595 **HOLD / NOT GO**, F2/T01 frozen, Guardian parked, Chợ Nhạc no-touch.
+**Next safe action:** Owner WSL PCP source may fast-forward to the current independently verified GitHub `main` only after remote-SHA and clean-branch checks; source synchronization does not deploy Runtime. No further T02 source changes are required for the accepted PR. Live #752 remains **PARKED / NOT DISPATCHED** until separately reviewed isolation, egress, credentials, baseline, budget and protected activation gates; P2 workflow-history liveness remains. Do not retry/bypass the safety-blocked egress overlay. G0 #595 **HOLD / NOT GO**, F2/T01 frozen, Guardian parked, Chợ Nhạc no-touch.
 
 ## Active investment / execution gates
 
