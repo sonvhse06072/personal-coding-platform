@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 import re
 import secrets
@@ -189,6 +190,83 @@ def issue(
         "state": str(raw.get("state") or ""),
         "html_url": raw.get("html_url"),
         "is_pull_request": bool(raw.get("pull_request")),
+    }
+
+
+# B2.1 source-only gate: no issue polling, dispatch, model, or GitHub write.
+# A missing flag rejects before registry/source filesystem or GitHub access.
+PCP_LOCAL_REPOSITORY = "sonvhse06072/personal-coding-platform"
+PCP_LOCAL_PROJECT_ID = "pcp-local"
+_LOCAL_SHA = re.compile(r"[0-9a-f]{40}\Z")
+
+
+@router.get("/local-source/issues/{issue_number}", dependencies=[Depends(auth)])
+def local_source_issue(
+    issue_number: int,
+    project_id: str = Query(..., min_length=1, max_length=200),
+) -> dict[str, Any]:
+    """Read ONLY an exact PCP Owner issue + current main through Executor.
+
+    Executor alone owns the GitHub token. The caller must independently
+    compare body digest, approved baseline and task contract, and can never
+    treat this read as a job authorization.
+    """
+    if (project_id != PCP_LOCAL_PROJECT_ID
+            or os.getenv("PCP_LOCAL_TASK_SOURCE_ENABLED", "") != "owner-approved"):
+        raise HTTPException(403, "PCP local source intake is disabled")
+    if issue_number <= 0 or issue_number > 2_147_483_647:
+        raise HTTPException(422, "Invalid PCP local issue number")
+
+    # Historical dedicated F2/G0 executor modes cannot be repurposed.
+    from . import main as executor_main
+    if executor_main._f2_git_only_scoped() or executor_main._g0_fixture_scoped():
+        raise HTTPException(403, "Protected historical executor scope")
+    cfg = _project(project_id)
+    if cfg.get("base_branch") != "main":
+        raise HTTPException(403, "PCP local base branch not registered")
+    delivery, repository = _repository(project_id)
+    if repository != PCP_LOCAL_REPOSITORY:
+        raise HTTPException(403, "PCP local repository identity mismatch")
+    try:
+        with delivery._client() as client:
+            issue_response = client.get(
+                f"{delivery.base}/repos/{PCP_LOCAL_REPOSITORY}/issues/{issue_number}"
+            )
+            issue_response.raise_for_status()
+            raw = issue_response.json()
+            branch_response = client.get(
+                f"{delivery.base}/repos/{PCP_LOCAL_REPOSITORY}/branches/main"
+            )
+            branch_response.raise_for_status()
+            branch = branch_response.json()
+        if not isinstance(raw, dict) or not isinstance(branch, dict):
+            raise ValueError("shape")
+        body = raw.get("body")
+        main_sha = (branch.get("commit") or {}).get("sha")
+        if (type(raw.get("number")) is not int
+                or raw["number"] != issue_number
+                or not isinstance(body, str)
+                or len(body.encode("utf-8")) > 16000
+                or not isinstance(main_sha, str)
+                or _LOCAL_SHA.fullmatch(main_sha) is None
+                or raw.get("html_url") != (
+                    f"https://github.com/{PCP_LOCAL_REPOSITORY}/issues/{issue_number}"
+                )):
+            raise ValueError("identity")
+    except (httpx.HTTPError, RuntimeError, ValueError, TypeError, KeyError) as exc:
+        # Do not leak upstream response bodies, bearer tokens, or task text.
+        raise HTTPException(502, "PCP local GitHub read/identity failed") from exc
+    return {
+        "project_id": PCP_LOCAL_PROJECT_ID,
+        "repository": PCP_LOCAL_REPOSITORY,
+        "number": issue_number,
+        "author": str((raw.get("user") or {}).get("login") or ""),
+        "state": str(raw.get("state") or ""),
+        "is_pull_request": bool(raw.get("pull_request")),
+        "html_url": raw["html_url"],
+        "body": body,
+        "body_sha256": hashlib.sha256(body.encode("utf-8")).hexdigest(),
+        "main_sha": main_sha,
     }
 
 
