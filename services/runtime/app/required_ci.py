@@ -13,10 +13,17 @@ from .fullpath_fixture_safety import PROJECT_ID as FULLPATH_FIXTURE_PROJECT_ID
 
 FULLPATH_FIXTURE_REPO = "sonvhse06072/pcp-g0-fullpath-fixture"
 FULLPATH_WORKFLOW = "validation"
+# A distinct policy marker, NOT a GitHub workflow name, prevents accepting
+# the dispatch run's main head_sha as a candidate commit.
+G1_T02_PROJECT = "pcp-benchmark-g1-t02"
+G1_T02_FIXTURE_REPO = FULLPATH_FIXTURE_REPO
+G1_T02_DISPATCH_POLICY = "validation_workflow_dispatch"
 
 
 def required_ci_for_project(project_id: str) -> tuple[str, str] | None:
     """Legacy projects are unchanged; new fixture requires exact hosted CI."""
+    if project_id == G1_T02_PROJECT:
+        return G1_T02_FIXTURE_REPO, G1_T02_DISPATCH_POLICY
     return (
         (FULLPATH_FIXTURE_REPO, FULLPATH_WORKFLOW)
         if project_id == FULLPATH_FIXTURE_PROJECT_ID
@@ -51,6 +58,27 @@ def required_github_actions_pass(
         or ci.get("effective_failures")
     ):
         return False
+    if workflow_name == G1_T02_DISPATCH_POLICY:
+        proof = ci.get("g1_t02_dispatch")
+        # Only the authenticated Executor is allowed to construct this
+        # sanitized object; no run's main SHA is a candidate SHA.
+        return bool(
+            repository == G1_T02_FIXTURE_REPO
+            and isinstance(proof, dict)
+            and proof.get("verdict") == "CI_VERIFIED_WAITING_PM_REVIEW"
+            and proof.get("repository") == repository
+            and proof.get("candidate_sha") == commit
+            and proof.get("source_sha") == "d4f4a56713e95f85ecc08c02bb43a5b5105a86a3"
+            and proof.get("workflow_blob_sha") == "a098e80472afc8dc628723bd26cc72204d8f3faf"
+            and type(proof.get("workflow_run_id")) is int
+            and proof["workflow_run_id"] > 0
+            and re.fullmatch(r"[0-9a-f]{40}",
+                             str(proof.get("workflow_run_head_sha") or ""))
+            and isinstance(proof.get("job_id"), str)
+            and re.fullmatch(r"[a-f0-9]{32}", proof["job_id"])
+            and proof.get("branch") == "ai/" + proof["job_id"][:12]
+            and proof.get("candidate_sha") != proof.get("workflow_run_head_sha")
+        )
     runs = ci.get("actions_runs")
     if not isinstance(runs, list) or not runs or len(runs) > 100:
         return False
