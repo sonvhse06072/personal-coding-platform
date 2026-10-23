@@ -18,6 +18,8 @@ from .config import _default_config_file, project_config
 from .pm_control import CONTROL_MARKER, PMControlEventStore, parse_pm_control_comment
 from .pcp_local_task_queue import (
     PROJECT_ID as PCP_LOCAL_PROJECT_ID,
+    SHA_RE as PCP_LOCAL_SHA_RE,
+    DIGEST_RE as PCP_LOCAL_DIGEST_RE,
     LocalSourceQueueStore,
     TaskStop,
     verify_issue as verify_pcp_local_issue,
@@ -346,7 +348,7 @@ class PMBridgeService:
                 or feed.get("project_id") != PCP_LOCAL_PROJECT_ID
                 or feed.get("repository") != "sonvhse06072/personal-coding-platform"
                 or type(feed.get("main_sha")) is not str
-                or len(feed["main_sha"]) != 40
+                or PCP_LOCAL_SHA_RE.fullmatch(feed["main_sha"]) is None
                 or feed.get("can_dispatch") is not False
                 or type(feed.get("candidates")) is not list
                 or len(feed["candidates"]) > per_page):
@@ -360,7 +362,7 @@ class PMBridgeService:
                     or type(item.get("number")) is not int
                     or item["number"] < 1
                     or type(item.get("body_sha256")) is not str
-                    or len(item["body_sha256"]) != 64
+                    or PCP_LOCAL_DIGEST_RE.fullmatch(item["body_sha256"]) is None
                     or item.get("html_url") !=
                     f"https://github.com/sonvhse06072/personal-coding-platform/issues/{item['number']}"
                     or item.get("status") != "UNTRUSTED_CANDIDATE_NOT_AUTHORIZED"):
