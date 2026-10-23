@@ -2,7 +2,7 @@
 
 Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline revision, Runtime/WSL rollout attestation, authority change, or chronological log. Verify GitHub and local durable evidence immediately before any mutation. The Constitution, architecture and approved baseline outrank this snapshot.
 
-Last reconciled: **2026-10-23, GitHub source accepted; NOT deployed.** `main@cdc7532012aff6090fb1965a20b3d3e23d0ac050`: [#763](https://github.com/sonvhse06072/personal-coding-platform/pull/763) remote intake and [#766](https://github.com/sonvhse06072/personal-coding-platform/pull/766) portable B1.1 merged, PR/main hosted full4 PASS. T02 PARKED, G0 HOLD.
+Last reconciled: **2026-10-24, SOURCE ONLY; NOT deployed.** `main@caffe3483087b1e73b33138e983723d92e4c6a57`: [PR #771](https://github.com/sonvhse06072/personal-coding-platform/pull/771) B2.2b merged; [postmerge CI #40001951762](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40001951762) full4 PASS. B1.1/B2.1/B2.2a source accepted; T02 PARKED, G0 HOLD.
 
 ## #752 source accepted; live T02 remains PARKED
 
@@ -16,7 +16,7 @@ Last reconciled: **2026-10-23, GitHub source accepted; NOT deployed.** `main@cdc
 | Queue | Status | Evidence / blocker |
 | --- | --- | --- |
 | #594 | COMPLETED | Live issue closed; #612 merged, exact head `8088e5382412d42790cb083c43e57b482debffc7` |
-| #764 / #765 | B1.1 MERGED; B2/B3 HOLD | [#766](https://github.com/sonvhse06072/personal-coding-platform/pull/766) CI PASS; fresh install and local worker unproven |
+| #764 / #765 | B1.1–B2.2b SOURCE ACCEPTED; B2.2c/B3 HOLD | [#771](https://github.com/sonvhse06072/personal-coding-platform/pull/771) PASS; no approved PCP-local baseline, live worker or clean transfer |
 | #752 source | MERGED / VERIFIED | [PR #760](https://github.com/sonvhse06072/personal-coding-platform/pull/760); PR-head and postmerge 4/4 hosted CI PASS; Runtime not deployed |
 | #752 live | NEEDS_OWNER_DECISION | Isolation/egress/credential/baseline/launch gates unresolved; PARKED |
 | #595 | BLOCKED | G0 HOLD / NOT GO; comparable accepted cohort absent |
@@ -28,7 +28,7 @@ Last reconciled: **2026-10-23, GitHub source accepted; NOT deployed.** `main@cdc
 
 GitHub/Runtime evidence remains separate; Runtime was not queried.
 
-**Next safe action:** [#764](https://github.com/sonvhse06072/personal-coding-platform/issues/764) local DDEV worker needs separate protected task-queue/credentials/isolation approval. B1.1 source accepted; clean WSL install, container login and unattended task are **NOT TESTED**. WSL source fast-forward is not Runtime deploy. #752 T02 PARKED (never bypass the egress safety block), #595 HOLD; F2/T01 frozen, Guardian parked, Chợ Nhạc no-touch.
+**Next safe action:** [#764](https://github.com/sonvhse06072/personal-coding-platform/issues/764) requires separate B2.2c protected approval and real isolated Docker/lease, active PCP-local baseline, scoped Codex auth and GitHub publisher/budget. **No worker activation or WSL rollout.** #752 T02 PARKED (no egress bypass), #595 HOLD; F2/T01/Guardian frozen; Chợ Nhạc no-touch.
 
 ## Active investment / execution gates
 
