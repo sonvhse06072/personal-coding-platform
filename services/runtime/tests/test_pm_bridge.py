@@ -858,3 +858,18 @@ def test_candidate_discovery_denies_forged_candidate_metadata(monkeypatch):
     service, gh = _pcp_local_discovery(monkeypatch, result=bad)
     with __import__("pytest").raises(TaskStop, match="pcp_local_candidate_identity_invalid"):
         asyncio.run(service.preview_local_candidates())
+
+
+def test_pcp_candidate_hex_identity_denied(monkeypatch):
+    from app.pcp_local_task_queue import TaskStop
+    for change in (
+        {"main_sha": "g" * 40},
+        {"candidates": [{
+            "number": 778, "body_sha256": "z" * 64,
+            "html_url": "https://github.com/sonvhse06072/personal-coding-platform/issues/778",
+            "status": "UNTRUSTED_CANDIDATE_NOT_AUTHORIZED",
+        }]},
+    ):
+        service, _ = _pcp_local_discovery(monkeypatch, result=change)
+        with __import__("pytest").raises(TaskStop):
+            asyncio.run(service.preview_local_candidates())
