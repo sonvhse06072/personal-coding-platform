@@ -398,7 +398,8 @@ def test_pcp_candidate_scan_is_read_only_and_never_authorizes(monkeypatch):
         "html_url": item["html_url"],
         "status": "UNTRUSTED_CANDIDATE_NOT_AUTHORIZED",
     }]
-    assert "body" not in repr(out)
+    assert "body" not in out
+    assert item["body"] not in repr(out)
     assert delivery.client.calls == [
         ("https://api.github.test/repos/sonvhse06072/personal-coding-platform/issues", {
             "state": "open", "labels": "pcp-local-ready",
