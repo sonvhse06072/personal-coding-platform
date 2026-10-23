@@ -5,6 +5,32 @@ ENV_FILE="$ROOT/.ddev/.env"
 [[ -f "$ENV_FILE" ]] || { echo "Missing $ENV_FILE" >&2; exit 1; }
 # shellcheck disable=SC1090
 source "$ENV_FILE"
+# Fresh portable installs explicitly disable the WSL-host Antigravity bridge.
+# Check before mkdir, settings/keyring reads or launching a subprocess.
+# Existing installs with no mode keep the original host-bridge behavior.
+case "${PCP_ANTIGRAVITY_MODE:-host}" in
+  disabled)
+    case "${1:-status}" in
+      start|stop)
+        echo "PCP_ANTIGRAVITY_HOST_BRIDGE=DISABLED"
+        exit 0
+        ;;
+      status)
+        echo '{"status":"disabled","service":"antigravity-host-bridge"}'
+        exit 1
+        ;;
+      *)
+        echo "STOP_ANTIGRAVITY_HOST_BRIDGE_COMMAND" >&2
+        exit 2
+        ;;
+    esac
+    ;;
+  host|"") ;;
+  *)
+    echo "STOP_ANTIGRAVITY_MODE_INVALID" >&2
+    exit 2
+    ;;
+esac
 STATE_DIR="$HOME/.coding-platform"
 PID_FILE="$STATE_DIR/antigravity-bridge.pid"
 LOG_FILE="$STATE_DIR/antigravity-bridge.log"
