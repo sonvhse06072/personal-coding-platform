@@ -329,3 +329,80 @@ def test_different_candidate_has_distinct_stable_job_id():
     assert worker.stable_job_id(t) != worker.stable_job_id(
         replace(t, issue_number=1000))
     assert len(worker.stable_job_id(t)) == 32
+
+
+class ReadOnlyQuery:
+    def __init__(self, result):
+        self.result = result
+        self.queries = []
+        self.committed = False
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        return False
+
+    def execute(self, statement, params=None):
+        self.queries.append((statement, params))
+        return self
+
+    def fetchone(self):
+        return self.result
+
+    def commit(self):
+        self.committed = True
+        raise AssertionError("Readonly queue scan must not commit")
+
+
+class ReadOnlyStorage:
+    def __init__(self, result):
+        self.db = ReadOnlyQuery(result)
+
+    def connect(self):
+        return self.db
+
+
+def test_db_next_pending_reads_only_pcp_local():
+    _, _, row, _ = fixture()
+    db = ReadOnlyStorage(row)
+    store = q.LocalSourceQueueStore(db)
+    assert store.next_pending() == row
+    assert len(db.db.queries) == 1
+    sql, params = db.db.queries[0]
+    assert "SELECT repository" in sql and "state='pending'" in sql
+    assert "LIMIT 1" in sql and "ORDER BY created_at" in sql
+    assert params == (q.REPOSITORY, q.PROJECT_ID)
+    assert not db.db.committed
+
+
+def test_db_next_pending_empty_remains_empty():
+    db = ReadOnlyStorage(None)
+    store = q.LocalSourceQueueStore(db)
+    assert store.next_pending() is None
+    assert not db.db.committed
+
+
+@pytest.mark.parametrize("field,value,expected", [
+    ("repository", "sonvhse06072/chonhac", "pending_receipt_identity_invalid"),
+    ("project_id", "chonhac", "pending_receipt_identity_invalid"),
+    ("issue_number", True, "pending_receipt_identity_invalid"),
+    ("generation", True, "pending_receipt_identity_invalid"),
+    ("generation", 1, "pending_receipt_identity_invalid"),
+    ("job_id", "a" * 32, "pending_receipt_identity_invalid"),
+    ("state", "claimed", "pending_receipt_identity_invalid"),
+])
+def test_db_pending_identity_mismatch_fails_closed(field, value, expected):
+    _, _, row, _ = fixture()
+    row[field] = value
+    db = ReadOnlyStorage(row)
+    with pytest.raises(q.TaskStop, match=expected):
+        q.LocalSourceQueueStore(db).next_pending()
+    assert not db.db.committed
+
+
+def test_db_pending_rejects_unknown_fields():
+    _, _, row, _ = fixture()
+    row["provider_token"] = "secret"
+    with pytest.raises(q.TaskStop, match="pending_receipt_shape_invalid"):
+        q.LocalSourceQueueStore(ReadOnlyStorage(row)).next_pending()
