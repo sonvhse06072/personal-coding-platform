@@ -752,3 +752,109 @@ def test_pcp_local_source_stale_head_and_pr_metadata_never_record(monkeypatch):
         with __import__("pytest").raises(TaskStop):
             asyncio.run(service.check_local_source(payload))
         assert receipts.calls == []
+
+
+# B2.2b discovery through existing PM Bridge is read-only and NOT intake.
+def test_pcp_local_candidates_only_when_source_opted_in(monkeypatch):
+    from app.pcp_local_task_queue import TaskStop
+    monkeypatch.delenv("PCP_LOCAL_TASK_SOURCE_ENABLED", raising=False)
+    monkeypatch.setattr(
+        pm_bridge, "project_config",
+        lambda _: (_ for _ in ()).throw(AssertionError("registry touched")),
+    )
+    service = pm_bridge.PMBridgeService(FakeStorage())
+    with __import__("pytest").raises(TaskStop, match="pcp_local_source_disabled"):
+        asyncio.run(service.preview_local_candidates())
+    monkeypatch.setenv("PCP_LOCAL_TASK_SOURCE_ENABLED", "true")
+    with __import__("pytest").raises(TaskStop, match="pcp_local_source_disabled"):
+        asyncio.run(service.preview_local_candidates())
+
+
+def _pcp_local_discovery(monkeypatch, result=None):
+    monkeypatch.setenv("PCP_LOCAL_TASK_SOURCE_ENABLED", "owner-approved")
+    monkeypatch.setattr(
+        pm_bridge, "project_config",
+        lambda _: {"base_branch": "main", "path": "/isolated/pcp-local"},
+    )
+    sample = {
+        "project_id": "pcp-local",
+        "repository": "sonvhse06072/personal-coding-platform",
+        "main_sha": "a" * 40, "can_dispatch": False,
+        "candidates": [{
+            "number": 778, "body_sha256": "b" * 64,
+            "html_url": "https://github.com/sonvhse06072/personal-coding-platform/issues/778",
+            "status": "UNTRUSTED_CANDIDATE_NOT_AUTHORIZED",
+        }],
+    }
+    if result is not None:
+        sample.update(result)
+
+    class GitHub:
+        def __init__(self):
+            self.calls = []
+        async def local_source_candidates(self, *, per_page):
+            self.calls.append(per_page)
+            return sample
+
+    gh = GitHub()
+    service = pm_bridge.PMBridgeService(FakeStorage(), github=gh)
+    return service, gh
+
+
+def test_pcp_candidate_metadata_is_not_an_approved_job(monkeypatch):
+    service, gh = _pcp_local_discovery(monkeypatch)
+    out = asyncio.run(service.preview_local_candidates(per_page=5))
+    assert out == {
+        "status": "PCP_LOCAL_CANDIDATES_NOT_ADMITTED",
+        "main_sha": "a" * 40,
+        "candidates": [{
+            "number": 778, "body_sha256": "b" * 64,
+            "html_url": "https://github.com/sonvhse06072/personal-coding-platform/issues/778",
+            "status": "UNTRUSTED_CANDIDATE_NOT_AUTHORIZED",
+        }],
+        "can_dispatch": False,
+    }
+    assert gh.calls == [5]
+    assert "body" not in out and "goal" not in out
+
+
+def test_candidate_discovery_needs_registered_main_project(monkeypatch):
+    from app.pcp_local_task_queue import TaskStop
+    monkeypatch.setenv("PCP_LOCAL_TASK_SOURCE_ENABLED", "owner-approved")
+    monkeypatch.setattr(pm_bridge, "project_config",
+                        lambda _: {"base_branch": "develop"})
+    service = pm_bridge.PMBridgeService(FakeStorage())
+    with __import__("pytest").raises(TaskStop, match="pcp_local_project_not_approved"):
+        asyncio.run(service.preview_local_candidates())
+
+
+def test_candidate_discovery_limit_rejects_malformed_before_api(monkeypatch):
+    from app.pcp_local_task_queue import TaskStop
+    service, gh = _pcp_local_discovery(monkeypatch)
+    for limit in (0, 11, True, "10"):
+        with __import__("pytest").raises(TaskStop, match="pcp_local_candidates_limit_invalid"):
+            asyncio.run(service.preview_local_candidates(per_page=limit))
+    assert gh.calls == []
+
+
+def test_candidate_discovery_does_not_trust_foreign_repo_or_permission(monkeypatch):
+    from app.pcp_local_task_queue import TaskStop
+    for bad in ({"repository": "sonvhse06072/chonhac"},
+                {"can_dispatch": True},
+                {"project_id": "chonhac"}):
+        service, gh = _pcp_local_discovery(monkeypatch, result=bad)
+        with __import__("pytest").raises(TaskStop, match="pcp_local_candidates_invalid"):
+            asyncio.run(service.preview_local_candidates())
+        assert gh.calls == [10]
+
+
+def test_candidate_discovery_denies_forged_candidate_metadata(monkeypatch):
+    from app.pcp_local_task_queue import TaskStop
+    bad = {"candidates": [{
+        "number": 778, "body_sha256": "b" * 64,
+        "html_url": "https://github.com/sonvhse06072/chonhac/issues/778",
+        "status": "UNTRUSTED_CANDIDATE_NOT_AUTHORIZED",
+    }]}
+    service, gh = _pcp_local_discovery(monkeypatch, result=bad)
+    with __import__("pytest").raises(TaskStop, match="pcp_local_candidate_identity_invalid"):
+        asyncio.run(service.preview_local_candidates())
