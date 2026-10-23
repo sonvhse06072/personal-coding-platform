@@ -2,21 +2,21 @@
 
 Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline revision, Runtime/WSL rollout attestation, authority change, or chronological log. Verify GitHub and local durable evidence immediately before any mutation. The Constitution, architecture and approved baseline outrank this snapshot.
 
-Last reconciled: **2026-10-23, PM P1 review APPROVED for local consolidation**. Source-only candidate on `ai/pcp-g1-t02-source-longrun`, parent `915017ab29145455a00dc98492a98bcfc08dfcee`. Owner WSL full4 PASS; hosted candidate CI NOT_RUN, no PR or Runtime rollout.
+Last reconciled: **2026-10-23, source merged; NOT Runtime deployment.** [PR #760](https://github.com/sonvhse06072/personal-coding-platform/pull/760) squash-merged at `main@2c6348d69cf64c611762b1a188f69db57b3af907`; PR-head and postmerge hosted full4 PASS, attempt 1. G1-T02 PARKED; G0 HOLD.
 
-## Active #752 source handoff
+## #752 source accepted; live T02 remains PARKED
 
 - **Authority:** Owner explicitly approved `DEC-G1-T02-DELIVERY-SOURCE-V1` and `DEC-G1-T02-CI-PROVENANCE-PATHS-V1` in the task supplied to this developer session. [Comment 6313229565](https://github.com/sonvhse06072/personal-coding-platform/issues/752#issuecomment-6313229565) remains a **proposal**, not a post-approval record. The maximum is the 12 paths listed below; no operational permission follows.
 - **Scope:** `services/runtime/app/{config.py,trusted_codex_broker.py,required_ci.py,engine_delivery.py}`, `services/runtime/tests/{test_g1_t02_identity.py,test_g0_fullpath_required_ci.py,test_delivery.py}`, `services/ddev-executor/app/{main.py,github_delivery.py}`, `services/ddev-executor/tests/{test_g1_t02_ddev_identity.py,test_github_delivery.py}`, and this T1. No other source/config/workflow/baseline path is authorized.
 - **Implementation:** separate exact default-OFF delivery + identity flags; fixture-only repository/job/branch/seed and one normal seed-child commit with exactly two modified PHP paths. Recheck isolated DDEV identity and repository before publish. Dispatch proof binds pinned workflow blob at run main SHA, exact candidate Git objects, job steps and pre-validation logs; failed/duplicate candidate runs fail closed. Runtime binds proof to current job/source/branch/open PR, stops on CI failure, and waits for PM review after verified CI instead of completing.
 - **P1 repair scope:** only `services/ddev-executor/app/main.py`, `services/ddev-executor/tests/test_g1_t02_ddev_identity.py`, and this T1. Reject the configured source symlink before path resolution; retain the exact fixture repository gate. Regression uses a real temporary symlink with real path resolution and mocked Git identity reads. No other gate or source/config/workflow/baseline change.
-- **Validation / checkpoint:** P1 symlink regression FAIL before fix and PASS after repair (focused Executor 36 PASS; T1 compactness 1 PASS). Owner WSL repaired-tree full4 **4/4 PASS: 3,778 passed, 88 skipped** (Router 132, Runtime 1,924, Executor 615, Structure 1,107); `git diff --check` PASS. Independent PM P1 review **APPROVED for local amend only**. Hosted candidate CI `NOT_RUN`, no PR or runtime/model dispatch.
+- **Validation / checkpoint:** P1 symlink regression PASS after repair; Owner WSL full4 **3,778 PASS / 88 skipped**. PM [COMMENT review #5622878258](https://github.com/sonvhse06072/personal-coding-platform/pull/760#pullrequestreview-5622878258) (not self-APPROVE); exact candidate `602b550ac502bebc2c6569821e96ed934edde9d6` and merge `2c6348d69cf64c611762b1a188f69db57b3af907` each passed 4/4 hosted suites. No Runtime/model/fixture execution.
 - **Preserved:** PARKED template, validator, baselines and Compose byte-for-byte; baseline `active_revision: null`, `revisions: {}`, `entrypoint=/bin/false`, flags OFF. Egress activation `NOT_REVIEWED`; never retry/recreate/bypass the blocked overlay. No service/model/fixture operation performed.
 
 | Queue | Status | Evidence / blocker |
 | --- | --- | --- |
 | #594 | COMPLETED | Live issue closed; #612 merged, exact head `8088e5382412d42790cb083c43e57b482debffc7` |
-| #752 source | LOCAL FULL4 PASS; PM P1 APPROVED | 3,778 PASS / 88 skipped; final local commit and separately authorized GitHub PR/hosted CI are next |
+| #752 source | MERGED / VERIFIED | [PR #760](https://github.com/sonvhse06072/personal-coding-platform/pull/760); PR-head and postmerge 4/4 hosted CI PASS; Runtime not deployed |
 | #752 live | NEEDS_OWNER_DECISION | Isolation/egress/credential/baseline/launch gates unresolved; PARKED |
 | #595 | BLOCKED | G0 HOLD / NOT GO; comparable accepted cohort absent |
 | #596–#599 | BLOCKED | Frozen historical pilot; G0/G1 exit and protected live gates unmet |
@@ -27,7 +27,7 @@ Last reconciled: **2026-10-23, PM P1 review APPROVED for local consolidation**. 
 
 GitHub/Runtime evidence remains separate; Runtime was not queried.
 
-**Next safe action:** consolidate P1 in one local source commit parented to `915017ab29145455a00dc98492a98bcfc08dfcee`, then PM review final HEAD. GitHub publication needs separate authorization. PR must declare `Owner-Approval-Issue: https://github.com/sonvhse06072/personal-coding-platform/issues/752` and exact `Approved-Protected-Paths`. Four hosted PR-head CI suites, expected-head PM merge and four postmerge main suites are mandatory. No next issue READY; no Docker/DDEV, egress, credentials, baseline, model or fixture activation. T02 `PARKED / NOT DISPATCHED`, G0 `HOLD / NOT GO`.
+**Next safe action:** Owner WSL PCP source may fast-forward to GitHub `main@2c6348d69cf64c611762b1a188f69db57b3af907` after clean-branch checks; this does not deploy Runtime. No further T02 source changes are required for the accepted PR. Live #752 remains **PARKED / NOT DISPATCHED** until separately reviewed isolation, egress, credentials, baseline, budget and protected activation gates; P2 workflow-history liveness remains. Do not retry/bypass the safety-blocked egress overlay. G0 #595 **HOLD / NOT GO**, F2/T01 frozen, Guardian parked, Chợ Nhạc no-touch.
 
 ## Active investment / execution gates
 
@@ -41,7 +41,7 @@ GitHub/Runtime evidence remains separate; Runtime was not queried.
 
 ## CI and residual operations
 
-- [#665 CI](https://github.com/sonvhse06072/personal-coding-platform/issues/665): all four real suites run on ephemeral hosted runners for code PRs and main pushes; T1/T3-only PRs may skip service suites. Base main run #39577260877 has four SUCCESS jobs with tests executed; candidate CI remains NOT_RUN.
+- [#665 CI](https://github.com/sonvhse06072/personal-coding-platform/issues/665): hosted full4 on code PR/main; docs-only PR may skip service pytest, while structure/doc-authority must execute. T02 [PR #39883810525](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/39883810525) and [postmerge #39884075677](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/39884075677) both 4/4 actually executed PASS; not a Runtime rollout.
 - **#665 security residual / FREE decision:** Owner explicitly chose `CP-665-PROTECTED-MAIN-V1 / FREE`: keep PCP **private** without GitHub Pro purchase, and **accept unprotected `main` / non-enforced required-status checks** as a known server-side risk. The four GitHub-hosted CI checks, PM exact-HEAD review and expected-head merge remain mandatory **manual process gates**, not actual server-enforced rules. The dedicated `SonVH` PCP runner was Owner-reported stopped/de-registered (no GitHub app runner-inventory API proof); no re-registration without a separate protected Owner decision. [Canonical #665](https://github.com/sonvhse06072/personal-coding-platform/issues/665) stays open as an accepted/known residual, not a pending payment request.
 - **Guardian is operationally PARKED / UNAVAILABLE under approved Option A:** [#524](https://github.com/sonvhse06072/personal-coding-platform/issues/524) remains an audit channel but `pcp-guardian.yml` still targets the now-retired self-hosted runner. No remote Guardian command execution or automatic outage recovery should be expected, and the workflow/history must not be deleted. [#512](https://github.com/sonvhse06072/personal-coding-platform/issues/512) remains OPEN for residual natural recovery evidence after a separately approved replacement. [#493](https://github.com/sonvhse06072/personal-coding-platform/issues/493) remains OPEN for Executor 1.0.35 cold-start/provenance; no synthetic restart.
 
