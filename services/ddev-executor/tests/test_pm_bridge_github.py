@@ -221,3 +221,127 @@ def test_merge_bridge_passes_only_bounded_project_derived_context(monkeypatch):
     assert result["project_id"] == "demo"
     assert result["job_id"] == "job-12345678"
     assert result["merged"] is True
+
+
+# B2.1 PCP-only issue read: repository and Executor credential boundary.
+def test_local_source_off_denies_before_project_and_github(monkeypatch):
+    monkeypatch.delenv("PCP_LOCAL_TASK_SOURCE_ENABLED", raising=False)
+    monkeypatch.setattr(
+        pm_bridge_github, "_project",
+        lambda *_: (_ for _ in ()).throw(AssertionError("project touched")),
+    )
+    monkeypatch.setattr(
+        pm_bridge_github, "_repository",
+        lambda *_: (_ for _ in ()).throw(AssertionError("GitHub touched")),
+    )
+    with pytest.raises(HTTPException) as exc:
+        pm_bridge_github.local_source_issue(6, "pcp-local")
+    assert exc.value.status_code == 403
+
+
+def test_local_source_wrong_project_and_malformed_flags_denied(monkeypatch):
+    monkeypatch.setenv("PCP_LOCAL_TASK_SOURCE_ENABLED", "owner-approved")
+    with pytest.raises(HTTPException) as exc:
+        pm_bridge_github.local_source_issue(6, "chonhac")
+    assert exc.value.status_code == 403
+    monkeypatch.setenv("PCP_LOCAL_TASK_SOURCE_ENABLED", "true")
+    with pytest.raises(HTTPException) as exc:
+        pm_bridge_github.local_source_issue(6, "pcp-local")
+    assert exc.value.status_code == 403
+
+
+def _pcp_source_gh(monkeypatch, *, raw=None, branch=None,
+                   config=None, repo=None):
+    from app import main as executor_main
+    monkeypatch.setenv("PCP_LOCAL_TASK_SOURCE_ENABLED", "owner-approved")
+    monkeypatch.setattr(executor_main, "_f2_git_only_scoped", lambda: False)
+    monkeypatch.setattr(executor_main, "_g0_fixture_scoped", lambda: False)
+    monkeypatch.setattr(pm_bridge_github, "_project",
+                        lambda *_: {"base_branch": "main"} if config is None else config)
+    body = "<!-- coding-platform:pcp-remote-source:v1 -->\n{}"
+    expected = pm_bridge_github.PCP_LOCAL_REPOSITORY
+    issue = {
+        "number": 6, "user": {"login": "sonvhse06072"},
+        "body": body, "state": "open",
+        "html_url": f"https://github.com/{expected}/issues/6",
+    } if raw is None else raw
+    branch = {"commit": {"sha": "a" * 40}} if branch is None else branch
+    delivery = FakeDelivery([issue, branch])
+    monkeypatch.setattr(pm_bridge_github, "_repository",
+                        lambda _: (delivery, expected if repo is None else repo))
+    return delivery, body
+
+
+def test_local_source_reads_only_exact_pcp_issue_and_current_main(monkeypatch):
+    import hashlib
+    delivery, body = _pcp_source_gh(monkeypatch)
+    result = pm_bridge_github.local_source_issue(6, "pcp-local")
+    assert result == {
+        "project_id": "pcp-local",
+        "repository": "sonvhse06072/personal-coding-platform",
+        "number": 6, "author": "sonvhse06072", "state": "open",
+        "is_pull_request": False,
+        "html_url": "https://github.com/sonvhse06072/personal-coding-platform/issues/6",
+        "body": body,
+        "body_sha256": hashlib.sha256(body.encode()).hexdigest(),
+        "main_sha": "a" * 40,
+    }
+    assert delivery.client.calls == [
+        ("https://api.github.test/repos/sonvhse06072/personal-coding-platform/issues/6", None),
+        ("https://api.github.test/repos/sonvhse06072/personal-coding-platform/branches/main", None),
+    ]
+    assert "token" not in str(result).lower()
+
+
+def test_local_source_rejects_unregistered_base_and_foreign_origin(monkeypatch):
+    delivery, _ = _pcp_source_gh(
+        monkeypatch, config={"base_branch": "develop"},
+    )
+    with pytest.raises(HTTPException) as exc:
+        pm_bridge_github.local_source_issue(6, "pcp-local")
+    assert exc.value.status_code == 403
+    assert delivery.client.calls == []
+    delivery, _ = _pcp_source_gh(
+        monkeypatch, repo="sonvhse06072/chonhac",
+    )
+    with pytest.raises(HTTPException) as exc:
+        pm_bridge_github.local_source_issue(6, "pcp-local")
+    assert exc.value.status_code == 403
+    assert delivery.client.calls == []
+
+
+@pytest.mark.parametrize("invalid", [
+    {"number": 7, "body": "good", "html_url":
+     "https://github.com/sonvhse06072/personal-coding-platform/issues/6"},
+    {"number": 6, "body": "x" * 16001, "html_url":
+     "https://github.com/sonvhse06072/personal-coding-platform/issues/6"},
+    {"number": 6, "body": "secret", "html_url":
+     "https://github.com/another/repo/issues/6"},
+])
+def test_local_source_upstream_mismatch_sanitized(monkeypatch, invalid):
+    _pcp_source_gh(monkeypatch, raw=invalid)
+    with pytest.raises(HTTPException) as exc:
+        pm_bridge_github.local_source_issue(6, "pcp-local")
+    assert exc.value.status_code == 502
+    assert "secret" not in str(exc.value.detail)
+    assert "token" not in str(exc.value.detail)
+
+
+def test_local_source_stale_or_invalid_main_never_returns_task(monkeypatch):
+    _pcp_source_gh(monkeypatch, branch={"commit": {"sha": "invalid"}})
+    with pytest.raises(HTTPException) as exc:
+        pm_bridge_github.local_source_issue(6, "pcp-local")
+    assert exc.value.status_code == 502
+
+
+def test_local_source_historical_executor_scope_denied(monkeypatch):
+    from app import main as executor_main
+    monkeypatch.setenv("PCP_LOCAL_TASK_SOURCE_ENABLED", "owner-approved")
+    monkeypatch.setattr(executor_main, "_f2_git_only_scoped", lambda: True)
+    monkeypatch.setattr(
+        pm_bridge_github, "_project",
+        lambda *_: (_ for _ in ()).throw(AssertionError("should not open registry")),
+    )
+    with pytest.raises(HTTPException) as exc:
+        pm_bridge_github.local_source_issue(6, "pcp-local")
+    assert exc.value.status_code == 403
