@@ -197,7 +197,9 @@ class FakeDatabase:
         if s.startswith("UPDATE cp_pcp_local_source_receipts"):
             target, job_id, repo, num = params[:4]
             row = self.receipts.get((repo, num))
-            if row is None or row["state"] != params[-2] or row["generation"] != params[-1]:
+            if (row is None or row["state"] != params[-3]
+                    or row["generation"] != params[-2]
+                    or row["job_id"] not in (None, params[-1])):
                 return Cursor(None)
             row.update(state=target, generation=row["generation"] + 1)
             row["job_id"] = row["job_id"] or job_id
@@ -286,3 +288,22 @@ def test_generation_cas_only_in_independently_admitted_worker(monkeypatch):
             task, expected_state="pending", expected_generation=0,
             target_state="claimed", job_id=job_id, worker_authorized=True,
         )
+
+
+def test_job_identity_cannot_swap_after_claim(monkeypatch):
+    monkeypatch.setenv("PCP_LOCAL_TASK_WORKER_ENABLED", "owner-approved")
+    store = q.LocalSourceQueueStore(FakeStorage())
+    task = check()
+    store.record(task)
+    first = "c" * 32
+    store.advance(task, expected_state="pending", expected_generation=0,
+                  target_state="claimed", job_id=first, worker_authorized=True)
+    with pytest.raises(q.TaskStop, match="task_generation_or_identity_stale"):
+        store.advance(task, expected_state="claimed", expected_generation=1,
+                      target_state="running", job_id="d" * 32,
+                      worker_authorized=True)
+    assert store.advance(task, expected_state="claimed", expected_generation=1,
+                         target_state="running", job_id=first,
+                         worker_authorized=True) == {
+        "state": "running", "generation": 2, "job_id": first,
+    }
