@@ -225,6 +225,47 @@ class LocalSourceQueueStore:
     def __init__(self, storage: Any) -> None:
         self.storage = storage
 
+    def next_pending(self) -> dict[str, Any] | None:
+        """One oldest PCP-local receipt, READ ONLY; no replay or table creation.
+
+        The caller must independently check default-off flags and the approved
+        ProjectBaseline BEFORE invoking this method. It never claims a job.
+        """
+        with self.storage.connect() as conn:
+            row = conn.execute(
+                """SELECT repository, issue_number, project_id, task_key,
+                          body_sha256, base_sha, baseline_revision,
+                          baseline_source_commit, goal_sha256, allowed_paths,
+                          state, generation, job_id
+                   FROM cp_pcp_local_source_receipts
+                   WHERE repository=%s AND project_id=%s AND state='pending'
+                   ORDER BY created_at ASC, issue_number ASC
+                   LIMIT 1""",
+                (REPOSITORY, PROJECT_ID),
+            ).fetchone()
+        if row is None:
+            return None
+        require(isinstance(row, dict), "pending_receipt_shape_invalid")
+        require(row.get("repository") == REPOSITORY
+                and row.get("project_id") == PROJECT_ID
+                and row.get("state") == "pending"
+                and type(row.get("issue_number")) is int
+                and row["issue_number"] > 0
+                and type(row.get("generation")) is int
+                and row["generation"] == 0
+                and row.get("job_id") is None,
+                "pending_receipt_identity_invalid")
+        # Fail closed on unexpected row fields rather than carrying mutable
+        # internal metadata into a model/Runtime authorization decision.
+        required = {
+            "repository", "issue_number", "project_id", "task_key",
+            "body_sha256", "base_sha", "baseline_revision",
+            "baseline_source_commit", "goal_sha256", "allowed_paths",
+            "state", "generation", "job_id",
+        }
+        require(set(row) == required, "pending_receipt_shape_invalid")
+        return dict(row)
+
     def record(self, task: LocalSourceTask) -> bool:
         with self.storage.connect() as conn:
             conn.execute(RECEIPT_DDL)
