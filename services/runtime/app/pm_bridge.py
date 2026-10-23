@@ -18,6 +18,8 @@ from .config import _default_config_file, project_config
 from .pm_control import CONTROL_MARKER, PMControlEventStore, parse_pm_control_comment
 from .pcp_local_task_queue import (
     PROJECT_ID as PCP_LOCAL_PROJECT_ID,
+    SHA_RE as PCP_LOCAL_SHA_RE,
+    DIGEST_RE as PCP_LOCAL_DIGEST_RE,
     LocalSourceQueueStore,
     TaskStop,
     verify_issue as verify_pcp_local_issue,
@@ -127,6 +129,24 @@ class PMBridgeGitHubClient:
             value = response.json()
             if not isinstance(value, dict):
                 raise TaskStop("executor_local_source_invalid")
+            return value
+
+
+    async def local_source_candidates(self, *, per_page: int = 10) -> dict[str, Any]:
+        """Read the narrow Executor-only PCP issue label feed; no auth claim."""
+        if type(per_page) is not int or not 1 <= per_page <= 10:
+            raise TaskStop("pcp_local_candidates_limit_invalid")
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.get(
+                f"{self.base}/v1/github/pm-bridge/local-source/candidates",
+                params={"project_id": PCP_LOCAL_PROJECT_ID, "per_page": per_page},
+                headers=self.headers,
+            )
+            if not response.is_success:
+                raise TaskStop("executor_local_candidates_unavailable")
+            value = response.json()
+            if not isinstance(value, dict):
+                raise TaskStop("executor_local_candidates_invalid")
             return value
 
 
@@ -312,6 +332,47 @@ class PMBridgeService:
         # Atomic unique receipt, never a call to create_job/run_job.
         created = self.local_receipts.record(task)
         return task.status(created=created)
+
+    async def preview_local_candidates(self, *, per_page: int = 10) -> dict[str, Any]:
+        """Read-only discovery, never admission, DB mutation or Codex run."""
+        if os.getenv("PCP_LOCAL_TASK_SOURCE_ENABLED", "") != "owner-approved":
+            raise TaskStop("pcp_local_source_disabled")
+        if type(per_page) is not int or not 1 <= per_page <= 10:
+            raise TaskStop("pcp_local_candidates_limit_invalid")
+        project = project_config(PCP_LOCAL_PROJECT_ID)
+        if (not isinstance(project, dict)
+                or project.get("base_branch") != "main"):
+            raise TaskStop("pcp_local_project_not_approved")
+        feed = await self.github.local_source_candidates(per_page=per_page)
+        if (type(feed) is not dict
+                or feed.get("project_id") != PCP_LOCAL_PROJECT_ID
+                or feed.get("repository") != "sonvhse06072/personal-coding-platform"
+                or type(feed.get("main_sha")) is not str
+                or PCP_LOCAL_SHA_RE.fullmatch(feed["main_sha"]) is None
+                or feed.get("can_dispatch") is not False
+                or type(feed.get("candidates")) is not list
+                or len(feed["candidates"]) > per_page):
+            raise TaskStop("pcp_local_candidates_invalid")
+        cleaned = []
+        for item in feed["candidates"]:
+            if (type(item) is not dict
+                    or set(item) != {
+                        "number", "body_sha256", "html_url", "status",
+                    }
+                    or type(item.get("number")) is not int
+                    or item["number"] < 1
+                    or type(item.get("body_sha256")) is not str
+                    or PCP_LOCAL_DIGEST_RE.fullmatch(item["body_sha256"]) is None
+                    or item.get("html_url") !=
+                    f"https://github.com/sonvhse06072/personal-coding-platform/issues/{item['number']}"
+                    or item.get("status") != "UNTRUSTED_CANDIDATE_NOT_AUTHORIZED"):
+                raise TaskStop("pcp_local_candidate_identity_invalid")
+            cleaned.append(dict(item))
+        return {
+            "status": "PCP_LOCAL_CANDIDATES_NOT_ADMITTED",
+            "main_sha": feed["main_sha"], "candidates": cleaned,
+            "can_dispatch": False,
+        }
 
     async def poll_project(self, project_id: str) -> dict[str, Any]:
         async with self._lock:
@@ -634,6 +695,24 @@ async def check_local_source(payload: LocalSourceCheckRequest) -> dict[str, Any]
     except (KeyError, RuntimeError, ValueError, httpx.HTTPError) as exc:
         # Prevent leaking GitHub/ProjectBaseline details into caller response.
         raise HTTPException(422, "pcp_local_source_check_failed") from exc
+
+
+@router.get("/local-source/candidates")
+async def local_source_candidates(
+    per_page: int = 10,
+) -> dict[str, Any]:
+    """Authenticated read-only source discovery, NOT a queue dispatch."""
+    try:
+        return await _service.preview_local_candidates(per_page=per_page)
+    except TaskStop as exc:
+        raise HTTPException(
+            403 if exc.code == "pcp_local_source_disabled" else 422,
+            exc.code,
+        ) from exc
+    except (KeyError, RuntimeError, ValueError, httpx.HTTPError) as exc:
+        raise HTTPException(
+            422, "pcp_local_candidates_check_failed"
+        ) from exc
 
 
 @router.post("/poll")
