@@ -278,12 +278,14 @@ class LocalSourceQueueStore:
                             worker_authorized=worker_authorized)
         require(type(expected_generation) is int and expected_generation >= 0,
                 "task_generation_invalid")
-        require(isinstance(job_id, str) and
-                re.fullmatch(r"[a-f0-9]{32}", job_id) is not None
-                if target_state != "blocked" else job_id is None or
-                (isinstance(job_id, str) and
-                 re.fullmatch(r"[a-f0-9]{32}", job_id) is not None),
-                "task_job_identity_invalid")
+        # A previously claimed job can never be silently replaced by a
+        # different caller/job on a later transition.
+        if target_state == "blocked" and job_id is None:
+            pass
+        else:
+            require(isinstance(job_id, str)
+                    and re.fullmatch(r"[a-f0-9]{32}", job_id) is not None,
+                    "task_job_identity_invalid")
         with self.storage.connect() as conn:
             row = conn.execute(
                 """UPDATE cp_pcp_local_source_receipts
@@ -294,11 +296,12 @@ class LocalSourceQueueStore:
                      AND baseline_revision=%s AND
                          baseline_source_commit=%s
                      AND state=%s AND generation=%s
+                     AND (job_id IS NULL OR job_id=%s)
                    RETURNING state, generation, job_id""",
                 (target_state, job_id, task.repository, task.issue_number,
                  task.project_id, task.body_sha256, task.base_sha,
                  task.baseline_revision, task.baseline_source_commit,
-                 expected_state, expected_generation),
+                 expected_state, expected_generation, job_id),
             ).fetchone()
             require(row is not None, "task_generation_or_identity_stale")
             conn.commit()
