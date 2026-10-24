@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+from copy import deepcopy
 import json
 import os
 from typing import Any
@@ -70,7 +71,8 @@ class LocalWorkerLoop:
         self.launcher = launcher
 
     async def _prepare(self) -> tuple[
-        LocalSourceTask, dict[str, Any], dict[str, Any], str
+        LocalSourceTask, dict[str, Any], dict[str, Any], str,
+        dict[str, Any]
     ] | None:
         source_worker_flags()
         # Do not even read DB or GitHub if no approved trusted evidence
@@ -131,7 +133,7 @@ class LocalWorkerLoop:
                 and hashlib.sha256(goal.encode("utf-8")).hexdigest()
                 == task.goal_sha256,
                 "pcp_local_goal_identity_changed")
-        return task, receipt, decision, goal
+        return task, deepcopy(receipt), decision, goal, deepcopy(evidence)
 
     async def preview_once(self) -> dict[str, Any]:
         """No claims, no external writes, no model. One oldest pending only."""
@@ -139,7 +141,7 @@ class LocalWorkerLoop:
         if current is None:
             return {"status": "PCP_LOCAL_QUEUE_IDLE_NOT_DISPATCHED",
                     "model_calls": 0}
-        task, _, decision, _ = current
+        task, _, decision, _, _ = current
         return {
             "status": "PCP_LOCAL_SOURCE_VALIDATED_NOT_DISPATCHED",
             "issue_number": task.issue_number,
@@ -169,7 +171,7 @@ class LocalWorkerLoop:
         if current is None:
             return {"status": "PCP_LOCAL_QUEUE_IDLE_NOT_DISPATCHED",
                     "model_calls": 0}
-        task, _, decision, goal = current
+        task, receipt, decision, goal, initial_evidence = current
         require(decision.get("requires_fresh_live_recheck") is True,
                 "pcp_local_live_recheck_required")
         job_id = stable_job_id(task)
@@ -177,6 +179,43 @@ class LocalWorkerLoop:
             task, expected_state="pending", expected_generation=0,
             target_state="claimed", job_id=job_id, worker_authorized=True,
         )
+        # P1: receipt/source/lease evidence may change between the initial
+        # validation and a successful durable CAS. Do not pass that old
+        # snapshot to a launcher without a second independent read.
+        # A failure AFTER claim remains claimed for manual reconciliation;
+        # never run the model and never create a replacement job/retry.
+        try:
+            self.receipts.read_claimed(task, job_id=job_id)
+            latest = await self.github.local_source_issue(
+                issue_number=task.issue_number
+            )
+            latest_task = verify_issue(
+                latest,
+                issue_number=task.issue_number,
+                body_sha256=task.body_sha256,
+                base_sha=task.base_sha,
+                baseline_revision=task.baseline_revision,
+                baseline_source_commit=task.baseline_source_commit,
+            )
+            require(latest_task == task, "pcp_local_task_identity_changed")
+            fresh = self.trusted_attestor.observe(task)
+            if inspect.isawaitable(fresh):
+                fresh = await fresh
+            require(type(fresh) is dict and set(fresh) == EVIDENCE_PARTS,
+                    "pcp_local_fresh_evidence_invalid")
+            fresh_decision = check_worker_admission(
+                task, receipt=receipt,
+                project=fresh["project"], baseline=fresh["baseline"],
+                isolation=fresh["isolation"], provider=fresh["provider"],
+                budget=fresh["budget"],
+            )
+            require(fresh == initial_evidence and fresh_decision == decision,
+                    "pcp_local_evidence_changed_after_claim")
+            operational_flag()  # A revoked activation cannot reach launcher.
+        except Exception as exc:
+            raise TaskStop(
+                "pcp_local_prelaunch_recheck_uncertain_do_not_retry"
+            ) from exc
         # The trusted launcher must perform its own just-in-time project/
         # lease/provider checks BEFORE touching Runtime jobs or Codex.
         try:
