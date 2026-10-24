@@ -1,0 +1,31 @@
+# B2.2c0 PCP-only draft, NEVER the active multi-project registry.
+# No recipient path, credentials, or source worker execution is approved.
+version: 1
+projects:
+  pcp-local:
+    registration_status: draft
+    repository: sonvhse06072/personal-coding-platform
+    path: null
+    base_branch: main
+    privacy:
+      private_code: true
+      allow_training_provider: false
+      require_zero_retention: true
+    autonomy:
+      allow_commit: false
+      allow_push_ai_branch: false
+      allow_create_pr: false
+      allow_auto_merge_low_risk: false
+      allow_production_deploy: false
+    runtime:
+      branch_prefix: ai
+      workspace_mode: isolated_clone
+      developer_permission_mode: bounded
+      exclusive_project_lease: false
+    ddev:
+      enabled: false
+      preflight: []
+      targeted_tests: []
+      static_analysis: []
+      full_tests: []
+      cleanup: []

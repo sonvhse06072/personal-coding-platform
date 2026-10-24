@@ -4,6 +4,7 @@ import asyncio
 import os
 import secrets
 import shutil
+from pathlib import Path
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
@@ -238,12 +239,112 @@ def _require_manual_collaboration_state(job_id: str) -> None:
         )
 
 
+
+# This mode is SOURCE ONLY; it does not prove Docker/WSL isolation or
+# create a project registration, lease, database, credentials, or worker.
+PCP_LOCAL_INSPECT_MODE = "pcp_local_inspect"
+_PCP_PROJECT_DRAFT = "projects.pcp-local.yml"
+_PCP_BASELINE_DRAFT = "project-baselines.pcp-local.yml"
+_PCP_LOCAL_FLAGS = (
+    "PCP_LOCAL_TASK_SOURCE_ENABLED",
+    "PCP_LOCAL_TASK_WORKER_ENABLED",
+    "PCP_LOCAL_TASK_OPERATIONAL_ACTIVATION",
+)
+
+
+def _pcp_local_scope_requested() -> bool:
+    return (
+        any(os.getenv(flag, "") != "" for flag in _PCP_LOCAL_FLAGS)
+        or Path(os.getenv("PROJECTS_FILE", "")).name == _PCP_PROJECT_DRAFT
+        or Path(os.getenv("PROJECT_BASELINES_FILE", "")).name == _PCP_BASELINE_DRAFT
+    )
+
+
+def _reject_pcp_local_legacy_startup() -> None:
+    # Reject before normal engine/startup, historical jobs and publishers.
+    if runtime_startup_mode() == PCP_LOCAL_INSPECT_MODE or _pcp_local_scope_requested():
+        raise RuntimeError("PCP-local SOURCE ONLY: legacy Runtime is forbidden")
+
+
+def _validate_pcp_local_inspection() -> None:
+    """Check two separate parked singleton registries without touching state."""
+    from .baseline import ProjectBaselineRegistry
+    import yaml
+
+    paths = []
+    for key, name in (
+        ("PROJECTS_FILE", _PCP_PROJECT_DRAFT),
+        ("PROJECT_BASELINES_FILE", _PCP_BASELINE_DRAFT),
+    ):
+        raw = os.getenv(key, "")
+        path = Path(raw)
+        if (not raw or not path.is_absolute() or path.name != name
+                or path.is_symlink() or not path.is_file()):
+            raise RuntimeError("PCP-local requires explicit real draft registry files")
+        paths.append(path)
+    if paths[0].parent.resolve() != paths[1].parent.resolve():
+        raise RuntimeError("PCP-local draft registry directories differ")
+    if any(os.getenv(flag, "") != "" for flag in _PCP_LOCAL_FLAGS):
+        raise RuntimeError("PCP-local activation flags must be absent")
+    if parked_fullpath_environment(os.environ):
+        raise RuntimeError("PCP-local cannot reuse frozen fullpath scope")
+    try:
+        with paths[0].open(encoding="utf-8") as stream:
+            project_registry = yaml.safe_load(stream)
+        with paths[1].open(encoding="utf-8") as stream:
+            baseline_registry = yaml.safe_load(stream)
+    except (OSError, yaml.YAMLError) as exc:
+        raise RuntimeError("PCP-local draft YAML invalid") from exc
+
+    draft = {
+        "registration_status": "draft",
+        "repository": "sonvhse06072/personal-coding-platform",
+        "path": None,
+        "base_branch": "main",
+        "privacy": {
+            "private_code": True,
+            "allow_training_provider": False,
+            "require_zero_retention": True,
+        },
+        "autonomy": {
+            "allow_commit": False, "allow_push_ai_branch": False,
+            "allow_create_pr": False, "allow_auto_merge_low_risk": False,
+            "allow_production_deploy": False,
+        },
+        "runtime": {
+            "branch_prefix": "ai", "workspace_mode": "isolated_clone",
+            "developer_permission_mode": "bounded",
+            "exclusive_project_lease": False,
+        },
+        "ddev": {
+            "enabled": False, "preflight": [], "targeted_tests": [],
+            "static_analysis": [], "full_tests": [], "cleanup": [],
+        },
+    }
+    if (type(project_registry) is not dict
+            or type(project_registry.get("version")) is not int
+            or project_registry != {
+                "version": 1, "projects": {"pcp-local": draft},
+            }):
+        raise RuntimeError("PCP-local project is not a parked singleton")
+    if (type(baseline_registry) is not dict
+            or type(baseline_registry.get("version")) is not int
+            or baseline_registry != {
+                "version": 1,
+                "projects": {"pcp-local": {
+                    "active_revision": None, "revisions": {},
+                }},
+            }):
+        raise RuntimeError("PCP-local baseline is not inactive draft")
+    ProjectBaselineRegistry.model_validate(baseline_registry)
+
+
 def runtime_startup_mode() -> str:
     """Explicit, opt-in inspection startup without any durable/runtime transitions."""
     mode = os.getenv("PCP_RUNTIME_STARTUP_MODE", "normal")
-    if mode not in {"normal", "inspect", "g0_fixture_run", FULLPATH_CANDIDATE_MODE, F2_WORKER_MODE}:
+    if mode not in {"normal", "inspect", "g0_fixture_run", FULLPATH_CANDIDATE_MODE, F2_WORKER_MODE, PCP_LOCAL_INSPECT_MODE}:
         raise RuntimeError(
-            "Invalid PCP_RUNTIME_STARTUP_MODE; expected normal, inspect, g0_fixture_run, g0_fullpath_candidate or g0_fullpath_worker"
+            "Invalid PCP_RUNTIME_STARTUP_MODE; expected normal, inspect, pcp_local_inspect, g0_fixture_run, g0_fullpath_candidate or g0_fullpath_worker"
         )
     return mode
 
@@ -254,6 +355,7 @@ async def _start_legacy_control_plane() -> None:
     No scheduler, plan replay or publisher belongs to a future direct-intake
     fresh F2 worker startup. Parked F2 also blocks direct helper invocation.
     """
+    _reject_pcp_local_legacy_startup()
     reject_parked_fullpath_side_effects()
     await plan_orchestrator.start()
     await progress_publisher.start()
@@ -262,6 +364,7 @@ async def _start_legacy_control_plane() -> None:
 
 async def _stop_legacy_control_plane() -> None:
     """Unchanged normal teardown order; never a parked F2 operation."""
+    _reject_pcp_local_legacy_startup()
     reject_parked_fullpath_side_effects()
     await job_status_publisher.stop()
     await progress_publisher.stop()
@@ -270,6 +373,16 @@ async def _stop_legacy_control_plane() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    mode = runtime_startup_mode()
+    if mode == PCP_LOCAL_INSPECT_MODE:
+        _validate_pcp_local_inspection()
+        app.state.pcp_local_inspection_ready = True
+        try:
+            yield
+        finally:
+            app.state.pcp_local_inspection_ready = False
+        return
+    _reject_pcp_local_legacy_startup()
     harden_runtime_process_secret_boundary()
     if runtime_startup_mode() == "inspect":
         # In particular: no Storage.init DDL/planning updates, Antigravity
@@ -319,6 +432,19 @@ app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan
 
 @app.middleware("http")
 async def inspection_mode_http_guard(request: Request, call_next):
+    # A mode flip cannot bypass a parked process latch.
+    parked = getattr(app.state, "pcp_local_inspection_ready", False)
+    if parked or os.getenv("PCP_RUNTIME_STARTUP_MODE") == PCP_LOCAL_INSPECT_MODE:
+        if (not parked or runtime_startup_mode() != PCP_LOCAL_INSPECT_MODE
+                or request.method != "GET" or request.url.path != "/health"):
+            return JSONResponse(status_code=503, content={
+                "detail": "PCP-local SOURCE ONLY: inspection APIs parked",
+            })
+        return await call_next(request)
+    if _pcp_local_scope_requested():
+        return JSONResponse(status_code=503, content={
+            "detail": "PCP-local draft cannot serve legacy Runtime endpoints",
+        })
     mode = runtime_startup_mode()
     if mode == F2_WORKER_MODE:
         # Middleware is required even when callers skip FastAPI lifespan.
@@ -449,6 +575,12 @@ app.include_router(
 
 @app.get("/health", response_model=RuntimeHealth)
 async def health() -> RuntimeHealth:
+    if getattr(app.state, "pcp_local_inspection_ready", False):
+        return RuntimeHealth(
+            status="degraded", service="coding-runtime",
+            version=RUNTIME_VERSION, router="not_checked", executor="not_checked",
+            adapters={"antigravity_host": False, "codex_cli": False, "opencode": False},
+        )
     router_ok = await engine.router.health()
     executor_ok = await engine.ddev.health()
     return RuntimeHealth(
