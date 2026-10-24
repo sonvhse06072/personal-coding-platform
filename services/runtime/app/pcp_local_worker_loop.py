@@ -133,7 +133,7 @@ class LocalWorkerLoop:
                 and hashlib.sha256(goal.encode("utf-8")).hexdigest()
                 == task.goal_sha256,
                 "pcp_local_goal_identity_changed")
-        return task, receipt, decision, goal, deepcopy(evidence)
+        return task, deepcopy(receipt), decision, goal, deepcopy(evidence)
 
     async def preview_once(self) -> dict[str, Any]:
         """No claims, no external writes, no model. One oldest pending only."""
