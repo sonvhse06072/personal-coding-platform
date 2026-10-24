@@ -192,9 +192,10 @@ def test_current_legacy_recipe_still_requires_new_source_approval(
     doc["build"]["dockerfile_sha256"] = (
         hashlib.sha256(current_dockerfile).hexdigest()
     )
-    assert evaluate(
-        plan, doc, compose, dockerfile=current_dockerfile,
-    ) == "DOCKERFILE_BASE_NOT_PINNED"
+    reason(
+        lambda: evaluate(plan, doc, compose, dockerfile=current_dockerfile),
+        "DOCKERFILE_BASE_NOT_PINNED",
+    )
 
 
 def test_explicit_latest_in_dockerfile_never_qualifies(
@@ -202,9 +203,10 @@ def test_explicit_latest_in_dockerfile_never_qualifies(
 ):
     raw = ("FROM " + BASE + "\nARG OPENCODE_VERSION=latest\n").encode()
     doc = complete_recipe(manifest, dockerfile=raw)
-    assert evaluate(
-        plan, doc, compose, dockerfile=raw,
-    ) == "DOCKERFILE_OPENCODE_FLOATING"
+    reason(
+        lambda: evaluate(plan, doc, compose, dockerfile=raw),
+        "DOCKERFILE_OPENCODE_FLOATING",
+    )
 
 
 def test_pinned_input_hash_drift_rejected(plan, manifest, compose):
