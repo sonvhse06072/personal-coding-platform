@@ -4,12 +4,15 @@ from __future__ import annotations
 import ast
 from copy import deepcopy
 import hashlib
+import io
+import json
 import os
 from pathlib import Path
 import runpy
 import shutil
 import subprocess
 import sys
+import tarfile
 
 import pytest
 import yaml
@@ -20,8 +23,9 @@ CONTRACT = ROOT / "profiles/pcp-local/image-provenance.example.yml"
 COMPOSE = ROOT / "profiles/pcp-local/.ddev/docker-compose.platform.yaml"
 DOCKERFILE = ROOT / "profiles/pcp-local/runtime/Dockerfile.inspect"
 LOCK = ROOT / "profiles/pcp-local/runtime/requirements-inspect.lock"
+IGNORE = ROOT / "profiles/pcp-local/runtime/Dockerfile.inspect.dockerignore"
 HEAD = "a" * 40
-BASE = "python:3.13-slim-bookworm@sha256:" + "b" * 64
+BASE = yaml.safe_load(CONTRACT.read_text())["build"]["base_image"]
 DIGEST = "sha256:" + "c" * 64
 APP_HASH = "d" * 64
 
@@ -59,7 +63,8 @@ def fake_lock(plan):
 def evaluate(plan, manifest, compose, *, lock=None, recipe=None, app_hash=APP_HASH):
     return plan["assess"](
         manifest, head=HEAD, dockerfile=recipe or DOCKERFILE.read_bytes(),
-        requirements=lock if lock is not None else fake_lock(plan),
+        requirements=lock if lock is not None else LOCK.read_bytes(),
+        context_ignore=IGNORE.read_bytes(),
         app_tree_sha256=app_hash, compose=compose,
     )
 
@@ -70,7 +75,7 @@ def complete_recipe(plan, manifest, *, lock=None):
     m["build"].update(
         base_image=BASE,
         dockerfile_sha256=hashlib.sha256(DOCKERFILE.read_bytes()).hexdigest(),
-        requirements_sha256=hashlib.sha256(lock if lock is not None else fake_lock(plan)).hexdigest(),
+        requirements_sha256=hashlib.sha256(lock if lock is not None else LOCK.read_bytes()).hexdigest(),
         app_tree_sha256=APP_HASH,
     )
     return m
@@ -91,20 +96,28 @@ def claimed_provenance(m):
         "verifier": "independent", "statement_sha256": "4" * 64,
         "subject_digest": m["artifact"]["digest"], "source_commit": HEAD,
         **{key: m["build"][key] for key in
-           ("dockerfile_sha256", "requirements_sha256", "app_tree_sha256")},
+           ("dockerfile_sha256", "requirements_sha256", "app_tree_sha256", "context_ignore_sha256")},
     }
 
 
 def test_checked_in_draft_is_unresolved_not_a_fabricated_pin(plan, manifest, compose):
     assert manifest["approval_state"] == "draft"
     assert manifest["source_commit"] is None
-    assert manifest["build"]["base_image"] is None
+    assert manifest["build"]["base_image"] == plan["BASE_IMAGE"]
     assert all(v is None for v in manifest["artifact"].values())
     assert manifest["independent_provenance"] is None
-    assert not plan["validate_lock"](LOCK.read_bytes())
+    assert plan["validate_lock"](LOCK.read_bytes())
     assert evaluate(plan, manifest, compose, lock=LOCK.read_bytes()) == "SOURCE_AUTHORITY_NOT_PINNED"
-    doc = complete_recipe(plan, manifest, lock=LOCK.read_bytes())
-    assert evaluate(plan, doc, compose, lock=LOCK.read_bytes()) == "DEPENDENCY_LOCK_NOT_RESOLVED"
+    doc = complete_recipe(plan, manifest)
+    assert evaluate(plan, doc, compose) == "ARTIFACT_DIGEST_NOT_ATTESTED"
+    doc["build"]["base_image"] = None
+    assert evaluate(plan, doc, compose) == "BUILD_RECIPE_NOT_PINNED"
+    unpinned = b"--require-hashes\n--only-binary=:all:\n" + b"\n".join(
+        line.split(b" --hash=")[0] for line in LOCK.read_bytes().splitlines()
+        if b"==" in line and not line.startswith(b"#")
+    ) + b"\n"
+    doc = complete_recipe(plan, manifest, lock=unpinned)
+    assert evaluate(plan, doc, compose, lock=unpinned) == "DEPENDENCY_LOCK_NOT_RESOLVED"
 
 
 @pytest.mark.parametrize(("field", "value", "expected"), [
@@ -130,7 +143,8 @@ def test_source_and_authority_rejected(plan, manifest, compose, field, value, ex
     ("startup_mode", "normal", "STARTUP_MODE_UNSAFE"),
     ("base_image", "python:3.13-slim-bookworm", "BASE_IMAGE_NOT_DIGEST_PINNED"),
     ("base_image", "node:22@sha256:" + "b" * 64, "BASE_IMAGE_NOT_DIGEST_PINNED"),
-    ("base_image", "python:3.13-slim-bookworm@sha256:" + "0" * 64, "DIGEST_FORMAT_UNSAFE"),
+    ("base_image", "python:3.13.17-slim-bookworm@sha256:" + "0" * 64, "DIGEST_FORMAT_UNSAFE"),
+    ("base_image", "python:3.13.17-slim-bookworm@sha256:" + "b" * 64, "BASE_IMAGE_PIN_DRIFT"),
     ("requirements_sha256", True, "HASH_FORMAT_UNSAFE"),
 ])
 def test_build_input_policy(plan, manifest, compose, field, value, expected):
@@ -310,7 +324,6 @@ def test_source_only_cli_no_build_or_default_host_action(plan, capsys):
     assert "PCP_H1A_REASON=USAGE_SOURCE_ONLY" in capsys.readouterr().out
     fn = plan["main"]
     fn.__globals__["check_checkout"] = lambda: HEAD
-    fn.__globals__["app_inputs"] = lambda: {"main.py": b"fake"}
     assert fn(["--check"]) == 2
     out = capsys.readouterr().out
     assert "PCP_H1A_REASON=SOURCE_AUTHORITY_NOT_PINNED" in out
@@ -330,7 +343,7 @@ def test_source_only_cli_no_build_or_default_host_action(plan, capsys):
 
 def test_new_source_paths_classified_protected():
     policy = runpy.run_path(str(ROOT / "scripts/check_project_doc_authority.py"))
-    for path in (SCRIPT, CONTRACT, DOCKERFILE, LOCK, COMPOSE):
+    for path in (SCRIPT, CONTRACT, DOCKERFILE, LOCK, IGNORE, COMPOSE):
         assert policy["classify_path"](str(path.relative_to(ROOT))) == "protected"
 
 
@@ -397,13 +410,124 @@ config = uvicorn.Config(m.app, loop="asyncio", http="h11", lifespan="on", ws="no
 config.load()
 print("SYNTHETIC_INSPECTION_NO_IO=PASS")
 '''
+    interpreter = os.getenv("PCP_H1B2_MINIMAL_PYTHON", sys.executable)
     env = {
-        "PATH": str(Path(sys.executable).parent),
+        "PATH": str(Path(interpreter).parent),
         "PCP_RUNTIME_STARTUP_MODE": "pcp_local_inspect",
         "PROJECTS_FILE": str(tmp_path / "projects.pcp-local.yml"),
         "PROJECT_BASELINES_FILE": str(tmp_path / "project-baselines.pcp-local.yml"),
     }
-    result = subprocess.run([sys.executable, "-I", "-B", "-c", code],
+    result = subprocess.run([interpreter, "-I", "-B", "-c", code],
                             cwd=tmp_path, env=env, capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stderr
     assert "SYNTHETIC_INSPECTION_NO_IO=PASS" in result.stdout
+
+
+def context_cases():
+    allowed = {line[1:] for line in IGNORE.read_text().splitlines() if line.startswith("!")}
+    forbidden = {
+        ".git/config", ".env", ".env.local", ".ddev/config.yaml", "docs/project/constitution.md",
+        "credentials.json", "workspaces/foreign/main.py", "chonhac/src/main.py",
+        "services/runtime/Dockerfile", "services/runtime/app/secret.env",
+        "services/runtime/app/unreviewed.py", "services/runtime/app/__pycache__/main.pyc",
+        "services/runtime/app/nested/unreviewed.py", "profiles/pcp-local/runtime/secrets.json",
+    }
+    for path in allowed:
+        forbidden.update({path + ".secret", path + "/secret.env",
+                          path + "/unexpected.py", "foreign/" + path})
+    return allowed, forbidden
+
+
+def test_context_matches_pinned_upstream_moby_oracle(plan):
+    # Actual upstream v0.6.0 was run during source research, with this exact
+    # 524-case matrix (not a Python replacement for Docker glob semantics).
+    # Commit 347bb8d8d557f90d1b75cd8bca3c0177f380a979; module sum in README.
+    allowed, forbidden = context_cases()
+    assert len(allowed) == 102 and len(forbidden) == 422
+    assert plan["context_paths"](IGNORE.read_bytes()) == allowed
+    expected = {path: path in allowed for path in sorted(allowed | forbidden)}
+    canonical = json.dumps(expected, sort_keys=True, separators=(",", ":")).encode()
+    assert hashlib.sha256(canonical).hexdigest() == (
+        "80635ae24ce7eeacbd1400d3f605d3594a37724a3a97b5fdf91a9135060bf4d6"
+    )
+    # Optional research-only upstream helper, supplied by the operator. No
+    # Docker, Go installation or module/network download happens in tests.
+    oracle = os.getenv("PCP_H1B2_MOBY_ORACLE")
+    if oracle:
+        result = subprocess.run([oracle], input=json.dumps({
+            "Ignore": str(IGNORE), "Paths": sorted(expected),
+        }), text=True, capture_output=True, timeout=15, check=True)
+        assert json.loads(result.stdout) == expected
+
+
+@pytest.mark.parametrize("fault", [
+    "no_deny", "glob_allow", "foreign", "dotdot", "absolute", "backslash",
+    "duplicate", "missing_file", "child_denials_missing", "late_reinclude",
+])
+def test_context_policy_rejects_ambiguous_or_expanded_rules(plan, fault):
+    raw = IGNORE.read_bytes()
+    if fault == "no_deny": raw = raw.replace(b"\n**\n", b"\n")
+    if fault == "glob_allow": raw += b"!services/runtime/app/**\n"
+    if fault == "foreign": raw += b"!.git/config\n"
+    if fault == "dotdot": raw += b"!services/runtime/app/../secret.py\n"
+    if fault == "absolute": raw += b"!/services/runtime/app/evil.py\n"
+    if fault == "backslash": raw += b"!services\\runtime\\app\\evil.py\n"
+    if fault == "duplicate": raw += b"!services/runtime/app/main.py\n"
+    if fault == "missing_file": raw = raw.replace(b"!services/runtime/app/main.py\n", b"")
+    if fault == "child_denials_missing": raw = raw.replace(b"services/runtime/app/main.py/*\n", b"")
+    if fault == "late_reinclude": raw += b"!services/runtime/app/main.py/secret.env\n"
+    with pytest.raises(Exception) as exc:
+        plan["context_paths"](raw)
+    assert type(exc.value).__name__ == "Stop"
+    assert str(exc.value).startswith("CONTEXT_")
+
+
+def test_source_context_tar_is_exact_deterministic_regular_files(plan):
+    inputs = plan["app_inputs"]()
+    kwargs = dict(dockerfile=DOCKERFILE.read_bytes(), requirements=LOCK.read_bytes(),
+                  context_ignore=IGNORE.read_bytes(), inputs=inputs)
+    raw = plan["source_context"](**kwargs)
+    assert raw == plan["source_context"](**{**kwargs, "inputs": dict(reversed(list(inputs.items())))})
+    expected = {"services/runtime/app/" + name: value for name, value in inputs.items()}
+    expected.update({str(p.relative_to(ROOT)): p.read_bytes() for p in (DOCKERFILE, LOCK, IGNORE)})
+    with tarfile.open(fileobj=io.BytesIO(raw), mode="r:") as archive:
+        members = archive.getmembers()
+        assert len(members) == len(expected) == 103
+        assert {item.name for item in members} == set(expected)
+        for item in members:
+            assert item.isfile() and not item.issym() and not item.islnk()
+            assert item.uid == item.gid == item.mtime == 0
+            assert item.mode == 0o644
+            assert archive.extractfile(item).read() == expected[item.name]
+    # Neighbors/credentials/unknown Python files cannot enter the payload.
+    for name in ("unreviewed.py", "../secret.py", "/absolute.py", "main.py/secret.env"):
+        bad = {**inputs, name: b"fake secret"}
+        reason(lambda: plan["source_context"](**{**kwargs, "inputs": bad}),
+               "CONTEXT_INPUT_SET_MISMATCH")
+    bad = dict(inputs)
+    bad.pop("main.py")
+    reason(lambda: plan["source_context"](**{**kwargs, "inputs": bad}),
+           "CONTEXT_INPUT_SET_MISMATCH")
+
+
+def test_context_digest_binding_and_platform_index_cannot_replace_manifest(plan, manifest, compose):
+    manifest["build"]["context_ignore_sha256"] = "9" * 64
+    reason(lambda: evaluate(plan, manifest, compose), "BUILD_INPUT_DIGEST_DRIFT")
+    manifest["build"]["context_ignore_sha256"] = hashlib.sha256(IGNORE.read_bytes()).hexdigest()
+    manifest["build"]["base_image"] = (
+        "python:3.13.17-slim-bookworm@sha256:e32be0e55814a08977501ca863271d9bd02443710db8f2afaf8372e2c4508530"
+    )
+    reason(lambda: evaluate(plan, manifest, compose), "BASE_IMAGE_PIN_DRIFT")
+
+
+def test_actual_wheel_hash_corruption_and_context_resource_limit(plan, manifest, compose):
+    lock = LOCK.read_bytes()
+    first_hash = next(line.split(b"--hash=sha256:")[1] for line in lock.splitlines() if b"--hash=sha256:" in line)
+    changed = lock.replace(first_hash, b"f" * 64, 1)
+    reason(lambda: evaluate(plan, manifest, compose, lock=changed), "BUILD_INPUT_DIGEST_DRIFT")
+    inputs = plan["app_inputs"]()
+    inputs["main.py"] = b"x" * (1024 * 1024 + 1)
+    reason(lambda: plan["source_context"](
+        dockerfile=DOCKERFILE.read_bytes(), requirements=lock,
+        context_ignore=IGNORE.read_bytes(), inputs=inputs,
+    ), "CONTEXT_RESOURCE_BOUND")
