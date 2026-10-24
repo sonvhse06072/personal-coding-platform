@@ -86,6 +86,8 @@ class Receipts:
         self.row = row
         self.scans = 0
         self.claims = 0
+        self.rechecks = 0
+        self.on_claim = None
 
     def next_pending(self):
         self.scans += 1
@@ -100,7 +102,20 @@ class Receipts:
         if args["target_state"] != "claimed" or not args["worker_authorized"]:
             raise AssertionError("unsafe transition")
         self.row.update(state="claimed", job_id=args["job_id"], generation=1)
+        if self.on_claim is not None:
+            self.on_claim()
         return {"state": "claimed", "generation": 1, "job_id": args["job_id"]}
+
+    def read_claimed(self, task, *, job_id):
+        self.rechecks += 1
+        if (self.row is None
+                or self.row["issue_number"] != task.issue_number
+                or self.row["body_sha256"] != task.body_sha256
+                or self.row["state"] != "claimed"
+                or self.row["generation"] != 1
+                or self.row["job_id"] != job_id):
+            raise q.TaskStop("pcp_local_claim_receipt_identity_changed")
+        return dict(self.row)
 
 
 class GitHub:
@@ -406,3 +421,102 @@ def test_db_pending_rejects_unknown_fields():
     row["provider_token"] = "secret"
     with pytest.raises(q.TaskStop, match="pending_receipt_shape_invalid"):
         q.LocalSourceQueueStore(ReadOnlyStorage(row)).next_pending()
+
+
+def test_p1_after_claim_rechecks_exact_receipt_issue_and_attestor(monkeypatch):
+    flags(monkeypatch, live=True)
+    launcher = Launcher()
+    loop, task, receipts, github, attestor = make_loop(launcher=launcher)
+    result = asyncio.run(loop.execute_once())
+    assert result["job_id"] == worker.stable_job_id(task)
+    assert receipts.claims == receipts.rechecks == 1
+    assert github.calls == 2
+    assert attestor.calls == 2
+    assert launcher.calls == 1
+
+
+@pytest.mark.parametrize("mutation", [
+    "main", "body", "claimed_job", "claimed_generation",
+    "lease_busy", "model_effort", "provider_credentials", "revoke_flag",
+])
+def test_p1_drift_after_claim_never_reaches_launcher(monkeypatch, mutation):
+    flags(monkeypatch, live=True)
+    launcher = Launcher()
+    loop, task, receipts, github, attestor = make_loop(launcher=launcher)
+
+    def drift():
+        if mutation == "main":
+            github.source["main_sha"] = "d" * 40
+        elif mutation == "body":
+            github.source["body"] += "\nchanged post-claim"
+        elif mutation == "claimed_job":
+            receipts.row["job_id"] = "f" * 32
+        elif mutation == "claimed_generation":
+            receipts.row["generation"] = 2
+        elif mutation == "lease_busy":
+            attestor.evidence["isolation"]["workspace_lease_state"] = "busy"
+        elif mutation == "model_effort":
+            # Both efforts pass the standalone gate. The second snapshot
+            # must still be IDENTICAL to the first independently observed one.
+            attestor.evidence["provider"]["effort"] = "high"
+        elif mutation == "provider_credentials":
+            attestor.evidence["provider"]["credential_scoped"] = False
+        elif mutation == "revoke_flag":
+            monkeypatch.delenv("PCP_LOCAL_TASK_OPERATIONAL_ACTIVATION", raising=False)
+
+    receipts.on_claim = drift
+    with pytest.raises(q.TaskStop, match="pcp_local_prelaunch_recheck_uncertain_do_not_retry"):
+        asyncio.run(loop.execute_once())
+    assert receipts.claims == 1
+    assert receipts.row["state"] == "claimed"
+    assert launcher.calls == 0
+    assert asyncio.run(loop.execute_once())["status"] == (
+        "PCP_LOCAL_QUEUE_IDLE_NOT_DISPATCHED"
+    )
+    assert launcher.calls == 0
+
+
+def test_p1_claimed_lookup_read_only_exact_binding():
+    task, _, pending, _ = fixture()
+    job_id = worker.stable_job_id(task)
+    claimed = dict(pending, state="claimed", generation=1, job_id=job_id)
+    db = ReadOnlyStorage(claimed)
+    store = q.LocalSourceQueueStore(db)
+    assert store.read_claimed(task, job_id=job_id) == claimed
+    assert len(db.db.queries) == 1
+    sql, args = db.db.queries[0]
+    assert sql.lstrip().startswith("SELECT repository")
+    assert "WHERE repository=%s AND project_id=%s AND issue_number=%s" in sql
+    assert args == (q.REPOSITORY, q.PROJECT_ID, task.issue_number)
+    assert db.db.committed is False
+
+
+@pytest.mark.parametrize("changes", [
+    {"state": "pending"},
+    {"state": "delivered"},
+    {"generation": 0},
+    {"generation": True},
+    {"job_id": "f" * 32},
+    {"body_sha256": "f" * 64},
+    {"baseline_revision": "not-approved"},
+    {"allowed_paths": ["tests/test_pcp_light_other.py"]},
+    {"project_id": "chonhac"},
+])
+def test_p1_claimed_lookup_wrong_identity_is_denied(changes):
+    task, _, pending, _ = fixture()
+    job_id = worker.stable_job_id(task)
+    claimed = dict(pending, state="claimed", generation=1, job_id=job_id)
+    claimed.update(changes)
+    db = ReadOnlyStorage(claimed)
+    with pytest.raises(q.TaskStop, match="pcp_local_claim_receipt_identity_changed"):
+        q.LocalSourceQueueStore(db).read_claimed(task, job_id=job_id)
+    assert db.db.committed is False
+
+
+def test_p1_claimed_lookup_no_row_denied():
+    task, _, _, _ = fixture()
+    db = ReadOnlyStorage(None)
+    with pytest.raises(q.TaskStop, match="pcp_local_claim_receipt_identity_changed"):
+        q.LocalSourceQueueStore(db).read_claimed(
+            task, job_id=worker.stable_job_id(task)
+        )
