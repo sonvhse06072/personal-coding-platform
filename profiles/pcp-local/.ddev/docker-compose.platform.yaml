@@ -1,0 +1,32 @@
+# B2.2c1-A3 SOURCE TEMPLATE ONLY, parked by default. No live model agent.
+# This template is NOT under the legacy root .ddev/ directory.
+services:
+  coding-runtime:
+    image: personal-coding-platform-coding-runtime:local
+    container_name: ddev-${DDEV_SITENAME}-coding-runtime
+    profiles:
+      - pcp-inspect
+    restart: "no"
+    user: "${DDEV_UID}:${DDEV_GID}"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      PCP_RUNTIME_STARTUP_MODE: pcp_local_inspect
+      PROJECTS_FILE: /config/projects.pcp-local.yml
+      PROJECT_BASELINES_FILE: /config/project-baselines.pcp-local.yml
+      HOME: /home/coder
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - type: bind
+        source: ${DDEV_APPROOT}/config/projects.pcp-local.yml
+        target: /config/projects.pcp-local.yml
+        read_only: true
+      - type: bind
+        source: ${DDEV_APPROOT}/config/project-baselines.pcp-local.yml
+        target: /config/project-baselines.pcp-local.yml
+        read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=67108864
