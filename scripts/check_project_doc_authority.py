@@ -24,6 +24,8 @@ PROTECTED_PATHS = frozenset({
     "scripts/check_project_doc_authority.py",
     "scripts/pcp-local-gate-a-inspect.sh",
     "scripts/pcp-shared-docker-ownership-check.sh",
+    "scripts/pcp-local-image-provenance-plan.py",
+    "profiles/pcp-local/image-provenance.example.yml",
     "profiles/pcp-local/.ddev/config.yaml",
     "profiles/pcp-local/.ddev/docker-compose.platform.yaml",
     "config/project-baselines.yml",
