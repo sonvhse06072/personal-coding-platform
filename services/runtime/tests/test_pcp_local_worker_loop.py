@@ -470,9 +470,15 @@ def test_p1_drift_after_claim_never_reaches_launcher(monkeypatch, mutation):
     assert receipts.claims == 1
     assert receipts.row["state"] == "claimed"
     assert launcher.calls == 0
-    assert asyncio.run(loop.execute_once())["status"] == (
-        "PCP_LOCAL_QUEUE_IDLE_NOT_DISPATCHED"
-    )
+    if mutation == "revoke_flag":
+        # Revoked operational consent must STOP before any queue read,
+        # rather than acknowledge an idle queue as though still authorized.
+        with pytest.raises(q.TaskStop, match="pcp_local_live_activation_not_approved"):
+            asyncio.run(loop.execute_once())
+    else:
+        assert asyncio.run(loop.execute_once())["status"] == (
+            "PCP_LOCAL_QUEUE_IDLE_NOT_DISPATCHED"
+        )
     assert launcher.calls == 0
 
 
