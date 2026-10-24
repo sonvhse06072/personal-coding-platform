@@ -22,6 +22,7 @@ PROTECTED_PATHS = frozenset({
     ".github/workflows/guardian-static.yml",
     ".github/workflows/pcp-guardian.yml",
     "scripts/check_project_doc_authority.py",
+    "scripts/pcp-local-gate-a-inspect.sh",
     "config/project-baselines.yml",
     "config/project-baselines.pcp-local.yml",
     "config/projects.yml",
