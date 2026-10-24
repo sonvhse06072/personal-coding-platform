@@ -163,12 +163,30 @@ STOP on foreign/noncanonical source, symlink or drifted configuration, wrong run
 
 **Standing STOP:** G1-T02 #752 PARKED, never bypass previously safety-blocked egress; G0 #595 HOLD; F2/T01/Guardian frozen; Chợ Nhạc STRICT NO-TOUCH. Existing A1 and hosted CI are source proofs, not live evidence.
 
-## B2.2c1-A2 — Shared-Docker PCP ownership preflight (DRAFT SOURCE; NOT APPROVED)
+## B2.2c1-A2 — Shared-Docker PCP ownership preflight (SOURCE SCOPE APPROVED; LIVE STOP)
 
-This proposed implementation is in [A2 ChangeProposal #782](https://github.com/sonvhse06072/personal-coding-platform/issues/782). **Not authorized for deployment or cleanup until exact protected path Owner approval, PR-head real CI, PM review, merge and postmerge CI.** Unlike the old exclusive-daemon A1, A2 explicitly treats Docker Desktop as an accepted deployment provider while preserving the daemon-wide socket risk.
+**Human Owner source-only approval:** [DEC-PCP-B22C1-A2-SHARED-DOCKER-CLEAN-STATE-SOURCE-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/782#issuecomment-6381170343) covers exactly the A2 read-only inspector, fake-only regression tests, protected-path policy and this document. [PR #784](https://github.com/sonvhse06072/personal-coding-platform/pull/784) must still pass exact HEAD GitHub-hosted CI, independent PM COMMENT review, expected-HEAD merge and postmerge full4 before the source milestone is accepted. This approval **does not grant permission to run the inspector on the Owner host**, delete/migrate PCP legacy state, invoke Docker mutation, grant credentials or activate a LIVE worker. The shared daemon remains **not a Docker security sandbox**.
 
-The script `scripts/pcp-shared-docker-ownership-check.sh` (when source-accepted) will read only the exact PCP repository identity, draft PCP-only registry/baseline, Docker context/OS metadata, and **five server-side filtered** Docker resource candidate lists: old PCP platform containers/volumes and the proposed new PCP-only namespace's containers/volumes/networks. It emits **counts only**, not resource names, IDs, paths, credentials, Docker raw responses or data from unrelated projects. It cannot see unlabeled or differently labeled resources, so its counts are never complete proof of ownership or absence. It never inspects managed job projects, old PCP DB, Chợ Nhạc or foreign resources.
+The script `scripts/pcp-shared-docker-ownership-check.sh` is designed to read only the canonical PCP source identity, draft PCP-only registry/baseline, Docker context/provider metadata and **five server-side label-filtered** Docker resource candidate lists: old PCP platform containers/volumes and the proposed PCP-only namespace's containers/volumes/networks. It emits only counts, a reviewed PCP source SHA and fixed STOP codes, never raw names/IDs, paths, secrets or project data. Unlabeled or differently labeled resources remain **NOT VERIFIED**; a label count never proves ownership, absence or safety for deletion. There is no inspection of historical PCP DB/jobs or Chợ Nhạc.
 
-The shared-Docker inspector intentionally **always exits 2 and reports `PCP_B22C1_LIVE=STOP` plus `PCP_A2_CLEANUP=NOT_AUTHORIZED`**. Candidate collisions, wrong source, activated flags, remote endpoint or unsupported provider stop earlier. A pass in fake CI means only the scripted read-only/STOP behavior was tested, not host correctness. Do not run this draft from any machine or replace old A1 until source approval.
+The inspector intentionally **always exits 2**, including for a clean shared-Docker candidate inventory, and reports `PCP_A2_CLEANUP=NOT_AUTHORIZED`, `PCP_B22C1_LIVE=STOP`. New namespace collisions, dirty checked-in source, activation flags, wrong Git identity, remote Docker endpoint, unknown provider and malformed output fail closed. Source/test CI cannot establish physical host correctness.
 
-**Next:** the PM requires exact Owner authorization for `scripts/pcp-shared-docker-ownership-check.sh`, `tests/test_pcp_shared_docker_ownership_check.py`, `scripts/check_project_doc_authority.py`, and this README before protected merge; then a controlled owner-run one-time read-only WSL inventory, and finally a separate Gate A3 clean PCP-only Compose/DB/credential implementation proposal. No `docker prune`, mass DDEV delete, container restart, provider calls, old PCP DB resumption or T02 egress bypass.
+**Post-merge operator procedure (not executed or authorized by source approval):** first independently verify the exact GitHub-accepted PCP checkout and its clean source, record that this is an Owner-approved **one-time read-only WSL observation** on the shared Docker Desktop, and verify no unusual external Docker socket or provider credential overrides. Only after this separate operator decision may the existing approved script be invoked. A parent-shell-safe example under `set -e`:
+
+```bash
+if (
+  bash scripts/pcp-shared-docker-ownership-check.sh --check
+); then
+  printf 'PCP_A2_WRAPPER=STOP_UNEXPECTED_ZERO_EXIT\n'
+else
+  result=$?
+  printf 'PCP_A2_INSPECT_EXIT=%s\n' "$result"
+  if (( result != 2 )); then
+    printf 'PCP_A2_WRAPPER=STOP_UNEXPECTED_EXIT_CODE\n'
+  fi
+fi
+```
+
+The expected controlled result remains **exit 2 / STOP**; it must never be interpreted as LIVE or deletion authorization. Share only the bounded `PCP_A2_*` and `PCP_B22C1_LIVE` keys, not Docker stderr, raw IDs, environment, tokens or unrelated names. The command makes no Docker/DDEV mutations, but it still accesses Docker API metadata and should not run outside a separately approved one-time read-only inspection.
+
+**Next after accepted source CI:** obtain one-time Host/Owner read-only inventory evidence; reconcile candidate resources without silently touching historical PCP managed state; then propose separate **A3 exact-path approval** for new PCP-only Compose/DDEV profile and blank database. Further B1/B2 approvals are required for active immutable baseline, fresh scoped credentials, network egress, budget, Executor permissions and trusted worker. No `docker system/volume prune`, `ddev delete --all`, old PCP DB/job resumption, Codex/provider calls or blocked T02 egress bypass.
