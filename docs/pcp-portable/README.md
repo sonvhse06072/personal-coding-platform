@@ -128,14 +128,20 @@ Until later Gate B approval, do not execute `--prepare`, `--start`, `ddev start`
 Run **only in a separately provisioned disposable WSL2 distro or Linux VM**, after independent confirmation that the checkout/daemon cannot access any historical project. This source prescreen is **not authority to inspect or operate an existing PCP or Chợ Nhạc installation**:
 
 ```bash
-(
+if (
   bash scripts/pcp-local-gate-a-inspect.sh --check
-)
-result=$?
-printf 'PCP_A1_INSPECT_EXIT=%s\n' "$result"
+); then
+  printf 'PCP_A1_WRAPPER=STOP_UNEXPECTED_ZERO_EXIT\n'
+else
+  result=$?
+  printf 'PCP_A1_INSPECT_EXIT=%s\n' "$result"
+  if (( result != 2 )); then
+    printf 'PCP_A1_WRAPPER=STOP_UNEXPECTED_EXIT_CODE\n'
+  fi
+fi
 ```
 
-The subshell protects the parent operator terminal session from the deliberately nonzero STOP result. The inspector uses **no host Python/Node** and performs no network requests, installation, model invocation, Docker mutation or DDEV startup. It checks only the canonical PCP checkout Git identity/HEAD, tracked file blobs, separate draft project/baseline settings and the legacy Compose credential/socket mounts and build hook. It then queries only three read-only Docker commands: `docker context show`, `docker context inspect --format`, and `docker info --format`. It never calls `ddev`, `docker ps`, `docker network/volume/image ls`, `docker run`, `docker build`, any job/DB API, GitHub API or credentials. Docker must use a local Unix socket; Docker Desktop and remote endpoints are rejected, though Unix-local by itself is not proof of exclusive Docker daemon ownership.
+The inspector runs as a conditional subshell: the `if`/`else` guard keeps an operator's parent shell alive **even with `set -e` enabled** when the expected exit code is 2. A bare `( script )` followed by `result=$?` is unsafe under parent-shell `errexit` and must not be used. The wrapper also reports unexpected success or other exit codes as STOP. The inspector uses **no host Python/Node** and performs no network requests, installation, model invocation, Docker mutation or DDEV startup. It checks only the canonical PCP checkout Git identity/HEAD, tracked file blobs, separate draft project/baseline settings and the legacy Compose credential/socket mounts and build hook. It then queries only three read-only Docker commands: `docker context show`, `docker context inspect --format`, and `docker info --format`. It never calls `ddev`, `docker ps`, `docker network/volume/image ls`, `docker run`, `docker build`, any job/DB API, GitHub API or credentials. Docker must use a local Unix socket; Docker Desktop and remote endpoints are rejected, though Unix-local by itself is not proof of exclusive Docker daemon ownership.
 
 Output is a bounded key=value report: predetermined STOP reasons/statuses, exact PCP source Git SHA, SHA-256 hash of Docker daemon ID plus Unix endpoint, and an untrusted WSL/Linux kernel class. It prints **no host path, Docker endpoint, remote URL, raw daemon identifier, container name, upstream error, token or credential**. The fingerprint is only a comparison hint against separately obtained and verified disposable Docker Engine evidence; it cannot attest no historical mounts or shared daemon backing store. **Every `--check` exits code 2 and reports `PCP_B22C1_LIVE=STOP`, including a clean synthetic prescreen.** A zero exit or `PASS` would be misleading before physical attestation.
 
