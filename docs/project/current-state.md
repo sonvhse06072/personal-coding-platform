@@ -2,7 +2,7 @@
 
 Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline revision, Runtime/WSL rollout attestation, authority change, or chronological log. Verify GitHub and local durable evidence immediately before any mutation. The Constitution, architecture and approved baseline outrank this snapshot.
 
-**Last reconciled: 2026-10-24, H1b #796 SOURCE ACCEPTED; digest/lock and Host/LIVE STOP.** `main@e57ec172b304deec9751dc11a3ea2977cf246b61`; [Owner decision #794](https://github.com/sonvhse06072/personal-coding-platform/issues/794#issuecomment-6386257784), [PR #796](https://github.com/sonvhse06072/personal-coding-platform/pull/796) merged, [real4 postmerge CI #40109114677](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40109114677) 4,250 PASS/89 skipped. [Codex P0 #797](https://github.com/sonvhse06072/personal-coding-platform/issues/797) pins unresolved. #752 PARKED; #595 HOLD.
+**Last reconciled: 2026-10-25 (2026-10-24 UTC), #797 H1b2 SOURCE DRAFT; approval/Host/LIVE STOP.** Starting remote `main@f2a5da71f1b773d7c9f72c8ea008a093e3cec3e5`; branch `ai/797-inspection-pins-context`. H1b #796 remains SOURCE ACCEPTED. H1b2 pins/context evidence is proposed only; fresh Owner scope approval and PM acceptance pending. #752 PARKED; #595 HOLD.
 
 
 ## #764 / #777 — Phase B PCP-only source acceptance and Gate A audit
@@ -21,7 +21,7 @@ Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline 
 | --- | --- | --- |
 | #594 | COMPLETED | Live issue closed; #612 merged, exact head `8088e5382412d42790cb083c43e57b482debffc7` |
 | #764 / #773 | B2.2c0 SOURCE ACCEPTED; B2.2c1 GATE A PHYSICAL HOLD | [#776](https://github.com/sonvhse06072/personal-coding-platform/pull/776) merged; [postmerge #40053565494](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40053565494) full4 PASS; no local worker deployment |
-| #777 / #794 / #797 | H1b SOURCE ACCEPTED; H1b2 pins/Host HOLD | [#796](https://github.com/sonvhse06072/personal-coding-platform/pull/796) merged/real4 PASS; image base digest, wheel hashes, context, independent provenance NOT resolved. No image build/DB/cleanup/LIVE |
+| #777 / #794 / #797 | H1b ACCEPTED; H1b2 SOURCE DRAFT / Host HOLD | [#796](https://github.com/sonvhse06072/personal-coding-platform/pull/796) merged/real4 PASS; H1b2 proposes verified base/wheel input pins and source-only context; built-image provenance NOT attested. No image build/DB/cleanup/LIVE |
 | #752 source | MERGED / VERIFIED | [PR #760](https://github.com/sonvhse06072/personal-coding-platform/pull/760); PR-head and postmerge 4/4 hosted CI PASS; Runtime not deployed |
 | #752 live | NEEDS_OWNER_DECISION | Isolation/egress/credential/baseline/launch gates unresolved; PARKED |
 | #595 | BLOCKED | G0 HOLD / NOT GO; comparable accepted cohort absent |
@@ -33,7 +33,7 @@ Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline 
 
 GitHub/Runtime evidence remains separate; Runtime was not queried.
 
-**Next safe action:** Codex P0 [#797](https://github.com/sonvhse06072/personal-coding-platform/issues/797) researches exact base digest, CPython 3.13 linux/amd64 wheel hashes and safe Docker build-context allowlist. New protected SOURCE scope requires separate Owner approval. [Codex P1 #795](https://github.com/sonvhse06072/personal-coding-platform/issues/795) follows only after H1b2. No Docker/DDEV/build/DB, provider egress, credentials or model dispatch; legacy PCP/Chợ Nhạc NO-TOUCH, #752 PARKED, #595 HOLD, LIVE STOP.
+**Next safe action:** review the [#797](https://github.com/sonvhse06072/personal-coding-platform/issues/797) draft and obtain fresh exact-path protected approval before PM merge. [Evidence/design](../pcp-portable/README.md): per-platform Python 3.13.17 manifest, 18 freshly hash-verified wheels, offline install/pip-check PASS; Moby 524-case proof and 103-file source-only TAR. Local Python 3.13: root 1,353; Router 132; Runtime 2,145/88 skipped; Executor 637 PASS; focused 124 PASS; diff-check PASS. Draft PR/CI pending. Checker still STOP/exit 2; Compose unchanged/OFF. [#795](https://github.com/sonvhse06072/personal-coding-platform/issues/795) remains dependent. No Docker/DDEV/build/DB, credentials, worker or LIVE; #752 PARKED, #595 HOLD, Chợ Nhạc NO-TOUCH.
 
 ## Active investment / execution gates
 

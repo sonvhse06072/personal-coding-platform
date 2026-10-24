@@ -1,7 +1,6 @@
-# H1b SOURCE DRAFT: NOT BUILDABLE until separately reviewed base/lock resolution.
-# No default digest, remote syntax frontend, apt, npm, coding CLI or test tools.
-ARG PCP_INSPECT_BASE_SHA256
-FROM --platform=linux/amd64 python:3.13-slim-bookworm@sha256:${PCP_INSPECT_BASE_SHA256}
+# H1b2 SOURCE candidate: metadata/wheel hashes verified; Host build NOT authorized.
+# Fixed per-platform manifest; no build-arg/remote frontend/CLI fallback.
+FROM --platform=linux/amd64 python:3.13.17-slim-bookworm@sha256:4cea12ab7d78a3312c85f8cab19b6971d4fe9704da25443986c0bc20a6678850
 WORKDIR /app
 COPY profiles/pcp-local/runtime/requirements-inspect.lock /app/requirements-inspect.lock
 RUN python -m pip install --no-cache-dir --require-hashes --only-binary=:all: -r /app/requirements-inspect.lock

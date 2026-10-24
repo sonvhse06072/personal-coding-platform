@@ -1,13 +1,96 @@
-# H1b UNRESOLVED DRAFT, NOT a usable dependency lock.
-# These direct-version candidates already exist in Runtime requirements.
-# Transitive wheel versions/hashes for CPython 3.13 linux/amd64 NOT RESOLVED.
-# No package hash/availability was inferred from a host test installation.
-# pip --require-hashes MUST fail; a reviewed successor must resolve ALL wheels.
+# H1b2 SOURCE candidate: CPython 3.13 / linux amd64 / manylinux_2_17 x86_64.
+# Every wheel re-fetched from files.pythonhosted.org and SHA256 checked against
+# its PyPI release JSON on 2026-10-24. URLs/filenames are evidence, not install directives.
+# No sdist, alternate architecture, mutable version or unverified hash fallback.
 --require-hashes
 --only-binary=:all:
-fastapi==0.116.1
-uvicorn==0.35.0
-pydantic==2.11.7
-PyYAML==6.0.2
-httpx==0.28.1
-psycopg[binary]==3.2.9
+# Release: https://pypi.org/pypi/annotated-types/0.8.0/json
+# Release-json-sha256: a6e8e5b10c8fd2f596bba53e015cd37f6279fb5cec26ce0c5e9968625be4fefa
+# Wheel: annotated_types-0.8.0-py3-none-any.whl
+# Origin: https://files.pythonhosted.org/packages/99/91/8acff4f5e50511b911bbccb72b8628a49c68ce14148cd9f6431094859a90/annotated_types-0.8.0-py3-none-any.whl
+annotated-types==0.8.0 --hash=sha256:f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0
+# Release: https://pypi.org/pypi/anyio/4.15.1/json
+# Release-json-sha256: e2ee22fad2fab3e66be503cba9b41945607d3076c9b7aa49b6e2f95ac323efab
+# Wheel: anyio-4.15.1-py3-none-any.whl
+# Origin: https://files.pythonhosted.org/packages/12/b8/4bd346e22b28902df4d651910f5242c28d84e4a5c2435ca5c3f797ed7e2e/anyio-4.15.1-py3-none-any.whl
+anyio==4.15.1 --hash=sha256:6152fdbbf9a77fdec97731721bebf7c4c44f7c29b424b0065826173efc7ed101
+# Release: https://pypi.org/pypi/certifi/2026.10.23/json
+# Release-json-sha256: 546ce90e02c152f5ff565baca6bc2a8f43c355855f637756f49a0143e312bdb2
+# Wheel: certifi-2026.10.23-py3-none-any.whl
+# Origin: https://files.pythonhosted.org/packages/32/d1/a3652fe2c19134d0d15922177821d863cbd7e842d53a21bbe7e8e3a1b5ac/certifi-2026.10.23-py3-none-any.whl
+certifi==2026.10.23 --hash=sha256:e9b54de76e530bb6cf0ccd036787103acb58fd42ba930ea8bf948ddbaa2f61d1
+# Release: https://pypi.org/pypi/click/8.5.0/json
+# Release-json-sha256: 4e36adc9b46f837e10ce801b7a478f9146fefdfb287292b7668fc64b1474e41d
+# Wheel: click-8.5.0-py3-none-any.whl
+# Origin: https://files.pythonhosted.org/packages/58/50/6c0d534c5f134586a8e1ba4e330569e32f057e33372ae556463212fb4cd3/click-8.5.0-py3-none-any.whl
+click==8.5.0 --hash=sha256:255bc9599cf7748b4b1a446ccc735421bd08a2ae529a8b88597d3de5664ee360
+# Release: https://pypi.org/pypi/fastapi/0.116.1/json
+# Release-json-sha256: 4be52f09bb32b7afd0761eabf3360d5f8a47c4019c66ddbf084f24fd3f5cc6e0
+# Wheel: fastapi-0.116.1-py3-none-any.whl
+# Origin: https://files.pythonhosted.org/packages/e5/47/d63c60f59a59467fda0f93f46335c9d18526d7071f025cb5b89d5353ea42/fastapi-0.116.1-py3-none-any.whl
+fastapi==0.116.1 --hash=sha256:c46ac7c312df840f0c9e220f7964bada936781bc4e2e6eb71f1c4d7553786565
+# Release: https://pypi.org/pypi/h11/0.16.0/json
+# Release-json-sha256: 97f4efb9cc00826f0408076983adc1a1e48e8f2cabf403aaf250f724e081440d
+# Wheel: h11-0.16.0-py3-none-any.whl
+# Origin: https://files.pythonhosted.org/packages/04/4b/29cac41a4d98d144bf5f6d33995617b185d14b22401f75ca86f384e87ff1/h11-0.16.0-py3-none-any.whl
+h11==0.16.0 --hash=sha256:63cf8bbe7522de3bf65932fda1d9c2772064ffb3dae62d55932da54b31cb6c86
+# Release: https://pypi.org/pypi/httpcore/1.0.9/json
+# Release-json-sha256: e26eca5c3d288fe9e6446af9bcbca1038ba688629d5c8a2886c47d74718d87a2
+# Wheel: httpcore-1.0.9-py3-none-any.whl
+# Origin: https://files.pythonhosted.org/packages/7e/f5/f66802a942d491edb555dd61e3a9961140fd64c90bce1eafd741609d334d/httpcore-1.0.9-py3-none-any.whl
+httpcore==1.0.9 --hash=sha256:2d400746a40668fc9dec9810239072b40b4484b640a8c38fd654a024c7a1bf55
+# Release: https://pypi.org/pypi/httpx/0.28.1/json
+# Release-json-sha256: 293bfab7bf587fcd0825f1bd8eed8e6303285ba14801b15659853827cbe30796
+# Wheel: httpx-0.28.1-py3-none-any.whl
+# Origin: https://files.pythonhosted.org/packages/2a/39/e50c7c3a983047577ee07d2a9e53faf5a69493943ec3f6a384bdc792deb2/httpx-0.28.1-py3-none-any.whl
+httpx==0.28.1 --hash=sha256:d909fcccc110f8c7faf814ca82a9a4d816bc5a6dbfea25d6591d6985b8ba59ad
+# Release: https://pypi.org/pypi/idna/3.20/json
+# Release-json-sha256: e7cbd26e23ce60f6cb3a151d2adf3b1b087bb8f10ac2d9d6db70fdccbf3bb041
+# Wheel: idna-3.20-py3-none-any.whl
+# Origin: https://files.pythonhosted.org/packages/58/a2/bb081bab032533a855d44de1d56f8e8426114ff1ba5d1f07a438a0a654f8/idna-3.20-py3-none-any.whl
+idna==3.20 --hash=sha256:ab7ae7122974553370f0bdb919e1a960b2cd1bc1ef0276416d896db81c14582c
+# Release: https://pypi.org/pypi/psycopg/3.2.9/json
+# Release-json-sha256: 64f62c6d8b1ad847d11c39f84cf0dfa2b60bdd8fa907a9161afb5cc95cd8f927
+# Wheel: psycopg-3.2.9-py3-none-any.whl
+# Origin: https://files.pythonhosted.org/packages/44/b0/a73c195a56eb6b92e937a5ca58521a5c3346fb233345adc80fd3e2f542e2/psycopg-3.2.9-py3-none-any.whl
+psycopg[binary]==3.2.9 --hash=sha256:01a8dadccdaac2123c916208c96e06631641c0566b22005493f09663c7a8d3b6
+# Release: https://pypi.org/pypi/psycopg-binary/3.2.9/json
+# Release-json-sha256: 73fee165b3b637c5ff882ed7342495a32e6d369bee76d90ed7b03ece02d732ef
+# Wheel: psycopg_binary-3.2.9-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+# Origin: https://files.pythonhosted.org/packages/3b/95/7325a8550e3388b00b5e54f4ced5e7346b531eb4573bf054c3dbbfdc14fe/psycopg_binary-3.2.9-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+psycopg-binary==3.2.9 --hash=sha256:7fc2915949e5c1ea27a851f7a472a7da7d0a40d679f0a31e42f1022f3c562e87
+# Release: https://pypi.org/pypi/pydantic/2.11.7/json
+# Release-json-sha256: 8a5fabba9f55159ec1575494bef8f28a53a6e10c72fafe5c04ed4e48f33ee772
+# Wheel: pydantic-2.11.7-py3-none-any.whl
+# Origin: https://files.pythonhosted.org/packages/6a/c0/ec2b1c8712ca690e5d61979dee872603e92b8a32f94cc1b72d53beab008a/pydantic-2.11.7-py3-none-any.whl
+pydantic==2.11.7 --hash=sha256:dde5df002701f6de26248661f6835bbe296a47bf73990135c7d07ce741b9623b
+# Release: https://pypi.org/pypi/pydantic_core/2.33.2/json
+# Release-json-sha256: 97a15e00a12e8e26740fc1ae744285a38134e51e7fd7ca1cfb520043998e776c
+# Wheel: pydantic_core-2.33.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+# Origin: https://files.pythonhosted.org/packages/eb/3c/f4abd740877a35abade05e437245b192f9d0ffb48bbbbd708df33d3cda37/pydantic_core-2.33.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+pydantic-core==2.33.2 --hash=sha256:9fdac5d6ffa1b5a83bca06ffe7583f5576555e6c8b3a91fbd25ea7780f825f7d
+# Release: https://pypi.org/pypi/PyYAML/6.0.2/json
+# Release-json-sha256: b0c0c215b80dbd5afc17cf6962b43a64c8234b468fb7185c56fa4174f0b1c648
+# Wheel: PyYAML-6.0.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+# Origin: https://files.pythonhosted.org/packages/04/24/b7721e4845c2f162d26f50521b825fb061bc0a5afcf9a386840f23ea19fa/PyYAML-6.0.2-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
+pyyaml==6.0.2 --hash=sha256:70b189594dbe54f75ab3a1acec5f1e3faa7e8cf2f1e08d9b561cb41b845f69d5
+# Release: https://pypi.org/pypi/starlette/0.47.3/json
+# Release-json-sha256: a353572cb6ff1ca35dd654a4eee16bcbc88feb3e2fcb7c6852c1d8848e98b27b
+# Wheel: starlette-0.47.3-py3-none-any.whl
+# Origin: https://files.pythonhosted.org/packages/ce/fd/901cfa59aaa5b30a99e16876f11abe38b59a1a2c51ffb3d7142bb6089069/starlette-0.47.3-py3-none-any.whl
+starlette==0.47.3 --hash=sha256:89c0778ca62a76b826101e7c709e70680a1699ca7da6b44d38eb0a7e61fe4b51
+# Release: https://pypi.org/pypi/typing-inspection/0.4.4/json
+# Release-json-sha256: 0605416f2f37f2df04e45360cf5ce4ca5eeca6d414bb6ddb1ec5a9893c62ac30
+# Wheel: typing_inspection-0.4.4-py3-none-any.whl
+# Origin: https://files.pythonhosted.org/packages/67/81/4add07e5172b7ac40d8ed5ff580409a7801a4fe26d529bdd915401dabfbe/typing_inspection-0.4.4-py3-none-any.whl
+typing-inspection==0.4.4 --hash=sha256:65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147
+# Release: https://pypi.org/pypi/typing_extensions/4.16.0/json
+# Release-json-sha256: 2140da00d62dde967f52d0be0ae28444f1d6a3fe603f52c83c23988c32122d5a
+# Wheel: typing_extensions-4.16.0-py3-none-any.whl
+# Origin: https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl
+typing-extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+# Release: https://pypi.org/pypi/uvicorn/0.35.0/json
+# Release-json-sha256: ef2329403f1176bc1b4d526c49f54a5c0cb92b18e809abeb79dbe557ae8c69c5
+# Wheel: uvicorn-0.35.0-py3-none-any.whl
+# Origin: https://files.pythonhosted.org/packages/d2/e2/dc81b1bd1dcfe91735810265e9d26bc8ec5da45b4c0f6237e286819194c3/uvicorn-0.35.0-py3-none-any.whl
+uvicorn==0.35.0 --hash=sha256:197535216b25ff9b785e29a0b79199f55222193d47f820816e7da751e9bc8d4a

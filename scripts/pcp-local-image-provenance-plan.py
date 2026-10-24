@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""H1b draft PCP-local image provenance review, SOURCE ONLY.
+"""H1b2 candidate PCP-local image provenance review, SOURCE ONLY.
 
 No Docker/Buildx/DDEV/network requests, image writes, or worker activation.
 A metadata/label assertion is not independently verified provenance.
@@ -7,11 +7,13 @@ A metadata/label assertion is not independently verified provenance.
 from __future__ import annotations
 
 import hashlib
+import io
 import os
 from pathlib import Path
 import re
 import subprocess
 import sys
+import tarfile
 from typing import Any
 
 import yaml
@@ -20,6 +22,8 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "profiles/pcp-local/image-provenance.example.yml"
 DOCKERFILE = ROOT / "profiles/pcp-local/runtime/Dockerfile.inspect"
 LOCK = ROOT / "profiles/pcp-local/runtime/requirements-inspect.lock"
+IGNORE = ROOT / "profiles/pcp-local/runtime/Dockerfile.inspect.dockerignore"
+BASE_IMAGE = "python:3.13.17-slim-bookworm@sha256:4cea12ab7d78a3312c85f8cab19b6971d4fe9704da25443986c0bc20a6678850"
 APP = ROOT / "services/runtime/app"
 PROFILE = ROOT / "profiles/pcp-local/.ddev/docker-compose.platform.yaml"
 REPO = "sonvhse06072/personal-coding-platform"
@@ -35,16 +39,16 @@ PARKED_COMMAND = ["/PCP_H1B_SOURCE_ONLY_NOT_AUTHORIZED"]
 KEYS = {"schema_version", "project_id", "repository", "approval_state", "source_commit",
         "build", "artifact", "evidence", "independent_provenance"}
 BUILD_KEYS = {"context", "dockerfile", "requirements", "platform", "startup_mode",
-              "dockerfile_sha256", "base_image", "requirements_sha256", "app_tree_sha256"}
+              "dockerfile_sha256", "base_image", "requirements_sha256", "app_tree_sha256",
+              "context_ignore", "context_ignore_sha256"}
 ARTIFACT_KEYS = {"image_ref", "digest", "config_digest", "buildx_metadata_sha256",
                  "attestation_sha256", "sbom_sha256"}
 EVIDENCE_KEYS = {"exporter", "image_store", "provenance_mode", "sbom_required"}
 PROVENANCE_KEYS = {"verifier", "statement_sha256", "subject_digest", "source_commit",
-                   "dockerfile_sha256", "requirements_sha256", "app_tree_sha256"}
+                   "dockerfile_sha256", "requirements_sha256", "app_tree_sha256", "context_ignore_sha256"}
 # Exact reviewed instruction policy: no appended RUN/COPY/ENTRYPOINT escape.
 RECIPE = (
-    "ARG PCP_INSPECT_BASE_SHA256",
-    "FROM --platform=linux/amd64 python:3.13-slim-bookworm@sha256:${PCP_INSPECT_BASE_SHA256}",
+    "FROM --platform=linux/amd64 " + BASE_IMAGE,
     "WORKDIR /app",
     "COPY profiles/pcp-local/runtime/requirements-inspect.lock /app/requirements-inspect.lock",
     "RUN python -m pip install --no-cache-dir --require-hashes --only-binary=:all: -r /app/requirements-inspect.lock",
@@ -117,7 +121,7 @@ def check_checkout() -> str:
 
 def document(data: Any) -> dict[str, Any]:
     require(type(data) is dict and set(data) == KEYS, "MANIFEST_SCHEMA_INVALID")
-    require(type(data["schema_version"]) is int and data["schema_version"] == 2,
+    require(type(data["schema_version"]) is int and data["schema_version"] == 3,
             "MANIFEST_SCHEMA_INVALID")
     require(data["project_id"] == "pcp-local" and data["repository"] == REPO,
             "FOREIGN_IMAGE_PROJECT")
@@ -129,7 +133,8 @@ def document(data: Any) -> dict[str, Any]:
     build = data["build"]
     require(build["context"] == "."
             and build["dockerfile"] == DOCKERFILE.relative_to(ROOT).as_posix()
-            and build["requirements"] == LOCK.relative_to(ROOT).as_posix(),
+            and build["requirements"] == LOCK.relative_to(ROOT).as_posix()
+            and build["context_ignore"] == IGNORE.relative_to(ROOT).as_posix(),
             "FOREIGN_BUILD_CONTEXT")
     require(build["platform"] == "linux/amd64", "BUILD_PLATFORM_UNSAFE")
     require(build["startup_mode"] == "pcp_local_inspect", "STARTUP_MODE_UNSAFE")
@@ -194,7 +199,7 @@ def validate_lock(raw: bytes) -> bool:
     complete = True
     for line in lines[2:]:
         match = re.fullmatch(
-            r"([A-Za-z0-9_-]+(?:\[binary\])?)==([0-9]+\.[0-9]+\.[0-9]+)"
+            r"([A-Za-z0-9_-]+(?:\[binary\])?)==([0-9]+(?:\.[0-9]+){1,3})"
             r"((?: +--hash=sha256:[a-f0-9]{64})*)", line,
         )
         require(match is not None, "DEPENDENCY_LOCK_UNSAFE")
@@ -231,9 +236,74 @@ def app_digest(inputs: dict[str, bytes]) -> str:
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
+def context_paths(raw: bytes) -> set[str]:
+    """Restricted Docker ignore policy: deny **, then literal file exceptions.
+
+    General Docker glob semantics are deliberately not reimplemented. This
+    subset was compared to pinned upstream Moby; source staging is mandatory
+    defense in depth, so the future builder never receives the repository.
+    """
+    lines = [line for line in raw.decode("utf-8").splitlines()
+             if line and not line.startswith("#")]
+    require(lines and lines[0] == "**", "CONTEXT_NOT_DENY_BY_DEFAULT")
+    paths = set()
+    exceptions = [line for line in lines[1:] if line.startswith("!")]
+    for line in exceptions:
+        path = line[1:]
+        require(bool(re.fullmatch(r"[A-Za-z0-9_./-]+", path))
+                and all(part not in {"", ".", "..", "__pycache__"}
+                        and not part.startswith(".") for part in path.split("/")),
+                "CONTEXT_PATTERN_UNSAFE")
+        require(path not in paths, "CONTEXT_PATTERN_UNSAFE")
+        require(path in {DOCKERFILE.relative_to(ROOT).as_posix(), LOCK.relative_to(ROOT).as_posix()}
+                or (path.startswith("services/runtime/app/") and path.endswith(".py")),
+                "CONTEXT_FOREIGN_INPUT")
+        paths.add(path)
+    require({DOCKERFILE.relative_to(ROOT).as_posix(), LOCK.relative_to(ROOT).as_posix(),
+             "services/runtime/app/main.py", "services/runtime/app/__init__.py"} <= paths,
+            "CONTEXT_INPUTS_INCOMPLETE")
+    # Moby matches parent exceptions too. Explicit child denials prevent a
+    # reviewed filename replaced by a directory from exposing its descendants.
+    require(lines == ["**"] + ["!" + path for path in sorted(paths)]
+            + [path + "/*" for path in sorted(paths)], "CONTEXT_PATTERN_UNSAFE")
+    # No allowed file can also be a parent directory, which Moby would allow
+    # descendants through. Reject file/directory ambiguity before staging.
+    require(not any(parent.startswith(path + "/") for path in paths for parent in paths),
+            "CONTEXT_FILE_DIRECTORY_COLLISION")
+    return paths
+
+
+def source_context(*, dockerfile: bytes, requirements: bytes,
+                   context_ignore: bytes, inputs: dict[str, bytes]) -> bytes:
+    """Create a deterministic source-only TAR IN MEMORY; never write/build/run.
+
+    A later separately approved Host wrapper must send ONLY these bytes. It may
+    not pass root '.', alternate contexts, symlinks, Git data or host paths.
+    """
+    allowed = context_paths(context_ignore)
+    payload = {"services/runtime/app/" + path: raw for path, raw in inputs.items()}
+    payload[DOCKERFILE.relative_to(ROOT).as_posix()] = dockerfile
+    payload[LOCK.relative_to(ROOT).as_posix()] = requirements
+    require(set(payload) == allowed, "CONTEXT_INPUT_SET_MISMATCH")
+    # Dockerfile-specific ignore is the one additional build-control file,
+    # necessarily sent by Docker even when excluded from image COPY access.
+    payload[IGNORE.relative_to(ROOT).as_posix()] = context_ignore
+    require(all(type(raw) is bytes and len(raw) <= 1024 * 1024 for raw in payload.values())
+            and sum(map(len, payload.values())) <= 8 * 1024 * 1024,
+            "CONTEXT_RESOURCE_BOUND")
+    buffer = io.BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w", format=tarfile.USTAR_FORMAT) as archive:
+        for name, raw in sorted(payload.items()):
+            member = tarfile.TarInfo(name)
+            member.size, member.mode = len(raw), 0o644
+            member.uid = member.gid = member.mtime = 0
+            archive.addfile(member, io.BytesIO(raw))
+    return buffer.getvalue()
+
+
 def assess(
     doc: dict[str, Any], *, head: str, dockerfile: bytes,
-    requirements: bytes, app_tree_sha256: str, compose: dict[str, Any],
+    requirements: bytes, app_tree_sha256: str, compose: dict[str, Any], context_ignore: bytes,
 ) -> str:
     """Pure negative gates. NO return value authorizes build or execution."""
     d = document(doc)
@@ -251,20 +321,23 @@ def assess(
     require(not re.search(r"(?mi)^\s*#\s*(syntax|escape|check)\s*=", dockerfile.decode()),
             "DOCKERFILE_RECIPE_UNSAFE")
     require(instructions == RECIPE, "DOCKERFILE_RECIPE_UNSAFE")
+    context_paths(context_ignore)
     lock_complete = validate_lock(requirements)
     expected = {
         "dockerfile_sha256": hashlib.sha256(dockerfile).hexdigest(),
         "requirements_sha256": hashlib.sha256(requirements).hexdigest(),
         "app_tree_sha256": app_tree_sha256,
+        "context_ignore_sha256": hashlib.sha256(context_ignore).hexdigest(),
     }
     require(validate_optional_sha(app_tree_sha256), "APP_INPUTS_INCOMPLETE")
     for key, value in expected.items():
         if validate_optional_sha(b[key]):
             require(b[key] == value, "BUILD_INPUT_DIGEST_DRIFT")
     base = b["base_image"]
-    prefix = "python:3.13-slim-bookworm@"
-    require(base is None or (type(base) is str and base.startswith(prefix)
-            and validate_optional_digest(base[len(prefix):])), "BASE_IMAGE_NOT_DIGEST_PINNED")
+    require(base is None or (type(base) is str and "@" in base
+            and base.split("@", 1)[0] == BASE_IMAGE.split("@", 1)[0]
+            and validate_optional_digest(base.split("@", 1)[1])), "BASE_IMAGE_NOT_DIGEST_PINNED")
+    require(base is None or base == BASE_IMAGE, "BASE_IMAGE_PIN_DRIFT")
     for key in ("digest", "config_digest"):
         validate_optional_digest(art[key])
     for key in ("buildx_metadata_sha256", "attestation_sha256", "sbom_sha256"):
@@ -320,9 +393,15 @@ def main(argv: list[str]) -> int:
             compose = yaml.safe_load(read_exact(PROFILE))
         except yaml.YAMLError as exc:
             raise Stop("MANIFEST_YAML_INVALID") from exc
-        reason = assess(doc, head=head, dockerfile=read_exact(DOCKERFILE),
-                        requirements=read_exact(LOCK),
-                        app_tree_sha256=app_digest(app_inputs()), compose=compose)
+        recipe, requirements, ignore = read_exact(DOCKERFILE), read_exact(LOCK), read_exact(IGNORE)
+        inputs = app_inputs()
+        # Pure in-memory staging proves the exact source payload; no disk or
+        # Docker action is exposed by this CLI.
+        source_context(dockerfile=recipe, requirements=requirements,
+                       context_ignore=ignore, inputs=inputs)
+        reason = assess(doc, head=head, dockerfile=recipe,
+                        requirements=requirements, context_ignore=ignore,
+                        app_tree_sha256=app_digest(inputs), compose=compose)
     except Stop as exc:
         reason = str(exc)
     except (OSError, UnicodeError, ValueError, TypeError):
@@ -330,7 +409,7 @@ def main(argv: list[str]) -> int:
     # Retain the H1a redacted output keys for existing operator consumers.
     print("PCP_H1A_RESULT=STOP")
     print(f"PCP_H1A_REASON={reason}")
-    print("PCP_H1B_SOURCE=DRAFT_UNRESOLVED")
+    print("PCP_H1B2_SOURCE=DRAFT_NOT_ACCEPTED")
     print("PCP_H1A_IMAGE_PROVENANCE=NOT_INDEPENDENTLY_ATTESTED")
     print("PCP_H1A_LEGACY_LOCAL_TAG=NOT_AUTHORIZED_FOR_NEW_PCP")
     print("PCP_H1A_IMAGE_BUILD=NOT_RUN")

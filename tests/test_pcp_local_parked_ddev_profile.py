@@ -160,3 +160,11 @@ def test_no_host_runtime_or_deploy_side_effects():
     assert "docker run" not in COMPOSE.read_text()
     assert "ddev start" not in CONFIG.read_text()
     assert "docker run" not in CONFIG.read_text()
+
+
+def test_resolved_source_pins_do_not_activate_the_existing_parked_profile():
+    svc = _compose()["services"]["coding-runtime"]
+    assert svc["image"] == "pcp-local-runtime-inspect:source-unresolved-do-not-run"
+    assert svc["command"] == ["/PCP_H1B_SOURCE_ONLY_NOT_AUTHORIZED"]
+    assert svc["profiles"] == ["pcp-inspect"] and svc["pull_policy"] == "never"
+    assert "build" not in svc and "ports" not in svc

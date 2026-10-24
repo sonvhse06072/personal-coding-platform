@@ -27,6 +27,7 @@ PROTECTED_PATHS = frozenset({
     "scripts/pcp-local-image-provenance-plan.py",
     "profiles/pcp-local/image-provenance.example.yml",
     "profiles/pcp-local/runtime/Dockerfile.inspect",
+    "profiles/pcp-local/runtime/Dockerfile.inspect.dockerignore",
     "profiles/pcp-local/runtime/requirements-inspect.lock",
     "profiles/pcp-local/.ddev/config.yaml",
     "profiles/pcp-local/.ddev/docker-compose.platform.yaml",
