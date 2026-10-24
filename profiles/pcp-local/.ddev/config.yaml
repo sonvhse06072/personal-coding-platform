@@ -1,0 +1,14 @@
+# B2.2c1-A3 SOURCE TEMPLATE ONLY. NOT a checked-in active DDEV project.
+# Do not run ddev here or install this into the existing legacy PCP checkout.
+# For a separately reviewed FRESH PCP clone only, after A2 host evidence.
+name: pcp-local
+type: php
+docroot: public
+php_version: "8.4"
+webserver_type: nginx-fpm
+database:
+  type: postgres
+  version: "17"
+use_dns_when_possible: true
+composer_version: "2"
+# No hooks; notably no legacy image builder or Antigravity host bridge.
