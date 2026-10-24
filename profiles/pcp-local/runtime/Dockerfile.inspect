@@ -1,0 +1,11 @@
+# H1b SOURCE DRAFT: NOT BUILDABLE until separately reviewed base/lock resolution.
+# No default digest, remote syntax frontend, apt, npm, coding CLI or test tools.
+ARG PCP_INSPECT_BASE_SHA256
+FROM --platform=linux/amd64 python:3.13-slim-bookworm@sha256:${PCP_INSPECT_BASE_SHA256}
+WORKDIR /app
+COPY profiles/pcp-local/runtime/requirements-inspect.lock /app/requirements-inspect.lock
+RUN python -m pip install --no-cache-dir --require-hashes --only-binary=:all: -r /app/requirements-inspect.lock
+COPY services/runtime/app /app/app
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PCP_RUNTIME_STARTUP_MODE=pcp_local_inspect PROJECTS_FILE=/config/projects.pcp-local.yml PROJECT_BASELINES_FILE=/config/project-baselines.pcp-local.yml HOME=/tmp
+USER 65532:65532
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8787", "--loop", "asyncio", "--http", "h11", "--ws", "none", "--lifespan", "on", "--no-access-log"]

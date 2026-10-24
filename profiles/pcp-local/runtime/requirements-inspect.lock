@@ -1,0 +1,13 @@
+# H1b UNRESOLVED DRAFT, NOT a usable dependency lock.
+# These direct-version candidates already exist in Runtime requirements.
+# Transitive wheel versions/hashes for CPython 3.13 linux/amd64 NOT RESOLVED.
+# No package hash/availability was inferred from a host test installation.
+# pip --require-hashes MUST fail; a reviewed successor must resolve ALL wheels.
+--require-hashes
+--only-binary=:all:
+fastapi==0.116.1
+uvicorn==0.35.0
+pydantic==2.11.7
+PyYAML==6.0.2
+httpx==0.28.1
+psycopg[binary]==3.2.9

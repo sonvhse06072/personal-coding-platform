@@ -1,23 +1,32 @@
-# H1a source-only manifest CONTRACT. Every null is a hard missing-evidence STOP.
-# Do not populate/activate as a side effect of Git checkout, CI or DDEV.
-# Buildx --metadata-file or an OCI label alone is NOT independent attestation.
-schema_version: 1
+# H1b offline SOURCE DRAFT. Missing evidence never grants build/host authority.
+# No registry/PyPI/image resolution is performed by --check.
+schema_version: 2
 project_id: pcp-local
 repository: sonvhse06072/personal-coding-platform
 approval_state: draft
 source_commit: null
 build:
-  context: services/runtime
-  dockerfile: services/runtime/Dockerfile
-  dockerfile_sha256: null
+  context: .
+  dockerfile: profiles/pcp-local/runtime/Dockerfile.inspect
+  requirements: profiles/pcp-local/runtime/requirements-inspect.lock
+  platform: linux/amd64
+  startup_mode: pcp_local_inspect
   base_image: null
-  codex_version: "0.160.0"
-  opencode_version: null
+  dockerfile_sha256: null
   requirements_sha256: null
-  requirements_dev_sha256: null
+  app_tree_sha256: null
 artifact:
   image_ref: null
   digest: null
+  config_digest: null
   buildx_metadata_sha256: null
   attestation_sha256: null
+  sbom_sha256: null
+evidence:
+  # Later approved Host stage must preserve the image index + attestations.
+  # registry or oci_layout can be proposed; classic_load is never sufficient.
+  exporter: null
+  image_store: null
+  provenance_mode: max
+  sbom_required: true
 independent_provenance: null

@@ -2,7 +2,7 @@
 
 Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline revision, Runtime/WSL rollout attestation, authority change, or chronological log. Verify GitHub and local durable evidence immediately before any mutation. The Constitution, architecture and approved baseline outrank this snapshot.
 
-**Last reconciled: 2026-10-24, H1a SOURCE ACCEPTED; image provenance/Host LIVE STOP.** `main@7abc888119b0b9f6b58023a8ae91b45274edfaa3`; [PR #792](https://github.com/sonvhse06072/personal-coding-platform/pull/792) merged, [postmerge real4 #40103550049](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40103550049) **4,225 PASS/88 skipped**. [H1a outcome #791](https://github.com/sonvhse06072/personal-coding-platform/issues/791#issuecomment-6385541385). No Docker/DDEV/image build or worker. #752 PARKED, #595 HOLD.
+**Last reconciled: 2026-10-24, #794 H1b SOURCE DRAFT / UNRESOLVED; Host/LIVE STOP.** Starting `main@15c18eefc13234efcda61c84f54a547d7a5bdebf`; branch `ai/794-inspection-image-source`. Owner allowed this mutable handoff file in addition to #794's nine proposed paths. Owner approved six protected SOURCE paths in [draft #796](https://github.com/sonvhse06072/personal-coding-platform/pull/796); PM acceptance pending. H1a #792 remains accepted; #752 PARKED, #595 HOLD.
 
 
 ## #764 / #777 — Phase B PCP-only source acceptance and Gate A audit
@@ -21,7 +21,7 @@ Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline 
 | --- | --- | --- |
 | #594 | COMPLETED | Live issue closed; #612 merged, exact head `8088e5382412d42790cb083c43e57b482debffc7` |
 | #764 / #773 | B2.2c0 SOURCE ACCEPTED; B2.2c1 GATE A PHYSICAL HOLD | [#776](https://github.com/sonvhse06072/personal-coding-platform/pull/776) merged; [postmerge #40053565494](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40053565494) full4 PASS; no local worker deployment |
-| #777 / #790 / #791 | H1a SOURCE ACCEPTED; H1b image/Host HOLD | [#792](https://github.com/sonvhse06072/personal-coding-platform/pull/792) merged/real4 PASS; old image unverified, no build/pull, DB, cleanup, baseline or worker LIVE |
+| #777 / #790 / #791 / #794 | H1a ACCEPTED; H1b SOURCE DRAFT / Host HOLD | [#792](https://github.com/sonvhse06072/personal-coding-platform/pull/792) merged/real4 PASS; old image unverified, no build/pull, DB, cleanup, baseline or worker LIVE |
 | #752 source | MERGED / VERIFIED | [PR #760](https://github.com/sonvhse06072/personal-coding-platform/pull/760); PR-head and postmerge 4/4 hosted CI PASS; Runtime not deployed |
 | #752 live | NEEDS_OWNER_DECISION | Isolation/egress/credential/baseline/launch gates unresolved; PARKED |
 | #595 | BLOCKED | G0 HOLD / NOT GO; comparable accepted cohort absent |
@@ -33,7 +33,7 @@ Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline 
 
 GitHub/Runtime evidence remains separate; Runtime was not queried.
 
-**Next safe action:** [H1a issue #791](https://github.com/sonvhse06072/personal-coding-platform/issues/791) needs a successor exact-path **H1b build-recipe/image-digest SOURCE proposal**. Existing Runtime Dockerfile uses floating base/OpenCode/apt; legacy builder overwrites shared `:local` tags. Do not build or start Docker/DDEV, repin old image on labels alone, clone credentials or delete old PCP/Chợ Nhạc resources. Separate Host H1 permission, source baseline, egress/budget and worker gates remain; #752 PARKED, #595 HOLD, LIVE STOP.
+**Next safe action:** exact-head full4 CI and independent ChatGPT PM COMMENT review of [#796](https://github.com/sonvhse06072/personal-coding-platform/pull/796) for [#794](https://github.com/sonvhse06072/personal-coding-platform/issues/794). Owner scope consent received; SOURCE acceptance pending. [Design](../pcp-portable/README.md): base digest/hashed lock **UNRESOLVED**, Compose blocked/OFF, `--check` exit 2/STOP. Local Python 3.13: root 1,337; Router 132; Runtime 2,145/88 skipped; Executor 637 PASS; diff-check PASS. Initial `ccfffed` CI #40105671662: three service suites PASS; structure stopped at missing-approval gate before root pytest. Owner approval declared in PR; current exact-head CI is linked there. No Docker/DDEV/build/DB/credentials/worker; Host and LIVE gates remain separate.
 
 ## Active investment / execution gates
 
