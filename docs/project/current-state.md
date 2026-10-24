@@ -33,7 +33,7 @@ Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline 
 
 GitHub/Runtime evidence remains separate; Runtime was not queried.
 
-**Next safe action:** exact-head full4 CI and independent ChatGPT PM COMMENT review of [#796](https://github.com/sonvhse06072/personal-coding-platform/pull/796) for [#794](https://github.com/sonvhse06072/personal-coding-platform/issues/794). Owner scope consent received; SOURCE acceptance pending. [Design](../pcp-portable/README.md): base digest/hashed lock **UNRESOLVED**, Compose blocked/OFF, `--check` exit 2/STOP. Local Python 3.13: root 1,337; Router 132; Runtime 2,145/88 skipped; Executor 637 PASS; diff-check PASS. Initial `ccfffed` CI #40105671662: three service suites PASS; structure stopped at missing-approval gate before root pytest. Approval metadata/final CI update pending. No Docker/DDEV/build/DB/credentials/worker; Host and LIVE gates remain separate.
+**Next safe action:** exact-head full4 CI and independent ChatGPT PM COMMENT review of [#796](https://github.com/sonvhse06072/personal-coding-platform/pull/796) for [#794](https://github.com/sonvhse06072/personal-coding-platform/issues/794). Owner scope consent received; SOURCE acceptance pending. [Design](../pcp-portable/README.md): base digest/hashed lock **UNRESOLVED**, Compose blocked/OFF, `--check` exit 2/STOP. Local Python 3.13: root 1,337; Router 132; Runtime 2,145/88 skipped; Executor 637 PASS; diff-check PASS. Initial `ccfffed` CI #40105671662: three service suites PASS; structure stopped at missing-approval gate before root pytest. Owner approval declared in PR; current exact-head CI is linked there. No Docker/DDEV/build/DB/credentials/worker; Host and LIVE gates remain separate.
 
 ## Active investment / execution gates
 
