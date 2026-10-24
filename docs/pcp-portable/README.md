@@ -265,7 +265,7 @@ Required before SOURCE acceptance: Owner scope approval (received, as recorded a
 
 ## B2.2c1-H1b2 — digest, wheel and context SOURCE proposal (#797)
 
-**Status: DRAFT SOURCE / OWNER APPROVAL PENDING; not accepted or runnable.** [WorkOrder and PM direction #797](https://github.com/sonvhse06072/personal-coding-platform/issues/797#issuecomment-6386754400), exact starting `main@f2a5da71f1b773d7c9f72c8ea008a093e3cec3e5`, branch `ai/797-inspection-pins-context`. Prior #796 approval does not cover this successor. Only the ten proposed #797 paths change; Compose, legacy Runtime/builder/root `.ddev`, baselines and CI do not. Research observed **2026-10-24 UTC / 2026-10-25 Asia/Bangkok**. All values below identify source inputs, never a built PCP image or a signature/trusted-build approval.
+**Status: [DRAFT PR #799](https://github.com/sonvhse06072/personal-coding-platform/pull/799) / OWNER APPROVAL PENDING; not accepted or runnable.** [WorkOrder and PM direction #797](https://github.com/sonvhse06072/personal-coding-platform/issues/797#issuecomment-6386754400), exact starting `main@f2a5da71f1b773d7c9f72c8ea008a093e3cec3e5`, branch `ai/797-inspection-pins-context`. Prior #796 approval does not cover this successor. Only the ten proposed #797 paths change; Compose, legacy Runtime/builder/root `.ddev`, baselines and CI do not. Research observed **2026-10-24 UTC / 2026-10-25 Asia/Bangkok**. All values below identify source inputs, never a built PCP image or a signature/trusted-build approval.
 
 ### Base image: verified per-platform metadata, no layers pulled
 
