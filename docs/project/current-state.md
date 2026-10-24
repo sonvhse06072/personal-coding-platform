@@ -2,7 +2,16 @@
 
 Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline revision, Runtime/WSL rollout attestation, authority change, or chronological log. Verify GitHub and local durable evidence immediately before any mutation. The Constitution, architecture and approved baseline outrank this snapshot.
 
-Last reconciled: **2026-10-24, SOURCE ONLY; NOT deployed.** `main@f613890692aac5b92a747035f7370431dfc163e5`: [#771](https://github.com/sonvhse06072/personal-coding-platform/pull/771) B2.2b, [#772](https://github.com/sonvhse06072/personal-coding-platform/pull/772) T1 and [#774](https://github.com/sonvhse06072/personal-coding-platform/pull/774) P1 accepted; [CI #40050596217](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40050596217) real full4 PASS. T02 PARKED; G0 HOLD.
+Last reconciled: **2026-10-24, Phase B2.2c0 SOURCE ACCEPTED; B2.2c1 direction accepted for staged Gate A evidence; LIVE NOT DEPLOYED.** Source checkpoint `main@2d536201dd28d94f43dd20903419007c0136261b`: [#776](https://github.com/sonvhse06072/personal-coding-platform/pull/776) merged after exact-HEAD PM COMMENT and full4 hosted CI; [postmerge #40053565494](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40053565494) 4/4 actually executed suites PASS (4,092 passed / 88 skipped). The newer B2.2c1 proposal [#777](https://github.com/sonvhse06072/personal-coding-platform/issues/777) is still subject to independent physical and protected approval gates. #752 T02 PARKED, #595 G0 HOLD.
+
+
+## #764 / #777 — Phase B PCP-only source acceptance and Gate A audit
+
+- **B2.2c0 source acceptance:** [PR #776](https://github.com/sonvhse06072/personal-coding-platform/pull/776) squash-merged at `2d536201dd28d94f43dd20903419007c0136261b`; six of eight approved paths, draft singleton `pcp-local` with `path: null`, separate draft baseline with `active_revision: null / revisions: {}`, and Runtime `pcp_local_inspect` inspection-only startup. No legacy scheduler, model, Docker, CI dispatch, job or historical data touched. Both PR-head and postmerge 4/4 hosted suites actually ran and PASS. [PM outcome #764](https://github.com/sonvhse06072/personal-coding-platform/issues/764#issuecomment-6378674879).
+- **B2.2c1:** Human Owner accepted the general [LIVE proposal #777](https://github.com/sonvhse06072/personal-coding-platform/issues/777) and requested the next step. This is **direction to investigate Gate A**, not permission for unbounded LIVE changes. [Gate A static findings](https://github.com/sonvhse06072/personal-coding-platform/issues/777#issuecomment-6378821748) were collected from GitHub source only. No WSL/daemon/context/mount/container/secret observation has occurred.
+- **Static blockers:** current `.ddev/docker-compose.platform.yaml` uses `/config/projects.yml` in Router/Runtime/Executor, exposing a registry with managed Chợ Nhạc and legacy fixtures. Runtime mounts host Codex/OpenCode home and gitconfig. Executor mounts `/var/run/docker.sock`, project/workspace roots and host `.ddev`. Existing DDEV pre-start builds images and invokes host bridge; `ddev start`, `--prepare` or `--start` are **not read-only Gate A diagnostics**.
+- **Next scoped source decision:** design a fail-closed redacted **read-only** inspection utility with targeted regression tests and protected path classification, not deployment. [#777 Gate A1 path proposal](https://github.com/sonvhse06072/personal-coding-platform/issues/777#issuecomment-6378821748) names proposed paths pending separate exact Owner approval. Even a source checker cannot replace independent physical proof of a dedicated Docker daemon. No active PCP baseline or installed trusted launcher/poller exists.
+- **Operational STOP:** `B22C1_GATE_A_PHYSICAL=NOT_ATTESTED`, `CREDENTIAL_ISOLATION=NOT_ATTESTED`, `LIVE=NOT_AUTHORIZED`, `MODEL_CALLS=0` (in this phase). Do not run DDEV, change Compose/mounts, enable task flags, install credentials, spend model quota, inspect legacy DB/jobs or bypass T02 egress. Chợ Nhạc STRICT NO-TOUCH; #752 PARKED; #595 HOLD; F2/T01/Guardian frozen.
 
 ## #752 source accepted; live T02 remains PARKED
 
@@ -16,7 +25,8 @@ Last reconciled: **2026-10-24, SOURCE ONLY; NOT deployed.** `main@f613890692aac5
 | Queue | Status | Evidence / blocker |
 | --- | --- | --- |
 | #594 | COMPLETED | Live issue closed; #612 merged, exact head `8088e5382412d42790cb083c43e57b482debffc7` |
-| #764 / #773 | B2.2b/P1 SOURCE ACCEPTED; B2.2c/B3 HOLD | [#774](https://github.com/sonvhse06072/personal-coding-platform/pull/774) full4 PASS; PCP-only baseline/worker/transfer unproven |
+| #764 / #773 | B2.2c0 SOURCE ACCEPTED; B2.2c1 GATE A PHYSICAL HOLD | [#776](https://github.com/sonvhse06072/personal-coding-platform/pull/776) merged; [postmerge #40053565494](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40053565494) full4 PASS; no local worker deployment |
+| #777 | Direction accepted / exact-path A1 decision pending | GitHub source audit complete; dedicated WSL/Docker daemon, credentials, baseline, live worker not independently attested |
 | #752 source | MERGED / VERIFIED | [PR #760](https://github.com/sonvhse06072/personal-coding-platform/pull/760); PR-head and postmerge 4/4 hosted CI PASS; Runtime not deployed |
 | #752 live | NEEDS_OWNER_DECISION | Isolation/egress/credential/baseline/launch gates unresolved; PARKED |
 | #595 | BLOCKED | G0 HOLD / NOT GO; comparable accepted cohort absent |
@@ -28,7 +38,7 @@ Last reconciled: **2026-10-24, SOURCE ONLY; NOT deployed.** `main@f613890692aac5
 
 GitHub/Runtime evidence remains separate; Runtime was not queried.
 
-**Next safe action:** [#764 B2.2c0](https://github.com/sonvhse06072/personal-coding-platform/issues/764#issuecomment-6378302228) isolated PCP-only registry/baseline/startup proposal is **NOT APPROVED**. No worker or WSL rollout, no legacy lease/DB restart, no T02 egress bypass. Dedicated Docker boundary, safe Codex/GitHub auth and budget require new live evidence. #752 PARKED, #595 HOLD; F2/T01/Guardian frozen, Chợ Nhạc no-touch.
+**Next safe action:** [#777 B2.2c1 Gate A1 exact-path proposal](https://github.com/sonvhse06072/personal-coding-platform/issues/777#issuecomment-6378821748) for a **read-only, source-only**, fail-closed isolation-inspection contract and negative tests. Do not treat the already accepted broad Phase B2.2c1 direction as authorization to implement or launch protected operational paths. Dedicated disposable WSL2/Docker daemon/context, safe Codex/GitHub credentials, approved immutable baseline and bounded budget require independent evidence and a later exact operational Owner decision. No worker/WSL rollout, no historical lease/DB restart, no T02 egress bypass. #752 PARKED, #595 HOLD; F2/T01/Guardian frozen, Chợ Nhạc strict no-touch.
 
 ## Active investment / execution gates
 

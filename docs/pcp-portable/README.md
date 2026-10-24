@@ -101,3 +101,21 @@ The only new Runtime mode is `PCP_RUNTIME_STARTUP_MODE=pcp_local_inspect`. It ac
 STOP on an existing checkout, old PCP DB/job/lease/worktree/credentials, non-PCP project in the singleton, populated project path, active/approved baseline, shared Docker daemon/context without separate risk attestation, unreviewed Docker socket/mount rights, normal scheduler/publisher startup, unknown image/start hooks, copied OAuth/keyring, undocumented GitHub/model permission, network/egress rule, unbounded budget or absent verified rollback. Never retry/recreate/rename/bypass the earlier safety-blocked T02 egress overlay.
 
 **B2.2c1 LIVE is NOT APPROVED.** A separately reviewed ChangeProposal must first attest a disposable standalone WSL2 distro/VM and **exclusive** Docker daemon/context, independent repo and state mounts, immutable approved PCP baseline with exact source/ref, container-scoped Codex and GitHub credentials, verified provider/network egress, bounded token/cash/wall budget, single writer/lease, safe rollback, trusted Runtime launcher/poller/Executor permissions and one real issue → Codex in container → draft PR → hosted exact-head CI → independent PM COMMENT → outcome. Setup may be one-time; no Owner WSL per task after that. No live activation without a new protected Owner decision.
+
+
+## B2.2c1 Gate A — source audit (24 Oct 2026; not a physical attestation)
+
+The Human Owner accepted the [B2.2c1 Phase B direction](https://github.com/sonvhse06072/personal-coding-platform/issues/777), but the original staged ChangeProposal still requires independently evidenced WSL2/Docker isolation, exact protected path approval, credentials and budget. [Audit evidence and limited A1 source proposal](https://github.com/sonvhse06072/personal-coding-platform/issues/777#issuecomment-6378821748) identify blockers without starting any service.
+
+| GitHub source observation | Gate A meaning |
+| --- | --- |
+| `.ddev/docker-compose.platform.yaml` sets `/config/projects.yml` for Router, Runtime and Executor; no dedicated active PCP-local baseline | **STOP**: legacy multi-project registry still wired to the shipped stack |
+| Runtime volumes bind host Codex/OpenCode credentials and gitconfig | **STOP**: fresh, container-specific provider identity not proven |
+| Executor binds host Docker socket, project roots, host DDEV and gitconfig | **STOP**: a new Docker network/name is not an exclusive daemon security boundary |
+| `.ddev/config.yaml` pre-start builds images and starts host-bridge helper; portable `--prepare` creates scoped secrets | **STOP**: `ddev start` and `--prepare/--start` are mutating, not audit steps |
+| `scripts/pcp-portable-bootstrap.sh --check` is a read-only preflight candidate; current source pin is Codex 0.160.0, while OpenCode defaults to `latest` | Check actual tool/image provenance later on a dedicated disposable environment; no physical acceptance yet |
+| Existing B2.2b worker loop has no installed trusted attestor/launcher/poller; PCP-only registry is draft with null path and inactive baseline | **STOP**: no worker is available to accept a real task |
+
+A narrowly scoped **B2.2c1-A1 source-only inspection utility** is proposed on issue #777. Candidate source paths and tests are documented there; **no approval for those protected edits or live DDEV/Compose/Runtime/Executor changes is implied**. Its future physical output must be redacted, independently compared against a known-new WSL2 distro/VM and exclusive Docker daemon/context, and must not contain passwords, tokens, host keyrings, repository secrets or unrelated project paths. A script cannot establish independent daemon provenance merely by reading its own Docker network labels.
+
+Until later Gate B approval, do not execute `--prepare`, `--start`, `ddev start`, image builds, Docker container create, new credential issuance, model calls, GitHub background polling or T02 egress configuration. All historical PCP state and Chợ Nhạc remain no-touch; B2.2c1 is **NOT LIVE**.
