@@ -1,0 +1,23 @@
+# H1a source-only manifest CONTRACT. Every null is a hard missing-evidence STOP.
+# Do not populate/activate as a side effect of Git checkout, CI or DDEV.
+# Buildx --metadata-file or an OCI label alone is NOT independent attestation.
+schema_version: 1
+project_id: pcp-local
+repository: sonvhse06072/personal-coding-platform
+approval_state: draft
+source_commit: null
+build:
+  context: services/runtime
+  dockerfile: services/runtime/Dockerfile
+  dockerfile_sha256: null
+  base_image: null
+  codex_version: "0.160.0"
+  opencode_version: null
+  requirements_sha256: null
+  requirements_dev_sha256: null
+artifact:
+  image_ref: null
+  digest: null
+  buildx_metadata_sha256: null
+  attestation_sha256: null
+independent_provenance: null
