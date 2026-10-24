@@ -2,7 +2,7 @@
 
 Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline revision, Runtime/WSL rollout attestation, authority change, or chronological log. Verify GitHub and local durable evidence immediately before any mutation. The Constitution, architecture and approved baseline outrank this snapshot.
 
-**Last reconciled: 2026-10-24, #794 H1b SOURCE DRAFT / UNRESOLVED; Host/LIVE STOP.** Starting `main@15c18eefc13234efcda61c84f54a547d7a5bdebf`; branch `ai/794-inspection-image-source`. Owner allowed this mutable handoff file in addition to #794's nine proposed paths. Protected approval/PM acceptance pending. H1a #792 remains accepted; #752 PARKED, #595 HOLD.
+**Last reconciled: 2026-10-24, #794 H1b SOURCE DRAFT / UNRESOLVED; Host/LIVE STOP.** Starting `main@15c18eefc13234efcda61c84f54a547d7a5bdebf`; branch `ai/794-inspection-image-source`. Owner allowed this mutable handoff file in addition to #794's nine proposed paths. Owner approved six protected SOURCE paths in [draft #796](https://github.com/sonvhse06072/personal-coding-platform/pull/796); PM acceptance pending. H1a #792 remains accepted; #752 PARKED, #595 HOLD.
 
 
 ## #764 / #777 — Phase B PCP-only source acceptance and Gate A audit
@@ -33,7 +33,7 @@ Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline 
 
 GitHub/Runtime evidence remains separate; Runtime was not queried.
 
-**Next safe action:** review [H1b #794](https://github.com/sonvhse06072/personal-coding-platform/issues/794) and obtain exact protected-path approval before PM merge. [Design/evidence plan](../pcp-portable/README.md): reduced image reuses guarded `app.main`; base digest/transitive hashed lock **UNRESOLVED**. Compose has a non-runnable placeholder + command blocker, profile OFF. `--check` always exit 2/STOP. Local Python 3.13: root 1,337; Router 132; Runtime 2,145/88 skipped; Executor 637 PASS; focused 108 PASS; diff-check PASS. Draft PR/hosted CI pending. No registry image lookup/pull/build, Docker/DDEV, DB, credentials or worker action. Host, baseline, egress/budget and LIVE gates remain independent.
+**Next safe action:** exact-head full4 CI and independent ChatGPT PM COMMENT review of [#796](https://github.com/sonvhse06072/personal-coding-platform/pull/796) for [#794](https://github.com/sonvhse06072/personal-coding-platform/issues/794). Owner scope consent received; SOURCE acceptance pending. [Design](../pcp-portable/README.md): base digest/hashed lock **UNRESOLVED**, Compose blocked/OFF, `--check` exit 2/STOP. Local Python 3.13: root 1,337; Router 132; Runtime 2,145/88 skipped; Executor 637 PASS; diff-check PASS. Initial `ccfffed` CI #40105671662: three service suites PASS; structure stopped at missing-approval gate before root pytest. Approval metadata/final CI update pending. No Docker/DDEV/build/DB/credentials/worker; Host and LIVE gates remain separate.
 
 ## Active investment / execution gates
 
