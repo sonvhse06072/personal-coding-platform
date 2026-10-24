@@ -119,3 +119,26 @@ The Human Owner accepted the [B2.2c1 Phase B direction](https://github.com/sonvh
 A narrowly scoped **B2.2c1-A1 source-only inspection utility** is proposed on issue #777. Candidate source paths and tests are documented there; **no approval for those protected edits or live DDEV/Compose/Runtime/Executor changes is implied**. Its future physical output must be redacted, independently compared against a known-new WSL2 distro/VM and exclusive Docker daemon/context, and must not contain passwords, tokens, host keyrings, repository secrets or unrelated project paths. A script cannot establish independent daemon provenance merely by reading its own Docker network labels.
 
 Until later Gate B approval, do not execute `--prepare`, `--start`, `ddev start`, image builds, Docker container create, new credential issuance, model calls, GitHub background polling or T02 egress configuration. All historical PCP state and Chợ Nhạc remain no-touch; B2.2c1 is **NOT LIVE**.
+
+
+## B2.2c1-A1 — Read-only isolation prescreen (SOURCE ONLY; not LIVE)
+
+**Owner authorization:** `DEC-PCP-LOCAL-WORKER-B22C1-A1-READONLY-SOURCE-V1` via [Phase B issue #777](https://github.com/sonvhse06072/personal-coding-platform/issues/777) and the Owner's explicit A1 implementation instruction. Only the A1 inspector script, fake-only tests, protected classification and this document are changed. No Docker/Compose configuration, ProjectBaseline, credential, Runtime or Executor behavior changes.
+
+Run **only in a separately provisioned disposable WSL2 distro or Linux VM**, after independent confirmation that the checkout/daemon cannot access any historical project. This source prescreen is **not authority to inspect or operate an existing PCP or Chợ Nhạc installation**:
+
+```bash
+(
+  bash scripts/pcp-local-gate-a-inspect.sh --check
+)
+result=$?
+printf 'PCP_A1_INSPECT_EXIT=%s\n' "$result"
+```
+
+The subshell protects the parent operator terminal session from the deliberately nonzero STOP result. The inspector uses **no host Python/Node** and performs no network requests, installation, model invocation, Docker mutation or DDEV startup. It checks only the canonical PCP checkout Git identity/HEAD, tracked file blobs, separate draft project/baseline settings and the legacy Compose credential/socket mounts and build hook. It then queries only three read-only Docker commands: `docker context show`, `docker context inspect --format`, and `docker info --format`. It never calls `ddev`, `docker ps`, `docker network/volume/image ls`, `docker run`, `docker build`, any job/DB API, GitHub API or credentials. Docker must use a local Unix socket; Docker Desktop and remote endpoints are rejected, though Unix-local by itself is not proof of exclusive Docker daemon ownership.
+
+Output is a bounded key=value report: predetermined STOP reasons/statuses, exact PCP source Git SHA, SHA-256 hash of Docker daemon ID plus Unix endpoint, and an untrusted WSL/Linux kernel class. It prints **no host path, Docker endpoint, remote URL, raw daemon identifier, container name, upstream error, token or credential**. The fingerprint is only a comparison hint against separately obtained and verified disposable Docker Engine evidence; it cannot attest no historical mounts or shared daemon backing store. **Every `--check` exits code 2 and reports `PCP_B22C1_LIVE=STOP`, including a clean synthetic prescreen.** A zero exit or `PASS` would be misleading before physical attestation.
+
+STOP on foreign/noncanonical source, symlink or drifted configuration, wrong runtime/worker flag, Docker connection environment override, root user, non-Linux target, nonlocal/Docker Desktop endpoint, bad source/metadata and anything lacking independent physical proof. Do not paste secrets or unsanitized Docker output into a GitHub issue. This script supplies no permission to activate the baseline, DDEV/Compose, Context, Runtime, Executor, task polling, provider credentials/egress, model calls or GitHub publishing.
+
+**Next gate (NOT ATTESTED):** compare the fingerprint with independent records of a *newly provisioned exclusive* WSL2/VM Docker daemon/context/storage, then attest there are no foreign containers, volumes, networks, workspaces or mounts without inspecting existing Chợ Nhạc state. Prepare a distinct exact-path Owner approval for an immutable PCP-only ProjectBaseline, container-scoped auth, Executor daemon boundary, reviewed network/egress, bounded one-task budget and tested rollback. `#752 G1-T02` PARKED, `#595 G0` HOLD, F2/T01/Guardian frozen, Chợ Nhạc STRICT NO-TOUCH. The safety-blocked T02 egress overlay must not be retried, renamed or bypassed.
