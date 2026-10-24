@@ -69,7 +69,7 @@ def test_committed_drafts_have_no_authority(monkeypatch, tmp_path):
     assert ProjectBaselineRegistry.model_validate(b).projects["pcp-local"].active_revision is None
     monkeypatch.setattr("app.baseline.project_baselines_doc", lambda: b)
     assert resolve_project_baseline("pcp-local") is None
-    with pytest.raises(ValueError, match="no ProjectBaseline"):
+    with pytest.raises(ValueError, match="Unknown ProjectBaseline revision"):
         resolve_project_baseline("pcp-local", "fake")
 
 

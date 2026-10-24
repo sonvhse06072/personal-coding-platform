@@ -373,8 +373,9 @@ async def _stop_legacy_control_plane() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    mode = runtime_startup_mode()
-    if mode == PCP_LOCAL_INSPECT_MODE:
+    # PCP-local scope is rejected before all legacy secret, DB and job actions.
+    # Historical invalid-mode startup still hardens before validating the mode.
+    if os.getenv("PCP_RUNTIME_STARTUP_MODE", "normal") == PCP_LOCAL_INSPECT_MODE:
         _validate_pcp_local_inspection()
         app.state.pcp_local_inspection_ready = True
         try:
@@ -382,9 +383,11 @@ async def lifespan(app: FastAPI):
         finally:
             app.state.pcp_local_inspection_ready = False
         return
-    _reject_pcp_local_legacy_startup()
+    if _pcp_local_scope_requested():
+        raise RuntimeError("PCP-local SOURCE ONLY: legacy Runtime is forbidden")
     harden_runtime_process_secret_boundary()
-    if runtime_startup_mode() == "inspect":
+    mode = runtime_startup_mode()
+    if mode == "inspect":
         # In particular: no Storage.init DDL/planning updates, Antigravity
         # cancel-all, queued-job replay, lease cleanup, PlanOrchestrator ticks,
         # or asynchronous notification publishers.
