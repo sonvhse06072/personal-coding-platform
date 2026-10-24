@@ -1,0 +1,7 @@
+# B2.2c0 PCP-local DRAFT only; no approved source SHA or active revision.
+# A later immutable ProjectBaseline requires separate explicit Owner approval.
+version: 1
+projects:
+  pcp-local:
+    active_revision: null
+    revisions: {}
