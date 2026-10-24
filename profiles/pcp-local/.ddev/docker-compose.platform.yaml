@@ -2,10 +2,10 @@
 # This template is NOT under the legacy root .ddev/ directory.
 services:
   coding-runtime:
-    # H1a SOURCE STOP: legacy :local image is UNATTESTED and MUST NOT RUN.
-    # Pull disabled; profile remains OFF. A future approved, digest-pinned
-    # replacement requires a separate source+host acceptance decision.
-    image: personal-coding-platform-coding-runtime:local
+    # H1b SOURCE DRAFT: no legacy image fallback and no runnable command.
+    # A separate reviewed source+Host decision must replace BOTH blockers.
+    image: pcp-local-runtime-inspect:source-unresolved-do-not-run
+    command: ["/PCP_H1B_SOURCE_ONLY_NOT_AUTHORIZED"]
     pull_policy: never
     container_name: ddev-${DDEV_SITENAME}-coding-runtime
     profiles:

@@ -56,9 +56,11 @@ def test_only_opt_in_inspection_service_and_no_runtime_launch_by_default():
     svc = services["coding-runtime"]
     assert svc["profiles"] == ["pcp-inspect"]
     assert svc["restart"] == "no"
-    assert svc["image"] == "personal-coding-platform-coding-runtime:local"
+    assert svc["image"] == "pcp-local-runtime-inspect:source-unresolved-do-not-run"
+    assert svc["command"] == ["/PCP_H1B_SOURCE_ONLY_NOT_AUTHORIZED"]
+    assert "personal-coding-platform-coding-runtime:local" not in COMPOSE.read_text()
     assert svc["container_name"] == "ddev-${DDEV_SITENAME}-coding-runtime"
-    assert "command" not in svc and "entrypoint" not in svc
+    assert "entrypoint" not in svc
     assert "depends_on" not in svc
     assert "ports" not in svc and "expose" not in svc
     assert "build" not in svc
