@@ -266,6 +266,52 @@ class LocalSourceQueueStore:
         require(set(row) == required, "pending_receipt_shape_invalid")
         return dict(row)
 
+    def read_claimed(self, task: LocalSourceTask, *, job_id: str) -> dict[str, Any]:
+        """Re-read the *same* claimed job after CAS; no write/repair/retry.
+
+        A successful first claim is not enough to launch a future worker:
+        state, generation, job binding and every immutable task fingerprint
+        must still match on a new database connection.
+        """
+        require(isinstance(task, LocalSourceTask)
+                and task.repository == REPOSITORY
+                and task.project_id == PROJECT_ID
+                and isinstance(job_id, str)
+                and re.fullmatch(r"[a-f0-9]{32}", job_id) is not None,
+                "pcp_local_claim_lookup_invalid")
+        with self.storage.connect() as conn:
+            row = conn.execute(
+                """SELECT repository, issue_number, project_id, task_key,
+                          body_sha256, base_sha, baseline_revision,
+                          baseline_source_commit, goal_sha256, allowed_paths,
+                          state, generation, job_id
+                   FROM cp_pcp_local_source_receipts
+                   WHERE repository=%s AND project_id=%s AND issue_number=%s
+                   LIMIT 1""",
+                (REPOSITORY, PROJECT_ID, task.issue_number),
+            ).fetchone()
+        expected = {
+            "repository": task.repository,
+            "issue_number": task.issue_number,
+            "project_id": task.project_id,
+            "task_key": task.task_key,
+            "body_sha256": task.body_sha256,
+            "base_sha": task.base_sha,
+            "baseline_revision": task.baseline_revision,
+            "baseline_source_commit": task.baseline_source_commit,
+            "goal_sha256": task.goal_sha256,
+            "allowed_paths": list(task.allowed_paths),
+            "state": "claimed",
+            "generation": 1,
+            "job_id": job_id,
+        }
+        require(type(row) is dict
+                and set(row) == set(expected)
+                and all(type(row[key]) is type(value) and row[key] == value
+                        for key, value in expected.items()),
+                "pcp_local_claim_receipt_identity_changed")
+        return dict(row)
+
     def record(self, task: LocalSourceTask) -> bool:
         with self.storage.connect() as conn:
             conn.execute(RECEIPT_DDL)
