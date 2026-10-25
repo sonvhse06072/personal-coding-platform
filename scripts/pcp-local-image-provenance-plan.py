@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""H1b2 candidate PCP-local image provenance review, SOURCE ONLY.
+"""H1b2/H1b3 PCP-local image provenance review, SOURCE ONLY.
 
 No Docker/Buildx/DDEV/network requests, image writes, or worker activation.
 A metadata/label assertion is not independently verified provenance.
@@ -11,9 +11,11 @@ import io
 import os
 from pathlib import Path
 import re
+import selectors
 import subprocess
 import sys
 import tarfile
+import time
 from typing import Any
 
 import yaml
@@ -25,6 +27,13 @@ LOCK = ROOT / "profiles/pcp-local/runtime/requirements-inspect.lock"
 IGNORE = ROOT / "profiles/pcp-local/runtime/Dockerfile.inspect.dockerignore"
 BASE_IMAGE = "python:3.13.17-slim-bookworm@sha256:4cea12ab7d78a3312c85f8cab19b6971d4fe9704da25443986c0bc20a6678850"
 APP = ROOT / "services/runtime/app"
+APP_TREE = "314ceeddf4a9a3c39edb748e99e290d06b3e9188"
+SOURCE_PATHS = (
+    "profiles/pcp-local/runtime/Dockerfile.inspect",
+    "profiles/pcp-local/runtime/requirements-inspect.lock",
+    "profiles/pcp-local/runtime/Dockerfile.inspect.dockerignore",
+    "services/runtime/app",
+)
 PROFILE = ROOT / "profiles/pcp-local/.ddev/docker-compose.platform.yaml"
 REPO = "sonvhse06072/personal-coding-platform"
 ORIGINS = {
@@ -87,21 +96,119 @@ def read_exact(path: Path, limit: int = 1024 * 1024) -> bytes:
     return raw
 
 
-def git_read(*args: str) -> str:
-    env = os.environ.copy()
-    env["GIT_OPTIONAL_LOCKS"] = "0"
-    env["GIT_TERMINAL_PROMPT"] = "0"
+def git_bytes(*args: str, limit: int = 1024 * 1024) -> bytes:
+    """Bounded, deadline-controlled, read-only Git; no shell or inherited secrets."""
+    require(bool(args) and args[0] in {"rev-parse", "remote", "status", "ls-tree", "cat-file"},
+            "SOURCE_GIT_OPERATION_UNSAFE")
+    env = {key: os.environ[key] for key in ("PATH", "LANG", "LC_ALL") if key in os.environ}
+    env.update(GIT_OPTIONAL_LOCKS="0", GIT_TERMINAL_PROMPT="0",
+               GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL="/dev/null")
+    deadline = time.monotonic() + 12
+    output = bytearray()
     try:
-        completed = subprocess.run(
+        with subprocess.Popen(
             ["git", "-C", str(ROOT), "-c", "core.fsmonitor=false",
              "-c", "core.hooksPath=/dev/null", *args],
-            cwd=ROOT, env=env, text=True, capture_output=True,
-            timeout=12, check=False,
-        )
+            cwd=ROOT, env=env, stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        ) as process:
+            try:
+                with selectors.DefaultSelector() as selector:
+                    selector.register(process.stdout, selectors.EVENT_READ)
+                    while True:
+                        remaining = deadline - time.monotonic()
+                        require(remaining > 0, "SOURCE_GIT_TIMEOUT")
+                        require(bool(selector.select(remaining)), "SOURCE_GIT_TIMEOUT")
+                        chunk = os.read(process.stdout.fileno(), min(65536, limit + 1 - len(output)))
+                        if not chunk:
+                            break
+                        output.extend(chunk)
+                        require(len(output) <= limit, "SOURCE_GIT_OUTPUT_LIMIT")
+                code = process.wait(timeout=max(0.001, deadline - time.monotonic()))
+                require(code == 0, "SOURCE_GIT_NOT_VERIFIED")
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=2)
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise Stop("SOURCE_GIT_NOT_VERIFIED") from exc
-    require(completed.returncode == 0, "SOURCE_GIT_NOT_VERIFIED")
-    return completed.stdout.strip()
+    return bytes(output)
+
+
+def git_read(*args: str) -> str:
+    return git_bytes(*args).decode("utf-8").strip()
+
+
+def _git_entries(commit: str, *paths: str) -> dict[str, tuple[str, int]]:
+    require(type(commit) is str and bool(SHA.fullmatch(commit)), "SOURCE_SHA_INVALID")
+    raw = git_bytes("ls-tree", "-r", "-l", "-z", "--full-tree", commit, "--", *paths)
+    entries = {}
+    for record in raw.split(b"\0"):
+        if not record:
+            continue
+        match = re.fullmatch(rb"(100644) blob ([a-f0-9]{40}) +([0-9]+)\t([^\x00]+)", record)
+        require(match is not None, "SOURCE_GIT_MODE_OR_ENTRY_UNSAFE")
+        path = match[4].decode("utf-8")
+        require(path not in entries and len(entries) < 256, "SOURCE_GIT_INVENTORY_UNSAFE")
+        size = int(match[3])
+        require(size <= 1024 * 1024, "SOURCE_FILE_UNSAFE")
+        entries[path] = (match[2].decode("ascii"), size)
+    require(bool(entries) and sum(size for _, size in entries.values()) <= 8 * 1024 * 1024,
+            "SOURCE_GIT_INVENTORY_UNSAFE")
+    return entries
+
+
+def _git_blob(identity: tuple[str, int]) -> bytes:
+    oid, size = identity
+    raw = git_bytes("cat-file", "blob", oid, limit=size)
+    require(len(raw) == size and b"\0" not in raw, "SOURCE_GIT_BLOB_UNSAFE")
+    actual = hashlib.sha1(b"blob " + str(len(raw)).encode("ascii") + b"\0" + raw).hexdigest()
+    require(actual == oid, "SOURCE_GIT_BLOB_MISMATCH")
+    return raw
+
+
+def _git_file(commit: str, path: str) -> bytes:
+    entries = _git_entries(commit, path)
+    require(set(entries) == {path}, "SOURCE_GIT_INVENTORY_UNSAFE")
+    return _git_blob(entries[path])
+
+
+def _read_git_inputs(commit: str) -> dict[str, bytes]:
+    """Read immutable source DATA only; authority is checked by the outer snapshot."""
+    require(type(commit) is str and bool(SHA.fullmatch(commit)), "SOURCE_SHA_INVALID")
+    require(git_read("rev-parse", "--verify", commit + "^{commit}") == commit,
+            "SOURCE_COMMIT_MISMATCH")
+    entries = _git_entries(commit, *SOURCE_PATHS)
+    require(git_read("rev-parse", commit + ":services/runtime/app") == APP_TREE,
+            "SOURCE_APP_TREE_MISMATCH")
+    ignore_path = IGNORE.relative_to(ROOT).as_posix()
+    require(ignore_path in entries, "CONTEXT_INPUTS_INCOMPLETE")
+    ignore = _git_blob(entries[ignore_path])
+    allowed = context_paths(ignore) | {ignore_path}
+    require(set(entries) == allowed and len(allowed) == 103,
+            "CONTEXT_INPUT_SET_MISMATCH")
+    # These immutable object IDs/bytes are used once, never working-tree paths.
+    return {path: ignore if path == ignore_path else _git_blob(identity)
+            for path, identity in sorted(entries.items())}
+
+
+def immutable_source_snapshot(expected_commit: str) -> dict[str, Any]:
+    require(type(expected_commit) is str and bool(SHA.fullmatch(expected_commit)),
+            "SOURCE_SHA_INVALID")
+    require(check_checkout() == expected_commit, "SOURCE_COMMIT_MISMATCH")
+    files = _read_git_inputs(expected_commit)
+    recipe, lock, ignore = (files[path.relative_to(ROOT).as_posix()]
+                            for path in (DOCKERFILE, LOCK, IGNORE))
+    inputs = {path.removeprefix("services/runtime/app/"): raw for path, raw in files.items()
+              if path.startswith("services/runtime/app/")}
+    archive = source_context(dockerfile=recipe, requirements=lock,
+                             context_ignore=ignore, inputs=inputs)
+    manifest = _git_file(expected_commit, MANIFEST.relative_to(ROOT).as_posix())
+    profile = _git_file(expected_commit, PROFILE.relative_to(ROOT).as_posix())
+    require(check_checkout() == expected_commit, "SOURCE_CHANGED_DURING_SNAPSHOT")
+    return {"commit": expected_commit, "files": files, "archive": archive,
+            "archive_sha256": hashlib.sha256(archive).hexdigest(),
+            "app_tree_sha256": app_digest(inputs), "manifest": manifest, "profile": profile}
 
 
 def check_checkout() -> str:
@@ -388,20 +495,18 @@ def main(argv: list[str]) -> int:
     try:
         require(argv == ["--check"], "USAGE_SOURCE_ONLY")
         head = check_checkout()
+        snapshot = immutable_source_snapshot(head)
         try:
-            doc = yaml.safe_load(read_exact(MANIFEST))
-            compose = yaml.safe_load(read_exact(PROFILE))
+            doc = yaml.safe_load(snapshot["manifest"])
+            compose = yaml.safe_load(snapshot["profile"])
         except yaml.YAMLError as exc:
             raise Stop("MANIFEST_YAML_INVALID") from exc
-        recipe, requirements, ignore = read_exact(DOCKERFILE), read_exact(LOCK), read_exact(IGNORE)
-        inputs = app_inputs()
-        # Pure in-memory staging proves the exact source payload; no disk or
-        # Docker action is exposed by this CLI.
-        source_context(dockerfile=recipe, requirements=requirements,
-                       context_ignore=ignore, inputs=inputs)
-        reason = assess(doc, head=head, dockerfile=recipe,
-                        requirements=requirements, context_ignore=ignore,
-                        app_tree_sha256=app_digest(inputs), compose=compose)
+        files = snapshot["files"]
+        reason = assess(doc, head=head,
+                        dockerfile=files[DOCKERFILE.relative_to(ROOT).as_posix()],
+                        requirements=files[LOCK.relative_to(ROOT).as_posix()],
+                        context_ignore=files[IGNORE.relative_to(ROOT).as_posix()],
+                        app_tree_sha256=snapshot["app_tree_sha256"], compose=compose)
     except Stop as exc:
         reason = str(exc)
     except (OSError, UnicodeError, ValueError, TypeError):
@@ -409,7 +514,7 @@ def main(argv: list[str]) -> int:
     # Retain the H1a redacted output keys for existing operator consumers.
     print("PCP_H1A_RESULT=STOP")
     print(f"PCP_H1A_REASON={reason}")
-    print("PCP_H1B2_SOURCE=DRAFT_NOT_ACCEPTED")
+    print("PCP_H1B2_SOURCE=ACCEPTED_SOURCE_ONLY")
     print("PCP_H1A_IMAGE_PROVENANCE=NOT_INDEPENDENTLY_ATTESTED")
     print("PCP_H1A_LEGACY_LOCAL_TAG=NOT_AUTHORIZED_FOR_NEW_PCP")
     print("PCP_H1A_IMAGE_BUILD=NOT_RUN")

@@ -324,6 +324,11 @@ def test_source_only_cli_no_build_or_default_host_action(plan, capsys):
     assert "PCP_H1A_REASON=USAGE_SOURCE_ONLY" in capsys.readouterr().out
     fn = plan["main"]
     fn.__globals__["check_checkout"] = lambda: HEAD
+    fn.__globals__["immutable_source_snapshot"] = lambda head: {
+        "manifest": CONTRACT.read_bytes(), "profile": COMPOSE.read_bytes(),
+        "files": {str(p.relative_to(ROOT)): p.read_bytes() for p in (DOCKERFILE, LOCK, IGNORE)},
+        "app_tree_sha256": APP_HASH,
+    }
     assert fn(["--check"]) == 2
     out = capsys.readouterr().out
     assert "PCP_H1A_REASON=SOURCE_AUTHORITY_NOT_PINNED" in out
@@ -331,7 +336,7 @@ def test_source_only_cli_no_build_or_default_host_action(plan, capsys):
     assert "PCP_B22C1_LIVE=STOP" in out
     tree = ast.parse(SCRIPT.read_text())
     calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
-             and isinstance(n.func, ast.Attribute) and n.func.attr == "run"]
+             and isinstance(n.func, ast.Attribute) and n.func.attr == "Popen"]
     assert len(calls) == 1  # existing allowlisted read-only Git helper only
     assert '"git", "-C"' in SCRIPT.read_text()
     for name in ('"docker",', '"ddev",', '"buildx",'):
@@ -531,3 +536,129 @@ def test_actual_wheel_hash_corruption_and_context_resource_limit(plan, manifest,
         dockerfile=DOCKERFILE.read_bytes(), requirements=lock,
         context_ignore=IGNORE.read_bytes(), inputs=inputs,
     ), "CONTEXT_RESOURCE_BOUND")
+
+
+ANCHOR = "7b8b2617973285365a6e4efe79b0d4e350ad64bf"
+
+
+def frozen_archive(plan, files):
+    return plan["source_context"](
+        dockerfile=files[str(DOCKERFILE.relative_to(ROOT))],
+        requirements=files[str(LOCK.relative_to(ROOT))],
+        context_ignore=files[str(IGNORE.relative_to(ROOT))],
+        inputs={path.removeprefix("services/runtime/app/"): raw for path, raw in files.items()
+                if path.startswith("services/runtime/app/")},
+    )
+
+
+def test_actual_reviewed_git_objects_reproduce_canonical_source_bytes(plan):
+    # Real local Git objects, no checkout/Host/container operation. Read exact
+    # HEAD objects (also present in shallow postmerge CI); the tree, inventory
+    # and regenerated hashes must equal the reviewed anchor's inputs.
+    # Expected bytes are checked AFTER generation, never used
+    # as a substitute for reading, hashing and assembling the 103 source blobs.
+    files = plan["_read_git_inputs"](plan["git_read"]("rev-parse", "HEAD"))
+    assert len(files) == 103
+    archive = frozen_archive(plan, files)
+    assert len(archive) == 1740800
+    assert hashlib.sha256(archive).hexdigest() == (
+        "cb766b4845bcf77759f51e74041a4e0e379ab37a869eeb99bb0b682bdbcfc39b")
+    assert archive == frozen_archive(plan, dict(reversed(list(files.items()))))
+    with tarfile.open(fileobj=io.BytesIO(archive), mode="r:") as tar:
+        assert [m.name for m in tar] == sorted(files)
+        for m in tar.getmembers():
+            assert m.type == tarfile.REGTYPE and m.mode == 0o644
+            assert m.uid == m.gid == m.mtime == 0
+            assert m.uname == m.gname == ""
+            assert tar.extractfile(m).read() == files[m.name]
+
+
+@pytest.mark.parametrize("entry", [
+    b"120000 blob " + b"a" * 40 + b" 5\tservices/runtime/app/link.py\0",
+    b"100755 blob " + b"a" * 40 + b" 5\tservices/runtime/app/main.py\0",
+    b"160000 commit " + b"a" * 40 + b" -\tservices/runtime/app/submodule\0",
+    b"100644 blob " + b"a" * 40 + b" 1048577\tservices/runtime/app/main.py\0",
+    b"100644 blob " + b"a" * 40 + b" 1\tmain.py\0" * 300,
+    b"malformed\0",
+])
+def test_git_inventory_rejects_modes_symlinks_submodules_duplicates_and_size(plan, entry):
+    fn = plan["_git_entries"]
+    fn.__globals__["git_bytes"] = lambda *a, **kw: entry
+    with pytest.raises(plan["Stop"]):
+        fn(ANCHOR, "services/runtime/app")
+
+
+@pytest.mark.parametrize("raw,size,oid,code", [
+    (b"a", 2, "a" * 40, "SOURCE_GIT_BLOB_UNSAFE"),
+    (b"\0", 1, "a" * 40, "SOURCE_GIT_BLOB_UNSAFE"),
+    (b"changed", 7, "a" * 40, "SOURCE_GIT_BLOB_MISMATCH"),
+])
+def test_git_blob_size_and_identity_are_verified(plan, raw, size, oid, code):
+    fn = plan["_git_blob"]
+    fn.__globals__["git_bytes"] = lambda *a, **kw: raw
+    reason(lambda: fn((oid, size)), code)
+
+
+def test_git_inventory_extra_missing_and_tree_substitution(plan):
+    fn = plan["_read_git_inputs"]
+    original = fn.__globals__["_git_entries"]
+    commit = plan["git_read"]("rev-parse", "HEAD")
+    entries = original(commit, *plan["SOURCE_PATHS"])
+    for changed in ({**entries, "services/runtime/app/unreviewed.py": ("a" * 40, 1)},
+                    {k: v for k, v in entries.items() if not k.endswith("main.py")}):
+        fn.__globals__["_git_entries"] = lambda *a: changed
+        reason(lambda: fn(commit), "CONTEXT_INPUT_SET_MISMATCH")
+    fn.__globals__["_git_entries"] = original
+    fn.__globals__["git_read"] = lambda *a: commit if "--verify" in a else "b" * 40
+    reason(lambda: fn(commit), "SOURCE_APP_TREE_MISMATCH")
+
+
+def test_snapshot_frozen_once_no_mutable_path_reads_and_head_race(plan):
+    commit = plan["git_read"]("rev-parse", "HEAD")
+    files = plan["_read_git_inputs"](commit)
+    fn = plan["immutable_source_snapshot"]
+    calls = []
+    def frozen(commit):
+        calls.append(commit)
+        return files
+    def forbidden(*args, **kwargs):
+        raise AssertionError("mutable path was read")
+    g = fn.__globals__
+    g.update(check_checkout=lambda: commit, _read_git_inputs=frozen,
+             read_exact=forbidden, app_inputs=forbidden)
+    snapshot = fn(commit)
+    assert calls == [commit]
+    assert snapshot["archive"] == frozen_archive(plan, files)
+    assert snapshot["commit"] == commit
+    reason(lambda: fn("a" * 40), "SOURCE_COMMIT_MISMATCH")
+    heads = iter([commit, "b" * 40])
+    g["check_checkout"] = lambda: next(heads)
+    reason(lambda: fn(commit), "SOURCE_CHANGED_DURING_SNAPSHOT")
+
+
+def test_git_helper_bounded_output_sanitized_environment_and_no_other_command(plan, monkeypatch):
+    reason(lambda: plan["git_bytes"]("fetch", "origin"), "SOURCE_GIT_OPERATION_UNSAFE")
+    reason(lambda: plan["git_bytes"]("rev-parse", "HEAD", limit=1), "SOURCE_GIT_OUTPUT_LIMIT")
+    seen = []
+    original = subprocess.Popen
+    def capture(*args, **kwargs):
+        seen.append((args, kwargs))
+        return original(*args, **kwargs)
+    monkeypatch.setenv("SECRET_FAKE_TEST_TOKEN", "must-not-be-inherited")
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setattr(subprocess, "Popen", capture)
+    assert plan["git_bytes"]("rev-parse", "HEAD").strip()
+    argv, kw = seen[0]
+    assert argv[0][0] == "git" and kw["stdin"] == subprocess.DEVNULL
+    assert set(kw["env"]) <= {"PATH", "LANG", "LC_ALL", "GIT_OPTIONAL_LOCKS",
+                             "GIT_TERMINAL_PROMPT", "GIT_CONFIG_NOSYSTEM", "GIT_CONFIG_GLOBAL"}
+    assert "shell" not in kw
+
+
+def test_git_deadline_fail_closed_without_sleep(plan):
+    fn = plan["git_bytes"]
+    ticks = iter([0, 99])
+    class Clock:
+        monotonic = staticmethod(lambda: next(ticks))
+    fn.__globals__["time"] = Clock
+    reason(lambda: fn("rev-parse", "HEAD"), "SOURCE_GIT_TIMEOUT")
