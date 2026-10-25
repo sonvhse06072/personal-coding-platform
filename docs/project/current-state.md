@@ -2,7 +2,7 @@
 
 Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline revision, Runtime/WSL rollout attestation, authority change, or chronological log. Verify GitHub and local durable evidence immediately before any mutation. The Constitution, architecture and approved baseline outrank this snapshot.
 
-**Last reconciled: 2026-10-25, #800 H1b3 SOURCE implementation for Draft review.** Verified research base `main@7b8b2617973285365a6e4efe79b0d4e350ad64bf`; #799/#801 accepted. [Owner exact nine-path SOURCE consent](https://github.com/sonvhse06072/personal-coding-platform/issues/800#issuecomment-6388248530), [WorkOrder](https://github.com/sonvhse06072/personal-coding-platform/issues/800#issuecomment-6388267083); branch `ai/800-h1b3-oci-evidence-source`. [H1b3 plan/evidence boundaries](../pcp-portable/h1b3-oci-evidence-plan.md). Frozen Git objects regenerate TAR 103 members / 1,740,800 bytes / SHA256 `cb766b4845bcf77759f51e74041a4e0e379ab37a869eeb99bb0b682bdbcfc39b`. OCI fixtures can pass integrity only; authenticated provenance NOT_VERIFIED, image reproducibility NOT_TESTED, Host/Runtime/LIVE STOP. Local full4: 4,380 PASS/88 skipped; Draft/hosted CI/PM review pending; no Host/Docker/DDEV/DB/signing/cleanup action. #752 PARKED, #595 HOLD.
+**Last reconciled: 2026-10-25, #800 H1b3 SOURCE implementation for Draft review.** Verified research base `main@7b8b2617973285365a6e4efe79b0d4e350ad64bf`; #799/#801 accepted. [Owner exact nine-path SOURCE consent](https://github.com/sonvhse06072/personal-coding-platform/issues/800#issuecomment-6388248530), [WorkOrder](https://github.com/sonvhse06072/personal-coding-platform/issues/800#issuecomment-6388267083); branch `ai/800-h1b3-oci-evidence-source`. [H1b3 plan/evidence boundaries](../pcp-portable/h1b3-oci-evidence-plan.md). Frozen Git objects regenerate TAR 103 members / 1,740,800 bytes / SHA256 `cb766b4845bcf77759f51e74041a4e0e379ab37a869eeb99bb0b682bdbcfc39b`. OCI fixtures can pass integrity only; authenticated provenance NOT_VERIFIED, image reproducibility NOT_TESTED, Host/Runtime/LIVE STOP. Local full4: 4,380 PASS/88 skipped; [Draft #802](https://github.com/sonvhse06072/personal-coding-platform/pull/802) records exact HEAD/hosted CI; PM COMMENT pending; no Host/Docker/DDEV/DB/signing/cleanup action. #752 PARKED, #595 HOLD.
 
 ## #764 / #777 — Phase B PCP-only source acceptance and Gate A audit
 
@@ -32,7 +32,7 @@ Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline 
 
 GitHub/Runtime evidence remains separate; Runtime was not queried.
 
-**Next safe action:** deliver #800 Draft and hosted full4, then independent PM COMMENT on exact HEAD/all five protected consent paths. [H1b3 plan](../pcp-portable/h1b3-oci-evidence-plan.md): producer/root, privileged builder/fallback, disk/egress/cancellation unresolved; every Host phase unapproved. #795 remains SOURCE design only. No Docker/DDEV/legacy-state reuse, cleanup or blocked-egress retry. #595 HOLD; F2/T01/Guardian frozen; Chợ Nhạc STRICT NO-TOUCH.
+**Next safe action:** independently verify #802 exact HEAD/hosted full4 and PM COMMENT on all five protected consent paths before PM merge. Keep Draft until review. [H1b3 plan](../pcp-portable/h1b3-oci-evidence-plan.md): producer/root, privileged builder/fallback, disk/egress/cancellation unresolved; every Host phase unapproved. #795 remains SOURCE design only. No Docker/DDEV/legacy-state reuse, cleanup or blocked-egress retry. #595 HOLD; F2/T01/Guardian frozen; Chợ Nhạc STRICT NO-TOUCH.
 
 ## Active investment / execution gates
 
