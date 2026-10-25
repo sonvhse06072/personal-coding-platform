@@ -49,6 +49,19 @@ INPUT_PINS = {
     "base_image": "python:3.13.17-slim-bookworm@sha256:4cea12ab7d78a3312c85f8cab19b6971d4fe9704da25443986c0bc20a6678850",
 }
 WHEELS_SHA256 = "bbc489a27cc99939780a4ca19fee81cbd24c4a7d634bb2c715fdf95256ac496a"
+# Derived from the Dockerfile bytes pinned by INPUT_PINS, not from artifact
+# claims. A regression test derives these values independently from Git blobs.
+# This narrow source profile grants no inherited-env/entrypoint exceptions.
+RUNTIME_CONFIG = {
+    "User": "65532:65532",
+    "WorkingDir": "/app",
+    "Cmd": ["python", "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1",
+            "--port", "8787", "--loop", "asyncio", "--http", "h11", "--ws", "none",
+            "--lifespan", "on", "--no-access-log"],
+    "Env": ["PYTHONDONTWRITEBYTECODE=1", "PYTHONUNBUFFERED=1",
+            "PCP_RUNTIME_STARTUP_MODE=pcp_local_inspect", "PROJECTS_FILE=/config/projects.pcp-local.yml",
+            "PROJECT_BASELINES_FILE=/config/project-baselines.pcp-local.yml", "HOME=/tmp"],
+}
 
 
 class Stop(Exception):
@@ -117,7 +130,9 @@ def validate_plan(plan):
          and plan["project_id"] == "pcp-local"
          and plan["repository"] == "sonvhse06072/personal-coding-platform"
          and plan["approval_state"] == "source_only_draft", "PLAN_AUTHORITY_INVALID")
-    expected = shape(plan["expected"], {"inputs", "outputs"})
+    expected = shape(plan["expected"], {"inputs", "outputs", "runtime_config"})
+    need(canonical(expected["runtime_config"]) == canonical(RUNTIME_CONFIG),
+         "REVIEWED_RUNTIME_POLICY_DRIFT")
     inputs = shape(expected["inputs"], {"source_commit", "source_tar_sha256", "source_tar_bytes",
                    "source_members", "app_git_tree", "dockerfile_sha256", "ignore_sha256",
                    "requirements_sha256", "app_tree_sha256", "base_image", "wheels"})
@@ -318,6 +333,32 @@ def sbom(obj, inputs):
     need(described == ids, "SBOM_RELATIONSHIP_INVALID")
 
 
+def validate_runtime_config(config):
+    """Require the pinned inspection recipe's values before integrity PASS.
+
+    No image-supplied expectation, duplicate env/override, activation flag or
+    inherited executable entrypoint may expand this offline fixture contract.
+    """
+    shape(config, RUNTIME_CONFIG, {"Entrypoint", "ExposedPorts", "Volumes", "Labels", "StopSignal"})
+    for key, code in (("User", "RUNTIME_USER_UNSAFE"), ("WorkingDir", "RUNTIME_WORKDIR_UNSAFE"),
+                      ("Cmd", "RUNTIME_COMMAND_UNSAFE")):
+        need(canonical(config[key]) == canonical(RUNTIME_CONFIG[key]), code)
+    env = config["Env"]
+    need(type(env) is list and len(env) == len(RUNTIME_CONFIG["Env"])
+         and all(type(item) is str for item in env)
+         and set(env) == set(RUNTIME_CONFIG["Env"]), "RUNTIME_ENV_UNSAFE")
+    entrypoint = config.get("Entrypoint")
+    need(entrypoint is None or (type(entrypoint) is list and not entrypoint),
+         "RUNTIME_ENTRYPOINT_UNSAFE")
+    for key in ("ExposedPorts", "Volumes"):
+        value = config.get(key)
+        need(value is None or (type(value) is dict and not value), "RUNTIME_CAPABILITY_UNSAFE")
+    labels = config.get("Labels")
+    need(labels is None or (type(labels) is dict
+         and all(type(k) is str and type(v) is str for k, v in labels.items())), "RUNTIME_LABELS_INVALID")
+    need(config.get("StopSignal") in (None, "SIGTERM"), "RUNTIME_STOP_SIGNAL_UNSAFE")
+
+
 def _inspect(plan, archive):
     """Pure integrity result. Matching fixture data cannot create producer trust."""
     inputs = validate_plan(plan)
@@ -376,8 +417,7 @@ def _inspect(plan, archive):
     rootfs = shape(config["rootfs"], {"type", "diff_ids"})
     need(rootfs["type"] == "layers" and type(rootfs["diff_ids"]) is list
          and 1 <= len(image["layers"]) == len(rootfs["diff_ids"]) <= 32, "ROOTFS_INVALID")
-    shape(config["config"], (), {"User", "Cmd", "Env", "WorkingDir", "Entrypoint",
-                               "Labels", "ExposedPorts", "Volumes", "StopSignal"})
+    validate_runtime_config(config["config"])
     layer_ids, layer_records, expanded_total = set(), {}, 0
     for desc, diff_id in zip(image["layers"], rootfs["diff_ids"]):
         raw = blob(desc, desc.get("mediaType"))

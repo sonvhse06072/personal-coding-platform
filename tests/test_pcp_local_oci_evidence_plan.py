@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import runpy
+import shlex
 import tarfile
 
 import pytest
@@ -66,7 +67,7 @@ def fixture(tool, plan, changes=None, compressed=False):
     layer = add(tool["LAYER"] + ("+gzip" if compressed else ""),
                 gzip.compress(expanded, mtime=0) if compressed else expanded)
     config = add(tool["CONFIG"], change("config", {
-        "os": "linux", "architecture": "amd64", "config": {"User": "65532:65532"},
+        "os": "linux", "architecture": "amd64", "config": deepcopy(plan["expected"]["runtime_config"]),
         "rootfs": {"type": "layers", "diff_ids": [tool["sha"](expanded)]}}))
     image = add(tool["MANIFEST"], change("image", {
         "schemaVersion": 2, "mediaType": tool["MANIFEST"], "config": config, "layers": [layer]}))
@@ -160,6 +161,146 @@ def test_reviewed_input_pins_match_actual_existing_recipe_lock_and_git_archive(t
     actual = [{"name": n.replace("[binary]", ""), "version": v, "sha256": d} for n, v, d in re.findall(
         r"^([a-z][a-z0-9-]*(?:\[binary\])?)==([0-9.]+) --hash=sha256:([0-9a-f]{64})$", lock, re.M)]
     assert inputs["wheels"] == actual
+
+
+def test_runtime_policy_is_derived_from_actual_immutable_pinned_recipe(tool):
+    old = runpy.run_path(str(ROOT / "scripts/pcp-local-image-provenance-plan.py"))
+    files = old["_read_git_inputs"](old["git_read"]("rev-parse", "HEAD"))
+    recipe = files["profiles/pcp-local/runtime/Dockerfile.inspect"]
+    assert hashlib.sha256(recipe).hexdigest() == tool["INPUT_PINS"]["dockerfile_sha256"]
+    values = {}
+    for line in recipe.decode().splitlines():
+        instruction, _, value = line.partition(" ")
+        if instruction in {"USER", "WORKDIR", "CMD", "ENV"}:
+            assert instruction not in values
+            values[instruction] = value
+        assert instruction not in {"ENTRYPOINT", "EXPOSE", "VOLUME"}
+    derived = {"User": values["USER"], "WorkingDir": values["WORKDIR"],
+               "Cmd": json.loads(values["CMD"]), "Env": shlex.split(values["ENV"])}
+    assert derived == tool["RUNTIME_CONFIG"]
+    assert derived == json.loads(EXAMPLE.read_bytes())["expected"]["runtime_config"]
+
+
+def mutate_runtime(key, value):
+    def mutate(config):
+        config["config"][key] = deepcopy(value)
+    return mutate
+
+
+UNSAFE_RUNTIME_VALUES = [
+    ("User", "0", "RUNTIME_USER_UNSAFE"),
+    ("User", "root", "RUNTIME_USER_UNSAFE"),
+    ("User", "65532:0", "RUNTIME_USER_UNSAFE"),
+    ("User", 0, "RUNTIME_USER_UNSAFE"),
+    ("User", None, "RUNTIME_USER_UNSAFE"),
+    ("WorkingDir", "/", "RUNTIME_WORKDIR_UNSAFE"),
+    ("WorkingDir", "/app/../root", "RUNTIME_WORKDIR_UNSAFE"),
+    ("WorkingDir", None, "RUNTIME_WORKDIR_UNSAFE"),
+    ("WorkingDir", [], "RUNTIME_WORKDIR_UNSAFE"),
+    ("Cmd", ["/bin/sh", "-c", "exec sleep infinity"], "RUNTIME_COMMAND_UNSAFE"),
+    ("Cmd", "python -m uvicorn app.main:app", "RUNTIME_COMMAND_UNSAFE"),
+    ("Cmd", [], "RUNTIME_COMMAND_UNSAFE"),
+    ("Cmd", None, "RUNTIME_COMMAND_UNSAFE"),
+    ("Entrypoint", ["/bin/sh"], "RUNTIME_ENTRYPOINT_UNSAFE"),
+    ("Entrypoint", ["python", "-c", "print('fake')"], "RUNTIME_ENTRYPOINT_UNSAFE"),
+    ("Entrypoint", "", "RUNTIME_ENTRYPOINT_UNSAFE"),
+    ("Entrypoint", False, "RUNTIME_ENTRYPOINT_UNSAFE"),
+    ("Entrypoint", {}, "RUNTIME_ENTRYPOINT_UNSAFE"),
+    ("Env", ["PCP_RUNTIME_STARTUP_MODE=normal"], "RUNTIME_ENV_UNSAFE"),
+    ("Env", None, "RUNTIME_ENV_UNSAFE"),
+    ("Env", {}, "RUNTIME_ENV_UNSAFE"),
+    ("Env", [], "RUNTIME_ENV_UNSAFE"),
+    ("Env", "PCP_RUNTIME_STARTUP_MODE=pcp_local_inspect", "RUNTIME_ENV_UNSAFE"),
+    ("ExposedPorts", {"8787/tcp": {}}, "RUNTIME_CAPABILITY_UNSAFE"),
+    ("ExposedPorts", [], "RUNTIME_CAPABILITY_UNSAFE"),
+    ("ExposedPorts", False, "RUNTIME_CAPABILITY_UNSAFE"),
+    ("Volumes", {"/var/run/docker.sock": {}}, "RUNTIME_CAPABILITY_UNSAFE"),
+    ("Volumes", {"/app": {}}, "RUNTIME_CAPABILITY_UNSAFE"),
+    ("Volumes", "", "RUNTIME_CAPABILITY_UNSAFE"),
+    ("Labels", {"fake": True}, "RUNTIME_LABELS_INVALID"),
+    ("StopSignal", "SIGSTOP", "RUNTIME_STOP_SIGNAL_UNSAFE"),
+]
+
+
+@pytest.mark.parametrize("key,value,expected", UNSAFE_RUNTIME_VALUES)
+def test_rehashed_malicious_runtime_values_cannot_pass_integrity(tool, plan, key, value, expected):
+    # Config, image, statement subjects, attestation and both index hashes are
+    # rebuilt by fixture(). Reject the semantic value, not a stale descriptor.
+    stop(tool, plan, fixture(tool, plan, {"config": mutate_runtime(key, value)}), expected)
+
+
+@pytest.mark.parametrize("key", ["User", "WorkingDir", "Cmd", "Env"])
+def test_rehashed_runtime_requires_every_recipe_field(tool, plan, key):
+    stop(tool, plan, fixture(tool, plan, {"config": lambda c: c["config"].pop(key)}), "SCHEMA_INVALID")
+
+
+@pytest.mark.parametrize("key,value", [
+    ("PCP_RUNTIME_STARTUP_MODE", "normal"), ("HOME", "/root"),
+    ("PROJECTS_FILE", "/config/projects.yml"), ("PROJECT_BASELINES_FILE", "/config/project-baselines.yml"),
+    ("PYTHONDONTWRITEBYTECODE", "0"), ("PYTHONUNBUFFERED", "0"),
+])
+def test_rehashed_runtime_critical_env_overrides(tool, plan, key, value):
+    def change(config):
+        config["config"]["Env"] = [key + "=" + value if e.startswith(key + "=") else e
+                                    for e in config["config"]["Env"]]
+    stop(tool, plan, fixture(tool, plan, {"config": change}), "RUNTIME_ENV_UNSAFE")
+
+
+@pytest.mark.parametrize("extra", [
+    "PCP_RUNTIME_STARTUP_MODE=normal", "PCP_RUNTIME_STARTUP_MODE=pcp_local_inspect",
+    "PCP_LOCAL_TASK_SOURCE_ENABLED=1", "PCP_LOCAL_TASK_WORKER_ENABLED=1",
+    "PCP_LOCAL_TASK_OPERATIONAL_ACTIVATION=1", "PYTHONPATH=/foreign", "LD_PRELOAD=/foreign.so",
+    "PATH=/foreign", "MALFORMED", None,
+])
+@pytest.mark.parametrize("position", [0, -1])
+def test_rehashed_runtime_duplicate_activation_and_unknown_env_rejected(tool, plan, extra, position):
+    def change(config):
+        config["config"]["Env"].insert(position, extra)
+    stop(tool, plan, fixture(tool, plan, {"config": change}), "RUNTIME_ENV_UNSAFE")
+
+
+@pytest.mark.parametrize("args", [
+    {"--host": "0.0.0.0"}, {"--port": "8000"}, {"--ws": "auto"},
+    {"--lifespan": "off"}, {"--loop": "uvloop"}, {"--http": "httptools"},
+])
+def test_rehashed_runtime_command_override_rejected(tool, plan, args):
+    def change(config):
+        cmd = config["config"]["Cmd"]
+        for flag, value in args.items():
+            cmd[cmd.index(flag) + 1] = value
+    stop(tool, plan, fixture(tool, plan, {"config": change}), "RUNTIME_COMMAND_UNSAFE")
+
+
+@pytest.mark.parametrize("entrypoint,capabilities", [(None, None), ([], {}), (None, {})])
+def test_safe_explicit_empty_runtime_capabilities_and_env_order(tool, plan, entrypoint, capabilities):
+    def change(config):
+        runtime = config["config"]
+        runtime.update(Entrypoint=entrypoint, ExposedPorts=capabilities, Volumes=capabilities)
+        runtime["Env"].reverse()  # Unique environment order has no meaning.
+    result = tool["inspect"](plan, envelope(fixture(tool, plan, {"config": change})))
+    assert result["integrity"] == "PASS"
+    assert result["authenticated_provenance"] == "NOT_VERIFIED" and result["result"] == "STOP"
+    assert not result["host_allowed"] and not result["live_allowed"]
+
+
+def test_matching_artifact_and_expected_runtime_override_cannot_redefine_policy(tool, plan):
+    plan["expected"]["runtime_config"]["User"] = "0"
+    stop(tool, plan, fixture(tool, plan), "REVIEWED_RUNTIME_POLICY_DRIFT")
+
+
+def test_malicious_config_cli_is_stop_and_does_not_echo_env(tool, plan, tmp_path, capsys):
+    p, archive = tmp_path / "plan.json", tmp_path / "layout.tar"
+    p.write_bytes(encode(plan))
+    files = fixture(tool, plan, {"config": mutate_runtime("Env", ["SECRET_FAKE=do-not-print"])})
+    archive.write_bytes(envelope(files))
+    assert tool["main"](["--check", str(p), str(archive)]) == 2
+    out = capsys.readouterr().out
+    for line in ("PCP_H1B3_RESULT=STOP", "PCP_H1B3_REASON=RUNTIME_ENV_UNSAFE",
+                 "PCP_H1B3_INTEGRITY=NOT_CHECKED", "PCP_H1B3_AUTHENTICATED_PROVENANCE=NOT_VERIFIED",
+                 "PCP_H1B3_REPRODUCIBILITY=NOT_TESTED", "PCP_H1B3_HOST=NOT_AUTHORIZED",
+                 "PCP_H1B3_RUNTIME=NOT_AUTHORIZED", "PCP_B22C1_LIVE=STOP"):
+        assert line in out
+    assert "SECRET_FAKE" not in out and "do-not-print" not in out
 
 
 @pytest.mark.parametrize("stage,mutate,expected", [

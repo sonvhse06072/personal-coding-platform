@@ -116,6 +116,37 @@
       "provenance": null,
       "sbom": null,
       "receipt": null
+    },
+    "runtime_config": {
+      "User": "65532:65532",
+      "WorkingDir": "/app",
+      "Cmd": [
+        "python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8787",
+        "--loop",
+        "asyncio",
+        "--http",
+        "h11",
+        "--ws",
+        "none",
+        "--lifespan",
+        "on",
+        "--no-access-log"
+      ],
+      "Env": [
+        "PYTHONDONTWRITEBYTECODE=1",
+        "PYTHONUNBUFFERED=1",
+        "PCP_RUNTIME_STARTUP_MODE=pcp_local_inspect",
+        "PROJECTS_FILE=/config/projects.pcp-local.yml",
+        "PROJECT_BASELINES_FILE=/config/project-baselines.pcp-local.yml",
+        "HOME=/tmp"
+      ]
     }
   },
   "observed": {

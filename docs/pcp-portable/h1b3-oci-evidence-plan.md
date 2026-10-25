@@ -102,6 +102,20 @@ The prospective graph profile is deliberately narrow:
    are checked. Config platform and ordered rootfs diff IDs match bounded
    plain/gzip layer bytes. Every blob must be referenced. Blob hashes are
    computed once to avoid repeated-reference CPU amplification.
+   Runtime config must also match the pinned inspection Dockerfile's actual
+   values: `User=65532:65532`, `WorkingDir=/app`, exact JSON `Cmd` (loopback
+   uvicorn, asyncio/h11, WebSocket off, lifespan on, no access log), and exactly
+   its six explicit environment entries. Unique environment order may vary;
+   missing, duplicate, malformed, extra or changed entries STOP, including
+   worker/task activation, alternate registry config or loader/provider env.
+   Entrypoint must be absent/null/empty array. Ports and volumes must be
+   absent/null/empty objects. Optional labels are string metadata only, with
+   no authority; non-default stop signals STOP. `expected.runtime_config`
+   cannot redefine these fixed values. Regression tests independently derive
+   the policy from immutable Git Dockerfile bytes, check the existing SHA256
+   pin and compare both executable policy and example. No recipe/input pin is
+   changed. No inherited base environment/entrypoint exception is granted;
+   real-export config compatibility remains a separate future review gate.
 4. Attestation annotations bind the runnable manifest digest. Exactly three
    in-toto v1 statements bind that same unique subject: SLSA v1 provenance,
    SPDX 2.3 SBOM, and the proposed PCP source-input receipt. Config and predicates
@@ -189,6 +203,19 @@ predicate/subject/material/ledger substitutions, min/max confusion, malformed
 JSON/TAR/gzip, missing/extra bytes, output role confusion, fake ownership,
 resource/expired phase permits and critical STOP/exit 2 cases. Tests use no
 network, container, signing key or Host resources.
+
+[PM finding #4369379317](https://github.com/sonvhse06072/personal-coding-platform/pull/802#discussion_r4369379317)
+identified that the initial config check only constrained keys. The
+[in-scope repair WorkOrder #6392498819](https://github.com/sonvhse06072/personal-coding-platform/issues/800#issuecomment-6392498819)
+requires value binding and new exact-head CI before re-review. The repair's
+fixtures rehash malicious config, image, subjects, attestations and both
+indexes, so the negatives fail on runtime policy rather than stale hashes.
+Actual offline comparison against the prior review HEAD reproduced integrity
+PASS for seven unsafe classes (User, Entrypoint, Cmd, Env, WorkingDir, ports,
+volumes); repaired inspection rejects all seven with specific STOP reasons.
+Safe positive fixtures supply the complete recipe contract and still cannot
+authenticate provenance or authorize Host. PM re-review/thread resolution
+remains independent; this repair is not SOURCE acceptance or merge authority.
 
 PM independently reviews the exact nine-path diff, all five protected consent
 references and negative tests, then writes COMMENT. All four GitHub-hosted
