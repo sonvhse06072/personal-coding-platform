@@ -32,7 +32,7 @@ Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline 
 
 GitHub/Runtime evidence remains separate; Runtime was not queried.
 
-**#800 continuation:** [T3 proposal](history/pcp-800-oci-next-gate-proposal-2026-10-25.md), anchor `4b2ff7472e201ab43876ef25a6f7d06b0b35354a`, branch `ai/800-oci-next-gate-proposal`; docs only. Draft PR/exact-head CI/PM review required. External producer, real-export compatibility and six-path successor SOURCE scope **UNAPPROVED**; no Host operations.
+**#800 continuation:** [Draft #807](https://github.com/sonvhse06072/personal-coding-platform/pull/807) / [T3 proposal](history/pcp-800-oci-next-gate-proposal-2026-10-25.md); source `4b2ff74`, docs only. Exact-head hosted CI/PM review required. Producer/root and six-path successor SOURCE scope **UNAPPROVED**; Host STOP.
 
 **Next safe action:** select producer/root and review exact cost/security/SOURCE scope. #800 OPEN; #795 Host/DDEV STOP; User/HOME unresolved. No Host checkout, Docker/DDEV/DB, credentials, cleanup, worker or #752 egress retry. #595 HOLD; F2/T01/Guardian frozen; Chợ Nhạc STRICT NO-TOUCH.
 

@@ -194,7 +194,7 @@ boundaries, not routine continuation gates based solely on task counters.
 ## Exact successor SOURCE scope, not approved implementation
 
 Proposed family: `DEC-PCP-800-H1B3-REAL-OCI-SOURCE-V2`. Only after producer
-selection and review of a legally/operationally acquired real export, the following
+selection and review of a separately authorized real export, the following
 six-path compatibility change is the initial bounded candidate:
 
 | Path | Existing class | Candidate change |
@@ -234,8 +234,11 @@ expected-head merge; source fixtures never replace real producer/Host UAT.
 ## Current delivery and next safe decision
 
 This documentation-only continuation changes exactly this evidence file and
-`docs/project/current-state.md` on `ai/800-oci-next-gate-proposal`. It requests
-PM review as a Draft PR, not merge or operational approval. The trusted-main
+`docs/project/current-state.md` on `ai/800-oci-next-gate-proposal`, delivered in
+[Draft PR #807](https://github.com/sonvhse06072/personal-coding-platform/pull/807).
+Local diff whitespace, relative-link, six-candidate-path/classification and T1
+size checks passed; no protected path changed. It requests PM review, not
+merge or operational approval. The trusted-main
 classifier permits T1/T3 docs-only service-suite skips; root Structure and doc
 authority remain required. Local system Python has no pytest; no package or Host
 tool was installed to compensate. Hosted results must be reported separately.
