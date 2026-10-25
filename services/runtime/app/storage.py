@@ -162,9 +162,15 @@ class Storage:
             conn.commit()
 
     def create(self, row: dict[str, Any]) -> None:
-        timestamp = now()
         with self.connect() as conn:
-            conn.execute(
+            self._insert_job_on_connection(conn, row)
+            conn.commit()
+
+    @staticmethod
+    def _insert_job_on_connection(conn: Any, row: dict[str, Any]) -> None:
+        """Normal job and event insert; transaction belongs to the caller."""
+        timestamp = now()
+        conn.execute(
                 """INSERT INTO cp_jobs
                 (id, project_id, status, source_commit, branch, workspace, task, repo_analysis, route, progress, checkpoint, result, error, dry_run, created_at, updated_at)
                 VALUES (%s,%s,%s,%s,%s,%s,%s::jsonb,%s::jsonb,%s::jsonb,%s::jsonb,%s::jsonb,%s::jsonb,%s,%s,%s,%s)""",
@@ -175,9 +181,86 @@ class Storage:
                     json.dumps(row.get("checkpoint")), json.dumps(row.get("result")), row.get("error"),
                     bool(row.get("dry_run", False)), timestamp, timestamp,
                 ),
-            )
-            _insert_job_event(conn, row["id"], job_registered_event())
-            conn.commit()
+        )
+        _insert_job_event(conn, row["id"], job_registered_event())
+
+    def create_local_source_job(self, row: dict[str, Any], *, registration: Any) -> None:
+        """After receipt CAS, atomically reserve one PCP-only queued writer.
+
+        The advisory lock serializes this PCP-local seam without locking or
+        querying foreign project inventories. All PCP-local create_job callers
+        must use this registration path. A queued/nonterminal job is the durable
+        isolated-clone reservation; no direct-workspace lease is acquired.
+        """
+        from .pcp_local_worker_loop import (
+            RuntimeTaskLauncher, PROJECT_ID, REPOSITORY, exact_value, require,
+        )
+        require(type(registration) is RuntimeTaskLauncher
+                and registration.engine.storage is self,
+                "pcp_local_trusted_registration_required")
+        registration.require_registration()
+        binding = registration.source_binding
+        expected = binding["receipt"]
+        require(row["id"] == expected["job_id"]
+                and row["project_id"] == PROJECT_ID and row["status"] == "queued"
+                and row["source_commit"] == expected["base_sha"]
+                and exact_value(row["checkpoint"].get("pcp_local_source"), binding),
+                "pcp_local_job_binding_invalid")
+        with self.connect() as conn:
+            conn.execute("SET LOCAL lock_timeout = '5s'")
+            conn.execute("SET LOCAL statement_timeout = '10s'")
+            conn.execute("SELECT pg_advisory_xact_lock(%s,%s)", (5260112, 808))
+            claimed = conn.execute(
+                """SELECT repository, project_id, issue_number, task_key,
+                          body_sha256, base_sha, baseline_revision,
+                          baseline_source_commit, goal_sha256, allowed_paths,
+                          state, generation, job_id
+                   FROM cp_pcp_local_source_receipts
+                   WHERE repository=%s AND project_id=%s AND issue_number=%s
+                   FOR UPDATE""",
+                (REPOSITORY, PROJECT_ID, expected["issue_number"]),
+            ).fetchone()
+            require(exact_value(claimed, expected),
+                    "pcp_local_claimed_fingerprint_changed")
+            conflict = conn.execute(
+                "SELECT id FROM cp_jobs WHERE id=%s FOR UPDATE", (row["id"],),
+            ).fetchone()
+            require(conflict is None, "pcp_local_job_collision_do_not_retry")
+            writers = conn.execute(
+                """SELECT id FROM cp_jobs WHERE project_id=%s
+                   AND (status IS NULL OR status NOT IN ('completed','failed','cancelled'))
+                   FOR UPDATE""", (PROJECT_ID,),
+            ).fetchall()
+            require(not writers, "pcp_local_writer_reservation_conflict")
+            claims = conn.execute(
+                """SELECT issue_number FROM cp_pcp_local_source_receipts
+                   WHERE repository=%s AND project_id=%s AND issue_number<>%s
+                   AND (state IS NULL OR state NOT IN ('pending','delivered')
+                        OR (state='pending' AND (job_id IS NOT NULL OR generation<>0))
+                        OR (state='delivered' AND job_id IS NULL)) FOR UPDATE""",
+                (REPOSITORY, PROJECT_ID, expected["issue_number"]),
+            ).fetchall()
+            require(not claims, "pcp_local_other_claim_ownership_unknown")
+            lease = conn.execute(
+                """SELECT project_id, owner_job_id, generation, state
+                   FROM cp_project_leases WHERE project_id=%s FOR UPDATE""",
+                (PROJECT_ID,),
+            ).fetchone()
+            expected_lease = binding["observations"]["writer"]["value"]["lease"]
+            require(exact_value(lease, expected_lease), "pcp_local_lease_identity_changed")
+            if lease is not None:
+                owner = conn.execute(
+                    "SELECT project_id, status FROM cp_jobs WHERE id=%s FOR UPDATE",
+                    (lease["owner_job_id"],),
+                ).fetchone()
+                require(type(owner) is dict and owner.get("project_id") == PROJECT_ID
+                        and owner.get("status") in {"completed", "failed", "cancelled"},
+                        "pcp_local_released_lease_owner_unknown")
+            # TTL, activation and registry revocation are checked while the
+            # exact receipt/writer locks are held, before the shared normal INSERT.
+            registration.require_registration()
+            self._insert_job_on_connection(conn, row)
+            conn.commit()  # Never expose an enqueue acknowledgement before this.
 
     def get(self, job_id: str) -> dict[str, Any] | None:
         with self.connect() as conn:

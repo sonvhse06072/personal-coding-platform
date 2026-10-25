@@ -789,11 +789,38 @@ class RuntimeEngine(_RuntimeEngine):
         assert updated is not None
         return updated
 
+    async def dispatch_pcp_local_once(self, *, issue_number: int,
+                                      readers: dict[str, Any], github: Any,
+                                      clock=None) -> dict[str, Any]:
+        """Internal SOURCE-only composition; no startup/route installs readers.
+
+        Real readers require separately admitted Runtime/Executor authority.
+        An active worker is forbidden: this increment ends at a queued job.
+        """
+        from .pcp_local_worker_loop import (
+            LocalWorkerLoop, RuntimeTaskAttestor, RuntimeTaskLauncher,
+            LocalSourceQueueStore, PROJECT_ID, operational_flag, require,
+        )
+        operational_flag()  # Before any queue/DB/GitHub read.
+        require(self.worker_task is None and not self.active_jobs and self.queue.empty(),
+                "pcp_local_existing_worker_forbidden")
+        require(callable(getattr(github, "local_source_issue", None)),
+                "pcp_local_trusted_github_reader_required")
+        attestor = RuntimeTaskAttestor(issue_number=issue_number, readers=readers,
+                                      **({"clock": clock} if clock is not None else {}))
+        receipts = LocalSourceQueueStore(self.storage)
+        launcher = RuntimeTaskLauncher(engine=self, attestor=attestor,
+                                       github=github, receipts=receipts)
+        async with self.project_operation_lock(PROJECT_ID):
+            return await LocalWorkerLoop(receipts=receipts, github=github,
+                trusted_attestor=attestor, launcher=launcher).execute_once()
+
     def create_job(
         self, payload: dict[str, Any], *,
         _orchestration: tuple[str, str] | None = None,
         _intake_decision: IntakeDecision | None = None,
         _remote_binding: dict[str, Any] | None = None,
+        _pcp_local_registration: Any | None = None,
     ) -> str:
         """Create one job with its governing baseline/contract in the same write.
 
@@ -804,6 +831,31 @@ class RuntimeEngine(_RuntimeEngine):
         the queued job until its exact durable started checkpoint releases it.
         """
 
+        from .pcp_local_worker_loop import RuntimeTaskLauncher, PROJECT_ID, require
+        local = _pcp_local_registration
+        if payload["project_id"] == PROJECT_ID or local is not None:
+            require(type(local) is RuntimeTaskLauncher and local.engine is self
+                    and payload["project_id"] == PROJECT_ID
+                    and _orchestration is None and _intake_decision is None
+                    and _remote_binding is None and payload.get("work_order") is None
+                    and set(payload) == {"_job_id", "project_id", "source_commit",
+                                         "baseline_revision", "task"},
+                    "pcp_local_trusted_registration_required")
+            local.require_registration()
+            expected = local.source_binding["receipt"]
+            require(payload["_job_id"] == expected["job_id"]
+                    and payload["source_commit"] == expected["base_sha"]
+                    and payload["baseline_revision"] == expected["baseline_revision"]
+                    and type(payload["task"]) is dict
+                    and payload["task"] == {
+                        "title": f"PCP-local issue #{expected['issue_number']}",
+                        "description": payload["task"].get("description"),
+                        "task_type": "implementation"},
+                    "pcp_local_registration_payload_changed")
+            import hashlib
+            require(type(payload["task"]["description"]) is str
+                    and hashlib.sha256(payload["task"]["description"].encode()).hexdigest()
+                    == expected["goal_sha256"], "pcp_local_registration_goal_changed")
         project = project_config(payload["project_id"])
         work_order = work_order_snapshot(payload.get("work_order"))
         requested_revision = (
@@ -824,7 +876,7 @@ class RuntimeEngine(_RuntimeEngine):
         launch = launch_identity(*_orchestration) if _orchestration is not None else None
         if launch and (job_id != launch["job_id"] or work_order is None or work_order.id != launch["work_order_id"]):
             raise RuntimeError("Orchestrator launch requires its exact deterministic job/WorkOrder")
-        if requested_job_id:
+        if requested_job_id and local is None:
             try:
                 uuid.UUID(hex=requested_job_id)
             except ValueError as exc:
@@ -898,7 +950,9 @@ class RuntimeEngine(_RuntimeEngine):
                 "control_comment_id": control_comment_id,
             }
 
-        self.storage.create({
+        if local is not None:
+            checkpoint["pcp_local_source"] = deepcopy(local.source_binding)
+        row = {
             "id": job_id,
             "project_id": payload["project_id"],
             "status": "queued",
@@ -908,7 +962,11 @@ class RuntimeEngine(_RuntimeEngine):
             "progress": self._new_progress(),
             "checkpoint": checkpoint,
             "dry_run": bool(payload.get("dry_run", False)),
-        })
+        }
+        if local is not None:
+            self.storage.create_local_source_job(row, registration=local)
+        else:
+            self.storage.create(row)
         return job_id
 
     def _restore_work_order_task(self, job_id: str) -> None:
@@ -924,7 +982,12 @@ class RuntimeEngine(_RuntimeEngine):
             self.storage.update(job_id, task=canonical)
 
     async def run_job(self, job_id: str) -> None:
-        marker = orchestrator_launch(self.storage.get(job_id) or {})
+        row = self.storage.get(job_id) or {}
+        if (row.get("checkpoint") or {}).get("pcp_local_source") is not None:
+            # This SOURCE increment never authorizes a model/worker transition,
+            # including accidental generic startup replay of the queued row.
+            raise RuntimeError("PCP-local queued SOURCE job requires separate execution admission")
+        marker = orchestrator_launch(row)
         if marker and marker["state"] == "held":
             raise RuntimeError("Orchestrator launch is held until its started checkpoint commits")
         self._restore_work_order_task(job_id)

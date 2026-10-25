@@ -9,8 +9,11 @@ from __future__ import annotations
 import hashlib
 import inspect
 from copy import deepcopy
+from dataclasses import dataclass
 import json
+import math
 import os
+import time
 from typing import Any
 
 from .pcp_local_task_queue import (
@@ -23,6 +26,231 @@ EVIDENCE_PARTS = frozenset({"project", "baseline", "isolation", "provider", "bud
 LAUNCH_RECEIPT_FIELDS = frozenset({
     "job_id", "state", "source_commit", "baseline_revision",
 })
+OBSERVER_PARTS = EVIDENCE_PARTS | {"writer", "publisher", "model_choice"}
+
+
+def claimed_source_receipt(task: LocalSourceTask) -> dict[str, Any]:
+    """Complete immutable identity, shared with the transactional registrar."""
+    return {
+        **vars(task), "allowed_paths": list(task.allowed_paths),
+        "state": "claimed", "generation": 1, "job_id": stable_job_id(task),
+    }
+
+
+def exact_value(actual: Any, expected: Any) -> bool:
+    """JSON equality including types (True must never stand for generation 1)."""
+    if type(actual) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return set(actual) == set(expected) and all(
+            exact_value(actual[k], v) for k, v in expected.items())
+    if isinstance(expected, list):
+        return len(actual) == len(expected) and all(
+            exact_value(a, b) for a, b in zip(actual, expected))
+    return actual == expected
+
+
+@dataclass(frozen=True)
+class RuntimeObservation:
+    """A trusted in-process reader's short-lived observation, never HTTP input.
+
+    Authentic readers must be installed by a separately admitted Runtime caller.
+    This type supplies no signing/Host authority, reader, credential or defaults.
+    """
+
+    value: dict[str, Any]
+    revision: str
+    observed_at: float
+    valid_until: float
+
+
+class RuntimeTaskAttestor:
+    """Compose required Runtime/Executor readers; no live backend is installed."""
+
+    def __init__(self, *, issue_number: int, readers: dict[str, Any],
+                 clock=time.monotonic) -> None:
+        require(type(issue_number) is int and issue_number > 0,
+                "pcp_local_approved_issue_required")
+        require(type(readers) is dict and set(readers) == OBSERVER_PARTS
+                and all(callable(r) for r in readers.values()) and callable(clock),
+                "pcp_local_trusted_readers_required")
+        self.issue_number = issue_number
+        self.readers = dict(readers)
+        self.clock = clock
+        self._identity = None
+        self._observed: dict[str, RuntimeObservation] = {}
+
+    def require_fresh(self) -> None:
+        current = self.clock()
+        require(type(current) in (int, float) and math.isfinite(current),
+                "pcp_local_observation_clock_invalid")
+        require(set(self._observed) == OBSERVER_PARTS,
+                "pcp_local_observers_not_checked")
+        for observation in self._observed.values():
+            require(type(observation) is RuntimeObservation
+                    and type(observation.value) is dict
+                    and type(observation.revision) is str
+                    and len(observation.revision) == 64
+                    and all(c in "0123456789abcdef" for c in observation.revision)
+                    and all(type(v) in (int, float) and math.isfinite(v)
+                            for v in (observation.observed_at, observation.valid_until))
+                    and observation.observed_at <= current < observation.valid_until
+                    and 0 < observation.valid_until - observation.observed_at <= 60,
+                    "pcp_local_observation_expired_or_invalid")
+
+    async def observe(self, task: LocalSourceTask) -> dict[str, Any]:
+        require(task.issue_number == self.issue_number
+                and task.project_id == PROJECT_ID and task.repository == REPOSITORY,
+                "pcp_local_approved_issue_mismatch")
+        observed = {}
+        for key in sorted(OBSERVER_PARTS):
+            result = self.readers[key](task)
+            if inspect.isawaitable(result):
+                result = await result
+            require(type(result) is RuntimeObservation,
+                    "pcp_local_typed_observation_required")
+            observed[key] = deepcopy(result)
+        self._observed = observed
+        self.require_fresh()
+        values = {k: v.value for k, v in observed.items()}
+        writer = values["writer"]
+        # Readers exclude ONLY this exact task's reserved job from this view;
+        # its receipt/job ownership is independently locked in the transaction.
+        require(set(writer) == {"project_id", "workspace_mode", "lease", "other_job_ids"}
+                and writer["project_id"] == PROJECT_ID
+                and writer["workspace_mode"] == "isolated_clone"
+                and exact_value(writer["other_job_ids"], []),
+                "pcp_local_writer_not_attested")
+        lease = writer["lease"]
+        require(lease is None or (
+            type(lease) is dict
+            and set(lease) == {"project_id", "owner_job_id", "generation", "state"}
+            and lease["project_id"] == PROJECT_ID and lease["state"] == "released"
+            and type(lease["generation"]) is int and lease["generation"] >= 1
+            and type(lease["owner_job_id"]) is str and len(lease["owner_job_id"]) == 32
+            and all(c in "0123456789abcdef" for c in lease["owner_job_id"])
+        ), "pcp_local_lease_not_attested")
+        require(exact_value(values["publisher"], {
+            "project_id": PROJECT_ID, "repository": REPOSITORY,
+            "executor_only": True, "allow_create_pr": True,
+            "allow_merge": False, "credential_in_agent": False,
+        }), "pcp_local_publisher_not_attested")
+        choice = values["model_choice"]
+        require(set(choice) == {"id", "adapter", "model", "reasoning_effort"}
+                and all(type(v) is str and v for v in choice.values()),
+                "pcp_local_model_identity_invalid")
+        from .config import model_config
+        from .model_capabilities import validate_model_choice
+        validate_model_choice(choice)
+        registered = model_config(choice["id"])
+        require(registered.get("kind") == "agent"
+                and "executor" in registered.get("roles", [])
+                and choice["adapter"] == "codex_cli"
+                and choice["model"] == values["provider"].get("model")
+                and choice["reasoning_effort"] == values["provider"].get("effort"),
+                "pcp_local_provider_choice_mismatch")
+        identity = {k: {"value": v.value, "revision": v.revision}
+                    for k, v in observed.items()}
+        require(self._identity is None or exact_value(identity, self._identity),
+                "pcp_local_observation_identity_changed")
+        self._identity = deepcopy(identity)
+        return {k: deepcopy(values[k]) for k in EVIDENCE_PARTS}
+
+    def binding(self, task: LocalSourceTask) -> dict[str, Any]:
+        self.require_fresh()
+        require(self._identity is not None, "pcp_local_observers_not_checked")
+        return {
+            "receipt": claimed_source_receipt(task),
+            "observations": deepcopy(self._identity),
+            "reservation": "pcp_local_isolated_queued_job",
+            "model_execution_proof": "NOT_ATTESTED",
+        }
+
+
+class RuntimeTaskLauncher:
+    """One registration attempt and one existing-queue submission, no worker."""
+
+    def __init__(self, *, engine: Any, attestor: RuntimeTaskAttestor,
+                 github: Any, receipts: LocalSourceQueueStore) -> None:
+        self.engine = engine
+        self.attestor = attestor
+        self.github = github
+        self.receipts = receipts
+        self.attempted = False
+        self.task = None
+        self.source_binding = None
+
+    async def _recheck(self, task: LocalSourceTask) -> None:
+        operational_flag()
+        self.receipts.read_claimed(task, job_id=stable_job_id(task))
+        latest = await self.github.local_source_issue(issue_number=task.issue_number)
+        require(verify_issue(
+            latest, issue_number=task.issue_number, body_sha256=task.body_sha256,
+            base_sha=task.base_sha, baseline_revision=task.baseline_revision,
+            baseline_source_commit=task.baseline_source_commit,
+        ) == task, "pcp_local_task_identity_changed")
+        facts = await self.attestor.observe(task)
+        # Reuse the unchanged admission policy with the original pending identity.
+        check_worker_admission(task, receipt={**claimed_source_receipt(task),
+            "state": "pending", "generation": 0, "job_id": None}, **facts)
+        self.require_registration()
+
+    def require_registration(self) -> None:
+        """Synchronous JIT gate, also run inside the insertion transaction."""
+        operational_flag()
+        self.attestor.require_fresh()
+        require(self.engine.worker_task is None and not self.engine.active_jobs,
+                "pcp_local_existing_worker_forbidden")
+        require(self.engine.queue.empty(), "pcp_local_existing_queue_forbidden")
+        require(type(self.task) is LocalSourceTask and self.attempted,
+                "pcp_local_registration_not_prepared")
+        from .config import project_config, project_baselines_doc
+        from .baseline import resolve_project_baseline
+        cfg = project_config(PROJECT_ID)
+        revision = (project_baselines_doc().get("projects", {}).get(PROJECT_ID) or {})
+        baseline = resolve_project_baseline(PROJECT_ID, self.task.baseline_revision)
+        require(cfg.get("repository") == REPOSITORY and cfg.get("base_branch") == "main"
+                and cfg.get("registration_status") == "approved"
+                and (cfg.get("runtime") or {}).get("workspace_mode") == "isolated_clone"
+                and (cfg.get("runtime") or {}).get("developer_permission_mode") == "bounded"
+                and (cfg.get("runtime") or {}).get("exclusive_project_lease") is False
+                and all((cfg.get("autonomy") or {}).get(k) is True for k in (
+                    "allow_commit", "allow_push_ai_branch", "allow_create_pr"))
+                and (cfg.get("autonomy") or {}).get("allow_production_deploy") is False
+                and revision.get("active_revision") == self.task.baseline_revision
+                and baseline is not None and baseline.project_id == PROJECT_ID
+                and baseline.source_commit == self.task.baseline_source_commit,
+                "pcp_local_current_authority_changed")
+        # Observe no direct lease: the transactional queued row is the reservation.
+        if self.source_binding is not None:
+            require(exact_value(self.source_binding, self.attestor.binding(self.task)),
+                    "pcp_local_registration_binding_changed")
+
+    async def launch(self, *, task, goal, job_id, evidence) -> dict[str, Any]:
+        require(not self.attempted, "pcp_local_launch_already_attempted")
+        self.attempted = True  # Remains consumed across every uncertain outcome.
+        self.task = task
+        require(job_id == stable_job_id(task)
+                and type(goal) is str and hashlib.sha256(goal.encode()).hexdigest() == task.goal_sha256,
+                "pcp_local_launch_identity_invalid")
+        await self._recheck(task)
+        facts = {k: deepcopy(self.attestor._observed[k].value) for k in EVIDENCE_PARTS}
+        decision = check_worker_admission(task, receipt={**claimed_source_receipt(task),
+            "state": "pending", "generation": 0, "job_id": None}, **facts)
+        require(exact_value(evidence, decision), "pcp_local_launch_evidence_changed")
+        self.source_binding = self.attestor.binding(task)
+        created = self.engine.create_job({
+            "_job_id": job_id, "project_id": PROJECT_ID,
+            "source_commit": task.base_sha, "baseline_revision": task.baseline_revision,
+            "task": {"title": f"PCP-local issue #{task.issue_number}", "description": goal,
+                     "task_type": "implementation"},
+        }, _pcp_local_registration=self)
+        require(created == job_id, "pcp_local_registration_ack_invalid")
+        # A revoked observation after commit preserves the queued row and claim.
+        await self._recheck(task)
+        await self.engine.enqueue(job_id)
+        return {"job_id": job_id, "state": "queued", "source_commit": task.base_sha,
+                "baseline_revision": task.baseline_revision}
 
 
 def source_worker_flags() -> None:
@@ -90,6 +318,9 @@ class LocalWorkerLoop:
                 and receipt.get("job_id") is None,
                 "pcp_local_pending_receipt_changed")
         issue_number = receipt["issue_number"]
+        if isinstance(self.trusted_attestor, RuntimeTaskAttestor):
+            require(issue_number == self.trusted_attestor.issue_number,
+                    "pcp_local_approved_issue_mismatch")
         # Executor token stays behind the existing narrow fixed-repo GET API.
         source = await self.github.local_source_issue(issue_number=issue_number)
         require(type(source) is dict, "pcp_local_source_shape_invalid")
@@ -237,7 +468,7 @@ class LocalWorkerLoop:
                 "pcp_local_launch_ack_ambiguous_do_not_retry")
         # Retain claim until independent durable Runtime job confirmation.
         # Never treat an unreviewed PR or successful model turn as delivered.
-        return {
+        response = {
             "status": "PCP_LOCAL_CLAIMED_AWAITING_JOB_RECONCILIATION",
             "issue_number": task.issue_number, "job_id": job_id,
             "receipt_generation": 1,
@@ -245,3 +476,6 @@ class LocalWorkerLoop:
             "model_execution_proof": "NOT_ATTESTED",
             "can_merge": False,
         }
+        if isinstance(self.launcher, RuntimeTaskLauncher):
+            response.update(runtime_job_state="queued", model_calls=0)
+        return response

@@ -20,6 +20,13 @@ from check_project_doc_authority import (  # noqa: E402
 
 def test_known_authority_classes_are_distinct():
     assert classify_path("AGENTS.md") == "protected"
+    for path in (
+        "services/runtime/app/pcp_local_worker_loop.py",
+        "services/runtime/app/engine.py",
+        "services/runtime/app/storage.py",
+        "scripts/check_project_doc_authority.py",
+    ):
+        assert classify_path(path) == "protected"
     assert classify_path("docs/project/business-strategy.md") == "protected"
     assert classify_path("config/project-baselines.yml") == "protected"
     assert classify_path("config/pm-bridge.yml") == "protected"

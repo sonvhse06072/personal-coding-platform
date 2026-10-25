@@ -346,6 +346,22 @@ def test_different_candidate_has_distinct_stable_job_id():
     assert len(worker.stable_job_id(t)) == 32
 
 
+@pytest.mark.parametrize("actual,expected", [
+    (True, 1), ({"generation": True}, {"generation": 1}),
+    ([1, True], [1, 1]), ({"state": "claimed", "extra": True}, {"state": "claimed"}),
+])
+def test_source_fingerprint_requires_exact_types_and_keys(actual, expected):
+    assert not worker.exact_value(actual, expected)
+
+
+def test_concrete_attestor_has_no_default_or_boolean_readers():
+    with pytest.raises(q.TaskStop, match="trusted_readers_required"):
+        worker.RuntimeTaskAttestor(issue_number=999, readers={})
+    with pytest.raises(q.TaskStop, match="trusted_readers_required"):
+        worker.RuntimeTaskAttestor(issue_number=999,
+            readers={k: True for k in worker.OBSERVER_PARTS})
+
+
 class ReadOnlyQuery:
     def __init__(self, result):
         self.result = result
