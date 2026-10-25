@@ -1,0 +1,166 @@
+{
+  "schema_version": 1,
+  "project_id": "pcp-local",
+  "repository": "sonvhse06072/personal-coding-platform",
+  "approval_state": "source_only_draft",
+  "plan_revision": 1,
+  "expected": {
+    "source_commit": "a97bb3fb4901a425a53743a37d818caea15a3b29",
+    "inputs": {
+      "profiles/pcp-local/.ddev/config.yaml": {
+        "mode": "100644",
+        "git_blob": "525d2798dcd60ea745839b4f2f127d2b6e700ea4",
+        "sha256": "b350c76fad14e88886bff3519f08050f1928a01da789c57be4ab254f22457b0f"
+      },
+      "profiles/pcp-local/.ddev/docker-compose.platform.yaml": {
+        "mode": "100644",
+        "git_blob": "95c41ce6c696488cac70354daa99116fc296c9bd",
+        "sha256": "5dfb39789f89f8396917726e0515027fdc07433508fc00fc6add3e780b3a7a6b"
+      },
+      "config/projects.pcp-local.yml": {
+        "mode": "100644",
+        "git_blob": "9935771e9ef22c2f6b48f36a15c045a31d57e642",
+        "sha256": "880383618e9a629f12e70932ed38a430bf2927e12e84e14c235b673b33c5f8ae"
+      },
+      "config/project-baselines.pcp-local.yml": {
+        "mode": "100644",
+        "git_blob": "21a0a97731643e3cec7b5786e118c5c49df79826",
+        "sha256": "c5ffea92761c3bd9a8e6e0d3a5fa3437fd379582cbe1e7f653b4aef69aa39052"
+      }
+    },
+    "project_name": "pcp-local",
+    "layout": {
+      "source": "source/a97bb3fb4901a425a53743a37d818caea15a3b29",
+      "instance": "instance",
+      "evidence": "evidence"
+    },
+    "phases": [
+      "SOURCE_INSPECT",
+      "HOST_PLAN_RO",
+      "SOURCE_PROVISION_APPLY",
+      "RENDER_REVIEW",
+      "FIRST_START_BASE",
+      "FIRST_START_INSPECT",
+      "HEALTH",
+      "ROLLBACK"
+    ]
+  },
+  "observed": {
+    "source": {
+      "repository": "sonvhse06072/personal-coding-platform",
+      "origin": "https://github.com/sonvhse06072/personal-coding-platform.git",
+      "commit": "a97bb3fb4901a425a53743a37d818caea15a3b29",
+      "files": [
+        {
+          "path": "profiles/pcp-local/.ddev/config.yaml",
+          "mode": "100644",
+          "git_blob": "525d2798dcd60ea745839b4f2f127d2b6e700ea4",
+          "sha256": "b350c76fad14e88886bff3519f08050f1928a01da789c57be4ab254f22457b0f",
+          "content": "# B2.2c1-A3 SOURCE TEMPLATE ONLY. NOT a checked-in active DDEV project.\n# Do not run ddev here or install this into the existing legacy PCP checkout.\n# For a separately reviewed FRESH PCP clone only, after A2 host evidence.\nname: pcp-local\ntype: php\ndocroot: public\nphp_version: \"8.4\"\nwebserver_type: nginx-fpm\ndatabase:\n  type: postgres\n  version: \"17\"\nuse_dns_when_possible: true\ncomposer_version: \"2\"\n# No hooks; notably no legacy image builder or Antigravity host bridge.\n"
+        },
+        {
+          "path": "profiles/pcp-local/.ddev/docker-compose.platform.yaml",
+          "mode": "100644",
+          "git_blob": "95c41ce6c696488cac70354daa99116fc296c9bd",
+          "sha256": "5dfb39789f89f8396917726e0515027fdc07433508fc00fc6add3e780b3a7a6b",
+          "content": "# B2.2c1-A3 SOURCE TEMPLATE ONLY, parked by default. No live model agent.\n# This template is NOT under the legacy root .ddev/ directory.\nservices:\n  coding-runtime:\n    # H1b SOURCE DRAFT: no legacy image fallback and no runnable command.\n    # A separate reviewed source+Host decision must replace BOTH blockers.\n    image: pcp-local-runtime-inspect:source-unresolved-do-not-run\n    command: [\"/PCP_H1B_SOURCE_ONLY_NOT_AUTHORIZED\"]\n    pull_policy: never\n    container_name: ddev-${DDEV_SITENAME}-coding-runtime\n    profiles:\n      - pcp-inspect\n    restart: \"no\"\n    user: \"${DDEV_UID}:${DDEV_GID}\"\n    read_only: true\n    cap_drop:\n      - ALL\n    security_opt:\n      - no-new-privileges:true\n    environment:\n      PCP_RUNTIME_STARTUP_MODE: pcp_local_inspect\n      PROJECTS_FILE: /config/projects.pcp-local.yml\n      PROJECT_BASELINES_FILE: /config/project-baselines.pcp-local.yml\n      HOME: /home/coder\n      PYTHONDONTWRITEBYTECODE: \"1\"\n    volumes:\n      - type: bind\n        source: ${DDEV_APPROOT}/config/projects.pcp-local.yml\n        target: /config/projects.pcp-local.yml\n        read_only: true\n      - type: bind\n        source: ${DDEV_APPROOT}/config/project-baselines.pcp-local.yml\n        target: /config/project-baselines.pcp-local.yml\n        read_only: true\n    tmpfs:\n      - /tmp:rw,nosuid,nodev,size=67108864\n"
+        },
+        {
+          "path": "config/projects.pcp-local.yml",
+          "mode": "100644",
+          "git_blob": "9935771e9ef22c2f6b48f36a15c045a31d57e642",
+          "sha256": "880383618e9a629f12e70932ed38a430bf2927e12e84e14c235b673b33c5f8ae",
+          "content": "# B2.2c0 PCP-only draft, NEVER the active multi-project registry.\n# No recipient path, credentials, or source worker execution is approved.\nversion: 1\nprojects:\n  pcp-local:\n    registration_status: draft\n    repository: sonvhse06072/personal-coding-platform\n    path: null\n    base_branch: main\n    privacy:\n      private_code: true\n      allow_training_provider: false\n      require_zero_retention: true\n    autonomy:\n      allow_commit: false\n      allow_push_ai_branch: false\n      allow_create_pr: false\n      allow_auto_merge_low_risk: false\n      allow_production_deploy: false\n    runtime:\n      branch_prefix: ai\n      workspace_mode: isolated_clone\n      developer_permission_mode: bounded\n      exclusive_project_lease: false\n    ddev:\n      enabled: false\n      preflight: []\n      targeted_tests: []\n      static_analysis: []\n      full_tests: []\n      cleanup: []\n"
+        },
+        {
+          "path": "config/project-baselines.pcp-local.yml",
+          "mode": "100644",
+          "git_blob": "21a0a97731643e3cec7b5786e118c5c49df79826",
+          "sha256": "c5ffea92761c3bd9a8e6e0d3a5fa3437fd379582cbe1e7f653b4aef69aa39052",
+          "content": "# B2.2c0 PCP-local DRAFT only; no approved source SHA or active revision.\n# A later immutable ProjectBaseline requires separate explicit Owner approval.\nversion: 1\nprojects:\n  pcp-local:\n    active_revision: null\n    revisions: {}\n"
+        }
+      ]
+    },
+    "layout": {
+      "install_root": null,
+      "source_root": null,
+      "instance_root": null,
+      "evidence_root": null,
+      "foreign_roots": [],
+      "symlinks": [],
+      "exclusive": null
+    },
+    "environment": {},
+    "extra_files": [],
+    "effective_config": null,
+    "inventory": {
+      "containers": [],
+      "ddev_projects": [],
+      "images": [],
+      "networks": [],
+      "ports": [],
+      "shared_effects": [],
+      "volumes": []
+    },
+    "journal": null,
+    "resources": {
+      "limits": {
+        "cpu": null,
+        "deadline_seconds": null,
+        "disk_bytes": null,
+        "egress_bytes": null,
+        "memory_bytes": null
+      },
+      "observed": {
+        "cpu": null,
+        "deadline_seconds": null,
+        "disk_bytes": null,
+        "egress_bytes": null,
+        "memory_bytes": null
+      },
+      "enforcement": null
+    },
+    "rollback": {
+      "requested_ids": [],
+      "owned_new_ids": [],
+      "foreign_ids": [],
+      "consumers": [],
+      "ownership_proof": null
+    }
+  },
+  "verification": {
+    "source_binding": "SUBMITTED_PINS_ONLY",
+    "checkout": "NOT_ATTESTED",
+    "host": "NOT_ATTESTED",
+    "oci": {
+      "image_digest": null,
+      "producer": null,
+      "trust_root": null,
+      "signature_verifier": null,
+      "authenticated_provenance": "NOT_VERIFIED",
+      "export_compatibility": "NOT_TESTED",
+      "ancillary_images": null
+    },
+    "enforcement_proof": null
+  },
+  "authority": {
+    "phase_permits": {
+      "SOURCE_INSPECT": null,
+      "HOST_PLAN_RO": null,
+      "SOURCE_PROVISION_APPLY": null,
+      "RENDER_REVIEW": null,
+      "FIRST_START_BASE": null,
+      "FIRST_START_INSPECT": null,
+      "HEALTH": null,
+      "ROLLBACK": null
+    },
+    "host": false,
+    "db": false,
+    "apply": false,
+    "render": false,
+    "start": false,
+    "stop": false,
+    "rollback": false,
+    "live": false
+  }
+}

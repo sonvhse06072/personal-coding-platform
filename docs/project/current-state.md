@@ -2,7 +2,7 @@
 
 Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline revision, Runtime/WSL rollout attestation, authority change, or chronological log. Verify GitHub and local durable evidence immediately before any mutation. The Constitution, architecture and approved baseline outrank this snapshot.
 
-**Last reconciled: 2026-10-25, #795 H1c design delivered; implementation/Host STOP.** Research main `25bba45538d9199bbf874be611a140a83b73f16a`; [eight-part ChangeProposal](https://github.com/sonvhse06072/personal-coding-platform/issues/795#issuecomment-6393130053), seven proposed paths/four protected, pure offline planner only. PM review and real Owner SOURCE decision pending; no implementation PR or physical setup. #800 H1b3 SOURCE accepted via [#802](https://github.com/sonvhse06072/personal-coding-platform/pull/802); [exact-main hosted full4](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40157237785) 4,452 PASS/89 skipped. Source integrity is not authentic provenance or Host proof. No DDEV/Docker/Buildx, install, DB, credentials, cleanup or worker. #752 PARKED, #595 HOLD.
+**Last reconciled: 2026-10-25, #795 H1c SOURCE implementation for Draft review; Host STOP.** Verified base `a97bb3fb4901a425a53743a37d818caea15a3b29`; [Owner seven-path/four-protected consent](https://github.com/sonvhse06072/personal-coding-platform/issues/795#issuecomment-6394295965), [WorkOrder](https://github.com/sonvhse06072/personal-coding-platform/issues/795#issuecomment-6394309665). Branch `ai/795-h1c-clean-ddev-plan-source`; [plan](../pcp-portable/h1c-ddev-install-plan.md). Four supplied pinned payloads/parked config may pass structure only; checker always STOP/exit 2, OCI provenance NOT_VERIFIED, checkout/ownership NOT_ATTESTED, parked User/HOME unresolved. Local full4 4,631 PASS/88 skipped; Draft/hosted CI/PM review pending. #800 SOURCE accepted; no physical install, DDEV/Docker/Buildx/DB, credentials, image, cleanup or worker. #752 PARKED; #595 HOLD.
 
 ## #764 / #777 — Phase B PCP-only source acceptance and Gate A audit
 
@@ -32,7 +32,7 @@ Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline 
 
 GitHub/Runtime evidence remains separate; Runtime was not queried.
 
-**Next safe action:** PM reviews [#795 proposal](https://github.com/sonvhse06072/personal-coding-platform/issues/795#issuecomment-6393130053), then Owner decides exact SOURCE scope before implementation. Parked templates remain unchanged. #800 producer/root, real OCI compatibility, privileged builder/no-fallback, hard disk/egress and shared-resource/cancellation evidence still block every Host phase. No old-state access/cleanup, global router change, credentials, worker or #752 blocked-egress retry. #595 HOLD; F2/T01/Guardian frozen; Chợ Nhạc STRICT NO-TOUCH.
+**Next safe action:** complete #795 exact seven-path Draft and actual hosted full4, then independent PM COMMENT on all four protected consent paths/exact HEAD. Keep Draft; no self-merge. Parked templates stay unchanged. #800 producer/root, OCI compatibility, privileged builder/no-fallback, disk/egress/shared effects and cancellation proof still block Host. No old-state access/cleanup, global router changes, credentials, worker or #752 egress retry. #595 HOLD; F2/T01/Guardian frozen; Chợ Nhạc STRICT NO-TOUCH.
 
 ## Active investment / execution gates
 
