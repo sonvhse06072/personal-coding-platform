@@ -2,7 +2,7 @@
 
 Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline revision, Runtime/WSL rollout attestation, authority change, or chronological log. Verify GitHub and local durable evidence immediately before any mutation. The Constitution, architecture and approved baseline outrank this snapshot.
 
-**Last reconciled: 2026-10-25, #795 H1c SOURCE implementation for Draft review; Host STOP.** Verified base `a97bb3fb4901a425a53743a37d818caea15a3b29`; [Owner seven-path/four-protected consent](https://github.com/sonvhse06072/personal-coding-platform/issues/795#issuecomment-6394295965), [WorkOrder](https://github.com/sonvhse06072/personal-coding-platform/issues/795#issuecomment-6394309665). Branch `ai/795-h1c-clean-ddev-plan-source`; [plan](../pcp-portable/h1c-ddev-install-plan.md). Four supplied pinned payloads/parked config may pass structure only; checker always STOP/exit 2, OCI provenance NOT_VERIFIED, checkout/ownership NOT_ATTESTED, parked User/HOME unresolved. Local full4 4,631 PASS/88 skipped; [Draft #805](https://github.com/sonvhse06072/personal-coding-platform/pull/805) records exact HEAD/CI; PM review pending. #800 SOURCE accepted; no physical install, DDEV/Docker/Buildx/DB, credentials, image, cleanup or worker. #752 PARKED; #595 HOLD.
+**Last reconciled: 2026-10-25, H1c #795 SOURCE ACCEPTED; Host/LIVE STOP.** `main@ee7864e3caee744b4a3417a58bc1757bcf4aa15c`; [Owner seven-path approval](https://github.com/sonvhse06072/personal-coding-platform/issues/795#issuecomment-6394295965), [PR #805 MERGED](https://github.com/sonvhse06072/personal-coding-platform/pull/805), [PM COMMENT](https://github.com/sonvhse06072/personal-coding-platform/pull/805#pullrequestreview-5642087227), [postmerge real4 #40173371214](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40173371214) **4,630 PASS/89 skipped**, [PM SOURCE outcome #795](https://github.com/sonvhse06072/personal-coding-platform/issues/795#issuecomment-6394961417). Offline DDEV validator has 178 new cases; synthetic plan may structurally PASS but CLI always STOP/exit 2, Host/DB/LIVE STOP, checkout and OCI producer NOT_ATTESTED. #800 OCI Host still blocked; #752 PARKED; #595 HOLD.
 
 ## #764 / #777 — Phase B PCP-only source acceptance and Gate A audit
 
@@ -32,7 +32,7 @@ Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline 
 
 GitHub/Runtime evidence remains separate; Runtime was not queried.
 
-**Next safe action:** PM checks #805 exact seven-path diff, all four protected consent paths and actual hosted full4 on exact HEAD, then independent COMMENT. Keep Draft; no self-merge. Parked templates stay unchanged. #800 producer/root, OCI compatibility, privileged builder/no-fallback, disk/egress/shared effects and cancellation proof still block Host. No old-state access/cleanup, global router changes, credentials, worker or #752 egress retry. #595 HOLD; F2/T01/Guardian frozen; Chợ Nhạc STRICT NO-TOUCH.
+**Next safe action:** #795 remains OPEN for future strictly separated Host/DDEV plan; #800 remains OPEN for independently authenticated OCI image producer/trust root, actual export/import, privileged builder/no-fallback and hard disk/egress/ownership/cancellation proof. Parked DDEV remains OFF, User/HOME mismatch unresolved. No Host checkout, Docker/DDEV, DB, credentials, global-router changes, source/old-state cleanup, model worker or #752 blocked-egress retry. #595 HOLD; F2/T01/Guardian frozen; Chợ Nhạc STRICT NO-TOUCH.
 
 ## Active investment / execution gates
 
