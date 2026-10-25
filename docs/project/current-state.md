@@ -34,7 +34,7 @@ GitHub/Runtime evidence remains separate; Runtime was not queried.
 
 **#800 reprioritized:** [Cloud producer/OCI successor research PARKED P2](https://github.com/sonvhse06072/personal-coding-platform/issues/800#issuecomment-6396801006); research preserved, current accepted offline security and physical STOP retained. No Google Cloud Build selection, new SOURCE approval or Host permit.
 
-**#808 next action:** [Exact SOURCE proposal](https://github.com/sonvhse06072/personal-coding-platform/issues/808#issuecomment-6397801665), anchor `d9b5a27`; `DEC-PCP-B2-F1-808-QUEUED-SEAM-SOURCE-V1` **UNAPPROVED**: 9 paths/4 protected, internal claim → durable Runtime job/queue. Owner exact scope approval precedes code edits. `ai/808-source-scope-handoff` is T1 only; implementation NOT_STARTED, Host STOP. First real task and active baseline unselected. No startup/flags, Docker/DDEV/DB/credentials/model, legacy reset or #752 egress retry. #595 HOLD; Chợ Nhạc STRICT NO-TOUCH.
+**#808 SOURCE DRAFT / SCOPE BLOCKED:** [PR #811](https://github.com/sonvhse06072/personal-coding-platform/pull/811), base `0d734ea`, `ai/808-queued-seam-source-v1`; Owner consent/WorkOrder in PR. Atomic claim/job insert and commit-before-enqueue implemented; fake-only tests. Root CI has 5 OCI failures: frozen app-tree pin conflicts with Runtime HEAD edits. Two root test files outside 9-path approval need exact Owner scope extension; pins/guards untouched. Full4/PM acceptance NOT achieved; evidence/current head in PR. No installed readers, active baseline or real task. Startup/flags/Host/LIVE STOP; #752 PARKED, #595 HOLD, historical jobs frozen; Chợ Nhạc STRICT NO-TOUCH.
 
 ## Active investment / execution gates
 

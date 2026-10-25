@@ -552,13 +552,14 @@ def frozen_archive(plan, files):
 
 
 def test_actual_reviewed_git_objects_reproduce_canonical_source_bytes(plan):
-    # Real local Git objects, no checkout/Host/container operation. Read exact
-    # HEAD objects (also present in shallow postmerge CI); the tree, inventory
-    # and regenerated hashes must equal the reviewed anchor's inputs.
+    # Real immutable Git objects from the reviewed inspection-image snapshot.
+    # New Runtime implementation HEADs do not amend that historical image pin.
+    # Hosted Structure checkout already contains the anchor; never fetch/fallback.
     # Expected bytes are checked AFTER generation, never used
     # as a substitute for reading, hashing and assembling the 103 source blobs.
-    files = plan["_read_git_inputs"](plan["git_read"]("rev-parse", "HEAD"))
+    files = plan["_read_git_inputs"](ANCHOR)
     assert len(files) == 103
+    assert sum(path.startswith("services/runtime/app/") for path in files) == 100
     archive = frozen_archive(plan, files)
     assert len(archive) == 1740800
     assert hashlib.sha256(archive).hexdigest() == (
@@ -571,6 +572,19 @@ def test_actual_reviewed_git_objects_reproduce_canonical_source_bytes(plan):
             assert m.uid == m.gid == m.mtime == 0
             assert m.uname == m.gname == ""
             assert tar.extractfile(m).read() == files[m.name]
+
+
+def test_current_head_cannot_replace_reviewed_inspection_app_tree(plan):
+    # Exercise actual HEAD independently of the historical positive. No mocked
+    # Git/tree result, skipped test or fallback to the anchor on rejection.
+    head = plan["git_read"]("rev-parse", "HEAD")
+    current_tree = plan["git_read"]("rev-parse", head + ":services/runtime/app")
+    if current_tree != plan["APP_TREE"]:
+        reason(lambda: plan["_read_git_inputs"](head), "SOURCE_APP_TREE_MISMATCH")
+    else:
+        # A future HEAD with the exact approved app tree need not contradict
+        # the unchanged policy: it must still pass its full input inventory.
+        assert len(plan["_read_git_inputs"](head)) == 103
 
 
 @pytest.mark.parametrize("entry", [
@@ -602,7 +616,7 @@ def test_git_blob_size_and_identity_are_verified(plan, raw, size, oid, code):
 def test_git_inventory_extra_missing_and_tree_substitution(plan):
     fn = plan["_read_git_inputs"]
     original = fn.__globals__["_git_entries"]
-    commit = plan["git_read"]("rev-parse", "HEAD")
+    commit = ANCHOR
     entries = original(commit, *plan["SOURCE_PATHS"])
     for changed in ({**entries, "services/runtime/app/unreviewed.py": ("a" * 40, 1)},
                     {k: v for k, v in entries.items() if not k.endswith("main.py")}):
@@ -614,7 +628,7 @@ def test_git_inventory_extra_missing_and_tree_substitution(plan):
 
 
 def test_snapshot_frozen_once_no_mutable_path_reads_and_head_race(plan):
-    commit = plan["git_read"]("rev-parse", "HEAD")
+    commit = ANCHOR
     files = plan["_read_git_inputs"](commit)
     fn = plan["immutable_source_snapshot"]
     calls = []

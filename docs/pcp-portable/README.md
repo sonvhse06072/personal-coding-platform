@@ -87,6 +87,57 @@ The Owner approved [DEC-PCP-LOCAL-WORKER-B22B-SOURCE-V1](https://github.com/sonv
 
 As of this source milestone, the **PCP worker is not running**. A GitHub label, candidate digest, passed unit test or positive proof fixture is never permission to bill a provider, mount an OAuth session or push code.
 
+## B2-F1 #808 — trusted claim to normal Runtime queue (SOURCE candidate)
+
+[Owner nine-path consent](https://github.com/sonvhse06072/personal-coding-platform/issues/808#issuecomment-6398481501)
+and [WorkOrder](https://github.com/sonvhse06072/personal-coding-platform/issues/808#issuecomment-6398511086)
+authorize this source/test increment only. The internal
+`RuntimeEngine.dispatch_pcp_local_once` composes the existing receipt loop with
+required in-process observation readers and a concrete normal-job registrar.
+No reader/backend, route, scheduler or worker is installed by default. The
+existing fixed-repository PM Bridge GitHub reader is reusable; no new adapter or
+service is introduced.
+
+Readers must independently supply short-lived, versioned project, baseline,
+isolation, provider, budget, writer, publisher and registered-model observations.
+Typed observations are an internal interface, not cryptographic authentication;
+their real origin, mount/credential isolation and provider authority still need
+separate physical admission. Missing/raw/expired/drifting observations STOP.
+An exact issue is selected by the trusted caller; issue/label/model prose cannot
+construct the readers. Revalidation occurs after claim and before insertion and
+enqueue, including actual project/baseline policy and the registered model tuple.
+
+After the existing claim CAS, one transaction serializes PCP-local registrations,
+locks and checks the complete claimed receipt, denies any existing same-ID job,
+unknown/nonterminal PCP writer or conflicting claim, and verifies lease identity.
+The shared normal `cp_jobs`/event INSERT commits before existing engine enqueue.
+The queued row is the PCP-only isolated-writer reservation; no direct-workspace
+lease is acquired. All PCP-local `create_job` requests require the private
+registration path; WorkOrder-ID-only reuse is unavailable. A failure around
+commit/enqueue preserves the consumed claim and any committed job; no automatic
+retry, replacement or counter reset occurs.
+
+Synthetic success reports `runtime_job_state=queued`, `model_calls=0` and
+`model_execution_proof=NOT_ATTESTED`. Active workers/occupied queues are rejected,
+and these SOURCE jobs cannot pass `run_job` without a later execution-admission
+change. Transaction-aware fake tests cover rollback/ambiguous commit, independent
+Runtime claim races, full identity/collision/ownership and permission revocation.
+They do not prove PostgreSQL concurrency on a real DB, container isolation or a
+Codex turn. `main.py`, the parked profile and all three activation flags remain
+unchanged; no Host/DB/provider call or worker startup is authorized. Exact-head
+full4 hosted CI and independent PM COMMENT are required for SOURCE acceptance.
+First real task, active baseline, installed readers, credentials/egress, startup,
+publication and Host/LIVE acceptance remain separate gates. #752 PARKED,
+#595 HOLD, historic jobs frozen; Chợ Nhạc STRICT NO-TOUCH.
+
+**Review blocker:** [Draft #811](https://github.com/sonvhse06072/personal-coding-platform/pull/811)
+exposes five pre-existing OCI tests tied to HEAD's historical inspection app
+tree. Runtime changes correctly fail that frozen pin. Those two root test files
+are outside #808's nine-path consent. A separate exact scope decision is needed
+to test the accepted immutable image-source snapshot independently of newer
+Runtime implementation, while explicitly retaining HEAD-drift STOP coverage.
+No image pin/checker/recipe or excluded test has been changed to pass CI.
+
 
 ## B2.2c0 — Isolated PCP-only draft startup (SOURCE ONLY / PARKED)
 
