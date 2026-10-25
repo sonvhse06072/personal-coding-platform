@@ -195,8 +195,9 @@ class RuntimeEngineCore:
         """
         reject_parked_fullpath_side_effects()
         jobs = self.storage.list(limit=500)
-        protected = any(legacy_source_job(job) for job in jobs)
+        protected = len(jobs) >= 500 or any(legacy_source_job(job) for job in jobs)
         # Unscoped host cancellation cannot safely exclude a SOURCE/unknown job.
+        # A full bounded page cannot establish that older rows are unrelated.
         # Keep per-job recovery of unrelated valid jobs below.
         if not protected:
             await cancel_all_antigravity_runs()

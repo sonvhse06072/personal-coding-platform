@@ -307,9 +307,12 @@ def test_b2f2_valid_legacy_jobs_still_reconcile_in_mixed_inventory(monkeypatch):
     assert [job_id for job_id, _ in store.updates] == ["inflight"]
 
 
-def test_b2f2_valid_legacy_queue_recovery_is_not_globally_disabled(monkeypatch):
+@pytest.mark.parametrize("inventory_size", [1, 500])
+def test_b2f2_valid_legacy_queue_recovery_is_not_globally_disabled(monkeypatch, inventory_size):
     from app import engine_core
-    store = ReplayStore([{"id": "queued", "project_id": "synthetic-legacy", "status": "queued", "checkpoint": {}}])
+    rows = [{"id": str(index), "project_id": "synthetic-legacy", "status": "queued", "checkpoint": {}}
+            for index in range(inventory_size)]
+    store = ReplayStore(rows)
     # No terminal lease to clean up in this synthetic ordinary project.
     store.terminal_active_project_leases = lambda: []
     instance = engine_core.RuntimeEngineCore(store)
@@ -318,7 +321,9 @@ def test_b2f2_valid_legacy_queue_recovery_is_not_globally_disabled(monkeypatch):
         calls.append("global")
     monkeypatch.setattr(engine_core, "cancel_all_antigravity_runs", cancel_global)
     asyncio.run(instance._reconcile_legacy_restart_effects())
-    assert calls == ["global"] and instance.queue.get_nowait() == "queued"
+    # A full page may hide an older SOURCE row: only scoped recovery is safe.
+    assert calls == (["global"] if inventory_size < 500 else [])
+    assert [instance.queue.get_nowait() for _ in rows] == [row["id"] for row in rows]
     assert store.updates == []
 
 
