@@ -2,7 +2,7 @@
 
 Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline revision, Runtime/WSL rollout attestation, authority change, or chronological log. Verify GitHub and local durable evidence immediately before any mutation. The Constitution, architecture and approved baseline outrank this snapshot.
 
-**Last reconciled: 2026-10-25, P0 local Codex workloop priority (Owner direction).** `main@6bf010382badbdd32472fa70e944b947295c2194`. [Product pivot #593](https://github.com/sonvhse06072/personal-coding-platform/issues/593#issuecomment-6396776368), [B2-F1 code task #808](https://github.com/sonvhse06072/personal-coding-platform/issues/808), [Phase B #764](https://github.com/sonvhse06072/personal-coding-platform/issues/764#issuecomment-6396800423). Existing H1c #795 and H1b3 #800 SOURCE accepted; real local Codex/Host/LIVE not proven. #752 PARKED, #595 HOLD.
+**Last reconciled: 2026-10-25, P0 #808 queued Runtime seam SOURCE ACCEPTED; Host/LIVE STOP.** [PR #811](https://github.com/sonvhse06072/personal-coding-platform/pull/811) merged `main@463d81f3fee27bc0fd804486e8b941fdf7887d14` after [PM review #5643860078](https://github.com/sonvhse06072/personal-coding-platform/pull/811#pullrequestreview-5643860078) and [postmerge real4 #40207083378](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40207083378) **4,717 PASS/89 skipped**. Owner approved 11 exact SOURCE paths/4 protected. OCI historic pin remains unchanged; queued is not Codex execution. #752 PARKED; #595 HOLD.
 
 ## #764 / #777 — Phase B PCP-only source acceptance and Gate A audit
 
@@ -34,7 +34,7 @@ GitHub/Runtime evidence remains separate; Runtime was not queried.
 
 **#800 reprioritized:** [Cloud producer/OCI successor research PARKED P2](https://github.com/sonvhse06072/personal-coding-platform/issues/800#issuecomment-6396801006); research preserved, current accepted offline security and physical STOP retained. No Google Cloud Build selection, new SOURCE approval or Host permit.
 
-**#808 SOURCE DRAFT / SCOPE BLOCKED:** [PR #811](https://github.com/sonvhse06072/personal-coding-platform/pull/811), base `0d734ea`, `ai/808-queued-seam-source-v1`; Owner consent/WorkOrder in PR. Atomic claim/job insert and commit-before-enqueue implemented; fake-only tests. Root CI has 5 OCI failures: frozen app-tree pin conflicts with Runtime HEAD edits. Two root test files outside 9-path approval need exact Owner scope extension; pins/guards untouched. Full4/PM acceptance NOT achieved; evidence/current head in PR. No installed readers, active baseline or real task. Startup/flags/Host/LIVE STOP; #752 PARKED, #595 HOLD, historical jobs frozen; Chợ Nhạc STRICT NO-TOUCH.
+**#808 next action:** [PM SOURCE outcome](https://github.com/sonvhse06072/personal-coding-platform/issues/808#issuecomment-6399544743) ACCEPTED: PCP-only claim → atomic `cp_jobs` queued job → existing queue; fake integration only. Current Runtime startup/legacy queued-job replay, physical DB/lease, approved baseline, actual readers/credentials/provider egress and first PCP task remain **NOT AUTHORIZED / NOT TESTED**. No Docker/DDEV/Host/LIVE, model call, reset or #752 retry; historical jobs/Chợ Nhạc STRICT NO-TOUCH.
 
 ## Active investment / execution gates
 

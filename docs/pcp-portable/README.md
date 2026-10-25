@@ -87,7 +87,7 @@ The Owner approved [DEC-PCP-LOCAL-WORKER-B22B-SOURCE-V1](https://github.com/sonv
 
 As of this source milestone, the **PCP worker is not running**. A GitHub label, candidate digest, passed unit test or positive proof fixture is never permission to bill a provider, mount an OAuth session or push code.
 
-## B2-F1 #808 — trusted claim to normal Runtime queue (SOURCE candidate)
+## B2-F1 #808 — trusted claim to Runtime queue (SOURCE accepted; LIVE STOP)
 
 [Owner nine-path consent](https://github.com/sonvhse06072/personal-coding-platform/issues/808#issuecomment-6398481501)
 and [WorkOrder](https://github.com/sonvhse06072/personal-coding-platform/issues/808#issuecomment-6398511086)
@@ -130,13 +130,15 @@ First real task, active baseline, installed readers, credentials/egress, startup
 publication and Host/LIVE acceptance remain separate gates. #752 PARKED,
 #595 HOLD, historic jobs frozen; Chợ Nhạc STRICT NO-TOUCH.
 
-**Review blocker:** [Draft #811](https://github.com/sonvhse06072/personal-coding-platform/pull/811)
-exposes five pre-existing OCI tests tied to HEAD's historical inspection app
-tree. Runtime changes correctly fail that frozen pin. Those two root test files
-are outside #808's nine-path consent. A separate exact scope decision is needed
-to test the accepted immutable image-source snapshot independently of newer
-Runtime implementation, while explicitly retaining HEAD-drift STOP coverage.
-No image pin/checker/recipe or excluded test has been changed to pass CI.
+**Source acceptance:** [PR #811](https://github.com/sonvhse06072/personal-coding-platform/pull/811)
+merged after [Owner two-test amendment](https://github.com/sonvhse06072/personal-coding-platform/issues/808#issuecomment-6399181198),
+[PM review](https://github.com/sonvhse06072/personal-coding-platform/pull/811#pullrequestreview-5643860078)
+and [actual postmerge full4 CI](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40207083378)
+4,717 PASS/89 skipped. OCI historical-positive tests now read the original
+immutable commit `7b8b2617973285365a6e4efe79b0d4e350ad64bf`; the existing
+production checker and app-tree pin are unchanged and still reject a different
+current HEAD with `SOURCE_APP_TREE_MISMATCH`. This acceptance does not
+authorize real Runtime startup, Docker/DDEV/DB, Codex model or worker LIVE.
 
 
 ## B2.2c0 — Isolated PCP-only draft startup (SOURCE ONLY / PARKED)
