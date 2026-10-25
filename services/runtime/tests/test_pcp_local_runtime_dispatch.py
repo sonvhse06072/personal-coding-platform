@@ -105,7 +105,7 @@ class Connection:
         if "FROM cp_pcp_local_source_receipts" in sql:
             assert params[0:2] == (source.REPOSITORY, source.PROJECT_ID)
             rows = list(self.db.receipts.values())
-            if "state='pending'" in sql:
+            if "ORDER BY created_at" in sql:
                 return Result(sorted((r for r in rows if r["state"] == "pending"),
                                      key=lambda r: r["issue_number"])[:1])
             if "issue_number<>" in sql:
