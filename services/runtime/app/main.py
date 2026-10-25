@@ -23,6 +23,7 @@ from .intake_policy import classify_intake
 from .job_status_publisher import JobStatusPublisher
 from .dashboard import _require_session, create_dashboard_router
 from .engine_telemetry import RuntimeEngine
+from .engine_core import require_legacy_job, SourceJobNotExecutable
 from .g0_fixture_execution import G0FixtureExecution, G0GateError
 from .fullpath_pm_review import FullpathPMReviewRequest, FullpathPMReviewService
 from .fullpath_worker_only import (
@@ -187,6 +188,17 @@ def runtime_error(exc: RuntimeError) -> HTTPException:
     return HTTPException(404 if message == "Unknown job" else 409, message)
 
 
+def _require_legacy_job_mutation(job_id: str) -> None:
+    """Narrow per-job HTTP gate, before any direct Executor/control action."""
+    row = storage.get(job_id)
+    if row is None:
+        raise HTTPException(404, "Unknown job")
+    try:
+        require_legacy_job(row)
+    except SourceJobNotExecutable as exc:
+        raise HTTPException(409, str(exc)) from exc
+
+
 async def _create_local_job_guarded(
     request: JobCreateRequest,
     *,
@@ -229,6 +241,7 @@ async def _create_local_job_guarded(
 
 
 def _require_manual_collaboration_state(job_id: str) -> None:
+    _require_legacy_job_mutation(job_id)
     row = storage.get(job_id)
     if not row:
         raise HTTPException(404, "Unknown job")
@@ -633,6 +646,8 @@ def latest_continuity_proposal(
 
 @app.post("/v1/continuity/events", dependencies=[Depends(auth)])
 def record_continuity_event(payload: ContinuityEventRequest) -> dict[str, Any]:
+    if payload.job_id:
+        _require_legacy_job_mutation(payload.job_id)
     if payload.job_id and not storage.get(payload.job_id):
         raise HTTPException(404, "Unknown job")
     try:
@@ -848,6 +863,7 @@ async def finalize_fullpath_pm_review(
     The future fixture must pass a separate full runtime/source identity guard.
     This route is 503 in the non-executable fullpath candidate mode.
     """
+    _require_legacy_job_mutation(job_id)
     try:
         return await fullpath_pm_review.finalize(job_id, payload)
     except (RuntimeError, ValueError) as exc:
@@ -991,6 +1007,7 @@ async def recheck_collaboration(
     dependencies=[Depends(auth)],
 )
 async def cancel_collaboration(job_id: str, thread_id: str) -> CollaborationView:
+    _require_legacy_job_mutation(job_id)
     try:
         return await collaboration_manager.cancel(job_id, thread_id)
     except RuntimeError as exc:
@@ -1006,6 +1023,7 @@ async def advance_job_source(
     job_id: str,
     payload: JobSourceAdvanceRequest,
 ) -> JobView:
+    _require_legacy_job_mutation(job_id)
     try:
         orchestration_resume = prepare_orchestrated_job_resume(
             plan_orchestrator.store,
@@ -1026,6 +1044,7 @@ async def advance_job_source(
 
 @app.post("/v1/jobs/{job_id}/run", response_model=JobView, dependencies=[Depends(auth)])
 async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
+    _require_legacy_job_mutation(job_id)
     request = payload or JobRunRequest()
     try:
         if runtime_startup_mode() == F2_WORKER_MODE:
@@ -1069,6 +1088,7 @@ async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
     dependencies=[Depends(auth)],
 )
 async def request_review_repair(job_id: str, payload: ReviewRepairRequest) -> JobView:
+    _require_legacy_job_mutation(job_id)
     try:
         row = await engine.request_review_repair(
             job_id,
@@ -1084,6 +1104,7 @@ async def request_review_repair(job_id: str, payload: ReviewRepairRequest) -> Jo
 
 @app.post("/v1/jobs/{job_id}/cancel", response_model=JobView, dependencies=[Depends(auth)])
 async def cancel_job(job_id: str) -> JobView:
+    _require_legacy_job_mutation(job_id)
     try:
         await engine.ddev.cancel(job_id=job_id)
         active = engine.active_jobs.get(job_id)
@@ -1098,6 +1119,7 @@ async def cancel_job(job_id: str) -> JobView:
 
 @app.post("/v1/jobs/{job_id}/decision", response_model=JobView, dependencies=[Depends(auth)])
 async def resolve_decision(job_id: str, payload: HumanDecisionRequest) -> JobView:
+    _require_legacy_job_mutation(job_id)
     try:
         row = await engine.resolve_human_decision(
             job_id,
@@ -1117,6 +1139,7 @@ async def cleanup_job(
     remove_workspace: bool = False,
     release_ddev_data: bool = False,
 ) -> dict[str, Any]:
+    _require_legacy_job_mutation(job_id)
     try:
         return await engine.cleanup(
             job_id,

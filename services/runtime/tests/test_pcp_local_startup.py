@@ -219,3 +219,137 @@ def test_protected_paths_are_registered():
         "services/runtime/app/main.py",
     ):
         assert policy["classify_path"](path) == "protected"
+
+
+class ReplayStore:
+    """Durable data and external operations are separate, observable fakes."""
+    def __init__(self, rows):
+        self.rows = {r["id"]: deepcopy(r) for r in rows}
+        self.receipt = {"state": "claimed", "generation": 1, "model_calls": 0}
+        self.lease = {"owner_job_id": rows[0]["id"], "state": "active", "generation": 4}
+        self.updates = []
+
+    def init(self):
+        pass
+
+    def get(self, job_id):
+        return deepcopy(self.rows.get(job_id))
+
+    def list(self, limit=500):
+        return deepcopy(list(self.rows.values()))
+
+    def update(self, job_id, **fields):
+        self.updates.append((job_id, fields))
+        self.rows[job_id].update(deepcopy(fields))
+
+    def terminal_active_project_leases(self):
+        return [deepcopy(self.lease)]
+
+    def release_project_lease(self, *args):
+        raise AssertionError("SOURCE lease released")
+
+
+@pytest.mark.parametrize("status", ["queued", "routing", "executing", "interrupted", "blocked", "completed"])
+@pytest.mark.parametrize("identity", ["source", "missing-marker", "null-marker", "foreign-marker", "missing-project", "corrupt-checkpoint"])
+def test_b2f2_legacy_reconcile_preserves_source_rows_and_lease(monkeypatch, status, identity):
+    from app import engine_core
+    row = {"id": "a" * 32, "project_id": "pcp-local", "status": status,
+           "checkpoint": {"pcp_local_source": {"receipt": {"generation": 1}}, "workspace_mode": "direct"},
+           "progress": {"model_calls": 0, "test_runs": 2, "elapsed_minutes": 3}}
+    if identity == "missing-marker":
+        row["checkpoint"].pop("pcp_local_source")
+    elif identity == "null-marker":
+        row["checkpoint"]["pcp_local_source"] = None
+    elif identity == "foreign-marker":
+        row["project_id"] = "synthetic-foreign"
+    elif identity == "missing-project":
+        row.pop("project_id")
+    elif identity == "corrupt-checkpoint":
+        row["checkpoint"] = "not-a-checkpoint"
+    store = ReplayStore([row])
+    instance = engine_core.RuntimeEngineCore(store)
+    original = deepcopy((store.rows, store.receipt, store.lease))
+    calls = []
+    async def forbidden(*args, **kwargs):
+        calls.append("external")
+        raise AssertionError("SOURCE invoked a legacy external operation")
+    monkeypatch.setattr(engine_core, "cancel_all_antigravity_runs", forbidden)
+    instance.enqueue = forbidden
+    instance.ddev.cancel = forbidden
+    async def run():
+        await instance._reconcile_legacy_restart_effects()
+    asyncio.run(run())
+    assert (store.rows, store.receipt, store.lease) == original
+    assert store.updates == calls == []
+
+
+def test_b2f2_valid_legacy_jobs_still_reconcile_in_mixed_inventory(monkeypatch):
+    from app import engine_core
+    source_row = {"id": "source", "project_id": "pcp-local", "status": "queued", "checkpoint": {}}
+    queued = {"id": "queued", "project_id": "synthetic-legacy", "status": "queued", "checkpoint": {}}
+    inflight = {"id": "inflight", "project_id": "synthetic-legacy", "status": "executing", "checkpoint": {}}
+    store = ReplayStore([source_row, queued, inflight])
+    instance = engine_core.RuntimeEngineCore(store)
+    enqueued, cancelled = [], []
+    async def enqueue(job_id):
+        enqueued.append(job_id)
+    async def cancel(*, job_id):
+        cancelled.append(job_id)
+    async def forbid_global():
+        raise AssertionError("Unscoped cancellation could touch SOURCE")
+    instance.enqueue = enqueue
+    instance.ddev.cancel = cancel
+    monkeypatch.setattr(engine_core, "cancel_all_antigravity_runs", forbid_global)
+    asyncio.run(instance._reconcile_legacy_restart_effects())
+    assert enqueued == ["queued"] and cancelled == ["inflight"]
+    assert store.rows["source"] == source_row
+    assert store.rows["inflight"]["status"] == "interrupted"
+    assert [job_id for job_id, _ in store.updates] == ["inflight"]
+
+
+def test_b2f2_valid_legacy_queue_recovery_is_not_globally_disabled(monkeypatch):
+    from app import engine_core
+    store = ReplayStore([{"id": "queued", "project_id": "synthetic-legacy", "status": "queued", "checkpoint": {}}])
+    # No terminal lease to clean up in this synthetic ordinary project.
+    store.terminal_active_project_leases = lambda: []
+    instance = engine_core.RuntimeEngineCore(store)
+    calls = []
+    async def cancel_global():
+        calls.append("global")
+    monkeypatch.setattr(engine_core, "cancel_all_antigravity_runs", cancel_global)
+    asyncio.run(instance._reconcile_legacy_restart_effects())
+    assert calls == ["global"] and instance.queue.get_nowait() == "queued"
+    assert store.updates == []
+
+
+@pytest.mark.parametrize("becomes_source", [False, True])
+def test_b2f2_generic_worker_preserves_source_on_exception_but_runs_valid_legacy(becomes_source):
+    from app import engine_core
+    rows = [
+        {"id": "source", "project_id": "pcp-local", "status": "queued", "checkpoint": {"pcp_local_source": None}},
+        {"id": "legacy", "project_id": "synthetic-legacy", "status": "queued", "checkpoint": {}, "progress": {"model_calls": 7}},
+    ]
+    store = ReplayStore(rows)
+    seen = []
+    class Worker(engine_core.RuntimeEngineCore):
+        async def run_job(self, job_id):
+            seen.append(job_id)
+            if becomes_source:
+                store.rows[job_id]["checkpoint"]["pcp_local_source"] = "uncertain"
+                raise RuntimeError("synthetic in-flight failure after identity changed")
+    instance = Worker(store)
+    async def run():
+        await instance.queue.put("source")
+        await instance.queue.put("legacy")
+        task = asyncio.create_task(instance._worker_loop())
+        try:
+            await asyncio.wait_for(instance.queue.join(), timeout=1)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+    asyncio.run(run())
+    assert seen == ["legacy"]
+    assert store.rows["source"] == rows[0]
+    assert store.rows["legacy"]["status"] == "queued"
+    assert store.rows["legacy"]["progress"] == {"model_calls": 7}
+    assert store.updates == []

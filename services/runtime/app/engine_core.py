@@ -6,6 +6,7 @@ import os
 import time
 import uuid
 from copy import deepcopy
+from functools import wraps
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +51,48 @@ PAUSED = {"blocked", "waiting_human", "interrupted"}
 STABLE = FINAL | PAUSED
 
 
+class SourceJobNotExecutable(RuntimeError):
+    """Legacy controls cannot consume SOURCE or ambiguous durable identity."""
+
+
+def legacy_source_job(row: Any) -> bool:
+    """Fail closed on PCP identity, marker presence (including null), or damage.
+
+    A marker on a foreign row is suspicious, never authority for that row.
+    Ordinary valid legacy rows may omit their optional checkpoint entirely.
+    """
+    if type(row) is not dict:
+        return True
+    project = row.get("project_id")
+    if type(project) is not str or not project or project != project.strip():
+        return True
+    checkpoint = row.get("checkpoint")
+    return (project == "pcp-local"
+            or (checkpoint is not None and type(checkpoint) is not dict)
+            or (type(checkpoint) is dict and "pcp_local_source" in checkpoint))
+
+
+def require_legacy_job(row: Any) -> None:
+    if legacy_source_job(row):
+        raise SourceJobNotExecutable("PCP-local SOURCE or ambiguous job requires separate execution admission; legacy Runtime is forbidden")
+
+
+def _guard_job_mutator(engine: Any, method: Any):
+    """Check the durable row before a derived implementation can do any work.
+
+    Facade/Antigravity overrides run before their base methods. Bind the guard
+    to those resolved methods at construction; no HTTP input, flag or caller
+    override supplies an exception to this denial.
+    """
+    @wraps(method)
+    async def guarded(job_id: str, *args, **kwargs):
+        row = engine.storage.get(job_id)
+        if row is not None:
+            require_legacy_job(row)
+        return await method(job_id, *args, **kwargs)
+    return guarded
+
+
 class RuntimeEngineCore:
     def __init__(self, storage: Storage):
         self.storage = storage
@@ -62,6 +105,13 @@ class RuntimeEngineCore:
         self._queued_orchestrated_jobs: set[str] = set()
         self._stopping = False
         self._f2_worker_only = False
+        # These inherited entry points can be overridden above core in the MRO.
+        # In particular, resume can restore WorkOrders or contact Router first.
+        for name in ("run_job", "resume", "cancel", "cleanup", "request_review_repair",
+                     "advance_direct_job_source", "resolve_human_decision"):
+            method = getattr(self, name, None)
+            if callable(method):
+                setattr(self, name, _guard_job_mutator(self, method))
 
     async def start(self) -> None:
         if (
@@ -104,6 +154,7 @@ class RuntimeEngineCore:
         tasks = list(self.active_jobs.items())
         for job_id, task in tasks:
             row = self.storage.get(job_id)
+            require_legacy_job(row)
             if row and row.get("project_id") != "pcp-g0-fullpath-fixture":
                 raise F2WorkerNotReady("F2 worker has foreign job identity")
             if row and row.get("status") not in FINAL:
@@ -142,8 +193,15 @@ class RuntimeEngineCore:
         Its direct invocation is independently barred for parked F2 identity.
         """
         reject_parked_fullpath_side_effects()
-        await cancel_all_antigravity_runs()
-        for job in self.storage.list(limit=500):
+        jobs = self.storage.list(limit=500)
+        protected = any(legacy_source_job(job) for job in jobs)
+        # Unscoped host cancellation cannot safely exclude a SOURCE/unknown job.
+        # Keep per-job recovery of unrelated valid jobs below.
+        if not protected:
+            await cancel_all_antigravity_runs()
+        for job in jobs:
+            if legacy_source_job(job):
+                continue
             if job["status"] == "queued":
                 marker = orchestrator_launch(job)
                 if not marker or marker["state"] != "held":
@@ -174,7 +232,7 @@ class RuntimeEngineCore:
                 )
                 if preview_retired and workspace_restored:
                     self._release_terminal_direct_lease(owner_job_id)
-        else:
+        elif not protected:
             self.storage.reconcile_terminal_project_leases()
 
     async def stop(self) -> None:
@@ -183,6 +241,9 @@ class RuntimeEngineCore:
         tasks = list(self.active_jobs.items())
         for job_id, task in tasks:
             row = self.storage.get(job_id)
+            if legacy_source_job(row):
+                task.cancel()  # In-process quiescence only; no durable/external action.
+                continue
             if row and row["status"] not in FINAL:
                 self.storage.update(
                     job_id,
@@ -234,6 +295,8 @@ class RuntimeEngineCore:
         row = self.storage.get(job_id)
         if not row:
             return
+        if legacy_source_job(row):
+            return
         if orchestrator_launch(row) is not None:
             return
         status = str(row.get("status") or "")
@@ -268,7 +331,7 @@ class RuntimeEngineCore:
             }
 
         latest = self.storage.get(job_id)
-        if not latest:
+        if not latest or legacy_source_job(latest):
             return
         checkpoint = checkpoint_from_row(latest)
         checkpoint["resource_quiesce"] = detail
@@ -278,6 +341,8 @@ class RuntimeEngineCore:
         if not job_id:
             return True
         row = self.storage.get(job_id)
+        if legacy_source_job(row):
+            return False
         if not row or str(row.get("status") or "") not in FINAL:
             return True
         checkpoint = checkpoint_from_row(row)
@@ -301,6 +366,8 @@ class RuntimeEngineCore:
         if not job_id:
             return True
         row = self.storage.get(job_id)
+        if legacy_source_job(row):
+            return False
         if not row or str(row.get("status") or "") not in FINAL:
             return True
         checkpoint = checkpoint_from_row(row)
@@ -321,7 +388,7 @@ class RuntimeEngineCore:
             )
         except Exception as exc:
             latest = self.storage.get(job_id)
-            if latest:
+            if latest and not legacy_source_job(latest):
                 latest_checkpoint = checkpoint_from_row(latest)
                 latest_checkpoint["direct_base_restore"] = {
                     "restored": False,
@@ -332,7 +399,7 @@ class RuntimeEngineCore:
 
         restored = bool(result.get("returned", False))
         latest = self.storage.get(job_id)
-        if latest:
+        if latest and not legacy_source_job(latest):
             latest_checkpoint = checkpoint_from_row(latest)
             latest_checkpoint["direct_base_restore"] = {
                 "restored": restored,
@@ -345,6 +412,8 @@ class RuntimeEngineCore:
 
     def _release_terminal_direct_lease(self, job_id: str) -> bool:
         row = self.storage.get(job_id)
+        if legacy_source_job(row):
+            return False
         if not row or str(row.get("status") or "") not in FINAL:
             return False
         checkpoint = checkpoint_from_row(row)
@@ -355,13 +424,18 @@ class RuntimeEngineCore:
     async def _worker_loop(self) -> None:
         while True:
             job_id = await self.queue.get()
+            # The accepted B2-F1 registrar may stage one SOURCE ID in this
+            # existing queue. Queue membership is never execution authority.
+            if legacy_source_job(self.storage.get(job_id)):
+                self.queue.task_done()  # Transport only; receipt/claim is untouched.
+                continue
             run_task = asyncio.create_task(self.run_job(job_id))
             self.active_jobs[job_id] = run_task
             try:
                 await run_task
             except asyncio.CancelledError:
                 row = self.storage.get(job_id)
-                if row and row["status"] not in FINAL and row["status"] != "interrupted":
+                if row and not legacy_source_job(row) and row["status"] not in FINAL and row["status"] != "interrupted":
                     if row["status"] != "cancelled":
                         self.storage.update(
                             job_id,
@@ -370,10 +444,10 @@ class RuntimeEngineCore:
                         )
             except Exception as exc:
                 row = self.storage.get(job_id)
-                if row and row["status"] != "cancelled":
+                if row and not legacy_source_job(row) and row["status"] != "cancelled":
                     self.storage.update(job_id, status="failed", error=f"{type(exc).__name__}: {exc}")
             finally:
-                if not self._stopping:
+                if not self._stopping and not legacy_source_job(self.storage.get(job_id)):
                     preview_retired = await self._retire_terminal_direct_preview(job_id)
                     await self._quiesce_stable_manual_job(job_id)
                     workspace_restored = await self._restore_terminal_direct_workspace(job_id)
@@ -424,6 +498,7 @@ class RuntimeEngineCore:
         row = self.storage.get(job_id)
         if not row:
             raise RuntimeError("Unknown job")
+        require_legacy_job(row)
         status = str(row["status"])
         failed_orchestrated_recovery = (
             status == "failed" and _allow_failed_orchestrated_recovery
@@ -541,6 +616,7 @@ class RuntimeEngineCore:
         row = self.storage.get(job_id)
         if not row:
             raise RuntimeError("Unknown job")
+        require_legacy_job(row)
         if row["status"] not in {"queued", "interrupted", "blocked"}:
             raise RuntimeError(f"Job cannot be resumed from status={row['status']}")
         checkpoint = checkpoint_from_row(row)
@@ -556,6 +632,7 @@ class RuntimeEngineCore:
         row = self.storage.get(job_id)
         if not row:
             raise RuntimeError("Unknown job")
+        require_legacy_job(row)
         if row["status"] in {"completed", "failed"}:
             raise RuntimeError(f"Job cannot be cancelled from status={row['status']}")
         if row["status"] != "cancelled":
@@ -585,6 +662,7 @@ class RuntimeEngineCore:
         row = self.storage.get(job_id)
         if not row:
             raise RuntimeError("Unknown job")
+        require_legacy_job(row)
         if row["status"] != "waiting_human":
             raise RuntimeError(f"Job is not waiting for a human decision (status={row['status']})")
         checkpoint = checkpoint_from_row(row)

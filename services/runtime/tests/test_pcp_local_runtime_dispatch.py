@@ -514,3 +514,163 @@ def test_no_flags_no_readers_no_db_and_no_existing_worker(setup, monkeypatch):
     with pytest.raises(source.TaskStop, match="existing_worker"):
         asyncio.run(s.dispatch())
     assert s.db.connections == s.github.calls == 0
+
+
+def protected_job(s, identity="source", status="queued"):
+    asyncio.run(s.dispatch())
+    job_id = worker.stable_job_id(s.task)
+    row = s.db.jobs[job_id]
+    row["status"] = status
+    if identity == "missing-marker":
+        row["checkpoint"].pop("pcp_local_source")
+    elif identity == "null-marker":
+        row["checkpoint"]["pcp_local_source"] = None
+    elif identity == "false-marker":
+        row["checkpoint"]["pcp_local_source"] = False
+    elif identity == "corrupt-marker":
+        row["checkpoint"]["pcp_local_source"] = "untrusted-allow"
+    elif identity == "foreign-marker":
+        row["project_id"] = "synthetic-foreign"
+    elif identity == "missing-project":
+        row.pop("project_id")
+    elif identity == "corrupt-checkpoint":
+        row["checkpoint"] = ["not-a-checkpoint"]
+    return job_id
+
+
+class NoLegacyEffects:
+    def __init__(self):
+        self.calls = []
+
+    def __getattr__(self, name):
+        async def forbidden(*args, **kwargs):
+            self.calls.append(name)
+            raise AssertionError("Forbidden legacy side effect: " + name)
+        return forbidden
+
+
+@pytest.mark.parametrize("identity", ["source", "missing-marker", "null-marker", "false-marker", "corrupt-marker", "foreign-marker", "missing-project", "corrupt-checkpoint"])
+@pytest.mark.parametrize("operation", ["run_job", "resume", "cancel", "cleanup", "request_review_repair", "advance_direct_job_source", "resolve_human_decision"])
+def test_b2f2_facade_mutators_deny_before_any_derived_effect(setup, monkeypatch, identity, operation):
+    from app.engine_core import SourceJobNotExecutable
+    s = setup
+    job_id = protected_job(s, identity, "blocked")
+    before = deepcopy((s.db.jobs, s.db.receipts, s.db.events, s.db.lease))
+    effects = NoLegacyEffects()
+    s.engine.ddev = s.engine.router = effects
+    def no_write(*args, **kwargs):
+        effects.calls.append("write")
+        raise AssertionError("SOURCE modified durable state")
+    monkeypatch.setattr(s.db, "update", no_write)
+    arguments = {
+        "resume": {"reroute": True, "reset_transient_provider_failures": True},
+        "cleanup": {"remove_workspace": True, "release_ddev_data": True},
+        "request_review_repair": {"expected_commit": "f" * 40, "finding": "synthetic"},
+        "advance_direct_job_source": {"expected_old_source": "a" * 40, "expected_new_source": "b" * 40},
+        "resolve_human_decision": {"action": "approve"},
+    }
+    with pytest.raises(SourceJobNotExecutable):
+        asyncio.run(getattr(s.engine, operation)(job_id, **arguments.get(operation, {})))
+    assert effects.calls == []
+    assert (s.db.jobs, s.db.receipts, s.db.events, s.db.lease) == before
+    assert s.engine.queue.submissions == [job_id]
+
+
+def test_b2f2_delivery_entry_denies_even_when_called_unbound(setup, monkeypatch):
+    from app import engine_delivery
+    from app.engine_core import SourceJobNotExecutable
+    s = setup
+    job_id = protected_job(s)
+    before = deepcopy((s.db.jobs, s.db.receipts, s.db.events))
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Legacy recovery inspected a SOURCE job")
+    monkeypatch.setattr(engine_delivery, "recover_legacy_accepted_result", forbidden)
+    monkeypatch.setattr(s.engine, "_ensure_review_repair_churn_epoch", forbidden)
+    with pytest.raises(SourceJobNotExecutable):
+        asyncio.run(engine_delivery.RuntimeEngine.run_job(s.engine, job_id))
+    assert (s.db.jobs, s.db.receipts, s.db.events) == before
+
+
+@pytest.mark.parametrize("identity", ["source", "null-marker", "foreign-marker", "missing-project", "corrupt-checkpoint"])
+def test_b2f2_stray_queue_item_cannot_run_fail_or_cleanup(setup, monkeypatch, identity):
+    from app.engine_core import RuntimeEngineCore
+    s = setup
+    job_id = protected_job(s, identity)
+    before = deepcopy((s.db.jobs, s.db.receipts, s.db.events, s.db.lease))
+    effects = NoLegacyEffects()
+    s.engine.ddev = effects
+    # Bypass constructor's entry wrapper to independently test dequeue rejection.
+    s.engine.run_job = effects.run_job
+    s.engine._quiesce_stable_manual_job = effects.cleanup
+    async def run():
+        task = asyncio.create_task(RuntimeEngineCore._worker_loop(s.engine))
+        try:
+            await asyncio.wait_for(s.engine.queue.join(), timeout=1)
+        finally:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+    asyncio.run(run())
+    assert effects.calls == [] and not s.engine.active_jobs
+    assert (s.db.jobs, s.db.receipts, s.db.events, s.db.lease) == before
+
+
+def test_b2f2_cleanup_helpers_preserve_terminal_source_lease(setup):
+    s = setup
+    job_id = protected_job(s, status="completed")
+    s.db.jobs[job_id]["checkpoint"]["workspace_mode"] = "direct"
+    before = deepcopy((s.db.jobs, s.db.receipts, s.db.events, s.db.lease))
+    effects = NoLegacyEffects()
+    s.engine.ddev = effects
+    async def run():
+        assert await s.engine._retire_terminal_direct_preview(job_id) is False
+        assert await s.engine._restore_terminal_direct_workspace(job_id) is False
+        await s.engine._quiesce_stable_manual_job(job_id)
+        assert s.engine._release_terminal_direct_lease(job_id) is False
+    asyncio.run(run())
+    assert effects.calls == []
+    assert (s.db.jobs, s.db.receipts, s.db.events, s.db.lease) == before
+
+
+HTTP_SOURCE_MUTATIONS = [
+    ("run", {"reroute": True}), ("cancel", None),
+    ("cleanup?remove_workspace=true&release_ddev_data=true", None),
+    ("advance-source", {"expected_old_source": "a" * 40, "expected_new_source": "b" * 40}),
+    ("review-repair", {"expected_commit": "f" * 40, "finding": "synthetic"}),
+    ("decision", {"action": "approve"}),
+    ("collaborations", {"role": "debugger", "topic": "synthetic", "objective": "synthetic",
+                        "question": "synthetic", "evidence": [{"ref": "synthetic", "summary": "synthetic"}]}),
+    ("collaborations/fake/recheck", {"developer_response": "synthetic"}),
+    ("collaborations/fake/cancel", None),
+]
+
+
+@pytest.mark.parametrize("identity", ["source", "foreign-marker", "missing-project", "null-marker", "corrupt-checkpoint"])
+@pytest.mark.parametrize("suffix,body", HTTP_SOURCE_MUTATIONS)
+def test_b2f2_authenticated_http_mutators_stop_before_executor_or_orchestrator(setup, monkeypatch, identity, suffix, body):
+    import httpx
+    from app import main
+    s = setup
+    job_id = protected_job(s, identity)
+    for flag in main._PCP_LOCAL_FLAGS:
+        monkeypatch.delenv(flag, raising=False)
+    monkeypatch.setenv("PCP_RUNTIME_STARTUP_MODE", "normal")
+    monkeypatch.setenv("RUNTIME_API_TOKEN", "synthetic-control-token")
+    monkeypatch.setattr(main, "storage", s.db)
+    effects = NoLegacyEffects()
+    # Any handler reaching the engine/control plane instead of its durable-row
+    # guard fails the test. ASGI requests make no real network/listener call.
+    s.engine.ddev = effects
+    monkeypatch.setattr(main, "engine", s.engine)
+    monkeypatch.setattr(main, "collaboration_manager", effects)
+    monkeypatch.setattr(main, "plan_orchestrator", effects)
+    monkeypatch.setattr(main, "prepare_orchestrated_job_resume", lambda *a: (_ for _ in ()).throw(AssertionError("plan touched")))
+    before = deepcopy((s.db.jobs, s.db.receipts, s.db.events, s.db.lease))
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=main.app), base_url="http://synthetic") as client:
+            result = await client.post(f"/v1/jobs/{job_id}/{suffix}", json=body,
+                                      headers={"Authorization": "Bearer synthetic-control-token"})
+            assert result.status_code == 409, result.text
+            assert "separate execution admission" in result.json()["detail"]
+    asyncio.run(run())
+    assert effects.calls == []
+    assert (s.db.jobs, s.db.receipts, s.db.events, s.db.lease) == before

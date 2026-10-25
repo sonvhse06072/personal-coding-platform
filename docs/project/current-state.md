@@ -34,7 +34,7 @@ GitHub/Runtime evidence remains separate; Runtime was not queried.
 
 **#800 reprioritized:** [Cloud producer/OCI successor research PARKED P2](https://github.com/sonvhse06072/personal-coding-platform/issues/800#issuecomment-6396801006); research preserved, current accepted offline security and physical STOP retained. No Google Cloud Build selection, new SOURCE approval or Host permit.
 
-**#808 next action:** [PM SOURCE outcome](https://github.com/sonvhse06072/personal-coding-platform/issues/808#issuecomment-6399544743) ACCEPTED: PCP-only claim → atomic `cp_jobs` queued job → existing queue; fake integration only. Current Runtime startup/legacy queued-job replay, physical DB/lease, approved baseline, actual readers/credentials/provider egress and first PCP task remain **NOT AUTHORIZED / NOT TESTED**. No Docker/DDEV/Host/LIVE, model call, reset or #752 retry; historical jobs/Chợ Nhạc STRICT NO-TOUCH.
+**#808 B2-F2 SOURCE candidate:** [Owner 8-path decision](https://github.com/sonvhse06072/personal-coding-platform/issues/808#issuecomment-6400411558), base `a03cb8c`, `ai/808-no-legacy-replay-source-v1`. Legacy replay/dequeue, derived mutators, delivery and authenticated HTTP guards preserve SOURCE/ambiguous rows; fake-only regressions. Exact-head full4 + PM COMMENT required; no merge/physical acceptance. B2-F1 SOURCE remains accepted. Fresh install/DB/lease/baseline/readers/credentials/first-task gates remain; Host/LIVE STOP, #752 PARKED, #595 HOLD; Chợ Nhạc NO-TOUCH.
 
 ## Active investment / execution gates
 

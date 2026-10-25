@@ -14,6 +14,7 @@ from .required_ci import (
 import os
 import re
 from .engine_verification import RuntimeEngine as ExecutionRuntimeEngine
+from .engine_core import require_legacy_job
 from .fingerprint import failure_fingerprint
 from .legacy_delivery_recovery import (
     LEGACY_RECOVERY_BLOCK_REASON,
@@ -211,6 +212,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         # verification/commit, resume the idempotent delivery step instead of
         # spending another model call on already-verified work.
         before = self.storage.get(job_id)
+        require_legacy_job(before)
         if before:
             checkpoint = deepcopy(before.get("checkpoint") or {})
             progress = deepcopy(before.get("progress") or {})
@@ -223,6 +225,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             except ReviewRepairChurnPaused:
                 return
             before = self.storage.get(job_id)
+            require_legacy_job(before)
         accepted = self._accepted_result_for_delivery(before) if before else None
         pending_review_repair_record = (
             (before.get("checkpoint") or {}).get("pending_review_repair")
@@ -285,6 +288,8 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             await super().run_job(job_id)
 
         repaired = self.storage.get(job_id)
+        if repaired is not None:
+            require_legacy_job(repaired)
         if repaired and repaired.get("status") == "delivering":
             repaired_checkpoint = deepcopy(repaired.get("checkpoint") or {})
             pending = repaired_checkpoint.get("pending_review_repair")
@@ -328,6 +333,8 @@ class RuntimeEngine(ExecutionRuntimeEngine):
 
         while True:
             row = self.storage.get(job_id)
+            if row is not None:
+                require_legacy_job(row)
             if not row or row.get("status") != "delivering":
                 return
 
