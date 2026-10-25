@@ -32,7 +32,9 @@ Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline 
 
 GitHub/Runtime evidence remains separate; Runtime was not queried.
 
-**Next safe action:** #795 remains OPEN for future strictly separated Host/DDEV plan; #800 remains OPEN for independently authenticated OCI image producer/trust root, actual export/import, privileged builder/no-fallback and hard disk/egress/ownership/cancellation proof. Parked DDEV remains OFF, User/HOME mismatch unresolved. No Host checkout, Docker/DDEV, DB, credentials, global-router changes, source/old-state cleanup, model worker or #752 blocked-egress retry. #595 HOLD; F2/T01/Guardian frozen; Chợ Nhạc STRICT NO-TOUCH.
+**#800 continuation:** [Draft #807](https://github.com/sonvhse06072/personal-coding-platform/pull/807) / [T3 proposal](history/pcp-800-oci-next-gate-proposal-2026-10-25.md); source `4b2ff74`, docs only. Exact-head hosted CI/PM review required. Producer/root and six-path successor SOURCE scope **UNAPPROVED**; Host STOP.
+
+**Next safe action:** select producer/root and review exact cost/security/SOURCE scope. #800 OPEN; #795 Host/DDEV STOP; User/HOME unresolved. No Host checkout, Docker/DDEV/DB, credentials, cleanup, worker or #752 egress retry. #595 HOLD; F2/T01/Guardian frozen; Chợ Nhạc STRICT NO-TOUCH.
 
 ## Active investment / execution gates
 
