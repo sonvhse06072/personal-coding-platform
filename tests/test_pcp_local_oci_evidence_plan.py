@@ -17,6 +17,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/pcp-local-oci-evidence-plan.py"
 EXAMPLE = ROOT / "profiles/pcp-local/oci-evidence-plan.example.yml"
+ANCHOR = "7b8b2617973285365a6e4efe79b0d4e350ad64bf"
 
 
 @pytest.fixture
@@ -151,7 +152,7 @@ def test_checked_in_plan_has_no_outputs_root_or_per_phase_permissions(tool):
 def test_reviewed_input_pins_match_actual_existing_recipe_lock_and_git_archive(tool):
     inputs = json.loads(EXAMPLE.read_bytes())["expected"]["inputs"]
     old = runpy.run_path(str(ROOT / "scripts/pcp-local-image-provenance-plan.py"))
-    files = old["_read_git_inputs"](old["git_read"]("rev-parse", "HEAD"))
+    files = old["_read_git_inputs"](ANCHOR)
     for key, path in (("dockerfile_sha256", old["DOCKERFILE"]), ("requirements_sha256", old["LOCK"]),
                       ("ignore_sha256", old["IGNORE"])):
         assert inputs[key] == hashlib.sha256(files[str(path.relative_to(ROOT))]).hexdigest()
@@ -160,12 +161,13 @@ def test_reviewed_input_pins_match_actual_existing_recipe_lock_and_git_archive(t
     lock = files["profiles/pcp-local/runtime/requirements-inspect.lock"].decode()
     actual = [{"name": n.replace("[binary]", ""), "version": v, "sha256": d} for n, v, d in re.findall(
         r"^([a-z][a-z0-9-]*(?:\[binary\])?)==([0-9.]+) --hash=sha256:([0-9a-f]{64})$", lock, re.M)]
+    assert len(actual) == 18
     assert inputs["wheels"] == actual
 
 
 def test_runtime_policy_is_derived_from_actual_immutable_pinned_recipe(tool):
     old = runpy.run_path(str(ROOT / "scripts/pcp-local-image-provenance-plan.py"))
-    files = old["_read_git_inputs"](old["git_read"]("rev-parse", "HEAD"))
+    files = old["_read_git_inputs"](ANCHOR)
     recipe = files["profiles/pcp-local/runtime/Dockerfile.inspect"]
     assert hashlib.sha256(recipe).hexdigest() == tool["INPUT_PINS"]["dockerfile_sha256"]
     values = {}
