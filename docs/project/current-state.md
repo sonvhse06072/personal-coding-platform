@@ -2,7 +2,7 @@
 
 Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline revision, Runtime/WSL rollout attestation, authority change, or chronological log. Verify GitHub and local durable evidence immediately before any mutation. The Constitution, architecture and approved baseline outrank this snapshot.
 
-**Last reconciled: 2026-10-25, #800 H1b3 SOURCE ACCEPTED; Host/LIVE STOP.** `main@a5186ed2926310814ba6c470b0e21e8ae7b436ae`; [Owner approval](https://github.com/sonvhse06072/personal-coding-platform/issues/800#issuecomment-6388248530), [PR #802](https://github.com/sonvhse06072/personal-coding-platform/pull/802) merged, [PM COMMENT](https://github.com/sonvhse06072/personal-coding-platform/pull/802#pullrequestreview-5641274399), [postmerge real4 #40156915986](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40156915986) **4,452 PASS/89 skipped**. [PM outcome](https://github.com/sonvhse06072/personal-coding-platform/issues/800#issuecomment-6392783715). Immutable Git source TAR 103 members reproduced. Synthetic OCI integrity-only PASS, authentic provenance NOT_VERIFIED, image NOT BUILT, checker/Host/LIVE STOP. #752 PARKED, #595 HOLD.
+**Last reconciled: 2026-10-25, #795 H1c design delivered; implementation/Host STOP.** Research main `25bba45538d9199bbf874be611a140a83b73f16a`; [eight-part ChangeProposal](https://github.com/sonvhse06072/personal-coding-platform/issues/795#issuecomment-6393130053), seven proposed paths/four protected, pure offline planner only. PM review and real Owner SOURCE decision pending; no implementation PR or physical setup. #800 H1b3 SOURCE accepted via [#802](https://github.com/sonvhse06072/personal-coding-platform/pull/802); [exact-main hosted full4](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40157237785) 4,452 PASS/89 skipped. Source integrity is not authentic provenance or Host proof. No DDEV/Docker/Buildx, install, DB, credentials, cleanup or worker. #752 PARKED, #595 HOLD.
 
 ## #764 / #777 — Phase B PCP-only source acceptance and Gate A audit
 
@@ -32,7 +32,7 @@ Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline 
 
 GitHub/Runtime evidence remains separate; Runtime was not queried.
 
-**Next safe action:** #800 OPEN for separately approved OCI Host producer/trust root, privileged builder/no-fallback, hard disk/egress and independent verification; **no Host permit**. [#795](https://github.com/sonvhse06072/personal-coding-platform/issues/795) may proceed SOURCE DDEV design only, no physical setup before verified image and separate Owner approval. No Docker/DDEV, old-state cleanup, credentials, worker or #752 blocked-egress retry. #595 HOLD, F2/T01/Guardian frozen; Chợ Nhạc STRICT NO-TOUCH.
+**Next safe action:** PM reviews [#795 proposal](https://github.com/sonvhse06072/personal-coding-platform/issues/795#issuecomment-6393130053), then Owner decides exact SOURCE scope before implementation. Parked templates remain unchanged. #800 producer/root, real OCI compatibility, privileged builder/no-fallback, hard disk/egress and shared-resource/cancellation evidence still block every Host phase. No old-state access/cleanup, global router change, credentials, worker or #752 blocked-egress retry. #595 HOLD; F2/T01/Guardian frozen; Chợ Nhạc STRICT NO-TOUCH.
 
 ## Active investment / execution gates
 
