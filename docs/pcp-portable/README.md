@@ -130,6 +130,14 @@ First real task, active baseline, installed readers, credentials/egress, startup
 publication and Host/LIVE acceptance remain separate gates. #752 PARKED,
 #595 HOLD, historic jobs frozen; Chợ Nhạc STRICT NO-TOUCH.
 
+**Review blocker:** [Draft #811](https://github.com/sonvhse06072/personal-coding-platform/pull/811)
+exposes five pre-existing OCI tests tied to HEAD's historical inspection app
+tree. Runtime changes correctly fail that frozen pin. Those two root test files
+are outside #808's nine-path consent. A separate exact scope decision is needed
+to test the accepted immutable image-source snapshot independently of newer
+Runtime implementation, while explicitly retaining HEAD-drift STOP coverage.
+No image pin/checker/recipe or excluded test has been changed to pass CI.
+
 
 ## B2.2c0 — Isolated PCP-only draft startup (SOURCE ONLY / PARKED)
 

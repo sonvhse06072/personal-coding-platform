@@ -195,8 +195,11 @@ class Storage:
         from .pcp_local_worker_loop import (
             RuntimeTaskLauncher, PROJECT_ID, REPOSITORY, exact_value, require,
         )
+        from .engine_delivery import DeliveryAwareStorage
         require(type(registration) is RuntimeTaskLauncher
-                and registration.engine.storage is self,
+                and type(registration.engine.storage) is DeliveryAwareStorage
+                and registration.engine.storage.backend is self
+                and registration.engine._delivery_storage_backend is self,
                 "pcp_local_trusted_registration_required")
         registration.require_registration()
         binding = registration.source_binding

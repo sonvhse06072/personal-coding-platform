@@ -140,8 +140,11 @@ class RuntimeTaskAttestor:
                 and all(type(v) is str and v for v in choice.values()),
                 "pcp_local_model_identity_invalid")
         from .config import model_config
-        from .model_capabilities import validate_model_choice
-        validate_model_choice(choice)
+        from .model_capabilities import ModelCapabilityError, validate_model_choice
+        try:
+            validate_model_choice(choice)
+        except ModelCapabilityError as exc:
+            raise TaskStop("pcp_local_registered_model_denied") from exc
         registered = model_config(choice["id"])
         require(registered.get("kind") == "agent"
                 and "executor" in registered.get("roles", [])
