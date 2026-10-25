@@ -2,7 +2,7 @@
 
 Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline revision, Runtime/WSL rollout attestation, authority change, or chronological log. Verify GitHub and local durable evidence immediately before any mutation. The Constitution, architecture and approved baseline outrank this snapshot.
 
-**Last reconciled: 2026-10-25, H1c #795 SOURCE ACCEPTED; Host/LIVE STOP.** `main@ee7864e3caee744b4a3417a58bc1757bcf4aa15c`; [Owner seven-path approval](https://github.com/sonvhse06072/personal-coding-platform/issues/795#issuecomment-6394295965), [PR #805 MERGED](https://github.com/sonvhse06072/personal-coding-platform/pull/805), [PM COMMENT](https://github.com/sonvhse06072/personal-coding-platform/pull/805#pullrequestreview-5642087227), [postmerge real4 #40173371214](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40173371214) **4,630 PASS/89 skipped**, [PM SOURCE outcome #795](https://github.com/sonvhse06072/personal-coding-platform/issues/795#issuecomment-6394961417). Offline DDEV validator has 178 new cases; synthetic plan may structurally PASS but CLI always STOP/exit 2, Host/DB/LIVE STOP, checkout and OCI producer NOT_ATTESTED. #800 OCI Host still blocked; #752 PARKED; #595 HOLD.
+**Last reconciled: 2026-10-25, P0 local Codex workloop priority (Owner direction).** `main@6bf010382badbdd32472fa70e944b947295c2194`. [Product pivot #593](https://github.com/sonvhse06072/personal-coding-platform/issues/593#issuecomment-6396776368), [B2-F1 code task #808](https://github.com/sonvhse06072/personal-coding-platform/issues/808), [Phase B #764](https://github.com/sonvhse06072/personal-coding-platform/issues/764#issuecomment-6396800423). Existing H1c #795 and H1b3 #800 SOURCE accepted; real local Codex/Host/LIVE not proven. #752 PARKED, #595 HOLD.
 
 ## #764 / #777 — Phase B PCP-only source acceptance and Gate A audit
 
@@ -32,9 +32,9 @@ Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline 
 
 GitHub/Runtime evidence remains separate; Runtime was not queried.
 
-**#800 continuation:** [Draft #807](https://github.com/sonvhse06072/personal-coding-platform/pull/807) / [T3 proposal](history/pcp-800-oci-next-gate-proposal-2026-10-25.md); source `4b2ff74`, docs only. Exact-head hosted CI/PM review required. Producer/root and six-path successor SOURCE scope **UNAPPROVED**; Host STOP.
+**#800 reprioritized:** [Cloud producer/OCI successor research PARKED P2](https://github.com/sonvhse06072/personal-coding-platform/issues/800#issuecomment-6396801006); research preserved, current accepted offline security and physical STOP retained. No Google Cloud Build selection, new SOURCE approval or Host permit.
 
-**Next safe action:** select producer/root and review exact cost/security/SOURCE scope. #800 OPEN; #795 Host/DDEV STOP; User/HOME unresolved. No Host checkout, Docker/DDEV/DB, credentials, cleanup, worker or #752 egress retry. #595 HOLD; F2/T01/Guardian frozen; Chợ Nhạc STRICT NO-TOUCH.
+**Next safe action:** #808 has P0: reconcile minimal in-process trusted attestor/launcher and PCP-only GitHub queue → Codex container → real PR/CI/PM loop; exact protected SOURCE permission before modifying Runtime/startup/registry, independent one-time Host permit before local activation. No second orchestration service, cloud primary worker, existing job/lease reset, Host Docker/DDEV/DB/credentials, model call or #752 blocked-egress retry. #595 HOLD until accepted fresh trial; Chợ Nhạc STRICT NO-TOUCH.
 
 ## Active investment / execution gates
 
