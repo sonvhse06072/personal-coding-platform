@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import time
 import uuid
@@ -427,6 +428,9 @@ class RuntimeEngineCore:
             # The accepted B2-F1 registrar may stage one SOURCE ID in this
             # existing queue. Queue membership is never execution authority.
             if legacy_source_job(self.storage.get(job_id)):
+                logging.getLogger(__name__).warning(
+                    "Legacy worker withheld SOURCE/ambiguous queue item; durable claim unchanged"
+                )
                 self.queue.task_done()  # Transport only; receipt/claim is untouched.
                 continue
             run_task = asyncio.create_task(self.run_job(job_id))

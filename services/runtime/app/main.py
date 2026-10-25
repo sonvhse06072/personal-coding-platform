@@ -1044,7 +1044,6 @@ async def advance_job_source(
 
 @app.post("/v1/jobs/{job_id}/run", response_model=JobView, dependencies=[Depends(auth)])
 async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
-    _require_legacy_job_mutation(job_id)
     request = payload or JobRunRequest()
     try:
         if runtime_startup_mode() == F2_WORKER_MODE:
@@ -1058,6 +1057,7 @@ async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
             ):
                 raise F2WorkerNotReady("F2 one-job resume is not authorized")
             async with _f2_single_job_intake_lock:
+                _require_legacy_job_mutation(job_id)
                 # No planner/PM orchestration, provider-state reset, reroute,
                 # budget increase, replay or new job. A second request sees
                 # status=queued and fails the same exact blocked-row gate.
@@ -1066,6 +1066,7 @@ async def run_job(job_id: str, payload: JobRunRequest | None = None) -> JobView:
                     raise F2WorkerNotReady("F2 one-job worker is already active")
                 row = await engine.resume(job_id)
         else:
+            _require_legacy_job_mutation(job_id)
             orchestration_resume = prepare_orchestrated_job_resume(plan_orchestrator.store, job_id)
             row = await engine.resume(
                 job_id,

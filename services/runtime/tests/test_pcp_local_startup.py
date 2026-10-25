@@ -353,3 +353,22 @@ def test_b2f2_generic_worker_preserves_source_on_exception_but_runs_valid_legacy
     assert store.rows["legacy"]["status"] == "queued"
     assert store.rows["legacy"]["progress"] == {"model_calls": 7}
     assert store.updates == []
+
+
+@pytest.mark.parametrize("job_id,request", [
+    ("not-the-admitted-job", None),
+    (runtime_main.F2_REENTRY_JOB_ID, runtime_main.JobRunRequest(reroute=True)),
+    (runtime_main.F2_REENTRY_JOB_ID, runtime_main.JobRunRequest(reset_transient_provider_failures=True)),
+])
+def test_b2f2_frozen_scope_rejection_precedes_any_job_database_read(monkeypatch, job_id, request):
+    from fastapi import HTTPException
+    monkeypatch.setattr(runtime_main, "runtime_startup_mode", lambda: runtime_main.F2_WORKER_MODE)
+    monkeypatch.setattr(runtime_main, "require_f2_worker_environment", lambda *_: None)
+    def forbidden(*_, **__):
+        raise AssertionError("Rejected historical scope read a job")
+    monkeypatch.setattr(runtime_main.storage, "get", forbidden)
+    async def run():
+        with pytest.raises(HTTPException) as exc:
+            await runtime_main.run_job(job_id, request)
+        assert exc.value.status_code == 409
+    asyncio.run(run())

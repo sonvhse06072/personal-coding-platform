@@ -592,7 +592,7 @@ def test_b2f2_delivery_entry_denies_even_when_called_unbound(setup, monkeypatch)
 
 
 @pytest.mark.parametrize("identity", ["source", "null-marker", "foreign-marker", "missing-project", "corrupt-checkpoint"])
-def test_b2f2_stray_queue_item_cannot_run_fail_or_cleanup(setup, monkeypatch, identity):
+def test_b2f2_stray_queue_item_cannot_run_fail_or_cleanup(setup, monkeypatch, caplog, identity):
     from app.engine_core import RuntimeEngineCore
     s = setup
     job_id = protected_job(s, identity)
@@ -611,6 +611,7 @@ def test_b2f2_stray_queue_item_cannot_run_fail_or_cleanup(setup, monkeypatch, id
             await asyncio.gather(task, return_exceptions=True)
     asyncio.run(run())
     assert effects.calls == [] and not s.engine.active_jobs
+    assert "withheld SOURCE/ambiguous queue item; durable claim unchanged" in caplog.text
     assert (s.db.jobs, s.db.receipts, s.db.events, s.db.lease) == before
 
 
