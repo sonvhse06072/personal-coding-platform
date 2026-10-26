@@ -2,7 +2,7 @@
 
 Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline revision, Runtime/WSL rollout attestation, authority change, or chronological log. Verify GitHub and local durable evidence immediately before any mutation. The Constitution, architecture and approved baseline outrank this snapshot.
 
-**Last reconciled: 2026-10-25, P0 #808 queued Runtime seam SOURCE ACCEPTED; Host/LIVE STOP.** [PR #811](https://github.com/sonvhse06072/personal-coding-platform/pull/811) merged `main@463d81f3fee27bc0fd804486e8b941fdf7887d14` after [PM review #5643860078](https://github.com/sonvhse06072/personal-coding-platform/pull/811#pullrequestreview-5643860078) and [postmerge real4 #40207083378](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40207083378) **4,717 PASS/89 skipped**. Owner approved 11 exact SOURCE paths/4 protected. OCI historic pin remains unchanged; queued is not Codex execution. #752 PARKED; #595 HOLD.
+**Last reconciled: 2026-10-26, B2-F2 SOURCE accepted on GitHub; Host/LIVE STOP.** [PR #811](https://github.com/sonvhse06072/personal-coding-platform/pull/811) merged `main@463d81f3fee27bc0fd804486e8b941fdf7887d14` after [PM review #5643860078](https://github.com/sonvhse06072/personal-coding-platform/pull/811#pullrequestreview-5643860078) and [postmerge real4 #40207083378](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40207083378) **4,717 PASS/89 skipped**. Owner approved 11 exact SOURCE paths/4 protected. OCI historic pin remains unchanged; queued is not Codex execution. #752 PARKED; #595 HOLD.
 
 ## #764 / #777 — Phase B PCP-only source acceptance and Gate A audit
 
@@ -34,7 +34,7 @@ GitHub/Runtime evidence remains separate; Runtime was not queried.
 
 **#800 reprioritized:** [Cloud producer/OCI successor research PARKED P2](https://github.com/sonvhse06072/personal-coding-platform/issues/800#issuecomment-6396801006); research preserved, current accepted offline security and physical STOP retained. No Google Cloud Build selection, new SOURCE approval or Host permit.
 
-**#808 B2-F2 SOURCE DRAFT:** [PR #813](https://github.com/sonvhse06072/personal-coding-platform/pull/813), `ai/808-no-legacy-replay-source-v1`, base `a03cb8c`. Owner chat approved `DEC-PCP-B2-F2-808-LEGACY-FIXTURES-SCOPE-V1`:12 paths/4 protected. Repair `cae8750` [CI40263331491](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40263331491) actual full4 PASS:4,869 passed/89 skipped/3 dependency warnings; old40215827175's9 failures retained. Production guards unchanged. Final HEAD CI is recorded on PR; PM review pending; no acceptance/merge or physical proof. Host/LIVE STOP; #752 PARKED, #595 HOLD; Chợ Nhạc NO-TOUCH.
+**#808 B2-F2 SOURCE ACCEPTED / Host STOP:** [PR #813](https://github.com/sonvhse06072/personal-coding-platform/pull/813) merged `main@b75be4e` after [Owner decision #6408467546](https://github.com/sonvhse06072/personal-coding-platform/issues/808#issuecomment-6408467546) and PM review. [Postmerge full4 #40271257268](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40271257268) **PASS: 4,869 passed/89 existing skipped/0 failed/3 warnings**. Historical Runtime nine-FAIL retained; physical execution **NOT ATTESTED**. #808 OPEN, Host/WSL/Docker/DDEV/DB/provider/model/LIVE STOP; #752 PARKED, #595 HOLD; Chợ Nhạc NO-TOUCH.
 
 ## Active investment / execution gates
 
