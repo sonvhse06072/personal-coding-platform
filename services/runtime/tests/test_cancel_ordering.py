@@ -8,6 +8,14 @@ def test_cancel_endpoint_drains_side_effects_before_engine_terminal_transition(m
     events = []
     job_id = "job12345"
 
+    def get_legacy_job(requested_id):
+        assert requested_id == job_id
+        events.append(("durable-identity", job_id))
+        return {
+            "id": job_id, "project_id": "default",
+            "status": "executing", "checkpoint": {},
+        }
+
     async def cancel_ddev(*, job_id: str):
         events.append(("ddev", job_id))
         return {"cancelled": True}
@@ -53,12 +61,14 @@ def test_cancel_endpoint_drains_side_effects_before_engine_terminal_transition(m
                 task.cancel()
                 await asyncio.gather(task, return_exceptions=True)
 
+    monkeypatch.setattr(main.storage, "get", get_legacy_job)
     monkeypatch.setattr(main.engine.ddev, "cancel", cancel_ddev)
     monkeypatch.setattr(main.engine, "cancel", cancel_engine)
 
     result = asyncio.run(scenario())
     assert result.status == "cancelled"
     assert events == [
+        ("durable-identity", job_id),
         ("ddev", job_id),
         ("agent", job_id),
         ("engine", job_id),

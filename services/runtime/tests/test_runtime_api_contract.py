@@ -37,6 +37,9 @@ def test_run_api_forwards_explicit_pm_handoff_verification_only(monkeypatch):
             "updated_at": timestamp,
         }
 
+    monkeypatch.setattr(main.storage, "get", lambda job_id: {
+        "id": job_id, "project_id": "demo", "status": "blocked", "checkpoint": {},
+    } if job_id == "job12345" else None)
     monkeypatch.setattr(main.engine, "resume", resume)
     monkeypatch.setattr(main, "prepare_orchestrated_job_resume", lambda *args: None)
     monkeypatch.setattr(main, "reopen_orchestrated_job", lambda *args: None)
@@ -89,6 +92,9 @@ def test_human_decision_api_forwards_exact_decision_key(monkeypatch):
     async def tick():
         return None
 
+    monkeypatch.setattr(main.storage, "get", lambda job_id: {
+        "id": job_id, "project_id": "demo", "status": "waiting_human", "checkpoint": {},
+    } if job_id == "job12345" else None)
     monkeypatch.setattr(main.engine, "resolve_human_decision", resolve)
     monkeypatch.setattr(main.plan_orchestrator, "tick", tick)
     payload = HumanDecisionRequest(
@@ -147,6 +153,9 @@ def test_review_repair_api_uses_dedicated_engine_transition(monkeypatch):
             "updated_at": datetime.now(timezone.utc),
         }
 
+    monkeypatch.setattr(main.storage, "get", lambda job_id: {
+        "id": job_id, "project_id": "demo", "status": "completed", "checkpoint": {},
+    } if job_id == "job12345" else None)
     monkeypatch.setattr(main.engine, "request_review_repair", request)
     payload = ReviewRepairRequest(
         expected_commit="b" * 40,

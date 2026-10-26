@@ -34,7 +34,7 @@ GitHub/Runtime evidence remains separate; Runtime was not queried.
 
 **#800 reprioritized:** [Cloud producer/OCI successor research PARKED P2](https://github.com/sonvhse06072/personal-coding-platform/issues/800#issuecomment-6396801006); research preserved, current accepted offline security and physical STOP retained. No Google Cloud Build selection, new SOURCE approval or Host permit.
 
-**#808 B2-F2 SOURCE DRAFT:** [PR #813](https://github.com/sonvhse06072/personal-coding-platform/pull/813), base `a03cb8c`, `ai/808-no-legacy-replay-source-v1`, 8 approved paths/4 protected. Replay/dequeue/control guards and fake regressions implemented; full4 NOT PASS. Old control fixtures need fake durable storage/project identity; four excluded test files require Owner scope delta (evidence in PR/#808). F2 fixed-job rejection stays before DB reads. B2-F1 SOURCE accepted; no B2-F2 acceptance/merge or physical proof. Host/LIVE STOP; #752 PARKED, #595 HOLD; Chợ Nhạc NO-TOUCH.
+**#808 B2-F2 SOURCE DRAFT:** [PR #813](https://github.com/sonvhse06072/personal-coding-platform/pull/813), base `a03cb8c`, branch `ai/808-no-legacy-replay-source-v1`. Human Owner approved `DEC-PCP-B2-F2-808-LEGACY-FIXTURES-SCOPE-V1` in the current chat: 12 exact paths/same 4 protected. Four legacy test fixtures now supply fake durable identity; restart asserts inspection before cancellation. Production guards unchanged. Prior hosted run40215827175 retains 9 Runtime failures; new full4 CI pending. No acceptance/merge or physical proof; Host/LIVE STOP, #752 PARKED, #595 HOLD, Chợ Nhạc NO-TOUCH.
 
 ## Active investment / execution gates
 
