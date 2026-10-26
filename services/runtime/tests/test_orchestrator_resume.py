@@ -156,6 +156,7 @@ def test_non_orchestrated_job_is_unchanged() -> None:
 
 def test_failed_orchestrated_source_advance_is_authorized_without_reopening(monkeypatch) -> None:
     store = Store([tracked()])
+    runtime_storage = RuntimeStorage(failed_job_row())
     calls = []
 
     class Engine:
@@ -178,6 +179,7 @@ def test_failed_orchestrated_source_advance_is_authorized_without_reopening(monk
             return row
 
     monkeypatch.setattr(runtime_main, "engine", Engine())
+    monkeypatch.setattr(runtime_main, "storage", runtime_storage)
     monkeypatch.setattr(
         runtime_main,
         "plan_orchestrator",
@@ -220,6 +222,7 @@ def test_failed_orchestrated_job_reopens_only_after_engine_resume_succeeds(monke
 
     engine.enqueue = enqueue
     monkeypatch.setattr(runtime_main, "engine", engine)
+    monkeypatch.setattr(runtime_main, "storage", runtime_storage)
     monkeypatch.setattr(runtime_main, "plan_orchestrator", SimpleNamespace(store=store))
     monkeypatch.setattr(runtime_main, "view", lambda row: row)
 
@@ -243,6 +246,7 @@ def test_orchestrated_resume_failure_leaves_plan_and_work_order_blocked(monkeypa
     engine = RuntimeEngine(runtime_storage)
 
     monkeypatch.setattr(runtime_main, "engine", engine)
+    monkeypatch.setattr(runtime_main, "storage", runtime_storage)
     monkeypatch.setattr(runtime_main, "plan_orchestrator", SimpleNamespace(store=store))
 
     with pytest.raises(HTTPException) as exc_info:
@@ -265,6 +269,7 @@ def test_failed_orchestrated_reroute_failure_leaves_plan_and_work_order_blocked(
 
     engine.router = Router()
     monkeypatch.setattr(runtime_main, "engine", engine)
+    monkeypatch.setattr(runtime_main, "storage", runtime_storage)
     monkeypatch.setattr(runtime_main, "plan_orchestrator", SimpleNamespace(store=store))
 
     with pytest.raises(HTTPException) as exc_info:

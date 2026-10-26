@@ -249,15 +249,15 @@ def test_normal_legacy_restart_semantics_remain_unchanged(monkeypatch):
             calls.append("init")
         def get(self, job_id):
             return (
-                {"id": job_id, "status": "queued", "checkpoint": {}}
+                {"id": job_id, "project_id": "demo", "status": "queued", "checkpoint": {}}
                 if job_id == "a" else None
             )
         def list(self, limit=50):
             assert limit == 500
             calls.append("list")
             return [
-                {"id": "a", "status": "queued", "checkpoint": {}},
-                {"id": "b", "status": "executing", "checkpoint": {}},
+                {"id": "a", "project_id": "demo", "status": "queued", "checkpoint": {}},
+                {"id": "b", "project_id": "demo", "status": "executing", "checkpoint": {}},
             ]
         def update(self, job_id, **kwargs):
             calls.append(("update", job_id, kwargs["status"]))
@@ -282,7 +282,7 @@ def test_normal_legacy_restart_semantics_remain_unchanged(monkeypatch):
             assert engine.worker_task is not None
             assert engine.queue.qsize() == 1
             assert calls == [
-                "init", "legacy-global-cancel", "list",
+                "init", "list", "legacy-global-cancel",
                 ("update", "b", "interrupted"), ("cancel", "b"), "leases",
             ]
         finally:

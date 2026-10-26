@@ -44,6 +44,8 @@ PROTECTED_PATHS = frozenset({
     "services/runtime/app/main.py",
     "services/runtime/app/pcp_local_worker_loop.py",
     "services/runtime/app/engine.py",
+    "services/runtime/app/engine_core.py",
+    "services/runtime/app/engine_delivery.py",
     "services/runtime/app/storage.py",
     "config/pm-bridge.yml",
     "config/routing-policy.yml",

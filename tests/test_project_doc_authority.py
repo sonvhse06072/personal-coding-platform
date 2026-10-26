@@ -24,6 +24,9 @@ def test_known_authority_classes_are_distinct():
         "services/runtime/app/pcp_local_worker_loop.py",
         "services/runtime/app/engine.py",
         "services/runtime/app/storage.py",
+        "services/runtime/app/engine_core.py",
+        "services/runtime/app/engine_delivery.py",
+        "services/runtime/app/main.py",
         "scripts/check_project_doc_authority.py",
     ):
         assert classify_path(path) == "protected"
