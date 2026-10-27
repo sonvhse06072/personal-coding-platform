@@ -8,6 +8,37 @@ This roadmap is a planning artifact beneath the Project Constitution. PM may reo
 
 Build the smallest layer that enables the next layer safely. Do not add swarm infrastructure, dashboards, or model orchestration complexity before the underlying team contracts and source-of-truth rules are durable.
 
+## PCP Local execution priority — GH-815, 2026-10-27
+
+Owner SOURCE decisions [V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6438475541),
+[V2](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6438904126)
+and [V3](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6440446016)
+prioritize one useful local Codex WorkOrder on Ubuntu WSL2 + Docker Desktop +
+DDEV using existing Runtime/Router/Executor/PostgreSQL. This is the immediate
+sequence within the approved efficiency direction:
+
+1. PR-A: local risk/delegation policy, isolated PCP-only bootstrap, default-OFF
+   service configuration, draft registration and inactive baseline; 13 exact
+   approved paths, fake/static checks and actual hosted four-suite CI.
+2. PR-B after accepted PR-A: authentic readers and dedicated admitted
+   execution/delivery using the existing durable receipt/job mechanisms. Preserve
+   source/lease/credential/budget/CI boundaries; no generic legacy-worker bypass.
+3. After both source reviews and postmerge CI, obtain one bounded physical pilot
+   delegation, prepare fresh local images/instance, verify actual health and
+   credential isolation, then run one fresh approved PCP-only issue through
+   Codex, tests, Draft PR, exact-head CI and independent PM outcome.
+4. Measure accepted work, quota/time and Owner interventions; prove the next
+   in-scope WorkOrder proceeds without per-task WSL intervention before expansion.
+
+External OCI signing/producer/GHCR research is no longer a prerequisite for
+this local development path. Do not dispatch the old image workflow as part of
+PR-A. Legacy compatibility is no longer required; retain historical artifacts
+only where useful, and do not force current configuration to reproduce obsolete
+fixtures. Physical deletion is separate. #795 installation remains unperformed;
+#752 is PARKED, #595 is HOLD, and Chợ Nhạc is no-touch. SOURCE policy and tests
+are not live deployment or benchmark evidence. Constitution and architecture
+invariants, immutable baselines, CI/review and protected decisions still govern.
+
 ## Current product/engineering priority overlay — 2026-10-09 (Owner-approved direction)
 
 **Áp dụng thay thế các đoạn ưu tiên cũ trong tài liệu này**, không thay đổi lịch sử phase, các ProjectBaseline đã phê duyệt hoặc trạng thái job đang chạy. Product North Star là [business-strategy.md](business-strategy.md); kiến trúc đích là [architecture.md](architecture.md). Đây là **phê duyệt định hướng và thứ tự đầu tư**, không phải lệnh dispatch WorkOrder hoặc thay đổi quyền Runtime.

@@ -1,5 +1,8 @@
-# B2.2c0 PCP-only draft, NEVER the active multi-project registry.
-# No recipient path, credentials, or source worker execution is approved.
+# GH-815 PR-A: the bootstrap copies ONLY this PCP identity into its instance.
+# Physical registration is separate: future reviewed activation binds path to
+# <install-root>/sources/personal-coding-platform, not an old project directory.
+# Keep draft/path:null/rights off until that delegation and PR-B admission exist.
+# bounded is intentional; config.py does not grant trusted_project to PCP-local.
 version: 1
 projects:
   pcp-local:

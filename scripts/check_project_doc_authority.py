@@ -23,6 +23,8 @@ PROTECTED_PATHS = frozenset({
     ".github/workflows/pcp-guardian.yml",
     ".github/workflows/pcp-local-inspect-image.yml",
     "scripts/check_project_doc_authority.py",
+    "scripts/pcp-local-trusted-bootstrap.sh",
+    "services/runtime/app/pcp_local_trusted_readers.py",
     "scripts/pcp-local-gate-a-inspect.sh",
     "scripts/pcp-shared-docker-ownership-check.sh",
     "scripts/pcp-local-image-provenance-plan.py",
@@ -183,13 +185,13 @@ def check(repo: Path, base: str, head: str, pr_body: str) -> dict[str, Any]:
     if changed_unclassified:
         raise ValueError("Changed document is unclassified: " + ", ".join(changed_unclassified))
 
-    config_path = "config/project-baselines.yml"
-    if config_path in changed:
-        old = yaml.safe_load(git(repo, "show", f"{merge_base}:{config_path}")) or {}
-        new = yaml.safe_load(git(repo, "show", f"{head}:{config_path}")) or {}
-        if not isinstance(old, dict) or not isinstance(new, dict):
-            raise ValueError("ProjectBaseline registry YAML must be an object")
-        require_existing_baseline_revisions_immutable(old, new)
+    for config_path in ("config/project-baselines.yml", "config/project-baselines.pcp-local.yml"):
+        if config_path in changed:
+            old = yaml.safe_load(git(repo, "show", f"{merge_base}:{config_path}")) or {}
+            new = yaml.safe_load(git(repo, "show", f"{head}:{config_path}")) or {}
+            if not isinstance(old, dict) or not isinstance(new, dict):
+                raise ValueError("ProjectBaseline registry YAML must be an object")
+            require_existing_baseline_revisions_immutable(old, new)
 
     protected = {path for path in changed if classify_path(path) == "protected"}
     declared_owner_ref = require_approval_scope(protected, pr_body)

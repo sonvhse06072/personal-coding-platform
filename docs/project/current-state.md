@@ -1,84 +1,81 @@
 # Current Project State and Handoff
 
-Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline revision, Runtime/WSL rollout attestation, authority change, or chronological log. Verify GitHub and local durable evidence immediately before any mutation. The Constitution, architecture and approved baseline outrank this snapshot.
+Tier-1 mutable execution index; not project-frame authority, baseline approval
+or physical attestation. Constitution, architecture and approved immutable
+ProjectBaseline revisions outrank this snapshot. Reverify GitHub before action.
 
-**Last reconciled: 2026-10-27, A3b.1 Owner-reported PASS, A3b.2 SOURCE authorized; HOST/LIVE STOP.** [PR #811](https://github.com/sonvhse06072/personal-coding-platform/pull/811) merged `main@463d81f3fee27bc0fd804486e8b941fdf7887d14` after [PM review #5643860078](https://github.com/sonvhse06072/personal-coding-platform/pull/811#pullrequestreview-5643860078) and [postmerge real4 #40207083378](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40207083378) **4,717 PASS/89 skipped**. Owner approved 11 exact SOURCE paths/4 protected. OCI historic pin remains unchanged; queued is not Codex execution. #752 PARKED; #595 HOLD.
+## Active work — GH-815 PR-A
 
-## #764 / #777 — Phase B PCP-only source acceptance and Gate A audit
+Updated 2026-10-27. Branch `ai/815-trusted-local-pr-a`, isolated source checkout
+`/home/sonvh/pcp-815-pr-a-source`; independently verified base
+`8ce2e51f7abde098e49e974011b06eb9f305d4d9`. No legacy runtime/DB/Host was inspected.
 
-- **B2.2c0 SOURCE ACCEPTED:** [PR #776](https://github.com/sonvhse06072/personal-coding-platform/pull/776), merge `2d536201dd28d94f43dd20903419007c0136261b`. Six approved paths: draft PCP-only registry (`path: null`), inactive baseline, parked `pcp_local_inspect`; PR/postmerge full4 CI PASS. No local model/Docker/worker action. [PM outcome #764](https://github.com/sonvhse06072/personal-coding-platform/issues/764#issuecomment-6378674879).
-- **B2.2c1-A1 SOURCE ACCEPTED:** [#779](https://github.com/sonvhse06072/personal-coding-platform/pull/779) + [safe shell #780](https://github.com/sonvhse06072/personal-coding-platform/pull/780); fake-only tests PASS. Owner reported `DOCKER_DESKTOP_SHARED`, controlled exit 2 / LIVE STOP. Owner subsequently accepted shared Docker as a deployment trade-off. Earlier exclusive-daemon A1 STOP is historical evidence, **not** permission to bypass its guard. [Decision #777](https://github.com/sonvhse06072/personal-coding-platform/issues/777#issuecomment-6379866815).
-- **Static blockers:** current `.ddev/docker-compose.platform.yaml` uses `/config/projects.yml` in Router/Runtime/Executor, exposing a registry with managed Chợ Nhạc and legacy fixtures. Runtime mounts host Codex/OpenCode home and gitconfig. Executor mounts `/var/run/docker.sock`, project/workspace roots and host `.ddev`. Existing DDEV pre-start builds images and invokes host bridge; `ddev start`, `--prepare` or `--start` are **not read-only Gate A diagnostics**.
-- **A2/A3/H0/H1b2 source evidence:** [A2 Owner filtered counts](https://github.com/sonvhse06072/personal-coding-platform/issues/782#issuecomment-6381693431) old PCP 6 containers/3 volumes, new `pcp-local` 0/0/0, not complete resource proof. A3 parked DDEV and H1a offline checker accepted. [Owner H0](https://github.com/sonvhse06072/personal-coding-platform/issues/790#issuecomment-6385186600) old Runtime image unverified. [H1b2 #799](https://github.com/sonvhse06072/personal-coding-platform/pull/799) SOURCE ACCEPTED: pinned Python 3.13.17 `linux/amd64` base manifest, 18 hashed wheels, deny-by-default context and synthetic source TAR. **No built/final OCI image, verified SBOM/attestation or Host UAT.** `--check` still STOP; `pcp-inspect` remains OFF/unrunnable.
-- **Operational STOP:** `B22C1_GATE_A_PHYSICAL=NOT_ATTESTED`, `CREDENTIAL_ISOLATION=NOT_ATTESTED`, `LIVE=NOT_AUTHORIZED`, `MODEL_CALLS=0` (in this phase). Do not run DDEV, change Compose/mounts, enable task flags, install credentials, spend model quota, inspect legacy DB/jobs or bypass T02 egress. Chợ Nhạc STRICT NO-TOUCH; #752 PARKED; #595 HOLD; F2/T01/Guardian frozen.
+- **Approved SOURCE:** [V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6438475541)
+  local bootstrap/policy; [V2](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6438904126)
+  adds three protected execution paths for PR-B; [V3](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6440446016)
+  adds three legacy test paths to PR-A and retires legacy compatibility as a
+  product requirement. PR-A ceiling is 13 paths; total approved union is 22.
+- **Implementation prepared, not yet source-accepted:** fresh-root bootstrap
+  dry-run plus separately gated future apply; three existing service Dockerfiles,
+  explicit base/tool pins, unique local tags and image IDs/build logs; PCP-only
+  hook-free DDEV instance, fresh internal service tokens, no provider/publisher
+  credential migration. Apply never starts DDEV/DB/services or dispatches Codex.
+- **Default OFF:** all custom services opt-in; real Runtime image currently uses
+  existing `pcp_local_inspect` health startup. Registries remain draft/path-null,
+  delivery rights off, `active_revision: null`, no invented revision/source SHA.
+  PR-B must wire actual admitted execution before a live task is possible.
+- **Tests:** 17 focused unittest cases PASS with strict fake Docker/DDEV and
+  temporary Git/files only; `bash -n` and `git diff --check` PASS. Host pytest is
+  absent; no package installation. Historical H1c/H1b tests now use their frozen
+  inputs, and placeholder-only profile assertions are replaced with current
+  boundary checks. Full hosted four-suite CI and independent PM review pending.
+- **Next:** publish one Draft PR, obtain actual exact-head root/Router/Runtime/
+  Executor hosted CI, then independent ChatGPT PM review. Developer does not
+  approve or merge. PM must verify actual Owner consent and exact protected path
+  declarations; PR metadata and CI alone are not independent human proof.
 
-## #752 source accepted; live T02 remains PARKED
+## PR-B handoff and physical boundary
 
-[#752](https://github.com/sonvhse06072/personal-coding-platform/issues/752) source gates accepted in [PR #760](https://github.com/sonvhse06072/personal-coding-platform/pull/760), with exact-head/postmerge hosted CI PASS. **No live dispatch**: baseline inactive, runtime/egress not attested and earlier T02 egress overlay safety-blocked; no retry, rename or bypass. G0 #595 HOLD, F2/T01/Guardian frozen, Chợ Nhạc strict no-touch.
+Only after PR-A acceptance and refreshed `main`, use the existing approved PR-B
+paths: `main.py`, `pcp_local_worker_loop.py`, new `pcp_local_trusted_readers.py`,
+`engine_core.py`, `engine.py`, `engine_delivery.py` and the three startup/worker/
+runtime-dispatch test files. Repeat T1/authority updates only inside approved
+scope. Reuse the current receipt/CAS/one-shot registration; install real trusted
+project/baseline/isolation/provider/budget/writer/publisher/model readers and a
+separate admitted execution/delivery path. Generic legacy SOURCE denial remains;
+no replacement queue/service. Keep `developer_permission_mode=bounded`.
 
-| Queue | Status | Evidence / blocker |
-| --- | --- | --- |
-| #594 | COMPLETED | Live issue closed; #612 merged, exact head `8088e5382412d42790cb083c43e57b482debffc7` |
-| #764 / #773 | B2.2c0 SOURCE ACCEPTED; B2.2c1 GATE A PHYSICAL HOLD | [#776](https://github.com/sonvhse06072/personal-coding-platform/pull/776) merged; [postmerge #40053565494](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40053565494) full4 PASS; no local worker deployment |
-| #777 / #797 / #800 | H1b2/H1b3 SOURCE ACCEPTED; OCI Host HOLD | [#799](https://github.com/sonvhse06072/personal-coding-platform/pull/799), [#802](https://github.com/sonvhse06072/personal-coding-platform/pull/802) merged; [postmerge real4](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40156915986) PASS. No producer trust root, privileged-builder/no-fallback or disk/egress proof; LIVE STOP |
-| #752 source | MERGED / VERIFIED | [PR #760](https://github.com/sonvhse06072/personal-coding-platform/pull/760); PR-head and postmerge 4/4 hosted CI PASS; Runtime not deployed |
-| #752 live | NEEDS_OWNER_DECISION | Isolation/egress/credential/baseline/launch gates unresolved; PARKED |
-| #595 | BLOCKED | G0 HOLD / NOT GO; comparable accepted cohort absent |
-| #596–#599 | BLOCKED | Frozen historical pilot; G0/G1 exit and protected live gates unmet |
-| #600–#605 | BLOCKED | G1 exit #599 and G0 #595 required |
-| #606–#610 | BLOCKED | G2 exit #605 required |
+Physical registration/baseline activation, DDEV global-name/shared-resource
+checks, actual image/CLI health, provider login and publisher custody, job-only
+verification configuration and the first issue/model/budget permit remain later
+pilot work. The instance does not inherit legacy hooks; do not start the tracked
+legacy `.ddev` inside the source clone for platform or job verification.
 
-## Immediate next safe actions — #815 A3b.2
+**HOST/DDEV/DB=STOP; CODEX_LIVE=STOP; A3B2_IMAGE_BUILD=STOP.** No Docker/DDEV,
+GHCR workflow dispatch, credential provisioning, model/provider API or physical
+cleanup was performed in this SOURCE task. The bootstrap future apply path is
+covered by fake tests only. Local build IDs and CI do not prove working deployment
+or developer credential isolation. One bounded operational delegation can cover
+routine approved local work after acceptance; it cannot cover foreign resources,
+production, destructive operations or protected/material decisions implicitly.
 
-GitHub/Runtime evidence remains separate; Runtime/Host was not queried.
+## Other execution gates
 
-- **B2-F1/F2 SOURCE accepted:** [#813](https://github.com/sonvhse06072/personal-coding-platform/pull/813)/[#814](https://github.com/sonvhse06072/personal-coding-platform/pull/814) merged `main@e15aced199e180d919b5fd4a6c89bcf438d70a51`; [actual main CI #40271865174](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40271865174) four suites, 4,869 pass/89 skipped.
-- **A3a/A3b.1:** one-use permissions consumed. [Owner-reported PASS #6435167850](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6435167850): 613 source files/6,794,080 bytes; 5 draft instance files; no submount observed. No independent PM WSL witness. Preserve fresh root; never rerun A2/A3a/A3b.1.
-- **A3b.2:** [Owner exact four-path SOURCE approval](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6436692753); one default-OFF manual GitHub OCI workflow, static tests, authority checker and T1. No workflow dispatch. `A3B2_IMAGE_BUILD=STOP`; `OCI_PROVENANCE=NOT_ATTESTED`; `DDEV_INSTALL=STOP`; `CODEX_LIVE=STOP`. #800 OCI Host gate OPEN; #795 DDEV Host STOP. Later separate permits for image build/signature, DDEV health, trusted Runtime readers and first Codex LIVE task. #752 PARKED, #595 HOLD; legacy/Chợ Nhạc NO-TOUCH.
+- #752 remains PARKED; #595 G0 remains HOLD / NOT GO. No comparable accepted
+  benchmark cohort or unattended local worker result is inferred from source.
+- Historical F2/T01/Guardian/legacy jobs are not dependencies of the new local
+  architecture. None are resumed, reset, queried or physically deleted here.
+  Removal needs a separate exact ownership/dependency operation.
+- #665: Owner accepted private FREE/unprotected-main residual. Hosted CI and
+  exact-head PM review/expected-head merge are mandatory process gates, not
+  claimed server-enforced branch protection. No runner/security-setting change.
+- Guardian remains operationally parked; no recovery or service health is
+  inferred. #493/#512 residual physical evidence is separate from this work.
+- **Chợ Nhạc strict no-touch:** no repository, worktree, DDEV, DB, job, lease,
+  credentials or deployment access by this task. Accepted local risk is not
+  authority over unrelated projects or shared resources.
 
-## Active investment / execution gates
-
-- **G0 #595: HOLD / NOT GO.** Historical G0D-T01 had code-valid fixture results but no clean unattended end-to-end comparable Direct-vs-full-PCP pair. F2 delivery was PM-assisted, not autonomous; there is no matched quality/time/cost cohort, p50/p90 proof, or USD billing evidence. Do not promote source/CI success into G0 GO. [Benchmark authority/evidence](https://github.com/sonvhse06072/personal-coding-platform/issues/595).
-- **PCP-light: active new-task-only path, not legacy Runtime.** [Guide](../pcp-light/README.md), [#593](https://github.com/sonvhse06072/personal-coding-platform/issues/593): exclusive job journal/worktree, one Codex turn, exact Owner/source SHA, bounded paths, deterministic checks, Draft PR and human PM/exact-head CI. No automatic retry/merge/deploy. Preserve completed #725/#729/#734/#738 journals; never rerun them.
-- **G1 #596: frozen current coding pilot.** An earlier isolated no-model job `2c6db0aa6f19*` proved corrected MCP→HTTP→Executor→DDEV Node phase PASS (0 model calls) and is preserved as smoke evidence. A **different** G1-T01 original job and one-use DB continuation ended `db_create_failed` (Docker Compose exit 1; NETWORK_ERROR/DAEMON_ERROR classes, cause inconclusive), **0 PCP coding model calls** and no pilot DB/network/container remaining in that read-only inventory. Both one-use markers consumed; **NO RETRY/RESET/REPLACEMENT**, no speculative Docker repair or new G1 activation. See [#596 incident and PM freeze](https://github.com/sonvhse06072/personal-coding-platform/issues/596#issuecomment-6196707676). Direct fixture [PR #6](https://github.com/sonvhse06072/pcp-g0-fullpath-fixture/pull/6) stays accepted but OPEN/unmerged; do not merge it without a separate benchmark decision.
-- **G1-T02:** source-only [#752](https://github.com/sonvhse06072/personal-coding-platform/issues/752) accepted and hosted CI checked; **PARKED / NOT DISPATCHED**. Baseline `active_revision: null`, parked Compose/broker and disallowed egress overlay remain unchanged. No model/provider call, WSL/DDEV startup, retry or credentials. No historical job reset.
-
-- **F2 historic singleton: frozen.** Original isolated job `88b9e0d8500147a9857621d18875a8e4` BLOCKED at 2/2 model calls after scoped changes; [fixture draft PR #4](https://github.com/sonvhse06072/pcp-g0-fullpath-fixture/pull/4) is PM-assisted/open, not a PCP autonomous delivery. Preserve C2 database/volumes, credentials, counters, jobs, fixtures and evidence; F2 Router/Runtime/Executor remain parked as last confirmed, **do not infer current process health**. No restart, new job, third call or journal reuse. [G0 evidence](https://github.com/sonvhse06072/personal-coding-platform/issues/595).
-- **Legacy managed-project Runtime/DB not safe to start by inference.** Prior read-only inventory showed old active project lease/orchestrations, pending WorkOrders, and a blocked Chợ Nhạc managed job. Starting Runtime may re-enqueue/cancel jobs and touch foreign project state; GitHub source merges do not activate its services. **No legacy Runtime/DDEV/DB operation without independent safe-start and lease proof.**
-
-## CI and residual operations
-
-- [#665 CI](https://github.com/sonvhse06072/personal-coding-platform/issues/665): hosted full4 on code PR/main; only `current-state.md`/history T1/T3 may skip service suites. Structure/doc authority always execute. CI does not prove Runtime deployment.
-- **#665 security residual / FREE decision:** Owner explicitly chose `CP-665-PROTECTED-MAIN-V1 / FREE`: keep PCP **private** without GitHub Pro purchase, and **accept unprotected `main` / non-enforced required-status checks** as a known server-side risk. The four GitHub-hosted CI checks, PM exact-HEAD review and expected-head merge remain mandatory **manual process gates**, not actual server-enforced rules. The dedicated `SonVH` PCP runner was Owner-reported stopped/de-registered (no GitHub app runner-inventory API proof); no re-registration without a separate protected Owner decision. [Canonical #665](https://github.com/sonvhse06072/personal-coding-platform/issues/665) stays open as an accepted/known residual, not a pending payment request.
-- **Guardian is operationally PARKED / UNAVAILABLE under approved Option A:** [#524](https://github.com/sonvhse06072/personal-coding-platform/issues/524) remains an audit channel but `pcp-guardian.yml` still targets the now-retired self-hosted runner. No remote Guardian command execution or automatic outage recovery should be expected, and the workflow/history must not be deleted. [#512](https://github.com/sonvhse06072/personal-coding-platform/issues/512) remains OPEN for residual natural recovery evidence after a separately approved replacement. [#493](https://github.com/sonvhse06072/personal-coding-platform/issues/493) remains OPEN for Executor 1.0.35 cold-start/provenance; no synthetic restart.
-
-## Active PCP issues and owner attention
-
-- [#593](https://github.com/sonvhse06072/personal-coding-platform/issues/593) governs outcome and cost; #595 HOLD, #596 historic G1 FROZEN, #752 egress PARKED. G2/G3 and #588 discovery deferred. Existing leases, jobs and counters preserved.
-- **Owner product direction (future protected decision, not A3b.2 authority):** PM Local autonomously plans, dispatches Codex, verifies and reviews/merges routine eligible PRs and reports to Owner; PM ChatGPT independently critiques plans and PM decisions. Owner retains protected/architecture/security/budget approvals. Owner reports Astra supported by Codex CLI; no model/provider/egress/live authorization here.
-- No unattended issue-to-Codex-to-PR loop or zero per-task WSL interactions proven. Keep one writer and independent accepted-task evidence; SOURCE CI is not LIVE.
-
-## Historical managed-project continuity (NOT current Chợ Nhạc runtime status)
-
-The following legacy automated continuity block is retained for existing parser compatibility and historical provenance only. **It is not authority to restart, resume, cancel or touch its project.**
-
-<!-- PCP:CONTINUITY:START -->
-## Automated continuity snapshot
-
-- Event: `pr_merged`.
-- Project/job: `chonhac` / `057f6acff17b501eae3a673cbb6bbe36`.
-- Runtime state: `completed`; outcome: `accepted`.
-- WorkOrder: `EE-0-04-event-engagement-analytics`; branch: `ai/057f6acff17b`.
-- Human attention: interventions `1`, avoidable `0`, owner wait `502.9` seconds.
-- Execution evidence: first-pass `False`, repairs `5`, provider failures `0`, quota failures `0`.
-- Incident learning: candidate `incident:5ca80fdd5a5adbc9a082`; signals repair_churn, verification_retry_anomaly.
-- This section is mutable execution state only. Durable architecture/policy changes still require their normal reviewed Git path.
-<!-- PCP:CONTINUITY:END -->
-
-## Standing safety boundary
-
-**Chợ Nhạc strict no-touch / historical job preservation.**
-
-Owner's PCP-side prohibition remains active: no PCP agent, PM Bridge, Guardian, Codex task, workflow or diagnostic may mutate or inspect the Chợ Nhạc repository, shared worktree, DDEV, DB, lease, secrets, deployment or its existing jobs as a side effect of PCP work. Historical Chợ Nhạc GH-89 job `08ae925693b85379b11a54e4dc26121e` and an old managed-project lease were observed blocked/uncertain; no status is inferred now, and no reset/cancel/replacement is allowed. This **operational** no-touch rule does not falsely claim a deployed technical denylist. PCP-light is explicitly **PCP-repository-only** and does not inherit any Chợ Nhạc writer privilege.
-
-Developer agents do not merge. Exact-HEAD tests, PM review, protected approvals and expected-head privileged merge checks remain mandatory; GitHub source and T1 prose cannot grant authority or reset durable-state counters.
+Durable policy: [Operating Model](operating-model.md), [Roadmap](roadmap.md).
+Practical setup and failure/rollback contract: [PCP Local](../pcp-portable/README.md).
+Historical continuity remains available in Git and the linked issues; this file
+replaces stale A3b execution history rather than accumulating another transcript.

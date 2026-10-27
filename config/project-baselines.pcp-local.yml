@@ -1,5 +1,8 @@
-# B2.2c0 PCP-local DRAFT only; no approved source SHA or active revision.
-# A later immutable ProjectBaseline requires separate explicit Owner approval.
+# GH-815 PR-A: preparation is not ProjectBaseline approval or activation.
+# The schema requires a concrete source_commit even for a draft revision. Do not
+# invent a future merge SHA: leave revisions empty until the reviewed authority
+# commit is known. Later add an explicitly approved immutable revision, then
+# separately activate it; never rewrite an approved revision in place.
 version: 1
 projects:
   pcp-local:
