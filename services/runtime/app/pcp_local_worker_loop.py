@@ -482,3 +482,124 @@ class LocalWorkerLoop:
         if isinstance(self.launcher, RuntimeTaskLauncher):
             response.update(runtime_job_state="queued", model_calls=0)
         return response
+
+
+async def run_admitted_job(engine, readers, task):
+    """Consume ONE registered queue item. This is not the legacy worker/replay.
+
+    The receipt moves to running before any invocation. A crash thereafter is
+    intentionally not replayable; all checkpoints/diffs/counters remain intact.
+    Known deterministic failure may repair in this same invocation only.
+    """
+    from pathlib import Path
+    from .adapters.codex import CodexAdapter
+    from .repo import diff_state, commit_changes
+    from .security import harden_runtime_process_secret_boundary
+    from .pcp_local_trusted_readers import TrustedReaders
+    require(type(readers) is TrustedReaders and readers.engine is engine,
+            'pcp_local_concrete_readers_required')
+    require(engine.worker_task is None and not engine.active_jobs,
+            'pcp_local_existing_worker_forbidden')
+    job_id = stable_job_id(task)
+    row = engine.storage.get(job_id)
+    require(row is not None and row['project_id'] == PROJECT_ID
+            and row['status'] == 'queued' and row['source_commit'] == task.base_sha
+            and exact_value(row['checkpoint']['pcp_local_source']['receipt'], claimed_source_receipt(task)),
+            'pcp_local_execution_identity_invalid')
+    receipts = LocalSourceQueueStore(engine.storage)
+    receipts.read_claimed(task, job_id=job_id)
+    await readers.refresh(task)
+    require(not engine.queue.empty() and engine.queue.get_nowait() == job_id
+            and engine.queue.empty(), 'pcp_local_queue_identity_invalid')
+    # Durable CAS is the execution fence. It is deliberately consumed even if
+    # lease acquisition or subsequent Host work has an uncertain result.
+    receipts.advance(task, expected_state='claimed', expected_generation=1,
+                     target_state='running', job_id=job_id, worker_authorized=True)
+    engine.queue.task_done()
+    lease = engine.storage.acquire_project_lease(PROJECT_ID, job_id)
+    readers.lease_generation = lease['generation']
+    checkpoint = deepcopy(row['checkpoint'])
+    checkpoint['pcp_local_execution'] = {'state': 'started', 'lease_generation': lease['generation']}
+    progress = deepcopy(row['progress'])
+    engine.storage.update(job_id, checkpoint=checkpoint, route=readers.route, status='executing')
+    started = time.monotonic()
+    try:
+        harden_runtime_process_secret_boundary()
+        await readers.refresh(task)
+        ws = await engine.ddev.create_workspace(job_id=job_id, project_id=PROJECT_ID,
+            ref=task.base_sha, workspace_mode='isolated_clone')
+        workspace = Path(ws['workspace'])
+        require(workspace == engine.workspace_root / job_id and not workspace.is_symlink()
+                and ws['source_commit'] == task.base_sha
+                and ws['branch'] == 'ai/' + job_id[:12], 'pcp_local_workspace_ack_invalid')
+        engine.storage.update(job_id, workspace=str(workspace), branch=ws['branch'])
+        project, _ = readers.authority()
+        limits = readers.activation['budget']
+        prompt = row['task']['description']
+        verification = None
+        for attempt in range(limits['model_calls']):
+            await readers.refresh(task)
+            # Project/home CLI configuration may not install agent-controlled
+            # MCP servers, hooks or a different sandbox for a repair turn.
+            require(not any(workspace.rglob('.codex'))
+                    and not (Path.home() / '.codex/config.toml').exists(),
+                    'pcp_local_unreviewed_codex_configuration')
+            remaining = limits['max_wall_seconds'] - int(time.monotonic() - started)
+            require(remaining > 0, 'pcp_local_resource_envelope_exhausted')
+            require(float(progress.get('cost_usd', 0)) <= limits['cash_ceiling_usd'],
+                    'pcp_local_material_budget_exhausted')
+            choice = readers.snapshot['model_choice']
+            checkpoint['pcp_local_execution'].update(state='invocation_started', attempt=attempt + 1,
+                                                     model_choice=choice)
+            progress['model_calls'] = int(progress.get('model_calls', 0)) + 1
+            engine.storage.update(job_id, checkpoint=checkpoint, progress=progress)
+            run = await CodexAdapter(choice['model'], choice['reasoning_effort']).run(
+                workspace=workspace, prompt=prompt + '\nAllowed paths: ' + ', '.join(task.allowed_paths),
+                mode='execute' if attempt == 0 else 'repair', timeout=remaining)
+            engine._record_usage(progress, choice['id'], run.usage)
+            engine._record_agent_attempt(progress, choice, run)
+            checkpoint['pcp_local_execution']['state'] = 'invocation_returned'
+            progress['elapsed_minutes'] = (time.monotonic() - started) / 60
+            engine.storage.update(job_id, checkpoint=checkpoint, progress=progress)
+            # No retry after provider/timeout/ambiguous CLI failure, even if the
+            # process may have left useful edits in the original workspace.
+            require(not run.provider_failed, 'pcp_local_provider_failure_no_retry')
+            require(run.returncode == 0, 'pcp_local_invocation_uncertain_no_retry')
+            diff = diff_state(workspace, int(project['runtime'].get('max_diff_bytes', 750000)),
+                              base_ref=task.base_sha)
+            require(bool(diff['changed_files']) and set(diff['changed_files']) <= set(task.allowed_paths),
+                    'pcp_local_changed_paths_denied')
+            await readers.refresh(task)
+            verification = await engine.verify_pcp_local(job_id, workspace, project,
+                timeout_seconds=max(10, limits['max_wall_seconds'] - int(time.monotonic() - started)))
+            progress['test_runs'] = progress.get('test_runs', 0) + verification['test_runs']
+            progress['required_checks_passed'] = verification['passed']
+            checkpoint['pcp_local_execution']['verification'] = verification
+            engine.storage.update(job_id, checkpoint=checkpoint, progress=progress)
+            if verification['passed']:
+                break
+            prompt = row['task']['description'] + '\nRepair deterministic failure:\n' + json.dumps(verification)
+        require(verification is not None and verification['passed'], 'pcp_local_engineering_verification_failed')
+        await readers.refresh(task)
+        # Recheck after tests, which must not mutate the developer source copy.
+        final_diff = diff_state(workspace, int(project['runtime'].get('max_diff_bytes', 750000)), base_ref=task.base_sha)
+        require(final_diff['diff_hash'] == diff['diff_hash'], 'pcp_local_verified_diff_changed')
+        commit = commit_changes(workspace, f"PCP-local issue #{task.issue_number}")
+        require(bool(commit), 'pcp_local_verified_commit_missing')
+        checkpoint['pcp_local_execution'].update(state='verified', commit=commit)
+        result = dict(status='accepted', branch=ws['branch'], commit=commit, diff=diff,
+                      verification=verification, route=readers.route, delivery_finalized=False)
+        engine.storage.update(job_id, status='delivering', checkpoint=checkpoint, result=result,
+                              progress=progress)
+        await engine.deliver_pcp_local(job_id, readers, task)
+    except BaseException as exc:
+        # Do not release the writer reservation or rewind receipts after an
+        # uncertain side effect. Reconciliation is for this exact job only.
+        latest = engine.storage.get(job_id)
+        if latest is not None:
+            cp = deepcopy(latest['checkpoint'])
+            cp.setdefault('pcp_local_execution', {})['state'] = 'held'
+            engine.storage.update(job_id, status='blocked', checkpoint=cp,
+                error=exc.code if isinstance(exc, TaskStop) else 'pcp_local_uncertain_execution_no_retry')
+        raise
+    return engine.storage.get(job_id)

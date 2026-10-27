@@ -789,6 +789,51 @@ class RuntimeEngine(_RuntimeEngine):
         assert updated is not None
         return updated
 
+    async def run_pcp_local_once(self):
+        """Authenticated one-shot ingress; no caller-supplied evidence or replay."""
+        from .pcp_local_trusted_readers import TrustedReaders
+        from .pm_bridge import PMBridgeGitHubClient
+        from .pcp_local_worker_loop import LocalSourceQueueStore, run_admitted_job
+        readers = TrustedReaders(self, PMBridgeGitHubClient())
+        task, _ = await readers.source()
+        LocalSourceQueueStore(self.storage).record(task)
+        await self.dispatch_pcp_local_once(issue_number=task.issue_number,
+            readers=readers.readers(), github=readers.github)
+        async with self.project_operation_lock("pcp-local"):
+            return await run_admitted_job(self, readers, task)
+
+    async def verify_pcp_local(self, job_id, workspace, project, *, timeout_seconds=900):
+        """Real mandatory checks only; disabled/empty/all-skipped is never PASS."""
+        from .pcp_local_task_queue import require
+        require(project.get("ddev", {}).get("enabled") is True,
+                "pcp_local_verification_disabled")
+        import time
+        started = time.monotonic()
+        outputs = []
+        executed = 0
+        skipped = 0
+        import re
+        for phase in ("targeted_tests", "full_tests"):
+            require(bool(project["ddev"].get(phase)), "pcp_local_mandatory_tests_missing")
+            result = await self.ddev.phase(job_id=job_id, project_id="pcp-local",
+                workspace=str(workspace), phase=phase, timeout_seconds=max(10, timeout_seconds - int(time.monotonic() - started)))
+            outputs.append(result)
+            commands = result.get("commands", [])
+            valid = result.get("passed") is True and bool(commands)
+            for command in commands:
+                text = command.get("stdout", "")
+                count = re.findall(r"\b([0-9]+) passed\b", text)
+                passed = int(count[-1]) if count else 0
+                skips = re.findall(r"\b([0-9]+) skipped\b", text)
+                skipped += int(skips[-1]) if skips else 0
+                executed += passed
+                valid = valid and command.get("returncode") == 0 and not command.get("timed_out") and passed > 0
+            if not valid:
+                return dict(passed=False, tests_passed=False, test_runs=executed,
+                    skipped_tests=skipped, phases=outputs, failure_text="Mandatory checks did not execute successfully")
+        return dict(passed=executed > 0, tests_passed=executed > 0, test_runs=executed,
+                    skipped_tests=skipped, phases=outputs)
+
     async def dispatch_pcp_local_once(self, *, issue_number: int,
                                       readers: dict[str, Any], github: Any,
                                       clock=None) -> dict[str, Any]:

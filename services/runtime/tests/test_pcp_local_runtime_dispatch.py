@@ -675,3 +675,46 @@ def test_b2f2_authenticated_http_mutators_stop_before_executor_or_orchestrator(s
     asyncio.run(run())
     assert effects.calls == []
     assert (s.db.jobs, s.db.receipts, s.db.events, s.db.lease) == before
+
+
+@pytest.mark.parametrize('enabled,commands,passed,stdout,expected', [
+    (False, ['tests/test_pcp_light_example.py'], True, '2 passed', 'disabled'),
+    (True, [], True, '2 passed', 'missing'),
+    (True, ['tests/test_pcp_light_example.py'], True, '', False),
+    (True, ['tests/test_pcp_light_example.py'], True, '2 skipped', False),
+    (True, ['tests/test_pcp_light_example.py'], False, '1 passed, 1 failed', False),
+    (True, ['tests/test_pcp_light_example.py'], True, '2 passed, 1 skipped', True),
+])
+def test_pcp_verification_never_accepts_disabled_empty_or_skipped(enabled, commands, passed, stdout, expected):
+    engine = object.__new__(RuntimeEngine)
+    calls = []
+    async def phase(**kwargs):
+        calls.append(kwargs['phase'])
+        return {'phase': kwargs['phase'], 'passed': passed, 'commands': [
+            {'returncode': 0, 'stdout': stdout, 'timed_out': False}]}
+    engine.ddev = SimpleNamespace(phase=phase)
+    project = {'ddev': {'enabled': enabled, 'targeted_tests': commands, 'full_tests': commands}}
+    if isinstance(expected, str):
+        with pytest.raises(source.TaskStop, match=expected):
+            asyncio.run(engine.verify_pcp_local('a' * 32, '/fake', project))
+        assert calls == []
+    else:
+        result = asyncio.run(engine.verify_pcp_local('a' * 32, '/fake', project))
+        assert result['passed'] is expected
+        if expected:
+            assert result['test_runs'] == 4 and result['skipped_tests'] == 2
+            assert calls == ['targeted_tests', 'full_tests']
+
+
+def test_admitted_worker_rejects_caller_dictionaries_without_claim(setup):
+    s = setup
+    with pytest.raises(source.TaskStop, match='concrete_readers'):
+        asyncio.run(worker.run_admitted_job(s.engine, s.readers, s.task))
+    assert claimed(s)['state'] == 'pending' and s.db.jobs == {}
+
+
+def test_dedicated_delivery_requires_concrete_reader_before_mutation(setup):
+    s = setup
+    with pytest.raises(source.TaskStop, match='delivery_admission'):
+        asyncio.run(s.engine.deliver_pcp_local('a' * 32, s.readers, s.task))
+    assert s.db.jobs == {}

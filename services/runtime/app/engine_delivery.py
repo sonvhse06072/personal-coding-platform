@@ -207,6 +207,43 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             3,
         )
 
+    async def deliver_pcp_local(self, job_id, readers, task):
+        """Existing publisher/CI machinery; independent PM owns final acceptance."""
+        from .pcp_local_trusted_readers import TrustedReaders
+        from .pcp_local_worker_loop import stable_job_id
+        from .pcp_local_task_queue import require, PROJECT_ID, REPOSITORY
+        require(type(readers) is TrustedReaders and readers.engine is self
+                and stable_job_id(task) == job_id, "pcp_local_delivery_admission_required")
+        await readers.refresh(task)
+        row = self.storage.get(job_id)
+        result = deepcopy(row.get("result") or {})
+        checkpoint = deepcopy(row["checkpoint"])
+        proof = checkpoint.get("pcp_local_execution") or {}
+        verification = result.get("verification") or {}
+        require(row["project_id"] == PROJECT_ID and row["source_commit"] == task.base_sha
+                and proof.get("state") == "verified" and proof.get("commit") == result.get("commit")
+                and verification.get("passed") is True and verification.get("test_runs", 0) > 0,
+                "pcp_local_unverified_delivery_denied")
+        project, _ = readers.authority()
+        rights = project["autonomy"]
+        require(all(rights.get(k) is True for k in ("allow_commit", "allow_push_ai_branch", "allow_create_pr"))
+                and rights.get("allow_production_deploy") is False, "pcp_local_delivery_rights_revoked")
+        body = pull_request_body(job_id=job_id, branch=row["branch"], commit=result["commit"],
+            verification=verification, evaluator=None)
+        delivery = await deliver_verified_work(ddev=self.ddev, job_id=job_id, project_id=PROJECT_ID,
+            workspace=row["workspace"], branch=row["branch"], source_commit=task.base_sha,
+            commit=result["commit"], title=row["task"]["title"], body=body,
+            permissions={"commit": True, "push_ai_branch": True, "create_pr": True,
+                         "auto_merge_low_risk": False, "production_deploy": False},
+            max_wait_seconds=900, required_ci=(REPOSITORY, "tests"))
+        result["delivery"] = delivery
+        result["acceptance_phase"] = "awaiting_independent_pm_review"
+        result["delivery_finalized"] = False
+        checkpoint["delivery"] = delivery
+        self.storage.update(job_id, status="blocked", result=result, checkpoint=checkpoint,
+            error="awaiting_independent_pm_review" if delivery.get("state") == "ci_success"
+                  else "pcp_local_hosted_ci_not_passed")
+
     async def run_job(self, job_id: str) -> None:
         # If Runtime restarted or a delivery dependency failed after local
         # verification/commit, resume the idempotent delivery step instead of

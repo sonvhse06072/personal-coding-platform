@@ -2082,3 +2082,134 @@ def test_remote_direct_sync_rejects_active_executor_process(
 
     assert exc.value.status_code == 409
     assert "active jobs" in str(exc.value.detail)
+
+
+# GH-815: fake-only PCP-local verification boundary. Ordinary workspace tests
+# above continue exercising their original behavior.
+def pcp_compose(target, name):
+    return {
+        'services': {'web': {'container_name': 'ddev-' + name + '-web',
+            'networks': {'default': None}, 'environment': {},
+            'volumes': [dict(type='bind', source=str(target), target='/var/www/html')]}},
+        'networks': {'default': {'name': name + '-private', 'internal': True}},
+    }
+
+
+def test_pcp_effective_compose_accepts_only_job_web(tmp_path):
+    from app.main import _pcp_effective_compose
+    _pcp_effective_compose(pcp_compose(tmp_path, 'pcp-local-job'), tmp_path, 'pcp-local-job')
+
+
+@pytest.mark.parametrize('mutation', ['service', 'hook_env', 'socket', 'home', 'shared_network', 'privileged', 'port'])
+def test_pcp_effective_compose_denies_foreign_capabilities(tmp_path, mutation):
+    from app.main import _pcp_effective_compose
+    doc = pcp_compose(tmp_path, 'pcp-local-job')
+    web = doc['services']['web']
+    if mutation == 'service':
+        doc['services']['n8n'] = {}
+    elif mutation == 'hook_env':
+        web['environment']['GITHUB_DELIVERY_TOKEN'] = 'test-only'
+    elif mutation in ('socket', 'home'):
+        web['volumes'].append(dict(type='bind', source='/var/run/docker.sock' if mutation == 'socket' else '/home/foreign', target='/foreign'))
+    elif mutation == 'shared_network':
+        doc['networks']['default']['name'] = 'ddev_default'
+    elif mutation == 'privileged':
+        web['privileged'] = True
+    else:
+        web['ports'] = [{'host_ip': '0.0.0.0'}]
+    with pytest.raises(HTTPException):
+        _pcp_effective_compose(doc, tmp_path, 'pcp-local-job')
+
+
+def test_pcp_copy_never_inherits_legacy_ddev_and_is_retry_stable(tmp_path, monkeypatch):
+    from app import main as executor
+    job = 'a' * 32
+    workspace = tmp_path / 'workspaces' / job
+    workspace.mkdir(parents=True)
+    (workspace / 'tests').mkdir()
+    (workspace / 'tests/test_pcp_light_sample.py').write_text('def test_example(): assert True\n')
+    (workspace / '.ddev').mkdir()
+    (workspace / '.ddev/config.yaml').write_text('hooks:\n  pre-start:\n    - exec-host: forbidden\n')
+    (workspace / '.ddev/docker-compose.legacy.yaml').write_text('services:\n  foreign: {}\n')
+    monkeypatch.setattr(executor, '_validate_workspace', lambda *args: workspace)
+    monkeypatch.setattr(executor, 'git', lambda *args: 'b' * 40)
+    payload = executor.PhaseRequest(job_id=job, project_id='pcp-local', workspace=str(workspace), phase='targeted_tests')
+    activation = {'base_sha': 'b' * 40, 'verification_image': 'test/web@sha256:' + 'c' * 64}
+    target, name = executor._pcp_verification_copy(payload, activation, tmp_path)
+    assert target != workspace and 'sources/.pcp-local-verification' in str(target)
+    config = yaml.safe_load((target / '.ddev/config.yaml').read_text())
+    assert config['name'] == name and 'hooks' not in config
+    assert not (target / '.ddev/docker-compose.legacy.yaml').exists()
+    assert (workspace / '.ddev/config.yaml').read_text().startswith('hooks:')
+    assert executor._pcp_verification_copy(payload, activation, tmp_path) == (target, name)
+    (target / '.ddev/config.evil.yaml').write_text('hooks: {}')
+    with pytest.raises(HTTPException, match='pcp_local_untrusted_ddev_configuration'):
+        executor._pcp_verification_copy(payload, activation, tmp_path)
+
+
+def test_pcp_copy_refuses_symlinks_before_commands(tmp_path, monkeypatch):
+    from app import main as executor
+    workspace = tmp_path / 'workspaces' / ('a' * 32)
+    workspace.mkdir(parents=True)
+    (workspace / 'foreign').symlink_to(tmp_path / 'outside')
+    monkeypatch.setattr(executor, '_validate_workspace', lambda *args: workspace)
+    monkeypatch.setattr(executor, 'git', lambda *args: pytest.fail('Git must not run on unsafe tree'))
+    payload = executor.PhaseRequest(job_id='a' * 32, project_id='pcp-local', workspace=str(workspace), phase='targeted_tests')
+    with pytest.raises(HTTPException, match='pcp_local_symlink_denied'):
+        executor._pcp_verification_copy(payload, {}, tmp_path)
+
+
+def test_pcp_resource_collision_refuses_foreign_owner(tmp_path, monkeypatch):
+    from app import main as executor
+    monkeypatch.setattr(executor, '_pcp_docker', lambda *args, **kwargs: {
+        'Config': {'Labels': {'com.docker.compose.project': 'unrelated'}}})
+    with pytest.raises(HTTPException, match='pcp_local_resource_collision'):
+        executor._pcp_resources(tmp_path, 'pcp-local-job')
+
+
+@pytest.mark.parametrize('test_output,expected', [('3 passed, 1 skipped', True), ('1 skipped', False), ('no tests ran', False)])
+def test_pcp_phase_requires_actual_tests_and_validates_before_start(tmp_path, monkeypatch, test_output, expected):
+    from app import main as executor
+    target = tmp_path / 'verified'
+    target.mkdir()
+    monkeypatch.setattr(executor, '_pcp_identity', lambda *_: ({}, {'ddev': {
+        'enabled': True, 'targeted_tests': ['tests/test_pcp_light_sample.py']}}, tmp_path))
+    monkeypatch.setattr(executor, '_pcp_verification_copy', lambda *args: (target, 'pcp-local-job'))
+    calls = []
+    monkeypatch.setattr(executor, '_pcp_resources', lambda *args, **kw: calls.append(('inspect', kw)))
+    def fake(job, argv, **kwargs):
+        assert 'GITHUB_DELIVERY_TOKEN' not in kwargs['env']
+        calls.append(tuple(argv))
+        if argv == ['ddev', 'debug', 'compose-config']:
+            return 0, yaml.safe_dump(pcp_compose(target, 'pcp-local-job')), '', False
+        if argv == ['ddev', 'start', '-y']:
+            return 0, '', '', False
+        assert argv[:3] == ['ddev', 'exec', '/opt/pcp-tests/bin/python']
+        return 0, test_output, '', False
+    (tmp_path / 'sources').mkdir()
+    monkeypatch.setattr(executor, 'run_tracked', fake)
+    payload = executor.PhaseRequest(job_id='a' * 32, project_id='pcp-local', workspace='/unused', phase='targeted_tests')
+    result = executor.phase(payload)
+    assert result.passed is expected
+    assert len(result.commands) == 1
+    assert calls[1] == ('ddev', 'debug', 'compose-config')
+    assert calls[2] == ('ddev', 'start', '-y')
+
+
+def test_pcp_phase_invalid_render_never_starts(tmp_path, monkeypatch):
+    from app import main as executor
+    (tmp_path / 'sources').mkdir()
+    monkeypatch.setattr(executor, '_pcp_identity', lambda *_: ({}, {'ddev': {
+        'enabled': True, 'targeted_tests': ['tests/test_pcp_light_sample.py']}}, tmp_path))
+    monkeypatch.setattr(executor, '_pcp_verification_copy', lambda *args: (tmp_path, 'pcp-local-job'))
+    monkeypatch.setattr(executor, '_pcp_resources', lambda *args, **kw: None)
+    calls = []
+    def fake(job, argv, **kwargs):
+        calls.append(argv)
+        assert argv == ['ddev', 'debug', 'compose-config']
+        return 0, 'services: {foreign: {}}', '', False
+    monkeypatch.setattr(executor, 'run_tracked', fake)
+    payload = executor.PhaseRequest(job_id='a' * 32, project_id='pcp-local', workspace='/unused', phase='targeted_tests')
+    with pytest.raises(HTTPException, match='pcp_local_extra_service'):
+        executor.phase(payload)
+    assert len(calls) == 1

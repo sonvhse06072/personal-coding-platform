@@ -542,3 +542,25 @@ def test_p1_claimed_lookup_no_row_denied():
         q.LocalSourceQueueStore(db).read_claimed(
             task, job_id=worker.stable_job_id(task)
         )
+
+
+def test_activation_document_rejects_expiry_foreign_and_symlink(tmp_path, monkeypatch):
+    import json
+    import time
+    from app import pcp_local_trusted_readers as trusted
+    path = tmp_path / 'activation.json'
+    monkeypatch.setattr(trusted, 'ACTIVATION_FILE', path)
+    value = dict(project_id='pcp-local', repository=q.REPOSITORY, issue_number=900,
+                 developer_permission_mode='bounded', expires_at=time.time() + 60)
+    path.write_text(json.dumps(value))
+    assert trusted.read_activation() == value
+    for bad in ({**value, 'expires_at': 0}, {**value, 'project_id': 'foreign'},
+                {**value, 'developer_permission_mode': 'unbounded'}):
+        path.write_text(json.dumps(bad))
+        with pytest.raises(q.TaskStop):
+            trusted.read_activation()
+    target = tmp_path / 'other.json'
+    path.rename(target)
+    path.symlink_to(target)
+    with pytest.raises(q.TaskStop, match='delegation_missing'):
+        trusted.read_activation()
