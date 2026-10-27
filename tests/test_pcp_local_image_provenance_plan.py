@@ -42,7 +42,14 @@ def manifest():
 
 @pytest.fixture
 def compose():
-    return yaml.safe_load(COMPOSE.read_text())
+    return yaml.safe_load(historical_compose())
+
+
+def historical_compose():
+    """Exercise the retained offline inspector against its own frozen inputs."""
+    fixture = json.loads((ROOT / "profiles/pcp-local/ddev-install-plan.example.yml").read_text())
+    return next(item["content"].encode() for item in fixture["observed"]["source"]["files"]
+                if item["path"] == str(COMPOSE.relative_to(ROOT)))
 
 
 def reason(fn, expected):
@@ -325,7 +332,7 @@ def test_source_only_cli_no_build_or_default_host_action(plan, capsys):
     fn = plan["main"]
     fn.__globals__["check_checkout"] = lambda: HEAD
     fn.__globals__["immutable_source_snapshot"] = lambda head: {
-        "manifest": CONTRACT.read_bytes(), "profile": COMPOSE.read_bytes(),
+        "manifest": CONTRACT.read_bytes(), "profile": historical_compose(),
         "files": {str(p.relative_to(ROOT)): p.read_bytes() for p in (DOCKERFILE, LOCK, IGNORE)},
         "app_tree_sha256": APP_HASH,
     }

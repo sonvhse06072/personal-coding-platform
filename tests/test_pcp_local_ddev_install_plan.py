@@ -52,13 +52,13 @@ def test_checked_in_plan_and_parked_effective_fixture_never_authorize(tool, plan
         assert plan["observed"]["layout"]["install_root"] is None
 
 
-def test_example_exact_payloads_match_four_accepted_repository_inputs(tool, plan):
-    # Verify real SOURCE fixture identities; no Git/Host API call or probing.
+def test_historical_payloads_match_their_frozen_content_hashes(tool, plan):
+    # H1c is historical evidence, not a constraint on the current local profile.
     files = plan["observed"]["source"]["files"]
     assert len(files) == len(tool["PINS"]) == 4
     for item in files:
-        raw = (ROOT / item["path"]).read_bytes()
-        assert item["content"].encode() == raw
+        raw = item["content"].encode()
+        assert item["sha256"] == tool["PINS"][item["path"]]["sha256"]
         assert hashlib.sha256(raw).hexdigest() == item["sha256"]
         assert hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest() == item["git_blob"]
     cfg = parked(plan)["services"]["coding-runtime"]

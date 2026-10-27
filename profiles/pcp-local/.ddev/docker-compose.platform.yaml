@@ -1,36 +1,104 @@
-# B2.2c1-A3 SOURCE TEMPLATE ONLY, parked by default. No live model agent.
-# This template is NOT under the legacy root .ddev/ directory.
+# GH-815: copied only into a fresh instance by pcp-local-trusted-bootstrap.sh.
+# All PCP services are opt-in. PR-B supplies the separately admitted worker;
+# this real Runtime image can currently serve inspection health only.
 services:
-  coding-runtime:
-    # H1b SOURCE DRAFT: no legacy image fallback and no runnable command.
-    # A separate reviewed source+Host decision must replace BOTH blockers.
-    image: pcp-local-runtime-inspect:source-unresolved-do-not-run
-    command: ["/PCP_H1B_SOURCE_ONLY_NOT_AUTHORIZED"]
+  router:
+    image: ${PCP_LOCAL_ROUTER_IMAGE:?run the approved bootstrap first}
     pull_policy: never
-    container_name: ddev-${DDEV_SITENAME}-coding-runtime
-    profiles:
-      - pcp-inspect
+    container_name: ddev-${DDEV_SITENAME}-router
+    profiles: [pcp-local]
     restart: "no"
     user: "${DDEV_UID}:${DDEV_GID}"
     read_only: true
-    cap_drop:
-      - ALL
-    security_opt:
-      - no-new-privileges:true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    env_file: [.env.router.local]
+    environment:
+      ROUTER_PROJECTS_FILE: /config/projects.pcp-local.yml
+      ROUTER_MODELS_FILE: /config/models.yml
+      ROUTER_POLICY_FILE: /config/routing-policy.yml
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ${DDEV_APPROOT}/config:/config:ro
+    tmpfs: [/tmp:rw,nosuid,nodev,size=67108864]
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:8090/health]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  coding-runtime:
+    image: ${PCP_LOCAL_RUNTIME_IMAGE:?run the approved bootstrap first}
+    pull_policy: never
+    container_name: ddev-${DDEV_SITENAME}-coding-runtime
+    profiles: [pcp-local]
+    restart: "no"
+    user: "${DDEV_UID}:${DDEV_GID}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    env_file: [.env.coding-runtime.local]
     environment:
       PCP_RUNTIME_STARTUP_MODE: pcp_local_inspect
       PROJECTS_FILE: /config/projects.pcp-local.yml
       PROJECT_BASELINES_FILE: /config/project-baselines.pcp-local.yml
+      MODELS_FILE: /config/models.yml
+      ROUTING_POLICY_FILE: /config/routing-policy.yml
+      ROUTER_URL: http://router:8090
+      DDEV_EXECUTOR_URL: http://ddev-executor:8790
+      DATABASE_URL: postgresql://db:db@db:5432/db
+      CODING_WORKSPACES_ROOT: ${PCP_LOCAL_ROOT}/workspaces
       HOME: /home/coder
       PYTHONDONTWRITEBYTECODE: "1"
     volumes:
-      - type: bind
-        source: ${DDEV_APPROOT}/config/projects.pcp-local.yml
-        target: /config/projects.pcp-local.yml
-        read_only: true
-      - type: bind
-        source: ${DDEV_APPROOT}/config/project-baselines.pcp-local.yml
-        target: /config/project-baselines.pcp-local.yml
-        read_only: true
-    tmpfs:
-      - /tmp:rw,nosuid,nodev,size=67108864
+      - ${DDEV_APPROOT}/config:/config:ro
+      - ${PCP_LOCAL_ROOT}/workspaces:${PCP_LOCAL_ROOT}/workspaces
+      - ${PCP_LOCAL_ROOT}/runtime-home:/home/coder
+    tmpfs: [/tmp:rw,nosuid,nodev,size=268435456]
+    depends_on:
+      router:
+        condition: service_healthy
+      ddev-executor:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:8787/health]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  ddev-executor:
+    image: ${PCP_LOCAL_EXECUTOR_IMAGE:?run the approved bootstrap first}
+    pull_policy: never
+    container_name: ddev-${DDEV_SITENAME}-ddev-executor
+    profiles: [pcp-local]
+    restart: "no"
+    user: "${DDEV_UID}:${DDEV_GID}"
+    group_add: ["${PCP_LOCAL_DOCKER_GID:?socket group required}"]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    env_file: [.env.ddev-executor.local]
+    environment:
+      PROJECTS_FILE: /config/projects.pcp-local.yml
+      CODING_PROJECTS_ROOT: ${PCP_LOCAL_ROOT}/sources
+      CODING_WORKSPACES_ROOT: ${PCP_LOCAL_ROOT}/workspaces
+      CODING_DIRECT_PROJECT_ROOT: ${PCP_LOCAL_ROOT}/direct-disabled
+      CONTINUITY_GITHUB_REPOSITORY: sonvhse06072/personal-coding-platform
+      CONTINUITY_BASE_BRANCH: main
+      PCP_BUILDX_BUILDER: default
+      PCP_BUILDX_CONFIG: /home/coder/.pcp-buildx
+      HOME: /home/coder
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${DDEV_APPROOT}/config:/config:ro
+      - ${PCP_LOCAL_ROOT}/sources:${PCP_LOCAL_ROOT}/sources
+      - ${PCP_LOCAL_ROOT}/workspaces:${PCP_LOCAL_ROOT}/workspaces
+      - ${PCP_LOCAL_ROOT}/executor-home:/home/coder
+    tmpfs: [/tmp:rw,nosuid,nodev,size=268435456]
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:8790/health]
+      interval: 10s
+      timeout: 5s
+      retries: 6

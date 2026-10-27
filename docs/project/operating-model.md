@@ -229,6 +229,47 @@ evidence as authoritative over chat history. When a PM chat is restarted or its
 active context is insufficient, recover through the repository reading order
 and live state checks defined in `AGENTS.md` and `docs/project/README.md`.
 
+### PCP Local Trusted Fastpath — approved SOURCE policy, GH-815
+
+[DEC-PCP-815-TRUSTED-LOCAL-FASTPATH-SOURCE-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6438475541)
+approves the local-first direction; [V2](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6438904126)
+adds the dedicated execution seam, and [V3](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6440446016)
+retires legacy compatibility as a product requirement. These are SOURCE
+approvals, not physical activation or approval of a new ProjectBaseline.
+
+The Owner accepts greater local supply-chain and shared-Docker residual risk
+for useful engineering throughput. For this PCP-only development path, reviewed
+source, explicit tool/base pins, local image IDs and retained build logs replace
+mandatory external OCI producer/signature/OIDC/SBOM/GHCR evidence. This does not
+claim independently attested images, bit-for-bit rebuilds or daemon isolation.
+Existing offline inspectors are optional historical diagnostics, not P0 gates.
+Legacy implementation is reused only where useful; neither its placeholder
+images nor its historical test contracts constrain the new installation.
+
+After a separate bounded operational delegation, Local PM may coordinate
+routine approved PCP-only code, tests, builds, development previews and repairs
+without repeated Owner permission per ordinary command. PM may choose the next
+in-scope WorkOrder and merge eligible PRs after deterministic verification,
+required independent review and exact-head CI. Healthy progress inside the
+approved resource envelope must not require continuation merely because an
+estimate/counter is reached. Logical roles and concurrency one remain unchanged.
+
+The delegation names the fresh instance/source/workspace/resource identities,
+provider entitlement, credential custody and resource envelope. It does not
+permit unrelated projects, unrestricted host access, developer Docker socket or
+publisher credentials. Production, destructive operations, protected authority,
+security/credential changes and material budget expansion retain separate Owner
+approval. Developer agents never merge. Approved baseline revisions remain
+immutable; source acceptance never activates a draft baseline.
+
+PR-A prepares the existing Runtime/Router/Executor and fresh DDEV PostgreSQL,
+OFF by default, using `bounded` developer permission. PR-B supplies admitted
+PCP-only execution/delivery. A first real issue-to-Codex-to-reviewed-PR result
+requires the later physical pilot. See [local installation](../pcp-portable/README.md).
+No new service, agent framework, remote shell or signing system is introduced.
+Physical legacy cleanup requires exact ownership/dependency checks and a separate
+operation; V3 is not deletion authority. Chợ Nhạc remains strictly out of scope.
+
 ## 4. Router / Staffing Policy
 
 Router answers **who/how expensive/how strong**, not **what/why**.
