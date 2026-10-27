@@ -117,9 +117,28 @@ git -C "$SOURCE" archive "$HEAD" services/router services/runtime services/ddev-
 # Build from committed service-only inputs, never from host secrets or .ddev.
 for service in router runtime ddev-executor; do
   context="$INSTALL_ROOT/build/services/$service"
-  [[ -z "$(find "$context" -type l -print -quit)" ]] || stop BUILD_SYMLINK
+  [[ -d "$context" && ! -L "$context" && -O "$context" &&
+     "$(realpath -e -- "$context")" == "$context" ]] || stop BUILD_CONTEXT_PATH
+  unsafe="$(find "$context" -type l -print -quit)" || stop BUILD_CONTEXT_SCAN
+  [[ -z "$unsafe" ]] || stop BUILD_SYMLINK
   case "$service" in runtime) base="$NODE_BASE" ;; *) base="$PYTHON_BASE" ;; esac
   sed "1cFROM $base" "$context/Dockerfile" > "$context/Dockerfile.local"
+  # Only owned, regular, non-secret archived inputs may become world-readable.
+  # Parents, logs, config and credentials stay under the global private umask.
+  unsafe="$(find "$context" \( ! -uid "$UID" -o \( ! -type f -a ! -type d \) \) -print -quit)" || stop BUILD_CONTEXT_SCAN
+  [[ -z "$unsafe" ]] || stop BUILD_CONTEXT_TYPE_OR_OWNER
+  unsafe="$(find "$context" \( -name '.env' -o -name '.env.*' -o -name '.git' \
+    -o -name '.ssh' -o -name '.codex' -o -name 'auth.json' -o -name 'credentials*' \
+    -o -name '*.pem' -o -name '*.key' -o -name 'id_rsa' -o -name 'id_ed25519' \
+    -o -name '.netrc' -o -name '.npmrc' -o -name '.pypirc' \) -print -quit)" || stop BUILD_CONTEXT_SCAN
+  [[ -z "$unsafe" ]] || stop BUILD_SECRET
+  # Reject private-key material even when it has an innocuous source filename.
+  if LC_ALL=C grep -rIEq -- '-----BEGIN ([A-Z0-9]+ )*PRIVATE KEY-----' "$context"; then
+    stop BUILD_SECRET
+  else
+    [[ "$?" == 1 ]] || stop BUILD_CONTEXT_SCAN
+  fi
+  chmod -R go+rX "$context" || stop BUILD_PERMISSIONS
   image="${INSTANCE}-${service}:${HEAD}"
   docker build --builder default --file "$context/Dockerfile.local" --tag "$image" \
     --iidfile "$INSTALL_ROOT/logs/$service.iid" \

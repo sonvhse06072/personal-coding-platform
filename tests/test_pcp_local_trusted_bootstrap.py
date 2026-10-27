@@ -57,6 +57,14 @@ if args[0] == 'build':
     assert not (context / '.env').exists()
     assert not (context / '.git').exists()
     assert not (context / '.ddev').exists()
+    # Inspect the real archive/tar output before the fake build accepts it.
+    for directory in (context, context / 'app', context / 'app/nested'):
+        assert directory.stat().st_mode & 0o555 == 0o555, directory
+    for relative in ('app/__init__.py', 'app/nested/module.py', 'Dockerfile.local'):
+        path = context / relative
+        assert path.stat().st_mode & 0o444 == 0o444, path
+        assert path.stat().st_mode & 0o111 == 0, path
+    assert (context / 'app/nested/tool.sh').stat().st_mode & 0o555 == 0o555
     assert len(args) == 20, args
     assert args[1] == '--file' and args[3] == '--tag' and args[5] == '--iidfile'
     assert args[7] == args[9] == '--label'
@@ -117,6 +125,14 @@ class BootstrapTests(unittest.TestCase):
             target = self.repo / path
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes((ROOT / path).read_bytes())
+        for service in ('router', 'runtime', 'ddev-executor'):
+            app = self.repo / 'services' / service / 'app'
+            (app / 'nested').mkdir(parents=True)
+            (app / '__init__.py').write_bytes((ROOT / 'services' / service / 'app/__init__.py').read_bytes())
+            (app / 'nested/module.py').write_text('VALUE = "reviewed source"\n')
+            script = app / 'nested/tool.sh'
+            script.write_text('#!/bin/sh\nprintf "source fixture\\n"\n')
+            script.chmod(0o755)
         # Poison legacy checkout files: none may enter instance/config/build.
         (self.repo / '.ddev').mkdir()
         (self.repo / '.ddev/config.yaml').write_text('hooks: LEGACY_MUST_NOT_RUN\n')
@@ -294,6 +310,78 @@ class BootstrapTests(unittest.TestCase):
         self.assertNotIn('DATABASE_URL', values['ddev-executor'])
         self.assertEqual(list((self.install / 'runtime-home').iterdir()), [])
         self.assertEqual(list((self.install / 'executor-home').iterdir()), [])
+
+    def test_only_build_contexts_become_readable_preserving_source_and_execute_bits(self):
+        result = self.run_script(*self.apply_args())
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for service in ('router', 'runtime', 'ddev-executor'):
+            source = self.repo / 'services' / service
+            context = self.install / 'build/services' / service
+            for path in context.rglob('*'):
+                with self.subTest(service=service, path=path.relative_to(context)):
+                    mode = path.stat().st_mode & 0o777
+                    if path.is_dir():
+                        self.assertEqual(mode, 0o755)
+                    else:
+                        executable = path.name == 'tool.sh'
+                        self.assertEqual(mode, 0o755 if executable else 0o644)
+                        if path.name != 'Dockerfile.local':
+                            self.assertEqual(path.read_bytes(), (source / path.relative_to(context)).read_bytes())
+            self.assertEqual(context.stat().st_mode & 0o777, 0o755)
+        for relative in ('', 'build', 'build/services', 'instance', 'instance/config',
+                         'logs', 'runtime-home', 'executor-home'):
+            self.assertEqual((self.install / relative).stat().st_mode & 0o777, 0o700, relative)
+        for path in (self.install / 'instance').glob('.env*'):
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600, path)
+
+    def test_failed_permission_normalization_retains_partial_state_without_retry(self):
+        self.executable('chmod', '#!/bin/sh\n'
+                        'case "$*" in "-R go+rX ' + str(self.install) + '/build/services/runtime") exit 73;; esac\n'
+                        'exec /usr/bin/chmod "$@"\n')
+        result = self.run_script(*self.apply_args())
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('STOP_BUILD_PERMISSIONS', result.stderr)
+        self.assertIn('PARTIAL_STOP; PRESERVE_ROOT_AND_IMAGES', result.stderr)
+        self.assertTrue((self.install / 'intent').is_file())
+        self.assertFalse((self.install / 'prepared').exists())
+        self.assertTrue((self.install / 'build/services/runtime/Dockerfile.local').is_file())
+        self.assertEqual((self.install / 'build/services/runtime/app/__init__.py').stat().st_mode & 0o777, 0o600)
+        self.assertEqual(self.install.stat().st_mode & 0o777, 0o700)
+        calls = self.calls()
+        self.assertEqual(len([c for c in calls if c[0] == 'build']), 1)
+        self.assertFalse(any(c[0] in ('run', 'rm', 'rmi', 'stop', 'prune', 'compose') for c in calls))
+        retry = self.run_script(*self.apply_args())
+        self.assertIn('STOP_EXISTING_OR_PARTIAL_ROOT', retry.stderr)
+        self.assertEqual(self.calls(), calls)
+
+    def test_symlink_and_secret_contexts_stop_before_normalization_or_build(self):
+        context = self.repo / 'services/router'
+        for relative, content in (('app/unsafe-link', None), ('.env.local', 'TOKEN=fixture\n'),
+                                  ('app/auth.json', '{"token": "fixture"}\n'),
+                                  ('app/key.txt', '-----BEGIN PRIVATE KEY-----\nfixture\n')):
+            with self.subTest(relative=relative):
+                path = context / relative
+                if content is None:
+                    path.symlink_to('/outside-context')
+                else:
+                    path.write_text(content)
+                self.git('add', str(path))
+                self.git('commit', '-qm', 'unsafe context fixture')
+                self.head = self.git('rev-parse', 'HEAD').strip()
+                # Separate fresh root for each refused archived context.
+                self.install = self.base / ('home-' + path.name.replace('.', '-')) / INSTANCE
+                self.install.parent.mkdir()
+                self.env['HOME'] = str(self.install.parent)
+                self.env['FAKE_INSTALL'] = str(self.install)
+                result = self.run_script(*self.apply_args())
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('STOP_BUILD_SYMLINK' if content is None else 'STOP_BUILD_SECRET', result.stderr)
+                self.assertIn('PARTIAL_STOP; PRESERVE_ROOT_AND_IMAGES', result.stderr)
+                self.assertFalse((self.install / 'prepared').exists())
+                self.assertEqual((self.install / 'build/services/router/app/__init__.py').stat().st_mode & 0o777, 0o600)
+                self.git('rm', str(path))
+                self.git('commit', '-qm', 'remove unsafe fixture')
+        self.assertFalse(any(c[0] in ('build', 'run') for c in self.calls()))
 
     def test_exact_retry_is_noop_and_changed_inputs_stop(self):
         first = self.run_script(*self.apply_args())
