@@ -675,3 +675,264 @@ def test_b2f2_authenticated_http_mutators_stop_before_executor_or_orchestrator(s
     asyncio.run(run())
     assert effects.calls == []
     assert (s.db.jobs, s.db.receipts, s.db.events, s.db.lease) == before
+
+
+@pytest.mark.parametrize('enabled,commands,passed,stdout,expected', [
+    (False, ['tests/test_pcp_light_example.py'], True, '2 passed', 'disabled'),
+    (True, [], True, '2 passed', 'missing'),
+    (True, ['tests/test_pcp_light_example.py'], True, '', False),
+    (True, ['tests/test_pcp_light_example.py'], True, '2 skipped', False),
+    (True, ['tests/test_pcp_light_example.py'], False, '1 passed, 1 failed', False),
+    (True, ['tests/test_pcp_light_example.py'], True, '2 passed, 1 skipped', True),
+])
+def test_pcp_verification_never_accepts_disabled_empty_or_skipped(enabled, commands, passed, stdout, expected):
+    engine = object.__new__(RuntimeEngine)
+    calls = []
+    async def phase(**kwargs):
+        calls.append(kwargs['phase'])
+        return {'phase': kwargs['phase'], 'passed': passed, 'commands': [
+            {'returncode': 0, 'stdout': stdout, 'timed_out': False}]}
+    engine.ddev = SimpleNamespace(phase=phase)
+    project = {'ddev': {'enabled': enabled, 'targeted_tests': commands, 'full_tests': commands}}
+    if isinstance(expected, str):
+        with pytest.raises(source.TaskStop, match=expected):
+            asyncio.run(engine.verify_pcp_local('a' * 32, '/fake', project))
+        assert calls == []
+    else:
+        result = asyncio.run(engine.verify_pcp_local('a' * 32, '/fake', project))
+        assert result['passed'] is expected
+        if expected:
+            assert result['test_runs'] == 2 and result['skipped_tests'] == 2
+            assert result['executed_tests'] == result['passed_tests'] == 4
+            assert result['failed_tests'] == 0
+            assert calls == ['targeted_tests', 'full_tests']
+        elif 'failed' in stdout:
+            assert result['test_runs'] == 1
+            assert result['passed_tests'] == result['failed_tests'] == 1
+            assert result['executed_tests'] == 2
+
+
+def test_pcp_verification_preserves_test_counts_after_infrastructure_failure():
+    engine = object.__new__(RuntimeEngine)
+    async def phase(**kwargs):
+        return {'passed': False, 'commands': [{'returncode': 0,
+            'stdout': '3 passed, 1 skipped', 'timed_out': False}],
+            'infrastructure': [{'returncode': 1, 'timed_out': False}]}
+    engine.ddev = SimpleNamespace(phase=phase)
+    result = asyncio.run(engine.verify_pcp_local('a' * 32, '/fake', {'ddev': {
+        'enabled': True, 'targeted_tests': ['tests/test_pcp_light_example.py'],
+        'full_tests': ['tests/test_pcp_light_example.py']}}))
+    assert result['passed'] is False and result['failure_kind'] == 'infrastructure'
+    assert result['test_runs'] == 1 and result['executed_tests'] == 3
+    assert result['passed_tests'] == 3 and result['skipped_tests'] == 1
+
+
+def test_admitted_worker_rejects_caller_dictionaries_without_claim(setup):
+    s = setup
+    with pytest.raises(source.TaskStop, match='concrete_readers'):
+        asyncio.run(worker.run_admitted_job(s.engine, s.readers, s.task))
+    assert claimed(s)['state'] == 'pending' and s.db.jobs == {}
+
+
+def test_dedicated_delivery_requires_concrete_reader_before_mutation(setup):
+    s = setup
+    with pytest.raises(source.TaskStop, match='delivery_admission'):
+        asyncio.run(s.engine.deliver_pcp_local('a' * 32, s.readers, s.task))
+    assert s.db.jobs == {}
+
+
+@pytest.mark.parametrize('outcome', ['success', 'timeout', 'repair'])
+def test_dedicated_worker_keeps_durable_identity_and_never_replays(setup, monkeypatch, tmp_path, outcome):
+    from pathlib import Path
+    from app import pcp_local_worker_loop as trusted
+    from app.adapters.base import AgentRun
+    from app.adapters.codex import CodexAdapter
+    s = setup
+    asyncio.run(s.dispatch())
+    job_id = worker.stable_job_id(s.task)
+    engine = s.engine
+    engine.workspace_root = tmp_path
+    workspace = tmp_path/job_id
+    workspace.mkdir()
+    reader = object.__new__(trusted.TrustedReaders)
+    reader.engine = engine
+    reader.lease_generation = None
+    reader.authority_digest = 'f'*64
+    reader.task = s.task
+    reader.activation = {'budget': {'model_calls':2,'max_wall_seconds':300,'cash_ceiling_usd':5}}
+    reader.snapshot = {'model_choice':s.facts['model_choice']}
+    reader.route = {'strategy':{'executor':s.facts['model_choice']}}
+    reader.authority = lambda: (s.project, s.baseline)
+    refreshes = []
+    async def refresh(task):
+        assert task == s.task
+        refreshes.append(s.db.receipts[s.task.issue_number]['state'])
+        return reader.snapshot
+    reader.refresh = refresh
+    monkeypatch.setattr(s.db, 'get', lambda key: deepcopy(s.db.jobs.get(key)))
+    def update(key, **fields):
+        s.db.jobs[key].update(deepcopy(fields))
+    monkeypatch.setattr(s.db, 'update', update)
+    def lease(project, key):
+        assert project == source.PROJECT_ID and key == job_id
+        s.db.lease = dict(project_id=project,owner_job_id=key,generation=1,state='active')
+        return deepcopy(s.db.lease)
+    monkeypatch.setattr(s.db,'acquire_project_lease',lease)
+    monkeypatch.setattr('app.security.harden_runtime_process_secret_boundary',lambda: None)
+    monkeypatch.setattr(Path,'home',lambda:tmp_path)
+    async def create_workspace(**kwargs):
+        assert kwargs == dict(job_id=job_id,project_id=source.PROJECT_ID,ref=s.task.base_sha,workspace_mode='isolated_clone')
+        return dict(workspace=str(workspace),branch='ai/'+job_id[:12],source_commit=s.task.base_sha)
+    monkeypatch.setattr(engine.ddev,'create_workspace',create_workspace)
+    attempts = []
+    async def fake_run(self, **kwargs):
+        # Each invocation is preceded by a persisted increment and running CAS.
+        assert s.db.receipts[s.task.issue_number]['state'] == 'running'
+        assert s.db.jobs[job_id]['progress']['model_calls'] == len(attempts)+1
+        attempts.append(kwargs['mode'])
+        if outcome == 'timeout':
+            (workspace/'retained-diff.txt').write_text('uncertain edit')
+            raise TimeoutError('unknown provider result')
+        return AgentRun(adapter='codex_cli',model=self.model,returncode=0,output='done')
+    monkeypatch.setattr(CodexAdapter,'run',fake_run)
+    diff = {'changed_files':list(s.task.allowed_paths),'diff_hash':'c'*64}
+    monkeypatch.setattr('app.repo.diff_state',lambda *a,**kw:deepcopy(diff))
+    commits=[]
+    monkeypatch.setattr('app.repo.commit_changes',lambda *args:commits.append(args) or 'd'*40)
+    checks=[]
+    async def verify(*args,**kwargs):
+        checks.append(1)
+        return {'passed': outcome!='repair' or len(checks)>1, 'test_runs':1}
+    monkeypatch.setattr(engine,'verify_pcp_local',verify)
+    deliveries=[]
+    async def deliver(key, actual_reader, task):
+        assert s.db.jobs[key]['checkpoint']['pcp_local_execution']['state']=='verified'
+        assert actual_reader is reader and task == s.task
+        deliveries.append(key)
+    monkeypatch.setattr(engine,'deliver_pcp_local',deliver)
+    if outcome == 'timeout':
+        with pytest.raises(TimeoutError):
+            asyncio.run(worker.run_admitted_job(engine,reader,s.task))
+        assert attempts == ['execute'] and not checks and not commits and not deliveries
+        assert (workspace/'retained-diff.txt').read_text()=='uncertain edit'
+        assert s.db.jobs[job_id]['status']=='blocked'
+    else:
+        asyncio.run(worker.run_admitted_job(engine,reader,s.task))
+        assert attempts == (['execute','repair'] if outcome=='repair' else ['execute'])
+        assert deliveries==[job_id] and len(commits)==1
+    assert s.db.receipts[s.task.issue_number]['job_id']==job_id
+    assert s.db.receipts[s.task.issue_number]['state']=='running'
+    assert s.db.lease['owner_job_id']==job_id and s.db.lease['generation']==1
+    count=len(attempts)
+    with pytest.raises(source.TaskStop):
+        asyncio.run(worker.run_admitted_job(engine,reader,s.task))
+    assert len(attempts)==count
+
+
+def test_pm_outcome_atomically_finishes_original_receipt_and_lease(setup, monkeypatch):
+    from app.main import FullpathPMReviewRequest
+    s = setup
+    asyncio.run(s.dispatch())
+    job_id = worker.stable_job_id(s.task)
+    head = 'd'*40
+    branch = 'ai/'+job_id[:12]
+    row = deepcopy(s.db.jobs[job_id])
+    row.update(status='blocked', branch=branch)
+    row['progress']['required_checks_passed'] = True
+    row['checkpoint']['pcp_local_execution'] = {'state':'verified','lease_generation':1,'commit':head}
+    pr = dict(number=7,head=head,head_ref=branch,base_ref='main',repository=source.REPOSITORY,state='open',merged=False)
+    ci = dict(state='success',commit=head)
+    row['result'] = dict(status='accepted',commit=head,delivery_finalized=False,
+        verification={'passed':True,'test_runs':3},diff={'changed_files':list(s.task.allowed_paths),'diff_hash':'c'*64},
+        route={'strategy':{}},delivery={'state':'ci_success','pull_request':pr,'ci':ci})
+    activation={k:getattr(s.task,k) for k in ('issue_number','body_sha256','base_sha','baseline_revision','baseline_source_commit')}
+    report={'verdict':'pass','findings':[],'diff_hash':'c'*64}
+    calls=[]
+    def init(reader, engine, github):
+        reader.activation=activation
+        reader.engine=engine
+    monkeypatch.setattr(worker.TrustedReaders,'__init__',init)
+    monkeypatch.setattr(worker.TrustedReaders,'authority',lambda self:(s.project,s.baseline))
+    async def proof(self,path,payload):
+        assert path=='/v1/pcp-local/pm-review'
+        calls.append('authenticated_github')
+        return dict(job_id=job_id,expected_head=head,activation_digest=worker.digest(activation),
+                    report=report,review_id=8,ci=ci,pr=pr)
+    monkeypatch.setattr(worker.TrustedReaders,'executor',proof)
+    class ReviewStore:
+        def __init__(self): self.row=deepcopy(row);self.events=[];self.pending=None
+        def get(self,key):
+            assert key==job_id
+            return deepcopy(self.row)
+        def connect(self): return self
+        def __enter__(self): self.pending=deepcopy(self.row);return self
+        def __exit__(self,*args): self.pending=None
+        def execute(self,sql,params):
+            self.events.append(sql)
+            if sql.startswith('SELECT * FROM cp_jobs'):
+                assert 'FOR UPDATE' in sql
+                return Result([self.pending])
+            if sql.startswith('UPDATE cp_pcp_local_source_receipts'):
+                assert "state='running' AND generation=2" in sql
+                assert params==(source.REPOSITORY,source.PROJECT_ID,s.task.issue_number,job_id,
+                                s.task.body_sha256,s.task.base_sha,s.task.baseline_revision)
+                return Result([{'job_id':job_id}])
+            if sql.startswith('UPDATE cp_project_leases'):
+                assert params==(source.PROJECT_ID,job_id,1)
+                return Result([{'project_id':source.PROJECT_ID}])
+            assert sql.startswith('UPDATE cp_jobs')
+            self.pending.update(status='completed',result=json.loads(params[0]),error=None)
+            return Result()
+        def commit(self): self.row=deepcopy(self.pending);self.events.append('COMMIT')
+    db=ReviewStore()
+    engine=object.__new__(RuntimeEngine)
+    engine.storage=db
+    request=FullpathPMReviewRequest(source_commit=s.task.base_sha,expected_head=head,branch=branch,
+        baseline_revision=s.task.baseline_revision,pr_number=7,review_id=8)
+    outcome=asyncio.run(engine.finalize_pcp_local_review(request))
+    assert outcome['status']=='completed' and outcome['merged'] is False
+    assert db.events[-1]=='COMMIT'
+    assert db.row['result']['delivery_finalized'] is True
+    assert db.row['progress']==row['progress']
+    assert db.row['checkpoint']==row['checkpoint']
+    assert calls==['authenticated_github']
+    # A lost HTTP acknowledgement does not perform a second model/claim/release.
+    count=len(db.events)
+    assert asyncio.run(engine.finalize_pcp_local_review(request))==outcome
+    assert len(db.events)==count and calls==['authenticated_github']
+
+
+@pytest.mark.parametrize('execution_state', ['verified', 'held'])
+def test_delivery_recovery_cannot_reenter_codex(setup, monkeypatch, execution_state):
+    from app.adapters.codex import CodexAdapter
+    s=setup
+    asyncio.run(s.dispatch())
+    job_id=worker.stable_job_id(s.task)
+    row=s.db.jobs[job_id]
+    row['checkpoint']['pcp_local_execution']=dict(state=execution_state,
+        authority_digest='f'*64,lease_generation=1)
+    row['route']={'strategy':{}}
+    row['progress']['model_calls']=1
+    before=deepcopy(row['progress'])
+    def init(reader,engine,github):
+        reader.engine=engine
+        reader.authority_digest='f'*64
+    monkeypatch.setattr(worker.TrustedReaders,'__init__',init)
+    monkeypatch.setattr(worker.TrustedReaders,'authority',lambda self:(s.project,s.baseline))
+    async def source_read(self): return s.task,s.issue
+    monkeypatch.setattr(worker.TrustedReaders,'source',source_read)
+    async def forbidden(*args,**kwargs): pytest.fail('Delivery recovery must never invoke Codex')
+    monkeypatch.setattr(CodexAdapter,'run',forbidden)
+    calls=[]
+    async def deliver(key,reader,task):
+        assert key==job_id and task==s.task and reader.lease_generation==1
+        calls.append(key)
+    monkeypatch.setattr(s.engine,'deliver_pcp_local',deliver)
+    if execution_state=='held':
+        with pytest.raises(source.TaskStop,match='not_resumable'):
+            asyncio.run(s.engine.retry_pcp_local_delivery())
+        assert calls==[]
+    else:
+        asyncio.run(s.engine.retry_pcp_local_delivery())
+        assert calls==[job_id]
+    assert row['progress']==before

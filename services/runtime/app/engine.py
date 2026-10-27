@@ -789,6 +789,86 @@ class RuntimeEngine(_RuntimeEngine):
         assert updated is not None
         return updated
 
+    async def run_pcp_local_once(self):
+        """Authenticated one-shot ingress; no caller-supplied evidence or replay."""
+        from .pcp_local_worker_loop import TrustedReaders
+        from .pm_bridge import PMBridgeGitHubClient
+        from .pcp_local_worker_loop import LocalSourceQueueStore, run_admitted_job
+        readers = TrustedReaders(self, PMBridgeGitHubClient())
+        task, _ = await readers.source()
+        LocalSourceQueueStore(self.storage).record(task)
+        await self.dispatch_pcp_local_once(issue_number=task.issue_number,
+            readers=readers.readers(), github=readers.github)
+        async with self.project_operation_lock("pcp-local"):
+            return await run_admitted_job(self, readers, task)
+
+    async def retry_pcp_local_delivery(self):
+        """Reconcile verified publishing only; never re-enter a coding turn."""
+        from .pcp_local_worker_loop import TrustedReaders, LocalSourceTask, stable_job_id
+        from .pcp_local_task_queue import PROJECT_ID, require
+        from .pm_bridge import PMBridgeGitHubClient
+        readers = TrustedReaders(self, PMBridgeGitHubClient())
+        project, baseline = readers.authority()
+        task, _ = await readers.source()
+        job_id = stable_job_id(task)
+        async with self.project_operation_lock(PROJECT_ID):
+            row = self.storage.get(job_id)
+            require(row is not None and row['project_id'] == PROJECT_ID,
+                    'pcp_local_delivery_job_missing')
+            execution = row['checkpoint'].get('pcp_local_execution') or {}
+            require(execution.get('state') == 'verified'
+                    and execution.get('authority_digest') == readers.authority_digest
+                    and row['checkpoint']['project_baseline'] == baseline.model_dump(mode='json'),
+                    'pcp_local_delivery_not_resumable')
+            readers.lease_generation = execution['lease_generation']
+            readers.route = row['route']
+            await self.deliver_pcp_local(job_id, readers, task)
+        return self.storage.get(job_id)
+
+    async def verify_pcp_local(self, job_id, workspace, project, *, timeout_seconds=900):
+        """Real mandatory checks only; disabled/empty/all-skipped is never PASS."""
+        from .pcp_local_task_queue import require
+        require(project.get("ddev", {}).get("enabled") is True,
+                "pcp_local_verification_disabled")
+        import time
+        started = time.monotonic()
+        outputs = []
+        runs = passed_tests = failed_tests = skipped_tests = 0
+        import re
+        def evidence(passed, **details):
+            return dict(passed=passed, tests_passed=passed, test_runs=runs,
+                executed_tests=passed_tests + failed_tests, passed_tests=passed_tests,
+                failed_tests=failed_tests, skipped_tests=skipped_tests,
+                phases=outputs, **details)
+        for phase in ("targeted_tests", "full_tests"):
+            require(bool(project["ddev"].get(phase)), "pcp_local_mandatory_tests_missing")
+            remaining = timeout_seconds - int(time.monotonic() - started)
+            require(remaining >= 10, "pcp_local_verification_wall_envelope_exhausted")
+            result = await self.ddev.phase(job_id=job_id, project_id="pcp-local",
+                workspace=str(workspace), phase=phase, timeout_seconds=remaining)
+            outputs.append(result)
+            commands = result.get("commands", [])
+            valid = result.get("passed") is True and bool(commands)
+            for command in commands:
+                text = command.get("stdout", "")
+                def count(label):
+                    matches = re.findall(r"\b([0-9]+) " + label + r"\b", text)
+                    return int(matches[-1]) if matches else 0
+                passed = count("passed")
+                runs += 1
+                passed_tests += passed
+                failed_tests += count("failed") + count("errors?")
+                skipped_tests += count("skipped")
+                valid = valid and command.get("returncode") == 0 and not command.get("timed_out") and passed > 0
+            # Preserve test evidence even when the subsequent owned-container
+            # stop fails; infrastructure failure must never look like PASS.
+            if any(c.get('returncode') != 0 or c.get('timed_out') for c in result.get('infrastructure', [])):
+                return evidence(False, failure_kind='infrastructure',
+                    failure_text='Verification environment failed; no engineering repair charged')
+            if not valid:
+                return evidence(False, failure_text="Mandatory checks did not execute successfully")
+        return evidence(passed_tests > 0)
+
     async def dispatch_pcp_local_once(self, *, issue_number: int,
                                       readers: dict[str, Any], github: Any,
                                       clock=None) -> dict[str, Any]:
@@ -951,6 +1031,8 @@ class RuntimeEngine(_RuntimeEngine):
             }
 
         if local is not None:
+            checkpoint["canonical_intake"] = {"mode": "direct", "bounded_direct": True,
+                "decomposition_required": False, "baseline_revision": baseline.revision}
             checkpoint["pcp_local_source"] = deepcopy(local.source_binding)
         row = {
             "id": job_id,

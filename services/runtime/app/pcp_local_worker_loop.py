@@ -1,8 +1,8 @@
-"""Default-OFF B2.2b PCP-local bounded loop: one receipt, no replay.
+"""Default-OFF PCP-local admission, concrete readers and bounded execution.
 
-The installed Runtime does NOT construct a trusted attestor or launcher, and
-does NOT start this loop at process startup. Only B2.2c may approve actual
-service credentials, model execution and on-host attestation.
+Dedicated startup installs no scheduler or model call. An authenticated one-shot
+request must bind separately installed operational authority and live service
+observations to the durable receipt. Legacy execution/replay remains forbidden.
 """
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ class RuntimeObservation:
 
 
 class RuntimeTaskAttestor:
-    """Compose required Runtime/Executor readers; no live backend is installed."""
+    """Compose fresh Runtime/Executor observations for one exact source issue."""
 
     def __init__(self, *, issue_number: int, readers: dict[str, Any],
                  clock=time.monotonic) -> None:
@@ -482,3 +482,345 @@ class LocalWorkerLoop:
         if isinstance(self.launcher, RuntimeTaskLauncher):
             response.update(runtime_job_state="queued", model_calls=0)
         return response
+
+
+async def run_admitted_job(engine, readers, task):
+    """Consume ONE registered queue item. This is not the legacy worker/replay.
+
+    The receipt moves to running before any invocation. A crash thereafter is
+    intentionally not replayable; all checkpoints/diffs/counters remain intact.
+    Known deterministic failure may repair in this same invocation only.
+    """
+    from pathlib import Path
+    from .adapters.codex import CodexAdapter
+    from .repo import diff_state, commit_changes
+    from .scope_guard import changed_path_protected_signals
+    from .security import harden_runtime_process_secret_boundary
+    require(type(readers) is TrustedReaders and readers.engine is engine,
+            'pcp_local_concrete_readers_required')
+    require(engine.worker_task is None and not engine.active_jobs,
+            'pcp_local_existing_worker_forbidden')
+    job_id = stable_job_id(task)
+    row = engine.storage.get(job_id)
+    require(row is not None and row['project_id'] == PROJECT_ID
+            and row['status'] == 'queued' and row['source_commit'] == task.base_sha
+            and exact_value(row['checkpoint']['pcp_local_source']['receipt'], claimed_source_receipt(task)),
+            'pcp_local_execution_identity_invalid')
+    require(not changed_path_protected_signals(task.allowed_paths, row['checkpoint']),
+            'pcp_local_protected_source_requires_separate_decision')
+    receipts = LocalSourceQueueStore(engine.storage)
+    receipts.read_claimed(task, job_id=job_id)
+    await readers.refresh(task)
+    require(not engine.queue.empty() and engine.queue.get_nowait() == job_id
+            and engine.queue.empty(), 'pcp_local_queue_identity_invalid')
+    # Durable CAS is the execution fence. It is deliberately consumed even if
+    # lease acquisition or subsequent Host work has an uncertain result.
+    receipts.advance(task, expected_state='claimed', expected_generation=1,
+                     target_state='running', job_id=job_id, worker_authorized=True)
+    engine.queue.task_done()
+    lease = engine.storage.acquire_project_lease(PROJECT_ID, job_id)
+    readers.lease_generation = lease['generation']
+    checkpoint = deepcopy(row['checkpoint'])
+    checkpoint['pcp_local_execution'] = {'state': 'started', 'lease_generation': lease['generation'],
+        'authority_digest': readers.authority_digest}
+    progress = deepcopy(row['progress'])
+    engine.storage.update(job_id, checkpoint=checkpoint, route=readers.route, status='executing')
+    started = time.monotonic()
+    try:
+        harden_runtime_process_secret_boundary()
+        await readers.refresh(task)
+        ws = await engine.ddev.create_workspace(job_id=job_id, project_id=PROJECT_ID,
+            ref=task.base_sha, workspace_mode='isolated_clone')
+        workspace = Path(ws['workspace'])
+        require(workspace == engine.workspace_root / job_id and not workspace.is_symlink()
+                and ws['source_commit'] == task.base_sha
+                and ws['branch'] == 'ai/' + job_id[:12], 'pcp_local_workspace_ack_invalid')
+        engine.storage.update(job_id, workspace=str(workspace), branch=ws['branch'])
+        project, _ = readers.authority()
+        limits = readers.activation['budget']
+        prompt = row['task']['description']
+        verification = None
+        for attempt in range(limits['model_calls']):
+            await readers.refresh(task)
+            # Project/home CLI configuration may not install agent-controlled
+            # MCP servers, hooks or a different sandbox for a repair turn.
+            require(not any(workspace.rglob('.codex'))
+                    and not (Path.home() / '.codex/config.toml').exists(),
+                    'pcp_local_unreviewed_codex_configuration')
+            remaining = limits['max_wall_seconds'] - int(time.monotonic() - started)
+            require(remaining > 0, 'pcp_local_resource_envelope_exhausted')
+            require(float(progress.get('cost_usd', 0)) <= limits['cash_ceiling_usd'],
+                    'pcp_local_material_budget_exhausted')
+            choice = readers.snapshot['model_choice']
+            checkpoint['pcp_local_execution'].update(state='invocation_started', attempt=attempt + 1,
+                                                     model_choice=choice)
+            progress['model_calls'] = int(progress.get('model_calls', 0)) + 1
+            engine.storage.update(job_id, checkpoint=checkpoint, progress=progress)
+            run = await CodexAdapter(choice['model'], choice['reasoning_effort']).run(
+                workspace=workspace, prompt=prompt + '\nAllowed paths: ' + ', '.join(task.allowed_paths),
+                mode='execute' if attempt == 0 else 'repair', timeout=remaining)
+            engine._record_usage(progress, choice['id'], run.usage)
+            engine._record_agent_attempt(progress, choice, run)
+            checkpoint['pcp_local_execution']['state'] = 'invocation_returned'
+            progress['elapsed_minutes'] = (time.monotonic() - started) / 60
+            engine.storage.update(job_id, checkpoint=checkpoint, progress=progress)
+            # No retry after provider/timeout/ambiguous CLI failure, even if the
+            # process may have left useful edits in the original workspace.
+            require(not run.provider_failed, 'pcp_local_provider_failure_no_retry')
+            require(run.returncode == 0, 'pcp_local_invocation_uncertain_no_retry')
+            diff = diff_state(workspace, int(project['runtime'].get('max_diff_bytes', 750000)),
+                              base_ref=task.base_sha)
+            require(bool(diff['changed_files']) and set(diff['changed_files']) <= set(task.allowed_paths),
+                    'pcp_local_changed_paths_denied')
+            await readers.refresh(task)
+            remaining = limits['max_wall_seconds'] - int(time.monotonic() - started)
+            require(remaining >= 10, 'pcp_local_resource_envelope_exhausted')
+            verification = await engine.verify_pcp_local(job_id, workspace, project,
+                timeout_seconds=remaining)
+            progress['test_runs'] = progress.get('test_runs', 0) + verification['test_runs']
+            progress['required_checks_passed'] = verification['passed']
+            checkpoint['pcp_local_execution']['verification'] = verification
+            engine.storage.update(job_id, checkpoint=checkpoint, progress=progress)
+            require(verification.get('failure_kind') != 'infrastructure',
+                    'pcp_local_infrastructure_failure_no_retry')
+            if verification['passed']:
+                break
+            prompt = row['task']['description'] + '\nRepair deterministic failure:\n' + json.dumps(verification)
+        require(verification is not None and verification['passed'], 'pcp_local_engineering_verification_failed')
+        await readers.refresh(task)
+        # Recheck after tests, which must not mutate the developer source copy.
+        final_diff = diff_state(workspace, int(project['runtime'].get('max_diff_bytes', 750000)), base_ref=task.base_sha)
+        require(final_diff['diff_hash'] == diff['diff_hash'], 'pcp_local_verified_diff_changed')
+        commit = commit_changes(workspace, f"PCP-local issue #{task.issue_number}")
+        require(bool(commit), 'pcp_local_verified_commit_missing')
+        checkpoint['pcp_local_execution'].update(state='verified', commit=commit)
+        progress['elapsed_minutes'] = (time.monotonic() - started) / 60
+        result = dict(status='accepted', branch=ws['branch'], commit=commit, diff=diff,
+                      verification=verification, route=readers.route, delivery_finalized=False)
+        engine.storage.update(job_id, status='delivering', checkpoint=checkpoint, result=result,
+                              progress=progress)
+        await engine.deliver_pcp_local(job_id, readers, task)
+    except BaseException as exc:
+        # Do not release the writer reservation or rewind receipts after an
+        # uncertain side effect. Reconciliation is for this exact job only.
+        latest = engine.storage.get(job_id)
+        if latest is not None:
+            cp = deepcopy(latest['checkpoint'])
+            execution = cp.setdefault('pcp_local_execution', {})
+            if execution.get('state') == 'verified':
+                execution['delivery_uncertain'] = True
+            else:
+                execution['state'] = 'held'
+            engine.storage.update(job_id, status='blocked', checkpoint=cp,
+                error=exc.code if isinstance(exc, TaskStop) else 'pcp_local_uncertain_execution_no_retry')
+        raise
+    return engine.storage.get(job_id)
+
+
+# Concrete service-owned readers for the dedicated execution path.
+import asyncio
+from copy import deepcopy
+import hashlib
+import json
+import os
+from pathlib import Path
+import time
+
+import httpx
+import yaml
+
+from .pcp_local_task_queue import PROJECT_ID, REPOSITORY, require, verify_issue
+
+ACTIVATION_FILE = Path('/config/pcp-local-activation.json')
+
+
+def digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def read_activation():
+    """A switch is not authority: require an independently installed document."""
+    require(not ACTIVATION_FILE.is_symlink() and ACTIVATION_FILE.is_file(),
+            'pcp_local_operational_delegation_missing')
+    value = json.loads(ACTIVATION_FILE.read_text())
+    require(type(value) is dict and value.get('project_id') == PROJECT_ID
+            and value.get('repository') == REPOSITORY
+            and type(value.get('expires_at')) in (int, float)
+            and time.time() < value['expires_at']
+            and type(value.get('issue_number')) is int
+            and value['issue_number'] > 0
+            and value.get('developer_permission_mode') == 'bounded',
+            'pcp_local_operational_delegation_invalid')
+    return value
+
+
+class TrustedReaders:
+    """The concrete eight readers. Callables/dictionaries are not wire inputs."""
+    def __init__(self, engine, github):
+        self.engine, self.github = engine, github
+        self.activation = read_activation()
+        self.route = None
+        self.task = None
+        self.snapshot = None
+        self.lease_generation = None
+        self.authority_digest = None
+
+    async def executor(self, path, payload):
+        async with httpx.AsyncClient(timeout=60) as client:
+            response = await client.post(self.engine.ddev.base + path,
+                json=payload, headers=self.engine.ddev.headers)
+            response.raise_for_status()
+            return response.json()
+
+    def authority(self):
+        from . import config
+        from .baseline import resolve_project_baseline
+        require(read_activation() == self.activation, 'pcp_local_delegation_revoked')
+        # Do not allow cached baseline/model files to survive a revocation.
+        config.project_baselines_doc.cache_clear()
+        config.models_doc.cache_clear()
+        config.routing_policy_doc.cache_clear()
+        projects = config.projects_doc().get('projects', {})
+        require(set(projects) == {PROJECT_ID}, 'pcp_local_singleton_required')
+        project = config.project_config(PROJECT_ID)
+        require(project.get('repository') == REPOSITORY
+                and project.get('registration_status') == 'approved'
+                and project.get('base_branch') == 'main'
+                and project['runtime'].get('workspace_mode') == 'isolated_clone'
+                and project['runtime'].get('developer_permission_mode') == 'bounded'
+                and project.get('ddev', {}).get('enabled') is True,
+                'pcp_local_project_not_operational')
+        baseline = resolve_project_baseline(PROJECT_ID, self.activation['baseline_revision'])
+        active = config.project_baselines_doc()['projects'][PROJECT_ID]['active_revision']
+        require(baseline is not None and baseline.revision == active
+                and baseline.source_commit == self.activation['baseline_source_commit'],
+                'pcp_local_baseline_revoked')
+        revision = digest({'project': project, 'baseline': baseline.model_dump(mode='json'),
+                           'models': config.models_doc(), 'policy': config.routing_policy_doc()})
+        require(self.authority_digest is None or self.authority_digest == revision,
+                'pcp_local_authority_changed')
+        self.authority_digest = revision
+        return project, baseline
+
+    async def source(self):
+        self.authority()
+        a = self.activation
+        issue = await self.github.local_source_issue(issue_number=a['issue_number'])
+        task = verify_issue(issue, **{k: a[k] for k in (
+            'issue_number', 'body_sha256', 'base_sha', 'baseline_revision', 'baseline_source_commit')})
+        require(self.task is None or task == self.task, 'pcp_local_source_revoked')
+        self.task = task
+        return task, issue
+
+    async def refresh(self, task):
+        from .config import model_config
+        from .model_capabilities import validate_model_choice
+        from .quota_telemetry import CodexQuotaCollector
+        from .shell import run_command
+        observed_at = time.monotonic()
+        project, baseline = self.authority()
+        checked, issue = await self.source()
+        require(checked == task, 'pcp_local_wrong_task')
+        expected_tests = {p for p in task.allowed_paths if p.startswith('tests/')}
+        require(bool(expected_tests) and all(expected_tests <= set(project['ddev'].get(phase) or [])
+                for phase in ('targeted_tests', 'full_tests')), 'pcp_local_task_tests_not_configured')
+        job_id = stable_job_id(task)
+        proof = await self.executor('/v1/pcp-local/observe', {
+            'job_id': job_id, 'source_commit': task.base_sha,
+            'activation_digest': digest(self.activation),
+        })
+        require(proof.get('job_id') == job_id and proof.get('source_commit') == task.base_sha
+                and proof.get('activation_digest') == digest(self.activation),
+                'pcp_local_executor_binding_invalid')
+        roots = list(self.engine.workspace_root.iterdir())
+        require(all(p.name == job_id and p.is_dir() and not p.is_symlink() for p in roots),
+                'pcp_local_foreign_workspace')
+        require(not Path('/var/run/docker.sock').exists()
+                and not any(os.getenv(k) for k in ('GITHUB_DELIVERY_TOKEN', 'GITHUB_TOKEN', 'GH_TOKEN'))
+                and not (Path.home() / '.ssh').exists(), 'pcp_local_runtime_credential_boundary')
+        with self.engine.storage.connect() as conn:
+            foreign = conn.execute('SELECT id FROM cp_jobs WHERE project_id<>%s LIMIT 1', (PROJECT_ID,)).fetchone()
+            require(foreign is None, 'pcp_local_database_not_dedicated')
+            if self.lease_generation is not None:
+                receipt = conn.execute('SELECT * FROM cp_pcp_local_source_receipts WHERE '
+                    'repository=%s AND project_id=%s AND issue_number=%s',
+                    (REPOSITORY, PROJECT_ID, task.issue_number)).fetchone()
+                expected = {**vars(task), 'allowed_paths': list(task.allowed_paths),
+                            'state': 'running', 'generation': 2, 'job_id': job_id}
+                require(receipt is not None and all(exact_value(receipt.get(k), v)
+                        for k, v in expected.items()), 'pcp_local_running_receipt_changed')
+            rows = conn.execute('SELECT id FROM cp_jobs WHERE project_id=%s AND status NOT IN '
+                "('completed','failed','cancelled') AND id<>%s", (PROJECT_ID, job_id)).fetchall()
+            lease = conn.execute('SELECT * FROM cp_project_leases WHERE project_id=%s',
+                                 (PROJECT_ID,)).fetchone()
+        require(not rows, 'pcp_local_other_writer')
+        if self.lease_generation is None:
+            require(lease is None or lease['state'] == 'released', 'pcp_local_writer_busy')
+        else:
+            require(lease is not None and lease['state'] == 'active'
+                    and lease['owner_job_id'] == job_id
+                    and lease['generation'] == self.lease_generation,
+                    'pcp_local_lease_revoked')
+        if self.route is None:
+            self.route = await self.engine.router.route({
+                'job_id': job_id, 'project_id': PROJECT_ID, 'repository': REPOSITORY,
+                'source_commit': task.base_sha,
+                'task': {'title': f'PCP-local issue #{task.issue_number}',
+                         'description': issue['body'], 'task_type': 'implementation'},
+                'repo': {'estimated_files': len(task.allowed_paths), 'tests_available': True},
+            })
+        strategy = self.route['strategy']
+        require(not strategy.get('human_decision', {}).get('required'),
+                'pcp_local_protected_decision_pending')
+        choice = strategy['executor']
+        validate_model_choice(choice)
+        require(choice['adapter'] == 'codex_cli'
+                and model_config(choice['id']).get('kind') == 'agent',
+                'pcp_local_selected_adapter_not_supported')
+        version = await run_command(['codex', '--version'], cwd='/tmp', timeout=10)
+        require(version.returncode == 0 and version.stdout.strip() ==
+                'codex-cli ' + self.activation['codex_version'], 'pcp_local_cli_version_mismatch')
+        quota = await CodexQuotaCollector().collect()
+        relevant = [q for q in quota if q.get('provider') == 'openai'
+                    and q.get('state_key') in ('provider:openai', 'quota:model:' + choice['id'])]
+        require(bool(relevant) and all(q.get('authoritative') is True
+                and q.get('available') is True for q in relevant), 'pcp_local_provider_unavailable')
+        limits = self.activation['budget']
+        rights = project['autonomy']
+        normalized_lease = None if lease is None else {k: lease[k] for k in (
+            'project_id', 'owner_job_id', 'generation', 'state')}
+        self.snapshot = {
+            'project': dict(project_id=PROJECT_ID, repository=REPOSITORY, base_branch='main',
+                            registered=True, allow_create_pr=rights.get('allow_create_pr'),
+                            allow_production_deploy=rights.get('allow_production_deploy')),
+            'baseline': dict(project_id=PROJECT_ID, revision=baseline.revision,
+                             source_commit=baseline.source_commit, active_revision=baseline.revision,
+                             status='approved'),
+            'isolation': {**proof['isolation'], 'workspace_mode': 'isolated_clone',
+                          'workspace_lease_state': 'free', 'active_writers': 0},
+            'provider': dict(adapter='codex_cli', model=choice['model'],
+                effort=choice['reasoning_effort'], installed_cli_version=self.activation['codex_version'],
+                approved_cli_version=self.activation['codex_version'], **proof['provider']),
+            'budget': dict(owner_approved=True, provider_quota_verified=True,
+                max_changed_files=len(task.allowed_paths), **limits),
+            'writer': dict(project_id=PROJECT_ID, workspace_mode='isolated_clone',
+                           lease=normalized_lease, other_job_ids=[]),
+            'publisher': proof['publisher'],
+            'model_choice': {k: choice[k] for k in ('id','adapter','model','reasoning_effort')},
+        }
+        require(time.monotonic() - observed_at < 30, 'pcp_local_observation_expired')
+        self.authority()
+        return self.snapshot
+
+    def readers(self):
+        # RuntimeTaskAttestor iterates sorted keys: refresh all live sources once
+        # per complete observation, rather than collecting quota eight times.
+        async def read(key, task):
+            if key == min(OBSERVER_PARTS):
+                await self.refresh(task)
+            require(self.snapshot is not None, 'pcp_local_observation_missing')
+            value = deepcopy(self.snapshot[key])
+            now = time.monotonic()
+            return RuntimeObservation(value, digest({'task': vars(task), 'value': value,
+                'activation': self.activation, 'authority': self.authority_digest}), now, now + 30)
+        return {k: lambda task, key=k: read(key, task) for k in OBSERVER_PARTS}

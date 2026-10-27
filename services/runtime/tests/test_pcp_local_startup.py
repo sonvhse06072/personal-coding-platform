@@ -377,3 +377,30 @@ def test_b2f2_frozen_scope_rejection_precedes_any_job_database_read(monkeypatch,
             await runtime_main.run_job(job_id, payload)
         assert exc.value.status_code == 409
     asyncio.run(run())
+
+
+def test_worker_mode_flags_alone_never_activate(monkeypatch, tmp_path):
+    from app import pcp_local_worker_loop as trusted
+    from app.pcp_local_task_queue import TaskStop
+    calls = forbid_external(monkeypatch)
+    monkeypatch.setattr(trusted, 'ACTIVATION_FILE', tmp_path / 'absent.json')
+    monkeypatch.setenv('PCP_RUNTIME_STARTUP_MODE', 'pcp_local_worker')
+    for key in runtime_main._PCP_LOCAL_FLAGS:
+        monkeypatch.setenv(key, 'owner-approved')
+    async def check():
+        with pytest.raises(TaskStop, match='delegation_missing'):
+            async with runtime_main.lifespan(runtime_main.app):
+                pytest.fail('flags cannot supply operational authority')
+    asyncio.run(check())
+    assert calls == ['harden']
+
+
+def test_worker_http_does_not_open_generic_controls(monkeypatch):
+    monkeypatch.setenv('PCP_RUNTIME_STARTUP_MODE', 'pcp_local_worker')
+    monkeypatch.setattr(runtime_main.app.state, 'pcp_local_worker_ready', True, raising=False)
+    async def check():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=runtime_main.app), base_url='http://test') as client:
+            for method, path in [('POST','/v1/jobs'), ('POST','/v1/jobs/old/run'),
+                                 ('POST','/v1/jobs/old/resume'), ('GET','/v1/jobs')]:
+                assert (await client.request(method, path)).status_code == 403
+    asyncio.run(check())

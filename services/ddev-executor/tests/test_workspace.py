@@ -2082,3 +2082,280 @@ def test_remote_direct_sync_rejects_active_executor_process(
 
     assert exc.value.status_code == 409
     assert "active jobs" in str(exc.value.detail)
+
+
+# GH-815: fake-only PCP-local verification boundary. Ordinary workspace tests
+# above continue exercising their original behavior.
+def pcp_compose(target, name):
+    return {
+        'services': {'web': {'container_name': 'ddev-' + name + '-web',
+            'networks': {'default': None}, 'environment': {},
+            'volumes': [dict(type='bind', source=str(target), target='/var/www/html')]}},
+        'networks': {'default': {'name': name + '-private', 'internal': True}},
+    }
+
+
+def test_pcp_effective_compose_accepts_only_job_web(tmp_path):
+    from app.main import _pcp_effective_compose
+    _pcp_effective_compose(pcp_compose(tmp_path, 'pcp-local-job'), tmp_path, 'pcp-local-job')
+
+
+@pytest.mark.parametrize('mutation', ['service', 'hook_env', 'socket', 'home', 'shared_network', 'privileged', 'port'])
+def test_pcp_effective_compose_denies_foreign_capabilities(tmp_path, mutation):
+    from app.main import _pcp_effective_compose
+    doc = pcp_compose(tmp_path, 'pcp-local-job')
+    web = doc['services']['web']
+    if mutation == 'service':
+        doc['services']['n8n'] = {}
+    elif mutation == 'hook_env':
+        web['environment']['GITHUB_DELIVERY_TOKEN'] = 'test-only'
+    elif mutation in ('socket', 'home'):
+        web['volumes'].append(dict(type='bind', source='/var/run/docker.sock' if mutation == 'socket' else '/home/foreign', target='/foreign'))
+    elif mutation == 'shared_network':
+        doc['networks']['default']['name'] = 'ddev_default'
+    elif mutation == 'privileged':
+        web['privileged'] = True
+    else:
+        web['ports'] = [{'host_ip': '0.0.0.0'}]
+    with pytest.raises(HTTPException):
+        _pcp_effective_compose(doc, tmp_path, 'pcp-local-job')
+
+
+def test_pcp_project_config_uses_supported_project_omit_containers():
+    from app import main as executor
+    image = 'test/web@sha256:' + 'c' * 64
+    config = yaml.safe_load(executor._pcp_job_config('pcp-local-job', image))
+    # ddev-router is global-only; project omissions do not disable it.
+    assert config['omit_containers'] == ['db', 'ddev-ssh-agent']
+    assert config['webimage'] == image
+
+
+def test_pcp_copy_never_inherits_legacy_ddev_and_is_retry_stable(tmp_path, monkeypatch):
+    from app import main as executor
+    job = 'a' * 32
+    workspace = tmp_path / 'workspaces' / job
+    workspace.mkdir(parents=True)
+    (workspace / 'tests').mkdir()
+    (workspace / 'tests/test_pcp_light_sample.py').write_text('def test_example(): assert True\n')
+    (workspace / '.ddev').mkdir()
+    (workspace / '.ddev/config.yaml').write_text('hooks:\n  pre-start:\n    - exec-host: forbidden\n')
+    (workspace / '.ddev/docker-compose.legacy.yaml').write_text('services:\n  foreign: {}\n')
+    monkeypatch.setattr(executor, '_validate_workspace', lambda *args: workspace)
+    monkeypatch.setattr(executor, 'git', lambda *args: 'b' * 40)
+    payload = executor.PhaseRequest(job_id=job, project_id='pcp-local', workspace=str(workspace), phase='targeted_tests')
+    activation = {'base_sha': 'b' * 40, 'verification_image': 'test/web@sha256:' + 'c' * 64}
+    target, name = executor._pcp_verification_copy(payload, activation, tmp_path)
+    assert target != workspace and 'sources/.pcp-local-verification' in str(target)
+    config = yaml.safe_load((target / '.ddev/config.yaml').read_text())
+    assert config['name'] == name and 'hooks' not in config
+    assert config['omit_containers'] == ['db', 'ddev-ssh-agent']
+    fragment = (target / '.ddev/web-build/Dockerfile').read_text()
+    # DDEV appends this fragment after its generated FROM and setup.
+    instructions = [line.split()[0].upper() for line in fragment.splitlines()
+                    if line.strip() and not line.lstrip().startswith('#')]
+    assert instructions == ['RUN']
+    assert 'python3 -m venv /opt/pcp-tests' in fragment
+    assert 'pytest==8.3.5 PyYAML==6.0.2' in fragment
+    assert not (target / '.ddev/docker-compose.legacy.yaml').exists()
+    assert (workspace / '.ddev/config.yaml').read_text().startswith('hooks:')
+    assert executor._pcp_verification_copy(payload, activation, tmp_path) == (target, name)
+    (target / '.ddev/config.evil.yaml').write_text('hooks: {}')
+    with pytest.raises(HTTPException, match='pcp_local_untrusted_ddev_configuration'):
+        executor._pcp_verification_copy(payload, activation, tmp_path)
+
+
+def test_pcp_copy_refuses_symlinks_before_commands(tmp_path, monkeypatch):
+    from app import main as executor
+    workspace = tmp_path / 'workspaces' / ('a' * 32)
+    workspace.mkdir(parents=True)
+    (workspace / 'foreign').symlink_to(tmp_path / 'outside')
+    monkeypatch.setattr(executor, '_validate_workspace', lambda *args: workspace)
+    monkeypatch.setattr(executor, 'git', lambda *args: pytest.fail('Git must not run on unsafe tree'))
+    payload = executor.PhaseRequest(job_id='a' * 32, project_id='pcp-local', workspace=str(workspace), phase='targeted_tests')
+    with pytest.raises(HTTPException, match='pcp_local_symlink_denied'):
+        executor._pcp_verification_copy(payload, {}, tmp_path)
+
+
+def test_pcp_resource_collision_refuses_foreign_owner(tmp_path, monkeypatch):
+    from app import main as executor
+    monkeypatch.setattr(executor, '_pcp_docker', lambda *args, **kwargs: {
+        'Config': {'Labels': {'com.docker.compose.project': 'unrelated'}}})
+    with pytest.raises(HTTPException, match='pcp_local_resource_collision'):
+        executor._pcp_resources(tmp_path, 'pcp-local-job')
+
+
+@pytest.mark.parametrize('test_output,expected', [('3 passed, 1 skipped', True), ('1 skipped', False), ('no tests ran', False)])
+def test_pcp_phase_requires_actual_tests_and_validates_before_start(tmp_path, monkeypatch, test_output, expected):
+    from app import main as executor
+    target = tmp_path / 'verified'
+    target.mkdir()
+    monkeypatch.setattr(executor, '_pcp_identity', lambda *_: ({}, {'ddev': {
+        'enabled': True, 'targeted_tests': ['tests/test_pcp_light_sample.py']}}, tmp_path))
+    monkeypatch.setattr(executor, '_pcp_verification_copy', lambda *args: (target, 'pcp-local-job'))
+    calls = []
+    monkeypatch.setattr(executor, '_pcp_resources', lambda *args, **kw: calls.append(('inspect', kw)))
+    def fake(job, argv, **kwargs):
+        assert 'GITHUB_DELIVERY_TOKEN' not in kwargs['env']
+        calls.append(tuple(argv))
+        if argv == ['ddev', 'debug', 'compose-config']:
+            return 0, yaml.safe_dump(pcp_compose(target, 'pcp-local-job')), '', False
+        if argv == ['ddev', 'start', '-y']:
+            return 0, '', '', False
+        if argv[:5] == ['docker', '--host', 'unix:///var/run/docker.sock', 'container', 'stop']:
+            assert argv[-1] == 'ddev-pcp-local-job-web'
+            return 0, '', '', False
+        assert argv[:3] == ['ddev', 'exec', '/opt/pcp-tests/bin/python']
+        return 0, test_output, '', False
+    (tmp_path / 'sources').mkdir()
+    monkeypatch.setattr(executor, 'run_tracked', fake)
+    payload = executor.PhaseRequest(job_id='a' * 32, project_id='pcp-local', workspace='/unused', phase='targeted_tests')
+    result = executor.phase(payload)
+    assert result.passed is expected
+    assert len(result.commands) == 1
+    assert calls[1] == ('ddev', 'debug', 'compose-config')
+    assert calls[2] == ('ddev', 'start', '-y')
+
+
+def test_pcp_phase_invalid_render_never_starts(tmp_path, monkeypatch):
+    from app import main as executor
+    (tmp_path / 'sources').mkdir()
+    monkeypatch.setattr(executor, '_pcp_identity', lambda *_: ({}, {'ddev': {
+        'enabled': True, 'targeted_tests': ['tests/test_pcp_light_sample.py']}}, tmp_path))
+    monkeypatch.setattr(executor, '_pcp_verification_copy', lambda *args: (tmp_path, 'pcp-local-job'))
+    monkeypatch.setattr(executor, '_pcp_resources', lambda *args, **kw: None)
+    calls = []
+    def fake(job, argv, **kwargs):
+        calls.append(argv)
+        assert argv == ['ddev', 'debug', 'compose-config']
+        return 0, 'services: {foreign: {}}', '', False
+    monkeypatch.setattr(executor, 'run_tracked', fake)
+    payload = executor.PhaseRequest(job_id='a' * 32, project_id='pcp-local', workspace='/unused', phase='targeted_tests')
+    with pytest.raises(HTTPException, match='pcp_local_extra_service'):
+        executor.phase(payload)
+    assert len(calls) == 1
+
+
+def test_pcp_clone_omits_legacy_ddev_without_changing_tracked_diff(tmp_path, monkeypatch):
+    import hashlib
+    from app import main as executor
+    root = tmp_path/'pcp-local-testing'
+    source = root/'sources/personal-coding-platform'
+    source.mkdir(parents=True)
+    workspaces = root/'workspaces'
+    workspaces.mkdir()
+    run('git','init','-b','main',cwd=source)
+    run('git','config','user.email','test@example.com',cwd=source)
+    run('git','config','user.name','Test',cwd=source)
+    (source/'.ddev').mkdir()
+    (source/'.ddev/config.yaml').write_text('hooks: {pre-start: [{exec-host: forbidden}]}\n')
+    (source/'.ddev/docker-compose.legacy.yaml').write_text('services: {foreign: {}}\n')
+    (source/'README.md').write_text('source\n')
+    run('git','add','.',cwd=source)
+    run('git','commit','-m','source fixture',cwd=source)
+    sha = run('git','rev-parse','HEAD',cwd=source)
+    a = dict(root=str(root),issue_number=999,body_sha256='b'*64,base_sha=sha,baseline_revision='test')
+    job = hashlib.sha256((f"pcp-local:v1:{executor._PCP_REPOSITORY}:999:{'b'*64}:{sha}:test").encode()).hexdigest()[:32]
+    registry = tmp_path/'pcp-projects.yml'
+    registry.write_text(yaml.safe_dump({'projects': {'pcp-local': {
+        'path':str(source),'repository':executor._PCP_REPOSITORY,'registration_status':'approved',
+        'base_branch':'main','runtime':{'workspace_mode':'isolated_clone','developer_permission_mode':'bounded'},
+        'ddev':{'enabled':True}}}}))
+    monkeypatch.setenv('PROJECTS_FILE',str(registry))
+    monkeypatch.setenv('CODING_PROJECTS_ROOT',str(root/'sources'))
+    monkeypatch.setenv('CODING_WORKSPACES_ROOT',str(workspaces))
+    monkeypatch.setattr(executor,'_pcp_activation',lambda:a)
+    payload = WorkspaceRequest(job_id=job,project_id='pcp-local',ref=sha,workspace_mode='isolated_clone')
+    result = executor.create_workspace(payload)
+    workspace = Path(result['workspace'])
+    assert not (workspace/'.ddev').exists()
+    assert (source/'.ddev/config.yaml').is_file()
+    assert run('git','status','--porcelain',cwd=workspace)==''
+    assert run('git','rev-parse','HEAD',cwd=workspace)==sha
+    with pytest.raises(HTTPException, match='Workspace already exists'):
+        executor.create_workspace(payload)
+    assert (workspace/'README.md').read_text()=='source\n'
+
+
+def test_pcp_draft_creation_never_publishes_ready_pr(monkeypatch):
+    from types import SimpleNamespace
+    from app import main as executor
+    calls=[]
+    class Reply:
+        def __init__(self,data): self.data=data
+        def raise_for_status(self): pass
+        def json(self): return self.data
+    class Client:
+        def __enter__(self): return self
+        def __exit__(self,*args): pass
+        def get(self,url,**kwargs): return Reply([])
+        def post(self,url,**kwargs):
+            calls.append(kwargs['json'])
+            return Reply(dict(number=12,html_url='https://github.com/test/pr/12',state='open',draft=True,
+                head={'sha':'c'*40,'ref':'ai/'+'a'*12,'repo':{'full_name':executor._PCP_REPOSITORY}},
+                base={'ref':'main'}))
+    delivery=SimpleNamespace(base='https://api.github.com',_client=Client,
+        assert_branch_commit=lambda *args:None)
+    cfg={'autonomy':{'allow_create_pr':True}}
+    monkeypatch.setattr(executor,'_pcp_identity',lambda *args:({},cfg,None))
+    monkeypatch.setattr(executor,'_github_context',lambda cfg:(delivery,executor._PCP_REPOSITORY))
+    result=executor.upsert_pull_request(executor.PullRequestRequest(job_id='a'*32,
+        project_id='pcp-local',branch='ai/'+'a'*12,expected_commit='c'*40,title='test',body='verified'))
+    assert calls[0]['draft'] is True and result['draft'] is True
+
+
+@pytest.mark.parametrize('fault', [None, 'head', 'reviewer', 'dismissed', 'baseline', 'skipped_suite', 'missing_step', 'missing_suite'])
+def test_pcp_pm_review_requires_authenticated_exact_head_and_four_executed_suites(monkeypatch, fault):
+    import json
+    from copy import deepcopy
+    from types import SimpleNamespace
+    from app import main as executor
+    job='a'*32
+    head='b'*40
+    a={'base_sha':'c'*40,'baseline_revision':'approved','pm_login':'reviewer'}
+    report=dict(verdict='pass',findings=[],job_id=job,source_commit=a['base_sha'],
+        expected_head=head,baseline_revision='approved',diff_hash='d'*64,
+        summary='Independent review checked source scope, deterministic verification and delivery evidence.')
+    pr=dict(state='open',merged=False,head=dict(sha=head,ref='ai/'+job[:12],
+        repo=dict(full_name=executor._PCP_REPOSITORY)),base=dict(ref='main'))
+    review=dict(user={'login':'reviewer'},commit_id=head,state='COMMENTED')
+    names=['structure-tests','python-tests (services/router)','python-tests (services/runtime)',
+           'python-tests (services/ddev-executor)']
+    jobs=[dict(name=n,conclusion='success',steps=[dict(name='Run tests',conclusion='success')]) for n in names]
+    if fault=='head': pr['head']['sha']='e'*40
+    if fault=='reviewer': review['user']['login']='developer'
+    if fault=='dismissed': review['state']='DISMISSED'
+    if fault=='baseline': report['baseline_revision']='wrong'
+    if fault=='skipped_suite': jobs[0]['conclusion']='skipped'
+    if fault=='missing_step': jobs[0]['steps']=[]
+    if fault=='missing_suite': jobs.pop()
+    review['body']='<!-- coding-platform:pcp-local-pm-review:v1 -->\n'+json.dumps(report)
+    calls=[]
+    class Reply:
+        def __init__(self,data): self.data=data
+        def raise_for_status(self): pass
+        def json(self): return deepcopy(self.data)
+    class Client:
+        def __enter__(self): return self
+        def __exit__(self,*args): pass
+        def get(self,url):
+            calls.append(url)
+            assert url.startswith('https://api.github.com/repos/'+executor._PCP_REPOSITORY+'/')
+            if url.endswith('/pulls/7'): return Reply(pr)
+            if url.endswith('/reviews/8'): return Reply(review)
+            if '/actions/runs?' in url:
+                return Reply({'workflow_runs':[dict(id=10,name='tests',head_sha=head,
+                    event='pull_request',status='completed',conclusion='success')]})
+            assert url.endswith('/actions/runs/10/jobs?filter=latest&per_page=100')
+            return Reply({'jobs':jobs})
+    monkeypatch.setattr(executor,'_pcp_identity',lambda *args:(a,{},None))
+    monkeypatch.setattr(executor,'_github_context',lambda cfg:(SimpleNamespace(
+        base='https://api.github.com',_client=Client),executor._PCP_REPOSITORY))
+    monkeypatch.setattr(executor,'github_ci',lambda *args:{'state':'success','commit':head})
+    request=executor.PcpLocalReviewRequest(job_id=job,source_commit=a['base_sha'],
+        expected_head=head,activation_digest=executor._pcp_digest(a),pr_number=7,review_id=8)
+    if fault:
+        with pytest.raises(HTTPException): executor.pcp_local_review(request)
+    else:
+        proof=executor.pcp_local_review(request)
+        assert proof['expected_head']==head and proof['ci_run_id']==10
+        assert proof['suites']==sorted(names) and proof['report']==report

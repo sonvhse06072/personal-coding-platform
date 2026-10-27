@@ -4,72 +4,114 @@ Tier-1 mutable execution index; not project-frame authority, baseline approval
 or physical attestation. Constitution, architecture and approved immutable
 ProjectBaseline revisions outrank this snapshot. Reverify GitHub before action.
 
-## Active work — GH-815 PR-A
+## Active work — GH-815 PR-B SOURCE implementation
 
-Updated 2026-10-27. Branch `ai/815-trusted-local-pr-a`, isolated source checkout
-`/home/sonvh/pcp-815-pr-a-source`; independently verified base
-`8ce2e51f7abde098e49e974011b06eb9f305d4d9`. No legacy runtime/DB/Host was inspected.
+Updated 2026-10-27. Checkout `/home/sonvh/pcp-815-pr-b-source`, branch
+`ai/815-trusted-local-pr-b`, base `f9bf5fd1a62810c4dcc429bae690fe82ce3d6e29`.
+[PR-A #817](https://github.com/sonvhse06072/personal-coding-platform/pull/817)
+is merged and accepted. Its actual postmerge push/main
+[run 40504187048](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40504187048)
+executed all four suites successfully at that exact main SHA.
 
-- **Approved SOURCE:** [V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6438475541)
-  local bootstrap/policy; [V2](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6438904126)
-  adds three protected execution paths for PR-B; [V3](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6440446016)
-  adds three legacy test paths to PR-A and retires legacy compatibility as a
-  product requirement. PR-A ceiling is 13 paths; total approved union is 22.
-- **Implementation prepared, not yet source-accepted:** fresh-root bootstrap
-  dry-run plus separately gated future apply; three existing service Dockerfiles,
-  explicit base/tool pins, unique local tags and image IDs/build logs; PCP-only
-  hook-free DDEV instance, fresh internal service tokens, no provider/publisher
-  credential migration. Apply never starts DDEV/DB/services or dispatches Codex.
-- **Default OFF:** all custom services opt-in; real Runtime image currently uses
-  existing `pcp_local_inspect` health startup. Registries remain draft/path-null,
-  delivery rights off, `active_revision: null`, no invented revision/source SHA.
-  PR-B must wire actual admitted execution before a live task is possible.
-- **Tests:** 17 focused unittest cases PASS with strict fake Docker/DDEV and
-  temporary Git/files only; 12 context-evaluation cases and actual in-memory
-  continuity replacement/idempotence PASS; `bash -n` and `git diff --check` PASS. Host pytest is
-  absent; no package installation. Historical H1c/H1b tests now use their frozen
-  inputs, and placeholder-only profile assertions are replaced with current
-  boundary checks. [Draft PR #817](https://github.com/sonvhse06072/personal-coding-platform/pull/817)
-  is open. Actual [hosted four-suite CI](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40502172094)
-  at code head `f3c1004d04f65eb93775e424b8a3fb6e5ea373d6` **PASS**:
-  root 1,736 passed/1 skipped; Router 132 passed; Runtime 2,383 passed/88 skipped;
-  Executor 637 passed. Total 4,888 passed/89 existing skips/3 dependency warnings.
-  T1 continuity interfaces are retained with current PCP-local content; no test
-  suppression or outside-scope edits. Final handoff-commit CI is tracked below.
+Authority: [V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6438475541),
+[V2](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6438904126),
+and verified [V4 Owner approval](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6443075044).
+V4 adds only Executor `app/main.py` and `tests/test_workspace.py` to the nine
+Runtime source/test paths. This T1 continuity file remains permitted. No scope
+expansion or source change to registry, baseline, Compose or Constitution.
+
+Implementation prepared in [Draft PR #818](https://github.com/sonvhse06072/personal-coding-platform/pull/818),
+not yet independently SOURCE-accepted:
+
+- Dedicated `pcp_local_worker` startup checks installed operational authority;
+  startup starts no scheduler, model, DB initializer or historical replay.
+  Authenticated one-shot ingress uses the existing source receipt, CAS, queue,
+  project lease and CodexAdapter. Generic legacy controls remain denied.
+- Concrete readers in the existing worker module use fresh registry/baseline/model/policy files, authenticated
+  Executor/GitHub, Docker inspection through Executor, PostgreSQL writer state,
+  Router choice and subscription CLI quota. Environment flags alone cannot
+  install authority. Consumed execution receipts cannot automatically replay;
+  uncertain outcomes retain the original job, lease, diff and counters.
+- PCP verification uses an Executor-owned source copy and controlled DDEV
+  configuration, private network/cache, pinned web base and generated Python
+  test image extension. Developer sparse clones omit legacy `.ddev`; verification
+  never uses source hooks/custom Compose. Non-PCP behavior is retained.
+- Mandatory checks must actually execute with positive test counts. Disabled,
+  empty and all-skipped verification cannot pass. Draft PR delivery reuses
+  existing GitHub/CI transport and requires the exact `tests` workflow HEAD;
+  independent PM acceptance remains separate from model success. The dedicated
+  PM endpoint fetches the exact GitHub review and four executed suites, applies
+  existing standalone PM merge gates, and atomically finalizes the original
+  receipt/job/lease. It records eligibility but never merges. Exact retries
+  acknowledge the persisted outcome without replaying execution.
 
 ## Immediate next safe actions
 
-Verify all four actual hosted suites for the latest exact head on
-[PR #817 checks](https://github.com/sonvhse06072/personal-coding-platform/pull/817/checks),
-then independent ChatGPT PM review. Developer does not approve or merge.
-PM must verify actual Owner consent and exact protected path declarations;
-PR metadata and CI alone are not independent human proof. GitHub/Runtime
-evidence remains separate: no live Runtime was queried for this handoff.
+Independent ChatGPT PM review of [PR #818](https://github.com/sonvhse06072/personal-coding-platform/pull/818):
+verify the final exact HEAD against all four actual
+[hosted checks](https://github.com/sonvhse06072/personal-coding-platform/pull/818/checks)
+and the developer evidence in its description before any eligible merge.
+Developer does not self-approve or merge. The PR description/checks carry the
+final head-specific CI receipt so this T1 index does not claim a future SHA's
+result from an earlier run.
+GitHub/Runtime evidence is separate: no live Runtime was queried or activated.
+Local pytest/service dependencies are absent; no Host packages were installed.
+Python AST checks, `git diff --check`, 17 fake bootstrap unittest cases and the
+historical in-memory context integrity check pass. Actual
+[run 40516561074](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40516561074)
+executed all four suites successfully at `c6995893ba48caf1e0d42ee7c46d9f858366d0c2`.
+The initial root-suite failure exposed a historical fixed filename set; placing
+readers in the existing worker module resolved it without changing/weakening
+historical tests or adding an unapproved path. Later checks remain exact-head
+specific; do not substitute this earlier receipt for final HEAD acceptance.
 
-## PR-B handoff and physical boundary
+## Physical pilot prerequisites and boundary
 
-Only after PR-A acceptance and refreshed `main`, use the existing approved PR-B
-paths: `main.py`, `pcp_local_worker_loop.py`, new `pcp_local_trusted_readers.py`,
-`engine_core.py`, `engine.py`, `engine_delivery.py` and the three startup/worker/
-runtime-dispatch test files. Repeat T1/authority updates only inside approved
-scope. Reuse the current receipt/CAS/one-shot registration; install real trusted
-project/baseline/isolation/provider/budget/writer/publisher/model readers and a
-separate admitted execution/delivery path. Generic legacy SOURCE denial remains;
-no replacement queue/service. Keep `developer_permission_mode=bounded`.
+After source acceptance and postmerge CI, obtain one bounded physical delegation:
 
-Physical registration/baseline activation, DDEV global-name/shared-resource
-checks, actual image/CLI health, provider login and publisher custody, job-only
-verification configuration and the first issue/model/budget permit remain later
-pilot work. The instance does not inherit legacy hooks; do not start the tracked
-legacy `.ddev` inside the source clone for platform or job verification.
+- Fresh PR-A instance/source/workspace roots, private PCP service network,
+  exact reviewed Runtime/Executor/Router images and DDEV/Compose versions;
+  Compose must support `!override`/`!reset`. No shared network peers or legacy
+  hooks. The verification web base is digest-pinned; its generated extension
+  installs Python venv, pytest 8.3.5 and PyYAML 6.0.2 inside the image only.
+- Approved singleton registration with `bounded`/`isolated_clone`, exact source
+  path, delivery rights and `ddev.enabled=true`. Configure nonempty
+  `targeted_tests` and `full_tests` as lists of approved
+  `tests/test_pcp_light_*.py` paths. Activate an approved immutable baseline
+  revision separately; no source commit/revision is fabricated by PR-B.
+- Fresh dedicated PostgreSQL schema including existing receipt/lease/job tables;
+  no foreign/historical jobs. Dedicated Runtime subscription login, Executor-only
+  GitHub publisher, service tokens, read-only config and hardened Runtime process.
+  No developer socket, source-root/Host HOME or publisher credential mount.
+- Install `/config/pcp-local-activation.json` outside developer-writeable storage:
+  `project_id`, `repository`, `issue_number`, `body_sha256`, `base_sha`,
+  `baseline_revision`, `baseline_source_commit`, `developer_permission_mode`,
+  `expires_at` (Unix seconds), fresh instance `root`, `runtime_image_id`,
+  `runtime_network`, `codex_version`, authorized independent `pm_login`,
+  digest-pinned DDEV `verification_image`, and
+  `budget` (`model_calls`, `max_wall_seconds`, `cash_ceiling_usd`). Runtime and
+  Executor must see identical bytes/values. This is operational delegation,
+  not an issue-authored evidence dictionary. Keep all task switches OFF until
+  the independent physical boundary checks and pilot authorization are complete.
+- After the pilot's exact-source receipt, one-shot `/v1/pcp-local/run-once` may
+  invoke its admitted job. Uncertain claims never replay; diagnosis retains the
+  same job/diff/counters/lease. `/v1/pcp-local/deliver` may reconcile an already
+  verified commit under fresh authority; it never invokes Codex again.
+  Verification stops only its owned test container;
+  it preserves copies, images, cache and logs. Removal is separately scoped.
+- The independent PM posts an exact-head GitHub review from `pm_login`, then
+  submits `/v1/pcp-local/pm-review` with source/head/branch/baseline/PR/review IDs.
+  Review body: `<!-- coding-platform:pcp-local-pm-review:v1 -->` followed by JSON
+  binding `job_id`, `source_commit`, `expected_head`, `baseline_revision`,
+  `diff_hash`, `verdict: "pass"`, `findings: []` and substantive `summary`.
+  The original source issue/activation cannot authorize its own review. GitHub
+  metadata proves the configured account, not independent human identity;
+  independent ChatGPT PM review remains a process gate. No Developer merge API.
 
-**HOST/DDEV/DB=STOP; CODEX_LIVE=STOP; A3B2_IMAGE_BUILD=STOP.** No Docker/DDEV,
-GHCR workflow dispatch, credential provisioning, model/provider API or physical
-cleanup was performed in this SOURCE task. The bootstrap future apply path is
-covered by fake tests only. Local build IDs and CI do not prove working deployment
-or developer credential isolation. One bounded operational delegation can cover
-routine approved local work after acceptance; it cannot cover foreign resources,
-production, destructive operations or protected/material decisions implicitly.
+**HOST/DDEV/DB=STOP; CODEX_LIVE=STOP; A3B2_IMAGE_BUILD=STOP.** No real Docker/DDEV,
+image build, credential provisioning, provider/model API, DB/job mutation or
+cleanup occurred in this SOURCE task. Local checks and hosted CI do not prove
+live isolation, deployed health, quota entitlement or successful Codex delivery.
 
 ## Active PCP issues and owner attention
 

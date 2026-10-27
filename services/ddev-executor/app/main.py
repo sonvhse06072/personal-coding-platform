@@ -1528,6 +1528,8 @@ def _inspect_orphan_resources(
     project_id: str,
     workspace: str | None,
 ) -> dict[str, Any]:
+    if project_id == 'pcp-local':
+        raise HTTPException(403, 'pcp_local_preserve_owned_resources')
     cfg = project(project_id)
     if not bool((cfg.get("ddev") or {}).get("enabled", False)):
         raise HTTPException(409, "Project does not enable DDEV resource management")
@@ -1986,6 +1988,8 @@ def cancel(payload: CancelRequest) -> dict[str, Any]:
 
 @app.post("/v1/preview/start", dependencies=[Depends(auth)])
 def start_preview(payload: PreviewRequest) -> dict[str, Any]:
+    if payload.project_id == 'pcp-local':
+        raise HTTPException(403, 'pcp_local_dedicated_operation_required')
     cfg = project(payload.project_id)
     if _workspace_mode(cfg) != "direct":
         raise HTTPException(409, "Live preview MVP requires a direct workspace")
@@ -2122,6 +2126,8 @@ def start_preview(payload: PreviewRequest) -> dict[str, Any]:
 
 @app.post("/v1/preview/status", dependencies=[Depends(auth)])
 def preview_status(payload: PreviewRequest) -> dict[str, Any]:
+    if payload.project_id == 'pcp-local':
+        raise HTTPException(403, 'pcp_local_dedicated_operation_required')
     cfg = project(payload.project_id)
     if _workspace_mode(cfg) != "direct":
         raise HTTPException(409, "Live preview MVP requires a direct workspace")
@@ -2178,6 +2184,8 @@ def preview_status(payload: PreviewRequest) -> dict[str, Any]:
 
 @app.post("/v1/preview/stop", dependencies=[Depends(auth)])
 def stop_preview(payload: PreviewRequest) -> dict[str, Any]:
+    if payload.project_id == 'pcp-local':
+        raise HTTPException(403, 'pcp_local_dedicated_operation_required')
     cfg = project(payload.project_id)
     if _workspace_mode(cfg) != "direct":
         raise HTTPException(409, "Live preview MVP requires a direct workspace")
@@ -2231,6 +2239,8 @@ def orphan_resources(payload: OrphanResourcesRequest) -> dict[str, Any]:
 
 @app.post("/v1/workspaces/quiesce", dependencies=[Depends(auth)])
 def quiesce_workspace(payload: QuiesceWorkspaceRequest) -> dict[str, Any]:
+    if payload.project_id == 'pcp-local':
+        raise HTTPException(403, 'pcp_local_dedicated_operation_required')
     cfg = project(payload.project_id)
     # Direct project quiesce is a safe no-op, even when verification is off.
     # An isolated project's quiesce executes DDEV stop and needs an explicit
@@ -2295,6 +2305,10 @@ def quiesce_workspace(payload: QuiesceWorkspaceRequest) -> dict[str, Any]:
 def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
     """Prepare either the configured direct repo or one isolated clone."""
     cfg = project(payload.project_id)
+    if payload.project_id == 'pcp-local':
+        _pcp_identity(payload.job_id, payload.ref)
+        if payload.ref is None or payload.workspace_mode != 'isolated_clone':
+            raise HTTPException(403, 'pcp_local_exact_workspace_required')
     if _f2_git_only_scoped():
         if (payload.ref != F2_FIXTURE_SOURCE
                 or payload.workspace_mode != "isolated_clone"
@@ -2386,7 +2400,8 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
         timeout=300,
     )
     if returncode != 0:
-        shutil.rmtree(workspace, ignore_errors=True)
+        if payload.project_id != 'pcp-local':
+            shutil.rmtree(workspace, ignore_errors=True)
         raise HTTPException(422, stderr.strip() or stdout.strip() or "git clone failed")
 
     try:
@@ -2400,7 +2415,11 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
             git(workspace, "remote", "remove", "origin")
         git(workspace, "checkout", "-b", branch, source_commit)
         git(workspace, "update-ref", "-d", "refs/pcp/materialized-source", check=False)
-        if not (_g0_fixture_scoped() or _f2_git_only_scoped()):
+        if payload.project_id == 'pcp-local':
+            # Sparse omission preserves the source tree/diff without materializing
+            # executable legacy DDEV files into the developer workspace.
+            git(workspace, 'sparse-checkout', 'set', '--no-cone', '/*', '!/.ddev/')
+        elif not (_g0_fixture_scoped() or _f2_git_only_scoped()):
             _reconcile_workspace_ddev_identity(
                 workspace,
                 payload.job_id,
@@ -2408,7 +2427,8 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
                 nodejs_version=cfg.get("ddev", {}).get("workspace_nodejs_version"),
             )
     except Exception:
-        shutil.rmtree(workspace, ignore_errors=True)
+        if payload.project_id != 'pcp-local':
+            shutil.rmtree(workspace, ignore_errors=True)
         raise
 
     return {
@@ -2649,6 +2669,8 @@ def prepare_review_repair(payload: ReviewRepairRequest) -> dict[str, Any]:
     """Revalidate one delivered PR and restore its exact job branch for repair."""
     if payload.project_id == G1_T02_ID:
         raise HTTPException(403, "T02 review repair requires separate approval")
+    if payload.project_id == 'pcp-local':
+        raise HTTPException(403, 'pcp_local_dedicated_operation_required')
     cfg = project(payload.project_id)
     if _f2_git_only_scoped():
         _require_f2_delivery_contract(
@@ -2741,6 +2763,8 @@ def prepare_review_repair(payload: ReviewRepairRequest) -> dict[str, Any]:
 
 @app.post("/v1/github/pull-request", dependencies=[Depends(auth)])
 def upsert_pull_request(payload: PullRequestRequest) -> dict[str, Any]:
+    if payload.project_id == 'pcp-local':
+        return _pcp_draft_pr(payload)
     cfg = project(payload.project_id)
     if payload.project_id == G1_T02_ID:
         _require_t02_delivery_identity(cfg, job_id=payload.job_id,
@@ -2823,6 +2847,8 @@ def return_direct_workspace_to_base(payload: ReturnDirectWorkspaceRequest) -> di
     This never resets, cleans, stashes, deletes the AI branch, or updates the base
     branch from a remote. A mismatch or dirty tree fails closed.
     """
+    if payload.project_id == 'pcp-local':
+        raise HTTPException(403, 'pcp_local_dedicated_operation_required')
     cfg = project(payload.project_id)
     workspace = _validate_workspace(
         payload.job_id,
@@ -2909,6 +2935,8 @@ def advance_direct_workspace_source(
 ) -> dict[str, Any]:
     """Advance one blocked direct job branch onto an exact newer base safely."""
 
+    if payload.project_id == 'pcp-local':
+        raise HTTPException(403, 'pcp_local_dedicated_operation_required')
     cfg = project(payload.project_id)
     workspace = _validate_workspace(
         payload.job_id,
@@ -2999,6 +3027,8 @@ def advance_direct_workspace_source(
 
 @app.delete("/v1/workspaces", dependencies=[Depends(auth)])
 def remove_workspace(job_id: str, project_id: str, workspace: str = Query(...)) -> dict[str, Any]:
+    if project_id == 'pcp-local':
+        raise HTTPException(403, 'pcp_local_preserve_owned_resources')
     cfg = project(project_id)
     path = _validate_workspace(job_id, project_id, workspace)
     if _workspace_instance_mode(cfg, job_id=job_id, path=path) == "direct":
@@ -3015,6 +3045,8 @@ def remove_workspace(job_id: str, project_id: str, workspace: str = Query(...)) 
 
 @app.post("/v1/phase", response_model=PhaseResponse, dependencies=[Depends(auth)])
 def phase(payload: PhaseRequest) -> PhaseResponse:
+    if payload.project_id == 'pcp-local':
+        return _pcp_phase(payload)
     cfg = project(payload.project_id)
     _require_ddev_enabled(cfg)
     workspace = _validate_workspace(
@@ -3508,3 +3540,453 @@ def trusted_codex_dev_phase(payload: TrustedCodexPhaseRequest) -> dict[str, Any]
         "tool_calls_used": used + 1,
         "tool_calls_max": 8,
     }
+
+
+# GH-815: PCP-only verification uses an Executor-owned copy, never the source
+# repository's .ddev. No caller supplies commands, mounts or Compose documents.
+_PCP_LOCAL = 'pcp-local'
+_PCP_REPOSITORY = 'sonvhse06072/personal-coding-platform'
+
+
+class PcpLocalObservationRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    job_id: str = Field(pattern=r'^[0-9a-f]{32}$')
+    source_commit: str = Field(pattern=r'^[0-9a-f]{40}$')
+    activation_digest: str = Field(pattern=r'^[0-9a-f]{64}$')
+
+
+def _pcp_digest(value):
+    import json
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def _pcp_activation():
+    import json
+    path = Path('/config/pcp-local-activation.json')
+    if path.is_symlink() or not path.is_file():
+        raise HTTPException(403, 'pcp_local_operational_delegation_missing')
+    value = json.loads(path.read_text())
+    if (value.get('project_id') != _PCP_LOCAL or value.get('repository') != _PCP_REPOSITORY
+            or type(value.get('expires_at')) not in (int, float)
+            or time.time() >= value['expires_at']):
+        raise HTTPException(403, 'pcp_local_operational_delegation_invalid')
+    return value
+
+
+def _pcp_identity(job_id, source_commit=None):
+    a = _pcp_activation()
+    cfg = project(_PCP_LOCAL)
+    root = Path(a['root'])
+    expected_id = hashlib.sha256((f"pcp-local:v1:{_PCP_REPOSITORY}:{a['issue_number']}:"
+        f"{a['body_sha256']}:{a['base_sha']}:{a['baseline_revision']}").encode('ascii')).hexdigest()[:32]
+    if (not root.is_absolute() or root.is_symlink() or root.resolve() != root
+            or not re.fullmatch(r'/[A-Za-z0-9_./-]+', str(root))
+            or not re.fullmatch(r'pcp-local-[a-z0-9][a-z0-9-]{5,30}', root.name)
+            or set(load_projects()) != {_PCP_LOCAL}
+            or job_id != expected_id
+            or (source_commit is not None and source_commit != a['base_sha'])
+            or cfg.get('repository') != _PCP_REPOSITORY
+            or cfg.get('registration_status') != 'approved'
+            or Path(cfg['path']).resolve() != root / 'sources/personal-coding-platform'
+            or Path(os.environ['CODING_WORKSPACES_ROOT']).resolve() != root / 'workspaces'
+            or cfg.get('runtime', {}).get('workspace_mode') != 'isolated_clone'
+            or cfg.get('runtime', {}).get('developer_permission_mode') != 'bounded'):
+        raise HTTPException(403, 'pcp_local_identity_invalid')
+    return a, cfg, root
+
+
+def _pcp_docker(kind, name, *, missing_ok=False):
+    import json
+    result = subprocess.run(['docker', '--host', 'unix:///var/run/docker.sock',
+        kind, 'inspect', name], text=True, capture_output=True, timeout=15, check=False,
+        env={'PATH': os.environ.get('PATH', '/usr/bin:/bin')})
+    if result.returncode:
+        if missing_ok and ('no such' in result.stderr.lower() or 'not found' in result.stderr.lower()):
+            return None
+        raise HTTPException(409, 'pcp_local_resource_unavailable')
+    try:
+        items = json.loads(result.stdout)
+        if not isinstance(items, list) or len(items) != 1:
+            raise ValueError()
+        return items[0]
+    except (ValueError, TypeError):
+        raise HTTPException(409, 'pcp_local_resource_identity_invalid') from None
+
+
+@app.post('/v1/pcp-local/observe', dependencies=[Depends(auth)])
+def pcp_local_observe(payload: PcpLocalObservationRequest):
+    a, cfg, root = _pcp_identity(payload.job_id, payload.source_commit)
+    if payload.activation_digest != _pcp_digest(a):
+        raise HTTPException(403, 'pcp_local_delegation_mismatch')
+    state = project_state(_PCP_LOCAL)
+    if not state['clean'] or state['head'] != payload.source_commit:
+        raise HTTPException(409, 'pcp_local_source_changed')
+    name = f'ddev-{root.name}-coding-runtime'
+    item = _pcp_docker('container', name)
+    host = item.get('HostConfig', {})
+    expected = {
+        '/config': (str(root / 'instance/config'), False),
+        str(root / 'workspaces'): (str(root / 'workspaces'), True),
+        '/home/coder': (str(root / 'runtime-home'), True),
+    }
+    mounts = item.get('Mounts', [])
+    if (item.get('Name') != '/' + name or not item.get('State', {}).get('Running')
+            or item.get('Image') != a['runtime_image_id']
+            or host.get('Privileged') is not False or host.get('PidMode') == 'host'
+            or host.get('NetworkMode') == 'host' or host.get('CapAdd')
+            or host.get('ReadonlyRootfs') is not True
+            or len(mounts) != len(expected)
+            or any(m.get('Type') != 'bind' or
+                expected.get(m.get('Destination')) != (m.get('Source'), m.get('RW'))
+                for m in mounts)):
+        raise HTTPException(409, 'pcp_local_runtime_isolation_invalid')
+    network_name = a['runtime_network']
+    if set(item.get('NetworkSettings', {}).get('Networks', {})) != {network_name}:
+        raise HTTPException(409, 'pcp_local_runtime_network_invalid')
+    network = _pcp_docker('network', network_name)
+    permitted = {f'ddev-{root.name}-{service}' for service in ('coding-runtime','router','ddev-executor','db','web')}
+    if any(peer.get('Name') not in permitted for peer in network.get('Containers', {}).values()):
+        raise HTTPException(409, 'pcp_local_foreign_network_peer')
+    delivery, repository = _github_context(cfg)
+    if repository != _PCP_REPOSITORY:
+        raise HTTPException(403, 'pcp_local_publisher_repository_invalid')
+    with delivery._client() as client:
+        response = client.get(f'{delivery.base}/repos/{repository}')
+        response.raise_for_status()
+        if response.json().get('permissions', {}).get('push') is not True:
+            raise HTTPException(403, 'pcp_local_publisher_not_authorized')
+    return dict(job_id=payload.job_id, source_commit=payload.source_commit,
+        activation_digest=_pcp_digest(a),
+        isolation=dict(current_main_sha=state['head'], source_repo_clean=True,
+            other_repo_mounts=False, agent_docker_socket=False, isolated_ddev_network=True),
+        provider=dict(credential_scoped=True, github_token_in_agent=False,
+            host_keyring_mounted=False, provider_network_reviewed=True),
+        publisher=dict(project_id=_PCP_LOCAL, repository=repository, executor_only=True,
+            allow_create_pr=cfg['autonomy'].get('allow_create_pr'), allow_merge=False,
+            credential_in_agent=False))
+
+
+def _pcp_no_symlinks(path):
+    if path.is_symlink() or not path.is_dir() or any(p.is_symlink() for p in path.rglob('*')):
+        raise HTTPException(403, 'pcp_local_symlink_denied')
+
+
+def _pcp_job_config(name, image):
+    if not re.fullmatch(r'[^\s]+@sha256:[0-9a-f]{64}', image):
+        raise HTTPException(403, 'pcp_local_verification_image_not_pinned')
+    return yaml.safe_dump(dict(name=name, type='php', docroot='', php_version='8.4',
+        webserver_type='nginx-fpm', webimage=image, use_dns_when_possible=False,
+        omit_containers=['db', 'ddev-ssh-agent'], web_environment=[]))
+
+
+def _pcp_verification_copy(payload, a, root):
+    """Snapshot code into an exact Executor-only root; exclude ALL legacy DDEV."""
+    raw = Path(payload.workspace)
+    if raw.is_symlink() or raw != root / 'workspaces' / payload.job_id:
+        raise HTTPException(403, 'pcp_local_workspace_identity_invalid')
+    workspace = _validate_workspace(payload.job_id, _PCP_LOCAL, payload.workspace)
+    _pcp_no_symlinks(workspace)
+    if (workspace / '.env').exists():
+        raise HTTPException(403, 'pcp_local_inherited_environment_denied')
+    if git(workspace, 'merge-base', 'HEAD', a['base_sha']) != a['base_sha']:
+        raise HTTPException(403, 'pcp_local_workspace_source_changed')
+    # Stable per-content identity makes retries inspect the same owned artifact.
+    entries = {}
+    for path in sorted(workspace.rglob('*')):
+        relative = path.relative_to(workspace)
+        if relative.parts[0] in {'.git', '.ddev', '.venv', '__pycache__', '.pytest_cache'}:
+            continue
+        if path.is_file():
+            entries[relative.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
+    code_digest = _pcp_digest(entries)
+    target = root / 'sources/.pcp-local-verification' / payload.job_id / code_digest
+    name = 'pcp-local-' + payload.job_id[:12] + '-' + code_digest[:8]
+    config = _pcp_job_config(name, a['verification_image'])
+    # Reviewed override: one web container, private internal network/cache;
+    # no source-provided Compose, ports, sockets or host HOME are included.
+    overlay = (
+        'services:\n  web:\n    networks: !override [default]\n'
+        '    ports: !reset []\n    volumes: !override\n'
+        f'      - "{target}:/var/www/html"\n'
+        f'      - "{target / ".ddev"}:/mnt/ddev_config"\n'
+        '      - pcp-local-cache:/mnt/ddev-global-cache\n'
+        'networks: !override\n  default:\n'
+        f'    name: {name}-private\n    internal: true\n'
+        'volumes: !override\n  pcp-local-cache:\n'
+        f'    name: {name}-cache\n'
+    )
+    files = {'.ddev/config.yaml': config, '.ddev/docker-compose.pcp-local.yaml': overlay,
+             '.ddev/web-build/Dockerfile': (
+                 'RUN apt-get update && apt-get install -y --no-install-recommends python3-venv '
+                 '&& python3 -m venv /opt/pcp-tests '
+                 '&& /opt/pcp-tests/bin/pip install --no-cache-dir pytest==8.3.5 PyYAML==6.0.2 '
+                 '&& rm -rf /var/lib/apt/lists/*\n'),
+             '.pcp-verification.json': __import__('json').dumps(entries, sort_keys=True)}
+    if target.exists():
+        _pcp_no_symlinks(target)
+        for key, text in files.items():
+            if not (target / key).is_file() or (target / key).read_text() != text:
+                raise HTTPException(409, 'pcp_local_verification_copy_changed')
+    else:
+        # Refuse a symlink in any existing parent before creating owned files.
+        if any(p.is_symlink() for p in [target, *target.parents]):
+            raise HTTPException(403, 'pcp_local_verification_parent_symlink')
+        target.mkdir(parents=True)
+        for key in entries:
+            dest = target / key
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(workspace / key, dest)
+        for key, text in files.items():
+            dest = target / key
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(text)
+    if (target / '.env').exists():
+        raise HTTPException(403, 'pcp_local_inherited_environment_denied')
+    for key, checksum in entries.items():
+        if hashlib.sha256((target / key).read_bytes()).hexdigest() != checksum:
+            raise HTTPException(409, 'pcp_local_verification_source_changed')
+    allowed = {'config.yaml', 'docker-compose.pcp-local.yaml', 'web-build',
+               '.ddev-docker-compose-base.yaml', '.ddev-docker-compose-full.yaml',
+               '.webimageBuild', '.gitignore'}
+    if not {p.name for p in (target / '.ddev').iterdir()} <= allowed:
+        raise HTTPException(409, 'pcp_local_untrusted_ddev_configuration')
+    if {p.name for p in (target / '.ddev/web-build').iterdir()} != {'Dockerfile'}:
+        raise HTTPException(403, 'pcp_local_untrusted_image_build')
+    return target, name
+
+
+def _pcp_effective_compose(document, target, name):
+    """Validate the rendered document BEFORE ddev start can run a hook/service."""
+    services = document.get('services', {})
+    if set(services) != {'web'}:
+        raise HTTPException(403, 'pcp_local_extra_service')
+    web = services['web']
+    if (web.get('privileged') or web.get('pid') or web.get('network_mode')
+            or web.get('cap_add') or web.get('devices') or web.get('env_file')
+            or web.get('container_name') != 'ddev-' + name + '-web'
+            or set(web.get('networks', {})) != {'default'}):
+        raise HTTPException(403, 'pcp_local_privileged_compose')
+    environment = web.get('environment', {})
+    if not isinstance(environment, dict) or any(k in environment for k in (
+            'GITHUB_DELIVERY_TOKEN', 'GITHUB_TOKEN', 'GH_TOKEN', 'PLATFORM_INTERNAL_TOKEN',
+            'RUNTIME_API_TOKEN', 'ROUTER_API_TOKEN', 'OPENAI_API_KEY', 'CODEX_HOME')):
+        raise HTTPException(403, 'pcp_local_verification_credentials_denied')
+    if not web.get('volumes'):
+        raise HTTPException(403, 'pcp_local_verification_mounts_missing')
+    for mount in web.get('volumes', []):
+        if not isinstance(mount, dict):
+            raise HTTPException(403, 'pcp_local_mount_unresolved')
+        source, destination = mount.get('source'), mount.get('target')
+        if not ((mount.get('type') == 'bind' and source in (str(target), str(target / '.ddev'))
+                 and destination in ('/var/www/html', '/mnt/ddev_config'))
+                or (mount.get('type') == 'volume' and source == 'pcp-local-cache'
+                    and destination == '/mnt/ddev-global-cache')):
+            raise HTTPException(403, 'pcp_local_foreign_mount')
+    network = document.get('networks', {}).get('default', {})
+    if network.get('name') != name + '-private' or network.get('internal') is not True or network.get('external'):
+        raise HTTPException(403, 'pcp_local_shared_network')
+    if any(p.get('host_ip') != '127.0.0.1' for p in web.get('ports', [])):
+        raise HTTPException(403, 'pcp_local_public_port')
+
+
+def _pcp_resources(target, name, *, running=False):
+    web = 'ddev-' + name + '-web'
+    for kind, resource in (('container', web), ('network', name + '-private'), ('volume', name + '-cache')):
+        item = _pcp_docker(kind, resource, missing_ok=not running)
+        if item is None:
+            continue
+        labels = (item.get('Config', {}).get('Labels') if kind == 'container' else item.get('Labels')) or {}
+        if labels.get('com.docker.compose.project') != 'ddev-' + name:
+            raise HTTPException(409, 'pcp_local_resource_collision')
+        if kind == 'container':
+            if labels.get('com.ddev.approot') != str(target):
+                raise HTTPException(409, 'pcp_local_resource_collision')
+            host = item.get('HostConfig') or {}
+            if host.get('Privileged') or host.get('PidMode') == 'host' or host.get('CapAdd'):
+                raise HTTPException(403, 'pcp_local_privileged_test_container')
+            for mount in item.get('Mounts', []):
+                if not ((mount.get('Type') == 'bind' and mount.get('Source') in (str(target), str(target / '.ddev')))
+                        or (mount.get('Type') == 'volume' and mount.get('Name') == name + '-cache')):
+                    raise HTTPException(403, 'pcp_local_foreign_test_mount')
+            if running and (not item.get('State', {}).get('Running') or
+                    set(item.get('NetworkSettings', {}).get('Networks', {})) != {name + '-private'}):
+                raise HTTPException(409, 'pcp_local_test_container_not_isolated')
+        if kind == 'network' and (item.get('Internal') is not True or
+                any(peer.get('Name') != web for peer in item.get('Containers', {}).values())):
+            raise HTTPException(409, 'pcp_local_foreign_network_peer')
+
+
+def _pcp_phase(payload):
+    # Serialize preparation/render/start/test across concurrent requests/processes.
+    # This lock has no authority outside the independently checked PCP root.
+    import fcntl
+    _, _, root = _pcp_identity(payload.job_id)
+    lock = root / 'sources/.pcp-local-verification.lock'
+    fd = os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise HTTPException(409, 'pcp_local_verification_busy') from None
+        return _pcp_phase_locked(payload)
+    finally:
+        os.close(fd)
+
+
+def _pcp_phase_locked(payload):
+    a, cfg, root = _pcp_identity(payload.job_id)
+    if cfg.get('ddev', {}).get('enabled') is not True or payload.phase not in ('targeted_tests', 'full_tests'):
+        raise HTTPException(403, 'pcp_local_verification_phase_denied')
+    tests = cfg['ddev'].get(payload.phase)
+    if (not isinstance(tests, list) or not tests or any(not isinstance(p, str)
+            or not re.fullmatch(r'tests/test_pcp_light_[A-Za-z0-9_]+\.py', p) for p in tests)):
+        raise HTTPException(403, 'pcp_local_mandatory_tests_missing')
+    target, name = _pcp_verification_copy(payload, a, root)
+    _pcp_resources(target, name)
+    # DDEV runs with a dedicated empty HOME, no publisher/provider/service env.
+    home = root / 'sources/.pcp-local-verification-home'
+    if home.is_symlink():
+        raise HTTPException(403, 'pcp_local_verification_home_invalid')
+    home.mkdir(exist_ok=True)
+    _pcp_no_symlinks(home)
+    global_config = home / '.ddev/global_config.yaml'
+    if global_config.exists():
+        global_values = yaml.safe_load(global_config.read_text()) or {}
+        if not isinstance(global_values, dict) or any(global_values.get(k) for k in ('hooks', 'web_environment')):
+            raise HTTPException(403, 'pcp_local_untrusted_global_configuration')
+    env = {'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'HOME': str(home),
+           'DOCKER_HOST': 'unix:///var/run/docker.sock', 'DDEV_NONINTERACTIVE': 'true'}
+    timeout = min(payload.timeout_seconds or 900, 900)
+    def run(argv):
+        return run_tracked(payload.job_id, argv, cwd=target, timeout=timeout, env=env)
+    rc, out, _, expired = run(['ddev', 'debug', 'compose-config'])
+    if rc or expired:
+        raise HTTPException(409, 'pcp_local_compose_render_failed')
+    _pcp_effective_compose(yaml.safe_load(out), target, name)
+    rc, out, err, expired = run(['ddev', 'start', '-y'])
+    if rc or expired:
+        return PhaseResponse(passed=False, phase=payload.phase, commands=[], infrastructure=[
+            CommandOutput(command='ddev start -y', returncode=rc, stdout=out[-30000:], stderr=err[-30000:], timed_out=expired)])
+    _pcp_resources(target, name, running=True)
+    command = ['ddev', 'exec', '/opt/pcp-tests/bin/python', '-m', 'pytest', '-q', '-p', 'no:cacheprovider', *tests]
+    rc, out, err, expired = run(command)
+    # Pytest's exit code 5 rejects zero collection; also require an actual pass
+    # count, rather than accepting an all-skipped run as mandatory evidence.
+    passed = rc == 0 and not expired and re.search(r'\b[1-9][0-9]* passed\b', out) is not None
+    _pcp_resources(target, name, running=True)
+    stop = ['docker', '--host', 'unix:///var/run/docker.sock', 'container', 'stop', 'ddev-' + name + '-web']
+    stopped, stop_out, stop_err, stop_expired = run(stop)
+    return PhaseResponse(passed=passed and stopped == 0 and not stop_expired, phase=payload.phase, commands=[
+        CommandOutput(command=' '.join(command), returncode=rc, stdout=out[-30000:], stderr=err[-30000:], timed_out=expired)],
+        infrastructure=[CommandOutput(command=' '.join(stop), returncode=stopped,
+            stdout=stop_out[-30000:], stderr=stop_err[-30000:], timed_out=stop_expired)])
+
+
+def _pcp_draft_pr(payload):
+    """Keep the generic publisher intact; PCP-only creation is always Draft."""
+    a, cfg, _ = _pcp_identity(payload.job_id)
+    if (payload.branch != 'ai/' + payload.job_id[:12]
+            or cfg.get('autonomy', {}).get('allow_create_pr') is not True):
+        raise HTTPException(403, 'pcp_local_draft_identity_invalid')
+    delivery, repository = _github_context(cfg)
+    if repository != _PCP_REPOSITORY:
+        raise HTTPException(403, 'pcp_local_publisher_repository_invalid')
+    delivery.assert_branch_commit(repository, payload.branch, payload.expected_commit)
+    with delivery._client() as client:
+        endpoint = f'{delivery.base}/repos/{repository}/pulls'
+        response = client.get(endpoint, params={'state': 'open',
+            'head': repository.split('/')[0] + ':' + payload.branch, 'base': 'main'})
+        response.raise_for_status()
+        existing = response.json()
+        if len(existing) > 1:
+            raise HTTPException(409, 'pcp_local_ambiguous_pr')
+        if existing:
+            data = existing[0]
+            # Never overwrite an independently reviewed PR during retry.
+            created = False
+        else:
+            response = client.post(endpoint, json={'head': payload.branch, 'base': 'main',
+                'title': payload.title, 'body': payload.body, 'draft': True})
+            response.raise_for_status()
+            data = response.json()
+            created = True
+    if (data.get('head', {}).get('sha') != payload.expected_commit
+            or data.get('head', {}).get('ref') != payload.branch
+            or data.get('base', {}).get('ref') != 'main'
+            or data.get('head', {}).get('repo', {}).get('full_name') != repository
+            or data.get('draft') is not True):
+        raise HTTPException(409, 'pcp_local_draft_proof_invalid')
+    return dict(job_id=payload.job_id, created=created, number=data['number'],
+        url=data['html_url'], state=data['state'], head=payload.expected_commit,
+        head_ref=payload.branch, base_ref='main', repository=repository, draft=True)
+
+
+class PcpLocalReviewRequest(PcpLocalObservationRequest):
+    pr_number: int = Field(gt=0)
+    expected_head: str = Field(pattern=r'^[0-9a-f]{40}$')
+    review_id: int = Field(gt=0)
+
+
+@app.post('/v1/pcp-local/pm-review', dependencies=[Depends(auth)])
+def pcp_local_review(payload: PcpLocalReviewRequest):
+    """Read-only GitHub review and actual four-job evidence; never merge."""
+    import json
+    a, cfg, _ = _pcp_identity(payload.job_id, payload.source_commit)
+    if _pcp_digest(a) != payload.activation_digest:
+        raise HTTPException(403, 'pcp_local_delegation_mismatch')
+    delivery, repository = _github_context(cfg)
+    if repository != _PCP_REPOSITORY:
+        raise HTTPException(403, 'pcp_local_publisher_repository_invalid')
+    with delivery._client() as client:
+        def get(path):
+            response = client.get(f'{delivery.base}/repos/{repository}/' + path)
+            response.raise_for_status()
+            return response.json()
+        pr = get(f'pulls/{payload.pr_number}')
+        review = get(f'pulls/{payload.pr_number}/reviews/{payload.review_id}')
+        if (pr.get('state') != 'open' or pr.get('merged') is True
+                or pr.get('head', {}).get('sha') != payload.expected_head
+                or pr.get('head', {}).get('ref') != 'ai/' + payload.job_id[:12]
+                or pr.get('head', {}).get('repo', {}).get('full_name') != repository
+                or pr.get('base', {}).get('ref') != 'main'
+                or review.get('user', {}).get('login') != a['pm_login']
+                or review.get('commit_id') != payload.expected_head
+                or review.get('state') not in ('APPROVED', 'COMMENTED')):
+            raise HTTPException(409, 'pcp_local_pm_identity_invalid')
+        marker = '<!-- coding-platform:pcp-local-pm-review:v1 -->'
+        body = review.get('body', '')
+        if not body.startswith(marker) or len(body.encode()) > 16000:
+            raise HTTPException(409, 'pcp_local_pm_report_missing')
+        report = json.loads(body[len(marker):].strip())
+        if (report.get('verdict') != 'pass' or report.get('findings') != []
+                or report.get('job_id') != payload.job_id
+                or report.get('source_commit') != payload.source_commit
+                or report.get('expected_head') != payload.expected_head
+                or report.get('baseline_revision') != a['baseline_revision']
+                or not isinstance(report.get('summary'), str) or len(report['summary']) < 40):
+            raise HTTPException(409, 'pcp_local_pm_report_denied')
+        runs = get(f'actions/runs?head_sha={payload.expected_head}&per_page=100')['workflow_runs']
+        selected = [r for r in runs if r.get('name') == 'tests' and r.get('head_sha') == payload.expected_head
+                    and r.get('event') == 'pull_request']
+        if not selected:
+            raise HTTPException(409, 'pcp_local_exact_ci_missing')
+        run = max(selected, key=lambda r: r['id'])
+        if run.get('status') != 'completed' or run.get('conclusion') != 'success':
+            raise HTTPException(409, 'pcp_local_exact_ci_not_successful')
+        jobs = get(f"actions/runs/{run['id']}/jobs?filter=latest&per_page=100")['jobs']
+        required = {'structure-tests', 'python-tests (services/router)',
+                    'python-tests (services/runtime)', 'python-tests (services/ddev-executor)'}
+        if not required <= {j.get('name') for j in jobs}:
+            raise HTTPException(409, 'pcp_local_four_suites_missing')
+        for name in required:
+            matches = [j for j in jobs if j.get('name') == name]
+            if len(matches) != 1 or matches[0].get('conclusion') != 'success' or not any(
+                    (step.get('name') == 'Run tests' or step.get('name', '').startswith('Run python -m pytest'))
+                    and step.get('conclusion') == 'success' for step in matches[0].get('steps', [])):
+                raise HTTPException(409, 'pcp_local_required_suite_not_executed')
+    ci = github_ci(_PCP_LOCAL, payload.expected_head)
+    return dict(job_id=payload.job_id, expected_head=payload.expected_head,
+        activation_digest=payload.activation_digest, report=report, review_id=payload.review_id,
+        ci=ci, ci_run_id=run['id'], suites=sorted(required),
+        pr=dict(number=payload.pr_number, repository=repository, state='open', merged=False,
+            head=payload.expected_head, head_ref=pr['head']['ref'], base_ref='main'))
