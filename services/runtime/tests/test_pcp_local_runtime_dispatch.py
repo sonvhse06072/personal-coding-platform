@@ -702,8 +702,29 @@ def test_pcp_verification_never_accepts_disabled_empty_or_skipped(enabled, comma
         result = asyncio.run(engine.verify_pcp_local('a' * 32, '/fake', project))
         assert result['passed'] is expected
         if expected:
-            assert result['test_runs'] == 4 and result['skipped_tests'] == 2
+            assert result['test_runs'] == 2 and result['skipped_tests'] == 2
+            assert result['executed_tests'] == result['passed_tests'] == 4
+            assert result['failed_tests'] == 0
             assert calls == ['targeted_tests', 'full_tests']
+        elif 'failed' in stdout:
+            assert result['test_runs'] == 1
+            assert result['passed_tests'] == result['failed_tests'] == 1
+            assert result['executed_tests'] == 2
+
+
+def test_pcp_verification_preserves_test_counts_after_infrastructure_failure():
+    engine = object.__new__(RuntimeEngine)
+    async def phase(**kwargs):
+        return {'passed': False, 'commands': [{'returncode': 0,
+            'stdout': '3 passed, 1 skipped', 'timed_out': False}],
+            'infrastructure': [{'returncode': 1, 'timed_out': False}]}
+    engine.ddev = SimpleNamespace(phase=phase)
+    result = asyncio.run(engine.verify_pcp_local('a' * 32, '/fake', {'ddev': {
+        'enabled': True, 'targeted_tests': ['tests/test_pcp_light_example.py'],
+        'full_tests': ['tests/test_pcp_light_example.py']}}))
+    assert result['passed'] is False and result['failure_kind'] == 'infrastructure'
+    assert result['test_runs'] == 1 and result['executed_tests'] == 3
+    assert result['passed_tests'] == 3 and result['skipped_tests'] == 1
 
 
 def test_admitted_worker_rejects_caller_dictionaries_without_claim(setup):

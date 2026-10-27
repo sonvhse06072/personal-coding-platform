@@ -833,9 +833,13 @@ class RuntimeEngine(_RuntimeEngine):
         import time
         started = time.monotonic()
         outputs = []
-        executed = 0
-        skipped = 0
+        runs = passed_tests = failed_tests = skipped_tests = 0
         import re
+        def evidence(passed, **details):
+            return dict(passed=passed, tests_passed=passed, test_runs=runs,
+                executed_tests=passed_tests + failed_tests, passed_tests=passed_tests,
+                failed_tests=failed_tests, skipped_tests=skipped_tests,
+                phases=outputs, **details)
         for phase in ("targeted_tests", "full_tests"):
             require(bool(project["ddev"].get(phase)), "pcp_local_mandatory_tests_missing")
             remaining = timeout_seconds - int(time.monotonic() - started)
@@ -843,25 +847,27 @@ class RuntimeEngine(_RuntimeEngine):
             result = await self.ddev.phase(job_id=job_id, project_id="pcp-local",
                 workspace=str(workspace), phase=phase, timeout_seconds=remaining)
             outputs.append(result)
-            if any(c.get('returncode') != 0 or c.get('timed_out') for c in result.get('infrastructure', [])):
-                return dict(passed=False, tests_passed=False, test_runs=executed,
-                    skipped_tests=skipped, phases=outputs, failure_kind='infrastructure',
-                    failure_text='Verification environment failed; no engineering repair charged')
             commands = result.get("commands", [])
             valid = result.get("passed") is True and bool(commands)
             for command in commands:
                 text = command.get("stdout", "")
-                count = re.findall(r"\b([0-9]+) passed\b", text)
-                passed = int(count[-1]) if count else 0
-                skips = re.findall(r"\b([0-9]+) skipped\b", text)
-                skipped += int(skips[-1]) if skips else 0
-                executed += passed
+                def count(label):
+                    matches = re.findall(r"\b([0-9]+) " + label + r"\b", text)
+                    return int(matches[-1]) if matches else 0
+                passed = count("passed")
+                runs += 1
+                passed_tests += passed
+                failed_tests += count("failed") + count("errors?")
+                skipped_tests += count("skipped")
                 valid = valid and command.get("returncode") == 0 and not command.get("timed_out") and passed > 0
+            # Preserve test evidence even when the subsequent owned-container
+            # stop fails; infrastructure failure must never look like PASS.
+            if any(c.get('returncode') != 0 or c.get('timed_out') for c in result.get('infrastructure', [])):
+                return evidence(False, failure_kind='infrastructure',
+                    failure_text='Verification environment failed; no engineering repair charged')
             if not valid:
-                return dict(passed=False, tests_passed=False, test_runs=executed,
-                    skipped_tests=skipped, phases=outputs, failure_text="Mandatory checks did not execute successfully")
-        return dict(passed=executed > 0, tests_passed=executed > 0, test_runs=executed,
-                    skipped_tests=skipped, phases=outputs)
+                return evidence(False, failure_text="Mandatory checks did not execute successfully")
+        return evidence(passed_tests > 0)
 
     async def dispatch_pcp_local_once(self, *, issue_number: int,
                                       readers: dict[str, Any], github: Any,
