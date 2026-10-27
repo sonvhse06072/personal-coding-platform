@@ -19,7 +19,7 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = 'scripts/pcp-local-trusted-bootstrap.sh'
-COMPOSE = 'profiles/pcp-local/.ddev/docker-compose.platform.yaml'
+COMPOSE = 'profiles/pcp-local/docker-compose.local.yaml'
 INSTANCE = 'pcp-local-fixture815'
 REPO = 'https://github.com/sonvhse06072/personal-coding-platform.git'
 APPROVAL = 'https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-9999999999'
@@ -35,7 +35,7 @@ with open(os.environ['FAKE_LOG'], 'a') as out:
 if os.environ.get('FAKE_QUERY_FAIL') and args[0] in ('ps', 'volume', 'network', 'image'):
     sys.exit(31)
 queries = (
-    ['ps', '-aq', '--filter', 'name=^/ddev-pcp-local-fixture815-'],
+    ['ps', '-aq', '--filter', 'name=^/pcp-local-fixture815-'],
     ['volume', 'ls', '-q', '--filter', 'name=pcp-local-fixture815'],
     ['network', 'ls', '-q', '--filter', 'name=pcp-local-fixture815'],
 )
@@ -75,12 +75,12 @@ if args[0] == 'run':
     mount = args[args.index('--mount') + 1]
     assert mount.startswith('type=bind,source=') and mount.endswith(',target=/output')
     target = pathlib.Path(mount[len('type=bind,source='):].removesuffix(',target=/output'))
-    assert str(target) == os.environ['FAKE_INSTALL'] + '/instance/.ddev'
+    assert str(target) == os.environ['FAKE_INSTALL'] + '/instance'
     assert args[args.index('--mount') + 2] == 'sha256:' + 'b' * 64
     assert args[-3:-1] == ['python3', '-c']
     # Execute the actual setup code only in the fake directory, not a container.
     # Its sole absolute output prefix is replaced; no shell/process/network calls.
-    code = args[-1].replace('"/output/.env."', repr(str(target / '.env.')))
+    code = args[-1].replace('"/output/', '"' + str(target) + '/')
     exec(compile(code, '<container-token-setup-fixture>', 'exec'))
     sys.exit(0)
 raise AssertionError('unexpected Docker command: ' + repr(args))
@@ -106,7 +106,7 @@ class BootstrapTests(unittest.TestCase):
             'FAKE_LOG': str(self.log), 'FAKE_INSTALL': str(self.install),
         }
         Path(self.env['HOME']).mkdir()
-        paths = [SCRIPT, COMPOSE, 'profiles/pcp-local/.ddev/config.yaml',
+        paths = [SCRIPT, COMPOSE,
                  'config/tool-versions.env', 'config/projects.pcp-local.yml',
                  'config/project-baselines.pcp-local.yml', 'config/models.yml',
                  'config/routing-policy.yml']
@@ -151,7 +151,8 @@ class BootstrapTests(unittest.TestCase):
         return ('--apply', '--source-commit', self.head, '--owner-approval', APPROVAL,
                 '--node-base', 'node:22-bookworm-slim@sha256:' + '1' * 64,
                 '--python-base', 'python:3.13-slim-bookworm@sha256:' + '2' * 64,
-                '--opencode-version', '1.2.3')
+                '--opencode-version', '1.2.3',
+                '--postgres-image', 'postgres:17-bookworm@sha256:' + '3'*64)
 
     def calls(self):
         return [json.loads(line) for line in self.log.read_text().splitlines()] if self.log.exists() else []
@@ -200,10 +201,11 @@ class BootstrapTests(unittest.TestCase):
         for extra in [('--source-commit', '0' * 40), ('--node-base', 'node:latest'),
                       ('--python-base', 'python:3.13\nRUN bad-slim-bookworm@sha256:' + '2' * 64),
                       ('--python-base', 'python:latest'), ('--opencode-version', 'latest'),
+                      ('--postgres-image', 'postgres:latest'), ('--postgres-image', 'postgres:16-bookworm@sha256:'+'3'*64),
                       ('--owner-approval', 'true')]:
             with self.subTest(extra=extra):
                 self.assertEqual(self.run_script(*self.apply_args(), *extra).returncode, 2)
-        for comment in ('6438475541', '6438904126', '6440446016'):
+        for comment in ('6438475541', '6438904126', '6440446016', '6446718577', '6447953456'):
             result = self.run_script(*self.apply_args(), '--owner-approval',
                                     APPROVAL.replace('9999999999', comment))
             self.assertIn('STOP_SOURCE_APPROVAL_IS_NOT_PHYSICAL', result.stderr)
@@ -235,16 +237,15 @@ class BootstrapTests(unittest.TestCase):
     def test_preparation_builds_scoped_images_and_stages_no_legacy_hooks(self):
         result = self.run_script(*self.apply_args())
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn('PREPARED; DDEV_START=NOT_RUN', result.stdout)
+        self.assertIn('PREPARED; COMPOSE_START=NOT_RUN', result.stdout)
         self.assertEqual([c[0] for c in self.calls()].count('build'), 3)
         self.assertEqual([c[0] for c in self.calls()].count('run'), 1)
         instance = self.install / 'instance'
-        cfg = yaml.safe_load((instance / '.ddev/config.yaml').read_text())
-        self.assertEqual(cfg['name'], INSTANCE)
-        self.assertNotIn('hooks', cfg)
+        self.assertTrue((instance / 'docker-compose.local.yaml').is_file())
+        self.assertFalse((instance / '.ddev').exists())
         self.assertEqual(set(p.name for p in (instance / 'config').iterdir()),
                          {'projects.pcp-local.yml', 'project-baselines.pcp-local.yml', 'models.yml', 'routing-policy.yml'})
-        env = (instance / '.ddev/.env').read_text()
+        env = (instance / '.env').read_text()
         for service, digest in (('ROUTER', 'a'), ('RUNTIME', 'b'), ('EXECUTOR', 'c')):
             self.assertIn('PCP_LOCAL_' + service + '_IMAGE=sha256:' + digest * 64, env)
         self.assertIn('COMPOSE_PROFILES=\n', env)
@@ -259,20 +260,38 @@ class BootstrapTests(unittest.TestCase):
         result = self.run_script(*self.apply_args())
         self.assertEqual(result.returncode, 0, result.stderr)
         values = {}
-        for name in ('router', 'coding-runtime', 'ddev-executor'):
-            path = self.install / ('instance/.ddev/.env.' + name + '.local')
+        for name in ('router', 'coding-runtime', 'ddev-executor', 'db'):
+            path = self.install / ('instance/.env.' + name + '.local')
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             values[name] = dict(line.split('=', 1) for line in path.read_text().splitlines())
         self.assertEqual(set(values['router']), {'ROUTER_API_TOKEN'})
         self.assertEqual(set(values['ddev-executor']), {'PLATFORM_INTERNAL_TOKEN'})
-        self.assertEqual(set(values['coding-runtime']), {'ROUTER_API_TOKEN', 'RUNTIME_API_TOKEN', 'PLATFORM_INTERNAL_TOKEN'})
+        self.assertEqual(set(values['coding-runtime']), {'ROUTER_API_TOKEN', 'RUNTIME_API_TOKEN', 'PLATFORM_INTERNAL_TOKEN', 'DATABASE_URL'})
         self.assertEqual(values['router']['ROUTER_API_TOKEN'], values['coding-runtime']['ROUTER_API_TOKEN'])
         self.assertEqual(values['ddev-executor']['PLATFORM_INTERNAL_TOKEN'], values['coding-runtime']['PLATFORM_INTERNAL_TOKEN'])
-        tokens = set(values['coding-runtime'].values())
+        tokens = {v for k,v in values['coding-runtime'].items() if k != 'DATABASE_URL'}
         self.assertEqual(len(tokens), 3)
         for token in tokens:
             self.assertEqual(len(token), 64)
             self.assertNotIn(token, result.stdout + result.stderr)
+        self.assertEqual(set(values['db']), {'POSTGRES_USER', 'POSTGRES_DB', 'POSTGRES_PASSWORD', 'PCP_RUNTIME_PASSWORD'})
+        self.assertEqual(values['db']['POSTGRES_USER'], 'pcp_bootstrap')
+        self.assertEqual(values['db']['POSTGRES_DB'], 'pcp_local')
+        self.assertNotIn(values['db']['POSTGRES_PASSWORD'], result.stdout + result.stderr)
+        uri = values['coding-runtime']['DATABASE_URL']
+        self.assertTrue(uri.startswith('postgresql://pcp_runtime:'))
+        password = uri.split(':', 2)[2].split('@')[0]
+        self.assertEqual(len(password), 64)
+        self.assertNotEqual(password, values['db']['POSTGRES_PASSWORD'])
+        self.assertNotIn(password, result.stdout + result.stderr)
+        sql = (self.install/'instance/initdb/01-runtime.sql').read_text()
+        self.assertIn('NOSUPERUSER NOCREATEDB NOCREATEROLE', sql)
+        self.assertNotIn(password, sql)
+        self.assertNotIn(values['db']['POSTGRES_PASSWORD'], sql)
+        self.assertEqual(values['db']['PCP_RUNTIME_PASSWORD'], password)
+        self.assertIn("PASSWORD :'runtime_password'", sql)
+        self.assertIn('getenv runtime_password PCP_RUNTIME_PASSWORD', sql)
+        self.assertNotIn('DATABASE_URL', values['ddev-executor'])
         self.assertEqual(list((self.install / 'runtime-home').iterdir()), [])
         self.assertEqual(list((self.install / 'executor-home').iterdir()), [])
 
@@ -325,12 +344,13 @@ class BootstrapTests(unittest.TestCase):
 class ConfigurationTests(unittest.TestCase):
     def test_dependencies_and_real_runtime_build_contract(self):
         services = yaml.safe_load((ROOT / COMPOSE).read_text())['services']
-        self.assertEqual(set(services), {'router', 'coding-runtime', 'ddev-executor'})
+        self.assertEqual(set(services), {'router', 'coding-runtime', 'ddev-executor', 'db'})
         runtime = services['coding-runtime']
         self.assertEqual(runtime['depends_on'], {s: {'condition': 'service_healthy'} for s in ('router', 'ddev-executor', 'db')})
         self.assertEqual(runtime['environment']['ROUTER_URL'], 'http://router:8090')
         self.assertEqual(runtime['environment']['DDEV_EXECUTOR_URL'], 'http://ddev-executor:8790')
-        self.assertEqual(runtime['environment']['DATABASE_URL'], 'postgresql://db:db@db:5432/db')
+        self.assertNotIn('DATABASE_URL', runtime['environment'])
+        self.assertEqual(services['db']['image'], '${PCP_LOCAL_POSTGRES_IMAGE:?PostgreSQL 17 digest required}')
         self.assertIn('@openai/codex@${CODEX_VERSION}', (ROOT / 'services/runtime/Dockerfile').read_text())
         for service in services.values():
             self.assertEqual(service['profiles'], ['pcp-local'])
@@ -342,20 +362,49 @@ class ConfigurationTests(unittest.TestCase):
         services = yaml.safe_load((ROOT / COMPOSE).read_text())['services']
         for name, service in services.items():
             with self.subTest(service=name):
-                self.assertNotIn('env_file', service['environment'])
+                self.assertNotIn('env_file', service.get('environment', {}))
                 self.assertEqual(service['env_file'], ['.env.' + name + '.local'])
                 self.assertNotIn('privileged', service)
                 self.assertNotIn('network_mode', service)
                 self.assertEqual(service['cap_drop'], ['ALL'])
                 self.assertEqual(service['security_opt'], ['no-new-privileges:true'])
                 for mount in service['volumes']:
-                    self.assertTrue(mount.startswith(('${DDEV_APPROOT}/config:', '${PCP_LOCAL_ROOT}/', '/var/run/docker.sock:')), mount)
+                    self.assertTrue(mount.startswith(('${PCP_LOCAL_ROOT}/', '/var/run/docker.sock:', 'postgres-data:')), mount)
                     if 'docker.sock' in mount or '/sources:' in mount:
                         self.assertEqual(name, 'ddev-executor')
                 for forbidden in ('HOST_HOME', '/config/projects.yml', 'GITHUB_TOKEN', 'GITHUB_DELIVERY_TOKEN', 'host.docker.internal', 'chonhac'):
                     self.assertNotIn(forbidden, str(service))
         self.assertEqual(services['coding-runtime']['environment']['PCP_RUNTIME_STARTUP_MODE'], 'pcp_local_inspect')
         self.assertNotIn('PCP_LOCAL_TASK_', (ROOT / COMPOSE).read_text())
+
+    def test_native_resources_are_explicit_private_and_bounded(self):
+        doc = yaml.safe_load((ROOT / COMPOSE).read_text())
+        self.assertEqual(doc['name'], '${PCP_LOCAL_INSTANCE:?explicit instance required}')
+        self.assertEqual(set(doc['networks']), {'private'})
+        self.assertEqual(doc['networks']['private']['name'], '${PCP_LOCAL_INSTANCE}-private')
+        self.assertEqual(set(doc['volumes']), {'postgres-data'})
+        self.assertEqual(doc['volumes']['postgres-data']['name'], '${PCP_LOCAL_INSTANCE}-postgres-data')
+        self.assertEqual(sum(s['cpus'] for s in doc['services'].values()), 4)
+        for name, service in doc['services'].items():
+            self.assertEqual(service['networks'], ['private'])
+            self.assertEqual(service['memswap_limit'], service['mem_limit'])
+            self.assertTrue(service['read_only'])
+            self.assertGreater(service['pids_limit'], 0)
+            self.assertEqual(service['container_name'], '${PCP_LOCAL_INSTANCE}-' + name)
+            self.assertNotIn('build', service)
+            self.assertNotIn('ports', service)
+            self.assertNotIn('volumes_from', service)
+        db = doc['services']['db']
+        self.assertEqual(db['user'], '999:999')
+        self.assertEqual(db['volumes'], ['postgres-data:/var/lib/postgresql/data',
+            '${PCP_LOCAL_ROOT}/instance/initdb:/docker-entrypoint-initdb.d:ro'])
+        self.assertEqual(db['env_file'], ['.env.db.local'])
+        self.assertNotIn('ddev-global-cache', (ROOT / COMPOSE).read_text())
+        self.assertNotIn('ddev-router', (ROOT / COMPOSE).read_text())
+        requirements = (ROOT / 'services/runtime/requirements-dev.txt').read_text()
+        self.assertIn('pytest==8.4.1', requirements)
+        self.assertIn('PyYAML==6.0.2', (ROOT / 'services/runtime/requirements.txt').read_text())
+        self.assertIn('/opt/venv', (ROOT / 'services/runtime/Dockerfile').read_text())
 
     def test_registry_and_baseline_stay_inactive(self):
         cfg = yaml.safe_load((ROOT / 'config/projects.pcp-local.yml').read_text())['projects']
@@ -370,7 +419,7 @@ class ConfigurationTests(unittest.TestCase):
 
     def test_bootstrap_and_future_reader_are_protected(self):
         policy = runpy.run_path(str(ROOT / 'scripts/check_project_doc_authority.py'))
-        for path in (SCRIPT, 'services/runtime/app/pcp_local_trusted_readers.py'):
+        for path in (SCRIPT, COMPOSE, 'services/ddev-executor/app/main.py', 'services/runtime/app/pcp_local_trusted_readers.py'):
             self.assertEqual(policy['classify_path'](path), 'protected')
         before = {'projects': {'pcp-local': {'revisions': {'r1': {'status': 'approved', 'source_commit': 'a' * 40}}}}}
         after = {'projects': {'pcp-local': {'revisions': {'r1': {'status': 'approved', 'source_commit': 'b' * 40}}}}}

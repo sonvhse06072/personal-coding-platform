@@ -3621,7 +3621,7 @@ def pcp_local_observe(payload: PcpLocalObservationRequest):
     state = project_state(_PCP_LOCAL)
     if not state['clean'] or state['head'] != payload.source_commit:
         raise HTTPException(409, 'pcp_local_source_changed')
-    name = f'ddev-{root.name}-coding-runtime'
+    name = f'{root.name}-coding-runtime'
     item = _pcp_docker('container', name)
     host = item.get('HostConfig', {})
     expected = {
@@ -3629,8 +3629,10 @@ def pcp_local_observe(payload: PcpLocalObservationRequest):
         str(root / 'workspaces'): (str(root / 'workspaces'), True),
         '/home/coder': (str(root / 'runtime-home'), True),
     }
-    mounts = item.get('Mounts', [])
-    if (item.get('Name') != '/' + name or not item.get('State', {}).get('Running')
+    mounts = [m for m in item.get('Mounts', []) if m.get('Type') != 'tmpfs']
+    if (set(host.get('Tmpfs') or {}) != {'/tmp'}
+            or any(m.get('Destination') != '/tmp' for m in item.get('Mounts', []) if m.get('Type') == 'tmpfs')
+            or item.get('Name') != '/' + name or not item.get('State', {}).get('Running')
             or item.get('Image') != a['runtime_image_id']
             or host.get('Privileged') is not False or host.get('PidMode') == 'host'
             or host.get('NetworkMode') == 'host' or host.get('CapAdd')
@@ -3644,7 +3646,9 @@ def pcp_local_observe(payload: PcpLocalObservationRequest):
     if set(item.get('NetworkSettings', {}).get('Networks', {})) != {network_name}:
         raise HTTPException(409, 'pcp_local_runtime_network_invalid')
     network = _pcp_docker('network', network_name)
-    permitted = {f'ddev-{root.name}-{service}' for service in ('coding-runtime','router','ddev-executor','db','web')}
+    permitted = {f'{root.name}-{service}' for service in ('coding-runtime','router','ddev-executor','db')}
+    if network_name != root.name + '-private' or network.get('Labels', {}).get('org.pcp.local.instance') != root.name:
+        raise HTTPException(409, 'pcp_local_runtime_network_invalid')
     if any(peer.get('Name') not in permitted for peer in network.get('Containers', {}).values()):
         raise HTTPException(409, 'pcp_local_foreign_network_peer')
     delivery, repository = _github_context(cfg)
@@ -3671,16 +3675,8 @@ def _pcp_no_symlinks(path):
         raise HTTPException(403, 'pcp_local_symlink_denied')
 
 
-def _pcp_job_config(name, image):
-    if not re.fullmatch(r'[^\s]+@sha256:[0-9a-f]{64}', image):
-        raise HTTPException(403, 'pcp_local_verification_image_not_pinned')
-    return yaml.safe_dump(dict(name=name, type='php', docroot='', php_version='8.4',
-        webserver_type='nginx-fpm', webimage=image, use_dns_when_possible=False,
-        omit_containers=['db', 'ddev-ssh-agent'], web_environment=[]))
-
-
 def _pcp_verification_copy(payload, a, root):
-    """Snapshot code into an exact Executor-only root; exclude ALL legacy DDEV."""
+    """Executor-owned immutable snapshot; never materialize executable DDEV."""
     raw = Path(payload.workspace)
     if raw.is_symlink() or raw != root / 'workspaces' / payload.job_id:
         raise HTTPException(403, 'pcp_local_workspace_identity_invalid')
@@ -3690,7 +3686,6 @@ def _pcp_verification_copy(payload, a, root):
         raise HTTPException(403, 'pcp_local_inherited_environment_denied')
     if git(workspace, 'merge-base', 'HEAD', a['base_sha']) != a['base_sha']:
         raise HTTPException(403, 'pcp_local_workspace_source_changed')
-    # Stable per-content identity makes retries inspect the same owned artifact.
     entries = {}
     for path in sorted(workspace.rglob('*')):
         relative = path.relative_to(workspace)
@@ -3698,127 +3693,97 @@ def _pcp_verification_copy(payload, a, root):
             continue
         if path.is_file():
             entries[relative.as_posix()] = hashlib.sha256(path.read_bytes()).hexdigest()
-    code_digest = _pcp_digest(entries)
-    target = root / 'sources/.pcp-local-verification' / payload.job_id / code_digest
-    name = 'pcp-local-' + payload.job_id[:12] + '-' + code_digest[:8]
-    config = _pcp_job_config(name, a['verification_image'])
-    # Reviewed override: one web container, private internal network/cache;
-    # no source-provided Compose, ports, sockets or host HOME are included.
-    overlay = (
-        'services:\n  web:\n    networks: !override [default]\n'
-        '    ports: !reset []\n    volumes: !override\n'
-        f'      - "{target}:/var/www/html"\n'
-        f'      - "{target / ".ddev"}:/mnt/ddev_config"\n'
-        '      - pcp-local-cache:/mnt/ddev-global-cache\n'
-        'networks: !override\n  default:\n'
-        f'    name: {name}-private\n    internal: true\n'
-        'volumes: !override\n  pcp-local-cache:\n'
-        f'    name: {name}-cache\n'
-    )
-    files = {'.ddev/config.yaml': config, '.ddev/docker-compose.pcp-local.yaml': overlay,
-             '.ddev/web-build/Dockerfile': (
-                 'RUN apt-get update && apt-get install -y --no-install-recommends python3-venv '
-                 '&& python3 -m venv /opt/pcp-tests '
-                 '&& /opt/pcp-tests/bin/pip install --no-cache-dir pytest==8.3.5 PyYAML==6.0.2 '
-                 '&& rm -rf /var/lib/apt/lists/*\n'),
-             '.pcp-verification.json': __import__('json').dumps(entries, sort_keys=True)}
+    if '.pcp-verification.json' in entries:
+        raise HTTPException(403, 'pcp_local_reserved_snapshot_file')
+    fingerprint = _pcp_digest(dict(job_id=payload.job_id, source=a['base_sha'], files=entries))
+    target = root / 'sources/.pcp-local-verification' / payload.job_id / fingerprint
+    if any(p.is_symlink() for p in [target, *target.parents]):
+        raise HTTPException(403, 'pcp_local_verification_parent_symlink')
+    manifest = __import__('json').dumps(entries, sort_keys=True)
+    marker = target / '.pcp-verification.json'
     if target.exists():
         _pcp_no_symlinks(target)
-        for key, text in files.items():
-            if not (target / key).is_file() or (target / key).read_text() != text:
-                raise HTTPException(409, 'pcp_local_verification_copy_changed')
+        if not marker.is_file() or marker.read_text() != manifest:
+            raise HTTPException(409, 'pcp_local_verification_copy_changed')
     else:
-        # Refuse a symlink in any existing parent before creating owned files.
-        if any(p.is_symlink() for p in [target, *target.parents]):
-            raise HTTPException(403, 'pcp_local_verification_parent_symlink')
+        # Partial failure retains the snapshot; a missing marker prevents adoption.
         target.mkdir(parents=True)
         for key in entries:
             dest = target / key
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(workspace / key, dest)
-        for key, text in files.items():
-            dest = target / key
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            dest.write_text(text)
-    if (target / '.env').exists():
-        raise HTTPException(403, 'pcp_local_inherited_environment_denied')
+        marker.write_text(manifest)
+    expected = set(entries) | {'.pcp-verification.json'}
+    if {p.relative_to(target).as_posix() for p in target.rglob('*') if p.is_file()} != expected:
+        raise HTTPException(409, 'pcp_local_verification_copy_changed')
     for key, checksum in entries.items():
         if hashlib.sha256((target / key).read_bytes()).hexdigest() != checksum:
             raise HTTPException(409, 'pcp_local_verification_source_changed')
-    allowed = {'config.yaml', 'docker-compose.pcp-local.yaml', 'web-build',
-               '.ddev-docker-compose-base.yaml', '.ddev-docker-compose-full.yaml',
-               '.webimageBuild', '.gitignore'}
-    if not {p.name for p in (target / '.ddev').iterdir()} <= allowed:
-        raise HTTPException(409, 'pcp_local_untrusted_ddev_configuration')
-    if {p.name for p in (target / '.ddev/web-build').iterdir()} != {'Dockerfile'}:
-        raise HTTPException(403, 'pcp_local_untrusted_image_build')
-    return target, name
+    return target, fingerprint
 
 
-def _pcp_effective_compose(document, target, name):
-    """Validate the rendered document BEFORE ddev start can run a hook/service."""
-    services = document.get('services', {})
-    if set(services) != {'web'}:
-        raise HTTPException(403, 'pcp_local_extra_service')
-    web = services['web']
-    if (web.get('privileged') or web.get('pid') or web.get('network_mode')
-            or web.get('cap_add') or web.get('devices') or web.get('env_file')
-            or web.get('container_name') != 'ddev-' + name + '-web'
-            or set(web.get('networks', {})) != {'default'}):
-        raise HTTPException(403, 'pcp_local_privileged_compose')
-    environment = web.get('environment', {})
-    if not isinstance(environment, dict) or any(k in environment for k in (
-            'GITHUB_DELIVERY_TOKEN', 'GITHUB_TOKEN', 'GH_TOKEN', 'PLATFORM_INTERNAL_TOKEN',
-            'RUNTIME_API_TOKEN', 'ROUTER_API_TOKEN', 'OPENAI_API_KEY', 'CODEX_HOME')):
-        raise HTTPException(403, 'pcp_local_verification_credentials_denied')
-    if not web.get('volumes'):
-        raise HTTPException(403, 'pcp_local_verification_mounts_missing')
-    for mount in web.get('volumes', []):
-        if not isinstance(mount, dict):
-            raise HTTPException(403, 'pcp_local_mount_unresolved')
-        source, destination = mount.get('source'), mount.get('target')
-        if not ((mount.get('type') == 'bind' and source in (str(target), str(target / '.ddev'))
-                 and destination in ('/var/www/html', '/mnt/ddev_config'))
-                or (mount.get('type') == 'volume' and source == 'pcp-local-cache'
-                    and destination == '/mnt/ddev-global-cache')):
-            raise HTTPException(403, 'pcp_local_foreign_mount')
-    network = document.get('networks', {}).get('default', {})
-    if network.get('name') != name + '-private' or network.get('internal') is not True or network.get('external'):
-        raise HTTPException(403, 'pcp_local_shared_network')
-    if any(p.get('host_ip') != '127.0.0.1' for p in web.get('ports', [])):
-        raise HTTPException(403, 'pcp_local_public_port')
+def _pcp_verification_image(a, root):
+    image = a.get('runtime_image_id')
+    if (not isinstance(image, str) or not re.fullmatch(r'sha256:[0-9a-f]{64}', image)
+            or a.get('verification_image') != image):
+        raise HTTPException(403, 'pcp_local_verification_image_not_pinned')
+    item = _pcp_docker('image', image)
+    config = item.get('Config') or {}
+    labels = config.get('Labels') or {}
+    allowed_env = {'PATH', 'NODE_VERSION', 'YARN_VERSION', 'PYTHONUNBUFFERED', 'LANG'}
+    if (item.get('Id') != image or config.get('Volumes')
+            or labels.get('org.pcp.local.instance') != root.name
+            or labels.get('org.opencontainers.image.revision') != a['base_sha']
+            or any(value.split('=', 1)[0] not in allowed_env for value in config.get('Env', []))):
+        raise HTTPException(403, 'pcp_local_verification_image_identity_invalid')
+    return image
 
 
-def _pcp_resources(target, name, *, running=False):
-    web = 'ddev-' + name + '-web'
-    for kind, resource in (('container', web), ('network', name + '-private'), ('volume', name + '-cache')):
-        item = _pcp_docker(kind, resource, missing_ok=not running)
-        if item is None:
-            continue
-        labels = (item.get('Config', {}).get('Labels') if kind == 'container' else item.get('Labels')) or {}
-        if labels.get('com.docker.compose.project') != 'ddev-' + name:
-            raise HTTPException(409, 'pcp_local_resource_collision')
-        if kind == 'container':
-            if labels.get('com.ddev.approot') != str(target):
-                raise HTTPException(409, 'pcp_local_resource_collision')
-            host = item.get('HostConfig') or {}
-            if host.get('Privileged') or host.get('PidMode') == 'host' or host.get('CapAdd'):
-                raise HTTPException(403, 'pcp_local_privileged_test_container')
-            for mount in item.get('Mounts', []):
-                if not ((mount.get('Type') == 'bind' and mount.get('Source') in (str(target), str(target / '.ddev')))
-                        or (mount.get('Type') == 'volume' and mount.get('Name') == name + '-cache')):
-                    raise HTTPException(403, 'pcp_local_foreign_test_mount')
-            if running and (not item.get('State', {}).get('Running') or
-                    set(item.get('NetworkSettings', {}).get('Networks', {})) != {name + '-private'}):
-                raise HTTPException(409, 'pcp_local_test_container_not_isolated')
-        if kind == 'network' and (item.get('Internal') is not True or
-                any(peer.get('Name') != web for peer in item.get('Containers', {}).values())):
-            raise HTTPException(409, 'pcp_local_foreign_network_peer')
+_PCP_PYTEST = '''import sys
+try:
+    import pytest, yaml, shutil
+    assert pytest.__version__ == "8.4.1" and yaml.__version__ == "6.0.2"
+    assert shutil.which("git")
+except Exception:
+    print("PCP_TEST_TOOLCHAIN_UNAVAILABLE", file=sys.stderr)
+    sys.exit(86)
+print("PCP_TEST_TOOLCHAIN=pytest8.4.1,PyYAML6.0.2", flush=True)
+sys.exit(pytest.main(["-q", "-p", "no:cacheprovider", "--basetemp=/tmp/pytest", *sys.argv[1:]]))
+'''
+
+
+def _pcp_test_identity(item, *, name, image, target, labels, command):
+    """Check the actual created container before starting or stopping its ID."""
+    config, host = item.get('Config') or {}, item.get('HostConfig') or {}
+    mounts = item.get('Mounts', [])
+    binds = [m for m in mounts if m.get('Type') != 'tmpfs']
+    expected_env = {'PATH', 'NODE_VERSION', 'YARN_VERSION', 'PYTHONUNBUFFERED',
+                    'LANG', 'HOME', 'TMPDIR'}
+    if (item.get('Name') != '/' + name or item.get('Image') != image
+            or config.get('Image') != image
+            or any((config.get('Labels') or {}).get(k) != v for k, v in labels.items())
+            or config.get('User') != f'{os.getuid()}:{os.getgid()}'
+            or config.get('WorkingDir') != '/workspace'
+            or config.get('Entrypoint') != ['/usr/bin/timeout']
+            or config.get('Cmd') != command
+            or any(v.split('=', 1)[0] not in expected_env for v in config.get('Env', []))
+            or host.get('Privileged') is not False or host.get('ReadonlyRootfs') is not True
+            or host.get('NetworkMode') != 'none' or host.get('PidMode')
+            or host.get('CapAdd') or host.get('Devices') or host.get('PortBindings')
+            or host.get('CapDrop') != ['ALL']
+            or host.get('SecurityOpt') not in (['no-new-privileges:true'], ['no-new-privileges'])
+            or host.get('Memory') != 1073741824 or host.get('NanoCpus') != 1500000000
+            or host.get('PidsLimit') != 256 or host.get('MemorySwap') != 1073741824
+            or set(host.get('Tmpfs') or {}) != {'/tmp'}
+            or set(host.get('Tmpfs', {}).get('/tmp', '').split(',')) != {'rw', 'nosuid', 'nodev', 'size=268435456', 'mode=1777'}
+            or len(binds) != 1 or binds[0].get('Type') != 'bind'
+            or binds[0].get('Source') != str(target) or binds[0].get('Destination') != '/workspace'
+            or binds[0].get('RW') is not False
+            or any(m.get('Destination') != '/tmp' for m in mounts if m.get('Type') == 'tmpfs')):
+        raise HTTPException(409, 'pcp_local_test_container_identity_invalid')
 
 
 def _pcp_phase(payload):
-    # Serialize preparation/render/start/test across concurrent requests/processes.
-    # This lock has no authority outside the independently checked PCP root.
     import fcntl
     _, _, root = _pcp_identity(payload.job_id)
     lock = root / 'sources/.pcp-local-verification.lock'
@@ -3838,48 +3803,93 @@ def _pcp_phase_locked(payload):
     if cfg.get('ddev', {}).get('enabled') is not True or payload.phase not in ('targeted_tests', 'full_tests'):
         raise HTTPException(403, 'pcp_local_verification_phase_denied')
     tests = cfg['ddev'].get(payload.phase)
-    if (not isinstance(tests, list) or not tests or any(not isinstance(p, str)
-            or not re.fullmatch(r'tests/test_pcp_light_[A-Za-z0-9_]+\.py', p) for p in tests)):
+    if (not isinstance(tests, list) or not tests
+            or any(not isinstance(p, str) or not re.fullmatch(r'tests/test_pcp_light_[A-Za-z0-9_]+\.py', p) for p in tests)
+            or len(tests) != len(set(tests))):
         raise HTTPException(403, 'pcp_local_mandatory_tests_missing')
-    target, name = _pcp_verification_copy(payload, a, root)
-    _pcp_resources(target, name)
-    # DDEV runs with a dedicated empty HOME, no publisher/provider/service env.
-    home = root / 'sources/.pcp-local-verification-home'
-    if home.is_symlink():
-        raise HTTPException(403, 'pcp_local_verification_home_invalid')
-    home.mkdir(exist_ok=True)
-    _pcp_no_symlinks(home)
-    global_config = home / '.ddev/global_config.yaml'
-    if global_config.exists():
-        global_values = yaml.safe_load(global_config.read_text()) or {}
-        if not isinstance(global_values, dict) or any(global_values.get(k) for k in ('hooks', 'web_environment')):
-            raise HTTPException(403, 'pcp_local_untrusted_global_configuration')
-    env = {'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'HOME': str(home),
-           'DOCKER_HOST': 'unix:///var/run/docker.sock', 'DDEV_NONINTERACTIVE': 'true'}
+    if os.getuid() == 0 or os.getgid() == 0:
+        raise HTTPException(403, 'pcp_local_test_nonroot_required')
+    image = _pcp_verification_image(a, root)
+    target, fingerprint = _pcp_verification_copy(payload, a, root)
+    if any(not (target / p).is_file() for p in tests):
+        raise HTTPException(403, 'pcp_local_mandatory_test_file_missing')
+    name = f'{root.name}-verify-{payload.job_id[:12]}-{fingerprint[:12]}-{payload.phase}'
+    if _pcp_docker('container', name, missing_ok=True) is not None:
+        raise HTTPException(409, 'pcp_local_test_resource_collision_no_retry')
+    labels = {'org.pcp.local.instance': root.name, 'org.pcp.local.job': payload.job_id,
+              'org.pcp.local.source': a['base_sha'], 'org.pcp.local.snapshot': fingerprint,
+              'org.pcp.local.phase': payload.phase}
     timeout = min(payload.timeout_seconds or 900, 900)
-    def run(argv):
-        return run_tracked(payload.job_id, argv, cwd=target, timeout=timeout, env=env)
-    rc, out, _, expired = run(['ddev', 'debug', 'compose-config'])
-    if rc or expired:
-        raise HTTPException(409, 'pcp_local_compose_render_failed')
-    _pcp_effective_compose(yaml.safe_load(out), target, name)
-    rc, out, err, expired = run(['ddev', 'start', '-y'])
-    if rc or expired:
-        return PhaseResponse(passed=False, phase=payload.phase, commands=[], infrastructure=[
-            CommandOutput(command='ddev start -y', returncode=rc, stdout=out[-30000:], stderr=err[-30000:], timed_out=expired)])
-    _pcp_resources(target, name, running=True)
-    command = ['ddev', 'exec', '/opt/pcp-tests/bin/python', '-m', 'pytest', '-q', '-p', 'no:cacheprovider', *tests]
-    rc, out, err, expired = run(command)
-    # Pytest's exit code 5 rejects zero collection; also require an actual pass
-    # count, rather than accepting an all-skipped run as mandatory evidence.
-    passed = rc == 0 and not expired and re.search(r'\b[1-9][0-9]* passed\b', out) is not None
-    _pcp_resources(target, name, running=True)
-    stop = ['docker', '--host', 'unix:///var/run/docker.sock', 'container', 'stop', 'ddev-' + name + '-web']
-    stopped, stop_out, stop_err, stop_expired = run(stop)
-    return PhaseResponse(passed=passed and stopped == 0 and not stop_expired, phase=payload.phase, commands=[
-        CommandOutput(command=' '.join(command), returncode=rc, stdout=out[-30000:], stderr=err[-30000:], timed_out=expired)],
-        infrastructure=[CommandOutput(command=' '.join(stop), returncode=stopped,
-            stdout=stop_out[-30000:], stderr=stop_err[-30000:], timed_out=stop_expired)])
+    # An in-container deadline survives loss of the Docker CLI/HTTP caller.
+    command = ['--signal=TERM', '--kill-after=5s', str(max(1, timeout - 10)) + 's',
+               '/opt/venv/bin/python', '-I', '-B', '-c', _PCP_PYTEST, *tests]
+    docker = ['docker', '--host', 'unix:///var/run/docker.sock']
+    create = docker + ['create', '--pull=never', '--name', name,
+        '--user', f'{os.getuid()}:{os.getgid()}', '--read-only', '--network=none',
+        '--cap-drop=ALL', '--security-opt=no-new-privileges:true',
+        '--cpus=1.5', '--memory=1g', '--memory-swap=1g', '--pids-limit=256',
+        '--workdir=/workspace', '--entrypoint=/usr/bin/timeout',
+        '--env', 'HOME=/tmp', '--env', 'TMPDIR=/tmp',
+        '--tmpfs', '/tmp:rw,nosuid,nodev,size=268435456,mode=1777',
+        '--mount', f'type=bind,source={target},target=/workspace,readonly,bind-recursive=disabled']
+    for key, value in labels.items():
+        create += ['--label', key + '=' + value]
+    create += [image, *command]
+    env = {'PATH': os.environ.get('PATH', '/usr/bin:/bin')}
+    started = time.monotonic()
+    def run(argv, seconds):
+        return run_tracked(payload.job_id, argv, cwd=target, timeout=seconds, env=env)
+    rc, out, err, expired = run(create, 5)
+    infrastructure = []
+    def output(argv, rc, out, err, expired):
+        return CommandOutput(command=' '.join(argv), returncode=rc,
+                             stdout=out[-30000:], stderr=err[-30000:], timed_out=expired)
+    if rc or expired or not re.fullmatch(r'[0-9a-f]{64}', out.strip()):
+        return PhaseResponse(passed=False, phase=payload.phase, commands=[],
+            infrastructure=[output(create, rc or 1, out, err, expired)])
+    container_id = out.strip()
+    def inspect():
+        item = _pcp_docker('container', container_id)
+        if item.get('Id') != container_id:
+            raise HTTPException(409, 'pcp_local_test_container_id_changed')
+        _pcp_test_identity(item, name=name, image=image, target=target, labels=labels, command=command)
+        return item
+    item = inspect()
+    if item.get('State', {}).get('Status') != 'created':
+        raise HTTPException(409, 'pcp_local_test_container_already_consumed')
+    remaining = max(1, timeout - int(time.monotonic() - started))
+    argv = docker + ['start', '--attach', container_id]
+    rc, out, err, expired = run(argv, remaining)
+    item = inspect()
+    if item.get('State', {}).get('Running'):
+        # CLI timeout/disconnection must not leave an unbounded test process.
+        # Fresh identity above permits stopping only this newly created ID.
+        stop = docker + ['container', 'stop', '--time', '5', container_id]
+        sr, so, se, st = run(stop, 10)
+        infrastructure.append(output(stop, sr, so, se, st))
+        item = inspect()
+        infrastructure.append(output(argv, 1, '', 'Test execution incomplete; retained container', expired))
+    state = item.get('State') or {}
+    exit_code = state.get('ExitCode')
+    if state.get('Status') != 'exited' or type(exit_code) is not int:
+        infrastructure.append(output(argv, 1, '', 'Test completion not attested', expired))
+        exit_code = rc or 1
+    if rc and exit_code == 0:
+        infrastructure.append(output(argv, rc, '', 'Attach transport failed', expired))
+    if state.get('OOMKilled'):
+        infrastructure.append(output(argv, 1, '', 'Test container resource ceiling reached', expired))
+    if expired or exit_code in (124, 137):
+        infrastructure.append(output(argv, 1, '', 'Test deadline/resource limit reached', True))
+    if exit_code in (86, 126, 127):
+        infrastructure.append(output(argv, 86, '', 'Runtime timeout/Python/pytest/PyYAML/Git tooling unavailable', False))
+    # The immutable snapshot is revalidated after the read-only execution too.
+    if _pcp_verification_copy(payload, a, root) != (target, fingerprint):
+        raise HTTPException(409, 'pcp_local_verified_snapshot_changed')
+    passed = (exit_code == 0 and not expired and not infrastructure
+              and 'PCP_TEST_TOOLCHAIN=pytest8.4.1,PyYAML6.0.2' in out
+              and re.search(r'\b[1-9][0-9]* passed\b', out) is not None)
+    return PhaseResponse(passed=passed, phase=payload.phase,
+        commands=[output(argv, exit_code, out, err, expired)], infrastructure=infrastructure)
 
 
 def _pcp_draft_pr(payload):

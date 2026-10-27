@@ -2084,155 +2084,208 @@ def test_remote_direct_sync_rejects_active_executor_process(
     assert "active jobs" in str(exc.value.detail)
 
 
-# GH-815: fake-only PCP-local verification boundary. Ordinary workspace tests
-# above continue exercising their original behavior.
-def pcp_compose(target, name):
-    return {
-        'services': {'web': {'container_name': 'ddev-' + name + '-web',
-            'networks': {'default': None}, 'environment': {},
-            'volumes': [dict(type='bind', source=str(target), target='/var/www/html')]}},
-        'networks': {'default': {'name': name + '-private', 'internal': True}},
-    }
-
-
-def test_pcp_effective_compose_accepts_only_job_web(tmp_path):
-    from app.main import _pcp_effective_compose
-    _pcp_effective_compose(pcp_compose(tmp_path, 'pcp-local-job'), tmp_path, 'pcp-local-job')
-
-
-@pytest.mark.parametrize('mutation', ['service', 'hook_env', 'socket', 'home', 'shared_network', 'privileged', 'port'])
-def test_pcp_effective_compose_denies_foreign_capabilities(tmp_path, mutation):
-    from app.main import _pcp_effective_compose
-    doc = pcp_compose(tmp_path, 'pcp-local-job')
-    web = doc['services']['web']
-    if mutation == 'service':
-        doc['services']['n8n'] = {}
-    elif mutation == 'hook_env':
-        web['environment']['GITHUB_DELIVERY_TOKEN'] = 'test-only'
-    elif mutation in ('socket', 'home'):
-        web['volumes'].append(dict(type='bind', source='/var/run/docker.sock' if mutation == 'socket' else '/home/foreign', target='/foreign'))
-    elif mutation == 'shared_network':
-        doc['networks']['default']['name'] = 'ddev_default'
-    elif mutation == 'privileged':
-        web['privileged'] = True
-    else:
-        web['ports'] = [{'host_ip': '0.0.0.0'}]
-    with pytest.raises(HTTPException):
-        _pcp_effective_compose(doc, tmp_path, 'pcp-local-job')
-
-
-def test_pcp_project_config_uses_supported_project_omit_containers():
+# GH-815: PCP uses native Docker; ordinary non-PCP workspace tests above retain
+# their existing DDEV behavior. All Docker calls below are strict fakes.
+@pytest.fixture
+def pcp_native(tmp_path, monkeypatch):
     from app import main as executor
-    image = 'test/web@sha256:' + 'c' * 64
-    config = yaml.safe_load(executor._pcp_job_config('pcp-local-job', image))
-    # ddev-router is global-only; project omissions do not disable it.
-    assert config['omit_containers'] == ['db', 'ddev-ssh-agent']
-    assert config['webimage'] == image
-
-
-def test_pcp_copy_never_inherits_legacy_ddev_and_is_retry_stable(tmp_path, monkeypatch):
-    from app import main as executor
+    root = tmp_path / 'pcp-local-test815'
+    (root / 'sources').mkdir(parents=True)
     job = 'a' * 32
-    workspace = tmp_path / 'workspaces' / job
-    workspace.mkdir(parents=True)
-    (workspace / 'tests').mkdir()
-    (workspace / 'tests/test_pcp_light_sample.py').write_text('def test_example(): assert True\n')
+    workspace = root / 'workspaces' / job
+    (workspace / 'tests').mkdir(parents=True)
+    (workspace / 'tests/test_pcp_light_sample.py').write_text('def test_sample(): assert True\n')
     (workspace / '.ddev').mkdir()
-    (workspace / '.ddev/config.yaml').write_text('hooks:\n  pre-start:\n    - exec-host: forbidden\n')
-    (workspace / '.ddev/docker-compose.legacy.yaml').write_text('services:\n  foreign: {}\n')
+    (workspace / '.ddev/config.yaml').write_text('hooks: {pre-start: [{exec-host: forbidden}]}')
+    (workspace / '.ddev/docker-compose.foreign.yaml').write_text('services: {foreign: {}}')
+    image = 'sha256:' + 'c' * 64
+    activation = dict(base_sha='b'*40, runtime_image_id=image, verification_image=image)
+    cfg = {'ddev': {'enabled': True, 'targeted_tests': ['tests/test_pcp_light_sample.py'],
+                    'full_tests': ['tests/test_pcp_light_sample.py']}}
+    monkeypatch.setattr(executor, '_pcp_identity', lambda *_: (activation, cfg, root))
     monkeypatch.setattr(executor, '_validate_workspace', lambda *args: workspace)
-    monkeypatch.setattr(executor, 'git', lambda *args: 'b' * 40)
+    monkeypatch.setattr(executor, 'git', lambda *args: 'b'*40)
+    monkeypatch.setattr(executor.os, 'getuid', lambda: 1000)
+    monkeypatch.setattr(executor.os, 'getgid', lambda: 1000)
+    return executor, root, workspace, job, activation, cfg
+
+
+def test_pcp_copy_has_no_ddev_and_preserves_original_and_retry(pcp_native):
+    executor, root, workspace, job, a, _ = pcp_native
     payload = executor.PhaseRequest(job_id=job, project_id='pcp-local', workspace=str(workspace), phase='targeted_tests')
-    activation = {'base_sha': 'b' * 40, 'verification_image': 'test/web@sha256:' + 'c' * 64}
-    target, name = executor._pcp_verification_copy(payload, activation, tmp_path)
-    assert target != workspace and 'sources/.pcp-local-verification' in str(target)
-    config = yaml.safe_load((target / '.ddev/config.yaml').read_text())
-    assert config['name'] == name and 'hooks' not in config
-    assert config['omit_containers'] == ['db', 'ddev-ssh-agent']
-    fragment = (target / '.ddev/web-build/Dockerfile').read_text()
-    # DDEV appends this fragment after its generated FROM and setup.
-    instructions = [line.split()[0].upper() for line in fragment.splitlines()
-                    if line.strip() and not line.lstrip().startswith('#')]
-    assert instructions == ['RUN']
-    assert 'python3 -m venv /opt/pcp-tests' in fragment
-    assert 'pytest==8.3.5 PyYAML==6.0.2' in fragment
-    assert not (target / '.ddev/docker-compose.legacy.yaml').exists()
-    assert (workspace / '.ddev/config.yaml').read_text().startswith('hooks:')
-    assert executor._pcp_verification_copy(payload, activation, tmp_path) == (target, name)
-    (target / '.ddev/config.evil.yaml').write_text('hooks: {}')
-    with pytest.raises(HTTPException, match='pcp_local_untrusted_ddev_configuration'):
-        executor._pcp_verification_copy(payload, activation, tmp_path)
+    target, fingerprint = executor._pcp_verification_copy(payload, a, root)
+    assert not (target/'.ddev').exists() and not (target/'.git').exists()
+    assert (workspace/'.ddev/docker-compose.foreign.yaml').is_file()
+    assert executor._pcp_verification_copy(payload, a, root) == (target, fingerprint)
+    (target/'foreign').write_text('unreviewed')
+    with pytest.raises(HTTPException, match='copy_changed'):
+        executor._pcp_verification_copy(payload, a, root)
+    assert (target/'foreign').is_file()  # No deletion to recover a partial/changed copy.
 
 
-def test_pcp_copy_refuses_symlinks_before_commands(tmp_path, monkeypatch):
-    from app import main as executor
-    workspace = tmp_path / 'workspaces' / ('a' * 32)
-    workspace.mkdir(parents=True)
-    (workspace / 'foreign').symlink_to(tmp_path / 'outside')
-    monkeypatch.setattr(executor, '_validate_workspace', lambda *args: workspace)
-    monkeypatch.setattr(executor, 'git', lambda *args: pytest.fail('Git must not run on unsafe tree'))
-    payload = executor.PhaseRequest(job_id='a' * 32, project_id='pcp-local', workspace=str(workspace), phase='targeted_tests')
-    with pytest.raises(HTTPException, match='pcp_local_symlink_denied'):
-        executor._pcp_verification_copy(payload, {}, tmp_path)
+def test_pcp_copy_refuses_symlink_and_wrong_source(pcp_native, monkeypatch):
+    executor, root, workspace, job, a, _ = pcp_native
+    payload = executor.PhaseRequest(job_id=job, project_id='pcp-local', workspace=str(workspace), phase='targeted_tests')
+    monkeypatch.setattr(executor, 'git', lambda *args: 'd'*40)
+    with pytest.raises(HTTPException, match='source_changed'):
+        executor._pcp_verification_copy(payload, a, root)
+    (workspace/'foreign').symlink_to(root/'outside')
+    with pytest.raises(HTTPException, match='symlink_denied'):
+        executor._pcp_verification_copy(payload, a, root)
 
 
-def test_pcp_resource_collision_refuses_foreign_owner(tmp_path, monkeypatch):
-    from app import main as executor
-    monkeypatch.setattr(executor, '_pcp_docker', lambda *args, **kwargs: {
-        'Config': {'Labels': {'com.docker.compose.project': 'unrelated'}}})
-    with pytest.raises(HTTPException, match='pcp_local_resource_collision'):
-        executor._pcp_resources(tmp_path, 'pcp-local-job')
+def pcp_image(root, activation):
+    return {'Id': activation['runtime_image_id'], 'Config': {'Env': ['PATH=/opt/venv/bin:/usr/bin'],
+        'Labels': {'org.pcp.local.instance': root.name,
+                   'org.opencontainers.image.revision': activation['base_sha']}}}
 
 
-@pytest.mark.parametrize('test_output,expected', [('3 passed, 1 skipped', True), ('1 skipped', False), ('no tests ran', False)])
-def test_pcp_phase_requires_actual_tests_and_validates_before_start(tmp_path, monkeypatch, test_output, expected):
-    from app import main as executor
-    target = tmp_path / 'verified'
-    target.mkdir()
-    monkeypatch.setattr(executor, '_pcp_identity', lambda *_: ({}, {'ddev': {
-        'enabled': True, 'targeted_tests': ['tests/test_pcp_light_sample.py']}}, tmp_path))
-    monkeypatch.setattr(executor, '_pcp_verification_copy', lambda *args: (target, 'pcp-local-job'))
-    calls = []
-    monkeypatch.setattr(executor, '_pcp_resources', lambda *args, **kw: calls.append(('inspect', kw)))
-    def fake(job, argv, **kwargs):
-        assert 'GITHUB_DELIVERY_TOKEN' not in kwargs['env']
-        calls.append(tuple(argv))
-        if argv == ['ddev', 'debug', 'compose-config']:
-            return 0, yaml.safe_dump(pcp_compose(target, 'pcp-local-job')), '', False
-        if argv == ['ddev', 'start', '-y']:
-            return 0, '', '', False
-        if argv[:5] == ['docker', '--host', 'unix:///var/run/docker.sock', 'container', 'stop']:
-            assert argv[-1] == 'ddev-pcp-local-job-web'
-            return 0, '', '', False
-        assert argv[:3] == ['ddev', 'exec', '/opt/pcp-tests/bin/python']
-        return 0, test_output, '', False
-    (tmp_path / 'sources').mkdir()
-    monkeypatch.setattr(executor, 'run_tracked', fake)
-    payload = executor.PhaseRequest(job_id='a' * 32, project_id='pcp-local', workspace='/unused', phase='targeted_tests')
-    result = executor.phase(payload)
-    assert result.passed is expected
-    assert len(result.commands) == 1
-    assert calls[1] == ('ddev', 'debug', 'compose-config')
-    assert calls[2] == ('ddev', 'start', '-y')
+@pytest.mark.parametrize('mutation', ['tag', 'different_image', 'source', 'owner', 'volume', 'secret'])
+def test_pcp_verification_image_rejects_unowned_or_unsafe(pcp_native, monkeypatch, mutation):
+    executor, root, _, _, a, _ = pcp_native
+    item = pcp_image(root, a)
+    if mutation == 'tag': a['runtime_image_id'] = 'runtime:latest'
+    elif mutation == 'different_image': a['verification_image'] = 'sha256:'+'d'*64
+    elif mutation == 'source': item['Config']['Labels']['org.opencontainers.image.revision'] = 'd'*40
+    elif mutation == 'owner': item['Config']['Labels']['org.pcp.local.instance'] = 'foreign'
+    elif mutation == 'volume': item['Config']['Volumes'] = {'/foreign': {}}
+    else: item['Config']['Env'].append('GITHUB_TOKEN=fixture-secret')
+    monkeypatch.setattr(executor, '_pcp_docker', lambda *args, **kwargs: item)
+    with pytest.raises(HTTPException): executor._pcp_verification_image(a, root)
 
 
-def test_pcp_phase_invalid_render_never_starts(tmp_path, monkeypatch):
-    from app import main as executor
-    (tmp_path / 'sources').mkdir()
-    monkeypatch.setattr(executor, '_pcp_identity', lambda *_: ({}, {'ddev': {
-        'enabled': True, 'targeted_tests': ['tests/test_pcp_light_sample.py']}}, tmp_path))
-    monkeypatch.setattr(executor, '_pcp_verification_copy', lambda *args: (tmp_path, 'pcp-local-job'))
-    monkeypatch.setattr(executor, '_pcp_resources', lambda *args, **kw: None)
-    calls = []
-    def fake(job, argv, **kwargs):
+def _exercise_pcp_native_phase(pcp_native, monkeypatch, stdout, exit_code, expected, *, mutate_source=False):
+    executor, root, workspace, job, a, _ = pcp_native
+    calls, inspected = [], []
+    container = {}
+    cid = 'e'*64
+    def inspect(kind, identity, **kwargs):
+        inspected.append((kind, identity))
+        if kind == 'image': return pcp_image(root, a)
+        assert kind == 'container'
+        if identity != cid:
+            assert kwargs == {'missing_ok': True}
+            assert identity.startswith(root.name+'-verify-')
+            return None
+        return container
+    def execute(job_id, argv, **kwargs):
         calls.append(argv)
-        assert argv == ['ddev', 'debug', 'compose-config']
-        return 0, 'services: {foreign: {}}', '', False
-    monkeypatch.setattr(executor, 'run_tracked', fake)
-    payload = executor.PhaseRequest(job_id='a' * 32, project_id='pcp-local', workspace='/unused', phase='targeted_tests')
-    with pytest.raises(HTTPException, match='pcp_local_extra_service'):
-        executor.phase(payload)
-    assert len(calls) == 1
+        assert job_id == job and kwargs['env'] == {'PATH': executor.os.environ.get('PATH', '/usr/bin:/bin')}
+        assert argv[:3] == ['docker','--host','unix:///var/run/docker.sock']
+        if argv[3] == 'create':
+            assert '--pull=never' in argv and '--read-only' in argv and '--network=none' in argv
+            assert '--cap-drop=ALL' in argv and '--security-opt=no-new-privileges:true' in argv
+            assert '--cpus=1.5' in argv and '--memory=1g' in argv and '--memory-swap=1g' in argv
+            assert '--pids-limit=256' in argv and '--workdir=/workspace' in argv
+            assert argv[argv.index('--user')+1] == '1000:1000'
+            assert argv[argv.index('--entrypoint=/usr/bin/timeout')+1] == '--env'
+            mount = argv[argv.index('--mount')+1]
+            assert mount.endswith('target=/workspace,readonly,bind-recursive=disabled')
+            assert str(root/'sources/.pcp-local-verification') in mount
+            assert 'docker.sock' not in mount and '/home/coder' not in mount
+            assert '--rm' not in argv and '--env-file' not in argv
+            env_args = [argv[i+1] for i,x in enumerate(argv) if x=='--env']
+            assert env_args == ['HOME=/tmp','TMPDIR=/tmp']
+            image_index = argv.index(a['runtime_image_id'])
+            assert argv[image_index+1:image_index+3] == ['--signal=TERM','--kill-after=5s']
+            assert argv[image_index+4:image_index+8] == ['/opt/venv/bin/python','-I','-B','-c']
+            assert argv[-1] == 'tests/test_pcp_light_sample.py'
+            labels = dict(argv[i+1].split('=',1) for i,x in enumerate(argv) if x=='--label')
+            container.update({'Id':cid,'Name':'/'+argv[argv.index('--name')+1], 'Image':a['runtime_image_id'],
+                'Config':{'Image':a['runtime_image_id'],'Labels':labels,'User':'1000:1000',
+                    'WorkingDir':'/workspace','Entrypoint':['/usr/bin/timeout'],
+                    'Cmd':argv[image_index+1:],'Env':['PATH=/opt/venv/bin:/usr/bin','HOME=/tmp','TMPDIR=/tmp']},
+                'HostConfig':{'Privileged':False,'ReadonlyRootfs':True,'NetworkMode':'none','CapDrop':['ALL'],
+                    'SecurityOpt':['no-new-privileges:true'],'Memory':1073741824,'MemorySwap':1073741824,
+                    'NanoCpus':1500000000,'PidsLimit':256,'Tmpfs':{'/tmp':'rw,nosuid,nodev,size=268435456,mode=1777'}},
+                'Mounts':[{'Type':'bind','Source':str(kwargs['cwd']),'Destination':'/workspace','RW':False}],
+                'State':{'Status':'created','Running':False}})
+            return 0, cid+'\n', '', False
+        if argv[3:6] == ['container','stop','--time']:
+            assert argv[6:] == ['5',cid] and container['State']['Running']
+            container['State']={'Status':'exited','Running':False,'ExitCode':124}
+            return 0, cid, '', False
+        assert argv[3:] == ['start','--attach',cid]
+        assert container['State']['Status']=='created'
+        if mutate_source:
+            (workspace/'tests/test_pcp_light_sample.py').write_text('def test_changed(): assert False\n')
+        container['State']=({'Status':'running','Running':True} if exit_code==124 else
+                            {'Status':'exited','Running':False,'ExitCode':exit_code})
+        return exit_code, 'PCP_TEST_TOOLCHAIN=pytest8.4.1,PyYAML6.0.2\n'+stdout, '', exit_code==124
+    monkeypatch.setattr(executor,'_pcp_docker',inspect)
+    monkeypatch.setattr(executor,'run_tracked',execute)
+    payload=executor.PhaseRequest(job_id=job,project_id='pcp-local',workspace=str(workspace),phase='targeted_tests')
+    result=executor.phase(payload)
+    assert result.passed is expected and len(result.commands)==1
+    assert result.commands[0].returncode==exit_code
+    assert len(calls)==(3 if exit_code==124 else 2) and all('ddev' not in c and 'ddev-global-cache' not in c for c in calls)
+    assert inspected[0]==('image',a['runtime_image_id'])
+    assert container['State']['Status']=='exited'  # Evidence/container retained, never removed.
+    if exit_code==86: assert result.infrastructure[0].returncode==86
+    if exit_code==124: assert any(c.timed_out for c in result.infrastructure)
+
+
+@pytest.mark.parametrize('stdout,exit_code,expected', [
+    ('3 passed, 1 skipped', 0, True), ('1 skipped', 0, False),
+    ('no tests ran', 5, False), ('1 failed, 2 passed', 1, False),
+    ('', 86, False), ('', 0, False), ('1 passed', 124, False),
+])
+def test_pcp_native_phase_executes_only_bounded_owned_container(pcp_native, monkeypatch, stdout, exit_code, expected):
+    _exercise_pcp_native_phase(pcp_native, monkeypatch, stdout, exit_code, expected)
+
+
+@pytest.mark.parametrize('fault', ['socket', 'rw', 'network', 'secret', 'root', 'memory', 'tmpfs', 'image', 'job'])
+def test_pcp_actual_container_is_validated_before_execution(pcp_native, monkeypatch, fault):
+    executor = pcp_native[0]
+    original = executor._pcp_test_identity
+    checked = []
+    def verify(item, **kwargs):
+        original(item, **kwargs)  # Fixture must first satisfy every real invariant.
+        checked.append(item['State']['Status'])
+        if fault == 'socket': item['Mounts'].append({'Type':'bind','Source':'/var/run/docker.sock'})
+        elif fault == 'rw': item['Mounts'][0]['RW'] = True
+        elif fault == 'network': item['HostConfig']['NetworkMode'] = 'bridge'
+        elif fault == 'secret': item['Config']['Env'].append('GH_TOKEN=fixture-secret')
+        elif fault == 'root': item['Config']['User'] = '0:0'
+        elif fault == 'memory': item['HostConfig']['Memory'] = 0
+        elif fault == 'tmpfs': item['HostConfig']['Tmpfs']['/tmp'] = 'rw,dev,suid'
+        elif fault == 'image': item['Image'] = 'sha256:'+'f'*64
+        else: item['Config']['Labels']['org.pcp.local.job'] = 'foreign'
+        original(item, **kwargs)
+    monkeypatch.setattr(executor, '_pcp_test_identity', verify)
+    with pytest.raises(HTTPException, match='container_identity_invalid'):
+        _exercise_pcp_native_phase(pcp_native, monkeypatch, '3 passed', 0, True)
+    assert checked == ['created']
+
+
+def test_pcp_native_disabled_verification_denies_before_docker(pcp_native, monkeypatch):
+    executor, _, workspace, job, _, cfg = pcp_native
+    cfg['ddev']['enabled'] = False
+    monkeypatch.setattr(executor, '_pcp_docker', lambda *args, **kwargs: pytest.fail('Docker invoked'))
+    with pytest.raises(HTTPException, match='phase_denied'):
+        executor.phase(executor.PhaseRequest(job_id=job, project_id='pcp-local', workspace=str(workspace), phase='targeted_tests'))
+
+
+def test_pcp_verification_refuses_source_change_during_test(pcp_native, monkeypatch):
+    with pytest.raises(HTTPException, match='verified_snapshot_changed'):
+        _exercise_pcp_native_phase(pcp_native, monkeypatch, '3 passed', 0, True, mutate_source=True)
+
+
+@pytest.mark.parametrize('tests', [[], ['missing'], [None], ['tests/test_pcp_light_a.py']*2])
+def test_pcp_native_invalid_checks_never_reach_docker(pcp_native, monkeypatch, tests):
+    executor, _, workspace, job, _, cfg = pcp_native
+    cfg['ddev']['targeted_tests']=tests
+    monkeypatch.setattr(executor,'_pcp_docker',lambda *args,**kwargs:pytest.fail('Docker invoked'))
+    with pytest.raises(HTTPException,match='mandatory_tests_missing'):
+        executor.phase(executor.PhaseRequest(job_id=job,project_id='pcp-local',workspace=str(workspace),phase='targeted_tests'))
+
+
+def test_pcp_native_collision_does_not_resume_or_remove(pcp_native,monkeypatch):
+    executor,root,workspace,job,a,_=pcp_native
+    monkeypatch.setattr(executor,'_pcp_docker',lambda kind,*args,**kw:pcp_image(root,a) if kind=='image' else {'Id':'foreign'})
+    monkeypatch.setattr(executor,'run_tracked',lambda *args,**kwargs:pytest.fail('mutated collision'))
+    with pytest.raises(HTTPException,match='collision_no_retry'):
+        executor.phase(executor.PhaseRequest(job_id=job,project_id='pcp-local',workspace=str(workspace),phase='targeted_tests'))
 
 
 def test_pcp_clone_omits_legacy_ddev_without_changing_tracked_diff(tmp_path, monkeypatch):

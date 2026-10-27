@@ -1,137 +1,157 @@
-# PCP Local Trusted Fastpath — GH-815 PR-A
+# PCP Local native Compose — GH-815 V5
 
-**SOURCE implementation for review; physical installation and Codex LIVE are
-STOP.** PR-A prepares an independent local instance. It does not dispatch a job,
-activate a ProjectBaseline, start DDEV/PostgreSQL, or prove deployment health.
-PR-B supplies the dedicated admitted execution path. The old portable installer,
-root `.ddev` hooks, inspection-image/OCI workflows and legacy database are not
-installation dependencies for this path.
+V5 replaces the PCP-local DDEV lifecycle with native Docker Compose and an
+isolated Docker test container. It reuses Router, Runtime, Executor, PostgreSQL,
+CodexAdapter, durable admission/lease and GitHub delivery. Other managed projects
+retain their existing stack-specific behavior. The legacy `.ddev` profile and
+historical inspection/OCI artifacts are not this installation path.
 
-Authority: [V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6438475541),
-[V2](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6438904126),
-[V3](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6440446016).
-V3 retires legacy compatibility as a product requirement. Useful historical
-input validators retain their own frozen fixtures; they do not gate this install.
-Physical deletion of old resources remains a separately scoped operation.
+**SOURCE preparation only. Host/LIVE is STOP.** V5 source approval does not
+resume Physical Pilot V1 or authorize a new issue, credentials, build or service.
+[Owner V5 approval](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6447953456)
+requires a separate Physical Pilot V2 after reviewed merge and postmerge CI.
+V1 stopped before installation because DDEV start implicitly changes the shared
+`ddev-global-cache`, independently of project mounts and isolated HOME.
 
-## Source planning, available now
+## Planning
 
-From a fresh PCP source checkout, run this standalone script (no host packages):
+From a clean reviewed source checkout:
 
 ```bash
 bash scripts/pcp-local-trusted-bootstrap.sh --dry-run \
-  --root /home/sonvh/pcp-local-new815 \
-  --instance pcp-local-new815
+  --root /home/sonvh/pcp-local-new815 --instance pcp-local-new815
 ```
 
-Planning checks repository identity, source/Codex pin and destination syntax,
-prints the service/image plan, and writes nothing. It never calls Docker/DDEV,
-reads credentials or claims resource availability. The destination must be
-absent, named exactly as the instance directly under the operator's HOME, and
-must not overlap the source checkout. This excludes nested managed-project roots.
-Use a fresh root; do not reuse `/home/sonvh/pcp-local-b2f3` or consumed receipts.
+Planning writes nothing and calls no Docker/DDEV/provider command. The root
+must be absent, directly under the operator's HOME, named exactly as the
+instance, with no symlinks or overlap with the source checkout. Planning does
+not inspect Docker collisions or certify physical feasibility.
 
-## One-time preparation after separate physical delegation
+## One-time preparation under a future physical permit
 
-Requirements: Ubuntu WSL2/Linux, existing Docker Desktop integration, DDEV,
-Git and ordinary shell tools. No host PHP, Python, Node, Codex or PostgreSQL is
-required. The normal Runtime Dockerfile includes Codex; `Dockerfile.inspect`
-does not. Do not substitute the historical inspection image.
+Required tools: Git, ordinary shell tools, Docker and native Compose. No Host
+PHP, Python, Node, Codex, PostgreSQL or DDEV installation is required. Use the
+normal Runtime Dockerfile, not the historical health-only inspection image.
 
-The future operator supplies `--apply`, the same root/instance, the exact clean
-reviewed `--source-commit`, and a **new physical** `--owner-approval` issue-comment
-URL. The URL records the delegation; this shell script cannot authenticate human
-consent. SOURCE approvals are not physical permits. Also supply reviewed
-`--node-base node:22-bookworm-slim@sha256:<digest>`,
-`--python-base python:3.13-slim-bookworm@sha256:<digest>` (or a concrete 3.13 patch
-tag with digest), and `--opencode-version X.Y.Z`. These values are deliberately
-not guessed or resolved over the network by dry-run.
+The operator supplies `--apply`, root/instance, exact clean `--source-commit`,
+and a new `--owner-approval` issue-comment URL. The script checks syntax, not
+human identity; verify actual consent, expiry and resource gates independently.
+Known source/V1 physical approval URLs are rejected. Explicit inputs:
 
-Apply performs only preparation:
+- `--node-base node:22-bookworm-slim@sha256:<reviewed digest>`;
+- `--python-base python:3.13-slim-bookworm@sha256:<reviewed digest>` (a concrete
+  3.13 patch tag is also accepted);
+- `--opencode-version X.Y.Z` (build dependency only, not pilot routing authority);
+- `--postgres-image postgres:17-bookworm@sha256:<reviewed digest>` (or a concrete
+  17 patch tag with digest). Verify the Debian image's PostgreSQL UID/GID 999
+  and sole declared data volume before physical activation.
 
-1. Refuse ambient daemon/Compose/activation overrides and matching containers
-   (including stopped ones), volumes, networks or local image tags. Docker query
-   failure is STOP. Atomically claim a fresh root; never adopt existing data.
-2. Archive committed service inputs, substitute only the pinned base in staged
-   copies of the existing three Dockerfiles, and build unique instance/SHA tags.
-   Use the explicit local Unix socket and built-in default builder; never select
-   or create a global builder or follow an ambient remote Docker context.
-   Pass the checked-in Codex pin, explicit OpenCode version and host UID/GID.
-   Keep build logs, image IDs, input pins and source SHA. Compose consumes those
-   exact image IDs with `pull_policy: never`, not global legacy tags.
-3. Clone only PCP source locally under `sources/personal-coding-platform` and
-   pin it detached. Prepare separate `workspaces`, `runtime-home`, `executor-home`
-   and `instance` directories. The instance receives only the hook-free profile,
-   PCP-only registries and model/routing config; it inherits no root `.ddev` files.
-4. Generate fresh internal API tokens in one non-root, networkless, read-only
-   Runtime-image container with only the fresh output directory mounted. Service
-   files are mode 0600. No provider or GitHub credentials are copied/provisioned.
-5. Leave Compose profiles empty, registry draft/path-null, baseline inactive and
-   worker flags absent. No DDEV command, DB initialization, provider call or
-   service startup occurs. A completed exact retry returns a read-only no-op;
-   partial setup or changed inputs STOP and retain all evidence.
+Bootstrap refuses ambient daemon/Compose overrides and any matching containers,
+volumes, networks or local service tags. It serially stages committed inputs
+and builds only the three existing services with unique instance/full-SHA tags,
+records image IDs/logs/pins, makes a detached PCP-only source clone and copies
+`profiles/pcp-local/docker-compose.local.yaml` into `instance/`. It generates
+fresh internal tokens and independent database passwords inside one bounded,
+networkless Runtime-image process, then exits **without starting services**.
+No provider or GitHub credentials are copied or provisioned.
 
-This is a practical reproducible **source/version and image-identity** workflow,
-not bit-for-bit reproducibility or independent supply-chain attestation. Existing
-Dockerfiles still resolve Debian packages and some Python transitive/range
-requirements at build time. Retain logs and built image IDs; do not assume a
-later rebuild yields identical bytes. External OCI signing/GHCR/SBOM research
-is not a prerequisite for the accepted local development risk posture.
+`instance/.env` contains instance/source/UID/image identities and an empty
+`COMPOSE_PROFILES`. Mode-0600 service env files contain only each service's
+credentials. DB alone receives the bootstrap administrator password. Runtime
+receives the separate `pcp_runtime` connection string; Router/Executor receive
+no database credential. DB also receives that role's password in its own
+mode-0600 env file. The non-secret DB-only `initdb/01-runtime.sql` uses PostgreSQL
+17 psql's `\getenv` and quoted variable interpolation to create a non-superuser
+Runtime role owning only the fresh `pcp_local` database/schema. SQL contains no
+literal passwords and is readable by DB UID 999; its private parent root remains
+operator-owned. Never dump service env files or mount them in a test container.
+Initialize existing Runtime/receipt/lease schema DDL later inside that owned
+database; never call legacy recovery or import old DB state.
 
-## Activation and one real WorkOrder remain separate
+## Native platform contract
 
-After PR-A/PR-B review, exact-head four-suite CI and postmerge verification, the
-Owner can delegate one bounded physical pilot once. Before any DDEV start,
-verify the exact DDEV project registration/name and freshly recheck Docker
-collisions; preparation does not reserve DDEV's global name. DDEV's shared
-router/network and ancillary images are not an isolated daemon. Account for
-these shared dependencies without stopping, inspecting or cleaning foreign
-projects. The install template publishes no PCP service ports.
-[DDEV project commands](https://docs.ddev.com/en/stable/users/usage/commands/)
-allow addressing a named project; never run lifecycle commands from legacy root.
+All four services use profile `pcp-local`, restart OFF, no published ports,
+explicit CPU/RAM/PID limits and the `${instance}-private` bridge. The explicit
+`${instance}-postgres-data` volume replaces the image's sole data-volume mount;
+there are no implicit global or anonymous volumes in the configuration. The
+bridge permits required reviewed provider/GitHub egress; it is not a firewall
+or a separate Docker daemon. Verify actual peers and egress before activation.
 
-PR-A's real Runtime image serves `pcp_local_inspect` health using the unchanged
-startup implementation. That is a useful health stage, not an inspection-only
-image or a worker. Router/Executor have explicit service dependencies and scoped
-configuration; PostgreSQL is the fresh instance's DDEV `db`. Runtime cannot
-start ordinary PCP execution merely by changing an environment flag: PR-B must
-install dedicated admission/startup and preserve legacy SOURCE replay denial.
+Runtime has only read-only config, its workspace root and dedicated HOME. It
+has no Docker socket, source root or publisher credential. Executor alone has
+the socket group, PCP source/workspaces, private HOME and later scoped publisher.
+PostgreSQL runs non-root with owned persistent data and private temporary space.
+The platform requests 4 CPU/5 GiB; one serialized verification adds 1.5 CPU/1 GiB.
+SOURCE does not establish hard limits for the shared builder, incremental disk,
+installed image behavior or available capacity; those remain V2 physical gates.
 
-Later activation binds the singleton registry to the exact new source path and
-approved delivery permissions, creates an approved immutable ProjectBaseline
-revision at a known reviewed authority commit, and activates it separately.
-Preparation never fabricates a revision or updates an approved revision in place.
-Keep `developer_permission_mode: bounded`; broad `trusted_project` enablement
-is not part of this scope.
+A future operator must explicitly address all Compose inputs, for example:
 
-Provider login belongs only in the new dedicated Runtime home; GitHub publisher
-credentials belong only to Executor. Runtime/agents receive no Docker socket,
-source repository mount, host HOME, host keyring or publisher credentials. Only
-Executor receives the socket and source root; this remains a powerful capability
-on shared Docker, not hard isolation. PR-B must verify the actual developer
-credential/workspace boundary and admitted issue/model/budget/lease before work.
-No source/fixture result proves that physical boundary or provider entitlement.
-The PCP source clone retains tracked files, but its legacy `.ddev` is never the
-platform instance; future job verification must use reviewed job configuration.
+```text
+docker --host unix:///var/run/docker.sock compose \
+  --project-name <exact-instance> --project-directory <root>/instance \
+  --env-file <root>/instance/.env -f <root>/instance/docker-compose.local.yaml \
+  --profile pcp-local <separately-authorized-operation>
+```
 
-## Failure, retry and rollback
+Never use default project/directory/env discovery, legacy root hooks, DDEV start,
+global lifecycle commands, global builders or old tags. Recheck all named resource
+ownership immediately before each future mutation. Digest-pinned PostgreSQL and
+exact built service IDs must be locally available; `pull_policy: never` prevents
+implicit substitution. Physical pull/build permissions remain separate.
 
-A failed build/setup preserves the root, logs, image IDs and intent. Do not retry
-against a partial root, delete it automatically, overwrite tags, reset a database,
-or create a replacement job. Diagnose the recorded failure first. A completed
-retry is only a no-op receipt acknowledgement, not health or integrity attestation.
+Inspection health requires original draft/path-null registration, inactive
+baseline and all task flags absent. Stop only the owned Runtime before promoting
+configuration; install the new approved immutable baseline, singleton registry
+and activation coherently, then start dedicated `pcp_local_worker`. Do not expect
+inspect startup with promoted config. No baseline is approved/activated by
+bootstrap or source acceptance. Keep `bounded`/`isolated_clone`, one writer and
+production/auto-merge OFF. The existing `ddev.enabled`/phase-list keys remain the
+mandatory-verification API contract; for PCP they do not invoke DDEV.
 
-Preparation starts no persistent services, so its rollback is to leave the
-prepared instance OFF. After separately approved activation, stop only the exact
-new PCP services under the scoped operational delegation; preserve DB/jobs,
-workspaces, source and image/log evidence. Removal of any root/image/volume needs
-separate exact ownership/dependency checks. Never prune shared Docker, operate
-Chợ Nhạc, or resume historical jobs as part of bootstrap.
+## Mandatory offline verification
 
-## Acceptance
+Activation must bind `verification_image` **equal to** the exact
+`runtime_image_id` (`sha256:...`). Executor verifies image ID, source-revision and
+instance labels, denies image-declared volumes/unexpected environment, and
+snapshots only the admitted workspace's exact source content outside developer
+access. Root `.git`, `.ddev`, virtualenv and cache contents are excluded. Snapshot
+hash/manifest and actual selected test files must match, including on retry.
 
-Focused tests use temporary source fixtures and strict fake Docker/DDEV commands;
-no real Docker/DDEV/DB/provider calls are allowed. Required hosted CI runs root,
-Router, Runtime and Executor suites at the exact PR HEAD. Physical health,
-credential separation, real Codex issue-to-Draft-PR delivery and zero per-task
-Owner interaction remain **NOT ATTESTED** until the approved pilot supplies them.
+Executor creates one named container per job/content/phase with no pull, non-root
+operator UID/GID, read-only root, network NONE, capabilities ALL dropped,
+no-new-privileges, 1.5 CPU/1 GiB/no swap and PID limit 256. Its only bind is the
+owned snapshot read-only at `/workspace`, nonrecursive. `/tmp` is private bounded
+tmpfs; HOME/TMPDIR point there. No socket, Host HOME, publisher/provider/service
+credentials, shared cache, DDEV utility or router is included. Image/container
+identity is checked before start; an existing name is refused, never resumed.
+
+The Runtime image already supplies `/opt/venv/bin/python`, pytest 8.4.1, PyYAML
+6.0.2 and Git. The container checks that actual toolchain before invoking the
+explicit configured test paths. Its entrypoint `/usr/bin/timeout` must also exist
+in the reviewed image; it bounds execution even if the CLI disconnects. Tooling,
+transport, timeout and resource failures are infrastructure failures. Both
+mandatory phases must run and succeed with a positive passed count; disabled,
+missing, all-skipped, zero-test or failed checks never PASS. Existing Runtime
+records executed commands and passed/failed/skipped counts and exact diff/source.
+No image/package build is done by verification. Physical tool compatibility
+remains untested until the separately authorized pilot executes it.
+
+## Failure, evidence and rollback
+
+Partial bootstrap retains intent, logs, image IDs, source and data; retry refuses
+partial/different inputs. Exact completed retry is a read-only acknowledgement,
+not proof of health or unchanged files. Never rebuild/reset to hide failure.
+Snapshots and stopped test containers are retained. Repeated names refuse replay;
+changed-content repair uses a distinct content identity only when existing
+Runtime authority permits it. A deadline/uncertain attach stops only the newly
+created container ID after fresh identity verification, never foreign resources.
+No test cleanup deletes volumes, containers, snapshots or images.
+
+Later physical rollback disables intake and stops only proven newly owned IDs;
+keep DB, lease/receipt, job, counters, diff and logs. No `down -v`, prune, reset,
+global stop, old PCP replay or Chợ Nhạc access. A new physical permit must bind
+accepted source, baseline, actual images/tools, one issue/model allowance,
+subscription entitlement/credentials, resource enforcement, staged health and
+real mandatory tests/Draft PR/four-suite CI/independent PM outcome. SOURCE tests
+and health alone prove none of those LIVE outcomes.
