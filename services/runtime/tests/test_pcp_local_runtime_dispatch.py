@@ -718,3 +718,90 @@ def test_dedicated_delivery_requires_concrete_reader_before_mutation(setup):
     with pytest.raises(source.TaskStop, match='delivery_admission'):
         asyncio.run(s.engine.deliver_pcp_local('a' * 32, s.readers, s.task))
     assert s.db.jobs == {}
+
+
+@pytest.mark.parametrize('outcome', ['success', 'timeout', 'repair'])
+def test_dedicated_worker_keeps_durable_identity_and_never_replays(setup, monkeypatch, tmp_path, outcome):
+    from pathlib import Path
+    from app import pcp_local_worker_loop as trusted
+    from app.adapters.base import AgentRun
+    from app.adapters.codex import CodexAdapter
+    s = setup
+    asyncio.run(s.dispatch())
+    job_id = worker.stable_job_id(s.task)
+    engine = s.engine
+    engine.workspace_root = tmp_path
+    workspace = tmp_path/job_id
+    workspace.mkdir()
+    reader = object.__new__(trusted.TrustedReaders)
+    reader.engine = engine
+    reader.lease_generation = None
+    reader.task = s.task
+    reader.activation = {'budget': {'model_calls':2,'max_wall_seconds':300,'cash_ceiling_usd':5}}
+    reader.snapshot = {'model_choice':s.facts['model_choice']}
+    reader.route = {'strategy':{'executor':s.facts['model_choice']}}
+    reader.authority = lambda: (s.project, s.baseline)
+    refreshes = []
+    async def refresh(task):
+        assert task == s.task
+        refreshes.append(s.db.receipts[s.task.issue_number]['state'])
+        return reader.snapshot
+    reader.refresh = refresh
+    monkeypatch.setattr(s.db, 'get', lambda key: deepcopy(s.db.jobs.get(key)))
+    def update(key, **fields):
+        s.db.jobs[key].update(deepcopy(fields))
+    monkeypatch.setattr(s.db, 'update', update)
+    def lease(project, key):
+        assert project == source.PROJECT_ID and key == job_id
+        s.db.lease = dict(project_id=project,owner_job_id=key,generation=1,state='active')
+        return deepcopy(s.db.lease)
+    monkeypatch.setattr(s.db,'acquire_project_lease',lease)
+    monkeypatch.setattr('app.security.harden_runtime_process_secret_boundary',lambda: None)
+    monkeypatch.setattr(Path,'home',lambda:tmp_path)
+    async def create_workspace(**kwargs):
+        assert kwargs == dict(job_id=job_id,project_id=source.PROJECT_ID,ref=s.task.base_sha,workspace_mode='isolated_clone')
+        return dict(workspace=str(workspace),branch='ai/'+job_id[:12],source_commit=s.task.base_sha)
+    monkeypatch.setattr(engine.ddev,'create_workspace',create_workspace)
+    attempts = []
+    async def fake_run(self, **kwargs):
+        # Each invocation is preceded by a persisted increment and running CAS.
+        assert s.db.receipts[s.task.issue_number]['state'] == 'running'
+        assert s.db.jobs[job_id]['progress']['model_calls'] == len(attempts)+1
+        attempts.append(kwargs['mode'])
+        if outcome == 'timeout':
+            (workspace/'retained-diff.txt').write_text('uncertain edit')
+            raise TimeoutError('unknown provider result')
+        return AgentRun(adapter='codex_cli',model=self.model,returncode=0,output='done')
+    monkeypatch.setattr(CodexAdapter,'run',fake_run)
+    diff = {'changed_files':list(s.task.allowed_paths),'diff_hash':'c'*64}
+    monkeypatch.setattr('app.repo.diff_state',lambda *a,**kw:deepcopy(diff))
+    commits=[]
+    monkeypatch.setattr('app.repo.commit_changes',lambda *args:commits.append(args) or 'd'*40)
+    checks=[]
+    async def verify(*args,**kwargs):
+        checks.append(1)
+        return {'passed': outcome!='repair' or len(checks)>1, 'test_runs':1}
+    monkeypatch.setattr(engine,'verify_pcp_local',verify)
+    deliveries=[]
+    async def deliver(key, actual_reader, task):
+        assert s.db.jobs[key]['checkpoint']['pcp_local_execution']['state']=='verified'
+        assert actual_reader is reader and task == s.task
+        deliveries.append(key)
+    monkeypatch.setattr(engine,'deliver_pcp_local',deliver)
+    if outcome == 'timeout':
+        with pytest.raises(TimeoutError):
+            asyncio.run(worker.run_admitted_job(engine,reader,s.task))
+        assert attempts == ['execute'] and not checks and not commits and not deliveries
+        assert (workspace/'retained-diff.txt').read_text()=='uncertain edit'
+        assert s.db.jobs[job_id]['status']=='blocked'
+    else:
+        asyncio.run(worker.run_admitted_job(engine,reader,s.task))
+        assert attempts == (['execute','repair'] if outcome=='repair' else ['execute'])
+        assert deliveries==[job_id] and len(commits)==1
+    assert s.db.receipts[s.task.issue_number]['job_id']==job_id
+    assert s.db.receipts[s.task.issue_number]['state']=='running'
+    assert s.db.lease['owner_job_id']==job_id and s.db.lease['generation']==1
+    count=len(attempts)
+    with pytest.raises(source.TaskStop):
+        asyncio.run(worker.run_admitted_job(engine,reader,s.task))
+    assert len(attempts)==count

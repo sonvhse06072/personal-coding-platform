@@ -398,7 +398,7 @@ async def lifespan(app: FastAPI):
             app.state.pcp_local_inspection_ready = False
         return
     if os.getenv("PCP_RUNTIME_STARTUP_MODE") == PCP_LOCAL_WORKER_MODE:
-        from .pcp_local_trusted_readers import TrustedReaders
+        from .pcp_local_worker_loop import TrustedReaders
         from .pm_bridge import PMBridgeGitHubClient
         harden_runtime_process_secret_boundary()
         # A mode flag cannot grant operational authority. No DB initialization,
@@ -467,7 +467,8 @@ async def inspection_mode_http_guard(request: Request, call_next):
     if worker or os.getenv("PCP_RUNTIME_STARTUP_MODE") == PCP_LOCAL_WORKER_MODE:
         if (not worker or runtime_startup_mode() != PCP_LOCAL_WORKER_MODE
                 or (request.method, request.url.path) not in {
-                    ("GET", "/health"), ("POST", "/v1/pcp-local/run-once")}):
+                    ("GET", "/health"), ("POST", "/v1/pcp-local/run-once"),
+                    ("POST", "/v1/pcp-local/pm-review")}):
             return JSONResponse(status_code=403, content={"detail": "PCP-local dedicated admission only"})
         return await call_next(request)
     parked = getattr(app.state, "pcp_local_inspection_ready", False)
@@ -1183,3 +1184,15 @@ async def pcp_local_run_once():
     except TaskStop as exc:
         raise HTTPException(409, exc.code) from None
     return {"job_id": row["id"], "status": row["status"], "can_merge": False}
+
+
+@app.post("/v1/pcp-local/pm-review", dependencies=[Depends(auth)])
+async def pcp_local_pm_review(payload: FullpathPMReviewRequest):
+    if (not getattr(app.state, "pcp_local_worker_ready", False)
+            or runtime_startup_mode() != PCP_LOCAL_WORKER_MODE):
+        raise HTTPException(403, "PCP-local dedicated startup required")
+    from .pcp_local_task_queue import TaskStop
+    try:
+        return await engine.finalize_pcp_local_review(payload)
+    except TaskStop as exc:
+        raise HTTPException(409, exc.code) from None

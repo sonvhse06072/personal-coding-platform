@@ -547,7 +547,7 @@ def test_p1_claimed_lookup_no_row_denied():
 def test_activation_document_rejects_expiry_foreign_and_symlink(tmp_path, monkeypatch):
     import json
     import time
-    from app import pcp_local_trusted_readers as trusted
+    from app import pcp_local_worker_loop as trusted
     path = tmp_path / 'activation.json'
     monkeypatch.setattr(trusted, 'ACTIVATION_FILE', path)
     value = dict(project_id='pcp-local', repository=q.REPOSITORY, issue_number=900,
@@ -564,3 +564,64 @@ def test_activation_document_rejects_expiry_foreign_and_symlink(tmp_path, monkey
     path.symlink_to(target)
     with pytest.raises(q.TaskStop, match='delegation_missing'):
         trusted.read_activation()
+
+
+def test_concrete_authority_reloads_baseline_and_detects_in_place_edit(tmp_path, monkeypatch):
+    import time
+    import yaml
+    from types import SimpleNamespace
+    from app import config
+    from app import pcp_local_worker_loop as trusted
+    activation = dict(project_id=q.PROJECT_ID, repository=q.REPOSITORY, issue_number=999,
+        developer_permission_mode='bounded', expires_at=time.time()+60,
+        baseline_revision='approved-test', baseline_source_commit='a'*40)
+    activation_file = tmp_path / 'activation.json'
+    activation_file.write_text(json.dumps(activation))
+    monkeypatch.setattr(trusted, 'ACTIVATION_FILE', activation_file)
+    project = {'repository': q.REPOSITORY, 'path': str(tmp_path / 'source'),
+        'registration_status': 'approved', 'base_branch': 'main',
+        'runtime': {'workspace_mode':'isolated_clone','developer_permission_mode':'bounded'},
+        'ddev': {'enabled':True}}
+    refs = {key: [{'path':'docs/project/constitution.md'}] for key in (
+        'goals','non_goals','requirements','architecture_constraints','quality_policy',
+        'security_policy','budget_policy','roadmap_frame')}
+    revision = {'status':'approved','source_commit':'a'*40,'references':refs}
+    baseline = {'projects': {q.PROJECT_ID:{'active_revision':'approved-test',
+        'revisions':{'approved-test':revision}}}}
+    paths = {'PROJECTS_FILE': ('projects.yml', {'projects':{q.PROJECT_ID:project}}),
+             'PROJECT_BASELINES_FILE':('baselines.yml', baseline)}
+    for key, (name, value) in paths.items():
+        (tmp_path/name).write_text(yaml.safe_dump(value))
+        monkeypatch.setenv(key,str(tmp_path/name))
+    reader = trusted.TrustedReaders(SimpleNamespace(), SimpleNamespace())
+    assert reader.authority()[1].source_commit == 'a'*40
+    # Same revision/source SHA, changed authority content: caching cannot hide it.
+    revision['references']['security_policy'] = [{'path':'docs/project/roadmap.md'}]
+    (tmp_path/'baselines.yml').write_text(yaml.safe_dump(baseline))
+    try:
+        with pytest.raises(q.TaskStop, match='authority_changed'):
+            reader.authority()
+    finally:
+        config.project_baselines_doc.cache_clear()
+        config.models_doc.cache_clear()
+        config.routing_policy_doc.cache_clear()
+
+
+def test_concrete_source_rejects_unbound_github_issue(monkeypatch):
+    from types import SimpleNamespace
+    from app import pcp_local_worker_loop as trusted
+    task, issue, _, _ = fixture()
+    reader = object.__new__(trusted.TrustedReaders)
+    reader.activation = {k:getattr(task,k) for k in (
+        'issue_number','body_sha256','base_sha','baseline_revision','baseline_source_commit')}
+    reader.task = None
+    reader.authority = lambda: None
+    class Source:
+        async def local_source_issue(self, **kwargs):
+            assert kwargs == {'issue_number':task.issue_number}
+            return issue
+    reader.github = Source()
+    assert asyncio.run(reader.source())[0] == task
+    issue['main_sha'] = 'f'*40
+    with pytest.raises(q.TaskStop, match='github_identity_or_main_changed'):
+        asyncio.run(reader.source())

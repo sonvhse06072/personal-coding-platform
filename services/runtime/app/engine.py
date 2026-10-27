@@ -791,7 +791,7 @@ class RuntimeEngine(_RuntimeEngine):
 
     async def run_pcp_local_once(self):
         """Authenticated one-shot ingress; no caller-supplied evidence or replay."""
-        from .pcp_local_trusted_readers import TrustedReaders
+        from .pcp_local_worker_loop import TrustedReaders
         from .pm_bridge import PMBridgeGitHubClient
         from .pcp_local_worker_loop import LocalSourceQueueStore, run_admitted_job
         readers = TrustedReaders(self, PMBridgeGitHubClient())
@@ -996,6 +996,8 @@ class RuntimeEngine(_RuntimeEngine):
             }
 
         if local is not None:
+            checkpoint["canonical_intake"] = {"mode": "direct", "bounded_direct": True,
+                "decomposition_required": False, "baseline_revision": baseline.revision}
             checkpoint["pcp_local_source"] = deepcopy(local.source_binding)
         row = {
             "id": job_id,

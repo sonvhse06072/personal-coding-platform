@@ -3889,3 +3889,74 @@ def _pcp_draft_pr(payload):
     return dict(job_id=payload.job_id, created=created, number=data['number'],
         url=data['html_url'], state=data['state'], head=payload.expected_commit,
         head_ref=payload.branch, base_ref='main', repository=repository, draft=True)
+
+
+class PcpLocalReviewRequest(PcpLocalObservationRequest):
+    pr_number: int = Field(gt=0)
+    expected_head: str = Field(pattern=r'^[0-9a-f]{40}$')
+    review_id: int = Field(gt=0)
+
+
+@app.post('/v1/pcp-local/pm-review', dependencies=[Depends(auth)])
+def pcp_local_review(payload: PcpLocalReviewRequest):
+    """Read-only GitHub review and actual four-job evidence; never merge."""
+    import json
+    a, cfg, _ = _pcp_identity(payload.job_id, payload.source_commit)
+    if _pcp_digest(a) != payload.activation_digest:
+        raise HTTPException(403, 'pcp_local_delegation_mismatch')
+    delivery, repository = _github_context(cfg)
+    if repository != _PCP_REPOSITORY:
+        raise HTTPException(403, 'pcp_local_publisher_repository_invalid')
+    with delivery._client() as client:
+        def get(path):
+            response = client.get(f'{delivery.base}/repos/{repository}/' + path)
+            response.raise_for_status()
+            return response.json()
+        pr = get(f'pulls/{payload.pr_number}')
+        review = get(f'pulls/{payload.pr_number}/reviews/{payload.review_id}')
+        if (pr.get('state') != 'open' or pr.get('merged') is True
+                or pr.get('head', {}).get('sha') != payload.expected_head
+                or pr.get('head', {}).get('ref') != 'ai/' + payload.job_id[:12]
+                or pr.get('head', {}).get('repo', {}).get('full_name') != repository
+                or pr.get('base', {}).get('ref') != 'main'
+                or review.get('user', {}).get('login') != a['pm_login']
+                or review.get('commit_id') != payload.expected_head
+                or review.get('state') not in ('APPROVED', 'COMMENTED')):
+            raise HTTPException(409, 'pcp_local_pm_identity_invalid')
+        marker = '<!-- coding-platform:pcp-local-pm-review:v1 -->'
+        body = review.get('body', '')
+        if not body.startswith(marker) or len(body.encode()) > 16000:
+            raise HTTPException(409, 'pcp_local_pm_report_missing')
+        report = json.loads(body[len(marker):].strip())
+        if (report.get('verdict') != 'pass' or report.get('findings') != []
+                or report.get('job_id') != payload.job_id
+                or report.get('source_commit') != payload.source_commit
+                or report.get('expected_head') != payload.expected_head
+                or report.get('baseline_revision') != a['baseline_revision']
+                or not isinstance(report.get('summary'), str) or len(report['summary']) < 40):
+            raise HTTPException(409, 'pcp_local_pm_report_denied')
+        runs = get(f'actions/runs?head_sha={payload.expected_head}&per_page=100')['workflow_runs']
+        selected = [r for r in runs if r.get('name') == 'tests' and r.get('head_sha') == payload.expected_head
+                    and r.get('event') == 'pull_request']
+        if not selected:
+            raise HTTPException(409, 'pcp_local_exact_ci_missing')
+        run = max(selected, key=lambda r: r['id'])
+        if run.get('status') != 'completed' or run.get('conclusion') != 'success':
+            raise HTTPException(409, 'pcp_local_exact_ci_not_successful')
+        jobs = get(f"actions/runs/{run['id']}/jobs?filter=latest&per_page=100")['jobs']
+        required = {'structure-tests', 'python-tests (services/router)',
+                    'python-tests (services/runtime)', 'python-tests (services/ddev-executor)'}
+        if not required <= {j.get('name') for j in jobs}:
+            raise HTTPException(409, 'pcp_local_four_suites_missing')
+        for name in required:
+            matches = [j for j in jobs if j.get('name') == name]
+            if len(matches) != 1 or matches[0].get('conclusion') != 'success' or not any(
+                    (step.get('name') == 'Run tests' or step.get('name', '').startswith('Run python -m pytest'))
+                    and step.get('conclusion') == 'success' for step in matches[0].get('steps', [])):
+                raise HTTPException(409, 'pcp_local_required_suite_not_executed')
+    ci = github_ci(_PCP_LOCAL, payload.expected_head)
+    return dict(job_id=payload.job_id, expected_head=payload.expected_head,
+        activation_digest=payload.activation_digest, report=report, review_id=payload.review_id,
+        ci=ci, ci_run_id=run['id'], suites=sorted(required),
+        pr=dict(number=payload.pr_number, repository=repository, state='open', merged=False,
+            head=payload.expected_head, head_ref=pr['head']['ref'], base_ref='main'))

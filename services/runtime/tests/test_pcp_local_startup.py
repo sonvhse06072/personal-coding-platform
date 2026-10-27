@@ -380,7 +380,7 @@ def test_b2f2_frozen_scope_rejection_precedes_any_job_database_read(monkeypatch,
 
 
 def test_worker_mode_flags_alone_never_activate(monkeypatch, tmp_path):
-    from app import pcp_local_trusted_readers as trusted
+    from app import pcp_local_worker_loop as trusted
     from app.pcp_local_task_queue import TaskStop
     calls = forbid_external(monkeypatch)
     monkeypatch.setattr(trusted, 'ACTIVATION_FILE', tmp_path / 'absent.json')
