@@ -164,20 +164,21 @@ files = {
     "router": {"ROUTER_API_TOKEN": router},
     "coding-runtime": {"ROUTER_API_TOKEN": router, "RUNTIME_API_TOKEN": runtime, "PLATFORM_INTERNAL_TOKEN": executor,
         "DATABASE_URL": "postgresql://pcp_runtime:" + database + "@db:5432/pcp_local"},
-    "db": {"POSTGRES_USER": "pcp_bootstrap", "POSTGRES_DB": "pcp_local", "POSTGRES_PASSWORD": admin},
+    "db": {"POSTGRES_USER": "pcp_bootstrap", "POSTGRES_DB": "pcp_local", "POSTGRES_PASSWORD": admin, "PCP_RUNTIME_PASSWORD": database},
     "ddev-executor": {"PLATFORM_INTERNAL_TOKEN": executor},
 }
 for service, values in files.items():
     fd = os.open("/output/.env." + service + ".local", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(fd, "w") as out:
         out.write("".join(key + "=" + value + "\n" for key, value in values.items()))
-# The PostgreSQL image runs as its own non-root UID, so this sole non-secret-
-# directory traversal is intentional. Only DB can mount the SQL with role secret.
+# Non-secret SQL is readable by PostgreSQL UID 999; passwords remain only in
+# mode-0600 service env files. psql quotes the DB-scoped environment value.
 os.chmod("/output/initdb", 0o755)
 fd = os.open("/output/initdb/01-runtime.sql", os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
 with os.fdopen(fd, "w") as out:
-    out.write("CREATE ROLE pcp_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD "
-        + chr(39) + database + chr(39) + ";\n"
+    out.write(chr(92) + "getenv runtime_password PCP_RUNTIME_PASSWORD\n"
+        + "CREATE ROLE pcp_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE PASSWORD :"
+        + chr(39) + "runtime_password" + chr(39) + ";\n"
         + "ALTER DATABASE pcp_local OWNER TO pcp_runtime;\n"
         + "ALTER SCHEMA public OWNER TO pcp_runtime;\n")
 os.chmod("/output/initdb/01-runtime.sql", 0o644)

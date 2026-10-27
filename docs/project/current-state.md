@@ -38,11 +38,16 @@ PM review remain intact. Ordinary non-PCP stack-specific behavior is retained.
 
 ## Immediate next safe actions
 
-Finish V5 fake/static checks and a Draft PR, obtain all four actual hosted
-suite results at its exact final HEAD, then independent ChatGPT PM review.
-The PR description/checks will carry the final immutable CI evidence. Developer
-never self-approves or merges. No SOURCE/fake result is physical PASS. Available
-Host pytest/service dependencies remain absent; no packages are installed.
+[Draft PR #819](https://github.com/sonvhse06072/personal-coding-platform/pull/819)
+is prepared for independent ChatGPT PM review after final exact-head CI. Local
+18 fake bootstrap tests, Python AST/shell syntax and diff checks pass. The initial
+hosted run passed Router/Runtime/Executor but caught a missing stable T1
+GitHub/Runtime marker; this continuity text restores it without weakening the
+test. Final head-specific four-suite evidence belongs in the PR description and
+checks; earlier-head success does not attest a later SHA. Developer never
+self-approves or merges. Host pytest/service dependencies are absent and no
+packages were installed. GitHub/Runtime SOURCE evidence is separate from actual
+Host health and LIVE behavior.
 
 After accepted merge and actual postmerge CI, propose separate **Physical Pilot
 V2** with the successor SHA and native manifest. Mandatory future physical gates:

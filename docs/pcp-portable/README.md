@@ -59,13 +59,14 @@ No provider or GitHub credentials are copied or provisioned.
 `COMPOSE_PROFILES`. Mode-0600 service env files contain only each service's
 credentials. DB alone receives the bootstrap administrator password. Runtime
 receives the separate `pcp_runtime` connection string; Router/Executor receive
-no database credential. The DB-only `initdb/01-runtime.sql` creates a non-superuser
-Runtime role owning only the fresh `pcp_local` database/schema. The SQL contains
-its password: keep the private parent root inaccessible to other Host users;
-only DB mounts that directory. It is mode 0644 inside that DB mount because DB
-runs as UID 999, whereas bootstrap runs as the operator. Never mount it in Runtime
-or a test container. Initialize existing Runtime/receipt/lease schema DDL later
-inside that owned database; never call legacy recovery or import old DB state.
+no database credential. DB also receives that role's password in its own
+mode-0600 env file. The non-secret DB-only `initdb/01-runtime.sql` uses PostgreSQL
+17 psql's `\getenv` and quoted variable interpolation to create a non-superuser
+Runtime role owning only the fresh `pcp_local` database/schema. SQL contains no
+literal passwords and is readable by DB UID 999; its private parent root remains
+operator-owned. Never dump service env files or mount them in a test container.
+Initialize existing Runtime/receipt/lease schema DDL later inside that owned
+database; never call legacy recovery or import old DB state.
 
 ## Native platform contract
 
