@@ -818,6 +818,10 @@ class RuntimeEngine(_RuntimeEngine):
             result = await self.ddev.phase(job_id=job_id, project_id="pcp-local",
                 workspace=str(workspace), phase=phase, timeout_seconds=max(10, timeout_seconds - int(time.monotonic() - started)))
             outputs.append(result)
+            if any(c.get('returncode') != 0 or c.get('timed_out') for c in result.get('infrastructure', [])):
+                return dict(passed=False, tests_passed=False, test_runs=executed,
+                    skipped_tests=skipped, phases=outputs, failure_kind='infrastructure',
+                    failure_text='Verification environment failed; no engineering repair charged')
             commands = result.get("commands", [])
             valid = result.get("passed") is True and bool(commands)
             for command in commands:

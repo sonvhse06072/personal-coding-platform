@@ -2400,7 +2400,8 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
         timeout=300,
     )
     if returncode != 0:
-        shutil.rmtree(workspace, ignore_errors=True)
+        if payload.project_id != 'pcp-local':
+            shutil.rmtree(workspace, ignore_errors=True)
         raise HTTPException(422, stderr.strip() or stdout.strip() or "git clone failed")
 
     try:
@@ -2426,7 +2427,8 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
                 nodejs_version=cfg.get("ddev", {}).get("workspace_nodejs_version"),
             )
     except Exception:
-        shutil.rmtree(workspace, ignore_errors=True)
+        if payload.project_id != 'pcp-local':
+            shutil.rmtree(workspace, ignore_errors=True)
         raise
 
     return {
@@ -3815,6 +3817,23 @@ def _pcp_resources(target, name, *, running=False):
 
 
 def _pcp_phase(payload):
+    # Serialize preparation/render/start/test across concurrent requests/processes.
+    # This lock has no authority outside the independently checked PCP root.
+    import fcntl
+    _, _, root = _pcp_identity(payload.job_id)
+    lock = root / 'sources/.pcp-local-verification.lock'
+    fd = os.open(lock, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
+    try:
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise HTTPException(409, 'pcp_local_verification_busy') from None
+        return _pcp_phase_locked(payload)
+    finally:
+        os.close(fd)
+
+
+def _pcp_phase_locked(payload):
     a, cfg, root = _pcp_identity(payload.job_id)
     if cfg.get('ddev', {}).get('enabled') is not True or payload.phase not in ('targeted_tests', 'full_tests'):
         raise HTTPException(403, 'pcp_local_verification_phase_denied')
@@ -3848,8 +3867,13 @@ def _pcp_phase(payload):
     # Pytest's exit code 5 rejects zero collection; also require an actual pass
     # count, rather than accepting an all-skipped run as mandatory evidence.
     passed = rc == 0 and not expired and re.search(r'\b[1-9][0-9]* passed\b', out) is not None
-    return PhaseResponse(passed=passed, phase=payload.phase, commands=[
-        CommandOutput(command=' '.join(command), returncode=rc, stdout=out[-30000:], stderr=err[-30000:], timed_out=expired)])
+    _pcp_resources(target, name, running=True)
+    stop = ['docker', '--host', 'unix:///var/run/docker.sock', 'container', 'stop', 'ddev-' + name + '-web']
+    stopped, stop_out, stop_err, stop_expired = run(stop)
+    return PhaseResponse(passed=passed and stopped == 0 and not stop_expired, phase=payload.phase, commands=[
+        CommandOutput(command=' '.join(command), returncode=rc, stdout=out[-30000:], stderr=err[-30000:], timed_out=expired)],
+        infrastructure=[CommandOutput(command=' '.join(stop), returncode=stopped,
+            stdout=stop_out[-30000:], stderr=stop_err[-30000:], timed_out=stop_expired)])
 
 
 def _pcp_draft_pr(payload):

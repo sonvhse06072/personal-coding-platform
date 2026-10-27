@@ -2184,6 +2184,9 @@ def test_pcp_phase_requires_actual_tests_and_validates_before_start(tmp_path, mo
             return 0, yaml.safe_dump(pcp_compose(target, 'pcp-local-job')), '', False
         if argv == ['ddev', 'start', '-y']:
             return 0, '', '', False
+        if argv[:5] == ['docker', '--host', 'unix:///var/run/docker.sock', 'container', 'stop']:
+            assert argv[-1] == 'ddev-pcp-local-job-web'
+            return 0, '', '', False
         assert argv[:3] == ['ddev', 'exec', '/opt/pcp-tests/bin/python']
         return 0, test_output, '', False
     (tmp_path / 'sources').mkdir()
@@ -2213,3 +2216,129 @@ def test_pcp_phase_invalid_render_never_starts(tmp_path, monkeypatch):
     with pytest.raises(HTTPException, match='pcp_local_extra_service'):
         executor.phase(payload)
     assert len(calls) == 1
+
+
+def test_pcp_clone_omits_legacy_ddev_without_changing_tracked_diff(tmp_path, monkeypatch):
+    import hashlib
+    from app import main as executor
+    root = tmp_path/'pcp-local-testing'
+    source = root/'sources/personal-coding-platform'
+    source.mkdir(parents=True)
+    workspaces = root/'workspaces'
+    workspaces.mkdir()
+    run('git','init','-b','main',cwd=source)
+    run('git','config','user.email','test@example.com',cwd=source)
+    run('git','config','user.name','Test',cwd=source)
+    (source/'.ddev').mkdir()
+    (source/'.ddev/config.yaml').write_text('hooks: {pre-start: [{exec-host: forbidden}]}\n')
+    (source/'.ddev/docker-compose.legacy.yaml').write_text('services: {foreign: {}}\n')
+    (source/'README.md').write_text('source\n')
+    run('git','add','.',cwd=source)
+    run('git','commit','-m','source fixture',cwd=source)
+    sha = run('git','rev-parse','HEAD',cwd=source)
+    a = dict(root=str(root),issue_number=999,body_sha256='b'*64,base_sha=sha,baseline_revision='test')
+    job = hashlib.sha256((f"pcp-local:v1:{executor._PCP_REPOSITORY}:999:{'b'*64}:{sha}:test").encode()).hexdigest()[:32]
+    registry = tmp_path/'pcp-projects.yml'
+    registry.write_text(yaml.safe_dump({'projects': {'pcp-local': {
+        'path':str(source),'repository':executor._PCP_REPOSITORY,'registration_status':'approved',
+        'base_branch':'main','runtime':{'workspace_mode':'isolated_clone','developer_permission_mode':'bounded'},
+        'ddev':{'enabled':True}}}}))
+    monkeypatch.setenv('PROJECTS_FILE',str(registry))
+    monkeypatch.setenv('CODING_PROJECTS_ROOT',str(root/'sources'))
+    monkeypatch.setenv('CODING_WORKSPACES_ROOT',str(workspaces))
+    monkeypatch.setattr(executor,'_pcp_activation',lambda:a)
+    payload = WorkspaceRequest(job_id=job,project_id='pcp-local',ref=sha,workspace_mode='isolated_clone')
+    result = executor.create_workspace(payload)
+    workspace = Path(result['workspace'])
+    assert not (workspace/'.ddev').exists()
+    assert (source/'.ddev/config.yaml').is_file()
+    assert run('git','status','--porcelain',cwd=workspace)==''
+    assert run('git','rev-parse','HEAD',cwd=workspace)==sha
+    with pytest.raises(HTTPException, match='Workspace already exists'):
+        executor.create_workspace(payload)
+    assert (workspace/'README.md').read_text()=='source\n'
+
+
+def test_pcp_draft_creation_never_publishes_ready_pr(monkeypatch):
+    from types import SimpleNamespace
+    from app import main as executor
+    calls=[]
+    class Reply:
+        def __init__(self,data): self.data=data
+        def raise_for_status(self): pass
+        def json(self): return self.data
+    class Client:
+        def __enter__(self): return self
+        def __exit__(self,*args): pass
+        def get(self,url,**kwargs): return Reply([])
+        def post(self,url,**kwargs):
+            calls.append(kwargs['json'])
+            return Reply(dict(number=12,html_url='https://github.com/test/pr/12',state='open',draft=True,
+                head={'sha':'c'*40,'ref':'ai/'+'a'*12,'repo':{'full_name':executor._PCP_REPOSITORY}},
+                base={'ref':'main'}))
+    delivery=SimpleNamespace(base='https://api.github.com',_client=Client,
+        assert_branch_commit=lambda *args:None)
+    cfg={'autonomy':{'allow_create_pr':True}}
+    monkeypatch.setattr(executor,'_pcp_identity',lambda *args:({},cfg,None))
+    monkeypatch.setattr(executor,'_github_context',lambda cfg:(delivery,executor._PCP_REPOSITORY))
+    result=executor.upsert_pull_request(executor.PullRequestRequest(job_id='a'*32,
+        project_id='pcp-local',branch='ai/'+'a'*12,expected_commit='c'*40,title='test',body='verified'))
+    assert calls[0]['draft'] is True and result['draft'] is True
+
+
+@pytest.mark.parametrize('fault', [None, 'head', 'reviewer', 'dismissed', 'baseline', 'skipped_suite', 'missing_step', 'missing_suite'])
+def test_pcp_pm_review_requires_authenticated_exact_head_and_four_executed_suites(monkeypatch, fault):
+    import json
+    from copy import deepcopy
+    from types import SimpleNamespace
+    from app import main as executor
+    job='a'*32
+    head='b'*40
+    a={'base_sha':'c'*40,'baseline_revision':'approved','pm_login':'reviewer'}
+    report=dict(verdict='pass',findings=[],job_id=job,source_commit=a['base_sha'],
+        expected_head=head,baseline_revision='approved',diff_hash='d'*64,
+        summary='Independent review checked source scope, deterministic verification and delivery evidence.')
+    pr=dict(state='open',merged=False,head=dict(sha=head,ref='ai/'+job[:12],
+        repo=dict(full_name=executor._PCP_REPOSITORY)),base=dict(ref='main'))
+    review=dict(user={'login':'reviewer'},commit_id=head,state='COMMENTED')
+    names=['structure-tests','python-tests (services/router)','python-tests (services/runtime)',
+           'python-tests (services/ddev-executor)']
+    jobs=[dict(name=n,conclusion='success',steps=[dict(name='Run tests',conclusion='success')]) for n in names]
+    if fault=='head': pr['head']['sha']='e'*40
+    if fault=='reviewer': review['user']['login']='developer'
+    if fault=='dismissed': review['state']='DISMISSED'
+    if fault=='baseline': report['baseline_revision']='wrong'
+    if fault=='skipped_suite': jobs[0]['conclusion']='skipped'
+    if fault=='missing_step': jobs[0]['steps']=[]
+    if fault=='missing_suite': jobs.pop()
+    review['body']='<!-- coding-platform:pcp-local-pm-review:v1 -->\n'+json.dumps(report)
+    calls=[]
+    class Reply:
+        def __init__(self,data): self.data=data
+        def raise_for_status(self): pass
+        def json(self): return deepcopy(self.data)
+    class Client:
+        def __enter__(self): return self
+        def __exit__(self,*args): pass
+        def get(self,url):
+            calls.append(url)
+            assert url.startswith('https://api.github.com/repos/'+executor._PCP_REPOSITORY+'/')
+            if url.endswith('/pulls/7'): return Reply(pr)
+            if url.endswith('/reviews/8'): return Reply(review)
+            if '/actions/runs?' in url:
+                return Reply({'workflow_runs':[dict(id=10,name='tests',head_sha=head,
+                    event='pull_request',status='completed',conclusion='success')]})
+            assert url.endswith('/actions/runs/10/jobs?filter=latest&per_page=100')
+            return Reply({'jobs':jobs})
+    monkeypatch.setattr(executor,'_pcp_identity',lambda *args:(a,{},None))
+    monkeypatch.setattr(executor,'_github_context',lambda cfg:(SimpleNamespace(
+        base='https://api.github.com',_client=Client),executor._PCP_REPOSITORY))
+    monkeypatch.setattr(executor,'github_ci',lambda *args:{'state':'success','commit':head})
+    request=executor.PcpLocalReviewRequest(job_id=job,source_commit=a['base_sha'],
+        expected_head=head,activation_digest=executor._pcp_digest(a),pr_number=7,review_id=8)
+    if fault:
+        with pytest.raises(HTTPException): executor.pcp_local_review(request)
+    else:
+        proof=executor.pcp_local_review(request)
+        assert proof['expected_head']==head and proof['ci_run_id']==10
+        assert proof['suites']==sorted(names) and proof['report']==report

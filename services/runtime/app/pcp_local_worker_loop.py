@@ -578,6 +578,8 @@ async def run_admitted_job(engine, readers, task):
             progress['required_checks_passed'] = verification['passed']
             checkpoint['pcp_local_execution']['verification'] = verification
             engine.storage.update(job_id, checkpoint=checkpoint, progress=progress)
+            require(verification.get('failure_kind') != 'infrastructure',
+                    'pcp_local_infrastructure_failure_no_retry')
             if verification['passed']:
                 break
             prompt = row['task']['description'] + '\nRepair deterministic failure:\n' + json.dumps(verification)
