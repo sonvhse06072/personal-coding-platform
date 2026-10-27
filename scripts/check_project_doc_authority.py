@@ -21,6 +21,7 @@ PROTECTED_PATHS = frozenset({
     ".github/workflows/tests.yml",
     ".github/workflows/guardian-static.yml",
     ".github/workflows/pcp-guardian.yml",
+    ".github/workflows/pcp-local-inspect-image.yml",
     "scripts/check_project_doc_authority.py",
     "scripts/pcp-local-gate-a-inspect.sh",
     "scripts/pcp-shared-docker-ownership-check.sh",
