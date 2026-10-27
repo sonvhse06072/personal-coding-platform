@@ -3676,7 +3676,7 @@ def _pcp_job_config(name, image):
         raise HTTPException(403, 'pcp_local_verification_image_not_pinned')
     return yaml.safe_dump(dict(name=name, type='php', docroot='', php_version='8.4',
         webserver_type='nginx-fpm', webimage=image, use_dns_when_possible=False,
-        omit_containers=['db', 'ddev-ssh-agent', 'ddev-router'], web_environment=[]))
+        omit_containers=['db', 'ddev-ssh-agent'], web_environment=[]))
 
 
 def _pcp_verification_copy(payload, a, root):
@@ -3717,7 +3717,6 @@ def _pcp_verification_copy(payload, a, root):
     )
     files = {'.ddev/config.yaml': config, '.ddev/docker-compose.pcp-local.yaml': overlay,
              '.ddev/web-build/Dockerfile': (
-                 'ARG BASE_IMAGE\nFROM ${BASE_IMAGE}\n'
                  'RUN apt-get update && apt-get install -y --no-install-recommends python3-venv '
                  '&& python3 -m venv /opt/pcp-tests '
                  '&& /opt/pcp-tests/bin/pip install --no-cache-dir pytest==8.3.5 PyYAML==6.0.2 '

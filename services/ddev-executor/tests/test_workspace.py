@@ -2121,6 +2121,15 @@ def test_pcp_effective_compose_denies_foreign_capabilities(tmp_path, mutation):
         _pcp_effective_compose(doc, tmp_path, 'pcp-local-job')
 
 
+def test_pcp_project_config_uses_supported_project_omit_containers():
+    from app import main as executor
+    image = 'test/web@sha256:' + 'c' * 64
+    config = yaml.safe_load(executor._pcp_job_config('pcp-local-job', image))
+    # ddev-router is global-only; project omissions do not disable it.
+    assert config['omit_containers'] == ['db', 'ddev-ssh-agent']
+    assert config['webimage'] == image
+
+
 def test_pcp_copy_never_inherits_legacy_ddev_and_is_retry_stable(tmp_path, monkeypatch):
     from app import main as executor
     job = 'a' * 32
@@ -2139,6 +2148,14 @@ def test_pcp_copy_never_inherits_legacy_ddev_and_is_retry_stable(tmp_path, monke
     assert target != workspace and 'sources/.pcp-local-verification' in str(target)
     config = yaml.safe_load((target / '.ddev/config.yaml').read_text())
     assert config['name'] == name and 'hooks' not in config
+    assert config['omit_containers'] == ['db', 'ddev-ssh-agent']
+    fragment = (target / '.ddev/web-build/Dockerfile').read_text()
+    # DDEV appends this fragment after its generated FROM and setup.
+    instructions = [line.split()[0].upper() for line in fragment.splitlines()
+                    if line.strip() and not line.lstrip().startswith('#')]
+    assert instructions == ['RUN']
+    assert 'python3 -m venv /opt/pcp-tests' in fragment
+    assert 'pytest==8.3.5 PyYAML==6.0.2' in fragment
     assert not (target / '.ddev/docker-compose.legacy.yaml').exists()
     assert (workspace / '.ddev/config.yaml').read_text().startswith('hooks:')
     assert executor._pcp_verification_copy(payload, activation, tmp_path) == (target, name)
