@@ -95,7 +95,9 @@ After source acceptance and postmerge CI, obtain one bounded physical delegation
   the independent physical boundary checks and pilot authorization are complete.
 - After the pilot's exact-source receipt, one-shot `/v1/pcp-local/run-once` may
   invoke its admitted job. Uncertain claims never replay; diagnosis retains the
-  same job/diff/counters/lease. Verification stops only its owned test container;
+  same job/diff/counters/lease. `/v1/pcp-local/deliver` may reconcile an already
+  verified commit under fresh authority; it never invokes Codex again.
+  Verification stops only its owned test container;
   it preserves copies, images, cache and logs. Removal is separately scoped.
 - The independent PM posts an exact-head GitHub review from `pm_login`, then
   submits `/v1/pcp-local/pm-review` with source/head/branch/baseline/PR/review IDs.

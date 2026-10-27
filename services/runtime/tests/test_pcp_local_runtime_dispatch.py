@@ -736,6 +736,7 @@ def test_dedicated_worker_keeps_durable_identity_and_never_replays(setup, monkey
     reader = object.__new__(trusted.TrustedReaders)
     reader.engine = engine
     reader.lease_generation = None
+    reader.authority_digest = 'f'*64
     reader.task = s.task
     reader.activation = {'budget': {'model_calls':2,'max_wall_seconds':300,'cash_ceiling_usd':5}}
     reader.snapshot = {'model_choice':s.facts['model_choice']}
@@ -878,3 +879,39 @@ def test_pm_outcome_atomically_finishes_original_receipt_and_lease(setup, monkey
     count=len(db.events)
     assert asyncio.run(engine.finalize_pcp_local_review(request))==outcome
     assert len(db.events)==count and calls==['authenticated_github']
+
+
+@pytest.mark.parametrize('execution_state', ['verified', 'held'])
+def test_delivery_recovery_cannot_reenter_codex(setup, monkeypatch, execution_state):
+    from app.adapters.codex import CodexAdapter
+    s=setup
+    asyncio.run(s.dispatch())
+    job_id=worker.stable_job_id(s.task)
+    row=s.db.jobs[job_id]
+    row['checkpoint']['pcp_local_execution']=dict(state=execution_state,
+        authority_digest='f'*64,lease_generation=1)
+    row['route']={'strategy':{}}
+    row['progress']['model_calls']=1
+    before=deepcopy(row['progress'])
+    def init(reader,engine,github):
+        reader.engine=engine
+        reader.authority_digest='f'*64
+    monkeypatch.setattr(worker.TrustedReaders,'__init__',init)
+    monkeypatch.setattr(worker.TrustedReaders,'authority',lambda self:(s.project,s.baseline))
+    async def source_read(self): return s.task,s.issue
+    monkeypatch.setattr(worker.TrustedReaders,'source',source_read)
+    async def forbidden(*args,**kwargs): pytest.fail('Delivery recovery must never invoke Codex')
+    monkeypatch.setattr(CodexAdapter,'run',forbidden)
+    calls=[]
+    async def deliver(key,reader,task):
+        assert key==job_id and task==s.task and reader.lease_generation==1
+        calls.append(key)
+    monkeypatch.setattr(s.engine,'deliver_pcp_local',deliver)
+    if execution_state=='held':
+        with pytest.raises(source.TaskStop,match='not_resumable'):
+            asyncio.run(s.engine.retry_pcp_local_delivery())
+        assert calls==[]
+    else:
+        asyncio.run(s.engine.retry_pcp_local_delivery())
+        assert calls==[job_id]
+    assert row['progress']==before

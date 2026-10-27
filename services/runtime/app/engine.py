@@ -802,6 +802,29 @@ class RuntimeEngine(_RuntimeEngine):
         async with self.project_operation_lock("pcp-local"):
             return await run_admitted_job(self, readers, task)
 
+    async def retry_pcp_local_delivery(self):
+        """Reconcile verified publishing only; never re-enter a coding turn."""
+        from .pcp_local_worker_loop import TrustedReaders, LocalSourceTask, stable_job_id
+        from .pcp_local_task_queue import PROJECT_ID, require
+        from .pm_bridge import PMBridgeGitHubClient
+        readers = TrustedReaders(self, PMBridgeGitHubClient())
+        project, baseline = readers.authority()
+        task, _ = await readers.source()
+        job_id = stable_job_id(task)
+        async with self.project_operation_lock(PROJECT_ID):
+            row = self.storage.get(job_id)
+            require(row is not None and row['project_id'] == PROJECT_ID,
+                    'pcp_local_delivery_job_missing')
+            execution = row['checkpoint'].get('pcp_local_execution') or {}
+            require(execution.get('state') == 'verified'
+                    and execution.get('authority_digest') == readers.authority_digest
+                    and row['checkpoint']['project_baseline'] == baseline.model_dump(mode='json'),
+                    'pcp_local_delivery_not_resumable')
+            readers.lease_generation = execution['lease_generation']
+            readers.route = row['route']
+            await self.deliver_pcp_local(job_id, readers, task)
+        return self.storage.get(job_id)
+
     async def verify_pcp_local(self, job_id, workspace, project, *, timeout_seconds=900):
         """Real mandatory checks only; disabled/empty/all-skipped is never PASS."""
         from .pcp_local_task_queue import require
@@ -815,8 +838,10 @@ class RuntimeEngine(_RuntimeEngine):
         import re
         for phase in ("targeted_tests", "full_tests"):
             require(bool(project["ddev"].get(phase)), "pcp_local_mandatory_tests_missing")
+            remaining = timeout_seconds - int(time.monotonic() - started)
+            require(remaining >= 10, "pcp_local_verification_wall_envelope_exhausted")
             result = await self.ddev.phase(job_id=job_id, project_id="pcp-local",
-                workspace=str(workspace), phase=phase, timeout_seconds=max(10, timeout_seconds - int(time.monotonic() - started)))
+                workspace=str(workspace), phase=phase, timeout_seconds=remaining)
             outputs.append(result)
             if any(c.get('returncode') != 0 or c.get('timed_out') for c in result.get('infrastructure', [])):
                 return dict(passed=False, tests_passed=False, test_runs=executed,

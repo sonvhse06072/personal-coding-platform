@@ -299,12 +299,18 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 and rights.get("allow_production_deploy") is False, "pcp_local_delivery_rights_revoked")
         body = pull_request_body(job_id=job_id, branch=row["branch"], commit=result["commit"],
             verification=verification, evaluator=None)
+        progress = deepcopy(row.get('progress') or {})
+        attempts = int(progress.get('delivery_attempts', 0))
+        progress['delivery_attempts'] = attempts + 1
+        self.storage.update(job_id, progress=progress)
         delivery = await deliver_verified_work(ddev=self.ddev, job_id=job_id, project_id=PROJECT_ID,
             workspace=row["workspace"], branch=row["branch"], source_commit=task.base_sha,
             commit=result["commit"], title=row["task"]["title"], body=body,
             permissions={"commit": True, "push_ai_branch": True, "create_pr": True,
                          "auto_merge_low_risk": False, "production_deploy": False},
-            max_wait_seconds=900, required_ci=(REPOSITORY, "tests"))
+            max_wait_seconds=max(1, min(900, int(readers.activation['budget']['max_wall_seconds']
+                - float(progress.get('elapsed_minutes', 0)) * 60))),
+            reconcile_existing=attempts > 0, required_ci=(REPOSITORY, "tests"))
         result["delivery"] = delivery
         result["acceptance_phase"] = "awaiting_independent_pm_review"
         result["delivery_finalized"] = False

@@ -1,8 +1,8 @@
-"""Default-OFF B2.2b PCP-local bounded loop: one receipt, no replay.
+"""Default-OFF PCP-local admission, concrete readers and bounded execution.
 
-The installed Runtime does NOT construct a trusted attestor or launcher, and
-does NOT start this loop at process startup. Only B2.2c may approve actual
-service credentials, model execution and on-host attestation.
+Dedicated startup installs no scheduler or model call. An authenticated one-shot
+request must bind separately installed operational authority and live service
+observations to the durable receipt. Legacy execution/replay remains forbidden.
 """
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ class RuntimeObservation:
 
 
 class RuntimeTaskAttestor:
-    """Compose required Runtime/Executor readers; no live backend is installed."""
+    """Compose fresh Runtime/Executor observations for one exact source issue."""
 
     def __init__(self, *, issue_number: int, readers: dict[str, Any],
                  clock=time.monotonic) -> None:
@@ -521,7 +521,8 @@ async def run_admitted_job(engine, readers, task):
     lease = engine.storage.acquire_project_lease(PROJECT_ID, job_id)
     readers.lease_generation = lease['generation']
     checkpoint = deepcopy(row['checkpoint'])
-    checkpoint['pcp_local_execution'] = {'state': 'started', 'lease_generation': lease['generation']}
+    checkpoint['pcp_local_execution'] = {'state': 'started', 'lease_generation': lease['generation'],
+        'authority_digest': readers.authority_digest}
     progress = deepcopy(row['progress'])
     engine.storage.update(job_id, checkpoint=checkpoint, route=readers.route, status='executing')
     started = time.monotonic()
@@ -572,8 +573,10 @@ async def run_admitted_job(engine, readers, task):
             require(bool(diff['changed_files']) and set(diff['changed_files']) <= set(task.allowed_paths),
                     'pcp_local_changed_paths_denied')
             await readers.refresh(task)
+            remaining = limits['max_wall_seconds'] - int(time.monotonic() - started)
+            require(remaining >= 10, 'pcp_local_resource_envelope_exhausted')
             verification = await engine.verify_pcp_local(job_id, workspace, project,
-                timeout_seconds=max(10, limits['max_wall_seconds'] - int(time.monotonic() - started)))
+                timeout_seconds=remaining)
             progress['test_runs'] = progress.get('test_runs', 0) + verification['test_runs']
             progress['required_checks_passed'] = verification['passed']
             checkpoint['pcp_local_execution']['verification'] = verification
@@ -591,6 +594,7 @@ async def run_admitted_job(engine, readers, task):
         commit = commit_changes(workspace, f"PCP-local issue #{task.issue_number}")
         require(bool(commit), 'pcp_local_verified_commit_missing')
         checkpoint['pcp_local_execution'].update(state='verified', commit=commit)
+        progress['elapsed_minutes'] = (time.monotonic() - started) / 60
         result = dict(status='accepted', branch=ws['branch'], commit=commit, diff=diff,
                       verification=verification, route=readers.route, delivery_finalized=False)
         engine.storage.update(job_id, status='delivering', checkpoint=checkpoint, result=result,
@@ -602,7 +606,11 @@ async def run_admitted_job(engine, readers, task):
         latest = engine.storage.get(job_id)
         if latest is not None:
             cp = deepcopy(latest['checkpoint'])
-            cp.setdefault('pcp_local_execution', {})['state'] = 'held'
+            execution = cp.setdefault('pcp_local_execution', {})
+            if execution.get('state') == 'verified':
+                execution['delivery_uncertain'] = True
+            else:
+                execution['state'] = 'held'
             engine.storage.update(job_id, status='blocked', checkpoint=cp,
                 error=exc.code if isinstance(exc, TaskStop) else 'pcp_local_uncertain_execution_no_retry')
         raise
@@ -713,6 +721,9 @@ class TrustedReaders:
         project, baseline = self.authority()
         checked, issue = await self.source()
         require(checked == task, 'pcp_local_wrong_task')
+        expected_tests = {p for p in task.allowed_paths if p.startswith('tests/')}
+        require(bool(expected_tests) and all(expected_tests <= set(project['ddev'].get(phase) or [])
+                for phase in ('targeted_tests', 'full_tests')), 'pcp_local_task_tests_not_configured')
         job_id = stable_job_id(task)
         proof = await self.executor('/v1/pcp-local/observe', {
             'job_id': job_id, 'source_commit': task.base_sha,
