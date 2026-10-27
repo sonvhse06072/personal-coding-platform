@@ -3883,7 +3883,8 @@ def _pcp_phase_locked(payload):
     if exit_code in (86, 126, 127):
         infrastructure.append(output(argv, 86, '', 'Runtime timeout/Python/pytest/PyYAML/Git tooling unavailable', False))
     # The immutable snapshot is revalidated after the read-only execution too.
-    _pcp_verification_copy(payload, a, root)
+    if _pcp_verification_copy(payload, a, root) != (target, fingerprint):
+        raise HTTPException(409, 'pcp_local_verified_snapshot_changed')
     passed = (exit_code == 0 and not expired and not infrastructure
               and 'PCP_TEST_TOOLCHAIN=pytest8.4.1,PyYAML6.0.2' in out
               and re.search(r'\b[1-9][0-9]* passed\b', out) is not None)

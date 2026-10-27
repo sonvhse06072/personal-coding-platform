@@ -2154,7 +2154,7 @@ def test_pcp_verification_image_rejects_unowned_or_unsafe(pcp_native, monkeypatc
     with pytest.raises(HTTPException): executor._pcp_verification_image(a, root)
 
 
-def _exercise_pcp_native_phase(pcp_native, monkeypatch, stdout, exit_code, expected):
+def _exercise_pcp_native_phase(pcp_native, monkeypatch, stdout, exit_code, expected, *, mutate_source=False):
     executor, root, workspace, job, a, _ = pcp_native
     calls, inspected = [], []
     container = {}
@@ -2207,6 +2207,8 @@ def _exercise_pcp_native_phase(pcp_native, monkeypatch, stdout, exit_code, expec
             return 0, cid, '', False
         assert argv[3:] == ['start','--attach',cid]
         assert container['State']['Status']=='created'
+        if mutate_source:
+            (workspace/'tests/test_pcp_light_sample.py').write_text('def test_changed(): assert False\n')
         container['State']=({'Status':'running','Running':True} if exit_code==124 else
                             {'Status':'exited','Running':False,'ExitCode':exit_code})
         return exit_code, 'PCP_TEST_TOOLCHAIN=pytest8.4.1,PyYAML6.0.2\n'+stdout, '', exit_code==124
@@ -2262,6 +2264,11 @@ def test_pcp_native_disabled_verification_denies_before_docker(pcp_native, monke
     monkeypatch.setattr(executor, '_pcp_docker', lambda *args, **kwargs: pytest.fail('Docker invoked'))
     with pytest.raises(HTTPException, match='phase_denied'):
         executor.phase(executor.PhaseRequest(job_id=job, project_id='pcp-local', workspace=str(workspace), phase='targeted_tests'))
+
+
+def test_pcp_verification_refuses_source_change_during_test(pcp_native, monkeypatch):
+    with pytest.raises(HTTPException, match='verified_snapshot_changed'):
+        _exercise_pcp_native_phase(pcp_native, monkeypatch, '3 passed', 0, True, mutate_source=True)
 
 
 @pytest.mark.parametrize('tests', [[], ['missing'], [None], ['tests/test_pcp_light_a.py']*2])
