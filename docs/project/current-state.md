@@ -30,6 +30,8 @@ Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline 
 
 ## Immediate next safe actions — #815 A3b.2
 
+GitHub/Runtime evidence remains separate; Runtime/Host was not queried.
+
 - **B2-F1/F2 SOURCE accepted:** [#813](https://github.com/sonvhse06072/personal-coding-platform/pull/813)/[#814](https://github.com/sonvhse06072/personal-coding-platform/pull/814) merged `main@e15aced199e180d919b5fd4a6c89bcf438d70a51`; [actual main CI #40271865174](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40271865174) four suites, 4,869 pass/89 skipped.
 - **A3a/A3b.1:** one-use permissions consumed. [Owner-reported PASS #6435167850](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6435167850): 613 source files/6,794,080 bytes; 5 draft instance files; no submount observed. No independent PM WSL witness. Preserve fresh root; never rerun A2/A3a/A3b.1.
 - **A3b.2:** [Owner exact four-path SOURCE approval](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6436692753); one default-OFF manual GitHub OCI workflow, static tests, authority checker and T1. No workflow dispatch. `A3B2_IMAGE_BUILD=STOP`; `OCI_PROVENANCE=NOT_ATTESTED`; `DDEV_INSTALL=STOP`; `CODEX_LIVE=STOP`. #800 OCI Host gate OPEN; #795 DDEV Host STOP. Later separate permits for image build/signature, DDEV health, trusted Runtime readers and first Codex LIVE task. #752 PARKED, #595 HOLD; legacy/Chợ Nhạc NO-TOUCH.
