@@ -805,3 +805,76 @@ def test_dedicated_worker_keeps_durable_identity_and_never_replays(setup, monkey
     with pytest.raises(source.TaskStop):
         asyncio.run(worker.run_admitted_job(engine,reader,s.task))
     assert len(attempts)==count
+
+
+def test_pm_outcome_atomically_finishes_original_receipt_and_lease(setup, monkeypatch):
+    from app.main import FullpathPMReviewRequest
+    s = setup
+    asyncio.run(s.dispatch())
+    job_id = worker.stable_job_id(s.task)
+    head = 'd'*40
+    branch = 'ai/'+job_id[:12]
+    row = deepcopy(s.db.jobs[job_id])
+    row.update(status='blocked', branch=branch)
+    row['progress']['required_checks_passed'] = True
+    row['checkpoint']['pcp_local_execution'] = {'state':'verified','lease_generation':1,'commit':head}
+    pr = dict(number=7,head=head,head_ref=branch,base_ref='main',repository=source.REPOSITORY,state='open',merged=False)
+    ci = dict(state='success',commit=head)
+    row['result'] = dict(status='accepted',commit=head,delivery_finalized=False,
+        verification={'passed':True,'test_runs':3},diff={'changed_files':list(s.task.allowed_paths),'diff_hash':'c'*64},
+        route={'strategy':{}},delivery={'state':'ci_success','pull_request':pr,'ci':ci})
+    activation={k:getattr(s.task,k) for k in ('issue_number','body_sha256','base_sha','baseline_revision','baseline_source_commit')}
+    report={'verdict':'pass','findings':[],'diff_hash':'c'*64}
+    calls=[]
+    def init(reader, engine, github):
+        reader.activation=activation
+        reader.engine=engine
+    monkeypatch.setattr(worker.TrustedReaders,'__init__',init)
+    monkeypatch.setattr(worker.TrustedReaders,'authority',lambda self:(s.project,s.baseline))
+    async def proof(self,path,payload):
+        assert path=='/v1/pcp-local/pm-review'
+        calls.append('authenticated_github')
+        return dict(job_id=job_id,expected_head=head,activation_digest=worker.digest(activation),
+                    report=report,review_id=8,ci=ci,pr=pr)
+    monkeypatch.setattr(worker.TrustedReaders,'executor',proof)
+    class ReviewStore:
+        def __init__(self): self.row=deepcopy(row);self.events=[];self.pending=None
+        def get(self,key):
+            assert key==job_id
+            return deepcopy(self.row)
+        def connect(self): return self
+        def __enter__(self): self.pending=deepcopy(self.row);return self
+        def __exit__(self,*args): self.pending=None
+        def execute(self,sql,params):
+            self.events.append(sql)
+            if sql.startswith('SELECT * FROM cp_jobs'):
+                assert 'FOR UPDATE' in sql
+                return Result([self.pending])
+            if sql.startswith('UPDATE cp_pcp_local_source_receipts'):
+                assert "state='running' AND generation=2" in sql
+                assert params==(source.REPOSITORY,source.PROJECT_ID,s.task.issue_number,job_id,
+                                s.task.body_sha256,s.task.base_sha,s.task.baseline_revision)
+                return Result([{'job_id':job_id}])
+            if sql.startswith('UPDATE cp_project_leases'):
+                assert params==(source.PROJECT_ID,job_id,1)
+                return Result([{'project_id':source.PROJECT_ID}])
+            assert sql.startswith('UPDATE cp_jobs')
+            self.pending.update(status='completed',result=json.loads(params[0]),error=None)
+            return Result()
+        def commit(self): self.row=deepcopy(self.pending);self.events.append('COMMIT')
+    db=ReviewStore()
+    engine=object.__new__(RuntimeEngine)
+    engine.storage=db
+    request=FullpathPMReviewRequest(source_commit=s.task.base_sha,expected_head=head,branch=branch,
+        baseline_revision=s.task.baseline_revision,pr_number=7,review_id=8)
+    outcome=asyncio.run(engine.finalize_pcp_local_review(request))
+    assert outcome['status']=='completed' and outcome['merged'] is False
+    assert db.events[-1]=='COMMIT'
+    assert db.row['result']['delivery_finalized'] is True
+    assert db.row['progress']==row['progress']
+    assert db.row['checkpoint']==row['checkpoint']
+    assert calls==['authenticated_github']
+    # A lost HTTP acknowledgement does not perform a second model/claim/release.
+    count=len(db.events)
+    assert asyncio.run(engine.finalize_pcp_local_review(request))==outcome
+    assert len(db.events)==count and calls==['authenticated_github']

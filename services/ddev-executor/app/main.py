@@ -3580,6 +3580,7 @@ def _pcp_identity(job_id, source_commit=None):
     expected_id = hashlib.sha256((f"pcp-local:v1:{_PCP_REPOSITORY}:{a['issue_number']}:"
         f"{a['body_sha256']}:{a['base_sha']}:{a['baseline_revision']}").encode('ascii')).hexdigest()[:32]
     if (not root.is_absolute() or root.is_symlink() or root.resolve() != root
+            or not re.fullmatch(r'/[A-Za-z0-9_./-]+', str(root))
             or not re.fullmatch(r'pcp-local-[a-z0-9][a-z0-9-]{5,30}', root.name)
             or set(load_projects()) != {_PCP_LOCAL}
             or job_id != expected_id
@@ -3848,6 +3849,12 @@ def _pcp_phase_locked(payload):
     if home.is_symlink():
         raise HTTPException(403, 'pcp_local_verification_home_invalid')
     home.mkdir(exist_ok=True)
+    _pcp_no_symlinks(home)
+    global_config = home / '.ddev/global_config.yaml'
+    if global_config.exists():
+        global_values = yaml.safe_load(global_config.read_text()) or {}
+        if not isinstance(global_values, dict) or any(global_values.get(k) for k in ('hooks', 'web_environment')):
+            raise HTTPException(403, 'pcp_local_untrusted_global_configuration')
     env = {'PATH': os.environ.get('PATH', '/usr/bin:/bin'), 'HOME': str(home),
            'DOCKER_HOST': 'unix:///var/run/docker.sock', 'DDEV_NONINTERACTIVE': 'true'}
     timeout = min(payload.timeout_seconds or 900, 900)

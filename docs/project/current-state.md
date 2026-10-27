@@ -20,13 +20,14 @@ V4 adds only Executor `app/main.py` and `tests/test_workspace.py` to the nine
 Runtime source/test paths. This T1 continuity file remains permitted. No scope
 expansion or source change to registry, baseline, Compose or Constitution.
 
-Prepared implementation, not yet independently SOURCE-accepted:
+Implementation prepared in [Draft PR #818](https://github.com/sonvhse06072/personal-coding-platform/pull/818),
+not yet independently SOURCE-accepted:
 
 - Dedicated `pcp_local_worker` startup checks installed operational authority;
   startup starts no scheduler, model, DB initializer or historical replay.
   Authenticated one-shot ingress uses the existing source receipt, CAS, queue,
   project lease and CodexAdapter. Generic legacy controls remain denied.
-- Concrete readers use fresh registry/baseline/model/policy files, authenticated
+- Concrete readers in the existing worker module use fresh registry/baseline/model/policy files, authenticated
   Executor/GitHub, Docker inspection through Executor, PostgreSQL writer state,
   Router choice and subscription CLI quota. Environment flags alone cannot
   install authority. Consumed execution receipts cannot automatically replay;
@@ -38,16 +39,31 @@ Prepared implementation, not yet independently SOURCE-accepted:
 - Mandatory checks must actually execute with positive test counts. Disabled,
   empty and all-skipped verification cannot pass. Draft PR delivery reuses
   existing GitHub/CI transport and requires the exact `tests` workflow HEAD;
-  independent PM acceptance remains separate from model success.
+  independent PM acceptance remains separate from model success. The dedicated
+  PM endpoint fetches the exact GitHub review and four executed suites, applies
+  existing standalone PM merge gates, and atomically finalizes the original
+  receipt/job/lease. It records eligibility but never merges. Exact retries
+  acknowledge the persisted outcome without replaying execution.
 
 ## Immediate next safe actions
 
-Finish focused regressions and actual hosted four-suite CI at final PR HEAD,
-then independent ChatGPT PM review. PR/CI evidence will replace this pending
-state before handoff. Developer does not self-approve or merge.
+Independent ChatGPT PM review of [PR #818](https://github.com/sonvhse06072/personal-coding-platform/pull/818):
+verify the final exact HEAD against all four actual
+[hosted checks](https://github.com/sonvhse06072/personal-coding-platform/pull/818/checks)
+and the developer evidence in its description before any eligible merge.
+Developer does not self-approve or merge. The PR description/checks carry the
+final head-specific CI receipt so this T1 index does not claim a future SHA's
+result from an earlier run.
 GitHub/Runtime evidence is separate: no live Runtime was queried or activated.
 Local pytest/service dependencies are absent; no Host packages were installed.
-Python AST checks and `git diff --check` pass; full tests remain hosted-only.
+Python AST checks, `git diff --check`, 17 fake bootstrap unittest cases and the
+historical in-memory context integrity check pass. Actual
+[run 40516561074](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40516561074)
+executed all four suites successfully at `c6995893ba48caf1e0d42ee7c46d9f858366d0c2`.
+The initial root-suite failure exposed a historical fixed filename set; placing
+readers in the existing worker module resolved it without changing/weakening
+historical tests or adding an unapproved path. Later checks remain exact-head
+specific; do not substitute this earlier receipt for final HEAD acceptance.
 
 ## Physical pilot prerequisites and boundary
 
@@ -71,11 +87,24 @@ After source acceptance and postmerge CI, obtain one bounded physical delegation
   `project_id`, `repository`, `issue_number`, `body_sha256`, `base_sha`,
   `baseline_revision`, `baseline_source_commit`, `developer_permission_mode`,
   `expires_at` (Unix seconds), fresh instance `root`, `runtime_image_id`,
-  `runtime_network`, `codex_version`, digest-pinned `verification_image`, and
+  `runtime_network`, `codex_version`, authorized independent `pm_login`,
+  digest-pinned DDEV `verification_image`, and
   `budget` (`model_calls`, `max_wall_seconds`, `cash_ceiling_usd`). Runtime and
   Executor must see identical bytes/values. This is operational delegation,
   not an issue-authored evidence dictionary. Keep all task switches OFF until
   the independent physical boundary checks and pilot authorization are complete.
+- After the pilot's exact-source receipt, one-shot `/v1/pcp-local/run-once` may
+  invoke its admitted job. Uncertain claims never replay; diagnosis retains the
+  same job/diff/counters/lease. Verification stops only its owned test container;
+  it preserves copies, images, cache and logs. Removal is separately scoped.
+- The independent PM posts an exact-head GitHub review from `pm_login`, then
+  submits `/v1/pcp-local/pm-review` with source/head/branch/baseline/PR/review IDs.
+  Review body: `<!-- coding-platform:pcp-local-pm-review:v1 -->` followed by JSON
+  binding `job_id`, `source_commit`, `expected_head`, `baseline_revision`,
+  `diff_hash`, `verdict: "pass"`, `findings: []` and substantive `summary`.
+  The original source issue/activation cannot authorize its own review. GitHub
+  metadata proves the configured account, not independent human identity;
+  independent ChatGPT PM review remains a process gate. No Developer merge API.
 
 **HOST/DDEV/DB=STOP; CODEX_LIVE=STOP; A3B2_IMAGE_BUILD=STOP.** No real Docker/DDEV,
 image build, credential provisioning, provider/model API, DB/job mutation or
