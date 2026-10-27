@@ -262,13 +262,26 @@ security/credential changes and material budget expansion retain separate Owner
 approval. Developer agents never merge. Approved baseline revisions remain
 immutable; source acceptance never activates a draft baseline.
 
-PR-A prepares the existing Runtime/Router/Executor and fresh DDEV PostgreSQL,
-OFF by default, using `bounded` developer permission. PR-B supplies admitted
-PCP-only execution/delivery. A first real issue-to-Codex-to-reviewed-PR result
-requires the later physical pilot. See [local installation](../pcp-portable/README.md).
-No new service, agent framework, remote shell or signing system is introduced.
-Physical legacy cleanup requires exact ownership/dependency checks and a separate
-operation; V3 is not deletion authority. Chợ Nhạc remains strictly out of scope.
+V5 [Owner SOURCE approval](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6447953456)
+corrects the PCP-local platform lifecycle: native instance-owned Docker Compose
+runs the existing Runtime/Router/Executor and dedicated PostgreSQL 17. Mandatory
+PCP verification uses the exact reviewed Runtime image in a non-root, read-only,
+network-disabled, resource-limited Docker container with only a read-only owned
+source snapshot and private temporary space. No PCP-local DDEV lifecycle,
+shared cache/router/helper or global configuration is used. Other registered
+projects retain their legitimately approved stack-specific DDEV behavior; PCP
+remains stack-agnostic. Existing phase API names do not imply DDEV execution.
+
+Bootstrap leaves registration/baseline, service profile and worker activation
+OFF. Database credentials are newly scoped to the instance, with separate
+bootstrap and non-superuser Runtime identities. True nonempty mandatory test
+execution, source/image/workspace/lease binding, exact-head CI and independent
+PM outcome remain required. See [local installation](../pcp-portable/README.md).
+V5 does not resume the blocked Physical Pilot V1: after reviewed merge and
+postmerge CI, a separately approved Pilot V2 must verify actual service/tool,
+credential, resource and isolation evidence before one real job. No new service,
+agent framework or cloud/signing system is introduced. Physical legacy cleanup
+still requires a separate operation; Chợ Nhạc remains strictly out of scope.
 
 ## 4. Router / Staffing Policy
 

@@ -1,0 +1,166 @@
+# Native PCP-only template. Bootstrap prepares it; a separate physical permit
+# and explicit --profile pcp-local are required to start any service.
+name: ${PCP_LOCAL_INSTANCE:?explicit instance required}
+services:
+  router:
+    image: ${PCP_LOCAL_ROUTER_IMAGE:?exact prepared image ID required}
+    pull_policy: never
+    container_name: ${PCP_LOCAL_INSTANCE}-router
+    profiles: [pcp-local]
+    restart: "no"
+    user: "${PCP_LOCAL_UID}:${PCP_LOCAL_GID}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 0.5
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 128
+    env_file: [.env.router.local]
+    environment:
+      ROUTER_PROJECTS_FILE: /config/projects.pcp-local.yml
+      ROUTER_MODELS_FILE: /config/models.yml
+      ROUTER_POLICY_FILE: /config/routing-policy.yml
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ${PCP_LOCAL_ROOT}/instance/config:/config:ro
+    tmpfs: [/tmp:rw,nosuid,nodev,size=67108864]
+    networks: [private]
+    labels:
+      org.pcp.local.instance: ${PCP_LOCAL_INSTANCE}
+      org.opencontainers.image.revision: ${PCP_LOCAL_SOURCE_COMMIT}
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:8090/health]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  coding-runtime:
+    image: ${PCP_LOCAL_RUNTIME_IMAGE:?exact prepared image ID required}
+    pull_policy: never
+    container_name: ${PCP_LOCAL_INSTANCE}-coding-runtime
+    profiles: [pcp-local]
+    restart: "no"
+    user: "${PCP_LOCAL_UID}:${PCP_LOCAL_GID}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 2
+    mem_limit: 3g
+    memswap_limit: 3g
+    pids_limit: 256
+    env_file: [.env.coding-runtime.local]
+    environment:
+      PCP_RUNTIME_STARTUP_MODE: pcp_local_inspect
+      PROJECTS_FILE: /config/projects.pcp-local.yml
+      PROJECT_BASELINES_FILE: /config/project-baselines.pcp-local.yml
+      MODELS_FILE: /config/models.yml
+      ROUTING_POLICY_FILE: /config/routing-policy.yml
+      ROUTER_URL: http://router:8090
+      DDEV_EXECUTOR_URL: http://ddev-executor:8790
+      CODING_WORKSPACES_ROOT: ${PCP_LOCAL_ROOT}/workspaces
+      HOME: /home/coder
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - ${PCP_LOCAL_ROOT}/instance/config:/config:ro
+      - ${PCP_LOCAL_ROOT}/workspaces:${PCP_LOCAL_ROOT}/workspaces
+      - ${PCP_LOCAL_ROOT}/runtime-home:/home/coder
+    tmpfs: [/tmp:rw,nosuid,nodev,size=268435456]
+    networks: [private]
+    labels:
+      org.pcp.local.instance: ${PCP_LOCAL_INSTANCE}
+      org.opencontainers.image.revision: ${PCP_LOCAL_SOURCE_COMMIT}
+    depends_on:
+      router: {condition: service_healthy}
+      ddev-executor: {condition: service_healthy}
+      db: {condition: service_healthy}
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:8787/health]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  ddev-executor:
+    image: ${PCP_LOCAL_EXECUTOR_IMAGE:?exact prepared image ID required}
+    pull_policy: never
+    container_name: ${PCP_LOCAL_INSTANCE}-ddev-executor
+    profiles: [pcp-local]
+    restart: "no"
+    user: "${PCP_LOCAL_UID}:${PCP_LOCAL_GID}"
+    group_add: ["${PCP_LOCAL_DOCKER_GID:?socket group required}"]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 0.5
+    mem_limit: 512m
+    memswap_limit: 512m
+    pids_limit: 128
+    env_file: [.env.ddev-executor.local]
+    environment:
+      PROJECTS_FILE: /config/projects.pcp-local.yml
+      CODING_PROJECTS_ROOT: ${PCP_LOCAL_ROOT}/sources
+      CODING_WORKSPACES_ROOT: ${PCP_LOCAL_ROOT}/workspaces
+      CODING_DIRECT_PROJECT_ROOT: ${PCP_LOCAL_ROOT}/direct-disabled
+      CONTINUITY_GITHUB_REPOSITORY: sonvhse06072/personal-coding-platform
+      CONTINUITY_BASE_BRANCH: main
+      HOME: /home/coder
+      PYTHONDONTWRITEBYTECODE: "1"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PCP_LOCAL_ROOT}/instance/config:/config:ro
+      - ${PCP_LOCAL_ROOT}/sources:${PCP_LOCAL_ROOT}/sources
+      - ${PCP_LOCAL_ROOT}/workspaces:${PCP_LOCAL_ROOT}/workspaces
+      - ${PCP_LOCAL_ROOT}/executor-home:/home/coder
+    tmpfs: [/tmp:rw,nosuid,nodev,size=268435456]
+    networks: [private]
+    labels:
+      org.pcp.local.instance: ${PCP_LOCAL_INSTANCE}
+      org.opencontainers.image.revision: ${PCP_LOCAL_SOURCE_COMMIT}
+    healthcheck:
+      test: [CMD, curl, -fsS, http://localhost:8790/health]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  db:
+    image: ${PCP_LOCAL_POSTGRES_IMAGE:?PostgreSQL 17 digest required}
+    pull_policy: never
+    container_name: ${PCP_LOCAL_INSTANCE}-db
+    profiles: [pcp-local]
+    restart: "no"
+    user: "999:999"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    cpus: 1
+    mem_limit: 1g
+    memswap_limit: 1g
+    pids_limit: 128
+    env_file: [.env.db.local]
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ${PCP_LOCAL_ROOT}/instance/initdb:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=67108864
+      - /var/run/postgresql:rw,nosuid,nodev,uid=999,gid=999,mode=3775,size=16777216
+    networks: [private]
+    labels:
+      org.pcp.local.instance: ${PCP_LOCAL_INSTANCE}
+      org.opencontainers.image.revision: ${PCP_LOCAL_SOURCE_COMMIT}
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U pcp_bootstrap -d pcp_local']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+networks:
+  private:
+    name: ${PCP_LOCAL_INSTANCE}-private
+    driver: bridge
+    labels:
+      org.pcp.local.instance: ${PCP_LOCAL_INSTANCE}
+volumes:
+  postgres-data:
+    name: ${PCP_LOCAL_INSTANCE}-postgres-data
+    labels:
+      org.pcp.local.instance: ${PCP_LOCAL_INSTANCE}

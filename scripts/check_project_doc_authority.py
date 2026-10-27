@@ -38,6 +38,8 @@ PROTECTED_PATHS = frozenset({
     "profiles/pcp-local/runtime/Dockerfile.inspect",
     "profiles/pcp-local/runtime/Dockerfile.inspect.dockerignore",
     "profiles/pcp-local/runtime/requirements-inspect.lock",
+    "profiles/pcp-local/docker-compose.local.yaml",
+    "services/ddev-executor/app/main.py",
     "profiles/pcp-local/.ddev/config.yaml",
     "profiles/pcp-local/.ddev/docker-compose.platform.yaml",
     "config/project-baselines.yml",
