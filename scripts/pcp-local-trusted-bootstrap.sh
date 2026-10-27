@@ -29,6 +29,7 @@ done
    "$SOURCE" != "$INSTALL_ROOT/"* ]] || stop ROOT_UNSAFE
 [[ "$(realpath -m -- "$INSTALL_ROOT")" == "$INSTALL_ROOT" ]] || stop ROOT_SYMLINK
 [[ -d "$(dirname "$INSTALL_ROOT")" ]] || stop ROOT_PARENT_MISSING
+[[ "$INSTALL_ROOT" == "$HOME/$INSTANCE" ]] || stop ROOT_MUST_BE_NEW_INSTANCE_IN_HOME
 ORIGIN="$(git -C "$SOURCE" remote get-url origin)"
 case "$ORIGIN" in
   https://github.com/sonvhse06072/personal-coding-platform.git|https://github.com/sonvhse06072/personal-coding-platform|git@github.com:sonvhse06072/personal-coding-platform.git) ;;
@@ -62,7 +63,7 @@ fi
    "$APPROVAL" != *'#issuecomment-6438904126' &&
    "$APPROVAL" != *'#issuecomment-6440446016' ]] || stop SOURCE_APPROVAL_IS_NOT_PHYSICAL
 [[ "$NODE_BASE" =~ ^node:22-bookworm-slim@sha256:[0-9a-f]{64}$ &&
-   "$PYTHON_BASE" =~ ^python:3\.13[^@/]*-slim-bookworm@sha256:[0-9a-f]{64}$ &&
+   "$PYTHON_BASE" =~ ^python:3\.13(\.[0-9]+)?-slim-bookworm@sha256:[0-9a-f]{64}$ &&
    "$OPENCODE" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || stop BUILD_PINS_REQUIRED
 [[ "$(id -u)" != 0 ]] || stop ROOT_USER
 [[ -z "$(git -C "$SOURCE" status --porcelain --untracked-files=all)" ]] || stop SOURCE_DIRTY

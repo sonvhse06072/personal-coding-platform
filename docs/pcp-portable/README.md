@@ -27,7 +27,8 @@ bash scripts/pcp-local-trusted-bootstrap.sh --dry-run \
 Planning checks repository identity, source/Codex pin and destination syntax,
 prints the service/image plan, and writes nothing. It never calls Docker/DDEV,
 reads credentials or claims resource availability. The destination must be
-absent, its parent must exist, and neither path may overlap the source checkout.
+absent, named exactly as the instance directly under the operator's HOME, and
+must not overlap the source checkout. This excludes nested managed-project roots.
 Use a fresh root; do not reuse `/home/sonvh/pcp-local-b2f3` or consumed receipts.
 
 ## One-time preparation after separate physical delegation

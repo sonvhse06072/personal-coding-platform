@@ -25,14 +25,24 @@ Updated 2026-10-27. Branch `ai/815-trusted-local-pr-a`, isolated source checkout
   delivery rights off, `active_revision: null`, no invented revision/source SHA.
   PR-B must wire actual admitted execution before a live task is possible.
 - **Tests:** 17 focused unittest cases PASS with strict fake Docker/DDEV and
-  temporary Git/files only; `bash -n` and `git diff --check` PASS. Host pytest is
+  temporary Git/files only; 12 context-evaluation cases and actual in-memory
+  continuity replacement/idempotence PASS; `bash -n` and `git diff --check` PASS. Host pytest is
   absent; no package installation. Historical H1c/H1b tests now use their frozen
   inputs, and placeholder-only profile assertions are replaced with current
-  boundary checks. Full hosted four-suite CI and independent PM review pending.
-- **Next:** publish one Draft PR, obtain actual exact-head root/Router/Runtime/
-  Executor hosted CI, then independent ChatGPT PM review. Developer does not
-  approve or merge. PM must verify actual Owner consent and exact protected path
-  declarations; PR metadata and CI alone are not independent human proof.
+  boundary checks. [Draft PR #817](https://github.com/sonvhse06072/personal-coding-platform/pull/817)
+  is open. The first [hosted run](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40501829679)
+  at `9a5ce307d47f755afe265a99d9623be56fef06a4` passed Router/Executor;
+  root/Runtime found three missing T1 continuity interfaces, repaired here with
+  current content. No test suppression or outside-scope edits.
+
+## Immediate next safe actions
+
+Verify all four actual hosted suites for the latest exact head on
+[PR #817 checks](https://github.com/sonvhse06072/personal-coding-platform/pull/817/checks),
+then independent ChatGPT PM review. Developer does not approve or merge.
+PM must verify actual Owner consent and exact protected path declarations;
+PR metadata and CI alone are not independent human proof. GitHub/Runtime
+evidence remains separate: no live Runtime was queried for this handoff.
 
 ## PR-B handoff and physical boundary
 
@@ -59,7 +69,7 @@ or developer credential isolation. One bounded operational delegation can cover
 routine approved local work after acceptance; it cannot cover foreign resources,
 production, destructive operations or protected/material decisions implicitly.
 
-## Other execution gates
+## Active PCP issues and owner attention
 
 - #752 remains PARKED; #595 G0 remains HOLD / NOT GO. No comparable accepted
   benchmark cohort or unattended local worker result is inferred from source.
@@ -71,9 +81,19 @@ production, destructive operations or protected/material decisions implicitly.
   claimed server-enforced branch protection. No runner/security-setting change.
 - Guardian remains operationally parked; no recovery or service health is
   inferred. #493/#512 residual physical evidence is separate from this work.
-- **Chợ Nhạc strict no-touch:** no repository, worktree, DDEV, DB, job, lease,
+## Standing safety boundary
+
+**Chợ Nhạc strict no-touch:** no repository, worktree, DDEV, DB, job, lease,
   credentials or deployment access by this task. Accepted local risk is not
   authority over unrelated projects or shared resources.
+
+<!-- PCP:CONTINUITY:START -->
+## Automated continuity snapshot
+
+No PCP-local live job is admitted or running in this SOURCE work. Registration
+is draft, baseline inactive, and worker execution STOP. This replaceable block
+is reserved for future evidence-backed Runtime publication; it grants no action.
+<!-- PCP:CONTINUITY:END -->
 
 Durable policy: [Operating Model](operating-model.md), [Roadmap](roadmap.md).
 Practical setup and failure/rollback contract: [PCP Local](../pcp-portable/README.md).

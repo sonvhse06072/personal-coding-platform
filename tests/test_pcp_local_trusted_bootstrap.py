@@ -94,7 +94,7 @@ class BootstrapTests(unittest.TestCase):
         self.base = Path(self.temp.name)
         self.repo = self.base / 'source'
         self.repo.mkdir()
-        self.install = self.base / INSTANCE
+        self.install = self.base / 'home' / INSTANCE
         self.bin = self.base / 'fake-bin'
         self.bin.mkdir()
         self.log = self.base / 'docker.log'
@@ -174,6 +174,7 @@ class BootstrapTests(unittest.TestCase):
 
     def test_unsafe_roots_names_and_unknown_modes(self):
         cases = [('--root', '/'), ('--root', '/mnt/c/pcp'), ('--root', str(self.repo)),
+                 ('--root', str(self.repo / INSTANCE)),
                  ('--root', str(self.repo / 'nested')), ('--root', str(self.base / '../escape')),
                  ('--root', str(self.base / 'bad$HOME')), ('--instance', 'personal-coding-platform'),
                  ('--instance', 'chonhac'), ('--start',), ('--rollback',), ('--apply',)]
@@ -197,6 +198,7 @@ class BootstrapTests(unittest.TestCase):
 
     def test_apply_requires_new_physical_delegation_exact_head_and_pins(self):
         for extra in [('--source-commit', '0' * 40), ('--node-base', 'node:latest'),
+                      ('--python-base', 'python:3.13\nRUN bad-slim-bookworm@sha256:' + '2' * 64),
                       ('--python-base', 'python:latest'), ('--opencode-version', 'latest'),
                       ('--owner-approval', 'true')]:
             with self.subTest(extra=extra):
