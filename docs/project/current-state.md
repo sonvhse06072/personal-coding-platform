@@ -2,7 +2,7 @@
 
 Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline revision, Runtime/WSL rollout attestation, authority change, or chronological log. Verify GitHub and local durable evidence immediately before any mutation. The Constitution, architecture and approved baseline outrank this snapshot.
 
-**Last reconciled: 2026-10-26, B2-F2 SOURCE accepted on GitHub; Host/LIVE STOP.** [PR #811](https://github.com/sonvhse06072/personal-coding-platform/pull/811) merged `main@463d81f3fee27bc0fd804486e8b941fdf7887d14` after [PM review #5643860078](https://github.com/sonvhse06072/personal-coding-platform/pull/811#pullrequestreview-5643860078) and [postmerge real4 #40207083378](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40207083378) **4,717 PASS/89 skipped**. Owner approved 11 exact SOURCE paths/4 protected. OCI historic pin remains unchanged; queued is not Codex execution. #752 PARKED; #595 HOLD.
+**Last reconciled: 2026-10-27, A3b.1 Owner-reported PASS, A3b.2 SOURCE authorized; HOST/LIVE STOP.** [PR #811](https://github.com/sonvhse06072/personal-coding-platform/pull/811) merged `main@463d81f3fee27bc0fd804486e8b941fdf7887d14` after [PM review #5643860078](https://github.com/sonvhse06072/personal-coding-platform/pull/811#pullrequestreview-5643860078) and [postmerge real4 #40207083378](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40207083378) **4,717 PASS/89 skipped**. Owner approved 11 exact SOURCE paths/4 protected. OCI historic pin remains unchanged; queued is not Codex execution. #752 PARKED; #595 HOLD.
 
 ## #764 / #777 — Phase B PCP-only source acceptance and Gate A audit
 
@@ -28,13 +28,11 @@ Status: **Tier-1 mutable working-state index**, not an approved ProjectBaseline 
 | #600–#605 | BLOCKED | G1 exit #599 and G0 #595 required |
 | #606–#610 | BLOCKED | G2 exit #605 required |
 
-## Immediate next safe actions
+## Immediate next safe actions — #815 A3b.2
 
-GitHub/Runtime evidence remains separate; Runtime was not queried.
-
-**#800 reprioritized:** [Cloud producer/OCI successor research PARKED P2](https://github.com/sonvhse06072/personal-coding-platform/issues/800#issuecomment-6396801006); research preserved, current accepted offline security and physical STOP retained. No Google Cloud Build selection, new SOURCE approval or Host permit.
-
-**#808 B2-F2 SOURCE ACCEPTED / Host STOP:** [PR #813](https://github.com/sonvhse06072/personal-coding-platform/pull/813) merged `main@b75be4e` after [Owner decision #6408467546](https://github.com/sonvhse06072/personal-coding-platform/issues/808#issuecomment-6408467546) and PM review. [Postmerge full4 #40271257268](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40271257268) **PASS: 4,869 passed/89 existing skipped/0 failed/3 warnings**. Historical Runtime nine-FAIL retained; physical execution **NOT ATTESTED**. #808 OPEN, Host/WSL/Docker/DDEV/DB/provider/model/LIVE STOP; #752 PARKED, #595 HOLD; Chợ Nhạc NO-TOUCH.
+- **B2-F1/F2 SOURCE accepted:** [#813](https://github.com/sonvhse06072/personal-coding-platform/pull/813)/[#814](https://github.com/sonvhse06072/personal-coding-platform/pull/814) merged `main@e15aced199e180d919b5fd4a6c89bcf438d70a51`; [actual main CI #40271865174](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40271865174) four suites, 4,869 pass/89 skipped.
+- **A3a/A3b.1:** one-use permissions consumed. [Owner-reported PASS #6435167850](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6435167850): 613 source files/6,794,080 bytes; 5 draft instance files; no submount observed. No independent PM WSL witness. Preserve fresh root; never rerun A2/A3a/A3b.1.
+- **A3b.2:** [Owner exact four-path SOURCE approval](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6436692753); one default-OFF manual GitHub OCI workflow, static tests, authority checker and T1. No workflow dispatch. `A3B2_IMAGE_BUILD=STOP`; `OCI_PROVENANCE=NOT_ATTESTED`; `DDEV_INSTALL=STOP`; `CODEX_LIVE=STOP`. #800 OCI Host gate OPEN; #795 DDEV Host STOP. Later separate permits for image build/signature, DDEV health, trusted Runtime readers and first Codex LIVE task. #752 PARKED, #595 HOLD; legacy/Chợ Nhạc NO-TOUCH.
 
 ## Active investment / execution gates
 
@@ -54,9 +52,9 @@ GitHub/Runtime evidence remains separate; Runtime was not queried.
 
 ## Active PCP issues and owner attention
 
-- [#593 PCP completion program](https://github.com/sonvhse06072/personal-coding-platform/issues/593) governs outcome, autonomy, owner attention and cost. [#594](https://github.com/sonvhse06072/personal-coding-platform/issues/594) G0 audit completed; #595 investment gate remains HOLD, #596 existing G1 pilot FROZEN. #597–#599, G2 #600–#605, and G3 #606–#610 are **planned**, not dispatched by this doc. [#588](https://github.com/sonvhse06072/personal-coding-platform/issues/588) future Project Discovery is DEFERRED. Historical duplicate planning tickets #586/#587/#589/#590 closed **without** implying all capabilities are implemented or leases released.
-- Next practical PCP-light task must solve an observed defect/owner-cost bottleneck, not be created merely for synthetic throughput or toolchain testing. Before new work, measure accepted task outcomes, owner interventions, source and PR CI, real elapsed time, model-reported cached/uncached/input/output and cash **if available**. A PR body is useful telemetry but not independent verification; original journal provenance and live GitHub facts outrank it.
-- Do not claim local PCP source has fast-forwarded to the newest GitHub SHA, or Runtime has rolled out, from a merge/CI result. One task/worktree writer at a time; preserve original journals on STOP and never run blind recovery.
+- [#593](https://github.com/sonvhse06072/personal-coding-platform/issues/593) governs outcome and cost; #595 HOLD, #596 historic G1 FROZEN, #752 egress PARKED. G2/G3 and #588 discovery deferred. Existing leases, jobs and counters preserved.
+- **Owner product direction (future protected decision, not A3b.2 authority):** PM Local autonomously plans, dispatches Codex, verifies and reviews/merges routine eligible PRs and reports to Owner; PM ChatGPT independently critiques plans and PM decisions. Owner retains protected/architecture/security/budget approvals. Owner reports Astra supported by Codex CLI; no model/provider/egress/live authorization here.
+- No unattended issue-to-Codex-to-PR loop or zero per-task WSL interactions proven. Keep one writer and independent accepted-task evidence; SOURCE CI is not LIVE.
 
 ## Historical managed-project continuity (NOT current Chợ Nhạc runtime status)
 
