@@ -254,7 +254,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         eligibility = evaluate_standalone_pm_merge(project=project, job=candidate,
             pr=proof['pr'], pr_number=payload.pr_number, current_ci=proof['ci'])
         require(not eligibility.blockers, 'pcp_local_pm_merge_gates_not_satisfied')
-        result['pm_merge_eligibility'] = eligibility.model_dump()
+        result['pm_merge_eligibility'] = json.loads(json.dumps(eligibility.model_dump()))
         readers.authority()  # Recheck revocation immediately before the transaction.
         with self.storage.connect() as conn:
             current = conn.execute('SELECT * FROM cp_jobs WHERE id=%s FOR UPDATE', (job_id,)).fetchone()
@@ -274,7 +274,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                          (json.dumps(result), job_id))
             conn.commit()
         return dict(job_id=job_id, status='completed', merged=False,
-                    pm_merge_eligibility=eligibility.model_dump())
+                    pm_merge_eligibility=result['pm_merge_eligibility'])
 
     async def deliver_pcp_local(self, job_id, readers, task):
         """Existing publisher/CI machinery; independent PM owns final acceptance."""
