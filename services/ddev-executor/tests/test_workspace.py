@@ -2191,7 +2191,7 @@ def _exercise_pcp_native_phase(pcp_native, monkeypatch, stdout, exit_code, expec
                 assert fields == {'type': 'bind', 'source': str(kwargs['cwd']),
                                   'target': '/workspace', 'readonly': True,
                                   'bind-nonrecursive': 'true'}
-            assert mount.endswith('target=/workspace,readonly,bind-recursive=disabled')
+            assert mount.endswith('target=/workspace,readonly,bind-nonrecursive=true')
             assert str(root/'sources/.pcp-local-verification') in mount
             assert 'docker.sock' not in mount and '/home/coder' not in mount
             assert '--rm' not in argv and '--env-file' not in argv
