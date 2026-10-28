@@ -451,17 +451,25 @@ def context_cases():
 
 
 def test_context_matches_pinned_upstream_moby_oracle(plan):
-    # Actual upstream v0.6.0 was run during source research, with this exact
-    # 524-case matrix (not a Python replacement for Docker glob semantics).
-    # Commit 347bb8d8d557f90d1b75cd8bca3c0177f380a979; module sum in README.
+    # Preserve the exact historical 524-case upstream-oracle matrix. Four
+    # new literal Runtime Python inputs extend the SOURCE context; they do not
+    # turn historical oracle evidence into a new physical build claim.
     allowed, forbidden = context_cases()
-    assert len(allowed) == 102 and len(forbidden) == 422
+    additions = {"services/runtime/app/" + name + ".py" for name in (
+        "dashboard_local", "dashboard_ui_local", "pcp_local_readiness", "pcp_local_recovery")}
+    assert len(allowed) == 106 and len(forbidden) == 438
     assert plan["context_paths"](IGNORE.read_bytes()) == allowed
-    expected = {path: path in allowed for path in sorted(allowed | forbidden)}
-    canonical = json.dumps(expected, sort_keys=True, separators=(",", ":")).encode()
+    original_allowed = allowed - additions
+    added_forbidden = {p + suffix for p in additions for suffix in (".secret", "/secret.env", "/unexpected.py")}
+    added_forbidden |= {"foreign/" + p for p in additions}
+    original_forbidden = forbidden - added_forbidden
+    assert len(original_allowed) == 102 and len(original_forbidden) == 422
+    original = {path: path in original_allowed for path in sorted(original_allowed | original_forbidden)}
+    canonical = json.dumps(original, sort_keys=True, separators=(",", ":")).encode()
     assert hashlib.sha256(canonical).hexdigest() == (
         "80635ae24ce7eeacbd1400d3f605d3594a37724a3a97b5fdf91a9135060bf4d6"
     )
+    expected = {path: path in allowed for path in sorted(allowed | forbidden)}
     # Optional research-only upstream helper, supplied by the operator. No
     # Docker, Go installation or module/network download happens in tests.
     oracle = os.getenv("PCP_H1B2_MOBY_ORACLE")
@@ -504,7 +512,7 @@ def test_source_context_tar_is_exact_deterministic_regular_files(plan):
     expected.update({str(p.relative_to(ROOT)): p.read_bytes() for p in (DOCKERFILE, LOCK, IGNORE)})
     with tarfile.open(fileobj=io.BytesIO(raw), mode="r:") as archive:
         members = archive.getmembers()
-        assert len(members) == len(expected) == 103
+        assert len(members) == len(expected) == 107
         assert {item.name for item in members} == set(expected)
         for item in members:
             assert item.isfile() and not item.issym() and not item.islnk()
@@ -591,7 +599,7 @@ def test_current_head_cannot_replace_reviewed_inspection_app_tree(plan):
     else:
         # A future HEAD with the exact approved app tree need not contradict
         # the unchanged policy: it must still pass its full input inventory.
-        assert len(plan["_read_git_inputs"](head)) == 103
+        assert len(plan["_read_git_inputs"](head)) == 107
 
 
 @pytest.mark.parametrize("entry", [

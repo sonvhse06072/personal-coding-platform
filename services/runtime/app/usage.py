@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+import math
 
 from .config import model_config
 
@@ -14,7 +15,7 @@ _COST_KEYS = ("cost_usd", "costUSD", "cost")
 def _number(value: Any) -> float | None:
     if isinstance(value, bool):
         return None
-    if isinstance(value, (int, float)):
+    if isinstance(value, (int, float)) and math.isfinite(value) and value >= 0:
         return float(value)
     return None
 
@@ -46,6 +47,28 @@ def _find_nested(mapping: dict[str, Any], keys: tuple[str, ...]) -> float:
                     if found:
                         values.append(found)
     return sum(values)
+
+
+def usage_observation(raw: dict[str, Any] | None) -> dict[str, bool]:
+    """Provenance captured from provider data before zero-default normalization."""
+    def observed(data, keys):
+        if not isinstance(data, dict):
+            return False
+        if _first_number(data, keys) is not None:
+            return True
+        return any(observed(v, keys) if isinstance(v, dict) else
+                   any(observed(i, keys) for i in v) if isinstance(v, list) else False
+                   for v in data.values())
+    gross = observed(raw, _INPUT_KEYS)
+    cached = observed(raw, _CACHED_INPUT_KEYS)
+    gross_value = _find_nested(raw or {}, _INPUT_KEYS)
+    cache_value = _find_nested(raw or {}, _CACHED_INPUT_KEYS)
+    # normalize_usage clamps cache to gross; that default/clamp is not observation.
+    valid_cache = gross and cached and cache_value <= gross_value
+    net_observed = valid_cache or (gross and gross_value == 0 and not cached)
+    return dict(gross_input_tokens=gross, cached_input_tokens=valid_cache,
+                input_tokens=net_observed, output_tokens=observed(raw, _OUTPUT_KEYS),
+                reported_cost_usd=observed(raw, _COST_KEYS))
 
 
 def normalize_usage(raw: dict[str, Any] | None) -> dict[str, float | int]:

@@ -521,7 +521,8 @@ async def run_admitted_job(engine, readers, task):
     lease = engine.storage.acquire_project_lease(PROJECT_ID, job_id)
     readers.lease_generation = lease['generation']
     checkpoint = deepcopy(row['checkpoint'])
-    checkpoint['pcp_local_execution'] = {'state': 'started', 'lease_generation': lease['generation'],
+    from .storage import now
+    checkpoint['pcp_local_execution'] = {'state': 'started', 'started_at': now().isoformat(), 'lease_generation': lease['generation'],
         'authority_digest': readers.authority_digest}
     progress = deepcopy(row['progress'])
     engine.storage.update(job_id, checkpoint=checkpoint, route=readers.route, status='executing')
@@ -570,11 +571,14 @@ async def run_admitted_job(engine, readers, task):
             require(run.returncode == 0, 'pcp_local_invocation_uncertain_no_retry')
             diff = diff_state(workspace, int(project['runtime'].get('max_diff_bytes', 750000)),
                               base_ref=task.base_sha)
-            require(bool(diff['changed_files']) and set(diff['changed_files']) <= set(task.allowed_paths),
+            require(bool(diff['changed_files']) and set(diff['changed_files']) <= set(task.allowed_paths)
+                    and len(diff['changed_files']) <= normalized_budget(limits, len(task.allowed_paths))['max_changed_files'],
                     'pcp_local_changed_paths_denied')
             await readers.refresh(task)
             remaining = limits['max_wall_seconds'] - int(time.monotonic() - started)
             require(remaining >= 10, 'pcp_local_resource_envelope_exhausted')
+            from .pcp_local_recovery import verified_tree, commit_verified
+            tested_tree = verified_tree(workspace, task, diff)
             verification = await engine.verify_pcp_local(job_id, workspace, project,
                 timeout_seconds=remaining)
             progress['test_runs'] = progress.get('test_runs', 0) + verification['test_runs']
@@ -591,7 +595,14 @@ async def run_admitted_job(engine, readers, task):
         # Recheck after tests, which must not mutate the developer source copy.
         final_diff = diff_state(workspace, int(project['runtime'].get('max_diff_bytes', 750000)), base_ref=task.base_sha)
         require(final_diff['diff_hash'] == diff['diff_hash'], 'pcp_local_verified_diff_changed')
-        commit = commit_changes(workspace, f"PCP-local issue #{task.issue_number}")
+        require(verified_tree(workspace, task, diff) == tested_tree, 'pcp_local_verified_tree_changed')
+        # Persist the original tested identity BEFORE Git; never refresh it to accept drift.
+        from .pcp_local_recovery import verified_tree, commit_verified
+        checkpoint['pcp_local_execution'].update(state='verified_uncommitted',
+            duration_seconds=time.monotonic() - started, verified_tree=tested_tree, diff=diff, route=deepcopy(readers.route))
+        engine.storage.update(job_id, checkpoint=checkpoint, progress=progress)
+        commit = commit_verified(engine, job_id, task, workspace, checkpoint)
+
         require(bool(commit), 'pcp_local_verified_commit_missing')
         checkpoint['pcp_local_execution'].update(state='verified', commit=commit)
         progress['elapsed_minutes'] = (time.monotonic() - started) / 60
@@ -603,16 +614,21 @@ async def run_admitted_job(engine, readers, task):
     except BaseException as exc:
         # Do not release the writer reservation or rewind receipts after an
         # uncertain side effect. Reconciliation is for this exact job only.
-        latest = engine.storage.get(job_id)
-        if latest is not None:
-            cp = deepcopy(latest['checkpoint'])
-            execution = cp.setdefault('pcp_local_execution', {})
-            if execution.get('state') == 'verified':
-                execution['delivery_uncertain'] = True
-            else:
-                execution['state'] = 'held'
-            engine.storage.update(job_id, status='blocked', checkpoint=cp,
-                error=exc.code if isinstance(exc, TaskStop) else 'pcp_local_uncertain_execution_no_retry')
+        try:
+            latest = engine.storage.get(job_id)
+            if latest is not None:
+                cp = deepcopy(latest['checkpoint'])
+                execution = cp.setdefault('pcp_local_execution', {})
+                if execution.get('state') == 'verified':
+                    execution['delivery_uncertain'] = True
+                elif execution.get('state') not in {'verified_uncommitted', 'commit_uncertain'}:
+                    execution['state'] = 'held'
+                engine.storage.update(job_id, status='blocked', checkpoint=cp,
+                    error=exc.code if isinstance(exc, TaskStop) else 'pcp_local_uncertain_execution_no_retry')
+        except Exception as secondary:
+            # Preserve the primary exception even if reading/writing its
+            # failure checkpoint is unavailable. Never claim the write passed.
+            exc.add_note('PCP failure checkpoint also failed: ' + type(secondary).__name__)
         raise
     return engine.storage.get(job_id)
 
@@ -636,6 +652,14 @@ ACTIVATION_FILE = Path('/config/pcp-local-activation.json')
 
 def digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def normalized_budget(limits, path_count):
+    value = dict(limits)
+    redundant = value.pop('max_changed_files', path_count)
+    require(type(redundant) is int and 0 < redundant <= path_count,
+            'pcp_local_changed_file_limit_invalid')
+    return dict(max_changed_files=redundant, **value)
 
 
 def read_activation():
@@ -802,7 +826,7 @@ class TrustedReaders:
                 effort=choice['reasoning_effort'], installed_cli_version=self.activation['codex_version'],
                 approved_cli_version=self.activation['codex_version'], **proof['provider']),
             'budget': dict(owner_approved=True, provider_quota_verified=True,
-                max_changed_files=len(task.allowed_paths), **limits),
+                **normalized_budget(limits, len(task.allowed_paths))),
             'writer': dict(project_id=PROJECT_ID, workspace_mode='isolated_clone',
                            lease=normalized_lease, other_job_ids=[]),
             'publisher': proof['publisher'],

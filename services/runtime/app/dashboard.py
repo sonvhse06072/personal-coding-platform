@@ -464,6 +464,23 @@ def build_dashboard_snapshot(storage: Any, orchestrator_store: Any) -> dict[str,
     }
 
 
+def local_dashboard_mode():
+    return os.getenv('PCP_RUNTIME_STARTUP_MODE') in {'pcp_local_worker', 'pcp_local_dashboard'}
+
+
+def require_visible_job(storage, job_id):
+    if local_dashboard_mode():
+        with storage.connect() as conn:
+            conn.execute('SET TRANSACTION READ ONLY')
+            job = conn.execute("SELECT id FROM cp_jobs WHERE id=%s AND project_id=%s "
+                "AND checkpoint ? 'pcp_local_source'", (job_id, 'pcp-local')).fetchone()
+    else:
+        job = storage.get(job_id)
+    if job is None:
+        raise HTTPException(404, 'Unknown job')
+    return job
+
+
 def create_dashboard_router(
     storage: Any,
     orchestrator_store: Any,
@@ -474,6 +491,9 @@ def create_dashboard_router(
 
     @router.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
     def dashboard_page() -> str:
+        if local_dashboard_mode():
+            from .dashboard_ui_local import LOCAL_DASHBOARD_HTML
+            return LOCAL_DASHBOARD_HTML
         return DASHBOARD_HTML
 
     @router.post("/v1/dashboard/session", include_in_schema=False)
@@ -641,6 +661,9 @@ def create_dashboard_router(
     @router.get("/v1/dashboard/snapshot", include_in_schema=False)
     def dashboard_snapshot(pcp_dashboard_session: str | None = Cookie(default=None)) -> dict[str, Any]:
         _require_session(pcp_dashboard_session)
+        if local_dashboard_mode():
+            from .dashboard_local import build_local_snapshot
+            return build_local_snapshot(storage)
         return build_dashboard_snapshot(storage, orchestrator_store)
 
     @router.get("/v1/dashboard/jobs/{job_id}/events", include_in_schema=False)
@@ -651,8 +674,7 @@ def create_dashboard_router(
         pcp_dashboard_session: str | None = Cookie(default=None),
     ) -> dict[str, Any]:
         _require_session(pcp_dashboard_session)
-        if storage.get(job_id) is None:
-            raise HTTPException(404, "Unknown job")
+        require_visible_job(storage, job_id)
         events = _public_job_events(storage, job_id, after=after, limit=limit)
         return {"events": events, "last_seq": max([after, *[int(event["seq"]) for event in events]])}
 
@@ -664,8 +686,7 @@ def create_dashboard_router(
         pcp_dashboard_session: str | None = Cookie(default=None),
     ) -> StreamingResponse:
         _require_session(pcp_dashboard_session)
-        if storage.get(job_id) is None:
-            raise HTTPException(404, "Unknown job")
+        require_visible_job(storage, job_id)
 
         async def stream():
             cursor = int(after)

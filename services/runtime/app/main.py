@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import secrets
 import shutil
 from pathlib import Path
@@ -257,6 +258,7 @@ def _require_manual_collaboration_state(job_id: str) -> None:
 # create a project registration, lease, database, credentials, or worker.
 PCP_LOCAL_INSPECT_MODE = "pcp_local_inspect"
 PCP_LOCAL_WORKER_MODE = "pcp_local_worker"
+PCP_LOCAL_DASHBOARD_MODE = "pcp_local_dashboard"
 _PCP_PROJECT_DRAFT = "projects.pcp-local.yml"
 _PCP_BASELINE_DRAFT = "project-baselines.pcp-local.yml"
 _PCP_LOCAL_FLAGS = (
@@ -356,7 +358,7 @@ def _validate_pcp_local_inspection() -> None:
 def runtime_startup_mode() -> str:
     """Explicit, opt-in inspection startup without any durable/runtime transitions."""
     mode = os.getenv("PCP_RUNTIME_STARTUP_MODE", "normal")
-    if mode not in {"normal", "inspect", "g0_fixture_run", FULLPATH_CANDIDATE_MODE, F2_WORKER_MODE, PCP_LOCAL_INSPECT_MODE, PCP_LOCAL_WORKER_MODE}:
+    if mode not in {"normal", "inspect", "g0_fixture_run", FULLPATH_CANDIDATE_MODE, F2_WORKER_MODE, PCP_LOCAL_INSPECT_MODE, PCP_LOCAL_WORKER_MODE, PCP_LOCAL_DASHBOARD_MODE}:
         raise RuntimeError(
             "Invalid PCP_RUNTIME_STARTUP_MODE; expected normal, inspect, pcp_local_inspect, g0_fixture_run, g0_fullpath_candidate or g0_fullpath_worker"
         )
@@ -396,6 +398,17 @@ async def lifespan(app: FastAPI):
             yield
         finally:
             app.state.pcp_local_inspection_ready = False
+        return
+    if os.getenv('PCP_RUNTIME_STARTUP_MODE') == PCP_LOCAL_DASHBOARD_MODE:
+        # Observation needs no live activation/provider login and starts no worker.
+        if set(projects_doc().get('projects', {})) != {'pcp-local'}:
+            raise RuntimeError('PCP-local dashboard requires singleton registry')
+        harden_runtime_process_secret_boundary()
+        app.state.pcp_local_dashboard_ready = True
+        try:
+            yield
+        finally:
+            app.state.pcp_local_dashboard_ready = False
         return
     if os.getenv("PCP_RUNTIME_STARTUP_MODE") == PCP_LOCAL_WORKER_MODE:
         from .pcp_local_worker_loop import TrustedReaders
@@ -463,11 +476,25 @@ app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan
 @app.middleware("http")
 async def inspection_mode_http_guard(request: Request, call_next):
     # A mode flip cannot bypass a parked process latch.
+    local_read = os.getenv('PCP_RUNTIME_STARTUP_MODE') in {PCP_LOCAL_WORKER_MODE, PCP_LOCAL_DASHBOARD_MODE}
+    read_ready = (getattr(app.state, 'pcp_local_worker_ready', False)
+                  or getattr(app.state, 'pcp_local_dashboard_ready', False))
+    path = request.url.path
+    read_route = ((request.method, path) in {('GET','/dashboard'), ('POST','/v1/dashboard/session'),
+        ('DELETE','/v1/dashboard/session'), ('GET','/v1/dashboard/snapshot')}
+        or (request.method == 'GET' and re.fullmatch(r'/v1/dashboard/jobs/[a-f0-9]{32}/(events|stream)', path)))
+    if local_read and read_ready and read_route:
+        return await call_next(request)
+    if (getattr(app.state, 'pcp_local_dashboard_ready', False)
+            or os.getenv('PCP_RUNTIME_STARTUP_MODE') == PCP_LOCAL_DASHBOARD_MODE):
+        if os.getenv('PCP_RUNTIME_STARTUP_MODE') == PCP_LOCAL_DASHBOARD_MODE and read_ready and (request.method, path) == ('GET','/health'):
+            return await call_next(request)
+        return JSONResponse(status_code=403, content={'detail':'PCP-local read-only dashboard'})
     worker = getattr(app.state, "pcp_local_worker_ready", False)
     if worker or os.getenv("PCP_RUNTIME_STARTUP_MODE") == PCP_LOCAL_WORKER_MODE:
         if (not worker or runtime_startup_mode() != PCP_LOCAL_WORKER_MODE
                 or (request.method, request.url.path) not in {
-                    ("GET", "/health"), ("POST", "/v1/pcp-local/run-once"),
+                    ("GET", "/health"), ("GET", "/v1/pcp-local/readiness"), ("POST", "/v1/pcp-local/run-once"),
                     ("POST", "/v1/pcp-local/pm-review"), ("POST", "/v1/pcp-local/deliver")}):
             return JSONResponse(status_code=403, content={"detail": "PCP-local dedicated admission only"})
         return await call_next(request)
@@ -613,7 +640,8 @@ app.include_router(
 
 @app.get("/health", response_model=RuntimeHealth)
 async def health() -> RuntimeHealth:
-    if getattr(app.state, "pcp_local_inspection_ready", False):
+    if (getattr(app.state, "pcp_local_inspection_ready", False)
+            or getattr(app.state, "pcp_local_dashboard_ready", False)):
         return RuntimeHealth(
             status="degraded", service="coding-runtime",
             version=RUNTIME_VERSION, router="not_checked", executor="not_checked",
@@ -1209,3 +1237,12 @@ async def pcp_local_retry_delivery():
     except TaskStop as exc:
         raise HTTPException(409, exc.code) from None
     return {"job_id": row["id"], "status": row["status"], "can_merge": False}
+
+@app.get('/v1/pcp-local/readiness', dependencies=[Depends(auth)])
+async def pcp_local_readiness():
+    if not getattr(app.state, 'pcp_local_worker_ready', False):
+        raise HTTPException(403, 'PCP-local worker readiness only')
+    from .pcp_local_worker_loop import TrustedReaders
+    from .pm_bridge import PMBridgeGitHubClient
+    from .pcp_local_readiness import collect_readiness
+    return await collect_readiness(engine)

@@ -161,6 +161,46 @@ class Storage:
             self._reconcile_legacy_planning_on_connection(conn)
             conn.commit()
 
+    def cas_local_checkpoint(self, expected, checkpoint, *, status, result):
+        """Exact-row CAS; never rewinds usage or edits receipt/lease ownership."""
+        from .pcp_local_task_queue import PROJECT_ID, REPOSITORY, require
+        from .pcp_local_worker_loop import exact_value
+        old = expected['checkpoint']['pcp_local_execution']
+        new = checkpoint['pcp_local_execution']
+        transition = (old.get('state'), new.get('state'), status)
+        require(transition in {('verified_uncommitted','commit_uncertain','blocked'),
+                               ('commit_uncertain','verified','delivering')},
+                'pcp_local_recovery_transition_invalid')
+        old_rest = {k:v for k,v in old.items() if k not in {'state','commit'}}
+        new_rest = {k:v for k,v in new.items() if k not in {'state','commit'}}
+        require(old_rest == new_rest and {k:v for k,v in expected['checkpoint'].items()
+                if k not in {'pcp_local_execution','pcp_local_recovery'}} ==
+                {k:v for k,v in checkpoint.items() if k not in {'pcp_local_execution','pcp_local_recovery'}},
+                'pcp_local_recovery_evidence_changed')
+        with self.connect() as conn:
+            conn.execute("SELECT pg_advisory_xact_lock(hashtext('pcp-local-recovery'))")
+            current = conn.execute('SELECT * FROM cp_jobs WHERE id=%s FOR UPDATE',
+                                   (expected['id'],)).fetchone()
+            require(exact_value(current, expected) and current['project_id'] == PROJECT_ID,
+                    'pcp_local_recovery_stale_row')
+            binding = current['checkpoint']['pcp_local_source']['receipt']
+            receipt = conn.execute('SELECT * FROM cp_pcp_local_source_receipts WHERE repository=%s '
+                'AND project_id=%s AND issue_number=%s FOR UPDATE',
+                (REPOSITORY, PROJECT_ID, binding['issue_number'])).fetchone()
+            lease = conn.execute('SELECT * FROM cp_project_leases WHERE project_id=%s FOR UPDATE',
+                                 (PROJECT_ID,)).fetchone()
+            require(receipt is not None and receipt['state'] == 'running'
+                and receipt['generation'] == 2 and receipt['job_id'] == current['id']
+                and all(receipt[k] == binding[k] for k in ('body_sha256', 'base_sha',
+                    'baseline_revision', 'baseline_source_commit', 'goal_sha256', 'allowed_paths'))
+                and lease is not None and lease['state'] == 'active'
+                and lease['owner_job_id'] == current['id']
+                and lease['generation'] == current['checkpoint']['pcp_local_execution']['lease_generation'],
+                'pcp_local_recovery_ownership_changed')
+            conn.execute('UPDATE cp_jobs SET checkpoint=%s::jsonb,result=%s::jsonb,status=%s,updated_at=%s '
+                'WHERE id=%s', (json.dumps(checkpoint), json.dumps(result), status, now(), current['id']))
+            conn.commit()
+
     def create(self, row: dict[str, Any]) -> None:
         with self.connect() as conn:
             self._insert_job_on_connection(conn, row)

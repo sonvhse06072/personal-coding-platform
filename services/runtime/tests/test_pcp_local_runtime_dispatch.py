@@ -741,7 +741,7 @@ def test_dedicated_delivery_requires_concrete_reader_before_mutation(setup):
     assert s.db.jobs == {}
 
 
-@pytest.mark.parametrize('outcome', ['success', 'timeout', 'repair'])
+@pytest.mark.parametrize('outcome', ['success', 'timeout', 'repair', 'commit_fail', 'publication_fail', 'secondary_fail'])
 def test_dedicated_worker_keeps_durable_identity_and_never_replays(setup, monkeypatch, tmp_path, outcome):
     from pathlib import Path
     from app import pcp_local_worker_loop as trusted
@@ -771,6 +771,8 @@ def test_dedicated_worker_keeps_durable_identity_and_never_replays(setup, monkey
     reader.refresh = refresh
     monkeypatch.setattr(s.db, 'get', lambda key: deepcopy(s.db.jobs.get(key)))
     def update(key, **fields):
+        if outcome == 'secondary_fail' and fields.get('status') == 'blocked':
+            raise RuntimeError('secondary checkpoint failure')
         s.db.jobs[key].update(deepcopy(fields))
     monkeypatch.setattr(s.db, 'update', update)
     def lease(project, key):
@@ -797,8 +799,17 @@ def test_dedicated_worker_keeps_durable_identity_and_never_replays(setup, monkey
     monkeypatch.setattr(CodexAdapter,'run',fake_run)
     diff = {'changed_files':list(s.task.allowed_paths),'diff_hash':'c'*64}
     monkeypatch.setattr('app.repo.diff_state',lambda *a,**kw:deepcopy(diff))
+    monkeypatch.setattr('app.pcp_local_recovery.verified_tree', lambda *a: {'files':{},'source':s.task.base_sha})
     commits=[]
-    monkeypatch.setattr('app.repo.commit_changes',lambda *args:commits.append(args) or 'd'*40)
+    def commit(*args):
+        commits.append(args)
+        proof = s.db.jobs[job_id]['checkpoint']['pcp_local_execution']
+        assert proof['state'] == 'commit_uncertain' and proof['verification']['passed']
+        if outcome in {'commit_fail', 'secondary_fail'}:
+            raise RuntimeError('primary commit failure')
+        return 'd'*40
+    monkeypatch.setattr('app.repo.commit_changes',commit)
+    monkeypatch.setattr('app.pcp_local_recovery.reconcile_commit', lambda *a: 'd'*40)
     checks=[]
     async def verify(*args,**kwargs):
         checks.append(1)
@@ -809,8 +820,18 @@ def test_dedicated_worker_keeps_durable_identity_and_never_replays(setup, monkey
         assert s.db.jobs[key]['checkpoint']['pcp_local_execution']['state']=='verified'
         assert actual_reader is reader and task == s.task
         deliveries.append(key)
+        if outcome == 'publication_fail':
+            raise RuntimeError('primary publication failure')
     monkeypatch.setattr(engine,'deliver_pcp_local',deliver)
-    if outcome == 'timeout':
+    if outcome in {'commit_fail', 'publication_fail', 'secondary_fail'}:
+        with pytest.raises(RuntimeError, match='primary') as error:
+            asyncio.run(worker.run_admitted_job(engine,reader,s.task))
+        assert attempts == ['execute'] and len(checks) == 1 and len(commits) == 1
+        state = s.db.jobs[job_id]['checkpoint']['pcp_local_execution']['state']
+        assert state == ('verified' if outcome == 'publication_fail' else 'commit_uncertain')
+        if outcome == 'secondary_fail':
+            assert any('checkpoint also failed' in note for note in error.value.__notes__)
+    elif outcome == 'timeout':
         with pytest.raises(TimeoutError):
             asyncio.run(worker.run_admitted_job(engine,reader,s.task))
         assert attempts == ['execute'] and not checks and not commits and not deliveries
@@ -936,3 +957,36 @@ def test_delivery_recovery_cannot_reenter_codex(setup, monkeypatch, execution_st
         asyncio.run(s.engine.retry_pcp_local_delivery())
         assert calls==[job_id]
     assert row['progress']==before
+
+
+def test_publication_failure_keeps_reconciliation_evidence_without_model(setup, monkeypatch):
+    from app import engine_delivery
+    from app.delivery import DeliveryError
+    from app.adapters.codex import CodexAdapter
+    s=setup;asyncio.run(s.dispatch());job_id=worker.stable_job_id(s.task)
+    row=s.db.jobs[job_id]
+    row.update(branch='ai/'+job_id[:12],workspace='/fake/owned',status='delivering')
+    row['checkpoint']['pcp_local_execution']=dict(state='verified',commit='d'*40,lease_generation=1)
+    row['result']=dict(commit='d'*40,verification={'passed':True,'test_runs':2},delivery_finalized=False)
+    reader=object.__new__(worker.TrustedReaders);reader.engine=s.engine;reader.activation={'budget':{'max_wall_seconds':900}}
+    async def refresh(task):assert task==s.task
+    reader.refresh=refresh
+    project={'autonomy':{'allow_commit':True,'allow_push_ai_branch':True,'allow_create_pr':True,'allow_production_deploy':False}}
+    reader.authority=lambda:(project,s.baseline)
+    monkeypatch.setattr(s.db,'get',lambda key:deepcopy(s.db.jobs[key]))
+    monkeypatch.setattr(s.db,'update',lambda key,**fields:s.db.jobs[key].update(deepcopy(fields)))
+    async def no_model(*args,**kwargs):pytest.fail('publication recovery must not invoke a model')
+    monkeypatch.setattr(CodexAdapter,'run',no_model)
+    calls=[]
+    async def publish(**kwargs):
+        calls.append(kwargs['reconcile_existing'])
+        raise DeliveryError('github_delivery_failed','lost acknowledgement',{'state':'pr_created','commit':'d'*40,'pull_request':{'number':7}})
+    monkeypatch.setattr(engine_delivery,'deliver_verified_work',publish)
+    before=deepcopy(row['progress'])
+    for _ in range(2):
+        with pytest.raises(DeliveryError):asyncio.run(s.engine.deliver_pcp_local(job_id,reader,s.task))
+    assert calls==[False,True]
+    assert row['status']=='blocked' and row['result']['delivery']['pull_request']['number']==7
+    assert row['result']['delivery']['uncertain'] is True
+    assert row['result']['delivery_finalized'] is False
+    assert row['progress']=={**before,'delivery_attempts':2}
