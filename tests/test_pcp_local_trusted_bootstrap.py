@@ -430,6 +430,18 @@ class BootstrapTests(unittest.TestCase):
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_tmpfs_mounts_preserve_options_as_single_yaml_scalars(self):
+        services = yaml.safe_load((ROOT / COMPOSE).read_text())['services']
+        for service, size in (('router', 67108864), ('coding-runtime', 268435456),
+                              ('ddev-executor', 268435456)):
+            with self.subTest(service=service):
+                self.assertEqual(services[service]['tmpfs'],
+                                 [f'/tmp:rw,nosuid,nodev,size={size}'])
+        self.assertEqual(services['db']['tmpfs'], [
+            '/tmp:rw,nosuid,nodev,size=67108864',
+            '/var/run/postgresql:rw,nosuid,nodev,uid=999,gid=999,mode=3775,size=16777216',
+        ])
+
     def test_dependencies_and_real_runtime_build_contract(self):
         services = yaml.safe_load((ROOT / COMPOSE).read_text())['services']
         self.assertEqual(set(services), {'router', 'coding-runtime', 'ddev-executor', 'db'})

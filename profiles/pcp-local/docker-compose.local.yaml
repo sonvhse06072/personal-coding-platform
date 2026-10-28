@@ -24,7 +24,7 @@ services:
       PYTHONDONTWRITEBYTECODE: "1"
     volumes:
       - ${PCP_LOCAL_ROOT}/instance/config:/config:ro
-    tmpfs: [/tmp:rw,nosuid,nodev,size=67108864]
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=67108864"]
     networks: [private]
     labels:
       org.pcp.local.instance: ${PCP_LOCAL_INSTANCE}
@@ -65,7 +65,7 @@ services:
       - ${PCP_LOCAL_ROOT}/instance/config:/config:ro
       - ${PCP_LOCAL_ROOT}/workspaces:${PCP_LOCAL_ROOT}/workspaces
       - ${PCP_LOCAL_ROOT}/runtime-home:/home/coder
-    tmpfs: [/tmp:rw,nosuid,nodev,size=268435456]
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=268435456"]
     networks: [private]
     labels:
       org.pcp.local.instance: ${PCP_LOCAL_INSTANCE}
@@ -111,7 +111,7 @@ services:
       - ${PCP_LOCAL_ROOT}/sources:${PCP_LOCAL_ROOT}/sources
       - ${PCP_LOCAL_ROOT}/workspaces:${PCP_LOCAL_ROOT}/workspaces
       - ${PCP_LOCAL_ROOT}/executor-home:/home/coder
-    tmpfs: [/tmp:rw,nosuid,nodev,size=268435456]
+    tmpfs: ["/tmp:rw,nosuid,nodev,size=268435456"]
     networks: [private]
     labels:
       org.pcp.local.instance: ${PCP_LOCAL_INSTANCE}
