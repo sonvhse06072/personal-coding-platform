@@ -1,6 +1,7 @@
 # H1b2 deny by default. Literal reviewed source files only; no directory/glob reinclusion.
 # Docker sends this ignore file as build control metadata even though excluded.
 # The future Host wrapper must also use the reviewed source-only staging archive.
+# A file path replaced by a directory must not admit any descendants.
 **
 !profiles/pcp-local/runtime/Dockerfile.inspect
 !profiles/pcp-local/runtime/requirements-inspect.lock
@@ -24,9 +25,11 @@
 !services/runtime/app/control_actions_live.py
 !services/runtime/app/control_actions_reroute.py
 !services/runtime/app/dashboard.py
+!services/runtime/app/dashboard_local.py
 !services/runtime/app/dashboard_ui.py
 !services/runtime/app/dashboard_ui_activity.py
 !services/runtime/app/dashboard_ui_base.py
+!services/runtime/app/dashboard_ui_local.py
 !services/runtime/app/delivery.py
 !services/runtime/app/developer_permissions.py
 !services/runtime/app/developer_stream.py
@@ -59,6 +62,8 @@
 !services/runtime/app/orchestrator_merge.py
 !services/runtime/app/orchestrator_notifications.py
 !services/runtime/app/orchestrator_resume.py
+!services/runtime/app/pcp_local_readiness.py
+!services/runtime/app/pcp_local_recovery.py
 !services/runtime/app/pcp_local_task_queue.py
 !services/runtime/app/pcp_local_worker_admission.py
 !services/runtime/app/pcp_local_worker_loop.py
@@ -104,8 +109,6 @@
 !services/runtime/app/visual_evidence.py
 !services/runtime/app/work_order.py
 !services/runtime/app/work_order_checkpoints.py
-
-# A file path replaced by a directory must not admit any descendants.
 profiles/pcp-local/runtime/Dockerfile.inspect/*
 profiles/pcp-local/runtime/requirements-inspect.lock/*
 services/runtime/app/__init__.py/*
@@ -128,9 +131,11 @@ services/runtime/app/control_actions_input_tokens.py/*
 services/runtime/app/control_actions_live.py/*
 services/runtime/app/control_actions_reroute.py/*
 services/runtime/app/dashboard.py/*
+services/runtime/app/dashboard_local.py/*
 services/runtime/app/dashboard_ui.py/*
 services/runtime/app/dashboard_ui_activity.py/*
 services/runtime/app/dashboard_ui_base.py/*
+services/runtime/app/dashboard_ui_local.py/*
 services/runtime/app/delivery.py/*
 services/runtime/app/developer_permissions.py/*
 services/runtime/app/developer_stream.py/*
@@ -163,6 +168,8 @@ services/runtime/app/model_capabilities.py/*
 services/runtime/app/orchestrator_merge.py/*
 services/runtime/app/orchestrator_notifications.py/*
 services/runtime/app/orchestrator_resume.py/*
+services/runtime/app/pcp_local_readiness.py/*
+services/runtime/app/pcp_local_recovery.py/*
 services/runtime/app/pcp_local_task_queue.py/*
 services/runtime/app/pcp_local_worker_admission.py/*
 services/runtime/app/pcp_local_worker_loop.py/*

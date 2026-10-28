@@ -1,0 +1,57 @@
+{
+  "kind": "fixture_browser_proof",
+  "live_rollout": false,
+  "states": [
+    "waiting_dashboard_auth",
+    "held",
+    "empty",
+    "waiting_auth",
+    "unavailable",
+    "stale",
+    "offline"
+  ],
+  "viewports": [
+    1440,
+    390
+  ],
+  "overflow": false,
+  "page_errors": [],
+  "requests": [
+    [
+      "GET",
+      "/dashboard"
+    ],
+    [
+      "GET",
+      "/v1/dashboard/snapshot"
+    ],
+    [
+      "POST",
+      "/v1/dashboard/session"
+    ],
+    [
+      "GET",
+      "/v1/dashboard/snapshot"
+    ],
+    [
+      "GET",
+      "/v1/dashboard/snapshot"
+    ],
+    [
+      "GET",
+      "/v1/dashboard/snapshot"
+    ],
+    [
+      "GET",
+      "/v1/dashboard/snapshot"
+    ],
+    [
+      "GET",
+      "/v1/dashboard/snapshot"
+    ],
+    [
+      "GET",
+      "/v1/dashboard/snapshot"
+    ]
+  ]
+}

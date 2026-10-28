@@ -6,12 +6,13 @@ CodexAdapter, durable admission/lease and GitHub delivery. Other managed project
 retain their existing stack-specific behavior. The legacy `.ddev` profile and
 historical inspection/OCI artifacts are not this installation path.
 
-**SOURCE preparation only. Host/LIVE is STOP.** V5 source approval does not
-resume Physical Pilot V1 or authorize a new issue, credentials, build or service.
-[Owner V5 approval](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6447953456)
-requires a separate Physical Pilot V2 after reviewed merge and postmerge CI.
-V1 stopped before installation because DDEV start implicitly changes the shared
-`ddev-global-cache`, independently of project mounts and isolated HOME.
+This describes the supported source installation path. Physical V3 later ran
+one development invocation and mandatory checks, then blocked in delivery; see
+[current state](../project/current-state.md) and the linked original receipts.
+Source preparation is not permission to build, start, re-admit or deploy.
+The consolidation's [supported readiness/recovery and observer rollout packet](local-operations.md)
+adds schema-only telemetry initialization, pre-admission checks and read-only
+observation. It does not hot-load changes into retained V3 or rewrite its baseline.
 
 ## Planning
 
@@ -65,8 +66,9 @@ mode-0600 env file. The non-secret DB-only `initdb/01-runtime.sql` uses PostgreS
 Runtime role owning only the fresh `pcp_local` database/schema. SQL contains no
 literal passwords and is readable by DB UID 999; its private parent root remains
 operator-owned. Never dump service env files or mount them in a test container.
-Initialize existing Runtime/receipt/lease schema DDL later inside that owned
-database; never call legacy recovery or import old DB state.
+Use the explicit schema-only initializer in [local operations](local-operations.md)
+inside that owned database, including telemetry and quota schema. Never call
+legacy recovery or import old DB state.
 
 ## Native platform contract
 

@@ -303,14 +303,28 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         attempts = int(progress.get('delivery_attempts', 0))
         progress['delivery_attempts'] = attempts + 1
         self.storage.update(job_id, progress=progress)
-        delivery = await deliver_verified_work(ddev=self.ddev, job_id=job_id, project_id=PROJECT_ID,
-            workspace=row["workspace"], branch=row["branch"], source_commit=task.base_sha,
-            commit=result["commit"], title=row["task"]["title"], body=body,
-            permissions={"commit": True, "push_ai_branch": True, "create_pr": True,
-                         "auto_merge_low_risk": False, "production_deploy": False},
-            max_wait_seconds=max(1, min(900, int(readers.activation['budget']['max_wall_seconds']
-                - float(progress.get('elapsed_minutes', 0)) * 60))),
-            reconcile_existing=attempts > 0, required_ci=(REPOSITORY, "tests"))
+        try:
+            delivery = await deliver_verified_work(ddev=self.ddev, job_id=job_id, project_id=PROJECT_ID,
+                workspace=row["workspace"], branch=row["branch"], source_commit=task.base_sha,
+                commit=result["commit"], title=row["task"]["title"], body=body,
+                permissions={"commit": True, "push_ai_branch": True, "create_pr": True,
+                             "auto_merge_low_risk": False, "production_deploy": False},
+                max_wait_seconds=max(1, min(900, int(readers.activation['budget']['max_wall_seconds']
+                    - float(progress.get('elapsed_minutes', 0)) * 60))),
+                reconcile_existing=attempts > 0, required_ci=(REPOSITORY, "tests"))
+        except DeliveryError as exc:
+            # Publication may already have happened. Retain all metadata so the
+            # next delivery-only attempt reconciles remote state before writes.
+            result['delivery'] = deepcopy(exc.metadata)
+            result['delivery']['uncertain'] = True
+            checkpoint['pcp_local_execution']['delivery_uncertain'] = True
+            checkpoint['delivery'] = deepcopy(result['delivery'])
+            try:
+                self.storage.update(job_id, status='blocked', result=result, checkpoint=checkpoint,
+                                    error=exc.reason)
+            except Exception as secondary:
+                exc.add_note('Delivery checkpoint also failed: ' + type(secondary).__name__)
+            raise
         result["delivery"] = delivery
         result["acceptance_phase"] = "awaiting_independent_pm_review"
         result["delivery_finalized"] = False

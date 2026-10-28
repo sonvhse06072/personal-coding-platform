@@ -2416,6 +2416,8 @@ def create_workspace(payload: WorkspaceRequest) -> dict[str, Any]:
         git(workspace, "checkout", "-b", branch, source_commit)
         git(workspace, "update-ref", "-d", "refs/pcp/materialized-source", check=False)
         if payload.project_id == 'pcp-local':
+            git(workspace, 'config', '--local', 'user.name', 'PCP Local')
+            git(workspace, 'config', '--local', 'user.email', 'pcp-local@localhost')
             # Sparse omission preserves the source tree/diff without materializing
             # executable legacy DDEV files into the developer workspace.
             git(workspace, 'sparse-checkout', 'set', '--no-cone', '/*', '!/.ddev/')
@@ -3651,6 +3653,12 @@ def pcp_local_observe(payload: PcpLocalObservationRequest):
         raise HTTPException(409, 'pcp_local_runtime_network_invalid')
     if any(peer.get('Name') not in permitted for peer in network.get('Containers', {}).values()):
         raise HTTPException(409, 'pcp_local_foreign_network_peer')
+    _pcp_verification_image(a, root)
+    from .github_delivery import ensure_askpass_script
+    helper = subprocess.run([ensure_askpass_script(), 'Username for HTTPS'],
+        env={'PATH':'/usr/bin:/bin'}, capture_output=True, text=True, timeout=10)
+    if helper.returncode or helper.stdout.strip() != 'x-access-token':
+        raise HTTPException(409, 'pcp_local_publisher_askpass_unavailable')
     delivery, repository = _github_context(cfg)
     if repository != _PCP_REPOSITORY:
         raise HTTPException(403, 'pcp_local_publisher_repository_invalid')
@@ -3659,6 +3667,8 @@ def pcp_local_observe(payload: PcpLocalObservationRequest):
         response.raise_for_status()
         if response.json().get('permissions', {}).get('push') is not True:
             raise HTTPException(403, 'pcp_local_publisher_not_authorized')
+        pulls = client.get(f'{delivery.base}/repos/{repository}/pulls', params={'state':'open','per_page':1})
+        pulls.raise_for_status()
     return dict(job_id=payload.job_id, source_commit=payload.source_commit,
         activation_digest=_pcp_digest(a),
         isolation=dict(current_main_sha=state['head'], source_repo_clean=True,

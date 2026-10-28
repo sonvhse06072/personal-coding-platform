@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import logging
 from typing import Any
 
 from .continuity import continuity_proposal
@@ -98,6 +99,15 @@ class TelemetryStorage(Storage):
         if not previous or not current:
             return
 
+        try:
+            self._record_transition_telemetry(previous, current)
+        except Exception as exc:
+            # Authoritative state already committed. Advisory telemetry must not
+            # hide the primary execution error or change the outcome. No raw SQL,
+            # credentials, exception message, or invented successful telemetry.
+            logging.getLogger(__name__).error('Runtime telemetry side effect unavailable: %s', type(exc).__name__)
+
+    def _record_transition_telemetry(self, previous, current):
         self._record_attention_transition(previous, current)
         self._record_budget_attention(previous, current)
 

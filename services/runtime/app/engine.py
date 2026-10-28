@@ -794,6 +794,12 @@ class RuntimeEngine(_RuntimeEngine):
         from .pcp_local_worker_loop import TrustedReaders
         from .pm_bridge import PMBridgeGitHubClient
         from .pcp_local_worker_loop import LocalSourceQueueStore, run_admitted_job
+        from .pcp_local_readiness import collect_readiness
+        readiness = await collect_readiness(self)
+        if not readiness['ready']:
+            from .pcp_local_task_queue import TaskStop
+            raise TaskStop('pcp_local_readiness_blocked:' + ','.join(
+                b['component'] + '/' + b['code'] for b in readiness['blockers']))
         readers = TrustedReaders(self, PMBridgeGitHubClient())
         task, _ = await readers.source()
         LocalSourceQueueStore(self.storage).record(task)
@@ -815,7 +821,14 @@ class RuntimeEngine(_RuntimeEngine):
             row = self.storage.get(job_id)
             require(row is not None and row['project_id'] == PROJECT_ID,
                     'pcp_local_delivery_job_missing')
+            require(row['checkpoint']['project_baseline'] == baseline.model_dump(mode='json'),
+                    'pcp_local_delivery_baseline_changed')
             execution = row['checkpoint'].get('pcp_local_execution') or {}
+            if execution.get('state') in {'verified_uncommitted', 'commit_uncertain'}:
+                from .pcp_local_recovery import recover_verified_job
+                row = await recover_verified_job(self, readers, task, row)
+                execution = row['checkpoint']['pcp_local_execution']
+
             require(execution.get('state') == 'verified'
                     and execution.get('authority_digest') == readers.authority_digest
                     and row['checkpoint']['project_baseline'] == baseline.model_dump(mode='json'),

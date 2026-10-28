@@ -38,17 +38,11 @@ def github_push_url(repository: str) -> str:
 
 
 def ensure_askpass_script() -> str:
-    path = Path("/tmp/coding-platform-github-askpass")
-    content = """#!/bin/sh
-case \"${1:-}\" in
-  *Username*) printf '%s\\n' 'x-access-token' ;;
-  *Password*) printf '%s\\n' \"${GITHUB_DELIVERY_TOKEN:-}\" ;;
-  *) exit 1 ;;
-esac
-"""
-    if not path.exists() or path.read_text(encoding="utf-8") != content:
-        path.write_text(content, encoding="utf-8")
-        path.chmod(0o700)
+    # Shipped inside the read-only Executor image; never generate executable
+    # files on a noexec tmpfs or include a token in script content.
+    path = Path(__file__).with_name('github_askpass.sh')
+    if not path.is_file() or path.is_symlink() or not os.access(path, os.X_OK):
+        raise RuntimeError('GitHub askpass helper unavailable')
     return str(path)
 
 
