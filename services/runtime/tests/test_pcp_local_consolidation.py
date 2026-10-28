@@ -141,13 +141,14 @@ def test_telemetry_side_effect_does_not_erase_authoritative_outcome(monkeypatch,
     assert 'unavailable' in caplog.text and 'secret-bearing' not in caplog.text
 
 
-@pytest.mark.parametrize('change',['none','stale_usage','lease_generation','receipt_generation','receipt_body','receipt_owner'])
+@pytest.mark.parametrize('change',['none','stale_usage','counter_type','lease_generation','receipt_generation','receipt_body','receipt_owner'])
 def test_real_checkpoint_cas_preserves_receipt_lease_counters(verified,change):
     v=verified; expected=deepcopy(v.store.row)
     receipt={**expected['checkpoint']['pcp_local_source']['receipt'],'state':'running','generation':2,'job_id':expected['id']}
     lease=dict(state='active',generation=1,owner_job_id=expected['id'])
     current=deepcopy(expected);writes=[]
     if change=='stale_usage':current['progress']['model_calls']+=1
+    if change=='counter_type':current['progress']['model_calls']=True
     if change=='lease_generation':lease['generation']+=1
     if change=='receipt_generation':receipt['generation']+=1
     if change=='receipt_body':receipt['body_sha256']='f'*64

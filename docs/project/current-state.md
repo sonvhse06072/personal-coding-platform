@@ -9,7 +9,9 @@ baselines outrank this index. Reverify GitHub before action.
 Updated 2026-10-28. Frozen main/source remains
 `0c968dd99199c73f3fbc89c0b59da168844e8f73` (PR #823). External Codex engineering
 works in `/home/sonvh/pcp-consolidation-815`, branch
-`ai/815-822-consolidation`. One writer, no nested agents, no further PCP-managed
+`ai/815-822-consolidation`, [Draft PR #825](https://github.com/sonvhse06072/personal-coding-platform/pull/825).
+Final head and hosted run/job receipts are tracked in that PR; only actually
+executed four-suite success at its current head is merge evidence. One writer, no nested agents, no further PCP-managed
 pilot or inference. Owner delegated routine in-frame reliability/dashboard work
 and Draft PR delivery; independent ChatGPT PM owns review and eligible merge.
 No protected project authority or approved baseline is rewritten.
@@ -88,9 +90,9 @@ observer mode starts no worker and rejects control endpoints. Local verification
 exact-head hosted CI, receipt/lease, actual model/effort, available usage and
 unknown/stale/offline states remain separate. No completion percentages or ETA.
 
-Local full suites: root 1742 pass; Runtime 2437 pass/88 skipped; Router 132 pass;
-Executor 680 pass (4991 pass/88 skipped overall). Focused Runtime/continuity
-regressions: 244 pass. Full-suite/head-specific hosted evidence is recorded
+Local full suites: root 1742 pass; Runtime 2438 pass/88 skipped; Router 132 pass;
+Executor 680 pass (4992 pass/88 skipped overall). Focused Runtime/continuity
+regressions: 245 pass. Full-suite/head-specific hosted evidence is recorded
 in the Draft PR and [execution checklist](../pcp-portable/consolidation.md).
 Browser fixtures cover the actual original held-job shape at desktop/mobile,
 authentication, empty, waiting-auth, stale, offline and unavailable; no overflow

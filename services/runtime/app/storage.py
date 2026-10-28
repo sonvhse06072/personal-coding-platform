@@ -164,6 +164,7 @@ class Storage:
     def cas_local_checkpoint(self, expected, checkpoint, *, status, result):
         """Exact-row CAS; never rewinds usage or edits receipt/lease ownership."""
         from .pcp_local_task_queue import PROJECT_ID, REPOSITORY, require
+        from .pcp_local_worker_loop import exact_value
         old = expected['checkpoint']['pcp_local_execution']
         new = checkpoint['pcp_local_execution']
         transition = (old.get('state'), new.get('state'), status)
@@ -180,7 +181,7 @@ class Storage:
             conn.execute("SELECT pg_advisory_xact_lock(hashtext('pcp-local-recovery'))")
             current = conn.execute('SELECT * FROM cp_jobs WHERE id=%s FOR UPDATE',
                                    (expected['id'],)).fetchone()
-            require(current == expected and current['project_id'] == PROJECT_ID,
+            require(exact_value(current, expected) and current['project_id'] == PROJECT_ID,
                     'pcp_local_recovery_stale_row')
             binding = current['checkpoint']['pcp_local_source']['receipt']
             receipt = conn.execute('SELECT * FROM cp_pcp_local_source_receipts WHERE repository=%s '
