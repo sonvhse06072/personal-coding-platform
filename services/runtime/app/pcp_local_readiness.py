@@ -24,10 +24,14 @@ def schema_readiness(storage):
         conn.execute('SET TRANSACTION READ ONLY')
         rows = conn.execute("""SELECT name, to_regclass(name) IS NOT NULL AS present,
             CASE WHEN to_regclass(name) IS NULL THEN false ELSE
-            has_table_privilege(current_user, name, 'SELECT,INSERT,UPDATE,DELETE') END AS permitted
+            has_table_privilege(current_user, name, 'SELECT')
+            AND has_table_privilege(current_user, name, 'INSERT')
+            AND has_table_privilege(current_user, name, 'UPDATE')
+            AND has_table_privilege(current_user, name, 'DELETE') END AS permitted
             FROM unnest(%s::text[]) AS name""", (list(TABLES),)).fetchall()
         sequences = conn.execute("""SELECT c.relname AS name,
-            has_sequence_privilege(current_user,c.oid,'USAGE,SELECT') AS permitted
+            has_sequence_privilege(current_user,c.oid,'USAGE')
+            AND has_sequence_privilege(current_user,c.oid,'SELECT') AS permitted
             FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
             WHERE n.nspname=current_schema() AND c.relkind='S'
             AND c.relname = ANY(%s)""", (['cp_job_events_id_seq', 'cp_attention_events_id_seq',

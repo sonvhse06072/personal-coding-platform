@@ -90,9 +90,9 @@ observer mode starts no worker and rejects control endpoints. Local verification
 exact-head hosted CI, receipt/lease, actual model/effort, available usage and
 unknown/stale/offline states remain separate. No completion percentages or ETA.
 
-Local full suites: root 1742 pass; Runtime 2438 pass/88 skipped; Router 132 pass;
-Executor 680 pass (4992 pass/88 skipped overall). Focused Runtime/continuity
-regressions: 245 pass. Full-suite/head-specific hosted evidence is recorded
+Local full suites: root 1742 pass; Runtime 2439 pass/88 skipped; Router 132 pass;
+Executor 680 pass (4993 pass/88 skipped overall). Focused Runtime/continuity
+regressions: 246 pass. Full-suite/head-specific hosted evidence is recorded
 in the Draft PR and [execution checklist](../pcp-portable/consolidation.md).
 Browser fixtures cover the actual original held-job shape at desktop/mobile,
 authentication, empty, waiting-auth, stale, offline and unavailable; no overflow

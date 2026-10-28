@@ -16,7 +16,7 @@ Session start: 2026-10-28 17:22:46 UTC. Physical recovery deadline:
 - [x] Locked/CAS same-job checkpoint reconciliation; guarded delivery blocked by retained askpass execution, remote absent; all 22 stopped again.
 - [x] Reliability implementation and focused regressions.
 - [x] Read-only dashboard projection/UI and representative browser fixtures.
-- [x] Full local suites: root 1742; Runtime 2438/88 skipped; Router 132; Executor 680.
+- [x] Full local suites: root 1742; Runtime 2439/88 skipped; Router 132; Executor 680.
 - [x] Browser fixtures: seven states, 1440/390 px, no overflow/page errors.
 - [x] Concrete PM review/retained-pilot disposition/observer adoption packet.
 - [x] Draft PR #825 delivered; current head/run/job evidence is tracked in its description/checks.
@@ -46,9 +46,9 @@ Source and fixture success do not establish live V3 deployment or PM acceptance.
 
 ## Acceptance evidence
 
-Local full suites: 4,992 passed / 88 skipped. The optional PostgreSQL/integration
+Local full suites: 4,993 passed / 88 skipped. The optional PostgreSQL/integration
 skips remain explicit, not executed acceptance. Focused Runtime/recovery/dashboard
-and continuity run: 245 passed. `git diff --check` passes. Browser evidence is in
+and continuity run: 246 passed. `git diff --check` passes. Browser evidence is in
 `evidence/consolidation-dashboard/`; no live dashboard or VPN-state parity is
 claimed. Router/Executor were unchanged after their successful full-suite runs.
 Hosted head/run/jobs and the independent-review status belong to the Draft PR;

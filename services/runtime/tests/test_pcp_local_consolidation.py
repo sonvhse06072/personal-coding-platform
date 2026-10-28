@@ -197,3 +197,18 @@ def test_readiness_success_uses_existing_admission_checks_without_mutation(monke
     assert view['ready'] is True and not view['blockers']
     assert view['job_registrations']==view['model_invocations']==0
     assert all(s.startswith(('SET TRANSACTION','SELECT')) for s in db.trace)
+
+
+def test_present_schema_with_incomplete_role_rights_is_not_ready():
+    class Denied(Schema):
+        def execute(self,sql,params=None):
+            super().execute(sql,params)
+            for row in self.rows:row['permitted']=False
+            return self
+    db=Denied();blockers=readiness.schema_readiness(db)
+    assert len(blockers)==len(readiness.TABLES)
+    assert all(b['code']=='role_permissions' for b in blockers)
+    privilege_query=next(s for s in db.trace if 'has_table_privilege' in s)
+    # PostgreSQL comma-separated privilege lists mean ANY privilege. Require
+    # each one independently so a SELECT-only principal cannot pass admission.
+    assert all("name, '"+p+"')" in privilege_query for p in ('SELECT','INSERT','UPDATE','DELETE'))
