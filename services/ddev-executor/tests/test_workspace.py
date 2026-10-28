@@ -2154,7 +2154,7 @@ def test_pcp_verification_image_rejects_unowned_or_unsafe(pcp_native, monkeypatc
     with pytest.raises(HTTPException): executor._pcp_verification_image(a, root)
 
 
-def _exercise_pcp_native_phase(pcp_native, monkeypatch, stdout, exit_code, expected, *, mutate_source=False):
+def _exercise_pcp_native_phase(pcp_native, monkeypatch, stdout, exit_code, expected, *, mutate_source=False, docker20=False):
     executor, root, workspace, job, a, _ = pcp_native
     calls, inspected = [], []
     container = {}
@@ -2180,6 +2180,17 @@ def _exercise_pcp_native_phase(pcp_native, monkeypatch, stdout, exit_code, expec
             assert argv[argv.index('--user')+1] == '1000:1000'
             assert argv[argv.index('--entrypoint=/usr/bin/timeout')+1] == '--env'
             mount = argv[argv.index('--mount')+1]
+            assert argv.count('--mount') == 1
+            if docker20:
+                # Docker CLI v20.10.24 opts/mount.go rejects unknown keys
+                # before contacting the daemon. Exercise the real phase's argv.
+                fields = dict(part.split('=', 1) if '=' in part else (part, True)
+                              for part in mount.split(','))
+                accepted = {'type', 'source', 'target', 'readonly', 'bind-nonrecursive'}
+                assert set(fields) <= accepted, 'Docker20 unsupported mount key'
+                assert fields == {'type': 'bind', 'source': str(kwargs['cwd']),
+                                  'target': '/workspace', 'readonly': True,
+                                  'bind-nonrecursive': 'true'}
             assert mount.endswith('target=/workspace,readonly,bind-recursive=disabled')
             assert str(root/'sources/.pcp-local-verification') in mount
             assert 'docker.sock' not in mount and '/home/coder' not in mount
@@ -2232,6 +2243,11 @@ def _exercise_pcp_native_phase(pcp_native, monkeypatch, stdout, exit_code, expec
 ])
 def test_pcp_native_phase_executes_only_bounded_owned_container(pcp_native, monkeypatch, stdout, exit_code, expected):
     _exercise_pcp_native_phase(pcp_native, monkeypatch, stdout, exit_code, expected)
+
+
+def test_pcp_native_verifier_command_supports_docker20(pcp_native, monkeypatch):
+    _exercise_pcp_native_phase(pcp_native, monkeypatch, '3 passed', 0, True,
+                               docker20=True)
 
 
 @pytest.mark.parametrize('fault', ['socket', 'rw', 'network', 'secret', 'root', 'memory', 'tmpfs', 'image', 'job'])
