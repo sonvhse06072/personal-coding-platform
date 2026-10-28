@@ -577,6 +577,8 @@ async def run_admitted_job(engine, readers, task):
             await readers.refresh(task)
             remaining = limits['max_wall_seconds'] - int(time.monotonic() - started)
             require(remaining >= 10, 'pcp_local_resource_envelope_exhausted')
+            from .pcp_local_recovery import verified_tree, commit_verified
+            tested_tree = verified_tree(workspace, task, diff)
             verification = await engine.verify_pcp_local(job_id, workspace, project,
                 timeout_seconds=remaining)
             progress['test_runs'] = progress.get('test_runs', 0) + verification['test_runs']
@@ -593,10 +595,11 @@ async def run_admitted_job(engine, readers, task):
         # Recheck after tests, which must not mutate the developer source copy.
         final_diff = diff_state(workspace, int(project['runtime'].get('max_diff_bytes', 750000)), base_ref=task.base_sha)
         require(final_diff['diff_hash'] == diff['diff_hash'], 'pcp_local_verified_diff_changed')
-        # Persist successful verification and exact source identity BEFORE Git.
+        require(verified_tree(workspace, task, diff) == tested_tree, 'pcp_local_verified_tree_changed')
+        # Persist the original tested identity BEFORE Git; never refresh it to accept drift.
         from .pcp_local_recovery import verified_tree, commit_verified
         checkpoint['pcp_local_execution'].update(state='verified_uncommitted',
-            verified_tree=verified_tree(workspace, task, diff), diff=diff, route=deepcopy(readers.route))
+            duration_seconds=time.monotonic() - started, verified_tree=tested_tree, diff=diff, route=deepcopy(readers.route))
         engine.storage.update(job_id, checkpoint=checkpoint, progress=progress)
         commit = commit_verified(engine, job_id, task, workspace, checkpoint)
 

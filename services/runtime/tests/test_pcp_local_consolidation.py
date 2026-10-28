@@ -31,7 +31,7 @@ class Schema:
     def execute(self, sql, params=None):
         self.trace.append(sql)
         self.rows = ([dict(name=n,present=not self.missing,permitted=not self.missing) for n in readiness.TABLES]
-                     if 'FROM unnest' in sql else [])
+                     if 'has_table_privilege' in sql else [])
         return self
     def fetchall(self): return deepcopy(self.rows)
 
@@ -212,3 +212,92 @@ def test_present_schema_with_incomplete_role_rights_is_not_ready():
     # PostgreSQL comma-separated privilege lists mean ANY privilege. Require
     # each one independently so a SELECT-only principal cannot pass admission.
     assert all("name, '"+p+"')" in privilege_query for p in ('SELECT','INSERT','UPDATE','DELETE'))
+
+
+@pytest.mark.parametrize('path', ['normal', 'recovery'])
+@pytest.mark.parametrize('drift', ['none', 'mode', 'content', 'mode_ignored_by_git'])
+def test_git_identity_bound_before_commit(verified, monkeypatch, path, drift):
+    v = verified
+    original = deepcopy(v.store.row)
+    def update(key, **fields):
+        v.store.row.update(deepcopy(fields))
+    v.store.update = update
+    if drift in {'mode', 'mode_ignored_by_git'}:
+        if drift.endswith('git'):
+            v.git('config', 'core.filemode', 'false')
+        (v.path/'original').chmod(0o755)
+    elif drift == 'content':
+        (v.path/'original').write_text('unverified')
+    def run():
+        if path == 'normal':
+            return recovery.commit_verified(v.engine, original['id'], v.task, v.path, deepcopy(original['checkpoint']))
+        return asyncio.run(recovery.recover_verified_job(v.engine, v.reader, v.task, deepcopy(original)))['result']['commit']
+    if drift == 'none':
+        commit = run()
+        assert v.git('show', '-s', '--format=%P', commit) == v.task.base_sha
+        assert v.git('rev-parse', commit+'^{tree}') == original['checkpoint']['pcp_local_execution']['verified_tree']['tree']
+    else:
+        with pytest.raises(TaskStop):
+            run()
+        assert v.git('rev-parse', 'HEAD') == v.task.base_sha
+        assert v.store.row == original
+    assert v.store.row['progress'] == original['progress']
+
+
+@pytest.mark.parametrize('path', ['normal', 'recovery'])
+@pytest.mark.parametrize('outcome', ['mode_in_commit', 'content_in_commit', 'extra_parent', 'lost_ack', 'no_commit'])
+def test_git_outcome_is_checked_on_both_paths(verified, monkeypatch, path, outcome):
+    from app import repo
+    v = verified
+    original = deepcopy(v.store.row)
+    v.store.update = lambda key, **fields: v.store.row.update(deepcopy(fields))
+    real_commit = repo.commit_changes
+    def commit(workspace, message):
+        if outcome == 'no_commit':
+            raise TimeoutError('uncertain before Git')
+        if outcome == 'mode_in_commit':
+            (v.path/'original').chmod(0o755)
+        if outcome == 'content_in_commit':
+            (v.path/'original').write_text('unverified')
+        sha = real_commit(workspace, message)
+        if outcome == 'extra_parent':
+            other = v.git('commit-tree', v.git('rev-parse', 'HEAD^{tree}'), '-p', v.task.base_sha, '-m', 'other')
+            merge = v.git('commit-tree', v.git('rev-parse', 'HEAD^{tree}'), '-p', v.task.base_sha, '-p', other, '-m', 'merge')
+            v.git('update-ref', 'HEAD', merge)
+            return merge
+        if outcome == 'lost_ack':
+            raise TimeoutError('committed but acknowledgement lost')
+        return sha
+    monkeypatch.setattr(repo, 'commit_changes', commit)
+    with pytest.raises((TaskStop, TimeoutError)):
+        if path == 'normal':
+            recovery.commit_verified(v.engine, original['id'], v.task, v.path, deepcopy(original['checkpoint']))
+        else:
+            asyncio.run(recovery.recover_verified_job(v.engine, v.reader, v.task, deepcopy(original)))
+    assert v.store.row['checkpoint']['pcp_local_execution']['state'] == 'commit_uncertain'
+    monkeypatch.setattr(repo, 'commit_changes', lambda *a: pytest.fail('uncertain recovery must not commit again'))
+    if outcome == 'lost_ack':
+        recovered = asyncio.run(recovery.recover_verified_job(v.engine, v.reader, v.task, v.store.get(original['id'])))
+        assert recovered['result']['commit'] == v.git('rev-parse', 'HEAD')
+        with pytest.raises(TaskStop):
+            asyncio.run(recovery.recover_verified_job(v.engine, v.reader, v.task, recovered))
+    else:
+        with pytest.raises(TaskStop):
+            asyncio.run(recovery.recover_verified_job(v.engine, v.reader, v.task, v.store.get(original['id'])))
+    assert v.store.row['progress'] == original['progress']
+    assert v.store.row['checkpoint']['pcp_local_source'] == original['checkpoint']['pcp_local_source']
+
+
+def test_candidate_tree_preserves_sparse_source_and_real_index(verified):
+    v=verified
+    # The executor omits legacy .ddev from the worktree while retaining its Git tree.
+    (v.path/'.ddev').mkdir();(v.path/'.ddev/config.yaml').write_text('name: retained\n')
+    v.git('add','.ddev/config.yaml');v.git('commit','-m','sparse base')
+    v.git('sparse-checkout','set','--no-cone','/*','!/.ddev/')
+    assert not (v.path/'.ddev/config.yaml').exists()
+    before=(v.path/'.git/index').read_bytes()
+    tree=recovery.candidate_tree(v.path)
+    assert (v.path/'.git/index').read_bytes()==before
+    assert v.git('show', tree+':.ddev/config.yaml')=='name: retained'
+    commit=commit_changes(v.path,'candidate')
+    assert v.git('rev-parse',commit+'^{tree}')==tree

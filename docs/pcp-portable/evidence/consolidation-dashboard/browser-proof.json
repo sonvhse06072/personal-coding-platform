@@ -8,6 +8,12 @@
     "waiting_auth",
     "unavailable",
     "stale",
+    "completed",
+    "failed",
+    "cancelled",
+    "verified_uncommitted",
+    "commit_uncertain",
+    "verified",
     "offline"
   ],
   "viewports": [
@@ -28,6 +34,34 @@
     [
       "POST",
       "/v1/dashboard/session"
+    ],
+    [
+      "GET",
+      "/v1/dashboard/snapshot"
+    ],
+    [
+      "GET",
+      "/v1/dashboard/snapshot"
+    ],
+    [
+      "GET",
+      "/v1/dashboard/snapshot"
+    ],
+    [
+      "GET",
+      "/v1/dashboard/snapshot"
+    ],
+    [
+      "GET",
+      "/v1/dashboard/snapshot"
+    ],
+    [
+      "GET",
+      "/v1/dashboard/snapshot"
+    ],
+    [
+      "GET",
+      "/v1/dashboard/snapshot"
     ],
     [
       "GET",

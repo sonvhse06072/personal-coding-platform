@@ -1,26 +1,41 @@
 # PCP Local consolidation execution checklist
 
-Scope: Owner-delegated same-job non-model salvage (GH-815 comment 6475561621),
-readiness/bootstrap/recovery repairs, and GH-822 read-only dashboard. One writer,
-no merge, no additional PCP-managed model call or live pilot. Base/main remains
-0c968dd99199c73f3fbc89c0b59da168844e8f73; approved baseline is unchanged.
+Scope: sustained repair of PR #825 under the [PM disposition](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6477295524)
+and [changes-required review](https://github.com/sonvhse06072/personal-coding-platform/pull/825#pullrequestreview-5687731514).
+One writer in `/home/sonvh/pcp-consolidation-815`, branch `ai/815-822-consolidation`.
+Reviewed starting head `8291fc501a7a0ad353e7bfaa0abb1aafef77b1df`; base
+`0c968dd99199c73f3fbc89c0b59da168844e8f73`. No merge or physical adoption.
 
-Session start: 2026-10-28 17:22:46 UTC. Physical recovery deadline:
-2026-10-28 19:22:46 UTC (earlier than original 22:53 UTC absolute ceiling).
+## Sustained repair checklist — 2026-10-29
 
-- [x] Reconcile governing docs, issues 815/822/824 and original receipts.
-- [x] Verify full IDs/ownership of 22 stopped containers and private network.
-- [x] Preserve private preimages; verify all 612 tested-tree file hashes.
-- [x] Start only owned DB, install exact accepted-source telemetry DDL as owner.
-- [x] Commit exact existing three-file result with repository-local automation identity.
-- [x] Locked/CAS same-job checkpoint reconciliation; guarded delivery blocked by retained askpass execution, remote absent; all 22 stopped again.
-- [x] Reliability implementation and focused regressions.
-- [x] Read-only dashboard projection/UI and representative browser fixtures.
-- [x] Full local suites: root 1742; Runtime 2439/88 skipped; Router 132; Executor 680.
-- [x] Browser fixtures: seven states, 1440/390 px, no overflow/page errors.
-- [x] Concrete PM review/retained-pilot disposition/observer adoption packet.
-- [x] Draft PR #825 delivered; current head/run/job evidence is tracked in its description/checks.
-- [ ] Independent PM review, legitimate retained-pilot disposition, eligible merge and separate rollout.
+- [x] Verify clean checkout, complete PR scope, four executed prior-head suites,
+  independent review and later PM disposition.
+- [x] Bind candidate Git tree/modes before verification; recompute diff; check
+  actual committed tree and complete sole-parent list on both paths.
+- [x] Separate terminal dashboard outcome/freshness/duration; record observation
+  provenance before normalization; show partial/unknown/reported/estimated usage.
+- [x] Complete real Git, PostgreSQL, readiness, publisher and browser regressions.
+- [x] Required full local suites.
+- [x] Update continuity and concrete successor adoption packet.
+- [ ] Renewed independent PM acceptance and eligible merge (PM responsibility).
+
+Hosted acceptance and final handoff are tracked only by the exact final-head
+run/jobs in PR #825.
+
+## Retained historical evidence
+
+The prior 2026-10-28 salvage window is closed. V3/#824 is incomplete assisted
+pilot evidence, never a new execution target. Preserve job
+`51a11aa704362d84ae5c7b70e85741f1`, assisted commit
+`7b3833bdb06e59aabcad31e4ad2aed4ac5d003ea`, historical source/baseline,
+verified snapshots, one development invocation and 213 passing local tests.
+Last operator report: delivering/execution verified, publication blocked;
+receipt running/gen2, lease active/gen1; no remote pilot branch/PR.
+All 22 owned containers were reported stopped, activation disabled. This repair
+session does not freshly inspect or mutate V3. No retry/re-admission, lease
+release, counter reset, source/image rebinding or fabricated completion.
+PM lifted only the scheduling freeze on main for a future eligible merge;
+no baseline succession, replacement job or physical adoption is thereby granted.
 
 ## Minimal implementation map
 
@@ -46,13 +61,40 @@ Source and fixture success do not establish live V3 deployment or PM acceptance.
 
 ## Acceptance evidence
 
-Local full suites: 4,993 passed / 88 skipped. The optional PostgreSQL/integration
-skips remain explicit, not executed acceptance. Focused Runtime/recovery/dashboard
-and continuity run: 246 passed. `git diff --check` passes. Browser evidence is in
-`evidence/consolidation-dashboard/`; no live dashboard or VPN-state parity is
-claimed. Router/Executor were unchanged after their successful full-suite runs.
-Hosted head/run/jobs and the independent-review status belong to the Draft PR;
-check the exact final head rather than reusing an earlier-head run.
+Local full suites: root 1742; Runtime 2479/96 skipped; Router 132; Executor 680:
+**5033 passed / 96 skipped**. Focused regressions **288 passed**, including eight
+executed PostgreSQL tests using a private temporary UTF-8 cluster and a scoped
+non-superuser owner. Running the new selected regressions against isolated copies of the reviewed
+8291fc5 modules produced 15 failures (three passing controls); the repaired
+modules pass the same coverage. Real Git regressions reproduce the PM's mode/parent failure
+mechanisms and cover both normal and recovery outcomes, uncertain commits, sparse
+checkout and unchanged indexes. CAS rejects stale usage/receipt/lease while
+preserving ownership and counters; no delivery recovery calls a model.
+
+Production recording/normalization, JSON storage and the actual database-backed
+projection cover absent, explicit zero and partial observations. Terminal
+completed/failed/cancelled states retain fixed duration or Unknown; stale active
+work remains distinct. Estimates do not become reported spend. Missing sequence
+readiness is tested with actual PostgreSQL. Remaining optional integration skips
+are not acceptance evidence. Root initially rejected generated bytecode; those
+files were moved to retained local evidence and the unchanged guard passed.
+
+The immutable askpass is tracked mode 100755, copied by the existing Dockerfile
+and preserved by bootstrap archive/permission handling. Its username and synthetic
+password probes execute locally without writing tmpfs. Actual container noexec
+mount behavior, publisher round trips, physical dashboard HTTPS and VPN parity
+remain NOT TESTED; the successor packet requires those checks.
+
+Browser evidence in `evidence/consolidation-dashboard/` is freshly generated from
+the current projection: 13 states, desktop/mobile, no overflow/page errors, no
+live endpoints. Local logs are retained in the operator's private validation
+folder. `git diff --check` passes. Source/fixture/DB evidence is not physical V3
+or container adoption evidence.
 
 Draft source delivery: [PR #825](https://github.com/sonvhse06072/personal-coding-platform/pull/825).
-Only that PR current exact-head executed hosted checks may establish CI readiness.
+Final-head executed hosted run/jobs and test counts are recorded in its description
+and checks, avoiding a self-referential source hash. Earlier-head green CI cannot
+establish readiness. Independent PM review remains required; Developer never
+self-accepts or merges. The [successor packet](local-operations.md#successor-release-adoption-packet--prepared-not-authorized)
+covers exact source/image/baseline succession, schema/readiness, authenticated
+observation, physical recovery/publication, VPN matrix and retention/rollback.

@@ -44,7 +44,7 @@ from .state import (
 )
 from .storage import Storage, now
 from .work_order_checkpoints import orchestrator_launch
-from .usage import estimated_cost_usd, normalize_usage
+from .usage import usage_observation, estimated_cost_usd, normalize_usage
 
 
 FINAL = {"completed", "failed", "cancelled"}
@@ -1158,6 +1158,7 @@ class RuntimeEngineCore:
     @staticmethod
     def _record_agent_attempt(progress: dict[str, Any], choice: dict[str, Any], run: Any) -> None:
         attempts = progress.setdefault("agent_attempts", [])
+        observed = usage_observation(run.usage)
         attempts.append({
             "iteration": progress.get("iteration", 0),
             "model": choice.get("id"),
@@ -1168,6 +1169,11 @@ class RuntimeEngineCore:
             "output_excerpt": (run.output or "")[-4000:],
             "stderr_excerpt": (run.stderr or "")[-4000:],
             "usage": normalize_usage(run.usage),
+            "usage_observed": observed,
+            "estimated_cost_usd": (estimated_cost_usd(choice.get("id", ""), run.usage)
+                if not observed["reported_cost_usd"]
+                and observed["gross_input_tokens"]
+                and observed["output_tokens"] else None),
         })
         if len(attempts) > 12:
             del attempts[:-12]

@@ -29,12 +29,11 @@ def schema_readiness(storage):
             AND has_table_privilege(current_user, name, 'UPDATE')
             AND has_table_privilege(current_user, name, 'DELETE') END AS permitted
             FROM unnest(%s::text[]) AS name""", (list(TABLES),)).fetchall()
-        sequences = conn.execute("""SELECT c.relname AS name,
-            has_sequence_privilege(current_user,c.oid,'USAGE')
-            AND has_sequence_privilege(current_user,c.oid,'SELECT') AS permitted
-            FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
-            WHERE n.nspname=current_schema() AND c.relkind='S'
-            AND c.relname = ANY(%s)""", (['cp_job_events_id_seq', 'cp_attention_events_id_seq',
+        sequences = conn.execute("""SELECT name,
+            CASE WHEN to_regclass(name) IS NULL THEN false ELSE
+            has_sequence_privilege(current_user,to_regclass(name),'USAGE')
+            AND has_sequence_privilege(current_user,to_regclass(name),'SELECT') END AS permitted
+            FROM unnest(%s::text[]) AS name""", (['cp_job_events_id_seq', 'cp_attention_events_id_seq',
                                          'cp_continuity_proposals_id_seq'],)).fetchall()
     return [dict(component='schema', code='missing_table' if not r['present'] else 'role_permissions',
                  object=r['name'], actor='operator', next_action='Run supported schema-only initialization as the scoped schema owner')

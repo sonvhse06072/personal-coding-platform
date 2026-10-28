@@ -70,7 +70,7 @@ def test_projection_empty_unavailable_and_unknown_never_zero():
     assert v['observation']=='unavailable' and v['jobs']==[] and 'PASSWORD' not in str(v)
 
 
-@pytest.mark.parametrize('status,state', [('queued','queued'),('blocked','blocked'),('waiting_human','blocked'),('completed','completed'),('failed','blocked')])
+@pytest.mark.parametrize('status,state', [('queued','queued'),('blocked','blocked'),('waiting_human','blocked'),('completed','completed'),('failed','failed')])
 def test_status_projection(status,state):
     row=held_row();row['status']=status
     if status in {'queued','completed'}:row['error']=None
@@ -79,10 +79,14 @@ def test_status_projection(status,state):
 
 def test_stale_is_not_active_and_sanitization_is_reused():
     row=held_row();row['status']='executing';row['updated_at']=NOW-timedelta(minutes=9);row['error']=None
+    row['task']={'title':'Fixture task','description':'GITHUB_TOKEN=ghp_12345678901234567'}
+    row['checkpoint']['pcp_local_source']['receipt']['allowed_paths']=['docs/pcp-light/fixture.md']
     event=dict(id=1,event_type='runtime_activity',phase='blocked',level='error',message='GITHUB_TOKEN=ghp_12345678901234567',created_at=NOW,data={})
     v=job_projection(row,None,None,[event],NOW)
     assert v['activity']=='stale' and v['blocker'] is None
     assert 'ghp_' not in str(v) and v['timeline'][0]['data']=={}
+    assert v['title']=='Fixture task' and v['allowed_paths']==['docs/pcp-light/fixture.md']
+    assert '<redacted>' in v['goal']
 
 
 def test_authenticated_router_never_calls_orchestrator_and_rejects_foreign_events(monkeypatch):
@@ -130,3 +134,83 @@ def test_default_zero_counters_are_not_tool_or_cost_observations():
     row['status']='delivering'  # Retained assisted salvage has an unresolved error.
     v=job_projection(row,None,None,[],NOW)
     assert v['activity']=='blocked' and v['responsible_actor']=='operator'
+
+
+@pytest.mark.parametrize('status', ['completed', 'failed', 'cancelled'])
+@pytest.mark.parametrize('duration', [None, 45.5])
+def test_terminal_outcome_and_duration_do_not_age(status, duration):
+    row = held_row(); row['status'] = status
+    row['checkpoint']['pcp_local_execution'].update(started_at=(NOW-timedelta(minutes=20)).isoformat())
+    if duration is not None:
+        row['checkpoint']['pcp_local_execution']['duration_seconds'] = duration
+    first = job_projection(row, None, None, [], NOW)
+    later = job_projection(row, None, None, [], NOW+timedelta(hours=1))
+    assert first['activity'] == later['activity'] == status
+    assert first['elapsed_seconds'] == later['elapsed_seconds'] == duration
+    assert later['observation_freshness'] == 'stale' and later['terminal_outcome'] == status
+
+
+@pytest.mark.parametrize('raw,expected', [
+    (None, (None, None, None)),
+    ({'cached_input_tokens':30}, (None,None,None)),
+    ({'input_tokens':0,'output_tokens':0,'cost_usd':0}, (0,0,0)),
+    ({'input_tokens':10,'cached_input_tokens':30}, (None,None,None)),
+    ({'input_tokens':0,'cached_input_tokens':0,'output_tokens':0,'cost_usd':0}, (0,0,0)),
+    ({'output_tokens':7}, (None,7,None)),
+    ({'input_tokens':100,'output_tokens':7}, (None,7,None)),
+    ({'input_tokens':100,'cached_input_tokens':30,'output_tokens':7,'cost_usd':0.1}, (70,7,0.1)),
+    ({'nested':{'input_tokens':0,'cached_input_tokens':0,'output_tokens':0,'cost_usd':0}}, (0,0,0)),
+])
+def test_real_usage_recording_json_storage_projection(raw, expected):
+    import json
+    from app.engine_core import RuntimeEngineCore as RuntimeEngine
+    from app.adapters.base import AgentRun
+    row = held_row(); row['progress'] = {'model_calls':1,'input_tokens':0,'output_tokens':0}
+    choice = {'id':'codex_gpt6_luna','adapter':'codex_cli','provider':'openai'}
+    run = AgentRun(adapter='codex_cli',model='gpt-6-luna',returncode=0,output='',usage=raw)
+    RuntimeEngine._record_usage(row['progress'], choice['id'], raw)
+    RuntimeEngine._record_agent_attempt(row['progress'], choice, run)
+    # Production progress is persisted as JSON, then read by the scoped snapshot.
+    row['progress'] = json.loads(json.dumps(row['progress']))
+    v = build_local_snapshot(ReadStore([row]), clock=NOW)['jobs'][0]['usage']
+    assert (v['input_tokens'],v['output_tokens'],v['cost_usd']) == expected
+    if raw is None:
+        assert v['estimated_cost_usd'] is None
+    if raw and raw.get('cached_input_tokens') == 30 and raw.get('input_tokens',0) < 30:
+        assert v['cached_input_tokens'] is None
+
+
+def test_partial_attempt_coverage_and_legacy_normalized_zero_are_unknown():
+    from app.engine_core import RuntimeEngineCore as RuntimeEngine
+    from app.adapters.base import AgentRun
+    row=held_row(); row['progress']={'model_calls':2}
+    for raw in (None, {'output_tokens':0,'cost_usd':0}):
+        RuntimeEngine._record_agent_attempt(row['progress'], {'id':'codex_gpt6_luna'},
+            AgentRun(adapter='codex_cli',model='gpt-6-luna',returncode=0,output='',usage=raw))
+    v=job_projection(row,None,None,[],NOW)['usage']
+    assert v['cost_usd'] is None and v['output_tokens'] is None
+    assert v['coverage']['output_tokens']=='partial' and v['observed_partial_totals']['output_tokens']==0
+    row['progress']['agent_attempts']=[{'usage':{'input_tokens':0,'output_tokens':0,'reported_cost_usd':0}}]
+    row['progress']['model_calls']=1
+    v=job_projection(row,None,None,[],NOW)['usage']
+    assert v['input_tokens'] is v['output_tokens'] is v['cost_usd'] is None
+
+
+@pytest.mark.parametrize('stage', ['verified_uncommitted','commit_uncertain','verified','held'])
+def test_recovery_stage_retains_observed_execution_duration(stage):
+    row=held_row();row['checkpoint']['pcp_local_execution'].update(state=stage,duration_seconds=12)
+    assert job_projection(row,None,None,[],NOW+timedelta(hours=1))['elapsed_seconds']==12
+
+
+def test_cost_estimate_never_becomes_reported_cost(monkeypatch):
+    from app.engine_core import RuntimeEngineCore
+    from app.adapters.base import AgentRun
+    monkeypatch.setattr('app.usage.model_config', lambda key: {'pricing_usd_per_million':{'input':2,'output':4}})
+    row=held_row();row['progress']={'model_calls':1}
+    RuntimeEngineCore._record_agent_attempt(row['progress'],{'id':'synthetic'},
+        AgentRun(adapter='codex_cli',model='synthetic',returncode=0,output='',usage={'input_tokens':1000,'output_tokens':500}))
+    usage=job_projection(row,None,None,[],NOW)['usage']
+    assert usage['cost_usd'] is None and usage['estimated_cost_usd']==0.004
+    row['progress']['model_calls']=13  # bounded attempt history cannot prove cumulative totals
+    usage=job_projection(row,None,None,[],NOW)['usage']
+    assert usage['output_tokens'] is None and usage['coverage']['output_tokens']=='partial'

@@ -16,7 +16,7 @@ ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT/'services/runtime'),str(ROOT/'services/runtime/tests')]
 from app.dashboard_local import build_local_snapshot
 from app.dashboard_ui_local import LOCAL_DASHBOARD_HTML
-from test_dashboard_local import ReadStore, NOW
+from test_dashboard_local import ReadStore, NOW, held_row
 from playwright.sync_api import sync_playwright
 
 
@@ -60,11 +60,25 @@ def main():
             if name=='unavailable':v['observation']='unavailable'
             state['snapshot']=v;page.evaluate('refresh()');page.wait_for_timeout(80)
             assert page.locator('#jobs').inner_text()
+        for status in ('completed','failed','cancelled','executing'):
+            row=held_row();row.update(status=status,error=None,updated_at=NOW-timedelta(hours=1))
+            row['checkpoint']['pcp_local_execution'].update(started_at=(NOW-timedelta(hours=2)).isoformat(),duration_seconds=45)
+            state['snapshot']=build_local_snapshot(ReadStore([row]),clock=NOW)
+            page.evaluate('refresh()');page.wait_for_timeout(80)
+            job=state['snapshot']['jobs'][0]
+            assert job['activity']==('stale' if status=='executing' else status)
+            if status!='executing':assert job['elapsed_seconds']==45
+            assert page.evaluate('document.documentElement.scrollWidth <= innerWidth')
+        for stage in ('verified_uncommitted','commit_uncertain','verified'):
+            row=held_row();row['checkpoint']['pcp_local_execution']['state']=stage
+            state['snapshot']=build_local_snapshot(ReadStore([row]),clock=NOW)
+            page.evaluate('refresh()');page.wait_for_timeout(80)
+            assert stage.replace('_',' ') in page.locator('#jobs').inner_text()
         state['offline']=True;page.evaluate('refresh()');page.wait_for_timeout(80)
         assert 'Offline' in page.locator('#connection').inner_text()
         assert not errors,errors
         browser.close()
-    evidence={'kind':'fixture_browser_proof','live_rollout':False,'states':['waiting_dashboard_auth','held','empty','waiting_auth','unavailable','stale','offline'],
+    evidence={'kind':'fixture_browser_proof','live_rollout':False,'states':['waiting_dashboard_auth','held','empty','waiting_auth','unavailable','stale','completed','failed','cancelled','verified_uncommitted','commit_uncertain','verified','offline'],
               'viewports':[1440,390],'overflow':False,'page_errors':errors,'requests':requests}
     (args.output/'browser-proof.json').write_text(json.dumps(evidence,indent=2)+'\n')
     print(json.dumps({k:v for k,v in evidence.items() if k!='requests'}))

@@ -809,6 +809,7 @@ def test_dedicated_worker_keeps_durable_identity_and_never_replays(setup, monkey
             raise RuntimeError('primary commit failure')
         return 'd'*40
     monkeypatch.setattr('app.repo.commit_changes',commit)
+    monkeypatch.setattr('app.pcp_local_recovery.reconcile_commit', lambda *a: 'd'*40)
     checks=[]
     async def verify(*args,**kwargs):
         checks.append(1)
