@@ -3831,7 +3831,7 @@ def _pcp_phase_locked(payload):
         '--workdir=/workspace', '--entrypoint=/usr/bin/timeout',
         '--env', 'HOME=/tmp', '--env', 'TMPDIR=/tmp',
         '--tmpfs', '/tmp:rw,nosuid,nodev,size=268435456,mode=1777',
-        '--mount', f'type=bind,source={target},target=/workspace,readonly,bind-recursive=disabled']
+        '--mount', f'type=bind,source={target},target=/workspace,readonly,bind-nonrecursive=true']
     for key, value in labels.items():
         create += ['--label', key + '=' + value]
     create += [image, *command]
