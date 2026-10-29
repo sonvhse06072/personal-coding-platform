@@ -66,6 +66,7 @@ def check_worker_admission(
     isolation: dict[str, Any],
     provider: dict[str, Any],
     budget: dict[str, Any],
+    recovery=None,
 ) -> dict[str, Any]:
     """Check authenticated *caller-supplied evidence*; perform NO side effects.
 
@@ -123,9 +124,15 @@ def check_worker_admission(
         "baseline_not_active_or_drifted",
     )
 
+    expected_main = task.base_sha
+    if recovery is not None:
+        from .pcp_local_task_queue import RecoveryPermit
+        require(type(recovery) is RecoveryPermit, 'claim_recovery_private_permit_required')
+        recovery.require_task(task, isolation.get('current_main_sha'))
+        expected_main = recovery.value['repair_source']
     i = _exact(isolation, ISOLATION_FIELDS, "isolation_shape_invalid")
     require(
-        i["current_main_sha"] == task.base_sha
+        i["current_main_sha"] == expected_main
         and i["source_repo_clean"] is True
         and i["workspace_mode"] == "isolated_clone"
         and i["workspace_lease_state"] == "free"

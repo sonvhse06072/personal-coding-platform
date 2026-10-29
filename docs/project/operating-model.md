@@ -983,3 +983,45 @@ checks. No observer admission, recovery, retirement or write capability is added
 [The finite rollout packet](history/2026-10-29-observer-worker-rollout.md) records
 the stable pilot window and separate postmerge execution checkpoint; source/fixture
 acceptance alone permits no physical adoption or dispatch.
+
+### PCP-local claimed-only recovery and repair release (GH-815 / PR832)
+
+A default-off private recovery permit may authorize registration of an exact
+claimed/gen1 source receipt with no job/lease/workspace/remote side effects. It
+never rewinds, replaces, or re-admits a task. The original issue/body/goal, task
+source S, approved baseline and deterministic job ID stay immutable. Original
+activation bytes and expiry remain evidence; the permit has its own bounded
+validity and independent execution decision. HTTP payloads cannot supply this
+permission. Ordinary fresh admission retains exact current-main/base checks and
+is disabled while the explicit recovery mode is installed.
+
+The supported registrar retains its concrete RuntimeTaskLauncher/storage checks,
+project policy, advisory lock `(5260112,808)`, row locks and ownership exclusion.
+It compares the full original receipt, including timestamps, and inserts one
+queued job plus its authorization/full registered preimage in one transaction.
+Registration preserves claimed/gen1 and never enqueues or invokes a model.
+Identical concurrent requests and uncertain COMMIT acknowledgements reconcile
+durable state. Drift or another decision is a retained stop; expected evidence
+must not be refreshed to force acceptance. Other blocked receipts keep blocking.
+
+Explicit execution holds a separate cross-process advisory lock, verifies the
+unchanged registered job/receipt, hydrates at most one process queue item, then
+uses full-row CAS to consume claimed/gen1 into running/gen2 before lease/model
+work. A crash after that fence is observe-only, even if no model was reached;
+there is no speculative replay. Verified checkpoints use existing delivery-only
+recovery; terminal states remain observe-only. Counters/proofs are never reset.
+
+The private release mapping separates task/verifier S from accepted platform
+repair R. GitHub actual main must equal R, S must be its ancestor, the exact
+reviewed commit/path range must match, and no pilot path may change anywhere in
+that range. Runtime and Executor use immutable R images; the retained verifier
+uses S. Router may retain S only when its entire service and model/policy inputs
+are unchanged through every repair commit. Actual image/container labels, IDs
+and full configuration/mount fingerprints are checked. The separately approved
+observer binding remains unchanged. This exception is confined to the exact
+claimed-only permit; it is not a general mixed-source admission policy.
+
+Source acceptance alone does not install a permit, activate a baseline, start
+workers or recover live ownership. Independent PM merge/postmerge and the later
+integrated execution decision are required. See the [single rollout packet](
+history/2026-10-29-claim-recovery832.md) for evidence and executable operations.

@@ -111,7 +111,7 @@ async def collect_readiness(engine, readers=None):
         from .pcp_local_worker_admission import check_worker_admission
         candidate = {**vars(task), 'allowed_paths':list(task.allowed_paths),
                      'state':'pending', 'generation':0, 'job_id':None}
-        check_worker_admission(task, receipt=candidate,
+        check_worker_admission(task, receipt=candidate, recovery=getattr(readers, "recovery", None),
             **{k:readers.snapshot[k] for k in ('project','baseline','isolation','provider','budget')})
 
     async def provider():

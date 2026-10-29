@@ -526,7 +526,10 @@ async def inspection_mode_http_guard(request: Request, call_next):
         if (not worker or runtime_startup_mode() != PCP_LOCAL_WORKER_MODE
                 or (request.method, request.url.path) not in {
                     ("GET", "/health"), ("GET", "/v1/pcp-local/readiness"), ("POST", "/v1/pcp-local/run-once"),
-                    ("POST", "/v1/pcp-local/pm-review"), ("POST", "/v1/pcp-local/deliver")}):
+                    ("POST", "/v1/pcp-local/pm-review"), ("POST", "/v1/pcp-local/deliver"),
+                    ("GET", "/v1/pcp-local/claim-recovery"),
+                    ("POST", "/v1/pcp-local/claim-recovery/register"),
+                    ("POST", "/v1/pcp-local/claim-recovery/execute")}):
             return JSONResponse(status_code=403, content={"detail": "PCP-local dedicated admission only"})
         return await call_next(request)
     parked = getattr(app.state, "pcp_local_inspection_ready", False)
@@ -1232,8 +1235,41 @@ async def cleanup_job(
         raise HTTPException(404, str(exc)) from exc
 
 
+async def _claim_recovery(action):
+    if (not getattr(app.state, "pcp_local_worker_ready", False)
+            or runtime_startup_mode() != PCP_LOCAL_WORKER_MODE):
+        raise HTTPException(403, "PCP-local dedicated startup required")
+    from . import pcp_local_task_queue as recovery
+    from .pcp_local_task_queue import TaskStop
+    try:
+        # No authority/request body. All paths load the fixed private permit.
+        if action == 'plan':
+            return recovery.plan(engine.storage, recovery.RecoveryPermit())
+        return await getattr(recovery, action)(engine)
+    except TaskStop as exc:
+        raise HTTPException(409, exc.code) from None
+
+
+@app.get('/v1/pcp-local/claim-recovery', dependencies=[Depends(auth)])
+async def pcp_local_claim_recovery_plan():
+    return await _claim_recovery('plan')
+
+
+@app.post('/v1/pcp-local/claim-recovery/register', dependencies=[Depends(auth)])
+async def pcp_local_claim_recovery_register():
+    return await _claim_recovery('register')
+
+
+@app.post('/v1/pcp-local/claim-recovery/execute', dependencies=[Depends(auth)])
+async def pcp_local_claim_recovery_execute():
+    return await _claim_recovery('execute')
+
+
 @app.post("/v1/pcp-local/run-once", dependencies=[Depends(auth)])
 async def pcp_local_run_once():
+    from .pcp_local_task_queue import enabled
+    if enabled():
+        raise HTTPException(403, 'claim_recovery_fresh_admission_disabled')
     if (not getattr(app.state, "pcp_local_worker_ready", False)
             or runtime_startup_mode() != PCP_LOCAL_WORKER_MODE):
         raise HTTPException(403, "PCP-local dedicated startup required")

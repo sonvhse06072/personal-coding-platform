@@ -204,25 +204,31 @@ class RuntimeTaskLauncher:
         self.attempted = False
         self.task = None
         self.source_binding = None
+        self.recovery = None
 
     async def _recheck(self, task: LocalSourceTask) -> None:
         operational_flag()
         self.receipts.read_claimed(task, job_id=stable_job_id(task))
         latest = await self.github.local_source_issue(issue_number=task.issue_number)
-        require(verify_issue(
+        checked = self.recovery.verify_issue(latest) if self.recovery is not None else verify_issue(
             latest, issue_number=task.issue_number, body_sha256=task.body_sha256,
             base_sha=task.base_sha, baseline_revision=task.baseline_revision,
             baseline_source_commit=task.baseline_source_commit,
-        ) == task, "pcp_local_task_identity_changed")
+        )
+        require(checked == task, "pcp_local_task_identity_changed")
         facts = await self.attestor.observe(task)
         # Reuse the unchanged admission policy with the original pending identity.
         check_worker_admission(task, receipt={**claimed_source_receipt(task),
-            "state": "pending", "generation": 0, "job_id": None}, **facts)
+            "state": "pending", "generation": 0, "job_id": None}, recovery=self.recovery, **facts)
         self.require_registration()
 
     def require_registration(self) -> None:
         """Synchronous JIT gate, also run inside the insertion transaction."""
         operational_flag()
+        if getattr(self, 'recovery', None) is not None:
+            from .pcp_local_task_queue import RecoveryPermit
+            require(type(self.recovery) is RecoveryPermit, 'claim_recovery_private_permit_required')
+            self.recovery.require_task(self.task, self.recovery.value['repair_source'])
         self.attestor.require_fresh()
         require(self.engine.worker_task is None and not self.engine.active_jobs,
                 "pcp_local_existing_worker_forbidden")
@@ -321,6 +327,8 @@ class LocalWorkerLoop:
         dict[str, Any]
     ] | None:
         source_worker_flags()
+        from .pcp_local_task_queue import enabled
+        require(not enabled(), 'claim_recovery_fresh_admission_disabled')
         # Do not even read DB or GitHub if no approved trusted evidence
         # integration was installed. Model/issue-reported proofs are invalid.
         require(self.trusted_attestor is not None
@@ -530,8 +538,12 @@ async def run_admitted_job(engine, readers, task):
             and engine.queue.empty(), 'pcp_local_queue_identity_invalid')
     # Durable CAS is the execution fence. It is deliberately consumed even if
     # lease acquisition or subsequent Host work has an uncertain result.
-    receipts.advance(task, expected_state='claimed', expected_generation=1,
-                     target_state='running', job_id=job_id, worker_authorized=True)
+    if getattr(readers, 'recovery', None) is not None:
+        from .pcp_local_task_queue import fence
+        fence(engine.storage, readers.recovery)
+    else:
+        receipts.advance(task, expected_state='claimed', expected_generation=1,
+                         target_state='running', job_id=job_id, worker_authorized=True)
     engine.queue.task_done()
     lease = engine.storage.acquire_project_lease(PROJECT_ID, job_id)
     readers.lease_generation = lease['generation']
@@ -679,6 +691,9 @@ def normalized_budget(limits, path_count):
 
 def read_activation():
     """A switch is not authority: require an independently installed document."""
+    from .pcp_local_task_queue import enabled, RecoveryPermit
+    if enabled():
+        return RecoveryPermit().activation
     require(not ACTIVATION_FILE.is_symlink() and ACTIVATION_FILE.is_file(),
             'pcp_local_operational_delegation_missing')
     value = json.loads(ACTIVATION_FILE.read_text())
@@ -698,6 +713,8 @@ class TrustedReaders:
     def __init__(self, engine, github):
         self.engine, self.github = engine, github
         self.activation = read_activation()
+        from .pcp_local_task_queue import enabled, RecoveryPermit
+        self.recovery = RecoveryPermit() if enabled() else None
         self.route = None
         self.task = None
         self.snapshot = None
@@ -739,7 +756,7 @@ class TrustedReaders:
         self.authority()
         a = self.activation
         issue = await self.github.local_source_issue(issue_number=a['issue_number'])
-        task = verify_issue(issue, **{k: a[k] for k in (
+        task = self.recovery.verify_issue(issue) if getattr(self, 'recovery', None) is not None else verify_issue(issue, **{k: a[k] for k in (
             'issue_number', 'body_sha256', 'base_sha', 'baseline_revision', 'baseline_source_commit')})
         require(self.task is None or task == self.task, 'pcp_local_source_revoked')
         self.task = task
@@ -758,6 +775,9 @@ class TrustedReaders:
         require(bool(expected_tests) and all(expected_tests <= set(project['ddev'].get(phase) or [])
                 for phase in ('targeted_tests', 'full_tests')), 'pcp_local_task_tests_not_configured')
         job_id = stable_job_id(task)
+        if getattr(self, 'recovery', None) is not None:
+            from .pcp_local_task_queue import plan
+            plan(self.engine.storage, self.recovery)  # Original/audited identity only.
         with self.engine.storage.connect() as conn:
             retired = conn.execute("SELECT id FROM cp_jobs WHERE id=%s AND checkpoint ? 'pcp_local_retirement'", (job_id,)).fetchone()
             require(retired is None, 'pcp_local_retired_job')

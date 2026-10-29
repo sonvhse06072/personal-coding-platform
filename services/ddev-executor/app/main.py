@@ -3563,6 +3563,9 @@ def _pcp_digest(value):
 
 
 def _pcp_activation():
+    from .pcp_local_claim_recovery import enabled, activation
+    if enabled():
+        return activation()
     import json
     path = Path('/config/pcp-local-activation.json')
     if path.is_symlink() or not path.is_file():
@@ -3621,6 +3624,7 @@ def pcp_local_observe(payload: PcpLocalObservationRequest):
     if payload.activation_digest != _pcp_digest(a):
         raise HTTPException(403, 'pcp_local_delegation_mismatch')
     state = project_state(_PCP_LOCAL)
+    current_main = state['head']
     if not state['clean'] or state['head'] != payload.source_commit:
         raise HTTPException(409, 'pcp_local_source_changed')
     name = f'{root.name}-coding-runtime'
@@ -3635,7 +3639,8 @@ def pcp_local_observe(payload: PcpLocalObservationRequest):
     if (set(host.get('Tmpfs') or {}) != {'/tmp'}
             or any(m.get('Destination') != '/tmp' for m in item.get('Mounts', []) if m.get('Type') == 'tmpfs')
             or item.get('Name') != '/' + name or not item.get('State', {}).get('Running')
-            or item.get('Image') != a['runtime_image_id']
+            or item.get('Image') != (a['claim_recovery']['roles']['runtime']['image_id']
+                if 'claim_recovery' in a else a['runtime_image_id'])
             or host.get('Privileged') is not False or host.get('PidMode') == 'host'
             or host.get('NetworkMode') == 'host' or host.get('CapAdd')
             or host.get('ReadonlyRootfs') is not True
@@ -3661,7 +3666,15 @@ def pcp_local_observe(payload: PcpLocalObservationRequest):
     delivery, repository = _github_context(cfg)
     if repository != _PCP_REPOSITORY:
         raise HTTPException(403, 'pcp_local_publisher_repository_invalid')
+    if 'claim_recovery' in a:
+        from .pcp_local_claim_recovery import release
+        current_main = release(a, Path(cfg['path']), root, _pcp_docker)
     with delivery._client() as client:
+        if 'claim_recovery' in a:
+            main = client.get(f'{delivery.base}/repos/{repository}/git/ref/heads/main')
+            main.raise_for_status()
+            if main.json().get('object', {}).get('sha') != current_main:
+                raise HTTPException(409, 'claim_recovery_actual_main_changed')
         response = client.get(f'{delivery.base}/repos/{repository}')
         response.raise_for_status()
         if response.json().get('permissions', {}).get('push') is not True:
@@ -3670,13 +3683,38 @@ def pcp_local_observe(payload: PcpLocalObservationRequest):
         pulls.raise_for_status()
     return dict(job_id=payload.job_id, source_commit=payload.source_commit,
         activation_digest=_pcp_digest(a),
-        isolation=dict(current_main_sha=state['head'], source_repo_clean=True,
+        isolation=dict(current_main_sha=current_main, source_repo_clean=True,
             other_repo_mounts=False, agent_docker_socket=False, isolated_ddev_network=True),
         provider=dict(credential_scoped=True, github_token_in_agent=False,
             host_keyring_mounted=False, provider_network_reviewed=True),
         publisher=dict(project_id=_PCP_LOCAL, repository=repository, executor_only=True,
             allow_create_pr=cfg['autonomy'].get('allow_create_pr'), allow_merge=False,
             credential_in_agent=False))
+
+
+@app.post('/v1/pcp-local/claim-recovery-preflight', dependencies=[Depends(auth)])
+def pcp_local_claim_recovery_preflight():
+    from .pcp_local_claim_recovery import enabled
+    if not enabled():
+        raise HTTPException(403, 'claim_recovery_disabled')
+    a = _pcp_activation()
+    job_id = a['claim_recovery']['receipt_before']['job_id']
+    a, cfg, root = _pcp_identity(job_id, a['base_sha'])
+    pcp_local_observe(PcpLocalObservationRequest(job_id=job_id,
+        source_commit=a['base_sha'], activation_digest=_pcp_digest(a)))
+    if any((root/'workspaces').iterdir()):
+        raise HTTPException(409, 'claim_recovery_workspace_exists')
+    delivery, repository = _github_context(cfg)
+    branch = 'ai/' + job_id[:12]
+    with delivery._client() as client:
+        ref = client.get(f'{delivery.base}/repos/{repository}/git/matching-refs/heads/{branch}')
+        ref.raise_for_status()
+        pulls = client.get(f'{delivery.base}/repos/{repository}/pulls',
+            params={'state': 'all', 'head': repository.split('/')[0]+':'+branch, 'per_page': 100})
+        pulls.raise_for_status()
+    if ref.json() != [] or pulls.json() != []:
+        raise HTTPException(409, 'claim_recovery_remote_side_effects')
+    return {'permit_sha256': _pcp_digest(a['claim_recovery']), 'side_effects': 'absent'}
 
 
 def _pcp_no_symlinks(path):

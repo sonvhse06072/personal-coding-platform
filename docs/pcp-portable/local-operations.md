@@ -26,7 +26,8 @@ run-once, reset/re-admit, create a replacement, weaken the lease flag or use
 same-identity recovery design need a separate PM adoption/continuation checkpoint.
 Owner approved protected worker-loop source correction on the follow-up PR. Its
 shared policy check requires exclusive=True in readiness and JIT registration.
-This candidate is not deployed, and does not recover a consumed claim; no hot patch.
+The initial narrow fix was not deployed. The active PR832 extension below now
+adds supported claim recovery; no hot patch or live ownership change occurred.
 
 New workers are stopped, intake disabled by moving the original activation to
 `releases/worker-b97ade581fecad4db2146258e5ca02c3902189e0/rollback/activation-831-disabled.json`.
@@ -53,6 +54,48 @@ It shows no admitted jobs because claim-only reservations are not job projection
 check durable receipt state separately before interpreting the empty view as free
 admission. Populated timers/usage remain untested. Existing exact observer/DB stop
 commands below remain valid; no rollback/reset/prune/down-v is authorized.
+
+## PR832 claimed-only recovery preparation
+
+[PM6496080714](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6496080714)
+authorizes source/tests/isolated rehearsal only. Use the [single executable packet](
+../project/history/2026-10-29-claim-recovery832.md) after independent review,
+merge/postmerge and the later integrated execution decision. It supersedes the
+prior absent-job design proposal, not original S/baseline/activation evidence.
+
+The three authenticated worker endpoints are GET `/v1/pcp-local/claim-recovery`
+(plan), POST `/v1/pcp-local/claim-recovery/register` (atomic queued registration,
+no enqueue/model), and POST `/v1/pcp-local/claim-recovery/execute` (explicit fenced
+execution). Their authority comes only from private installed recovery files;
+no request body can authorize them. The in-container operator client defaults to
+plan: `python -m app.pcp_local_task_queue`. It uses the existing bearer privately,
+never prints it and never automatically retries an uncertain POST. Observer mode
+continues denying every mutation endpoint, including these new endpoints.
+
+Plan compares the entire claimed receipt and, after registration, the entire
+initial job preimage. Same-decision retries are observation only. Running fences
+are not replayable; verified states use existing delivery-only recovery; terminal
+states remain terminal. Another blocked receipt/writer/lease still blocks.
+Original activation bytes/expiry and taskS remain immutable. A separate fresh
+permit binds accepted Runtime/ExecutorR, retained verifierS, RouterS unchanged
+inputs and the unchanged observer. Actual GitHub main must be R; ordinary
+fresh admission cannot use this exception and run-once is denied in recovery mode.
+
+The source-session restored-copy fixture uses no live data volume/network and
+is retained separately as container
+`cc373616aff0b6a0143aca906ada559b87200ab4ea6a4f26d93c7a81ea5580c8`.
+It is stopped/exited, restart=no; its own volume and three private after dumps
+are retained. Exact scoped stop command (after inspecting its recorded identity):
+
+```sh
+docker --host unix:///var/run/docker.sock stop --time 15 \
+  cc373616aff0b6a0143aca906ada559b87200ab4ea6a4f26d93c7a81ea5580c8
+```
+
+Retain its volume/private dumps/manifests. Do not use fixture permit/images as
+live authority. Existing V4 DB/observer/frontend and historical S/V3 assets are
+unchanged. No new baseline activation, login, model, admission or live recovery
+is authorized in this source session.
 
 ## Readiness and schema
 

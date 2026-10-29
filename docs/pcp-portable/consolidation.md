@@ -8,7 +8,42 @@ all four suites successfully. One writer on `ai/815-successor-adoption-v4` in
 `/home/sonvh/pcp-local-adoption825-v4`. This historical825 campaign did not activate
 a protected baseline or live job. New831 execution is recorded below.
 
-## Active successor831 physical execution checklist
+## Active PR832 same-identity recovery source checklist
+
+[WorkOrder6496080714](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6496080714),
+one writer, same `ai/815-successor831-live` / PR832. Main/taskS unchanged;
+R is the future independently accepted merge. [Combined evidence/rollout packet](
+../project/history/2026-10-29-claim-recovery832.md).
+
+- [x] Read full WorkOrder/review/ordered instructions; reconcile original receipt,
+  backup/activation hashes, absent job/lease/workspace/remote effects, stopped
+  workers and unchanged HTTPS observer. Preserve all historical resources.
+- [x] Default-off private expiring permit, full immutable identity/preimage,
+  original activation retained, no caller HTTP authority and read-only plan.
+- [x] Existing strict registrar/advisory lock/full-row CAS; queued job plus full
+  original preimage/audit atomically; receipt claimed/gen1 preserved, no enqueue.
+- [x] Duplicate/racing requests, rollback/COMMIT uncertainty, other blocked
+  receipts/writers/leases, stale full receipt/job and conflicting decision tests.
+- [x] Separate explicit execution lock/queue hydration/full-row running fence;
+  lost queue acknowledgement reconciled, running/verified/terminal never reset.
+- [x] Actual GitHubmainR versus taskS; exact Git ancestry/range/pilot paths;
+  immutable Runtime/ExecutorR, verifierS and justified RouterS; unchanged observer.
+- [x] Preserve17 shared readiness/lease regressions; real temporary Git and
+  PostgreSQL cases, plus actual retained-backup restored-copy rehearsal. External
+  provider/GitHub/Docker authority doubles explicitly distinguished from PHYSICAL.
+- [x] One integrated executable rollout packet: accepted R/CI, image/input mapping,
+  private permit/config custody, readiness/plan/register/reconcile/execute,
+  verification/publisher/CI/dashboard, scoped shutdown and preserved S baseline.
+- [x] Full local verification5239/165 skipped; separate real PostgreSQL/permit91
+  passed. Final candidate restored-copy rehearsal passed, after dumps retained,
+  isolated container stopped. Live full rows/sequences/configs unchanged.
+- Hosted final-head four-suite gate: exact run/head receipt maintained on PR832;
+  independent PM must match all four executed results to the current PR SHA.
+- [ ] Independent PM acceptance/merge/postmerge and later physical decision.
+- [ ] LIVE same831 recovery/model/verification/Draft task PR/CI/PM acceptance:
+  NOT EXECUTED by this source WorkOrder. VPN ON/parity remains NOT TESTED.
+
+## Historical successor831 physical execution checklist
 
 [DEC-PCP-815-SUCCESSOR831-LIVE-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6494028046).
 Accepted PR830/S=b97ade581fecad4db2146258e5ca02c3902189e0; exact postmerge
@@ -43,7 +78,8 @@ Accepted PR830/S=b97ade581fecad4db2146258e5ca02c3902189e0; exact postmerge
 - [x] Owner explicit protected-path approval for source PR; shared operational
   project gate and17 new readiness/registration/drift regressions, focused265 pass.
   Full local5211 passed/134 skipped; two new regressions fail on original S.
-  No live source patch or recovery path added.
+  At that narrow-fix checkpoint no recovery path existed; the active source
+  extension above now adds it without a live patch.
 - [ ] Independent source correction acceptance/adoption and same-identity recovery
   disposition; no claimed receipt replay is authorized by source test success.
 - [ ] Real831 development/verification/commit/Draft PR/exact-head CI/independent PM
