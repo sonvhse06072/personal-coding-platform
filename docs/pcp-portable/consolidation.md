@@ -39,9 +39,12 @@ One writer in `ai/815-observer828-adoption`; separate pinned application checkou
   Schema/contract checks pass; trusted reader still denies missing activation.
 - [x] Final retention: V4 three running/30 stopped; all22 V3/four rehearsal stopped;
   frozen maintenance/app checkouts clean; old configs/token unchanged.
+- [x] Check actual Executor seams: reject alternate source path/newer task base
+  with old image; current worker network excludes observer828. Correct private
+  canonical-path proposal; retain superseded drafts, do not install/bypass.
 - [x] Update continuity, operations and [one physical receipt](../project/history/2026-10-29-observer828-adoption.md).
 - [ ] Independent PM acceptance of this physical evidence/documentation PR and
-  its applicable exact-head CI; source four-suite acceptance is already recorded.
+  its applicable exact-head CI via [PR829](https://github.com/sonvhse06072/personal-coding-platform/pull/829); source four-suite acceptance is already recorded.
 - [ ] Separately approved successor operational registration/baseline/activation,
   real issue identity, credential/readiness/ownership checks and clean admission.
 - [ ] VPN ON/parity and true second-machine LAN measurement: NOT TESTED. Current

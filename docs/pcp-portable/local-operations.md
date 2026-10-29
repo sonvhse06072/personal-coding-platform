@@ -296,13 +296,23 @@ The prior [825 candidate](../project/pilot-successor-825-candidate.md) and
 historical, never silently advanced to include newer code.
 
 Successor operational configuration, approval/activation and admission still need
-their explicit PM checkpoint. The draft proposes a fresh source clone under
-`/home/sonvh/pcp-local-adoption825-v4/sources/successor-51349be`; it has not been
-created or installed. The actual build checkout stays in the release directory.
+their explicit PM checkpoint. The corrected draft uses the Executor-required canonical path
+`/home/sonvh/pcp-local-adoption825-v4/sources/personal-coding-platform`. Its existing
+5ad clone is preserved; a later permitted succession must retain that preimage
+before installing a fresh clone. The earlier alternate-path draft was rejected
+by the actual identity helper in a fixture, retained and superseded. The accepted
+build checkout stays in the release directory.
 Current registration/ddev/autonomy remain draft/disabled/off. Source application
 and image authority stays51349 even if this documentation PR advances main;
-a real task must separately re-read/pin trusted current main/body/goal. A synthetic
-issue fixture grants no live author identity, reservation, readiness or dispatch.
+a real task must separately re-read/pin trusted current main/body/goal. However,
+`_pcp_verification_image` also requires Runtime image revision == task base_sha:
+changing only the task SHA after docs merge fails closed. PM must choose a
+consistent current-main window or separately reviewed matching image/build bindings,
+never relabel old images or weaken the checker. The worker-network allowlist also
+excludes the live observer828 peer; a separately approved coexistence change or
+scheduled observer pause is required before workers can pass observe. No worker
+start/network change is authorized here. A synthetic issue fixture grants no live
+author identity, reservation, readiness or dispatch.
 
 ### Reviewed retirement procedure
 

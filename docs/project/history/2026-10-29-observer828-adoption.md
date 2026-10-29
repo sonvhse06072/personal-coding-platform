@@ -7,7 +7,7 @@ One writer; no nested agents. Application source **51349be73b54ca2fb827a4becc30e
 Reviewed/merged Git tree `eb700feb9e43f1b246d315476947e08d3106be78` matches.
 [Postmerge CI40836381983](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40836381983)
 executed structure1741/1 skipped, Runtime2540/134 skipped, Router132, Executor680:
-**5093 passed / 135 skipped**. This documentation PR is not a new application build.
+**5093 passed / 135 skipped**. [Documentation PR829](https://github.com/sonvhse06072/personal-coding-platform/pull/829) is not a new application build.
 
 ## Result and evidence classes
 
@@ -149,21 +149,29 @@ rewritten. Installed instance/observer registries, autonomy and activation untou
 | --- | --- |
 | `successor-828-draft.yml` | `d0cb78dd1f6e06a62719ae25c13f56c52f9415841b2f842d54e3c89a7d0debd1` |
 | `project-baselines.pcp-local.yml.diff` | `f1910d060adca5e1f3df6b72733f4f8268c254b3a01e0e7603864b20e7df743d` |
-| `projects-successor-draft.yml` | `4593b2d51aa11a11b1de6beb96ce215e3fd1dbcaf56bcba64cdb4a122cb3c361` |
-| `projects.pcp-local.yml.diff` | `e3e6f8cc3373fdaa0ff725b4804a6ac0a1d0823a4c0a3706687d59a0105663a3` |
+| `projects-successor-draft.yml` (superseded, unsupported path) | `4593b2d51aa11a11b1de6beb96ce215e3fd1dbcaf56bcba64cdb4a122cb3c361` |
+| `projects.pcp-local.yml.diff` (superseded) | `e3e6f8cc3373fdaa0ff725b4804a6ac0a1d0823a4c0a3706687d59a0105663a3` |
 | `successor-image-bindings.env` | `c770f4ae79e0d3a4e1896facee19d74c128727783cfa2f4aee6b72f37d238f05` |
 | `instance.env.diff` | `ceb1970f6fd741e076a6fd7abf6986fec946fbc521bd57a3bd24577823013710` |
-| `successor-release.json` | `82d690482dc35ea3acce9f0d4d8fdc61155ab5731195c2bf9be3c57e47ffce44` |
+| `successor-release.json` (superseded) | `82d690482dc35ea3acce9f0d4d8fdc61155ab5731195c2bf9be3c57e47ffce44` |
 | `next-task-draft.md` | `7165385fa6d031d40dab1399704ee221e31eef8784da4a3f44d4768bd5876a24` |
+| `projects-successor-canonical-draft.yml` | `88f878454b81af71f81bc4a90fc26428794f52039365852676ad8f9aad47bb2f` |
+| `projects-canonical.pcp-local.yml.diff` | `89b2ce349ae5d1290909c851a3719f0403daeb87c51fe55befcd57a0623b6244` |
+| `successor-release-v2.json` | `053ea5aa9cc3d7210cbb8a365a65972be0ffffaee56ed98892e51f0b102183e3` |
 
 Registry delta: add the new51349 definition with the exact827 authority/reference
 frame, retain both historical draft definitions; active_revision stays null.
-Project delta: path null → proposed fresh `sources/successor-51349be`, targeted/full
+Corrected project delta: path null → canonical
+`sources/personal-coding-platform`, targeted/full
 paths → `tests/test_pcp_light_evidence_summary.py`; registration/ddev/autonomy stay
 draft/false/off. Image-env delta: source5ad →51349 and all three application image
 IDs → table above; root/namespace/Postgres/UID/GID remain unchanged, profiles empty.
-Full exact unified diffs are retained as named above, never applied. Future fresh
-source clone and worker config/activation require their next execution permit.
+Full exact unified diffs are retained as named above, never applied. The existing
+canonical5ad clone must first be retained before a later permitted source succession.
+The alternate-path draft failed the actual Executor identity helper and is retained
+as non-admissible; corrected canonical-path fixture passes. Baseline definitions
+were not changed during this correction. Future source succession and worker
+config/activation require their next execution permit.
 No whole-Compose restart: it would also disturb preserved DB/observer resources.
 
 Schema/config parsing PASS. Approved-baseline resolver correctly rejects the
@@ -171,6 +179,26 @@ DRAFT; concrete TrustedReaders constructor rejects missing operational delegatio
 before any executor/provider/DB request. These expected refusals establish that
 preparation did not grant dispatch; they are not operational-readiness PASS.
 Same-source image labels/IDs/Git input trees validated; no mixed-source waiver.
+
+Additional admission seams, independently checked before final handoff:
+
+- **SOURCE/FIXTURE:** the actual `_pcp_verification_image` helper with inspected
+  image metadata accepts base51349 and rejects newer documentation base6a63f7d
+  with `pcp_local_verification_image_identity_invalid`. Its rule is image revision
+  == activation base_sha and verification_image == runtime_image_id. No image
+  relabel/checker change: a newer main needs a separately reviewed matching
+  build/binding decision. Merely regenerating the task body is insufficient.
+- **SOURCE/FIXTURE:** `_pcp_identity` requires exactly the canonical source path;
+  `sources/successor-51349be` fails, canonical path passes with fixture authority.
+  No fixture approval is installed or presented as actual registration.
+- **PHYSICAL/SOURCE:** actual V4 network peers are DB and observer828. The current
+  worker allowlist permits only named coding-runtime/router/ddev-executor/db, so
+  observer828 would cause `pcp_local_foreign_network_peer`. No worker observe
+  request was made. Next PM permit must specify reviewed observer coexistence or
+  a scoped scheduled observer pause; this session keeps the dashboard running.
+
+These are remaining admission prerequisites, not tokenless-observer failures.
+Private `admission-seams.json` preserves function results/actual network evidence.
 
 Exact future task proposal (no issue created/admitted):
 
@@ -200,18 +228,20 @@ CI/independent review. The2–4 allowed-path rule including a test is unchanged.
 
 Remaining admission prerequisites, as one next WorkOrder: PM accepts physical
 handoff and reviews a separately approved successor baseline/operational config;
-installs a fresh source clone and truthful service bindings without touching old
-resources; records fresh ownership/reservation and expiring worker/Executor
+resolves canonical source succession, image/base equality and observer/network
+coexistence without losing old resources; records fresh ownership/reservation and expiring worker/Executor
 activation; creates a real issue and re-reads exact trusted current main/body/goal;
 provides scoped credentials only under that permit; proves readiness/schema/verify/
 publisher behavior without a model before one clean authorized admission. If this
-docs PR advances main, regenerate task base/body bindings without silently changing
-baseline51349 or rebuilding identical images. No use of old824 activation or result.
+docs PR advances main, regenerate task base/body and separately authorize a
+matching Runtime image/build-binding solution required by the existing checker;
+do not silently advance baseline51349, relabel images or claim this preparation
+already passes that gate. No use of old824 activation or result.
 The historical retired job stays cancelled/incomplete_not_delivered, never delivered.
 
 Local required root suite: **1742 passed**; `git diff --check`, relative links and
 the two standalone stop/rollback blocks (bash syntax only) pass. Exact-head hosted
-CI is recorded in this PR's validation receipt/checks. Service jobs may legitimately classify this
-T1/T3-only diff as not applicable; that is not four newly executed service suites.
+CI is recorded in this PR's validation receipt/checks. The unchanged trusted classifier treats the operations/checklist paths as full
+scope; inspect actual execution/logs of all four suites at the final head.
 Accepted application four-suite evidence is the distinct postmerge run above.
 Developer has not self-approved or merged this handoff.

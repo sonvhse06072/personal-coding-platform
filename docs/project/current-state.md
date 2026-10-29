@@ -42,7 +42,8 @@ Current VPN state was queried but not reconfirmed; earlier Owner-reported OFF
 remains historical. VPN ON/parity is NOT TESTED; no VPN/DNS changes.
 
 One documentation writer in `/home/sonvh/pcp-observer828-adoption`, branch
-`ai/815-observer828-adoption`. Accepted application checkout is separately pinned
+`ai/815-observer828-adoption`, [PR829](https://github.com/sonvhse06072/personal-coding-platform/pull/829).
+Accepted application checkout is separately pinned
 at `/home/sonvh/pcp-local-adoption825-v4/releases/observer828-51349be/source`.
 [Single checklist](../pcp-portable/consolidation.md),
 [physical receipt and successor packet](history/2026-10-29-observer828-adoption.md),
@@ -75,12 +76,17 @@ Retirement resolves only this reservation; it does not authorize another job.
    All50 protected classes and both prior drafts preserved; active_revision null.
    Installed registries/autonomy stay draft/off. No mixed-source exception needed.
 3. Separately authorize baseline approval/activation, operational project config,
-   fresh source clone and expiring worker/Executor activation. Retired824 resolves
+   canonical source-path succession and expiring worker/Executor activation.
+   Executor requires `sources/personal-coding-platform`, Runtime image revision
+   equal to task base, and a worker network whose peers exclude observer828.
+   Resolve these exact gates in the next WorkOrder; no bypass/relabel here.
+   Retired824 resolves
    only its old ownership; it grants no successor reservation or dispatch right.
 4. Create a fresh actual issue for the three-path evidence-summary CLI/test/doc
    contract. Re-read trusted current main and regenerate body/base/goal bindings
-   if docs merge advances main; keep the accepted51349 baseline/image authority
-   distinct. Synthetic issue888 validation is not live issue approval.
+   if docs merge advances main, then provide a separately accepted matching
+   Runtime verification image/binding. Merely editing task base would fail.
+   Baseline authority stays distinct. Synthetic888 is not live issue approval.
 5. Only under the next admission WorkOrder: scoped provider/publisher readiness,
    physical worker/verification/publisher validation and one clean admission.
    No credentials, admission, run-once or PCP-managed inference in this session.
