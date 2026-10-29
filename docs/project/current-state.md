@@ -1,43 +1,43 @@
 # Current Project State and Handoff
 
-Tier-1 mutable execution index, not project-frame authority, baseline approval
-or permission to operate retained resources. Constitution/architecture and
-immutable approved baselines outrank this index. Reverify GitHub before action.
+Tier-1 mutable continuity, not authority to rewrite baselines, merge, retire V3,
+or admit work. Reverify the exact GitHub/source/physical receipts before action.
 
-## Accepted source and successor adoption — GH-815 / GH-822
+## Integrated retirement and HTTPS — GH-815 / GH-822
 
-Updated 2026-10-29. [PR #825](https://github.com/sonvhse06072/personal-coding-platform/pull/825)
-is merged at `5adfd120dbd6aa4718cf9549ddc6fae0bab8f12d`, independently
-[accepted by PM](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6482401042).
-[Postmerge CI 40780653020](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40780653020)
-executed all four suites: 5032 passed / 97 skipped. Earlier premerge continuity
-is superseded by these receipts. The accepted release pin stays exact if main
-advances; approved historical baselines are not rewritten.
+Updated 2026-10-29. [PR825](https://github.com/sonvhse06072/personal-coding-platform/pull/825)
+accepted application source remains `5adfd120dbd6aa4718cf9549ddc6fae0bab8f12d`,
+postmerge CI40780653020 (four executed suites). [PR826](https://github.com/sonvhse06072/personal-coding-platform/pull/826)
+merged the V4 physical packet at `bca7189a53cadba3feb38330dcfd658b95002048`.
+[PM acceptance/postmerge CI40816963431](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6487825349)
+executed all four suites successfully. This supersedes premerge continuity; neither receipt activates a baseline.
 
-[DEC-PCP-815-SUCCESSOR-ADOPTION-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6485231069)
-authorized one foreground, non-model local adoption campaign under delegated PM
-authority. Instance/root `pcp-local-adoption825-v4` /
-`/home/sonvh/pcp-local-adoption825-v4`. One writer, no nested agents. Evidence/docs
-worktree `/home/sonvh/pcp-successor-adoption-v4`, branch
-`ai/815-successor-adoption-v4`; its follow-up PR carries exact-head CI. Developer
-does not self-approve or merge. No protected authority/config is changed.
+[DEC-PCP-815-RETIREMENT-HTTPS-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6488558812)
+records Owner chat direction through delegated PM and grants the exact protected
+source/physical scope. [PR827](https://github.com/sonvhse06072/personal-coding-platform/pull/827) is the single candidate.
+One writer, branch `ai/815-retirement-https-v1`, worktree
+`/home/sonvh/pcp-retirement-https-v1`; no nested agents. Source candidate adds
+operator-only default-dry-run retirement, atomic retained non-delivery audit,
+exact receipt/lease resolution, admission exception for validated retirement,
+and guards against old recovery/activation. No Engine/admin HTTP/model path.
 
-Accepted images were built and physically checked; exact IDs, capacity, network,
-checks and retained logs are in the [physical WorkReport](history/2026-10-29-adoption825-v4.md).
-Non-root/read-only/noexec, immutable askpass and Docker20 nonrecursive bind pass.
-Schema was initialized twice by the real non-superuser role; actual instance
-jobs/receipts/leases/usage remain zero. Focused tests 288 pass, integrated real
-Git/PG/container matrix 12 pass, Docker20 verifier 193 pass, synthetic publication
-response-loss test 1 pass. No live run-once request or PCP-managed model call.
+Independent PM source acceptance, eligible merge, postmerge verification and an
+**exact PM execution record** still precede any real V3 operation. Developer
+never self-merges. Disposable real PostgreSQL/Git tests are separate from the
+original job. [Single checklist](../pcp-portable/consolidation.md),
+[operations and admission packet](../pcp-portable/local-operations.md#v4-successor-and-admission-decision-packet),
+[session evidence](history/2026-10-29-retirement-https-v1.md).
 
-Observer protocol tests ran against a physical process and separate synthetic
-DB/SELECT-only role; authentication/scope, fixed terminal timers, usage provenance
-and no-write checks pass. **No HTTPS dashboard is deployed:** Owner confirmed
-there is no approved PCP ingress. No Secure-cookie weakening or global network
-change. Network DNS/TLS tested in the current route-observed OFF state; provider
-403/421 responses are not entitlement success. VPN ON remains NOT TESTED pending
-Owner's state change. Readiness correctly remains false for activation,
-operational delegation and provider authentication; no live admission implied.
+Physical V4 uses the accepted Runtime image and actual empty `pcp_local` DB;
+new `pcp_dashboard_reader` has SELECT only on six observer tables, no table write
+or sequence usage. DML/public DDL/nextval actually fail with SQLSTATE42501 even
+with transaction read-only disabled. No job/receipt/lease/usage import or model.
+HTTPS frontend syntax, certificate chain and actual trusted Chromium browser
+login/logout/reconnect now PASS after Owner installed the exact existing CA in
+user NSS. No ignored TLS errors or injected cookies. New observer/frontend and
+V4 DB remain running for Owner inspection at `https://localhost:18443/dashboard`;
+private login and exact stop IDs are in the operations packet. Empty V4 is not
+proof of active development or LIVE task delivery.
 
 ## Original #824 — retained incomplete assisted pilot
 
@@ -63,39 +63,35 @@ build metadata was read. A new namespace cannot evade the old reservation.
 
 ## Immediate next safe actions
 
-1. PM reviews this adoption evidence and follow-up documentation PR/CI.
-2. Decide the [single successor/admission packet](../pcp-portable/local-operations.md#v4-successor-and-admission-decision-packet):
-   immutable baseline candidate at the accepted merge; legitimate disposition of
-   historical ownership; approved PCP-only HTTPS mechanism/certificate; scoped
-   provider/publisher credentials; second VPN measurement and bounded new task.
-3. Preserve current gates. Accepted-source PM finalization requires real PR/CI/
-   review evidence absent for #824; no accepted non-delivery retirement seam was
-   found. Do not fabricate completion or call generic cleanup to release it.
-4. Only a later authorized clean task may validate live delivery. Its evidence
-   must remain distinct from unresolved historical #824.
+1. Independent PM reviews PR827, the full evidence/approved protected diff and
+   all four genuinely executed suites at the exact final head. Developer does
+   not merge; any earlier-head run is supporting evidence only.
+2. Owner may inspect the authenticated HTTPS observer. Retain only the verified
+   observer/DB/frontend within the resource envelope; no worker/intake starts.
+3. PM issues the postmerge DB-only backup/restored-copy rehearsal/dry-run/apply
+   checkpoint for exact V3 identities. No mutation of original rows occurred here.
+4. Resolve legitimate historical ownership before successor admission. Keep the
+   old `5adfd12` candidate historical/draft; prepare a successor from final accepted
+   implementation and service-input bindings, not an unreviewed SHA.
+5. The next proposed task has three allowed code/test/doc paths; no one-Markdown
+   task, contract weakening, credential provision or premature run-once.
 
 ## Active PCP issues and owner attention
 
-GH-815/822/824 remain open; source acceptance, physical fixtures and LIVE results
-are separate. GitHub/Runtime evidence is recorded with its actual scope. There
-is no routine repair approval outstanding; material decisions are consolidated
-in the packet. The HTTPS proposal is prepared, not applied. The durable checklist
-is [consolidation.md](../pcp-portable/consolidation.md).
+GH-815/822/824 remain open; GitHub/Runtime evidence stays scoped. Independent review, actual trust verification and the
+postmerge execution record are separate checkpoints. No routine repair approval
+is needed. Legacy `A3B2_IMAGE_BUILD=STOP` remains independent of the named V4
+observer permission; `CODEX_LIVE=STOP` still forbids PCP-managed inference.
 
 ## Standing safety boundary
 
-Chợ Nhạc and foreign resources untouched; #752 PARKED; #595 G0 HOLD.
-Legacy `A3B2_IMAGE_BUILD=STOP` remains independent of this named V4 bootstrap
-permit. `CODEX_LIVE=STOP`: no worker/model/new admission, no old activation reuse.
-No production, force push, self-merge, shared router/global DNS/VPN change,
-approved baseline rewrite or paid service. Private-repo CI/review is a process
-gate, not claimed server-enforced protection. All 12 V4 containers are stopped (2026-10-29 01:54:24 UTC);
-data/images/evidence retained. No V4 service or HTTPS observer remains running.
+Chợ Nhạc/foreign workloads untouched; #752 PARKED and #595 G0 HOLD. No production,
+force push, self-merge, new paid service, global VPN/DNS change, baseline rewrite,
+V3 worker restart, old activation reuse or PCP-managed model invocation. VPN
+second state remains NOT TESTED until Owner selects it and actual probes run.
+Private-repo review/CI remains a process gate, not claimed server enforcement.
 
 <!-- PCP:CONTINUITY:START -->
-## Automated continuity snapshot
-
-PR825 accepted/merged at5adfd12; V4 physical non-model evidence recorded.
-Retained #824 remains incomplete with last-reported running receipt/active lease.
-No HTTPS deployment or new admission; successor/ownership decisions remain gates.
+Integrated WorkOrder6488558812: retirement candidate/fixtures and independent V4
+HTTPS observer. Original V3 unchanged; PM postmerge execution checkpoint required.
 <!-- PCP:CONTINUITY:END -->

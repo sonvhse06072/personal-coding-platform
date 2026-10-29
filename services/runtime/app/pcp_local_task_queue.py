@@ -374,6 +374,8 @@ class LocalSourceQueueStore:
                     and re.fullmatch(r"[a-f0-9]{32}", job_id) is not None,
                     "task_job_identity_invalid")
         with self.storage.connect() as conn:
+            from .pcp_local_recovery import project_lock
+            project_lock(conn)
             row = conn.execute(
                 """UPDATE cp_pcp_local_source_receipts
                    SET state=%s, generation=generation+1, job_id=COALESCE(job_id,%s),

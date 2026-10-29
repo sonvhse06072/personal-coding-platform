@@ -749,6 +749,9 @@ class TrustedReaders:
         require(bool(expected_tests) and all(expected_tests <= set(project['ddev'].get(phase) or [])
                 for phase in ('targeted_tests', 'full_tests')), 'pcp_local_task_tests_not_configured')
         job_id = stable_job_id(task)
+        with self.engine.storage.connect() as conn:
+            retired = conn.execute("SELECT id FROM cp_jobs WHERE id=%s AND checkpoint ? 'pcp_local_retirement'", (job_id,)).fetchone()
+            require(retired is None, 'pcp_local_retired_job')
         proof = await self.executor('/v1/pcp-local/observe', {
             'job_id': job_id, 'source_commit': task.base_sha,
             'activation_digest': digest(self.activation),

@@ -161,7 +161,7 @@ def test_real_checkpoint_cas_preserves_receipt_lease_counters(verified,change):
             elif sql.startswith('SELECT * FROM cp_pcp_local_source_receipts'):self.value=receipt
             elif sql.startswith('SELECT * FROM cp_project_leases'):self.value=lease
             elif sql.startswith('UPDATE cp_jobs'):writes.append((sql,params))
-            else:assert 'pg_advisory_xact_lock' in sql
+            else:assert 'pg_advisory_xact_lock' in sql or sql.startswith('SET LOCAL')
             return self
         def fetchone(self):return deepcopy(self.value)
         def commit(self):writes.append('COMMIT')
