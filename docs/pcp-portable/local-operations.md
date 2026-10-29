@@ -103,7 +103,9 @@ at final PR head; eligible merge under the recorded PM disposition; postmerge su
 image build and physical rollout. No such rollout or new pilot is authorized by
 this source delivery. Keep the original V3 source/images/DB untouched.
 
-For a separately authorized observer deployment, use the reviewed Runtime image,
+The following is the retained **default token-mode** setup. The explicitly
+authorized current local exception is documented under [Actual V4 HTTPS observer](#actual-v4-https-observer); do not use this older port/session example for it.
+For a separately authorized default observer deployment, use the reviewed Runtime image,
 singleton PCP registry, scoped read database access and a dedicated nonempty
 `DASHBOARD_READ_TOKEN` in the service's private env file. Retain the existing
 container isolation, mounts, DNS and other service roles. The exact additional
@@ -277,27 +279,30 @@ supersedes the earlier no-retirement/no-ingress proposal. Original
 
 ### Accepted source and successor binding
 
-V4 observer application stays at accepted PR825 `5adfd120dbd6aa4718cf9549ddc6fae0bab8f12d`,
-Runtime image `sha256:0391589bf34d58a3e3a4aae326539e9c46833fd44da591d4b57ca89904c0b1e2`.
-PR826 merged the evidence at `bca7189a53cadba3feb38330dcfd658b95002048`; this is
-the retirement branch base, not a new image binding. Original V3 bindings stay
-unchanged. The old `pcp-local-successor-825-5adfd12-20261029` candidate and its
-[record](../project/pilot-successor-825-candidate.md) are **historical drafts**,
-never installed/activated. Do not advance that candidate in place or approve it
-as if it contained retirement.
+V4 observer now runs accepted PR828 source
+`51349be73b54ca2fb827a4becc30e00ba62acd7d` under
+[decision6490872107](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6490872107).
+Independent review/merge/postmerge four-suite CI40836381983 passed. One actual
+Runtime/Router/Executor build each from that exact source resolves the prior
+mixed-source preparation gap without relabeling old images or changing checkers.
+Only the observer Runtime is deployed. [Full immutable mappings and receipt](../project/history/2026-10-29-observer828-adoption.md).
 
-After independent PM acceptance/merge and four executed postmerge suites, record
-the actual accepted merge SHA, full diff and authority snapshot. Produce a NEW
-draft successor revision from that exact source. Preserve protected authority
-classes and all old approved definitions. Compare actual Git input trees for
-`services/runtime`, `services/router`, `services/ddev-executor`, Dockerfiles,
-requirements and shipped configuration. Retirement changes Runtime inputs:
-build/bind its next image from accepted source through the reviewed adoption
-procedure. Reuse other service images only if that procedure permits explicit,
-verified identical-input bindings; otherwise present the exact mismatch for PM.
-Do not relabel an old image, guess the future SHA, rebuild every service merely
-for docs, or deploy this unreviewed branch. PM approval/activation and the next
-concrete admission checkpoint remain separate.
+NEW private `pcp-local-successor-828-51349be-20261029` is DRAFT, active_revision
+null. All50 protected classes and prior825/827 definitions are preserved; no
+installed registry changed. Exact registry/project/image-env diffs and the
+three-path task body are retained in the release artifacts named in the receipt.
+The prior [825 candidate](../project/pilot-successor-825-candidate.md) and
+[827 packet](../project/history/2026-10-29-successor-observer-packet.md) remain
+historical, never silently advanced to include newer code.
+
+Successor operational configuration, approval/activation and admission still need
+their explicit PM checkpoint. The draft proposes a fresh source clone under
+`/home/sonvh/pcp-local-adoption825-v4/sources/successor-51349be`; it has not been
+created or installed. The actual build checkout stays in the release directory.
+Current registration/ddev/autonomy remain draft/disabled/off. Source application
+and image authority stays51349 even if this documentation PR advances main;
+a real task must separately re-read/pin trusted current main/body/goal. A synthetic
+issue fixture grants no live author identity, reservation, readiness or dispatch.
 
 ### Reviewed retirement procedure
 
@@ -429,43 +434,52 @@ No agent, dashboard or worker is given this capability or these credentials.
 
 ### Actual V4 HTTPS observer
 
-Approved origin **https://localhost:18443/dashboard**, upstream
-`127.0.0.1:18787`. Exact current running/stopped IDs and browser evidence are in
-[the WorkReport](../project/history/2026-10-29-retirement-https-v1.md). Container
-fallback uses official `nginx:1.28.0-bookworm` pinned to
-`sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609`;
-no global binary/service/router installation. Frontend shares only the new
-observer's network namespace. Docker publishes both ports on **127.0.0.1 only**;
-inside that isolated namespace Nginx reaches the exact127.0.0.1 upstream. No
-public/LAN bind, provider/publisher credentials, Docker socket or source-tree mount.
+**Open https://localhost:18443/dashboard directly.** Active authentication mode is
+`loopback_readonly`: no token, login form, session request or cookie. This explicit
+Owner-approved exception is only for the successfully latched singleton local
+read observer. Default/worker/control authentication is unchanged. Other local
+OS processes/users reaching loopback can read; remote anonymous access is denied.
+Fresh WSL Chromium with normal certificate validation passed polling/reconnect;
+no injected cookies or ignored TLS errors. V4 is actually empty: "No admitted jobs"
+is expected. [Current physical receipt](../project/history/2026-10-29-observer828-adoption.md).
 
-Private root `/home/sonvh/pcp-local-adoption825-v4/observer-https` (0700), leaf/key,
-configuration/env/read-token (0600). Nginx mounts only its config and leaf/key,
-never the issuer key or observer credentials. Existing mkcert issuer fingerprint
+Runtime image `sha256:d7761e08e8f9318d38d948f1b3ea916825762cec45e47ead5f85c7567b5f586f`
+listens only on namespace127.0.0.1:18787 with `--no-proxy-headers`;18787 has no host
+publication. Nginx shares that namespace and Docker publishes only127.0.0.1:18443.
+Nginx image remains `sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609`.
+Exact Host `localhost:18443` and frontend peer192.168.64.1 are enforced; actual
+socket peer remeasured. No forwarded identity trust, Docker socket, source mount,
+provider/publisher credentials or activation. Read-only/nonrecursive binds,
+non-root UID1000, all capabilities dropped and noexec tmpfs remain enforced.
+
+Current private configuration root (0700):
+`/home/sonvh/pcp-local-adoption825-v4/releases/observer828-51349be/config`.
+Nginx mounts only config/leaf/key, never issuer key or DB credentials. Exact
+unchanged leaf SHA256 fingerprint:
+`85:16:F2:09:1D:CC:D4:89:D3:C9:81:84:26:2C:61:64:B8:ED:7B:2D:75:9E:BF:57:CE:F5:43:A9:54:E6:92:C6`.
+Existing mkcert issuer fingerprint remains
 `39:9F:71:13:39:6C:35:5F:C5:9A:B2:54:09:72:54:31:44:32:D4:07:59:3A:45:43:35:DD:D6:8F:B9:73:D2:14`.
-No new CA was generated. System chain verifies; Chromium requires that existing
-public CA in user NSS. Owner-only interactive script
-`/home/sonvh/.local/state/pcp-retirement-https-v1/owner-trust.sh` verifies that exact
-fingerprint and imports only nickname `PCP-local-mkcert-399f7113` in
-`sql:/home/sonvh/.pki/nssdb`. Removal:
-`certutil -D -d sql:/home/sonvh/.pki/nssdb -n PCP-local-mkcert-399f7113`.
-Never weaken TLS or install system-wide trust as a fallback.
+No CA, certificate or trust-store change in this adoption. The prior Owner NSS
+import remains in effect; its exact removal procedure is retained in the
+[historical HTTPS receipt](../project/history/2026-10-29-retirement-https-v1.md).
+Do not ignore TLS errors or install global trust as a fallback.
 
-The syntax-tested config quotes the `{32}` regex and directs client/proxy/fastcgi/
-uwsgi/scgi temporary paths to noexec tmpfs (read-only root). Allowlist only
-`/dashboard`, read-session, snapshot and32-hex job event/stream paths; everything
-else404. Access logs off. Dedicated `pcp_dashboard_reader` has SELECT on six
-observer tables and no sequence mutation, table writes or public DDL. Startup is
-`pcp_local_dashboard`, no schema initialization/worker/activation. Actual empty V4
-is used: never import historical or synthetic jobs to make the screen active.
+Syntax-tested routes allow only dashboard/snapshot/scoped events/stream reads;
+other paths404, Runtime controls403. Foreign Host/Origin/cross-site/forwarded
+identity denied. Separate-container upstream refused and frontend403. Own-host
+non-loopback ports refused/timed out; true second-machine LAN NOT TESTED.
+Dedicated `pcp_dashboard_reader` retains SELECT on six observation tables, no
+sequence use, table writes or schema creation. Actual three permission denials
+and identical11-table/sequence hash verified. No schema initialization, workers,
+model calls or synthetic rows. Event/SSE redaction/timers/usage fixtures are
+separate from this actual empty database.
 
-Private login when browser checks pass: open the HTTPS origin; read `read-token`
-locally using a private editor and enter it in the password field. Do not put it
-in URL/chat/Git/logs or shell arguments. The accepted UI clears the input and
-sets Secure/HttpOnly/SameSite=Strict. Accepted image has no logout button; in that
-browser's developer console, `fetch('/v1/dashboard/session', {method:'DELETE'})`
-then reload performs its supported logout (no cookie injection/deletion shortcut).
-This UI limitation does not authorize deploying unreviewed application code.
+Rollback assets remain at `observer-https` and release `rollback/`, including the
+old private read token. It is absent from the new observer environment/mounts.
+Only if restoring the retained token-mode pair: read that token in a private local
+editor, enter its password form, never URL/chat/Git/logs/arguments. That old mode
+uses Secure/HttpOnly/SameSite=Strict cookies and supported session DELETE logout.
+No login is needed for the current deployed observer.
 
 ### VPN, scoped credentials and next admissible task
 
@@ -507,35 +521,70 @@ validation stays distinct from historical assisted #824.
 
 ## V4 shutdown and retention
 
-Prior12-container shutdown at2026-10-29 01:54:24UTC remains historical evidence;
-this WorkOrder selectively starts the exact DB and new observer/frontend only.
-Private current evidence: `/home/sonvh/.local/state/pcp-retirement-https-v1`.
-Retain failed startup/syntax/browser evidence and all stopped containers; no prune,
-cleanup/down-v, old-worker restart or counter reset. The only V3 row mutation is
-the separately authorized, now completed retirement in the execution receipt.
+Current evidence: `/home/sonvh/.local/state/pcp-observer828-adoption-v1` (0700).
+V4 retains33 containers, three running/30 stopped. All22 V3 and four retirement
+rehearsal containers stay stopped. Retain old images/configs/token, original
+backups/manifests and every stopped probe, including diagnosed harness failures.
+No prune/down-v/reset, V3 restart or retirement replay. The accepted application
+checkout and frozen ea6 maintenance checkout both remain clean and pinned.
 
-To stop ONLY the new frontend/observer and dedicated V4 DB, after verifying these
-IDs against the WorkReport, use this standalone process:
+To stop ONLY the current frontend, observer and dedicated V4 DB, first compare
+these IDs with the receipt, then run this standalone process (not executed as
+part of the successful keep-available handoff):
 
 ```sh
+bash <<'SH'
+set -eu
+unset DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH
 timeout 90 docker --host unix:///var/run/docker.sock stop --time 10 \
-  3b5cc02c77e96847c2e04446e802c3ee20fbb770d30956f42c7911f3a3443cab \
-  41aabe0d4c63f23056bf4bd0a0fdeb4c0b91cfe6dc296f20f71f3f55db596823 \
+  d22a5bf0ef1adee16464c27ccab10bf3cf22dc7320fa65ed5a995fbd5ea4daf2 \
+  5d6b3e9b578745877f162f9c34e4413cc855a40a8c4281c32d3c6ed711b05411 \
   8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8
+SH
 ```
 
-No volume deletion, data reset or restoration is part of shutdown. Keep observer/
-frontend/DB running only after the actual browser/security checks pass. A rollback
-is a scoped stop plus retained evidence, not permission to retry V3 or rebind old
-images/baselines. The final report states what was actually left running.
+Scoped rollback to retained reviewed token mode, only while DB is still running
+and old configs/images match the retained preimages. This does not restore DB or
+undo retirement. Run as its own process; halt on any identity/config mismatch:
+
+```sh
+bash <<'SH'
+set -eu
+unset DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH
+D=(docker --host unix:///var/run/docker.sock)
+old_obs=41aabe0d4c63f23056bf4bd0a0fdeb4c0b91cfe6dc296f20f71f3f55db596823
+old_front=3b5cc02c77e96847c2e04446e802c3ee20fbb770d30956f42c7911f3a3443cab
+root=/home/sonvh/pcp-local-adoption825-v4
+for file in observer.env nginx.conf read-token localhost.pem localhost-key.pem; do
+  cmp "$root/observer-https/$file" "$root/releases/observer828-51349be/rollback/$file"
+done
+test "$("${D[@]}" inspect -f '{{.Image}} {{.State.Status}}' "$old_obs")" = \
+  'sha256:0391589bf34d58a3e3a4aae326539e9c46833fd44da591d4b57ca89904c0b1e2 exited'
+test "$("${D[@]}" inspect -f '{{.Image}} {{.State.Status}}' "$old_front")" = \
+  'sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609 exited'
+test "$("${D[@]}" inspect -f '{{.State.Running}}' \
+  8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8)" = true
+timeout 60 "${D[@]}" stop --time 10 \
+  d22a5bf0ef1adee16464c27ccab10bf3cf22dc7320fa65ed5a995fbd5ea4daf2 \
+  5d6b3e9b578745877f162f9c34e4413cc855a40a8c4281c32d3c6ed711b05411
+timeout 30 "${D[@]}" start "$old_obs"
+timeout 30 "${D[@]}" start "$old_front"
+SH
+```
+
+Reconcile uncertain starts/stops with exact-ID inspect before retry. Verify trusted
+HTTPS login/read behavior after rollback; never relax TLS or local restrictions.
+Rollback switching was prepared, not rehearsed against the live DB in this session.
 
 ## Tokenless observer next adoption
 
 [Decision6489495501](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6489495501)
 supersedes the intermediate ea6-only Runtime build plan: combine the Owner's
 local-auth change with the next reviewed Runtime adoption, avoiding two builds.
-The existing observer remains **token mode**, same source/image/config/URL.
-This section is a concrete rollout proposal, not an executed deployment.
+Completed under decision6490872107 at accepted51349; the current receipt above
+records actual tokenless deployment. The procedure below is retained for audit,
+not authority to rebuild/restart again. The decision additionally authorized one
+Router and one Executor build from the same source, preparation only.
 
 Before rollout require independent acceptance, merge, actual four-suite postmerge
 CI and the PM image-adoption checkpoint. Use a clean checkout of that exact merge,
@@ -543,7 +592,8 @@ never floating main. Keep the frozen maintenance checkout at accepted827 untouch
 Create a NEW private build/evidence directory and full-SHA image tag; refuse
 preexisting paths/tags. Reuse the reviewed bootstrap procedure's committed archive,
 symlink/ownership/secret scan and executable-mode-preserving permissions, but build
-only Runtime. Do not rerun whole-instance bootstrap or overwrite V4 source/config.
+each of the three application images once under decision6490872107. Do not rerun
+whole-instance bootstrap or overwrite prior V4 source/config.
 
 Exact reviewed pins: Node
 `node:22-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d`,
@@ -558,10 +608,14 @@ Build using `docker --host unix:///var/run/docker.sock build --builder default`,
 `CODEX_VERSION=0.160.0 OPENCODE_VERSION=1.19.4 DDEV_UID=1000 DDEV_GID=1000`.
 Retain build output privately. Verify label/image ID against actual archive inputs,
 toolchain and immutable askpass modes, non-root/read-only/noexec/nonrecursive mounts.
-No unreviewed image or label-only source promotion. Router/Executor mixed-source
-binding remains the precise PM decision in the [successor packet](../project/history/2026-10-29-successor-observer-packet.md).
+No unreviewed image or label-only source promotion. Router/Executor additionally
+use the retained Python pin
+`python:3.13-slim-bookworm@sha256:93498f36dc7e24ef233bfdf6cc17d4b8bd32d94ee737143e906460d5f5a914c5`,
+DDEVv1.25.4 and Buildxv0.37.0. The actual combined services archive and all three
+image IDs are in the [new receipt](../project/history/2026-10-29-observer828-adoption.md);
+there is no longer a mixed-source gap for this prepared release.
 
-Proposed observer input diff (private destination, not installed):
+Applied observer input diff (private destination; old preimages retained):
 
 ```diff
  PCP_RUNTIME_STARTUP_MODE=pcp_local_dashboard
@@ -580,7 +634,7 @@ and frontend IDs must be recorded; old containers/config/token stay retained for
 rollback. Only the final accepted source/image binding changes at that checkpoint.
 
 Nginx continues sharing the observer's network namespace, reaches only
-127.0.0.1:18787, and publishes only host127.0.0.1:18443. Proposed server changes:
+127.0.0.1:18787, and publishes only host127.0.0.1:18443. Applied server changes:
 
 ```nginx
 # Preserve existing TLS leaf/key/protocols and noexec temp-path configuration.
@@ -619,7 +673,8 @@ bridge IP and gets denied at frontend even with valid Host/Origin/spoofed header
 probe LAN/host non-loopback addresses too. If Docker forwarding makes an external
 peer indistinguishable from the allowed publication peer, **HOLD tokenless rollout**
 and retain token mode; do not broaden allowlists or change global networking.
-No cross-container/LAN proof is claimed from source fixtures.
+Actual cross-container and own-host probes passed in the new receipt. A true
+second-machine LAN test remains NOT TESTED; source fixtures establish neither.
 
 Run Nginx syntax and real certificate-chain/browser checks before switching.
 With default TLS validation and a fresh browser profile/no cookies, opening the

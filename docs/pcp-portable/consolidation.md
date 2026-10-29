@@ -7,47 +7,51 @@ all four suites successfully. One writer on `ai/815-successor-adoption-v4` in
 `/home/sonvh/pcp-successor-adoption-v4`; named physical root
 `/home/sonvh/pcp-local-adoption825-v4`. No protected baseline activation or live job.
 
-## Active postmerge maintenance and local observer checklist
+## Active observer828 adoption checklist
 
-[Execution6489438739](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6489438739)
-and later [Owner observer decision6489495501](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6489495501).
-PR827 merged at `ea6fc0ac5dd101068bf4fe6f8f8813495cc529bf`; exact postmerge
-CI40827639082 passed four executed suites. One writer; frozen maintenance checkout
-`/home/sonvh/pcp-retire824-execute-v1` stays clean at accepted source. New source
-branch `ai/815-local-observer-no-token` in `/home/sonvh/pcp-local-observer-no-token`.
+[DEC-PCP-815-OBSERVER828-ADOPT-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6490872107).
+Accepted PR828 source `51349be73b54ca2fb827a4becc30e00ba62acd7d`, reviewed/merged
+same tree; postmerge CI40836381983 executed four suites,5093 passed/135 skipped.
+One writer in `ai/815-observer828-adoption`; separate pinned application checkout.
 
-- [x] Reconcile all22 original V3 containers, exact DB/image/volume/network,
-  current three stopped workers, activation disabled and resource headroom.
-- [x] DB-only start; consistent private dump/list/hash and full manifest once.
-  Full job/receipt/lease equal retained final rows;612-file verified snapshot,
-  assisted commit/sole parent/clean Git and original counters freshly matched.
-- [x] New network-none rehearsal DB + three inert stopped placeholders; restore
-  entire backup, identical business preimages/all11 tables; dry-run/APPLY/exact
-  retry/read-only reconciliation pass; stop all4 and retain volume/evidence.
-- [x] Separate original approval bound to actual PM record and manifest digest;
-  unchanged original dry-run, one APPLY, complete postimage/unrelated-table checks,
-  after-dump and read-only reconciliation. No acknowledgement uncertainty/retry.
-- [x] Historical824 retired incomplete/not delivered; cancelled, receiptblocked3,
-  same-owner leasereleased1. All22 V3 stopped; no counters/proof/commit rewritten.
-- [x] Existing V4 observer/DB/HTTPS unchanged; trusted TLS and resource IDs rechecked.
-- [x] Explicit successfully latched local read exception; preserve default token,
-  worker/legacy/control auth, scope, sanitization and no side-effect guarantees.
-- [x] Focused auth/rebinding/proxy/mode/foreign/control regressions; fresh browser
-  fixture without token/form/cookie, repeated polls. Events/SSE sanitization repair.
-- [x] Compare actual service input trees and truthful V4 image labels; frozen
-  draft registry diff validates50 protected paths; next task has code/test/doc.
-- [x] Record later decision to combine Runtime build with reviewed auth adoption;
-  no intermediate build, observer swap, registry activation or new admission.
-- [ ] Independent PM source review, merge/postmerge and exact observer adoption.
-- [ ] Actual tokenless browser/container/LAN checks after reviewed deployment.
-- [ ] Mixed-source service-binding decision, successor activation and fresh task.
+- [x] Reconcile exact V4 DB/observer/frontend/network/volume, private preimages,
+  existing pins/trusted cert, capacity and publication peer before switching.
+- [x] One serial cached build each Runtime/Router/Executor from accepted51349;
+  archive/hash/immutable IDs, actual packaged content/modes/toolchains checked.
+  Router/Executor services never started; their probes were offline only.
+- [x] Non-root/read-only/nonrecursive mounts/noexec tmpfs, Docker20/Buildx and
+  immutable executable askpass outside tmpfs verified without publisher secrets.
+- [x] Retain old token pair/config/images; syntax-check new Nginx; replace only
+  observer/frontend, preserve DB/role/network/cert. No token in new observer.
+- [x] Fresh trusted real Chromium: no form/token/session cookie, six successful
+  polls, actual empty DB state, offline/reconnect and no page errors.
+- [x] Runtime direct controls403; frontend control/session/foreign paths404;
+  wrong Host, Origin, cross-site and forwarded identity rejected.
+- [x] Separate container: bridge upstream refused, frontend403 even with valid
+  Host/Origin/spoofing. Own-host non-loopback addresses refused/timed out.
+- [x] Actual read-role permissions and denied DELETE/DDL/sequence operations;
+  identical full11-table/sequence before/after hash, no inserted fixture jobs.
+- [x] 74 container fixture regressions pass: real recording/normalization/projected
+  usage, fixed terminal timers, auth/scope/event/SSE redaction. Harness missing
+  models.yml diagnosed and fixed by stdin-only accepted configuration; no rebuild.
+- [x] NEW private immutable51349 DRAFT, all50 protected paths and prior825/827
+  revisions preserved; exact image/config/registry diffs and three-path task.
+  Schema/contract checks pass; trusted reader still denies missing activation.
+- [x] Final retention: V4 three running/30 stopped; all22 V3/four rehearsal stopped;
+  frozen maintenance/app checkouts clean; old configs/token unchanged.
+- [x] Update continuity, operations and [one physical receipt](../project/history/2026-10-29-observer828-adoption.md).
+- [ ] Independent PM acceptance of this physical evidence/documentation PR and
+  its applicable exact-head CI; source four-suite acceptance is already recorded.
+- [ ] Separately approved successor operational registration/baseline/activation,
+  real issue identity, credential/readiness/ownership checks and clean admission.
+- [ ] VPN ON/parity and true second-machine LAN measurement: NOT TESTED. Current
+  VPN state not reconfirmed; prior OFF evidence does not substitute for ON.
 
-[Execution receipt](../project/history/2026-10-29-retire824-execution.md),
-[successor/config/task packet](../project/history/2026-10-29-successor-observer-packet.md).
-Local required suites PASS: root1742, Runtime2540/134 skipped, Router132,
-Executor680. The35 new auth/SSE regressions are included in Runtime. Exact-final-
-head hosted execution is recorded in [PR828](https://github.com/sonvhse06072/personal-coding-platform/pull/828);
-earlier-head CI is supporting evidence only.
+Historical retirement is complete under execution6489438739:824 cancelled /
+incomplete_not_delivered, receiptblocked/gen3, same-owner leasereleased/gen1;
+proof/commit/error/counters preserved. [Retirement receipt](../project/history/2026-10-29-retire824-execution.md)
+and [prior draft packet](../project/history/2026-10-29-successor-observer-packet.md)
+remain immutable history. This session neither repeated retirement nor admitted work.
 
 ## Historical integrated checklist — retirement and HTTPS source preparation
 
