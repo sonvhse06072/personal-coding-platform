@@ -218,7 +218,8 @@ def setup(monkeypatch):
                                "source_commit": task.baseline_source_commit, "status": "approved"})
     project = {"repository": source.REPOSITORY, "base_branch": "main", "registration_status": "approved",
                "runtime": {"workspace_mode": "isolated_clone", "developer_permission_mode": "bounded",
-                           "exclusive_project_lease": False},
+                           "exclusive_project_lease": True},
+               "ddev": {"enabled": True},
                "autonomy": {"allow_commit": True, "allow_push_ai_branch": True,
                             "allow_create_pr": True, "allow_production_deploy": False}}
     registry = {"projects": {source.PROJECT_ID: {"active_revision": task.baseline_revision}}}
@@ -249,6 +250,7 @@ def claimed(s):
 
 def test_one_normal_queued_job_and_existing_queue_after_atomic_commit(setup):
     s = setup
+    assert s.project['runtime']['exclusive_project_lease'] is True
     result = asyncio.run(s.dispatch())
     job_id = worker.stable_job_id(s.task)
     assert result["runtime_job_state"] == "queued"

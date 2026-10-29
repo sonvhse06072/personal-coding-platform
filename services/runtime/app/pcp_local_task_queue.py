@@ -114,6 +114,14 @@ def verify_issue(
     Caller separately resolves the approved ProjectBaseline and compares the
     current trusted branch SHA. Validation alone never grants dispatch.
     """
+    return _verify_issue(source, issue_number=issue_number, body_sha256=body_sha256,
+        base_sha=base_sha, baseline_revision=baseline_revision,
+        baseline_source_commit=baseline_source_commit, expected_main=base_sha)
+
+
+def _verify_issue(source, *, issue_number, body_sha256, base_sha,
+                  baseline_revision, baseline_source_commit, expected_main):
+    """Shared parser. Public fresh admission always pins expected_main to base."""
     require(type(issue_number) is int and issue_number > 0,
             "issue_number_invalid")
     require(isinstance(body_sha256, str) and DIGEST_RE.fullmatch(body_sha256) is not None,
@@ -135,7 +143,7 @@ def verify_issue(
             and source.get("is_pull_request") is False
             and source.get("html_url")
             == f"https://github.com/{REPOSITORY}/issues/{issue_number}"
-            and source.get("main_sha") == base_sha,
+            and source.get("main_sha") == expected_main,
             "github_identity_or_main_changed")
     body = source.get("body")
     require(isinstance(body, str) and len(body.encode("utf-8")) <= 16000
@@ -395,3 +403,332 @@ class LocalSourceQueueStore:
             require(row is not None, "task_generation_or_identity_stale")
             conn.commit()
             return dict(row)
+
+
+# Private claimed-only recovery; original activation remains immutable evidence.
+from copy import deepcopy
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import time
+
+
+PERMIT = Path('/config/pcp-local-claim-recovery.json')
+ORIGINAL = Path('/config/pcp-local-original-activation.json')
+KEY = 'pcp_local_claim_recovery'
+FLAG = 'PCP_LOCAL_CLAIM_RECOVERY_ENABLED'
+
+
+def digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+
+
+def enabled():
+    return os.getenv(FLAG, '') == 'owner-approved'
+
+
+def private_bytes(path):
+    require(path.is_file() and not path.is_symlink(), 'claim_recovery_private_file_missing')
+    info = path.stat()
+    require(info.st_uid in (0, os.getuid()) and info.st_mode & 0o077 == 0,
+            'claim_recovery_private_file_permissions')
+    data = path.read_bytes()
+    require(len(data) <= 128000, 'claim_recovery_private_file_size')
+    return data
+
+
+class RecoveryPermit:
+    """Concrete trusted configuration; no constructor from a request dictionary."""
+    def __init__(self):
+        require(enabled(), 'claim_recovery_disabled')
+        raw, original = private_bytes(PERMIT), private_bytes(ORIGINAL)
+        self.value = json.loads(raw, object_pairs_hook=_unique)
+        self.original = json.loads(original, object_pairs_hook=_unique)
+        p, a = self.value, self.original
+        require(set(p) == {'version', 'decision_id', 'execution_record', 'not_before', 'expires_at',
+            'receipt_before', 'original_activation_sha256', 'original_activation_digest',
+            'repair_source', 'repair_commits', 'repair_paths', 'roles'}, 'claim_recovery_permit_shape')
+        require(type(p['version']) is int and p['version'] == 1
+            and re.fullmatch(r'[A-Za-z0-9._-]{8,100}', p['decision_id']) is not None
+            and p['execution_record'].startswith('https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-')
+            and p['original_activation_sha256'] == hashlib.sha256(original).hexdigest()
+            and p['original_activation_digest'] == digest(a), 'claim_recovery_original_activation_changed')
+        before = p['receipt_before']
+        fields = set(LocalSourceTask.__dataclass_fields__)
+        require(type(before) is dict and set(before) == fields | {
+            'state', 'generation', 'job_id', 'created_at', 'updated_at'}, 'claim_recovery_receipt_shape')
+        self.task = LocalSourceTask(**{k: tuple(before[k]) if k == 'allowed_paths' else before[k] for k in fields})
+        from .pcp_local_worker_loop import claimed_source_receipt
+        require({k: v for k, v in before.items() if k not in ('created_at', 'updated_at')}
+            == claimed_source_receipt(self.task) and type(before['generation']) is int
+            and self.task.project_id == 'pcp-local'
+            and self.task.repository == 'sonvhse06072/personal-coding-platform'
+            and self.task.base_sha == self.task.baseline_source_commit
+            and all(a.get(k) == before[k] for k in ('issue_number', 'body_sha256', 'base_sha',
+                'baseline_revision', 'baseline_source_commit')),
+            'claim_recovery_original_identity_changed')
+        require(re.fullmatch('[0-9a-f]{40}', p['repair_source']) is not None
+            and p['repair_source'] != self.task.base_sha
+            and type(p['repair_commits']) is list and p['repair_commits']
+            and p['repair_commits'][-1] == p['repair_source']
+            and all(re.fullmatch('[0-9a-f]{40}', x) for x in p['repair_commits'])
+            and len(set(p['repair_commits'])) == len(p['repair_commits'])
+            and type(p['repair_paths']) is list and p['repair_paths']
+            and p['repair_paths'] == sorted(set(p['repair_paths']))
+            and not set(p['repair_paths']).intersection(self.task.allowed_paths),
+            'claim_recovery_repair_range_invalid')
+        require(type(p['roles']) is dict and set(p['roles']) == {'runtime', 'executor', 'router', 'verifier'},
+            'claim_recovery_roles_invalid')
+        for role, binding in p['roles'].items():
+            expected = {'image_id', 'source_commit'} | (set() if role == 'verifier' else {'configuration_sha256'})
+            require(type(binding) is dict and set(binding) == expected
+                and re.fullmatch('sha256:[0-9a-f]{64}', binding['image_id']) is not None
+                and binding['source_commit'] == (p['repair_source'] if role in ('runtime', 'executor') else self.task.base_sha)
+                and (role == 'verifier' or re.fullmatch('[0-9a-f]{64}', binding['configuration_sha256']) is not None),
+                'claim_recovery_roles_invalid')
+        require(p['roles']['verifier']['image_id'] == a['verification_image'] == a['runtime_image_id'],
+                'claim_recovery_original_verifier_changed')
+        self.sha256 = digest(p)
+        self.activation = {**a, 'claim_recovery': deepcopy(p)}
+        self.require_fresh()
+
+    def require_fresh(self):
+        p = self.value
+        require(enabled() and all(type(p[k]) in (int, float) for k in ('not_before', 'expires_at'))
+            and p['not_before'] <= time.time() < p['expires_at']
+            and 0 < p['expires_at'] - p['not_before'] <= 86400,
+            'claim_recovery_permit_expired')
+        require(digest(self.value) == self.sha256
+            and digest(json.loads(private_bytes(PERMIT), object_pairs_hook=_unique)) == self.sha256
+            and hashlib.sha256(private_bytes(ORIGINAL)).hexdigest() == p['original_activation_sha256'],
+            'claim_recovery_permit_revoked')
+
+    def require_task(self, task, main):
+        self.require_fresh()
+        require(task == self.task and main == self.value['repair_source'], 'claim_recovery_source_changed')
+
+    def verify_issue(self, source):
+        from .pcp_local_task_queue import _verify_issue
+        self.require_fresh()
+        # Explicit expected CURRENT main R; immutable task/base still S.
+        task = _verify_issue(source, expected_main=self.value['repair_source'], **{
+            k: getattr(self.task, k) for k in ('issue_number', 'body_sha256', 'base_sha',
+                'baseline_revision', 'baseline_source_commit')})
+        self.require_task(task, source['main_sha'])
+        return task
+
+    def audit(self):
+        return {'permit_sha256': self.sha256, 'decision': deepcopy(self.value)}
+
+
+def receipt(conn, permit, *, lock=False):
+    return conn.execute('SELECT to_jsonb(r) AS value FROM cp_pcp_local_source_receipts r '
+        'WHERE repository=%s AND project_id=%s AND issue_number=%s' + (' FOR UPDATE' if lock else ''),
+        (permit.task.repository, permit.task.project_id, permit.task.issue_number)).fetchone()
+
+
+def classify(conn, permit):
+    """Full preimage for retryable queued state. Advanced states are observe-only."""
+    from .pcp_local_worker_loop import exact_value, stable_job_id
+    r = receipt(conn, permit)
+    row = conn.execute('SELECT to_jsonb(j) AS value FROM cp_jobs j WHERE id=%s',
+                       (stable_job_id(permit.task),)).fetchone()
+    before = permit.value['receipt_before']
+    if row is None:
+        require(r is not None and exact_value(r['value'], before), 'claim_recovery_receipt_preimage_drift')
+        return 'unregistered', None
+    job = row['value']
+    cp = job.get('checkpoint') or {}
+    audit = cp.get(KEY)
+    require(type(audit) is dict and audit.get('authorization') == permit.audit(),
+            'claim_recovery_conflicting_job_or_decision')
+    initial = audit['registered_preimage']
+    current = deepcopy(job)
+    del current['checkpoint'][KEY]
+    require(initial['id'] == stable_job_id(permit.task)
+        and initial['source_commit'] == permit.task.base_sha
+        and all(current[k] == initial[k] for k in ('id','project_id','source_commit','dry_run','created_at','task'))
+        and current['checkpoint']['pcp_local_source'] == initial['checkpoint']['pcp_local_source']
+        and current['checkpoint']['project_baseline'] == initial['checkpoint']['project_baseline'],
+        'claim_recovery_job_identity_drift')
+    if r is not None and exact_value(r['value'], before):
+        require(exact_value(current, initial), 'claim_recovery_registered_preimage_drift')
+        return 'registered_not_started', job
+    require(r is not None and all(exact_value(r['value'].get(k), v)
+        for k, v in before.items() if k not in ('state', 'generation', 'updated_at')),
+        'claim_recovery_receipt_identity_drift')
+    require((r['value']['state'], r['value']['generation']) in {
+        ('running', 2), ('delivered', 3), ('blocked', 3)}, 'claim_recovery_receipt_transition_drift')
+    execution = cp.get('pcp_local_execution') or {}
+    state = ('terminal_observe_only' if job['status'] in ('completed', 'failed', 'cancelled')
+        else 'verified_delivery_only' if execution.get('state') in ('verified', 'verified_uncommitted', 'commit_uncertain')
+        else 'execution_fenced_no_replay')
+    return state, job
+
+
+def require_quiescent(conn, permit, *, lock=False):
+    from .pcp_local_recovery import blocking_receipts
+    suffix = ' FOR UPDATE' if lock else ''
+    writers = conn.execute("SELECT id FROM cp_jobs WHERE project_id='pcp-local' AND id<>%s "
+        "AND (status IS NULL OR status NOT IN ('completed','failed','cancelled'))"+suffix,
+        (permit.value['receipt_before']['job_id'],)).fetchall()
+    claims = conn.execute("SELECT * FROM cp_pcp_local_source_receipts WHERE project_id='pcp-local' "
+        "AND issue_number<>%s AND (state IS NULL OR state NOT IN ('pending','delivered') "
+        "OR (state='pending' AND (generation<>0 OR job_id IS NOT NULL)) "
+        "OR (state='delivered' AND job_id IS NULL))"+suffix,
+        (permit.task.issue_number,)).fetchall()
+    lease = conn.execute("SELECT * FROM cp_project_leases WHERE project_id='pcp-local'"+suffix).fetchone()
+    require(not writers and not blocking_receipts(conn, claims, lock=lock) and lease is None,
+            'claim_recovery_ownership_changed')
+
+
+def plan(storage, permit):
+    require(type(permit) is RecoveryPermit, 'claim_recovery_private_permit_required')
+    permit.require_fresh()
+    with storage.connect() as conn:
+        conn.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+        state, job = classify(conn, permit)
+        if state in ('unregistered', 'registered_not_started'):
+            require_quiescent(conn, permit)
+    return {'state': state, 'job_id': permit.value['receipt_before']['job_id'],
+        'permit_sha256': permit.sha256, 'task_source': permit.task.base_sha,
+        'repair_source': permit.value['repair_source'], 'model_invocations': 0,
+        'can_register': state == 'unregistered', 'can_execute': state == 'registered_not_started'}
+
+
+async def prepare(engine):
+    from .pcp_local_worker_loop import TrustedReaders, RuntimeTaskAttestor, RuntimeTaskLauncher
+    from .pcp_local_task_queue import LocalSourceQueueStore, MARKER
+    from .pm_bridge import PMBridgeGitHubClient
+    permit = RecoveryPermit()
+    readers = TrustedReaders(engine, PMBridgeGitHubClient())
+    from .pcp_local_readiness import collect_readiness
+    readiness = await collect_readiness(engine, readers)
+    require(readiness['ready'], 'claim_recovery_readiness_blocked')
+    task, issue = await readers.source()
+    require(readers.recovery.sha256 == permit.sha256, 'claim_recovery_permit_revoked')
+    attestor = RuntimeTaskAttestor(issue_number=task.issue_number, readers=readers.readers())
+    launcher = RuntimeTaskLauncher(engine=engine, attestor=attestor, github=readers.github,
+                                  receipts=LocalSourceQueueStore(engine.storage))
+    launcher.recovery = permit
+    launcher.task, launcher.attempted = task, True
+    await launcher._recheck(task)
+    launcher.source_binding = attestor.binding(task)
+    goal = json.loads(issue['body'].strip()[len(MARKER):].strip())['goal']
+    return permit, readers, launcher, goal
+
+
+async def register(engine):
+    """Commit once, return durable reconciliation. Never enqueue, lease or model."""
+    permit = RecoveryPermit()
+    before = plan(engine.storage, permit)
+    if before['state'] != 'unregistered':
+        return before
+    permit, readers, launcher, goal = await prepare(engine)
+    require(not list(engine.workspace_root.iterdir()), 'claim_recovery_workspace_exists')
+    remote = await readers.executor('/v1/pcp-local/claim-recovery-preflight', {})
+    require(remote == {'permit_sha256': permit.sha256, 'side_effects': 'absent'},
+            'claim_recovery_remote_side_effects')
+    engine.create_job({'_job_id': permit.value['receipt_before']['job_id'], 'project_id': 'pcp-local',
+        'source_commit': permit.task.base_sha, 'baseline_revision': permit.task.baseline_revision,
+        'task': {'title': f'PCP-local issue #{permit.task.issue_number}', 'description': goal,
+                 'task_type': 'implementation'}}, _pcp_local_registration=launcher)
+    return plan(engine.storage, permit)
+
+
+async def execute(engine):
+    # Share publication/PM-operation serialization with the normal worker path.
+    async with engine.project_operation_lock('pcp-local'):
+        return await _execute_locked(engine)
+
+
+async def _execute_locked(engine):
+    """One queue hydration under a cross-process lock; receipt CAS fences models.
+
+    On an uncertain running transition, return observe-only; NEVER reset/replay.
+    A lost registration/queue acknowledgement can safely retry this explicit step.
+    """
+    from .pcp_local_worker_loop import run_admitted_job, TrustedReaders
+    from .pm_bridge import PMBridgeGitHubClient
+    permit = RecoveryPermit()
+    with engine.storage.connect() as conn:
+        held = conn.execute('SELECT pg_try_advisory_lock(%s,%s) AS held', (5260112, 831)).fetchone()['held']
+        require(held, 'claim_recovery_execution_busy')
+        try:
+            result = plan(engine.storage, permit)
+            if result['state'] != 'registered_not_started':
+                return result
+            readers = TrustedReaders(engine, PMBridgeGitHubClient())
+            from .pcp_local_readiness import collect_readiness
+            readiness = await collect_readiness(engine, readers)
+            require(readiness['ready'], 'claim_recovery_readiness_blocked')
+            task, _ = await readers.source()
+            await readers.refresh(task)
+            require(not list(engine.workspace_root.iterdir()), 'claim_recovery_workspace_exists')
+            remote = await readers.executor('/v1/pcp-local/claim-recovery-preflight', {})
+            require(remote == {'permit_sha256': permit.sha256, 'side_effects': 'absent'},
+                    'claim_recovery_remote_side_effects')
+            require(plan(engine.storage, permit)['state'] == 'registered_not_started', 'claim_recovery_state_changed')
+            if engine.queue.empty():
+                await engine.enqueue(result['job_id'])
+            row = await run_admitted_job(engine, readers, task)
+            return {'state': row['status'], 'job_id': row['id'], 'can_merge': False}
+        finally:
+            conn.execute('SELECT pg_advisory_unlock(%s,%s)', (5260112, 831))
+
+
+def fence(storage, permit):
+    """Full-row CAS before the existing execution path may acquire its lease."""
+    from .pcp_local_recovery import blocking_receipts
+    permit.require_fresh()
+    with storage.connect() as conn:
+        conn.execute("SET LOCAL lock_timeout = '5s'")
+        conn.execute('SELECT pg_advisory_xact_lock(%s,%s)', (5260112, 808))
+        receipt(conn, permit, lock=True)
+        conn.execute('SELECT id FROM cp_jobs WHERE id=%s FOR UPDATE',
+                     (permit.value['receipt_before']['job_id'],)).fetchone()
+        state, _ = classify(conn, permit)
+        require(state == 'registered_not_started', 'claim_recovery_execution_already_fenced')
+        require_quiescent(conn, permit, lock=True)
+        permit.require_fresh()
+        conn.execute("UPDATE cp_pcp_local_source_receipts SET state='running',generation=2,updated_at=NOW() "
+            'WHERE repository=%s AND issue_number=%s', (permit.task.repository, permit.task.issue_number))
+        conn.commit()
+
+
+def main(argv=None):
+    """In-container operator client. No token on argv/logs; default is read-only."""
+    import argparse
+    import urllib.error
+    import urllib.request
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('action', nargs='?', default='plan',
+                        choices=('plan', 'readiness', 'register', 'execute', 'deliver'))
+    action = parser.parse_args(argv).action
+    token = os.environ.get('RUNTIME_API_TOKEN', '')
+    if not token:
+        print('runtime_auth_unavailable')
+        return 2
+    paths = {'plan': '/claim-recovery', 'readiness': '/readiness',
+        'register': '/claim-recovery/register', 'execute': '/claim-recovery/execute', 'deliver': '/deliver'}
+    request = urllib.request.Request('http://127.0.0.1:8787/v1/pcp-local'+paths[action],
+        method='GET' if action in ('plan','readiness') else 'POST',
+        headers={'Authorization': 'Bearer '+token})
+    try:
+        with urllib.request.urlopen(request, timeout=3600) as response:
+            result = json.load(response)
+        print(json.dumps(result, sort_keys=True))
+        return 0
+    except urllib.error.HTTPError as exc:
+        # Do not reflect arbitrary upstream error content or authentication.
+        print(json.dumps({'status': exc.code, 'action': action, 'next': 'read_only_reconcile'}))
+        return 2
+    except (OSError, ValueError):
+        print('request_outcome_uncertain_read_only_reconcile_before_retry')
+        return 2
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

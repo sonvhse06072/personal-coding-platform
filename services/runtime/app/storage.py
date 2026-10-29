@@ -251,10 +251,22 @@ class Storage:
                 and row["source_commit"] == expected["base_sha"]
                 and exact_value(row["checkpoint"].get("pcp_local_source"), binding),
                 "pcp_local_job_binding_invalid")
+        recovery = getattr(registration, 'recovery', None)
         with self.connect() as conn:
             conn.execute("SET LOCAL lock_timeout = '5s'")
             conn.execute("SET LOCAL statement_timeout = '10s'")
             conn.execute("SELECT pg_advisory_xact_lock(%s,%s)", (5260112, 808))
+            if recovery is not None:
+                from .pcp_local_task_queue import receipt, classify, require_quiescent
+                full = receipt(conn, recovery, lock=True)
+                require(full is not None, 'claim_recovery_receipt_missing')
+                state, existing = classify(conn, recovery)
+                if state == 'unregistered':
+                    require_quiescent(conn, recovery, lock=True)
+                if state != 'unregistered':
+                    # Another registrant committed under the same advisory lock.
+                    # This call never queues or executes the already durable job.
+                    return
             claimed = conn.execute(
                 """SELECT repository, project_id, issue_number, task_key,
                           body_sha256, base_sha, baseline_revision,
@@ -306,6 +318,14 @@ class Storage:
             # exact receipt/writer locks are held, before the shared normal INSERT.
             registration.require_registration()
             self._insert_job_on_connection(conn, row)
+            if recovery is not None:
+                from .pcp_local_task_queue import KEY
+                initial = conn.execute('SELECT to_jsonb(j) AS value FROM cp_jobs j WHERE id=%s',
+                    (row['id'],)).fetchone()['value']
+                checkpoint = {**initial['checkpoint'], KEY: {
+                    'authorization': recovery.audit(), 'registered_preimage': initial}}
+                conn.execute('UPDATE cp_jobs SET checkpoint=%s::jsonb WHERE id=%s',
+                             (json.dumps(checkpoint), row['id']))
             conn.commit()  # Never expose an enqueue acknowledgement before this.
 
     def get(self, job_id: str) -> dict[str, Any] | None:
