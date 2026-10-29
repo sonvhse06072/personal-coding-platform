@@ -1,56 +1,59 @@
 # Current Project State and Handoff
 
 Tier-1 mutable continuity, not baseline, merge or admission authority. Reverify
-exact source/PM/physical receipts before acting.
+exact source/PM/physical receipts and current GitHub/Runtime state before acting.
 
-## Active PR832 — complete claimed-only recovery candidate, source-only
+## Same #831 delivered as Draft PR #833; independent PM outcome pending
 
-Updated2026-10-29 under [PM WorkOrder6496080714](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6496080714).
-The [independent PR832 review](https://github.com/sonvhse06072/personal-coding-platform/pull/832#pullrequestreview-5697253728)
-accepted the narrow exclusive-lease fix at79f7f4 and held merge for complete
-same-identity recovery. One writer extends the SAME
-[PR832](https://github.com/sonvhse06072/personal-coding-platform/pull/832), branch
-`ai/815-successor831-live`, checkout `/home/sonvh/pcp-successor831-live`.
-Main/task **S=b97ade581fecad4db2146258e5ca02c3902189e0** remains unchanged.
-Future accepted repair merge **R is unknown**, never substituted with the PR head.
+Updated 2026-10-29 under [execution6499496019](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6499496019)
+and narrow [binding disposition6500237978](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6500237978).
+PR #832 is merged; accepted Runtime/Executor repair **R=1f9b5d50a18a7b93e6a22c6191d59985d4d3892a**.
+Actual main stays R. Original task/baseline/verifier/Router **S=b97ade581fecad4db2146258e5ca02c3902189e0**
+and baseline `pcp-local-successor-830-b97ade5-20261029` are unchanged.
+One writer, execution evidence on `ai/815-recovery832-live` in
+`/home/sonvh/pcp-recovery832-live`; no Developer merge.
 
-The candidate adds a private, expiring, default-off permit; read-only plan;
-atomic registration/audit of the same claimed/gen1 identity; full preimage and
-ownership checks; exact duplicate/COMMIT reconciliation; separate execution fence
-with no replay after running; explicit task/verifierS versus Runtime/ExecutorR
-binding with actual GitHubmainR, exact repair range and unchanged pilot/Router
-inputs. Normal admission, trusted registrar types, publisher/model/lease controls
-remain enforced. No live source or worker deployment changed.
+**Real Draft [PR #833](https://github.com/sonvhse06072/personal-coding-platform/pull/833)**,
+branch `ai/a8851f89dd3e`, head `4161ba059002c7aaf3fd35a88e3b0b80065c62b7`.
+Same deterministic job `a8851f89dd3e4e582c697ec1fe6d8cdb` is **blocked / verified /
+awaiting_independent_pm_review**. Receipt running/gen2, same-job lease active/gen1;
+`delivery_finalized=false`. Independent PM acceptance/finalization/merge remains
+outstanding. Do not interpret blocked here as failed coding or permission to replay.
 
-**Retained LIVE state:** original receipt831 **claimed/gen1**, deterministic ID
-`a8851f89dd3e4e582c697ec1fe6d8cdb`, **no job/lease/workspace/model/commit/remote
-branch/PR**. Issue/body/goal/base/baseline/three paths unchanged. Original approved
-baseline `pcp-local-successor-830-b97ade5-20261029` stays S. Original activation
-bytes remain disabled; expiry2026-10-30T10:51:28.134568Z is not renewed. Scoped
-credentials remain private in stopped worker custody. Publisher expiry is
-2026-11-04T08:29:46Z; current entitlement is not assumed from the prior login.
+One supported registration preserved full claimed/gen1 receipt and created one
+queued job/audit without model/lease. One execute consumed the fence and ran one
+Luna/low invocation. Actual verifier S phases 13+13 passed (26 total, 2 runs); one
+commit, three original paths, exact Git tree/modes/sole parent S; one publisher
+attempt, no delivery retry. [Exact-head CI40898352672](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40898352672)
+executed all four suites: **5254 passed/166 skipped**. Repair postmergeCI40891720152
+is separately verified 5241/166. Neither substitutes for independent PM review.
+
+The first private permit failed readiness after Docker first start normalized
+only `HostConfig.OomKillDisable` false→null. Original bytes/snapshots were retained;
+no job existed then. PM6500237978 authorized one exact successor after complete
+same-ID/preimage/two-snapshot checks. Only decision/record and Runtime/Executor
+fingerprints changed; original validity 2026-10-29T14:49:39.238744Z through
+2026-10-30T14:49:39.238744Z and all other authority remained exact. Aggregate
+readiness, eight trusted readers and real Executor preflight then passed.
+No source patch, rebuild, counter reset or unreviewed proof refresh.
 
 **https://localhost:18443/dashboard — loopback_readonly, no login/token/cookie.**
-Observer51349, DB and frontend remain running unchanged; V4 retains39 containers,
-36 stopped including the three S workers. All historical V3 resources remain
-untouched. Claim-only reservations are not job projections: “No admitted jobs”
-does not mean ownership is free. Trusted HTTPS availability rechecked; no R
-adoption, populated LIVE job/timer/usage or VPN parity is claimed.
+Unchanged observer at 51349 now shows the actual #831 job, PR/CI, fixed verified duration
+67.801641624s and trustworthy usage: one invocation, gross 271430/cached 236544,
+cache-miss 34886/output 3482. Reported cost/tool calls Unknown; estimated cost 0.
+Fresh trusted Chromium: 352 HTTP 200 snapshot responses, no form/cookie/page error,
+offline/reload/reconnect after worker shutdown passed. Terminal completed/failed/
+cancelled states, VPN ON/parity and second-machine LAN remain NOT TESTED live.
 
-Real isolated PostgreSQL/Git regressions and a restored-copy rehearsal passed.
-The original29082B backup restored into named network-none PG17, with no live
-volume mounted. Its real receipt/S baseline registered exactly one queued job/
-audit, preserved claimed/gen1, zero model/test/lease/enqueue; exact retry unchanged.
-A fixture running fence prevented replay. External release/provider/remote
-observations were synthetic. The fixture container is stopped; its volume, backups and evidence are retained,
-separate from V4. See [evidence and executable integrated rollout packet](
-history/2026-10-29-claim-recovery832.md), [durable checklist](../pcp-portable/consolidation.md),
-[operations](../pcp-portable/local-operations.md), and [original LIVE receipt](
-history/2026-10-29-successor831-live.md).
-
-Local full verification: **5242 passed/165 skipped**; separate real PostgreSQL/
-permit suite **91 passed**. Final-head hosted receipt is on PR832; verify all four
-executed suites against its current SHA, never substitute the earlier79f7f4 run.
+R Runtime/Executor and reused Router are stopped; both permits and original
+activation disabled intact. **46 V4 containers retained, 3 running/43 stopped**;
+only unchanged DB/observer/frontend remain up. Original S workers/images/configs,
+credentials, workspaces, verification containers, backups and V3 assets preserved.
+Private evidence `/home/sonvh/.local/state/pcp-recovery832-live-v1` includes full
+before/registered/fenced/final snapshots, dumps, proof, original/successor permit
+custody, Docker/CI/browser receipts and job bundle. [Consolidated execution record](
+history/2026-10-29-recovery832-live.md), [single checklist](../pcp-portable/consolidation.md),
+[operations/stop commands](../pcp-portable/local-operations.md).
 
 ## Original #824 — retired incomplete, never delivered
 
@@ -70,41 +73,41 @@ Retirement resolves only this reservation; it does not authorize another job.
 
 ## Immediate next safe actions
 
-1. PM independently reviews the completed PR832 candidate, exact-head hosted CI,
-   real PostgreSQL/Git/restored-copy evidence and combined rollout packet. No
-   Developer merge or self-approval. PM alone closes stable-S and assigns accepted R.
-2. After merge/postmerge and the later integrated execution decision: build/adopt
-   Runtime/ExecutorR, retain verifier/RouterS with proofs and observer51349, install
-   the fresh private permit while preserving original activation, run full
-   readiness/plan, supported registration/reconciliation and controlled same-job
-   execution/delivery. No run-once/re-admission/reset/manual SQL registration.
-3. Real831 development/verification/Draft PR/CI/independent acceptance remain
-   outstanding. Successor baseline for subsequent work remains a new draft,
-   never a rewrite of the existing S task frame. No replacement task is needed.
+1. Independent PM reviews exact Draft PR #833 head/contract, actual verification/CI,
+   preserved proof/counters and execution evidence PR. Keep main at R until the
+   stable-R window is explicitly closed. Developer does not self-accept or merge.
+2. PM determines legitimate finalization before advancing main, and any scoped worker/permit
+   restoration needed for its supported review path. Recheck source/expiry/live
+   ownership first. No execute replay, redundant publication, SQL release/reset,
+   automatic permit chain or backup restoration over consumed ownership.
+3. Future fresh work needs a separately approved immutable successor baseline,
+   final source/image bindings and resolved current ownership. Existing S baseline
+   and historical #824 are never rewritten; no replacement issue for831 is needed.
 
 ## Active PCP issues and owner attention
 
-GH-815/822/824/831 remain open; GitHub/Runtime evidence stays scoped. The remaining external
-checkpoint is independent PM acceptance/merge/postmerge and one concrete physical
-execution decision. No new interactive login was requested in this source session.
-Unrelated `A3B2_IMAGE_BUILD=STOP` and `CODEX_LIVE=STOP` remain in force outside the
-explicit finite831 decision. Do not use this source WorkOrder for live recovery.
+GH-815/822/824/831 remain open. The current action belongs to independent PM:
+review Draft PR #833 and the execution evidence, then govern finalization/eligible merge.
+No new interactive login or routine Owner continuation is pending. Unrelated
+`A3B2_IMAGE_BUILD=STOP` and `CODEX_LIVE=STOP` remain effective outside the exact
+finite #831 decisions; this successful pilot did not lift those historical gates.
 
 ## Standing safety boundary
 
-Chợ Nhạc/foreign workloads untouched; #752 PARKED and #595 G0 HOLD. No production,
-force push, new paid service, global VPN/DNS/trust change, baseline rewrite, V3
-worker restart or old campaign revival. Current finite831 authority did not
-lift unrelated H1b/A3B2/Codex gates. Review/CI is a process gate, not claimed server
-branch protection. Prior [rollout packet](history/2026-10-29-observer-worker-rollout.md)
-is retained preparation history; this receipt records its actual execution limits.
+GH-815/822/824/831 remain scoped; Chợ Nhạc/foreign workloads untouched; #752 PARKED
+and #595 G0 HOLD. No production, force push, new paid service, global VPN/DNS/trust
+change, baseline rewrite, V3 restart or old campaign revival. Unrelated H1b/A3B2/
+Codex gates were not lifted. Review/CI is a process gate, not claimed server branch
+protection. The [accepted source packet](history/2026-10-29-claim-recovery832.md)
+retains premerge history; the new execution record gives actual results and the
+first-start binding disposition. Source/fixture results are separated from LIVE.
 
 <!-- PCP:CONTINUITY:START -->
-PM6496080714 extends SAME PR832 for original831 claimed/gen1 recovery. Main/taskS
-b97ade5 and original baseline/activation/evidence stay unchanged; R unknown.
-Private permit + atomic audited registrar + no-replay execution fence + explicit
-S/R image/range binding prepared. Actual isolated PG/Git/restored-copy checks pass;
-no live recovery/model/adoption. DB/tokenless dashboard up; S workers/V3 stopped.
-Single rollout/evidence packet: history/2026-10-29-claim-recovery832.md. Await
-independent PM final candidate review, exact-head CI and later execution decision.
+PM6499496019 +6500237978: accepted R=1f9b5d5 adopted Runtime/Executor; task/verifier/
+Router S b97ade5 unchanged. Exact one-successor OOM binding, original expiry retained.
+Same #831 registered/executed once: one model,26 configured tests, commit4161ba0,
+Draft PR #833, exact CI40898352672 four suites: 5254/166. Await independent PM; receipt
+running/gen2 / lease active/gen1/proof/counters preserved. Workers and both permits off;
+DB/tokenless HTTPS dashboard up, real populated browser verified. Evidence branch
+ai/815-recovery832-live; report history/2026-10-29-recovery832-live.md. No self-merge.
 <!-- PCP:CONTINUITY:END -->

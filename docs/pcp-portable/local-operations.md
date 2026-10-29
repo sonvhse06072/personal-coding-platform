@@ -5,97 +5,104 @@ change to the Constitution, approved baseline or retained V3 authority.
 GH-815 and GH-822 are implemented together because the view must explain the
 new durable verification/commit/publication states. No new service/state store.
 
-## Current831 execution and no-replay checkpoint
+## Current #831 execution and no-replay checkpoint
 
-[Execution6494028046](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6494028046)
-advanced the prior preparation packet through real S builds, baseline/config,
-credentials, readiness and one admission attempt. [Actual receipt](../project/history/2026-10-29-successor831-live.md)
-records exact images/resources/hashes. S is b97ade581fecad4db2146258e5ca02c3902189e0;
-main remains held. Prior sections describing draft/OFF preparation are historical,
-not the current installed state or new permission.
+[Execution6499496019](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6499496019)
+and [binding disposition6500237978](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6500237978)
+authorized the completed same-identity registration/execution/delivery. [Actual consolidated record](../project/history/2026-10-29-recovery832-live.md)
+is current; the [accepted packet](../project/history/2026-10-29-claim-recovery832.md)
+and [earlier claim-only receipt](../project/history/2026-10-29-successor831-live.md)
+retain their original premerge/blocked history.
 
-Baseline `pcp-local-successor-830-b97ade5-20261029` is approved/active in the private
-registry; all prior definitions remain unchanged. Canonical S clone installed;
-old5ad retained in release rollback. Readiness returned true but missed the
-launcher's obsolete exclusive_project_lease=False predicate. Approved private
-configuration requires True. The sole831 admission left receipt claimed/gen1,
-reserved ID `a8851f89dd3e4e582c697ec1fe6d8cdb`, **without a job or lease**.
-No model, commit, branch or PR exists. Keep the exact receipt; do not repeat
-run-once, reset/re-admit, create a replacement, weaken the lease flag or use
-`/deliver` (which requires verified job evidence). A source correction and reviewed
-same-identity recovery design need a separate PM adoption/continuation checkpoint.
-Owner approved protected worker-loop source correction on the follow-up PR. Its
-shared policy check requires exclusive=True in readiness and JIT registration.
-The initial narrow fix was not deployed. The active PR832 extension below now
-adds supported claim recovery; no hot patch or live ownership change occurred.
+Main/repair R=`1f9b5d50a18a7b93e6a22c6191d59985d4d3892a`; original task/baseline/
+verifier/Router S=`b97ade581fecad4db2146258e5ca02c3902189e0`. Baseline
+`pcp-local-successor-830-b97ade5-20261029`, canonical S clone, original #831 body/goal
+and three allowed paths remain unchanged. Runtime/Executor were built once at R;
+observer at 51349 was not rebuilt/swapped. Scoped retained credentials were validated.
 
-New workers are stopped, intake disabled by moving the original activation to
-`releases/worker-b97ade581fecad4db2146258e5ca02c3902189e0/rollback/activation-831-disabled.json`.
-SHA256bfa447d7e79afe7f53267598d280beb084c6a88ebf6d8dcb5d22f9b05a5752a4;
-original expiry2026-10-30T10:51:28.134568Z, never renewed. Preserve it and private
-scoped session/PAT; publisher expiry2026-11-04T08:29:46Z. Do not start the stopped
-workers or restore activation as an implicit retry. Their exact stop commands,
-if reconciling a later uncertain stop, are scoped to these new IDs only:
+Same job `a8851f89dd3e4e582c697ec1fe6d8cdb` is **blocked / verified /
+awaiting_independent_pm_review**, with receipt **running/gen2**, lease **active/gen1**.
+One Luna/low invocation, two configured verifier phases 13+13 PASS, one delivery
+attempt. Real [Draft PR #833](https://github.com/sonvhse06072/personal-coding-platform/pull/833),
+head `4161ba059002c7aaf3fd35a88e3b0b80065c62b7`, branch `ai/a8851f89dd3e`;
+[exact-head40898352672](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40898352672)
+executed four suites: 5254 passed/166 skipped. No delivery retry, model replay or
+self-approval. `delivery_finalized=false`; keep ownership until legitimate PM outcome.
+
+### Consumed permit and exact first-start binding exception
+
+Initial readiness failed because first Docker start changed only the optional
+`HostConfig.OomKillDisable` JSON false→null on new Runtime/Executor containers.
+Full original permit and pre-start snapshots were retained; no registration had
+occurred. PM6500237978 explicitly authorized one successor after full same-ID,
+original receipt/absent-side-effect, production-digest and two-stable-snapshot
+checks. No global normalization, omitted fingerprint field, source repair,
+replacement container or security/resource/config change was used.
+
+Original permit bytes SHA256 `9133cf6a5995f019ccd3279c8f7fb452569b1961bf1406f28eadeaf3b042bc4a`;
+successor `083637a98ba1a63925181830e0b003d439188d86ccbb42393a627e154195c330`.
+The complete successor diff changed only decision/record and the two affected
+configuration hashes. **Original validity remained 2026-10-29T14:49:39.238744Z to
+2026-10-30T14:49:39.238744Z.** No renewal or extra 24h. Original activation remains
+unchanged and disabled, expiry 2026-10-30T10:51:28.134568Z.
+
+Both permits now reside intact in release
+`releases/claim-recovery-1f9b5d50a18a7b93e6a22c6191d59985d4d3892a/rollback/`
+as `disabled-recovery-permit.json` and `disabled-recovery-permit-v2.json`.
+Private operator evidence is `/home/sonvh/.local/state/pcp-recovery832-live-v1`.
+`prepare-successor-permit.py` was an earlier proposal with broader validity and
+was **never applied**; it is superseded by PM6500237978 and the executed exact
+`install-binding-v2.py`. Neither script grants future permission.
+
+### Read, review and stop; never replay
+
+Open **https://localhost:18443/dashboard** directly; no login/token/cookie.
+It now projects the real job, verified fixed duration, reported-cost Unknown versus
+estimate 0, and exact PR/CI. Its SELECT-only reader remains available while workers
+are stopped. A stale observation does not authorize a retry. Read-only plan's
+`model_invocations=0` describes that operation, not the job's historical one call.
+
+The supported worker client remains `python -m app.pcp_local_task_queue` (default
+plan); dedicated endpoints are documented in the accepted packet. Final plan was
+`verified_delivery_only`, but delivery already has ci_success: do not call deliver
+redundantly. No run-once/execute/reset/new issue/SQL lease release is appropriate.
+Independent PM must first review #833 and its actual proof/CI, then separately govern
+any supported `/v1/pcp-local/pm-review` finalization/merge and scoped worker/permit
+restoration. Recheck current source, original expiry and consumed ownership. No
+automatic chain of successor permits, no backup restore over consumed live state.
+
+The exact R Runtime/Executor and reused S Router below are already stopped. If a
+later stop acknowledgement needs reconciliation, inspect those exact IDs first;
+this standalone block stops only the three approved workers and retains all data:
 
 ```sh
 bash <<'SH'
 set -eu
 unset DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH
 timeout 90 docker --host unix:///var/run/docker.sock stop --time 15 \
-  f8d63b9721d37883ad111fd1e3cd46b79cb39b8535cfadc856d5dff791ceb938 \
-  cade4f36d11544a1bda50145a3d5095e7a92b7d561d1822e5d168196279479b8 \
+  d6fb53f17809e9b11a0e82ecadd1e7c250c8183d84305645c66557cfea6fd285 \
+  403553246e43f86b5b38918f3a287d26165654c3919dc5ae5be7543266d269fb \
   f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6
 SH
 ```
 
-V4 now39 retained containers, only DB/observer/frontend running. The unchanged
-https://localhost:18443/dashboard is tokenless/loopback_readonly with trusted TLS.
-It shows no admitted jobs because claim-only reservations are not job projections;
-check durable receipt state separately before interpreting the empty view as free
-admission. Populated timers/usage remain untested. Existing exact observer/DB stop
-commands below remain valid; no rollback/reset/prune/down-v is authorized.
+V4 retains 46 containers, 3 running/43 stopped. DB/observer/frontend IDs and scoped
+optional stop commands below are unchanged. Old S Runtime/Executor containers are
+retained under `-retained-S-<first8ID>` names, not restarted. All V3/#824 evidence
+and earlier restored-copy fixture resources remain untouched/stopped. No pruning,
+volume removal, worker image rollback/replay, credential reset or baseline rewrite.
+Future fresh work requires a separate immutable successor frame and ownership
+resolution; current receipt and baseline are not a free slot.
 
-## PR832 claimed-only recovery preparation
-
-[PM6496080714](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6496080714)
-authorizes source/tests/isolated rehearsal only. Use the [single executable packet](
-../project/history/2026-10-29-claim-recovery832.md) after independent review,
-merge/postmerge and the later integrated execution decision. It supersedes the
-prior absent-job design proposal, not original S/baseline/activation evidence.
-
-The three authenticated worker endpoints are GET `/v1/pcp-local/claim-recovery`
-(plan), POST `/v1/pcp-local/claim-recovery/register` (atomic queued registration,
-no enqueue/model), and POST `/v1/pcp-local/claim-recovery/execute` (explicit fenced
-execution). Their authority comes only from private installed recovery files;
-no request body can authorize them. The in-container operator client defaults to
-plan: `python -m app.pcp_local_task_queue`. It uses the existing bearer privately,
-never prints it and never automatically retries an uncertain POST. Observer mode
-continues denying every mutation endpoint, including these new endpoints.
-
-Plan compares the entire claimed receipt and, after registration, the entire
-initial job preimage. Same-decision retries are observation only. Running fences
-are not replayable; verified states use existing delivery-only recovery; terminal
-states remain terminal. Another blocked receipt/writer/lease still blocks.
-Original activation bytes/expiry and taskS remain immutable. A separate fresh
-permit binds accepted Runtime/ExecutorR, retained verifierS, RouterS unchanged
-inputs and the unchanged observer. Actual GitHub main must be R; ordinary
-fresh admission cannot use this exception and run-once is denied in recovery mode.
-
-The source-session restored-copy fixture uses no live data volume/network and
-is retained separately as container
+The earlier restored-copy fixture remains separate, stopped, with restart=no:
 `cc373616aff0b6a0143aca906ada559b87200ab4ea6a4f26d93c7a81ea5580c8`.
-It is stopped/exited, restart=no; its own volume and three private after dumps
-are retained. Exact scoped stop command (after inspecting its recorded identity):
+Its volume/private dumps/manifests are retained. If a later stop needs
+reconciliation, inspect that exact ID before using the scoped command:
 
 ```sh
 docker --host unix:///var/run/docker.sock stop --time 15 \
   cc373616aff0b6a0143aca906ada559b87200ab4ea6a4f26d93c7a81ea5580c8
 ```
-
-Retain its volume/private dumps/manifests. Do not use fixture permit/images as
-live authority. Existing V4 DB/observer/frontend and historical S/V3 assets are
-unchanged. No new baseline activation, login, model, admission or live recovery
-is authorized in this source session.
 
 ## Readiness and schema
 
@@ -394,7 +401,8 @@ their explicit PM checkpoint. The corrected draft uses the Executor-required can
 before installing a fresh clone. The earlier alternate-path draft was rejected
 by the actual identity helper in a fixture, retained and superseded. The accepted
 build checkout stays in the release directory.
-Current registration/ddev/autonomy remain draft/disabled/off. PR829 was accepted
+At that historical preparation checkpoint registration/ddev/autonomy remained
+draft/disabled/off; the current831 section above records subsequent activation. PR829 was accepted
 and merged2ff29; active observer source remains51349. Under
 [decision6492648806](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6492648806),
 the [one final rollout/readiness packet](../project/history/2026-10-29-observer-worker-rollout.md)
@@ -570,8 +578,10 @@ Owner-approved exception is only for the successfully latched singleton local
 read observer. Default/worker/control authentication is unchanged. Other local
 OS processes/users reaching loopback can read; remote anonymous access is denied.
 Fresh WSL Chromium with normal certificate validation passed polling/reconnect;
-no injected cookies or ignored TLS errors. V4 is actually empty: "No admitted jobs"
-is expected. [Current physical receipt](../project/history/2026-10-29-observer828-adoption.md).
+no injected cookies or ignored TLS errors. V4 now contains the real831 job and
+retained ownership; [current LIVE receipt](../project/history/2026-10-29-recovery832-live.md).
+The [observer adoption receipt](../project/history/2026-10-29-observer828-adoption.md)
+records its originally empty database, not current job state.
 
 Runtime image `sha256:d7761e08e8f9318d38d948f1b3ea916825762cec45e47ead5f85c7567b5f586f`
 listens only on namespace127.0.0.1:18787 with `--no-proxy-headers`;18787 has no host
@@ -613,10 +623,11 @@ No login is needed for the current deployed observer.
 
 ### VPN, scoped credentials and next admissible task
 
-Provider/publisher credentials and PCP inference remain absent. After legitimate
-ownership/baseline/source/image decisions, use the already approved private login
-mechanism; verify entitlement/permissions only when admission gates are ready.
-No copying V3/host auth, new token scopes or provider calls to compensate now.
+Scoped Runtime subscription login and Executor publisher credentials are retained
+privately in the stopped831 workers. They were validated and used only under the
+finite831 execution decision; no fresh task is thereby authorized. Revalidate
+entitlement/expiry at a later approved action; never copy V3/host auth or reset
+credentials merely because the session ended.
 
 Measure connectivity in the Owner-selected existing VPN state, timestamp DNS/TLS/
 HTTP and actual authenticated dashboard results. Current/second-state results are
@@ -652,8 +663,9 @@ validation stays distinct from historical assisted #824.
 
 ## V4 shutdown and retention
 
-Current evidence: `/home/sonvh/.local/state/pcp-successor831-live-v1` (0700).
-V4 retains39 containers, three running/36 stopped. The prior observer828 receipt
+Current evidence: `/home/sonvh/.local/state/pcp-recovery832-live-v1` (0700).
+V4 retains46 containers, three running/43 stopped. Original831 evidence remains
+at `/home/sonvh/.local/state/pcp-successor831-live-v1`. The prior observer828 receipt
 remains retained. All22 V3 and four retirement rehearsal containers stay stopped.
 Retain old images/configs/token, original
 backups/manifests and every stopped probe, including diagnosed harness failures.
