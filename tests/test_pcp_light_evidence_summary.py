@@ -1,0 +1,83 @@
+"""Focused contract tests for the pure evidence-summary CLI."""
+import importlib.util
+import json
+from pathlib import Path
+import subprocess
+import sys
+
+import pytest
+
+ROOT = Path(__file__).resolve().parents[1]
+SCRIPT = ROOT / "scripts/pcp-light-evidence-summary.py"
+SPEC = importlib.util.spec_from_file_location("evidence_summary", SCRIPT)
+assert SPEC is not None and SPEC.loader is not None
+summary = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(summary)
+
+SHA = "a" * 40
+
+
+def record(record_id="r1", evidence_class="SOURCE", outcome="PASS", source_sha=SHA):
+    return {"id": record_id, "class": evidence_class, "outcome": outcome,
+            "source_sha": source_sha}
+
+
+def test_summary_counts_classes_and_outcomes_without_live_promotion():
+    result = summary.summarize([
+        record("fixture", "FIXTURE", "PASS"),
+        record("live", "LIVE", "NOT_TESTED"),
+        record("source", "SOURCE", "FAIL"),
+        record("physical", "PHYSICAL", "PASS"),
+    ])
+    assert result == {
+        "count": 4, "source_sha": SHA,
+        "by_class": {"SOURCE": 1, "FIXTURE": 1, "PHYSICAL": 1, "LIVE": 1},
+        "by_outcome": {"PASS": 2, "FAIL": 1, "NOT_TESTED": 1},
+        "fixture_evidence_is_live": False,
+    }
+
+
+def test_empty_list_is_valid():
+    assert summary.summarize([])["count"] == 0
+
+
+@pytest.mark.parametrize("bad", [
+    {}, {"id": "x"}, record("", "SOURCE"), record("x", "UNKNOWN"),
+    record("x", "SOURCE", "MAYBE"), record("x", "SOURCE", "PASS", "a" * 39),
+    {**record(), "extra": True},
+])
+def test_invalid_records_rejected(bad):
+    with pytest.raises(summary.InputError):
+        summary.summarize([bad])
+
+
+def test_duplicate_ids_rejected():
+    with pytest.raises(summary.InputError, match="duplicate_id"):
+        summary.summarize([record("same"), record("same", "LIVE")])
+
+
+def test_mixed_source_shas_rejected():
+    with pytest.raises(summary.InputError, match="source_sha_mismatch"):
+        summary.summarize([record("one"), record("two", source_sha="b" * 40)])
+
+
+def test_order_does_not_change_json_output(tmp_path):
+    items = [record("z", "LIVE", "FAIL"), record("a", "FIXTURE", "PASS")]
+    outputs = []
+    for n, data in enumerate((items, list(reversed(items)))):
+        path = tmp_path / f"{n}.json"
+        path.write_text(json.dumps(data), encoding="utf-8")
+        run = subprocess.run([sys.executable, str(SCRIPT), str(path)],
+                             capture_output=True, text=True, check=False)
+        assert run.returncode == 0
+        outputs.append(run.stdout)
+    assert outputs[0] == outputs[1]
+
+
+def test_cli_invalid_input_returns_nonzero(tmp_path):
+    path = tmp_path / "bad.json"
+    path.write_text(json.dumps([record("x", "NOT_A_CLASS")]), encoding="utf-8")
+    run = subprocess.run([sys.executable, str(SCRIPT), str(path)],
+                         capture_output=True, text=True, check=False)
+    assert run.returncode != 0
+    assert json.loads(run.stdout)["status"] == "INVALID"
