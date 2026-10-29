@@ -60,7 +60,9 @@ def test_quiescence_observes_exact_workers_database_and_all_owned_containers(cli
     trace=[]
     def run(args,**kwargs):
         trace.append(args)
-        if args[1]=='ps':out='\n'.join(r['Id'] for r in rows)
+        if args[1]=='ps':
+            assert '--no-trunc' in args
+            out='\n'.join(r['Id'] for r in rows)
         elif args[1]=='inspect':out=json.dumps(rows)
         elif args[1]=='exec':out='Database system identifier: '+('456' if change=='wrong_cluster' else '123')
         else:pytest.fail('unexpected mutation or external process')

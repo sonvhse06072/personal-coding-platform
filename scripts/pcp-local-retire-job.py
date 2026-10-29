@@ -54,7 +54,7 @@ def stopped_workers(manifest):
         require(p.returncode==0,'retirement_quiescence_unavailable')
         return p.stdout
     instance=manifest['instance']
-    ids=docker('ps','-aq','--filter','label=org.pcp.local.instance='+instance).split()
+    ids=docker('ps','--no-trunc','-aq','--filter','label=org.pcp.local.instance='+instance).split()
     require(set(manifest['workers'])<=set(ids),'retirement_worker_inventory_changed')
     require(manifest['database_container'] in ids,'retirement_database_container_changed')
     rows=json.loads(docker('inspect',*ids))

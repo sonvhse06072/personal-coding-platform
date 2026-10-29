@@ -3,7 +3,8 @@
 Authority: [DEC-PCP-815-RETIREMENT-HTTPS-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6488558812),
 Owner chat direction recorded through delegated PM. One writer, no subagents.
 Branch `ai/815-retirement-https-v1`, base `bca7189a53cadba3feb38330dcfd658b95002048`.
-The one PR carries exact final source/head/CI; this report does not guess its own
+[PR827](https://github.com/sonvhse06072/personal-coding-platform/pull/827)
+carries exact final source/head/CI; this report does not guess its own
 future commit. [PR826 acceptance/postmerge receipt](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6487825349)
 verified again: CI40816963431, four actual suites,5032 passed/97 skipped. V4
 application/images remain at accepted PR825 source5adfd120, not this docs merge.
@@ -145,3 +146,17 @@ boundaries and logs without token/DSN PASS. Screenshot and machine-readable
 `final-physical.json`, browser/DB/channel/network proofs remain in the private
 current evidence directory. Original V4 workers and prior fixture observer remain
 stopped; no V3/foreign resource was started. Scoped stop commands are in operations.
+
+The first hosted candidate run40826116533 at8ebf5707a3b10d68c8db3803f3ee48192a805eeb
+executed all four suites: root1741/1 skip, Runtime2505/134 opt-in skips,
+Executor680, Router132 (5058 passed/135 skipped). This is supporting evidence,
+not the final-head gate: final run/jobs/logs are linked in PR827's final handoff.
+No original V3 or real retirement operation was performed by CI.
+
+A final physical CLI check found Docker's default abbreviated IDs unsuitable for
+exact custody. `--no-trunc` now preserves all64 hex digits. The actual V4 daemon
+probe rejects its running observer namespace, passes after stopping ONLY the two
+new observer/frontend containers, and validates the actual DB system identifier.
+Both new services were restored; the accepted browser checks still pass. Original
+V4 workers and every V3 resource stayed stopped/untouched. This read-only physical
+quiescence proof is separate from synthetic approval and retirement SQL fixtures.

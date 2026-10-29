@@ -14,7 +14,8 @@ executed all four suites successfully. This supersedes premerge continuity; neit
 
 [DEC-PCP-815-RETIREMENT-HTTPS-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6488558812)
 records Owner chat direction through delegated PM and grants the exact protected
-source/physical scope. One writer, branch `ai/815-retirement-https-v1`, worktree
+source/physical scope. [PR827](https://github.com/sonvhse06072/personal-coding-platform/pull/827) is the single candidate.
+One writer, branch `ai/815-retirement-https-v1`, worktree
 `/home/sonvh/pcp-retirement-https-v1`; no nested agents. Source candidate adds
 operator-only default-dry-run retirement, atomic retained non-delivery audit,
 exact receipt/lease resolution, admission exception for validated retirement,
@@ -62,8 +63,9 @@ build metadata was read. A new namespace cannot evade the old reservation.
 
 ## Immediate next safe actions
 
-1. Finish source/full verification and exact-head four-suite CI on the one PR;
-   independent PM reviews the full evidence and approved protected diff.
+1. Independent PM reviews PR827, the full evidence/approved protected diff and
+   all four genuinely executed suites at the exact final head. Developer does
+   not merge; any earlier-head run is supporting evidence only.
 2. Owner may inspect the authenticated HTTPS observer. Retain only the verified
    observer/DB/frontend within the resource envelope; no worker/intake starts.
 3. PM issues the postmerge DB-only backup/restored-copy rehearsal/dry-run/apply

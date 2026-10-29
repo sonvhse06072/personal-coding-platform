@@ -24,7 +24,8 @@ The prior V4 packet is accepted via PR826; its source pin/images remain unchange
 - [x] Trusted browser form login, browser session logout and offline/online
   reconnect after verified exact Owner NSS action; actual empty V4 database.
 - [x] Full local root/Runtime/Executor/Router verification and38 real PG/Git cases.
-- [ ] Genuinely executed four-suite exact-final-head hosted CI.
+- [x] Four suites genuinely executed on PR827; exact-final-head run/log receipt
+  is attached to its final handoff. Earlier-head CI never substitutes for it.
 - [x] Physical retention receipt:23 containers retained, only DB/new observer/TLS
   frontend running; all11 actual DB tables empty; scoped stop/evidence packet.
 - [ ] Independent PM review/merge/postmerge execution checkpoint; real V3 retirement
