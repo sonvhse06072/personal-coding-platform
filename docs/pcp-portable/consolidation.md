@@ -8,7 +8,67 @@ all four suites successfully. One writer on `ai/815-successor-adoption-v4` in
 `/home/sonvh/pcp-local-adoption825-v4`. This historical825 campaign did not activate
 a protected baseline or live job. New831 execution is recorded below.
 
-## Active PR832 same-identity recovery source checklist
+## Finalization checkpoint — completed, PM merge pending
+
+[Decision6501364012](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6501364012),
+independent structured task review5700617139; SAME evidence PR #834.
+
+- [x] Full retained preimages, exact task/review/CI/mainR, private consistent backup.
+- [x] Restore byte-identical unexpired V2; same Runtime/Executor IDs/images/full
+  fingerprints before/after start; Router stays stopped, original activation off.
+- [x] Finalization-specific health/authority/plan and actual review/CI checks;
+  one authenticated POST with the exact decision payload, HTTP200.
+- [x] Durable completed/pm_review_accepted/finalized=true, receipt delivered/gen3,
+  same-owner lease released/gen1; checkpoint/proof/audit/progress unchanged.
+- [x] Zero additional model/job-verification/delivery calls; no rebuild/renewal/SQL.
+- [x] LIVE completed dashboard, trusted TLS, fixed duration, changing age,
+  truthful usage/CI, offline/reload/reconnect after shutdown.
+- [x] Final dump/full afterimages; exact two workers stopped, Router still off;
+  permit disabled intact, all46 containers retained, DB/observer/frontend up.
+- [ ] ChatGPT PM closes hold, readies/merges833, checks postmerge, reviews/merges834.
+  Both remain unmerged; mainR unchanged. Failed/cancelled UI/VPN parity untested.
+
+## Pre-finalization same #831 recovery execution checklist
+
+[PM6499496019](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6499496019)
+and [exact binding amendment6500237978](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6500237978).
+One writer, `ai/815-recovery832-live`; [actual report](../project/history/2026-10-29-recovery832-live.md).
+Main R=1f9b5d5 held; original task/baseline/verifier/Router S b97ade5 unchanged.
+
+- [x] Read complete decisions/packet/ordered docs; exact original full receipt,
+  all tables/sequences, issue/body/goal/S, backup/activation/config hashes and
+  absent job/lease/workspace/remote branch/PR reconciled before mutation.
+- [x] Fresh consistent private backup; one serial Runtime/Executor R build each;
+  shipped content/modes/toolchain/non-root/read-only/noexec/askpass probes.
+  Retained verifier/Router S and unchanged observer; no image relabel/rebuild loop.
+- [x] Exact stopped-worker create intents; old S containers retained, same private
+  registry/credentials; actual DB roles/sequence rights, no schema/grant changes.
+- [x] Reproduce first-start OomKillDisable false→null; fail closed before register.
+  Preserve rejected permit; PM6500237978 conditional preconditions pass using
+  production full digests and two stable snapshots. One successor installed
+  atomically, only exact authorized fields changed; original expiry preserved.
+- [x] Same worker IDs restarted/config stable; aggregate readiness/eight readers/
+  real Executor preflight pass, actual publisher/account quota verified.
+- [x] One supported registration: same queued job/event/audit, original full
+  claimed/gen1 receipt, zero model/tests/lease/workspace; afterimage/plan verified.
+- [x] One explicit execute, running/gen2 fence and active/gen1 lease; one Luna/low
+  invocation, verifier S targeted 13/full 13 PASS, exact Git proof/sole parent S.
+- [x] One publish, real Draft PR #833 at 4161ba059002c7aaf3fd35a88e3b0b80065c62b7;
+  hosted40898352672 executed four suites: 5254/166 skipped. No model/delivery replay.
+- [x] Actual populated trusted tokenless Chromium: 352 HTTP 200 snapshot responses,
+  no cookie/form/page error, reconnect; fixed 67.801641624s verified duration,
+  complete token provenance, reported cost/tool calls Unknown versus estimated 0.
+- [x] Final dump/full rows/sequences/job bundle; proof/counters/ownership preserved.
+  Same three workers stopped, both permits disabled intact; 46 containers retained,
+  only DB/observer/frontend running. V3/rollback/foreign resources untouched.
+- [x] Update current-state/operations/report on one evidence PR; exact-head required
+  checks are tracked on that PR, distinct from task833's executed four suites.
+- [x] Independent PM acceptance and supported finalization completed under the
+  later checkpoint above. Merge remains solely with PM; this block records prior state.
+- [ ] VPN ON/parity, second-machine LAN, actual terminal-job dashboard cases:
+  NOT TESTED. No synthetic state insertion or global network changes.
+
+## Historical PR832 same-identity recovery source checklist
 
 [WorkOrder6496080714](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6496080714),
 one writer, same `ai/815-successor831-live` / PR832. Main/taskS unchanged;
@@ -39,7 +99,8 @@ R is the future independently accepted merge. [Combined evidence/rollout packet]
   isolated container stopped. Live full rows/sequences/configs unchanged.
 - Hosted final-head four-suite gate: exact run/head receipt maintained on PR832;
   independent PM must match all four executed results to the current PR SHA.
-- [ ] Independent PM acceptance/merge/postmerge and later physical decision.
+- [x] Independent PR832 acceptance/mergeR/postmerge40891720152 and later
+  execution6499496019 completed; actual execution is recorded above.
 - [ ] LIVE same831 recovery/model/verification/Draft task PR/CI/PM acceptance:
   NOT EXECUTED by this source WorkOrder. VPN ON/parity remains NOT TESTED.
 
