@@ -572,9 +572,7 @@ async def run_admitted_job(engine, readers, task):
             await readers.refresh(task)
             # Project/home CLI configuration may not install agent-controlled
             # MCP servers, hooks or a different sandbox for a repair turn.
-            require(not any(workspace.rglob('.codex'))
-                    and not (Path.home() / '.codex/config.toml').exists(),
-                    'pcp_local_unreviewed_codex_configuration')
+            require_isolated_codex_configuration(workspace)
             remaining = limits['max_wall_seconds'] - int(time.monotonic() - started)
             require(remaining > 0, 'pcp_local_resource_envelope_exhausted')
             require(float(progress.get('cost_usd', 0)) <= limits['cash_ceiling_usd'],
@@ -586,7 +584,8 @@ async def run_admitted_job(engine, readers, task):
             engine.storage.update(job_id, checkpoint=checkpoint, progress=progress)
             run = await CodexAdapter(choice['model'], choice['reasoning_effort']).run(
                 workspace=workspace, prompt=prompt + '\nAllowed paths: ' + ', '.join(task.allowed_paths),
-                mode='execute' if attempt == 0 else 'repair', timeout=remaining)
+                mode='execute' if attempt == 0 else 'repair', timeout=remaining,
+                isolate_workspace=True)
             engine._record_usage(progress, choice['id'], run.usage)
             engine._record_agent_attempt(progress, choice, run)
             checkpoint['pcp_local_execution']['state'] = 'invocation_returned'
@@ -687,6 +686,96 @@ def normalized_budget(limits, path_count):
     require(type(redundant) is int and 0 < redundant <= path_count,
             'pcp_local_changed_file_limit_invalid')
     return dict(max_changed_files=redundant, **value)
+
+
+def require_isolated_codex_configuration(workspace):
+    # The sandbox may create empty protected .codex directories. They grant no
+    # configuration. Reject symlinks or content, including ancestor project config;
+    # user config/rules are separately disabled by the adapter flags. System config
+    # is immutable image input and must remain absent for this pinned profile.
+    from .adapters.codex import require_isolated_configuration
+    try:
+        require_isolated_configuration(workspace)
+    except (ValueError, OSError) as exc:
+        raise TaskStop('pcp_local_unreviewed_codex_configuration') from exc
+
+
+def retained_workspaces(storage, root, current_job_id):
+    """Read-only validation of authentic completed siblings, never terminal flags alone.
+
+    Caller keeps the existing exclusive project/admission locks. The developer
+    profile hides every sibling even while it writes the current job. No rename,
+    chmod, deletion, fresh proof or history replacement is permitted here.
+    """
+    import re
+    from types import SimpleNamespace
+    from .pcp_local_readiness import operation_snapshot, finalization_ownership
+    from .pcp_local_recovery import reconcile_commit, git
+    require(root.is_absolute() and root.resolve() == root and not root.is_symlink(),
+            'pcp_local_workspace_root_invalid')
+    for path in root.iterdir():
+        require(path.is_dir() and not path.is_symlink() and path.resolve() == path
+                and re.fullmatch('[a-f0-9]{32}', path.name), 'pcp_local_foreign_workspace')
+        if path.name == current_job_id:
+            continue
+        git_dir = path / '.git'
+        require(git_dir.is_dir() and not git_dir.is_symlink()
+                and not any(p.is_symlink() for p in git_dir.rglob('*'))
+                and not any((git_dir / p).exists() for p in
+                            ('commondir', 'worktrees', 'objects/info/alternates')),
+                'pcp_local_retained_git_escape')
+        # Reading a retained repo must not execute an edited Git filter/monitor
+        # or load configuration from outside that clone during proof comparison.
+        keys = [v.split('\n', 1)[0].lower() for v in
+                git(path, 'config', '--local', '--no-includes', '--null', '--list').split('\0') if v]
+        require(not any(k.startswith(('include.', 'includeif.', 'filter.', 'diff.', 'extensions.'))
+                or k in {'core.worktree', 'core.fsmonitor', 'core.hookspath',
+                         'core.attributesfile', 'core.excludesfile'} for k in keys),
+                'pcp_local_retained_git_configuration')
+        row, receipt, lease = operation_snapshot(storage, path.name)
+        cp, result = row['checkpoint'], row.get('result') or {}
+        execution = cp.get('pcp_local_execution') or {}
+        binding = (cp.get('pcp_local_source') or {}).get('receipt') or {}
+        task_values = {k: binding.get(k) for k in LocalSourceTask.__dataclass_fields__}
+        task_values['allowed_paths'] = tuple(task_values['allowed_paths'] or ())
+        task = LocalSourceTask(**task_values)
+        require(row['status'] == 'completed' and row['workspace'] == str(path)
+                and result.get('delivery_finalized') is True
+                and result.get('acceptance_phase') == 'pm_review_accepted'
+                and result.get('review', {}).get('source') == 'authenticated_github_pm'
+                and result['review'].get('verdict') == 'pass'
+                and type(result['review'].get('review_id')) is int
+                and result['review']['review_id'] > 0
+                # Finalization can be accepted with PM auto-merge disabled.
+                # Require the persisted blocker-free exact-head assessment,
+                # not a new merge permission or the unrelated eligible flag.
+                and result.get('pm_merge_eligibility', {}).get('blockers') == []
+                and result['pm_merge_eligibility'].get('expected_head') == result.get('commit')
+                and result['pm_merge_eligibility'].get('source_commit') == task.base_sha
+                and result['review'].get('report', {}).get('diff_hash') == result.get('diff', {}).get('diff_hash')
+                and result.get('delivery', {}).get('state') == 'ci_success'
+                and result.get('verification', {}).get('passed') is True
+                and result['verification'].get('test_runs', 0) > 0
+                and row['source_commit'] == task.base_sha
+                and row.get('branch') == 'ai/' + row['id'][:12]
+                and result.get('branch') == row['branch']
+                and execution.get('verified_tree', {}).get('branch') == row['branch']
+                and task.project_id == PROJECT_ID and task.repository == REPOSITORY
+                and stable_job_id(task) == row['id']
+                and exact_value(binding, claimed_source_receipt(task))
+                and cp.get('project_baseline', {}).get('revision') == task.baseline_revision
+                and cp['project_baseline'].get('source_commit') == task.baseline_source_commit
+                and execution.get('state') == 'verified' and 'pcp_local_retirement' not in cp
+                and execution.get('commit') == result.get('commit')
+                and execution.get('verification') == result.get('verification')
+                and execution.get('diff') == result.get('diff'),
+                'pcp_local_retained_evidence_invalid')
+        finalization_ownership(row, receipt, lease)
+        require(reconcile_commit(row, SimpleNamespace(base_sha=task.base_sha)) == result['commit'],
+                'pcp_local_retained_commit_changed')
+        # A read-only validator cannot silently accept concurrent evidence edits.
+        require(operation_snapshot(storage, path.name) == (row, receipt, lease),
+                'pcp_local_retained_evidence_changed')
 
 
 def read_activation():
@@ -791,9 +880,9 @@ class TrustedReaders:
         require(proof.get('job_id') == job_id and proof.get('source_commit') == task.base_sha
                 and proof.get('activation_digest') == digest(self.activation),
                 'pcp_local_executor_binding_invalid')
-        roots = list(self.engine.workspace_root.iterdir())
-        require(all(p.name == job_id and p.is_dir() and not p.is_symlink() for p in roots),
-                'pcp_local_foreign_workspace')
+        retained_workspaces(self.engine.storage, self.engine.workspace_root, job_id)
+        if operation == 'admission':
+            require_isolated_codex_configuration(self.engine.workspace_root / job_id)
         require(not Path('/var/run/docker.sock').exists()
                 and not any(os.getenv(k) for k in ('GITHUB_DELIVERY_TOKEN', 'GITHUB_TOKEN', 'GH_TOKEN'))
                 and not (Path.home() / '.ssh').exists(), 'pcp_local_runtime_credential_boundary')
@@ -843,8 +932,11 @@ class TrustedReaders:
                 and model_config(choice['id']).get('kind') == 'agent',
                 'pcp_local_selected_adapter_not_supported')
         version = await run_command(['codex', '--version'], cwd='/tmp', timeout=10)
+        from .adapters.codex import PCP_ISOLATION_CLI_VERSION
         require(version.returncode == 0 and version.stdout.strip() ==
-                'codex-cli ' + self.activation['codex_version'], 'pcp_local_cli_version_mismatch')
+                'codex-cli ' + self.activation['codex_version']
+                and self.activation['codex_version'] == PCP_ISOLATION_CLI_VERSION,
+                'pcp_local_cli_version_mismatch')
         quota = await CodexQuotaCollector().collect()
         relevant = [q for q in quota if q.get('provider') == 'openai'
                     and q.get('state_key') in ('provider:openai', 'quota:model:' + choice['id'])]

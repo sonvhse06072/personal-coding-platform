@@ -311,6 +311,9 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         await readers.refresh_delivery(task)
         row = self.storage.get(job_id)
         result = deepcopy(row.get("result") or {})
+        require((result.get('delivery') or {}).get('state') != 'ci_success'
+                and result.get('delivery_finalized') is not True,
+                'pcp_local_delivery_already_complete')
         checkpoint = deepcopy(row["checkpoint"])
         proof = checkpoint.get("pcp_local_execution") or {}
         verification = result.get("verification") or {}

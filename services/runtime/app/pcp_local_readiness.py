@@ -174,6 +174,23 @@ def finalization_ownership(row, receipt, lease):
             and lease['state'] == ('released' if done else 'active'), 'pcp_local_lease_changed')
 
 
+def delivery_operation(row):
+    """Durable disposition only, never remote publication/CI attestation."""
+    result = row.get('result') or {}
+    delivery = result.get('delivery') or {}
+    if row['status'] == 'completed' and result.get('delivery_finalized') is True:
+        state, actor, action = 'completed', 'none', 'No delivery is needed; retain completed evidence'
+    elif delivery.get('state') == 'ci_success':
+        state, actor, action = 'awaiting_pm_review', 'PM', 'Review the exact delivered head/CI, then use finalization readiness; do not publish again'
+    elif delivery.get('state') == 'ci_waiting':
+        state, actor, action = 'ci_pending', 'operator', 'Observe exact-head remote CI and reconcile before any delivery retry'
+    elif delivery or (row.get('progress') or {}).get('delivery_attempts', 0):
+        state, actor, action = 'reconcile_publication', 'operator', 'Reconcile the remote branch, all-state PR and CI read-only before any retry'
+    else:
+        state, actor, action = 'delivery_needed', 'operator', 'Resolve dependency blockers and use the existing delivery endpoint only under installed authority'
+    return dict(state=state, eligible=state == 'delivery_needed', actor=actor, next_action=action)
+
+
 async def operation_readiness(engine, *, phase, job_id, review_id=None, readers=None):
     """Phase prerequisites are observations, never an execution authorization."""
     from types import SimpleNamespace
@@ -198,7 +215,8 @@ async def operation_readiness(engine, *, phase, job_id, review_id=None, readers=
 
     def finish():
         view['blockers'] = [c for c in checks if c['state'] in ('blocked', 'unknown')]
-        view['ready'] = not view['blockers']
+        view['dependencies_ready'] = not view['blockers']
+        view['ready'] = view['dependencies_ready'] and view.get('operation', {}).get('eligible', True)
         return view
 
     if phase not in ('status', 'delivery', 'finalization'):
@@ -214,6 +232,8 @@ async def operation_readiness(engine, *, phase, job_id, review_id=None, readers=
     result = row.get('result') or {}
     cp = row.get('checkpoint') or {}
     execution = cp.get('pcp_local_execution') or {}
+    if phase == 'delivery':
+        view['operation'] = delivery_operation(row)
     view['job'] = dict(id=row['id'], status=row['status'], execution=execution.get('state'),
         finalized=result.get('delivery_finalized') is True,
         review_id=result.get('review', {}).get('review_id'),

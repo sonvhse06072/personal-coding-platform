@@ -715,6 +715,7 @@ def session_request(path, payload=None):
 
 def session_main(argv=None):
     import argparse
+    from http.client import HTTPException
     import urllib.parse
     parser = argparse.ArgumentParser(description='PCP local status, readiness and PM finalization; default read-only.')
     parser.add_argument('action', nargs='?', default='status', choices=('status','readiness','finalize'))
@@ -749,7 +750,7 @@ def session_main(argv=None):
                 response = session_request('pm-review', payload)
                 report['result'] = {k: response.get(k) for k in ('job_id', 'status', 'merged')}
                 report['outcome'] = 'response_received'
-            except (OSError, ValueError):
+            except (OSError, ValueError, HTTPException):
                 report['outcome'] = 'response_uncertain'
             # Always reconcile after a mutation, including success/lost acknowledgement.
             after = session_request('readiness?' + urllib.parse.urlencode(dict(phase='status',job_id=args.job_id)))
@@ -764,14 +765,20 @@ def session_main(argv=None):
             else:
                 report['outcome'] = 'reconcile_before_retry'
         report['next_action'] = 'none' if report['outcome'] in ('observed','already_completed','completed') else 'Inspect read-only state and blockers; do not replay'
-    except (OSError, ValueError, KeyError, TypeError):
-        report.update(outcome='unobserved', next_action='Reconcile read-only; request was not automatically retried')
+        if args.action != 'finalize' and observed.get('operation'):
+            report['next_action'] = observed['operation']['next_action']
+    except (OSError, ValueError, HTTPException, KeyError, TypeError):
+        report.update(outcome='reconcile_before_retry' if report['mutation_requests'] else 'unobserved',
+                      next_action='Reconcile read-only; request was not automatically retried')
     if args.json:
         print(json.dumps(report, sort_keys=True))
     else:
         print(f"PCP {args.action}: {report['outcome']} | job {args.job_id} | writes {report['mutation_requests']}")
         for check in report.get('observation', {}).get('checks', report.get('observation', {}).get('blockers', [])):
             print(f"{check['component']}: {check.get('state', check.get('code', 'unknown'))} | {check['actor']} | {check['next_action']}")
+        operation = report.get('observation', {}).get('operation')
+        if operation:
+            print(f"operation: {operation['state']} | {operation['actor']} | eligible {operation['eligible']}")
         print(report['next_action'])
     return 0 if report['outcome'] in ('observed','already_completed','completed') else 2
 

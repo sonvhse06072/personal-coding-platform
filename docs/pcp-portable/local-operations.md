@@ -18,7 +18,7 @@ at its accepted image and https://localhost:18443/dashboard stays tokenless/loca
 | --- | --- | --- |
 | `status` (default) | Exact requested PCP job, scoped read-only repeatable-read DB snapshot; sanitized ownership/counters | Activation, Router, provider, GitHub, workspace verification |
 | `readiness --phase admission` | Existing full admission: eight authentic readers, source/baseline/isolation/ownership, publisher, provider and tool/schema checks | None omitted; no receipt written |
-| `readiness --phase delivery` | Existing authority/source/Executor/publisher/isolation/receipt/lease plus exact retained Git proof | Developer quota/login and Router selection |
+| `readiness --phase delivery` | Existing authority/source/Executor/publisher/isolation/receipt/lease plus exact retained Git proof and durable delivery disposition | Developer quota/login and Router selection |
 | `readiness --phase finalization --review-id ID` | Same supported PM finalizer in dry-run: exact proof, full ownership, installed authority, authenticated independent review and exact-head CI | Fresh admission's absent-workspace/PR assumptions, developer provider and Router |
 | `finalize --review-id ID` | Re-read finalization readiness, one existing authenticated PM-review POST, then durable status reconciliation | No model, admission, delivery, test, merge, permit renewal or implicit next task |
 
@@ -28,6 +28,13 @@ is unknown, not PASS; exception text/credentials are not returned. Default admis
 retains its existing response contract and aggregate blocker codes. Completed status
 needs no active permit. A repeated completed finalization client call reports the
 retained exact review without POST; changed review identity is rejected.
+Delivery exposes `dependencies_ready` separately from `operation.eligible` and
+`ready`: `ci_success` → `awaiting_pm_review` (PM); `ci_waiting` → `ci_pending`;
+uncertain/previous publication → `reconcile_publication`; first verified delivery
+→ `delivery_needed`; finalized terminal job → `completed`. Only delivery-needed
+can be eligible, and readiness still grants no mutation authority. The existing
+authenticated delivery method rejects already-successful/finalized delivery before
+incrementing a counter or calling publication.
 
 Use an exact reconciled **existing worker** container ID from the accepted release
 record, not the observer ID. The launcher neither starts nor installs anything;
@@ -47,16 +54,37 @@ Container equivalent: `python -m app.pcp_local_task_queue session`. HTTP is fixe
 loopback port8787 and uses its existing `RUNTIME_API_TOKEN` custody. The client has
 no URL/shell/SQL argument, retry loop, account login, baseline store or permission
 writer. Exit0 means observation/existing completion, exit2 means blocked/unobserved/
-reconcile-before-retry. On timeout, inspect read-only durable state first; never
+reconcile-before-retry. Timeout, connection reset and HTTP protocol errors (including
+truncated bodies/invalid status lines) after POST always lead to one bounded status
+GET. If that read also fails, retain the sanitized uncertain result; no second POST.
+Inspect read-only durable state first; never
 repeat admission/model/delivery to repair an uncertain response. The older
 `app.pcp_local_task_queue` recovery client is retained for its separately authorized
 exact permit flow; #835 does not revive it for completed831.
 
-**Sequential-task STOP:** do not remove/rename completed831's workspace or simply
-allow terminal directories. Measured Codex sandbox read access includes sibling
-jobs. The [single adoption packet/read-isolation proposal](../project/history/2026-10-29-local-repeatability.md)
-is the next decision boundary. B admission is NOT demonstrated; no physical rollout
-or next task may be inferred from green source/fixture checks.
+**Sequential-task adoption gate:** the candidate's ordinary A→B admission is
+FIXTURE PASS; the installed workers are unchanged and cannot use it yet. The
+PCP-only adapter pins CLI0.160.0, selects its named read-restricted profile and
+keeps network disabled. It grants current-job writes and immutable toolchain reads;
+provider authentication remains with the existing CLI transport, hidden from tool
+commands. No new socket, service, credential copy or CLI/image upgrade is required.
+
+Before future adoption, verify the actual `CODEX_HOME/config.toml` and system
+`/etc/codex/config.toml` are absent, and project/ancestor `.codex` directories have
+no configuration or symlinks. Empty sandbox-created protected directories are
+allowed. The current CLI merges empty permission tables with inherited roots;
+these guards and `--ignore-user-config --ignore-rules --strict-config` are mandatory.
+Do not delete existing configuration or change provider custody to make this pass:
+retain any mismatch for the integrated adoption disposition.
+
+The retained-workspace validator requires deterministic identity, original Git
+proof/tree/modes/parent, authenticated PM acceptance and delivered/released ownership.
+It rejects Git alternates/worktrees/config execution escapes, symlinks, unknown
+paths, partial/terminal-only rows and drift. Existing reservation/lease checks
+remain authoritative. Never remove/rename completed831's workspace to admit B.
+[One adoption packet](../project/history/2026-10-29-local-repeatability.md) contains
+pinned fixture reproduction and later physical/image/baseline/task gates. No LIVE
+admission or successful deployment is inferred from fixture/CI evidence.
 
 The remaining campaign-specific packets below are retained history, superseded
 for current next-task instructions by the #835 packet. Their one-time approvals,

@@ -1,5 +1,6 @@
-"""Transport uncertainty and narrow client capability; no real HTTP/model."""
+"""Transport uncertainty, including real loopback HTTP; no model or live PCP."""
 import json
+import http.client
 import pytest
 from app import pcp_local_task_queue as s
 
@@ -83,3 +84,84 @@ def test_malformed_or_stale_identity_never_claims_success(monkeypatch,capsys,mut
     result=json.loads(capsys.readouterr().out)
     assert result['outcome'] in ('unobserved','reconcile_before_retry')
     assert len(calls)==(3 if mutation.startswith('wrong_after') else 1)
+
+
+@pytest.mark.parametrize('error', [http.client.IncompleteRead(b'PRIVATE'),
+    http.client.BadStatusLine('PRIVATE'), http.client.RemoteDisconnected('PRIVATE'),
+    ConnectionResetError('PRIVATE')])
+@pytest.mark.parametrize('after_available', [True, False])
+def test_protocol_error_after_post_always_reconciles_once(monkeypatch,capsys,error,after_available):
+    calls=[]
+    def request(path,payload=None):
+        calls.append((path,payload))
+        if len(calls)==1:return ready()
+        if payload is not None or not after_available:raise error
+        return completed()
+    monkeypatch.setattr(s,'session_request',request)
+    code=s.session_main(['finalize','--job-id',JOB,'--review-id','7','--json'])
+    output=capsys.readouterr().out;report=json.loads(output)
+    assert len(calls)==3 and sum(payload is not None for _,payload in calls)==1
+    assert code==(0 if after_available else 2) and 'PRIVATE' not in output
+    assert report['outcome']==('completed' if after_available else 'reconcile_before_retry')
+    assert report['mutation_requests']==1
+
+
+@pytest.mark.parametrize('fault', ['truncated_body','invalid_status'])
+def test_real_loopback_http_committed_post_protocol_failure(monkeypatch,capsys,fault):
+    """Real urllib HTTP parser; server commits then loses its response, no provider."""
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from threading import Thread
+    import urllib.request
+    calls=[];committed=False
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self,*args):pass
+        def do_GET(self):
+            assert self.headers['Authorization']=='Bearer fixture-token'
+            calls.append('GET')
+            body=json.dumps(completed() if committed else ready()).encode()
+            self.send_response(200);self.send_header('Content-Length',str(len(body)));self.end_headers()
+            self.wfile.write(body)
+        def do_POST(self):
+            nonlocal committed
+            assert self.path=='/v1/pcp-local/pm-review'
+            payload=json.loads(self.rfile.read(int(self.headers['Content-Length'])))
+            assert payload==ready()['identity']
+            calls.append('POST');committed=True
+            if fault=='invalid_status':self.wfile.write(b'PRIVATE invalid status\r\n\r\n')
+            else:
+                self.send_response(200);self.send_header('Content-Length','1000');self.end_headers()
+                self.wfile.write(b'{"PRIVATE":')
+            self.wfile.flush();self.close_connection=True
+    server=ThreadingHTTPServer(('127.0.0.1',0),Handler)
+    thread=Thread(target=server.serve_forever,daemon=True);thread.start()
+    opener=urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    def loopback(request,timeout):
+        assert request.full_url.startswith('http://127.0.0.1:8787/v1/pcp-local/')
+        assert timeout<=300
+        local=request.full_url.replace(':8787/',':'+str(server.server_port)+'/')
+        return opener.open(urllib.request.Request(local,data=request.data,headers=dict(request.header_items())),timeout=timeout)
+    monkeypatch.setenv('RUNTIME_API_TOKEN','fixture-token')
+    monkeypatch.setattr(urllib.request,'urlopen',loopback)
+    try:
+        assert s.main(['session','finalize','--job-id',JOB,'--review-id','7','--json'])==0
+        text=capsys.readouterr().out;report=json.loads(text)
+        assert committed and calls==['GET','POST','GET']
+        assert report['outcome']=='completed' and 'PRIVATE' not in text
+    finally:
+        server.shutdown();server.server_close();thread.join(timeout=2)
+
+
+@pytest.mark.parametrize('as_json',[False,True])
+def test_delivery_readiness_reports_PM_action_without_post(monkeypatch,capsys,as_json):
+    observed=dict(ready=False,dependencies_ready=True,authorized=False,checks=[],
+        operation=dict(state='awaiting_pm_review',actor='PM',eligible=False,
+            next_action='Review exact head; do not publish again'))
+    calls=[]
+    def request(path,payload=None):
+        assert payload is None;calls.append(path);return observed
+    monkeypatch.setattr(s,'session_request',request)
+    args=['readiness','--job-id',JOB,'--phase','delivery']+(['--json'] if as_json else [])
+    assert s.session_main(args)==2
+    output=capsys.readouterr().out
+    assert len(calls)==1 and 'PM' in output and 'do not publish again' in output
+    if as_json:assert json.loads(output)['mutation_requests']==0

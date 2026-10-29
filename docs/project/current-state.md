@@ -6,7 +6,8 @@ source, PM decisions and current GitHub/Runtime physical state before acting.
 ## Active source WorkOrder #835
 
 [WO835](https://github.com/sonvhse06072/personal-coding-platform/issues/835) and
-[clarification6502893427](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6502893427)
+[clarification6502893427](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6502893427), and
+[PM continuation6504158102](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6504158102)
 authorize SOURCE and disposable FIXTURE work only. One writer on
 `ai/835-local-repeatability`, `/home/sonvh/pcp-local-repeatability-835`.
 Single [Draft PR #836](https://github.com/sonvhse06072/personal-coding-platform/pull/836)
@@ -21,19 +22,27 @@ GitHub main and both merge receipts were rechecked during #835. Main is **not
 frozen**. This engineering anchor does not activate a successor ProjectBaseline.
 
 The candidate adds authenticated phase readiness, a container-resident status/
-finalization client, non-model delivery checks and stronger atomic finalization.
-Real isolated Git/PostgreSQL regressions cover proof/ownership drift, duplicate,
-concurrent finalization, rollback and acknowledgement loss. Exact tests and final
-PR/CI receipt: [WorkReport/adoption packet](history/2026-10-29-local-repeatability.md).
-No candidate image is deployed.
+finalization client and atomic non-model finalization. Review5702385825's two
+findings are repaired: HTTP protocol errors reach one bounded read-only
+reconciliation with no second POST; already-published CI-success jobs report PM
+ownership and cannot increment counters or publish again through delivery.
 
-**Remaining boundary:** ordinary task B still fails `pcp_local_foreign_workspace`
-with completed A retained. Actual offline Codex0.160 `:workspace` sandbox read a
-synthetic sibling job's proof. Removing that guard would expose prior-job data.
-The guard remains closed; B admission/repeatability is NOT demonstrated. The
-WorkOrder's explicit boundary exception is used; the report gives one concrete
-read-isolation proposal and its acceptance gates. No history was relocated or
-rewritten to make admission pass.
+**A → ordinary B is FIXTURE PASS.** The current pinned Codex0.160.0 enforces a
+PCP-only read restriction with actual candidate adapter arguments/environment.
+Synthetic sibling reads/stat/enumeration, symlink/Git/process escapes and network
+access are denied while current-job Python/Git/read/write works. Inherited config
+is rejected, including the measured empty-table merge trap. A strict retained
+workspace validator now requires authentic completed/PM-accepted proof and exact
+ownership; arbitrary terminal rows/paths/reservations remain blocked.
+
+Real Git/PostgreSQL A finalization → B admission uses all eight readers and the
+existing registrar, preserves A's row/receipt/files/proof/counters, and advances the
+lease1→2. Crash/rollback/lost-ack/concurrent/stale requests are covered without model
+replay. External source/provider/Executor observations in these DB tests are
+controlled doubles; the separate sandbox check is an actual isolated container
+fixture with candidate source overlay, **not a rebuilt/adopted worker**. No LIVE B
+admission or candidate deployment occurred. Exact evidence, residuals and rollout:
+[WorkReport/adoption packet](history/2026-10-29-local-repeatability.md).
 
 ## Retained completed #831 and deployed services
 
@@ -82,13 +91,14 @@ Retirement resolves only this reservation; it does not authorize another job.
 ## Active PCP issues and owner attention
 
 #835 is the active source WorkOrder. No interactive Owner login/VPN step is
-pending. The retained-workspace read-isolation decision belongs in PM's combined
-acceptance packet; it is not a request to continue ordinary engineering.
+pending. Independent PM acceptance of the repaired source/read-isolation evidence
+and the later integrated physical-adoption decision remain required. Two unrelated
+baseline PostgreSQL supervision failures remain tracked in the WorkReport.
 
 ## Immediate next safe actions
 
 1. Independent PM reviews the single #835 Draft PR and actual final-head CI;
-   resolve the read-isolation proposal before claiming two-task repeatability.
+   review the measured isolation and ordinary A-to-B fixture before adoption.
 2. After accepted merge/postmerge evidence, complete the consolidated adoption
    packet with the exact accepted SHA, new immutable baseline and separately
    authorized task/release bindings. No numeric next issue has been invented.
@@ -108,7 +118,7 @@ branch protection; Developer never merges or self-approves independent review.
 PM6502481811 closed R hold; PR833/834 merged, engineering main34c0e9a.
 WO835 SOURCE/FIXTURE on ai/835-local-repeatability: phase readiness/operator client
 and atomic finalization candidate; real Git/PG evidence and one rollout packet.
-Sequential B still blocked by retained workspace: measured sibling-read boundary,
-no guard bypass. No LIVE dispatch/deployment or historical state/permit change.
+PM6504158102 repairs complete; pinned read isolation and ordinary A-to-B FIXTURE PASS.
+No LIVE dispatch/deployment or historical state/permit change; PM acceptance pending.
 Completed831/delivered3/released1/counters1/2/1 and retired824 preserved; dashboard up.
 <!-- PCP:CONTINUITY:END -->

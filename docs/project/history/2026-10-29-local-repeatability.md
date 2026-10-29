@@ -1,7 +1,9 @@
 # #835 WorkReport and consolidated next-task packet
 
 Authority: [WO835](https://github.com/sonvhse06072/personal-coding-platform/issues/835)
-and [execution clarification6502893427](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6502893427).
+and [execution clarification6502893427](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6502893427),
+continued by [PM6504158102](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6504158102)
+after [independent review5702385825](https://github.com/sonvhse06072/personal-coding-platform/pull/836#pullrequestreview-5702385825).
 One writer, `ai/835-local-repeatability`, `/home/sonvh/pcp-local-repeatability-835`.
 Single [Draft PR #836 and exact-head CI receipt](https://github.com/sonvhse06072/personal-coding-platform/pull/836).
 Engineering anchor `34c0e9ac99a057eef0a08a15f0c3828b3c1addfa`. The
@@ -25,31 +27,50 @@ completed retries send no POST. Generation comes from the observed lease, not a
 hardcoded first-generation assumption. No arbitrary command/URL/SQL, implicit
 admission, permit creation, new authority store or service was added.
 
-**Sequential B admission remains blocked.** A legitimately finalized fixture job
-retains its exact workspace/proof/counters and released lease, but an ordinary B
-still hits `pcp_local_foreign_workspace`. A real sandbox probe shows why allowing
-that directory now is unsafe. The WorkOrder explicitly permits a precise boundary
-proposal while independent work completes; the guard is deliberately retained.
-This PR does not claim full A-to-B repeatability or permission for the next LIVE task.
+**Retained A → ordinary B is now FIXTURE PASS.** The pinned CLI supports a
+read-restricted named profile without an image/CLI upgrade or a new isolation
+service. Enforcement was measured before replacing the broad directory guard.
+The validator admits only an authentic completed/PM-accepted sibling with exact
+original source/Git proof and delivered ownership. Unknown paths, drift, Git
+escapes, arbitrary terminal flags and reservations still fail closed. A's path,
+source files, full job/receipt, proof and counters remain unchanged; B acquires
+lease generation2 through the existing storage method, with no model invocation.
+
+The review's POST finding reproduced as15 failing/34 passing targeted cases before
+repair. `IncompleteRead`, `BadStatusLine`, disconnected/reset connections and
+truncated real loopback HTTP responses now reach one bounded read-only status
+reconciliation; a second failed read reports sanitized uncertainty. There is never
+a second POST. Delivery readiness now separates dependency health from operation
+eligibility: already successful delivery belongs to PM, CI waiting/uncertainty
+requires remote reconciliation, and only first delivery is eligible. The actual
+mutation method also rejects successful/finalized delivery before counters or
+publication, independently of readiness.
 
 | Class | Result | Evidence |
 | --- | --- | --- |
-| SOURCE | PASS, subject to independent acceptance | Phase/client/finalization changes; unchanged admission and credential gates; no Dockerfile, policy, baseline, service configuration or CI edits |
-| FIXTURE | RED reproduced | New phase regression against anchor fails `collect_readiness() got an unexpected keyword argument 'phase'`; retained completed A rejects B in actual `TrustedReaders.refresh` |
-| FIXTURE | PASS | 388 focused tests, including real temporary Git and isolated PostgreSQL roles/schemas; normal recovery, modes/content/parents, receipt/lease fences, atomic finalization, full-row drift, concurrent requests, rollback, lost acknowledgement, exact retry, revoked authority/unapproved review and no model replay |
-| FIXTURE | Boundary demonstrated | Credential-free Codex0.160 `:workspace` sandbox reads a sibling job file; no model/auth/network call. A terminal DB flag alone cannot grant safe retention visibility |
-| FIXTURE / physical container | PASS | Existing Runtime image plus read-only candidate source, network none: actual launcher/container client makes exactly one authenticated GET status, reports zero mutation requests; synthetic HTTP response only |
-| LIVE / read-only | PASS | Existing dashboard and snapshot HTTPS200 with pinned existing CA verification, no auth/cookie; actual completed831, delivered3/released1, model1/test2 observed. Existing worker IDs remain stopped |
-| LIVE / candidate adoption, B admission | NOT TESTED / NOT AUTHORIZED | No build/adoption, worker start, baseline/permit change, registration, inference, task publication or finalization in installed PCP |
+| SOURCE | PASS, independent acceptance pending | Same PR; phase/client/finalization and PCP-only adapter/retention changes. No Dockerfile, CLI pin, baseline, service configuration or CI edits |
+| FIXTURE / RED | Reproduced | Original72b61b6 `TrustedReaders.refresh` with the new ordinary A→B test fails `pcp_local_foreign_workspace`; prior protocol/readiness RED above |
+| FIXTURE / Git + PostgreSQL | PASS | 446 focused regressions: all eight real reader functions/original registrar, A finalization→B claim/queued job, lease1→2, exact reacquisition, concurrent requests, rollback/lost acknowledgement, stale CAS/restart, full-row drift and unrelated blocked receipt; proof/counters preserved |
+| FIXTURE / physical container | PASS | Current Runtime R image/CLI0.160.0 plus candidate adapter overlay in disposable tmpfs; captured actual argv/environment/config, no `codex exec`/model request. Current-job Python/Git/read/write works; sibling read/stat/list, symlink, Git alternates/worktree, process routes, Git metadata writes, provider-home reads and network socket creation denied |
+| FIXTURE / client | PASS | Real loopback HTTP parser failures reconcile a synthetic committed POST exactly once. Prior actual Docker launcher/client fixture remains evidence for the unchanged launcher, not deployment |
+| LIVE / read-only | PASS | Existing dashboard/snapshot trusted HTTPS200, actual completed831/delivered3/released1/counters1/2/1. Existing workers remain stopped |
+| LIVE / candidate adoption or B | NOT TESTED / NOT AUTHORIZED | No build/adoption, permit/baseline change, worker start, registration, inference, publication or finalization in installed PCP |
 
-Local full suites use the repository CI commands. Router132, Runtime2583 (185 optional skips), Executor797 and root1755 passed.
-The exact hosted PR head/run and executed job results are recorded in the
+Git/PG tests use controlled external source/provider/Executor observations; they
+are not physical Executor/Docker/GitHub end-to-end admission. The separate sandbox
+fixture uses actual container/tool enforcement. The final accepted image still
+requires the consolidated physical gate below. No fixture claims provider login,
+model execution, live two-task throughput, browser retest or VPN parity.
+
+Local required suites: Runtime2605/211 optional skips, root1755, Executor797,
+Router132 PASS. The exact final hosted SHA/run/job counts are recorded in the
 Draft PR verification receipt. All four hosted suites must actually execute;
-service skips from a documentation-only classifier are insufficient. The PR body
-holds the final SHA/run so recording a run does not create an untested successor
-documentation commit. Earlier-head runs never establish final acceptance.
+documentation-classifier skips or earlier-head green do not establish acceptance.
+The PR body holds the final SHA/run so recording it does not create an untested
+successor documentation commit. The earlier72b61b6 run40922905063 passed5266/186
+but was independently **not accepted**; it is not the continuation's CI receipt.
 
-An additional all-Runtime PostgreSQL-enabled scan executed2765 passing tests and
+The earlier #835 all-Runtime PostgreSQL-enabled scan executed2765 passing tests and
 found two **pre-existing, out-of-scope** plan-supervision fixture failures:
 `test_initial_supervised_hold_rejects_mutated_ready_set` passes an unsupported
 `continuation_key` keyword; `test_pr_acceptance_does_not_hold_but_durable_merge_does`
@@ -71,49 +92,78 @@ retry uses one read and zero POST. Lost acknowledgement also uses one POST only.
 This replaces ad-hoc payload assembly for this operation; it is not a claim of
 measured end-to-end Owner time savings or unattended LIVE throughput.
 
-## Sequential-workspace boundary proposal (not implemented or approved)
+## Measured isolation, implementation scope and reproduction
 
-Runtime mounts the whole workspace root; the developer shares its UID. Executor's
-existing observation validates the current job and exact container/source mounts,
-but does not attest ownership or read isolation of retained siblings. Runtime's
-current root-directory exclusion is therefore material, not merely inconvenient.
-Actual isolated command, using only synthetic files in the probe's tmpfs:
+The initial shorthand `:workspace` read was a diagnostic, not acceptance of the
+adapter boundary. Continuation inspected shipped0.160.0 help and generated schema,
+then used config-only app-server `initialize`, `config/read` and
+`permissionProfile/list` calls. Capturing the real `CodexAdapter.run` invocation
+with only its subprocess mocked showed approval=never, memory disabled and network
+false overriding hostile synthetic user settings. Replaying that legacy mode with
+those overrides still read/stat/listed A and followed B's symlink to A.
 
-```text
-codex sandbox -P :workspace -C /tmp/job-b -- cat /tmp/job-a/proof
-exit 0; output retained-fixture-proof
+The CLI's documented named permission tables are supported by the pinned binary
+([vendor permissions reference](https://learn.chatgpt.com/docs/permissions)); the
+measurement, not current documentation alone, establishes compatibility. Root and
+global temporary reads are denied, the current workspace is writable, and immutable
+`/usr`, `/bin`, `/lib`, `/lib64`, `/opt/venv` plus the CLI's minimal toolchain paths
+are readable. Existing protected `.git` metadata stays read-only. The initial
+minimal profile could not find Python because this image puts its launcher in
+`/opt/venv`; adding that immutable input fixed the positive path. No bwrap package,
+new mount/capability/service or CLI/image upgrade was installed.
+
+A deliberate hostile config demonstrated that empty permission tables **merge**
+with inherited workspace roots. The implementation therefore rejects user/system
+config and nonempty or symlinked project/ancestor `.codex` directories before a
+subprocess, and passes `--ignore-user-config --ignore-rules --strict-config`.
+Empty sandbox-created protected directories are permitted. Existing provider auth
+remains at the same `CODEX_HOME` for the CLI transport; tool commands cannot read
+that home. No provider/service/publisher token is added to the child environment.
+PCP-local only selects this mode; ordinary non-PCP adapter behavior is unchanged.
+
+Exact additional paths and reasons under continuation6504158102:
+
+- `services/runtime/app/adapters/codex.py`: supported named profile, config gate and
+  opt-in PCP invocation; no extra environment/broker permitted in that mode.
+- `services/runtime/app/pcp_local_worker_loop.py`: pin the measured CLI, select the
+  profile, validate retained finalized workspace/source/receipt/Git proof and
+  reject executable Git config/alternate/worktree escape before reading proof.
+  Existing eight-reader and atomic registrar/reservation paths remain in use.
+- `services/runtime/tests/test_codex_adapter.py`, `test_pcp_local_repeatability.py`
+  and `fixtures/codex_read_isolation_probe.py`: source contracts, real Git/PG
+  lifecycle/concurrency/failure regressions and reproducible physical capability.
+- Existing readiness/client/delivery paths and their tests repair the two review
+  findings. This records delegated tightening scope, not new Owner authority over
+  baselines, policies, images or future live operations.
+
+Reproduction on a separately authorized **disposable** Runtime fixture: first
+inspect the exact64-hex ID, accepted image, no mounts/ports, network none, UID1000,
+read-only root, cap-dropALL/no-new-privileges,512MiB/1CPU/128PIDs and64MiB noexec tmpfs.
+Then, from accepted source (never target a live worker):
+
+```sh
+# Standalone process; failing assertions stop only this command.
+docker --host unix:///var/run/docker.sock exec -i EXACT_DISPOSABLE_CONTAINER_ID \
+  python - < services/runtime/tests/fixtures/codex_read_isolation_probe.py
 ```
 
-Proposed boundary: keep the existing Runtime/Executor services and per-job paths,
-but use a reviewed, pinned Codex permission profile that restricts **reads as well
-as writes** for each developer invocation. Its read allowlist must be only the
-current exact job, necessary immutable toolchain/libraries and the existing scoped
-provider home; workspace-root/sibling reads are denied. Writes remain current-job
-only. Do not change provider/publisher credential custody or network policy.
-The exact shipped CLI's ability to enforce this profile is **not verified**;
-the follow-up source/fixture decision must prove it before selecting/adopting it.
-No fallback to the measured broad-read profile is permissible.
+For this source session, only the candidate adapter module was loaded from tmpfs
+into the retained R-image fixture; no candidate image was built. The checked probe
+asserts hostile-config rejection, actual adapter argv/sanitized environment,
+current-job positive paths, every denied route above, network denial and unchanged
+full synthetic A file hashes. It creates only synthetic `/tmp/pcp-probe-*` data;
+no auth file/login/inference/Runtime API/DB. Private logs and source/probe hashes
+are under `/home/sonvh/.local/state/pcp-repeatability835/continuation`.
+SHA256: checked probe log `619b8cdd4aa0452a81db46c36a7c213de21b97a840a9b07780724098aeaf9174`;
+446-test log `51448334839acdfb67d5b09122de79b912c10a8b8e26182993455f75b3ce3751`;
+retained synthetic sandbox archive `4ab5fbc42fe5aed8a3abe90bfcde76b1bc3288d55d205e37e8f5989ce21a1764`.
 
-Acceptance for that decision, in one bounded source/fixture follow-up:
-
-1. Demonstrate denied sibling enumeration/read/stat and escape via symlink, Git
-   alternate/worktree metadata or `/proc`; demonstrate successful current-job
-   read/write and normal toolchain use with no new credentials/model invocation.
-2. Only after enforced read isolation, replace the broad root exclusion with a
-   Runtime-owned retained-workspace validator. Require exact deterministic path,
-   no symlink/foreign resource, full trusted job/source/receipt/commit/tree/mode/
-   parent/proof binding and finalized/released ownership. Reject unknown, drifting,
-   incomplete or reserved siblings; terminal status alone is insufficient.
-3. Run actual A finalization then ordinary B admission/registration through all
-   eight readers and the existing registrar. Keep A bytes/path/proof/counters;
-   prove B generation2 lease ownership, duplicate/stale/concurrent claims and
-   restart/lost acknowledgement fences. Test Runtime and Executor together.
-4. Independently review any protected sandbox/security/config changes. No source
-   approval, green CI or this PM record invents an exact-path Owner amendment.
-
-No chmod, rename, deletion, backup substitution, separate instance or forged
-proof is an acceptable workaround. The present PR can be reviewed for its
-independent improvements while this prerequisite remains explicit.
+Retained validation additionally compares full DB snapshots before/after Git and
+requires the producer's exact branch/baseline/verification/review bindings. The
+persisted PM assessment must have no blockers and the matching head/source; its
+`eligible` flag may correctly remain false when automatic merge is disabled.
+No new merge permission, proof refresh, chmod, rename, deletion, backup substitution
+or alternative instance is used to make ordinary B admission pass.
 
 ## Fixture resources and retained LIVE identities
 
@@ -128,7 +178,10 @@ at handoff; containers/volume and evidence retained, no prune/removal.
 | `pcp-repeatability835-client` | `abf587a5fefb302ca7e8cc930f6e118681750f02c2c37e101dec19ab3c3ef933` | Same Runtime R; only read-only #835 app and synthetic server binds |
 
 Two short help/version probe containers with the same task prefix are also stopped
-and retained. Each substantive fixture used network none/no published ports,
+and retained. Continuation shutdown: PostgreSQL exit0; idle sleep probe exit137
+from scoped Docker stop timeout, OOM=false (probe process had already returned0).
+The prior client exit137 and sandbox-help exit101 are retained history, not a
+new test failure. The probe's synthetic tmpfs Git data was archived before stop. Each substantive fixture used network none/no published ports,
 512MiB memory+swap,1CPU,128PIDs, cap-dropALL/no-new-privileges. Runtime probes used
 UID1000/read-only root and64MiB noexec/nosuid/nodev tmpfs; PG used UID999. No fixture
 mounted V3/V4 data/source/credentials. PG first-start socket initialization failure
@@ -158,7 +211,7 @@ Their optional scoped stop commands remain in [operations](../../pcp-portable/lo
 **Gate 0: acceptance and scope.** PM independently reviews this Draft PR, exact
 head/four executed hosted suites and the boundary above. PM controls merge and
 postmerge. Let **P = `<PM_ACCEPTED_POSTMERGE_SHA>`**, filled only from that receipt
-after the required read-isolation implementation is also accepted. Do not silently
+after this measured read-isolation implementation is independently accepted. Do not silently
 substitute future main. A separate integrated physical WorkOrder must name P,
 release bindings, task and resource envelope. No old831 activation/permit is reused.
 
@@ -207,8 +260,11 @@ decision explicitly accepts that measured reuse; keep their actual source labels
 Otherwise build that changed role once from P. Do not rebuild/swap observer merely
 for docs or this client. Inspect shipped content/modes, immutable executable askpass
 outside noexec tmpfs, Docker20, toolchain, non-root/read-only/nonrecursive mounts,
-resource limits and network peers. The old whole-root developer sandbox cannot
-pass Gate0/2. Do not import privileged service tokens into the developer process.
+resource limits and network peers. Repeat the checked credential-free isolation
+probe against the actual new image (no candidate overlay) and verify its adapter
+bytes/profile match P. Check absence of user/system/project config before any
+model launch; retain an unexpected config for disposition, never silently delete
+it or change provider custody. Old whole-root sandbox behavior cannot pass Gate2. Do not import privileged service tokens into the developer process.
 
 **Gate 3: physical preflight and ownership.** Capture a consistent private DB dump
 and full rows/sequences; reconcile completed831/delivered3/released1/counters1/2/1,
