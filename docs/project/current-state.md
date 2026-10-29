@@ -1,85 +1,88 @@
 # Current Project State and Handoff
 
-Tier-1 mutable continuity, not authority to rewrite baselines, merge, retire V3,
-or admit work. Reverify the exact GitHub/source/physical receipts before action.
+Tier-1 mutable continuity, not baseline, merge or admission authority. Reverify
+exact source/PM/physical receipts before acting.
 
-## Integrated retirement and HTTPS — GH-815 / GH-822
+## Postmerge retirement completed; local observer simplification candidate
 
-Updated 2026-10-29. [PR825](https://github.com/sonvhse06072/personal-coding-platform/pull/825)
-accepted application source remains `5adfd120dbd6aa4718cf9549ddc6fae0bab8f12d`,
-postmerge CI40780653020 (four executed suites). [PR826](https://github.com/sonvhse06072/personal-coding-platform/pull/826)
-merged the V4 physical packet at `bca7189a53cadba3feb38330dcfd658b95002048`.
-[PM acceptance/postmerge CI40816963431](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6487825349)
-executed all four suites successfully. This supersedes premerge continuity; neither receipt activates a baseline.
+Updated 2026-10-29. [PR827](https://github.com/sonvhse06072/personal-coding-platform/pull/827)
+merged at `ea6fc0ac5dd101068bf4fe6f8f8813495cc529bf`; postmerge
+[CI40827639082](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40827639082)
+executed four suites: 5058 passed/135 skipped. Independent PM review and
+[execution record6489438739](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6489438739)
+supersede the premerge retirement hold. Clean frozen maintenance checkout
+`/home/sonvh/pcp-retire824-execute-v1` remains at that exact accepted source.
 
-[DEC-PCP-815-RETIREMENT-HTTPS-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6488558812)
-records Owner chat direction through delegated PM and grants the exact protected
-source/physical scope. [PR827](https://github.com/sonvhse06072/personal-coding-platform/pull/827) is the single candidate.
-One writer, branch `ai/815-retirement-https-v1`, worktree
-`/home/sonvh/pcp-retirement-https-v1`; no nested agents. Source candidate adds
-operator-only default-dry-run retirement, atomic retained non-delivery audit,
-exact receipt/lease resolution, admission exception for validated retirement,
-and guards against old recovery/activation. No Engine/admin HTTP/model path.
+**PHYSICAL PASS:** exact original V3 inventory/quiescence, private consistent
+backup, full original preimages, restored-copy dry-run/APPLY/exact retry, then
+one original dry-run/APPLY and read-only reconciliation. Original transaction
+committed at **2026-10-29 06:27:27.128313 UTC**. Complete postimages match and all
+other tables/row counts remain unchanged. DB after-backup retained; all22 V3
+containers and all4 rehearsal containers stopped. No uncertain acknowledgement,
+original retry, model invocation or publication occurred.
 
-Independent PM source acceptance, eligible merge, postmerge verification and an
-**exact PM execution record** still precede any real V3 operation. Developer
-never self-merges. Disposable real PostgreSQL/Git tests are separate from the
-original job. [Single checklist](../pcp-portable/consolidation.md),
-[operations and admission packet](../pcp-portable/local-operations.md#v4-successor-and-admission-decision-packet),
-[session evidence](history/2026-10-29-retirement-https-v1.md).
+[Owner-requested local observer decision6489495501](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6489495501)
+adds an explicit loopback-only read exception. One writer/no nested agents in
+`/home/sonvh/pcp-local-observer-no-token`, branch `ai/815-local-observer-no-token`.
+This follow-up combines implementation/regressions with the retirement handoff.
+Only protected `services/runtime/app/main.py` and `docs/project/operating-model.md`
+change under that decision. Frozen maintenance source and running observer stay
+unchanged. Default token/worker/legacy/control authentication remains enforced;
+local events/replay now reuse snapshot secret sanitization.
 
-Physical V4 uses the accepted Runtime image and actual empty `pcp_local` DB;
-new `pcp_dashboard_reader` has SELECT only on six observer tables, no table write
-or sequence usage. DML/public DDL/nextval actually fail with SQLSTATE42501 even
-with transaction read-only disabled. No job/receipt/lease/usage import or model.
-HTTPS frontend syntax, certificate chain and actual trusted Chromium browser
-login/logout/reconnect now PASS after Owner installed the exact existing CA in
-user NSS. No ignored TLS errors or injected cookies. New observer/frontend and
-V4 DB remain running for Owner inspection at `https://localhost:18443/dashboard`;
-private login and exact stop IDs are in the operations packet. Empty V4 is not
-proof of active development or LIVE task delivery.
+[Single checklist](../pcp-portable/consolidation.md),
+[maintenance receipt](history/2026-10-29-retire824-execution.md),
+[successor/config/task packet](history/2026-10-29-successor-observer-packet.md).
+Source and browser fixtures do not prove tokenless deployment. Required final-head
+CI and review are tracked by this branch's PR; Developer never self-merges.
 
-## Original #824 — retained incomplete assisted pilot
+## Original #824 — retired incomplete, never delivered
 
-Instance/root `pcp-local-pilot815-v3` / `/home/sonvh/pcp-local-pilot815-v3`.
-Job `51a11aa704362d84ae5c7b70e85741f1`; branch `ai/51a11aa70436`;
-baseline `pcp-local-pilot-v3-verifier0c968-20261028`, source
-`0c968dd99199c73f3fbc89c0b59da168844e8f73`. Assisted commit
-`7b3833bdb06e59aabcad31e4ad2aed4ac5d003ea` is preserved.
+Job `51a11aa704362d84ae5c7b70e85741f1`, instance `pcp-local-pilot815-v3`:
+`delivering / execution verified` → **`cancelled / incomplete_not_delivered`**.
+Receipt `running/gen2` → **`blocked/gen3`**; same-owner lease `active/gen1` →
+**`released/gen1`**. Original result/error/verification/history/usage remain intact,
+including213 passing tests, one model call, input29,474/output3,968,
+gross257,826/cached228,352/reportedUSD0. Assisted commit
+`7b3833bdb06e59aabcad31e4ad2aed4ac5d003ea`, source
+`0c968dd99199c73f3fbc89c0b59da168844e8f73`, baseline
+`pcp-local-pilot-v3-verifier0c968-20261028` and verified snapshot are unchanged.
+No remote branch/PR was published. Full before/after evidence is private at
+`/home/sonvh/.local/state/pcp-retire824-execute-v1`; backup/manifest hashes are
+in the sanitized receipt. Old binaries stay fenced/stopped and activation off.
+Retirement resolves only this reservation; it does not authorize another job.
 
-**Last operator report, not freshly inspected:** delivering / execution verified,
-publication blocked at noexec askpass; receipt running/gen2, lease active/gen1,
-one development invocation and 213 passing local tests; no remote branch/PR.
-Input 29,474/output 3,968; gross input257,826/cached228,352; reported USD0.
-All 22 owned containers were reported stopped, activation and provider/publisher
-use disabled. Original forensic preimages, tested snapshot and counters remain
-in V3's private journal. Source/fixture PASS does not complete this job.
+## Existing V4 observer — unchanged token mode
 
-The [PM disposition](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6477295524)
-retains V3 incomplete and lifted only its main scheduling freeze. No V3 restart,
-activation renewal, re-admission, lease release/cancel/reset, source/image
-rebinding, commit publication or model replay occurred in V4. Only permitted
-build metadata was read. A new namespace cannot evade the old reservation.
+**https://localhost:18443/dashboard** remains available on accepted source
+`5adfd120dbd6aa4718cf9549ddc6fae0bab8f12d`, Runtime image `0391589bf34d…`.
+DB/observer/Nginx are the only three running V4 containers. Read-token entry is
+still required; private login and exact stop IDs remain in
+[local operations](../pcp-portable/local-operations.md#actual-v4-https-observer).
+Actual trusted browser login/logout/reconnect and SELECT-only permissions passed
+in the prior physical session; this session rechecked trusted HTTPS and preserved
+resource identities. The actual empty database is not a development activity claim.
 
 ## Immediate next safe actions
 
-1. Independent PM reviews PR827, the full evidence/approved protected diff and
-   all four genuinely executed suites at the exact final head. Developer does
-   not merge; any earlier-head run is supporting evidence only.
-2. Owner may inspect the authenticated HTTPS observer. Retain only the verified
-   observer/DB/frontend within the resource envelope; no worker/intake starts.
-3. PM issues the postmerge DB-only backup/restored-copy rehearsal/dry-run/apply
-   checkpoint for exact V3 identities. No mutation of original rows occurred here.
-4. Resolve legitimate historical ownership before successor admission. Keep the
-   old `5adfd12` candidate historical/draft; prepare a successor from final accepted
-   implementation and service-input bindings, not an unreviewed SHA.
-5. The next proposed task has three allowed code/test/doc paths; no one-Markdown
-   task, contract weakening, credential provision or premature run-once.
+1. Independent PM reviews this follow-up's exact source/protected diff and four
+   genuinely executed final-head suites, then handles eligible merge/postmerge CI.
+2. Adopt one Runtime image containing retirement and the accepted local-auth change.
+   The later decision explicitly defers the interim ea6-only build to avoid two
+   builds. No candidate image was built/swapped here. Router/Executor retain5ad
+   provenance; identical inputs do not silently authorize mixed-source adoption.
+3. Review the frozen ea6 draft registry and concrete successor packet. Since the
+   auth change is newer, generate a NEW immutable revision from its final accepted
+   merge; never advance an old approved/draft revision in place or guess its SHA.
+4. Apply only the next reviewed local ingress/config rollout, prove fresh browser
+   tokenless polling and container/LAN rejection, retain token-mode rollback.
+5. PM separately resolves final baseline/image bindings, activation and a fresh
+   issue for the three-path evidence-summary task. No admission, run-once,
+   provider/publisher login or inference was authorized/performed here.
 
 ## Active PCP issues and owner attention
 
-GH-815/822/824 remain open; GitHub/Runtime evidence stays scoped. Independent review, actual trust verification and the
-postmerge execution record are separate checkpoints. No routine repair approval
+GH-815/822/824 remain open; GitHub/Runtime evidence stays scoped. Retirement is recorded as incomplete; review/adoption/admission remain separate checkpoints. No routine repair approval
 is needed. Legacy `A3B2_IMAGE_BUILD=STOP` remains independent of the named V4
 observer permission; `CODEX_LIVE=STOP` still forbids PCP-managed inference.
 
@@ -92,6 +95,7 @@ second state remains NOT TESTED until Owner selects it and actual probes run.
 Private-repo review/CI remains a process gate, not claimed server enforcement.
 
 <!-- PCP:CONTINUITY:START -->
-Integrated WorkOrder6488558812: retirement candidate/fixtures and independent V4
-HTTPS observer. Original V3 unchanged; PM postmerge execution checkpoint required.
+Execution6489438739: original V3 retired incomplete, evidence retained, all stopped.
+Decision6489495501: isolated source candidate for tokenless local reads; live V4
+still token-authenticated. Next gate: independent source review and image adoption.
 <!-- PCP:CONTINUITY:END -->

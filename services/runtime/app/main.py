@@ -22,7 +22,7 @@ from .baseline import resolve_project_baseline
 from .intake import IntakeRequest, IntakeResponse, DirectIntakeResponse, PlanningIntakeResponse
 from .intake_policy import classify_intake
 from .job_status_publisher import JobStatusPublisher
-from .dashboard import _require_session, create_dashboard_router
+from .dashboard import _require_session, create_dashboard_router, require_local_readonly_request
 from .engine_telemetry import RuntimeEngine
 from .engine_core import require_legacy_job, SourceJobNotExecutable
 from .g0_fixture_execution import G0FixtureExecution, G0GateError
@@ -389,6 +389,14 @@ async def _stop_legacy_control_plane() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    dashboard_auth = os.getenv("PCP_LOCAL_DASHBOARD_AUTH", "token")
+    if dashboard_auth not in {"token", "loopback_readonly"} or (
+        dashboard_auth == "loopback_readonly" and (
+            os.getenv("PCP_RUNTIME_STARTUP_MODE") != PCP_LOCAL_DASHBOARD_MODE
+            or bool(os.getenv("DASHBOARD_READ_TOKEN"))
+        )
+    ):
+        raise RuntimeError("Invalid PCP-local dashboard authentication configuration")
     # PCP-local scope is rejected before all legacy secret, DB and job actions.
     # Historical invalid-mode startup still hardens before validating the mode.
     if os.getenv("PCP_RUNTIME_STARTUP_MODE", "normal") == PCP_LOCAL_INSPECT_MODE:
@@ -404,11 +412,13 @@ async def lifespan(app: FastAPI):
         if set(projects_doc().get('projects', {})) != {'pcp-local'}:
             raise RuntimeError('PCP-local dashboard requires singleton registry')
         harden_runtime_process_secret_boundary()
+        app.state.pcp_local_dashboard_auth = dashboard_auth
         app.state.pcp_local_dashboard_ready = True
         try:
             yield
         finally:
             app.state.pcp_local_dashboard_ready = False
+            app.state.pcp_local_dashboard_auth = None
         return
     if os.getenv("PCP_RUNTIME_STARTUP_MODE") == PCP_LOCAL_WORKER_MODE:
         from .pcp_local_worker_loop import TrustedReaders
@@ -475,6 +485,27 @@ app = FastAPI(title="Personal Coding Runtime", version=RUNTIME_VERSION, lifespan
 
 @app.middleware("http")
 async def inspection_mode_http_guard(request: Request, call_next):
+    configured_auth = os.getenv("PCP_LOCAL_DASHBOARD_AUTH", "token")
+    latched_auth = getattr(app.state, "pcp_local_dashboard_auth", None)
+    if configured_auth != "token" or latched_auth == "loopback_readonly":
+        if configured_auth != "loopback_readonly" or latched_auth != configured_auth:
+            return JSONResponse(status_code=403, content={"detail": "Local observer configuration unavailable"})
+        try:
+            require_local_readonly_request(request)
+        except HTTPException as exc:
+            return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+        path = request.url.path
+        if request.method != "GET" or not (
+            path in {"/dashboard", "/v1/dashboard/snapshot", "/health"}
+            or re.fullmatch(r"/v1/dashboard/jobs/[a-f0-9]{32}/(events|stream)", path)
+        ):
+            return JSONResponse(status_code=403, content={"detail": "PCP-local read-only dashboard"})
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Content-Security-Policy"] = "frame-ancestors 'none'"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        return response
     # A mode flip cannot bypass a parked process latch.
     local_read = os.getenv('PCP_RUNTIME_STARTUP_MODE') in {PCP_LOCAL_WORKER_MODE, PCP_LOCAL_DASHBOARD_MODE}
     read_ready = (getattr(app.state, 'pcp_local_worker_ready', False)
