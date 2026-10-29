@@ -19,14 +19,14 @@ One writer: `ai/815-observer-worker-integration`, no agents or physical mutation
 - [x] Reproduce valid observer rejection through actual observe route (old409).
 - [x] Minimal protected network seam + private-binding helper; exact immutable
   identities, hard read-only role/mount/env/network/port checks and no HTTP override.
-- [x]99 focused regressions: valid/four-peer paths; absent/malformed binding;
+- [x]100 focused regressions: valid/four-peer paths; absent/malformed binding;
   forged/replaced/drifted resources; unchanged auth/publisher/verifier gates.
 - [x] Complete non-dispatch [final rollout packet](../project/history/2026-10-29-observer-worker-rollout.md):
   canonical clone retention, single finalS build window, immutable baseline50
   classes, exact three-path task, private activation/binding, both service switches,
   all eight readers/schema/credentials/recovery/readiness and one later admission.
-- [x] Local full suites: structure1742, Executor779, Router132, Runtime2540/134
-  skipped; total5193 passed/134 skipped. No actual PostgreSQL/container coverage
+- [x] Local full suites: structure1742, Executor780, Router132, Runtime2540/134
+  skipped; total5194 passed/134 skipped. No actual PostgreSQL/container coverage
   is claimed for skipped/in-memory tests.
 - [x] Offline packet validation: captured private Docker metadata replay, new
   baseline schema preserving all50 protected classes/prior revisions, exact task

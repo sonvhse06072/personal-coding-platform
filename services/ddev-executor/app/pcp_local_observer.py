@@ -26,6 +26,9 @@ _NGINX_ENV = {'PATH', 'NGINX_VERSION', 'NJS_VERSION', 'NJS_RELEASE', 'PKG_RELEAS
 def configuration_digest(row):
     """Offline approval fingerprint. Do not refresh an expected digest on drift."""
     value = {key: row[key] for key in ('Name', 'Config', 'HostConfig', 'Mounts')}
+    # Docker enumerates this map as a list in nondeterministic order. Preserve
+    # every record/field, but not enumeration order; never mutate the preimage.
+    value['Mounts'] = sorted(value['Mounts'], key=lambda mount: mount['Destination'])
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 

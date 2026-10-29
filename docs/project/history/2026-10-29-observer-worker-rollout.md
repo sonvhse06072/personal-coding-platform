@@ -12,7 +12,7 @@ combines those gates after this source PR's independent review/merge/postmerge.
 | Class | Result | Evidence and limit |
 | --- | --- | --- |
 | SOURCE | PASS | Only the Executor network-peer seam/helper and scoped operating contract change. Canonical identity, verifier source equality, shared auth and Runtime engine unchanged. |
-| FIXTURE | PASS | Valid approved topology reproduced old observe409 `pcp_local_foreign_network_peer`; the corrected actual ASGI observe route accepts it.99 focused cases cover drift/replacement/forgery, hard role constraints, unchanged four-peer path, auth/publisher/verifier checks. Docker/GitHub boundaries are mocked; inspect fixture is explicitly sanitized. |
+| FIXTURE | PASS | Valid approved topology reproduced old observe409 `pcp_local_foreign_network_peer`; the corrected actual ASGI observe route accepts it.100 focused cases cover drift/replacement/forgery, hard role constraints, unchanged four-peer path, auth/publisher/verifier checks. Docker/GitHub boundaries are mocked; inspect fixture is explicitly sanitized. |
 | PHYSICAL | PASS, limited | Read-only exact-ID inspection of the accepted V4 DB/pair/network/images and trusted HTTPS empty-state snapshot; no resources changed. Previous browser, role, remote-peer and packaging evidence belongs to the [accepted adoption receipt](2026-10-29-observer828-adoption.md). |
 | PHYSICAL | NOT TESTED | New helper in a deployed worker, final-S images, concurrent worker/dashboard operation, populated job display, publisher/subscription readiness. No build or DB/container mutation in this session. |
 | LIVE | NOT TESTED | No successor issue, receipt, lease, job, inference, publication or baseline activation. VPN ON/parity and true second-machine LAN testing remain unmeasured. |
@@ -22,15 +22,22 @@ Full inspect contains private DB configuration: never publish it or full env.
 Exact source head and genuinely executed CI are attached to [PR830](https://github.com/sonvhse06072/personal-coding-platform/pull/830); they are
 not inferred from older runs or this mutable document.
 
-Local full verification: structure1742, Executor779, Router132, Runtime2540/134
-skipped = **5193 passed/134 skipped**. Offline packet validation also passed:
+Local full verification: structure1742, Executor780, Router132, Runtime2540/134
+skipped = **5194 passed/134 skipped**. Offline packet validation also passed:
 actual captured private inspect replay (no Docker call), successor baseline
 schema with all50 protected classes/prior revisions preserved, exact task parser,
 body/main drift refusal, eight-reader contract and missing-activation refusal.
 The in-memory source/issue substitutions are fixtures, not future approvals.
-Private `observer-binding-DRAFT-private.json` SHA256
-`38d5ecc8bc3fd75eff406aad2237c86bc55563242cc8f90de4150151a298db85`
+Private `observer-binding-DRAFT-v2-private.json` SHA256
+`8fc9a8cffe9cc253e39c109373f93fdf44a3e8a38f090bd9b23361693dbed472`
 contains the concrete prepared binding; it is not installed or approved activation.
+The prior draft is retained/superseded. Read-only final inspection at09:55UTC
+confirmed Docker varies frontend Mounts enumeration order while all full records
+remain equal. A second regression reproduced false409; canonical destination
+ordering now accepts the same proof without dropping fields or tolerating actual
+mount drift. Configuration fingerprints derive from the original retained preimage,
+not a refreshed expected value after material drift. Trusted HTTPS/dashboard and
+snapshot200/no-cookie checks passed again; exact DB/pair/network unchanged.
 
 ## Stable source, canonical clone and final build
 
@@ -163,7 +170,7 @@ IDs from the accepted receipt, re-inspect before approving:
 | frontend.image_id | `sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609` |
 
 For each role, compute `configuration_digest` from the accepted helper over the
-privately inspected Name/Config/HostConfig/Mounts, compare to retained approval
+privately inspected Name/Config/HostConfig/Mounts (Mounts sorted by Destination), compare to retained approval
 preimages, then include that digest in the independently reviewed private binding.
 Do not expose env or silently recompute expected values on mismatch. A draft
 binding is not activation. Replacement requires a new explicit binding.

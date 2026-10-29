@@ -14,6 +14,7 @@ from app import main as executor
 
 def digest_config(row):
     data = {key: row[key] for key in ('Name', 'Config', 'HostConfig', 'Mounts')}
+    data['Mounts'] = sorted(data['Mounts'], key=lambda mount: mount['Destination'])
     return hashlib.sha256(json.dumps(data, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
@@ -261,6 +262,15 @@ def test_frontend_must_share_exact_full_observer_id(topology):
     t.frontend['HostConfig']['NetworkMode'] = 'container:'+t.observer['Name'][1:]
     t.binding['frontend']['configuration_sha256'] = digest_config(t.frontend)
     assert observe(t).status_code == 409
+
+
+def test_docker_mount_listing_order_does_not_change_approved_configuration(topology):
+    t = topology; before = deepcopy(t.binding)
+    assert observe(t).status_code == 200
+    # Docker may enumerate its mount map in a different order on each inspect.
+    t.frontend['Mounts'].reverse()
+    assert observe(t).status_code == 200
+    assert t.binding == before  # Same proof; no refresh/adoption after observation.
 
 
 def test_publisher_failure_is_not_hidden_by_valid_observer(topology, monkeypatch):

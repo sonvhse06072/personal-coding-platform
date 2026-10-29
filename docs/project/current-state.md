@@ -19,9 +19,9 @@ fixes the actual Executor observe rejection of the accepted read-only observer:
 optional private exact-ID/image/network/configuration binding, hard role checks
 and existing four-peer default. No HTTP policy override, auto-adoption or broader
 worker privilege. Canonical source and verifier exact-base rules remain intact.
-**FIXTURE:**99 observe-route regressions, including reproduced old409 rejection;
+**FIXTURE:**100 observe-route regressions, including reproduced old409 rejection;
 Docker/GitHub boundaries mocked using sanitized actual inspect metadata.
-Local full suites5193 passed/134 skipped; offline packet schema/task/binding checks
+Local full suites5194 passed/134 skipped; offline packet schema/task/binding checks
 pass. Missing activation still rejects before any external call.
 [Single durable checklist](../pcp-portable/consolidation.md) and
 [complete non-dispatch rollout/readiness packet](history/2026-10-29-observer-worker-rollout.md).
@@ -96,7 +96,7 @@ Private-repo review/CI remains a process gate, not claimed server enforcement.
 
 <!-- PCP:CONTINUITY:START -->
 Decision6492648806: accepted829/2ff29; source observer-worker integration candidate
-on ai/815-observer-worker-integration. Exact private binding +99 fixture cases;
+on ai/815-observer-worker-integration. Exact private binding +100 fixture cases;
 new physical coexistence untested. Dashboard51349 remains up/tokenless. One next
 PM record binds finalS builds/baseline/issue/readiness/admission; no dispatch now.
 <!-- PCP:CONTINUITY:END -->
