@@ -9,6 +9,8 @@ source, PM decisions and current GitHub/Runtime physical state before acting.
 [clarification6502893427](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6502893427)
 authorize SOURCE and disposable FIXTURE work only. One writer on
 `ai/835-local-repeatability`, `/home/sonvh/pcp-local-repeatability-835`.
+Single [Draft PR #836](https://github.com/sonvhse06072/personal-coding-platform/pull/836)
+holds the exact final-head verification receipt and remains for independent PM review.
 Engineering anchor: **34c0e9ac99a057eef0a08a15f0c3828b3c1addfa**.
 
 [PM receipt6502481811](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6502481811)

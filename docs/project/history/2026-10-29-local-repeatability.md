@@ -3,6 +3,7 @@
 Authority: [WO835](https://github.com/sonvhse06072/personal-coding-platform/issues/835)
 and [execution clarification6502893427](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6502893427).
 One writer, `ai/835-local-repeatability`, `/home/sonvh/pcp-local-repeatability-835`.
+Single [Draft PR #836 and exact-head CI receipt](https://github.com/sonvhse06072/personal-coding-platform/pull/836).
 Engineering anchor `34c0e9ac99a057eef0a08a15f0c3828b3c1addfa`. The
 [PM merge receipt6502481811](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6502481811)
 supersedes earlier premerge instructions: 833/834 merged, stable-R hold closed,

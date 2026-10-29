@@ -12,6 +12,7 @@ a protected baseline or live job. New831 execution is recorded below.
 
 [WorkOrder835](https://github.com/sonvhse06072/personal-coding-platform/issues/835),
 clarification6502893427; one writer/branch `ai/835-local-repeatability`.
+[Draft PR #836 / exact-head hosted receipt](https://github.com/sonvhse06072/personal-coding-platform/pull/836).
 [WorkReport and one adoption packet](../project/history/2026-10-29-local-repeatability.md).
 
 - [x] Ordered documents, current main34c0e9a, merged833/834 and PM hold closure reconciled.
