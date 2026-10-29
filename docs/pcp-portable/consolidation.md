@@ -1,10 +1,40 @@
 # PCP Local consolidation execution checklist
 
-Scope: sustained repair of PR #825 under the [PM disposition](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6477295524)
-and [changes-required review](https://github.com/sonvhse06072/personal-coding-platform/pull/825#pullrequestreview-5687731514).
-One writer in `/home/sonvh/pcp-consolidation-815`, branch `ai/815-822-consolidation`.
-Reviewed starting head `8291fc501a7a0ad353e7bfaa0abb1aafef77b1df`; base
-`0c968dd99199c73f3fbc89c0b59da168844e8f73`. No merge or physical adoption.
+Current campaign: [DEC-PCP-815-SUCCESSOR-ADOPTION-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6485231069).
+PR825 is independently accepted and merged at
+`5adfd120dbd6aa4718cf9549ddc6fae0bab8f12d`; postmerge run40780653020 executed
+all four suites successfully. One writer on `ai/815-successor-adoption-v4` in
+`/home/sonvh/pcp-successor-adoption-v4`; named physical root
+`/home/sonvh/pcp-local-adoption825-v4`. No protected baseline activation or live job.
+
+## Successor adoption checklist — 2026-10-29
+
+- [x] Read full WorkOrder/source/required docs; reconcile stale premerge continuity.
+- [x] Private release record before mutation: authority, exact source, pins,
+  capacity, namespace/network allocation, command timeouts and retention.
+- [x] Serial accepted-source bootstrap/build; verify immutable images and clone.
+- [x] Actual container identity/toolchain/security/noexec/askpass/Docker20 checks.
+- [x] Schema-only initialization/idempotence and real role/sequence privileges;
+  adopted DB remains empty, fixtures are in a separate database.
+- [x] Focused288 + integrated Git/PG/container12 + Docker20 verifier193 +
+  synthetic publication-response-loss1 pass; proofs/counters/ownership retained.
+- [x] Actual observer HTTP protocol/SELECT-role checks with visibly synthetic
+  data; secure auth flags, scope, timers, usage and unchanged DB checksum.
+- [x] Current network DNS/TLS/HTTP observations; no global changes.
+- [x] Owner confirms no approved HTTPS ingress; prepare exact local proposal.
+- [ ] Owner-selected second VPN state measurement; currently NOT TESTED.
+- [ ] LIVE HTTPS/provider/publisher/admission validation; protected prerequisites
+  and historical reservation disposition remain unresolved, not implied by tests.
+- [x] Prepare one baseline/ownership/next WorkOrder decision packet.
+- [x] Final scoped shutdown: 12 retained containers, zero running; private dumps
+  and release/shutdown receipts retained. Follow-up exact-head CI is tracked in
+  its PR checks so this document does not self-reference a future source hash.
+- [ ] Independent PM acceptance of this physical evidence and next decisions.
+
+[Physical WorkReport and identities](../project/history/2026-10-29-adoption825-v4.md).
+[Concrete next-decision packet](local-operations.md#v4-successor-and-admission-decision-packet).
+This is the single durable checklist. Historical source results below retain
+their original evidence class; they do not substitute for current LIVE checks.
 
 ## Sustained repair checklist — 2026-10-29
 
@@ -17,7 +47,7 @@ Reviewed starting head `8291fc501a7a0ad353e7bfaa0abb1aafef77b1df`; base
 - [x] Complete real Git, PostgreSQL, readiness, publisher and browser regressions.
 - [x] Required full local suites.
 - [x] Update continuity and concrete successor adoption packet.
-- [ ] Renewed independent PM acceptance and eligible merge (PM responsibility).
+- [x] Independent PM acceptance and merge completed; see accepted-source receipt above.
 
 Hosted acceptance and final handoff are tracked only by the exact final-head
 run/jobs in PR #825.
@@ -59,7 +89,7 @@ Reliability first; dashboard next; PM review/eligible merge after exact-head CI;
 separate reviewed-source rollout; only then a separately authorized clean pilot.
 Source and fixture success do not establish live V3 deployment or PM acceptance.
 
-## Acceptance evidence
+## Historical source repair evidence
 
 Local full suites: root 1742; Runtime 2479/96 skipped; Router 132; Executor 680:
 **5033 passed / 96 skipped**. Focused regressions **288 passed**, including eight
@@ -83,7 +113,8 @@ The immutable askpass is tracked mode 100755, copied by the existing Dockerfile
 and preserved by bootstrap archive/permission handling. Its username and synthetic
 password probes execute locally without writing tmpfs. Actual container noexec
 mount behavior, publisher round trips, physical dashboard HTTPS and VPN parity
-remain NOT TESTED; the successor packet requires those checks.
+were NOT TESTED in that source repair; the V4 matrix above records which were
+subsequently executed.
 
 Browser evidence in `evidence/consolidation-dashboard/` is freshly generated from
 the current projection: 13 states, desktop/mobile, no overflow/page errors, no
@@ -91,10 +122,10 @@ live endpoints. Local logs are retained in the operator's private validation
 folder. `git diff --check` passes. Source/fixture/DB evidence is not physical V3
 or container adoption evidence.
 
-Draft source delivery: [PR #825](https://github.com/sonvhse06072/personal-coding-platform/pull/825).
+Merged source delivery: [PR #825](https://github.com/sonvhse06072/personal-coding-platform/pull/825).
 Final-head executed hosted run/jobs and test counts are recorded in its description
 and checks, avoiding a self-referential source hash. Earlier-head green CI cannot
-establish readiness. Independent PM review remains required; Developer never
-self-accepts or merges. The [successor packet](local-operations.md#successor-release-adoption-packet--prepared-not-authorized)
+establish readiness. Independent PM review and merge are now recorded above; Developer did not
+self-accept or merge. The [successor packet](local-operations.md#successor-release-adoption-packet--prepared-not-authorized)
 covers exact source/image/baseline succession, schema/readiness, authenticated
 observation, physical recovery/publication, VPN matrix and retention/rollback.
