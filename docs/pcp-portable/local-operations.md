@@ -1,6 +1,6 @@
 # Supported readiness, recovery and dashboard adoption
 
-This is an operational source contract for the consolidation branch, not a
+This is the accepted operational source contract and V4 decision packet, not a
 change to the Constitution, approved baseline or retained V3 authority.
 GH-815 and GH-822 are implemented together because the view must explain the
 new durable verification/commit/publication states. No new service/state store.
@@ -156,6 +156,10 @@ no browser and calls no real provider/GitHub/Runtime/DB endpoint.
 
 ## Successor release adoption packet — prepared, not authorized
 
+The original generic sequence below predates merge. PR825 is now accepted and
+V4 has executed the separately authorized non-model subset; see the concrete
+V4 packet below for actual evidence and the remaining protected/LIVE gates.
+
 The [PM disposition](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6477295524)
 ends further V3 retry scheduling and lifts the main freeze solely for an otherwise
 eligible reviewed merge. It changes no database row, activation, source binding
@@ -262,3 +266,208 @@ start, credential provision, activation, replacement-job or production authority
    WorkOrder/issue and physical permit. Its outcome and metrics are a separate
    record. Do not close GH-815/822/824 as delivered on source CI alone, and never
    report that clean validation completed historical #824.
+
+## V4 successor and admission decision packet
+
+Prepared after the [delegated PM adoption WorkOrder](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6485231069).
+[Actual evidence, identities and limitations](../project/history/2026-10-29-adoption825-v4.md)
+replace the earlier packet's unfilled source/build prerequisites. This packet
+proposes decisions; it grants no protected change, credential expansion, service
+installation, old-job mutation or new live execution.
+
+### 1. Immutable successor candidate
+
+Candidate revision **`pcp-local-successor-825-5adfd12-20261029`**, project
+`pcp-local`, source **`5adfd120dbd6aa4718cf9549ddc6fae0bab8f12d`**.
+Status remains `draft`, `active_revision: null`. Accepted source PR825/postmerge
+CI40780653020 are established; activation is not. Private, schema-validated
+candidate artifact:
+`/home/sonvh/.local/state/pcp-adoption825-v4/successor-baseline-candidate.json`,
+SHA256 `45fd1ad73f3bbdccab688cc337f3e8437e897bbaed5130ed1f8557fe1f150ce3`.
+The [complete reviewable candidate](../project/pilot-successor-825-candidate.md)
+contains the same data. It is not an installed registry or signed approval.
+
+Its references pin goals/non-goals/security/budget to Constitution sections
+2/3/9/11, requirements to the roadmap's PCP Local priority, architecture to
+`docs/project/architecture.md`, quality to operating-model section8, roadmap
+frame to `docs/project/roadmap.md`. All are read at the accepted source SHA.
+It explicitly retains `human_owner_protected` for all 50 exact paths in the
+accepted `scripts/check_project_doc_authority.py:PROTECTED_PATHS`; its two
+MUTABLE_PATHS remain mutable, history/consolidation evidence remains evidence,
+and this operational index cannot redefine protected authority. No new delegated
+design authority is proposed. PM must review the full artifact before seeking
+actual Owner consent for protected registry changes.
+
+Authority delta against V3 source0c968dd: Constitution, architecture, operating
+model, roadmap, business strategy, config, CI and the authority checker have no
+Git diff. Implementation now includes exact Git identity/parent proof, recovery
+CAS, schema/readiness, immutable askpass and truthful observer projection. The
+candidate advances the source pin without altering the old immutable V3 revision.
+Keep that revision verbatim; approve a new revision through a separate protected
+PR/decision, then separately activate only the new named scope. Do not replace
+this candidate's source with this documentation PR's head or a later main.
+
+### 2. Historical ownership disposition — admission remains blocked
+
+Last reported V3 identity: job `51a11aa704362d84ae5c7b70e85741f1`, issue824,
+receipt running/gen2, lease active/gen1, assisted commit
+`7b3833bdb06e59aabcad31e4ad2aed4ac5d003ea`; no remote branch/PR. Those are
+historical facts, not freshly queried rows. V4's empty DB does not supersede this
+reservation. The current WorkOrder prohibits altering or releasing it.
+
+The accepted `finalize_pcp_local_review` path requires a matching actual PR,
+exact-head CI, independent review, valid authority and transactional receipt/
+lease checks. It legitimately releases ownership only on accepted delivery.
+There is no supported non-delivery archival/supersession endpoint in this source;
+generic cleanup of PCP-source jobs is denied. Therefore invoking PM finalization
+with fabricated PR/CI, SQL release, cancellation, or a fresh instance is not a
+supported resolution.
+
+Recommended PM disposition now: **retain admission HOLD**, accept the physical
+non-model evidence, and request one explicit protected decision for an audited
+non-delivery retirement path. A proposed subsequent source-only WorkOrder would
+add one narrowly authenticated terminal-disposition operation: exact old job,
+receipt/body/source/lease generations and full-row CAS; a distinct retained
+incomplete/retired outcome; original proof/commit/counters unchanged; idempotent
+same-decision handling; stale/conflicting decisions rejected; no GitHub write,
+model call or fabricated delivery. Its authority, schema vocabulary and actual
+V3 operation must be separately reviewed/approved. It is not implemented or
+permitted by this packet. Until such a supported path is accepted and its
+physical operation authorized, no successor task is admitted. This limitation
+cannot be repaired here without crossing the WorkOrder's protected boundary.
+
+### 3. Smallest HTTPS observer proposal — not applied
+
+Owner confirms there is no existing approved PCP HTTPS ingress. Proposed local
+origin: **`https://localhost:18443/dashboard`**, with an isolated PCP-owned TLS
+terminator process and existing loopback upstream `127.0.0.1:18787`. It needs no
+DNS/hosts/VPN change. This is a proposed address, not a deployed dashboard URL.
+
+Required decision: approve that exact listener, one PCP-owned supported Nginx
+binary/process with its version/package digest recorded before use, and a
+certificate/key whose SAN includes localhost and whose chain the Owner browser
+already trusts. If that certificate does not exist, select a managed certificate
+or explicitly approve local trust provisioning in the same decision. No CA/trust
+store modification, package installation or shared-router restart occurred.
+Private key remains outside Git at the proposed root's `instance/https/` (0600).
+The proposed isolated Nginx config at
+`/home/sonvh/pcp-local-adoption825-v4/instance/https/nginx.conf` is:
+
+```nginx
+pid /home/sonvh/pcp-local-adoption825-v4/instance/https/nginx.pid;
+error_log /home/sonvh/pcp-local-adoption825-v4/logs/observer-tls-error.log warn;
+events { worker_connections 128; }
+http {
+    access_log off;
+    server_tokens off;
+    client_body_temp_path /home/sonvh/pcp-local-adoption825-v4/instance/https/body;
+    proxy_temp_path /home/sonvh/pcp-local-adoption825-v4/instance/https/proxy;
+    server {
+        listen 127.0.0.1:18443 ssl;
+        server_name localhost;
+        ssl_certificate /home/sonvh/pcp-local-adoption825-v4/instance/https/fullchain.pem;
+        ssl_certificate_key /home/sonvh/pcp-local-adoption825-v4/instance/https/key.pem;
+        ssl_protocols TLSv1.2 TLSv1.3;
+        client_max_body_size 2k;
+        location = /dashboard {
+            proxy_pass http://127.0.0.1:18787;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Proto https;
+        }
+        location ~ ^/v1/dashboard/(session|snapshot|jobs/[a-f0-9]{32}/(events|stream))$ {
+            proxy_pass http://127.0.0.1:18787;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_buffering off;
+            proxy_read_timeout 60s;
+        }
+        location / { return 404; }
+    }
+}
+```
+
+Run syntax/certificate/bind checks before starting any approved terminator; bind
+only loopback and use a new private read token in the accepted observer's env.
+The observer must use a dedicated SELECT-only role on the approved database,
+not the schema owner. Fixture credentials/database never become a live job's
+credentials/database. The physical fixture proved that such a role can project
+state and cannot DML/DDL. Never mount provider/publisher credentials or the Docker
+socket into an observer. Preserve `pcp_local_dashboard`, no activation needed.
+
+Future private login: Owner reads the dedicated dashboard token from its local
+0600 credential file and enters it into `/dashboard` over the approved HTTPS
+origin; never put token in URL, chat, PR, command arguments or access logs. Verify
+browser trust, actual login/logout/reconnect, cookie flags, cross-project/control
+rejection and unchanged DB/counters. Manual cookie carriage in the current HTTP
+fixture is not HTTPS/browser acceptance. For real empty V4, show empty/Unknown;
+never import V3 or synthetic jobs to make it appear active.
+
+### 4. Scoped credentials and VPN evidence
+
+No provider/publisher credentials are installed or imported in V4. After actual
+ownership/baseline decisions, bind only the already-authorized credential
+mechanism to the new Executor and scoped Runtime account home. Revalidate
+provider account entitlement without inference and GitHub repository push/read
+permissions without writing. New token scope/issuance or copying host/V3 auth is
+not authorized here. If interactive login becomes necessary, collect it only
+when the remaining gates are ready, through the supported private flow.
+
+Current route snapshot is consistent with VPN OFF; authenticated HTTPS dashboard
+is absent. Runtime/Executor DNS and certificate-verified TLS passed to GitHub,
+registry and provider endpoints; unauthenticated HTTP403/421 does not prove
+account usability. Owner was asked to select the second state only after the
+probe was ready. Until measured, VPN ON remains NOT TESTED. Repeat the retained
+`connectivity.py` inside the exact owned containers after Owner confirms state;
+record timestamp/routes/status and internal service health. Do not change global
+VPN/DNS or infer parity from fixture tests. An instance-only DNS repair would
+require measured resolver evidence and a retained per-instance config diff.
+
+### 5. Proposed clean validation WorkOrder
+
+Only after the decisions above: PM creates a fresh issue, distinct from824,
+for **one documentation artifact** at
+`docs/pcp-light/adoption825-successor-validation.md`. Its content reports the
+accepted source/images, successful scoped preflight and links to actual new-job
+verification/delivery receipts; no authority change or invented PASS. Allowlist
+that one path, one writer, existing approved low-cost routing/resource envelope,
+no foreign projects. Pin the successor baseline and exact implementation/source
+binding in the new WorkOrder; hash its body/goal before admission.
+
+Acceptance requires actual readiness=true, correct receipt/lease ownership,
+normal mandatory verification, exact Git tree/modes/sole parent, one reconciled
+remote branch and Draft PR, all four genuinely executed exact-head CI suites,
+independent PM review and legitimate terminal ownership finalization. Exercise
+publication response-loss recovery only in an explicitly scoped non-model
+validation substep; capture remote branch SHA/PR identity before retry and require
+no duplicate creation or additional model invocation. The historical assisted
+commit must never be the publication target. Any later implementation release
+needed for retirement must be independently accepted/built; this session does
+not silently advance accepted source to enable that future task.
+
+## V4 shutdown and retention
+
+All 12 owned containers were stopped/retained at 2026-10-29 01:54:24 UTC.
+HTTPS is unavailable, so no observer remains for Owner use. Intake/baseline/activation stay OFF and no
+provider/publisher credentials were provisioned. Retain all stopped containers,
+images, owned network/volume, source/config, fixtures, logs and database dumps.
+Private evidence root: `/home/sonvh/.local/state/pcp-adoption825-v4`.
+No V3/foreign operation, cleanup, prune/down-v, lease release or counter reset.
+
+For these exact retained IDs only, the idempotent stop command is a standalone
+process (it does not exit the Owner's interactive shell):
+
+```sh
+timeout 90 docker --host unix:///var/run/docker.sock stop --time 10 \
+  e4ce42b28d9906608ae341391cf0fabaf90d5a1af7c9960c684b91b3472032b4 \
+  da8522e1d8c6f29bacc3da886933a9533fd6acdc82da02b9d4167955954d6b47 \
+  cca3c4bfad1c7c3ad545716098bb8bbc47986af1f793b04213415f579e3a9b69 \
+  9935d2be55f72e2a06a1a49eb845baa719ddd76d5b8415364fa1e692ef0f2293 \
+  8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8
+```
+
+Recheck identity/ownership against `shutdown.json` before a later operational
+use; do not substitute name-only wildcard stops. All short-lived fixture
+containers have already exited; their full IDs/states are in that manifest.
+Rollback means stopping only affected V4 services and retaining their state.
+Restoring an old worker or changing images/baselines requires its own compatible,
+authorized adoption. Stopping V4 never renews permission to operate V3.
