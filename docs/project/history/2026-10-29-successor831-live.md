@@ -11,7 +11,9 @@ not proof of successful admission. Actual main remained S at all physical gates.
 
 One operator/writer, no agents. Continuity worktree
 `/home/sonvh/pcp-successor831-live`, branch `ai/815-successor831-live`.
-Keep the follow-up PR unmerged until PM explicitly closes the stable-S window.
+[PR832](https://github.com/sonvhse06072/personal-coding-platform/pull/832) contains
+the source correction and this receipt. Keep it unmerged until PM explicitly
+closes the stable-S window.
 Frozen application/build source is a separate clean detached checkout at S.
 No installed application patch or image relabeling occurred.
 

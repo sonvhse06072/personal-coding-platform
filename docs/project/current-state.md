@@ -12,7 +12,8 @@ reviewed/merged tree173ba174224888692561b08568c72265c10490ec. Postmerge
 executed all four suites:5193 passed/135 skipped. Actual main stayed S. PM holds
 main merges through delivery or its independently reconciled stop decision.
 One writer in `/home/sonvh/pcp-successor831-live`, branch
-`ai/815-successor831-live`; follow-up remains unmerged during the stable-S window.
+`ai/815-successor831-live`, [PR832](https://github.com/sonvhse06072/personal-coding-platform/pull/832);
+follow-up remains unmerged during the stable-S window.
 [Full physical/evidence/decision receipt](history/2026-10-29-successor831-live.md),
 [single durable checklist](../pcp-portable/consolidation.md),
 [operations](../pcp-portable/local-operations.md).
