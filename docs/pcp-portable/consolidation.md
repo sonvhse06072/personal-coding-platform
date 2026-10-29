@@ -37,7 +37,7 @@ One writer: `ai/815-observer-worker-integration`, no agents or physical mutation
 No build/deploy/restart/DB/network/activation/credential/source-clone mutation.
 Routine dashboard downtime is not an approved coexistence solution. Existing
 historical evidence below is retained with its original class and date.
-Final-head hosted suite receipts are tracked on the candidate PR; local PASS
+Final-head hosted suite receipts are tracked on [PR830](https://github.com/sonvhse06072/personal-coding-platform/pull/830); local PASS
 does not substitute for executed CI or the independent acceptance checkbox above.
 
 ## Historical accepted observer828 adoption checklist

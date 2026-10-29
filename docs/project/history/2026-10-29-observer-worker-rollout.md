@@ -19,7 +19,7 @@ combines those gates after this source PR's independent review/merge/postmerge.
 
 Private diagnostic records: `/home/sonvh/.local/state/pcp-observer-worker-integration-v1`.
 Full inspect contains private DB configuration: never publish it or full env.
-Exact source head and genuinely executed CI are attached to the PR; they are
+Exact source head and genuinely executed CI are attached to [PR830](https://github.com/sonvhse06072/personal-coding-platform/pull/830); they are
 not inferred from older runs or this mutable document.
 
 Local full verification: structure1742, Executor779, Router132, Runtime2540/134

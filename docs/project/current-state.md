@@ -14,7 +14,7 @@ executed all four suites:5093 passed/135 skipped. This documentation merge did
 not change the deployed application source51349.
 
 One writer in `/home/sonvh/pcp-observer-worker-integration`, branch
-`ai/815-observer-worker-integration`, from accepted2ff29. The source candidate
+`ai/815-observer-worker-integration`, [PR830](https://github.com/sonvhse06072/personal-coding-platform/pull/830), from accepted2ff29. The source candidate
 fixes the actual Executor observe rejection of the accepted read-only observer:
 optional private exact-ID/image/network/configuration binding, hard role checks
 and existing four-peer default. No HTTP policy override, auto-adoption or broader
