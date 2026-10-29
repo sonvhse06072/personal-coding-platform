@@ -13,6 +13,8 @@ pending-review text. **Main is held at P** for this finite task until PM release
 it; no evidence merge or future-main substitution is authorized.
 
 One writer: `ai/835-adoption837-live`, `/home/sonvh/pcp-adoption837-live`.
+[Draft evidence PR #838](https://github.com/sonvhse06072/personal-coding-platform/pull/838)
+remains unmerged; its description holds exact-final-head executed CI.
 [Actual WorkReport and continuation packet](history/2026-10-30-adoption837.md).
 Runtime/verifier P image built once; actual-image isolation (no overlay), packaged
 bytes/modes/toolchains and verifier recipe13 tests/read-only/nonrecursive/noexec
