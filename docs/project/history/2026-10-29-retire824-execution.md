@@ -101,8 +101,30 @@ Original namespace `pcp-local-pilot815-v3`: all22 stopped. Exact current resourc
 | Data volume | `pcp-local-pilot815-v3-postgres-data` |
 | Network | `064fff94593732cecb10011c7a602720f1e32335682a853c3f26d274f445ee09` /10.255.255.192/27 |
 
-The remaining18 historical containers retain their full IDs in private preflight/
-final-retention inventory; none was started/deleted. Old workers retain old binaries
+The remaining18 historical containers stayed stopped and were not deleted:
+
+```text
+4605e7430f5d3d3f9559b7ae1f0c970ffb2e65b8c445253ebf04750ce8a32d19
+5c7f6debf6c6ee9f7b315500ceb165f54fe7e008db6a0e254252ddb584bf36e0
+6b847837bc15549ab9997829b905e4bf489a3ae77bdbfff73a0832455dbfe927
+4cb4cc89ca8451b1755e19cb6abcba3a5bbf5f923ad0233736e19803d36db20b
+71f10f360ad42cedbf6262fad01dc1ec77693ebfa5f0b62b13eb2dcd965062fc
+bbcd8df428090f6b2a6887e0de910c51ab47d018fd73ffd8502b53b36669051b
+f3d54b02df859753efacd38aa9d9c9491452e6226befd8c12a87b555a6f1f716
+35e2bc0297a0f62abe389fa124aa3fc73c8f2ffa154644ca4c3b6e6f5781f3ca
+195ce246834e8793590a4abcec8e14860f47745609785cd8bc65bfe593852647
+b3ccf3b6ef7cbd40bedd624c20c47501274cacf2e44e705d8fd7da4fe0d32d17
+27af7e9a83fd3b3bcbc6461620477aa3ad39e6567cff5d1e3f92eb2c6487d38c
+806b599d1cd74525c899e58460c13afb496f4a4298612486cf4aa7975e592f98
+cf97b2c899108745d3c2db2865e454480cbadd9ba906e0df378d493e24282ac3
+99038af6e759f0d53e8f9490e6682d399de0238130b4e7bca430d5d5822f4e85
+bc4dc3cf197278165ad82977457535165be7cf48a7f94fbeccd91203d9a547e7
+e482db5211e2d5c8521b9db9b6dcf84d2580539700798c079fae4b4136aa4b54
+247e0470381d6af833f768d6331c3e2109c57b9a77b018900f8e18f31c1974b6
+371ac03d1664a326c7e25d61e2a279015014937ded6647b8228c57a9bc2492a6
+```
+
+All IDs match the private preflight/final-retention inventory. Old workers retain old binaries
 and must never restart; installed activation remains disabled. New source fences
 do not upgrade those binaries. Rehearsal volume
 `pcp-local-retire824-rehearsal-v1-postgres-data` and root
@@ -164,8 +186,12 @@ real TLS or real DB for tokenless mode. Prior token-mode PHYSICAL evidence is
 separate. Actual tokenless browser/container/LAN adoption is **NOT TESTED** pending
 independent review/merge/postmerge and the next image/config checkpoint.
 
-Required local root/Runtime/Router/Executor results and exact final-head four-suite
-hosted run/jobs are in the PR handoff, including skips; none substitutes for PM
+Required local suites PASS: root1742, Runtime2540/134 skipped, Router132,
+Executor680 (5094 passed/134 skipped). Runtime includes35 focused auth/SSE
+regressions. Root uses the real Git checkout; hosted may skip its optional local
+case. One harness collection failure lacked the documented fake ROUTER_API_TOKEN;
+with the CI fixture environment the unchanged Router suite passed. Exact-final-head
+four-suite hosted run/jobs are in [PR828](https://github.com/sonvhse06072/personal-coding-platform/pull/828), including skips; none substitutes for PM
 review or physical adoption. No new inference/provider/publisher operations.
 
 ## Accepted service-input comparison and next packet

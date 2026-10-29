@@ -44,7 +44,10 @@ branch `ai/815-local-observer-no-token` in `/home/sonvh/pcp-local-observer-no-to
 
 [Execution receipt](../project/history/2026-10-29-retire824-execution.md),
 [successor/config/task packet](../project/history/2026-10-29-successor-observer-packet.md).
-Required local/final-head hosted verification is recorded in this PR's handoff.
+Local required suites PASS: root1742, Runtime2540/134 skipped, Router132,
+Executor680. The35 new auth/SSE regressions are included in Runtime. Exact-final-
+head hosted execution is recorded in [PR828](https://github.com/sonvhse06072/personal-coding-platform/pull/828);
+earlier-head CI is supporting evidence only.
 
 ## Historical integrated checklist — retirement and HTTPS source preparation
 

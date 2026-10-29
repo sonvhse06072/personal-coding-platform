@@ -24,7 +24,8 @@ original retry, model invocation or publication occurred.
 [Owner-requested local observer decision6489495501](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6489495501)
 adds an explicit loopback-only read exception. One writer/no nested agents in
 `/home/sonvh/pcp-local-observer-no-token`, branch `ai/815-local-observer-no-token`.
-This follow-up combines implementation/regressions with the retirement handoff.
+[PR828](https://github.com/sonvhse06072/personal-coding-platform/pull/828) combines
+implementation/regressions with the retirement handoff.
 Only protected `services/runtime/app/main.py` and `docs/project/operating-model.md`
 change under that decision. Frozen maintenance source and running observer stay
 unchanged. Default token/worker/legacy/control authentication remains enforced;
