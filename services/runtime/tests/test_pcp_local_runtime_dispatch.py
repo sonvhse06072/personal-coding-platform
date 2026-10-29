@@ -858,9 +858,10 @@ def test_pm_outcome_atomically_finishes_original_receipt_and_lease(setup, monkey
     asyncio.run(s.dispatch())
     job_id = worker.stable_job_id(s.task)
     head = 'd'*40
+    monkeypatch.setattr('app.pcp_local_recovery.reconcile_commit', lambda row, task: head)
     branch = 'ai/'+job_id[:12]
     row = deepcopy(s.db.jobs[job_id])
-    row.update(status='blocked', branch=branch)
+    row.update(status='blocked', branch=branch, workspace=str(s.engine.workspace_root/job_id))
     row['progress']['required_checks_passed'] = True
     row['checkpoint']['pcp_local_execution'] = {'state':'verified','lease_generation':1,'commit':head}
     pr = dict(number=7,head=head,head_ref=branch,base_ref='main',repository=source.REPOSITORY,state='open',merged=False)
@@ -896,6 +897,10 @@ def test_pm_outcome_atomically_finishes_original_receipt_and_lease(setup, monkey
             if sql.startswith('SELECT * FROM cp_jobs'):
                 assert 'FOR UPDATE' in sql
                 return Result([self.pending])
+            if sql.startswith('SELECT * FROM cp_pcp_local_source_receipts'):
+                return Result([receipt])
+            if sql.startswith('SELECT * FROM cp_project_leases'):
+                return Result([lease])
             if sql.startswith('UPDATE cp_pcp_local_source_receipts'):
                 assert "state='running' AND generation=2" in sql
                 assert params==(source.REPOSITORY,source.PROJECT_ID,s.task.issue_number,job_id,
@@ -908,9 +913,13 @@ def test_pm_outcome_atomically_finishes_original_receipt_and_lease(setup, monkey
             self.pending.update(status='completed',result=json.loads(params[0]),error=None)
             return Result()
         def commit(self): self.row=deepcopy(self.pending);self.events.append('COMMIT')
+    receipt = {**worker.claimed_source_receipt(s.task), 'state':'running', 'generation':2}
+    lease = {'owner_job_id':job_id, 'state':'active', 'generation':1}
+    monkeypatch.setattr('app.pcp_local_readiness.operation_snapshot', lambda db, key:(db.get(key),receipt,lease))
     db=ReviewStore()
     engine=object.__new__(RuntimeEngine)
     engine.storage=db
+    engine.workspace_root=s.engine.workspace_root
     request=FullpathPMReviewRequest(source_commit=s.task.base_sha,expected_head=head,branch=branch,
         baseline_revision=s.task.baseline_revision,pr_number=7,review_id=8)
     outcome=asyncio.run(engine.finalize_pcp_local_review(request))
@@ -972,7 +981,7 @@ def test_publication_failure_keeps_reconciliation_evidence_without_model(setup, 
     row['checkpoint']['pcp_local_execution']=dict(state='verified',commit='d'*40,lease_generation=1)
     row['result']=dict(commit='d'*40,verification={'passed':True,'test_runs':2},delivery_finalized=False)
     reader=object.__new__(worker.TrustedReaders);reader.engine=s.engine;reader.activation={'budget':{'max_wall_seconds':900}}
-    async def refresh(task):assert task==s.task
+    async def refresh(task, **kwargs):assert task==s.task
     reader.refresh=refresh
     project={'autonomy':{'allow_commit':True,'allow_push_ai_branch':True,'allow_create_pr':True,'allow_production_deploy':False}}
     reader.authority=lambda:(project,s.baseline)

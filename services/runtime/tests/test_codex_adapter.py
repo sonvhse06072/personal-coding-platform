@@ -332,3 +332,60 @@ def test_codex_timeout_returns_structured_failure_and_removes_last_message_file(
         if event["event_type"] == "developer_step"
     ]
     assert lifecycle == ["started", "failed"]
+
+
+@pytest.mark.parametrize('mode', ['execute', 'repair'])
+def test_pcp_profile_is_explicit_and_preserves_provider_custody(monkeypatch,tmp_path,mode):
+    import tomllib
+    from app.shell import agent_subprocess_env
+    captured={}
+    monkeypatch.setenv('CODEX_HOME','/fixture-provider')
+    monkeypatch.setenv('RUNTIME_API_TOKEN','SYNTHETIC_PRIVATE')
+    monkeypatch.setenv('GITHUB_DELIVERY_TOKEN','SYNTHETIC_PRIVATE')
+    async def run(argv,**kwargs):
+        captured.update(argv=argv,env=agent_subprocess_env(kwargs.get('env')))
+        return CommandResult(argv=argv,returncode=0,stdout=_event({'type':'turn.completed'}),stderr='')
+    monkeypatch.setattr('app.adapters.codex.run_command',run)
+    asyncio.run(CodexAdapter('fixture-model').run(workspace=tmp_path,prompt='fixture',mode=mode,timeout=10,isolate_workspace=True))
+    args=captured['argv']
+    assert '--sandbox' not in args
+    assert {'--ignore-user-config','--ignore-rules','--strict-config'}<=set(args)
+    assert 'approval_policy="never"' in args and 'sandbox_workspace_write.network_access=false' in args
+    config=tomllib.loads(next(v for v in args if v.startswith('permissions=')))['permissions']['pcp_local']
+    assert config['extends']==':workspace' and config['workspace_roots']=={}
+    assert config['network']=={'enabled':False}
+    assert config['filesystem'][':root']=='deny' and config['filesystem'][str(tmp_path)]=='write'
+    assert '/fixture-provider' not in config['filesystem']
+    assert captured['env']['CODEX_HOME']=='/fixture-provider'
+    assert not any('TOKEN' in k for k in captured['env'])
+
+
+@pytest.mark.parametrize('override', [{'environment':{'TMPDIR':'/foreign'}},
+    {'developer_broker':{'x':'y'}},{'mode':'plan'}])
+def test_pcp_profile_refuses_incompatible_transport_or_mode(tmp_path,override):
+    args=dict(workspace=tmp_path,prompt='fixture',mode='execute',timeout=10,isolate_workspace=True)
+    args.update(override)
+    with pytest.raises(ValueError):
+        asyncio.run(CodexAdapter('fixture-model').run(**args))
+
+
+def test_pcp_profile_refuses_symlinked_workspace(tmp_path):
+    from app.adapters.codex import isolated_permissions
+    (tmp_path/'link').symlink_to(tmp_path,target_is_directory=True)
+    with pytest.raises(ValueError):isolated_permissions(tmp_path/'link')
+
+
+@pytest.mark.parametrize('location', ['user','project','ancestor','symlink'])
+def test_pcp_inherited_configuration_fails_closed_before_subprocess(monkeypatch,tmp_path,location):
+    workspace=tmp_path/'jobs'/'b';workspace.mkdir(parents=True)
+    home=tmp_path/'provider';home.mkdir()
+    monkeypatch.setenv('CODEX_HOME',str(home))
+    target=home if location=='user' else (workspace if location in ('project','symlink') else workspace.parent)/'.codex'
+    target.mkdir(exist_ok=True)
+    if location=='symlink':
+        target.rmdir();target.symlink_to(home,target_is_directory=True)
+    else:(target/'config.toml').write_text('[permissions.pcp_local.workspace_roots]\n"/foreign"=true\n')
+    def forbidden(*a,**k):pytest.fail('configuration must be rejected before any command')
+    monkeypatch.setattr('app.adapters.codex.run_command',forbidden)
+    with pytest.raises(ValueError,match='unreviewed_codex_configuration'):
+        asyncio.run(CodexAdapter('fixture-model').run(workspace=workspace,prompt='fixture',mode='execute',timeout=10,isolate_workspace=True))

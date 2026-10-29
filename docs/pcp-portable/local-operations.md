@@ -5,7 +5,92 @@ change to the Constitution, approved baseline or retained V3 authority.
 GH-815 and GH-822 are implemented together because the view must explain the
 new durable verification/commit/publication states. No new service/state store.
 
-## Current PM-finalized #831 checkpoint
+## #835 candidate operator interface and adoption gate
+
+Engineering anchor34c0e9ac99a057eef0a08a15f0c3828b3c1addfa follows merged833/834;
+[PM6502481811](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6502481811)
+closed the stable-R hold. #835 source/fixtures do not deploy the candidate, start
+workers, restore permits or activate a baseline. The commands below become usable
+only in the independently accepted/adopted Runtime. The existing observer remains
+at its accepted image and https://localhost:18443/dashboard stays tokenless/local.
+
+| Operation | Authoritative checks | Unused dependencies |
+| --- | --- | --- |
+| `status` (default) | Exact requested PCP job, scoped read-only repeatable-read DB snapshot; sanitized ownership/counters | Activation, Router, provider, GitHub, workspace verification |
+| `readiness --phase admission` | Existing full admission: eight authentic readers, source/baseline/isolation/ownership, publisher, provider and tool/schema checks | None omitted; no receipt written |
+| `readiness --phase delivery` | Existing authority/source/Executor/publisher/isolation/receipt/lease plus exact retained Git proof and durable delivery disposition | Developer quota/login and Router selection |
+| `readiness --phase finalization --review-id ID` | Same supported PM finalizer in dry-run: exact proof, full ownership, installed authority, authenticated independent review and exact-head CI | Fresh admission's absent-workspace/PR assumptions, developer provider and Router |
+| `finalize --review-id ID` | Re-read finalization readiness, one existing authenticated PM-review POST, then durable status reconciliation | No model, admission, delivery, test, merge, permit renewal or implicit next task |
+
+Readiness is observation, **never authorization**. Non-admission phase checks report
+`pass`, `blocked`, `unknown` or `not_applicable` with actor/action. Missing transport
+is unknown, not PASS; exception text/credentials are not returned. Default admission
+retains its existing response contract and aggregate blocker codes. Completed status
+needs no active permit. A repeated completed finalization client call reports the
+retained exact review without POST; changed review identity is rejected.
+Delivery exposes `dependencies_ready` separately from `operation.eligible` and
+`ready`: `ci_success` → `awaiting_pm_review` (PM); `ci_waiting` → `ci_pending`;
+uncertain/previous publication → `reconcile_publication`; first verified delivery
+→ `delivery_needed`; finalized terminal job → `completed`. Only delivery-needed
+can be eligible, and readiness still grants no mutation authority. The existing
+authenticated delivery method rejects already-successful/finalized delivery before
+incrementing a counter or calling publication.
+
+Use an exact reconciled **existing worker** container ID from the accepted release
+record, not the observer ID. The launcher neither starts nor installs anything;
+only Docker and a POSIX shell are required on the host. No token on argv/output:
+
+```sh
+# Read-only; replace both placeholders from the separately accepted release record.
+scripts/pcp-local-session.sh FULL_64_HEX_RUNTIME_ID --job-id EXACT_32_HEX_JOB_ID
+scripts/pcp-local-session.sh FULL_64_HEX_RUNTIME_ID readiness \
+  --job-id EXACT_32_HEX_JOB_ID --phase finalization --review-id EXACT_REVIEW_ID --json
+# Only after the separately authorized PM finalization checkpoint:
+scripts/pcp-local-session.sh FULL_64_HEX_RUNTIME_ID finalize \
+  --job-id EXACT_32_HEX_JOB_ID --review-id EXACT_REVIEW_ID --json
+```
+
+Container equivalent: `python -m app.pcp_local_task_queue session`. HTTP is fixed to Runtime's
+loopback port8787 and uses its existing `RUNTIME_API_TOKEN` custody. The client has
+no URL/shell/SQL argument, retry loop, account login, baseline store or permission
+writer. Exit0 means observation/existing completion, exit2 means blocked/unobserved/
+reconcile-before-retry. Timeout, connection reset and HTTP protocol errors (including
+truncated bodies/invalid status lines) after POST always lead to one bounded status
+GET. If that read also fails, retain the sanitized uncertain result; no second POST.
+Inspect read-only durable state first; never
+repeat admission/model/delivery to repair an uncertain response. The older
+`app.pcp_local_task_queue` recovery client is retained for its separately authorized
+exact permit flow; #835 does not revive it for completed831.
+
+**Sequential-task adoption gate:** the candidate's ordinary A→B admission is
+FIXTURE PASS; the installed workers are unchanged and cannot use it yet. The
+PCP-only adapter pins CLI0.160.0, selects its named read-restricted profile and
+keeps network disabled. It grants current-job writes and immutable toolchain reads;
+provider authentication remains with the existing CLI transport, hidden from tool
+commands. No new socket, service, credential copy or CLI/image upgrade is required.
+
+Before future adoption, verify the actual `CODEX_HOME/config.toml` and system
+`/etc/codex/config.toml` are absent, and project/ancestor `.codex` directories have
+no configuration or symlinks. Empty sandbox-created protected directories are
+allowed. The current CLI merges empty permission tables with inherited roots;
+these guards and `--ignore-user-config --ignore-rules --strict-config` are mandatory.
+Do not delete existing configuration or change provider custody to make this pass:
+retain any mismatch for the integrated adoption disposition.
+
+The retained-workspace validator requires deterministic identity, original Git
+proof/tree/modes/parent, authenticated PM acceptance and delivered/released ownership.
+It rejects Git alternates/worktrees/config execution escapes, symlinks, unknown
+paths, partial/terminal-only rows and drift. Existing reservation/lease checks
+remain authoritative. Never remove/rename completed831's workspace to admit B.
+[One adoption packet](../project/history/2026-10-29-local-repeatability.md) contains
+pinned fixture reproduction and later physical/image/baseline/task gates. No LIVE
+admission or successful deployment is inferred from fixture/CI evidence.
+
+The remaining campaign-specific packets below are retained history, superseded
+for current next-task instructions by the #835 packet. Their one-time approvals,
+identities and expiry dates never authorize replay.
+
+## Retained PM-finalized #831 checkpoint
 
 [PM6501364012](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6501364012)
 accepted exact task head4161ba059002c7aaf3fd35a88e3b0b80065c62b7 in review5700617139.
@@ -25,17 +110,18 @@ After shutdown its active copy was moved intact to release rollback file
 Dashboard https://localhost:18443/dashboard now shows actual completed state and
 delivered/released ownership; trusted browser timer/provenance/reconnect passed.
 Same46 resources retained,3 running/43 stopped. Exact worker/dashboard stop
-commands below remain valid. PM alone handles hold closure, task-ready/merge/
-postmerge and evidence merge; keep mainR and both833/834 unmerged meanwhile.
+commands below remain valid. PM6502481811 subsequently closed the hold, merged
+833/834 and checked postmerge40912349585. Engineering main is34c0e9a; deployed
+workers remain R. Do not use the old stable-R freeze as current instructions.
 Do not invoke another recovery/delivery/finalization or activate fresh work.
 See [final afterimages/hashes](../project/history/2026-10-29-recovery832-live.md).
 
-## Pre-finalization #831 execution and no-replay checkpoint
+## Historical pre-finalization #831 execution and no-replay checkpoint
 
 [Execution6499496019](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6499496019)
 and [binding disposition6500237978](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6500237978)
 authorized the completed same-identity registration/execution/delivery. [Actual consolidated record](../project/history/2026-10-29-recovery832-live.md)
-is current; the [accepted packet](../project/history/2026-10-29-claim-recovery832.md)
+records historical stages and final afterimages; the [accepted packet](../project/history/2026-10-29-claim-recovery832.md)
 and [earlier claim-only receipt](../project/history/2026-10-29-successor831-live.md)
 retain their original premerge/blocked history.
 
@@ -45,7 +131,7 @@ verifier/Router S=`b97ade581fecad4db2146258e5ca02c3902189e0`. Baseline
 and three allowed paths remain unchanged. Runtime/Executor were built once at R;
 observer at 51349 was not rebuilt/swapped. Scoped retained credentials were validated.
 
-Same job `a8851f89dd3e4e582c697ec1fe6d8cdb` is **blocked / verified /
+At the pre-finalization checkpoint, job `a8851f89dd3e4e582c697ec1fe6d8cdb` was **blocked / verified /
 awaiting_independent_pm_review**, with receipt **running/gen2**, lease **active/gen1**.
 One Luna/low invocation, two configured verifier phases 13+13 PASS, one delivery
 attempt. Real [Draft PR #833](https://github.com/sonvhse06072/personal-coding-platform/pull/833),
@@ -91,9 +177,9 @@ The supported worker client remains `python -m app.pcp_local_task_queue` (defaul
 plan); dedicated endpoints are documented in the accepted packet. Final plan was
 `verified_delivery_only`, but delivery already has ci_success: do not call deliver
 redundantly. No run-once/execute/reset/new issue/SQL lease release is appropriate.
-Independent PM must first review #833 and its actual proof/CI, then separately govern
-any supported `/v1/pcp-local/pm-review` finalization/merge and scoped worker/permit
-restoration. Recheck current source, original expiry and consumed ownership. No
+Independent PM review, supported finalization and both merges are complete. Do
+not repeat this historical sequence. Recheck current source and consumed ownership
+before any separately approved future work. No
 automatic chain of successor permits, no backup restore over consumed live state.
 
 The exact R Runtime/Executor and reused S Router below are already stopped. If a

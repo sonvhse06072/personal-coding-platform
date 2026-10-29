@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from pathlib import Path
 from copy import deepcopy
 from typing import Any
 
@@ -207,12 +208,11 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             3,
         )
 
-    async def finalize_pcp_local_review(self, payload):
+    async def finalize_pcp_local_review(self, payload, *, dry_run=False):
         """Record authenticated independent PM outcome; no merge/model/replay."""
         import json
         from .pcp_local_worker_loop import TrustedReaders, digest
-        from .pcp_local_task_queue import PROJECT_ID, REPOSITORY, require, LocalSourceTask
-        from .pcp_local_worker_loop import stable_job_id
+        from .pcp_local_task_queue import PROJECT_ID, REPOSITORY, require
         from .pm_bridge import PMBridgeGitHubClient
         from .pm_merge import evaluate_standalone_pm_merge
         readers = TrustedReaders(self, PMBridgeGitHubClient())
@@ -238,6 +238,16 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                     'pcp_local_review_conflicting_retry')
             return dict(job_id=job_id, status='completed', merged=False,
                         pm_merge_eligibility=result['pm_merge_eligibility'])
+        from .pcp_local_readiness import operation_snapshot, finalization_ownership
+        original, receipt_before, lease_before = operation_snapshot(self.storage, job_id)
+        require(original == row, 'pcp_local_review_race')
+        finalization_ownership(row, receipt_before, lease_before)
+        workspace = Path(row['workspace'])
+        require(workspace == self.workspace_root / job_id and not workspace.is_symlink()
+                and workspace.resolve() == workspace, 'pcp_local_workspace_identity_invalid')
+        execution = row['checkpoint']['pcp_local_execution']
+        require(execution.get('state') == 'verified' and execution.get('commit') == payload.expected_head,
+                'pcp_local_review_unverified_job')
         proof = await readers.executor('/v1/pcp-local/pm-review', dict(job_id=job_id,
             source_commit=payload.source_commit, expected_head=payload.expected_head,
             activation_digest=digest(a), pr_number=payload.pr_number, review_id=payload.review_id))
@@ -256,13 +266,25 @@ class RuntimeEngine(ExecutionRuntimeEngine):
             pr=proof['pr'], pr_number=payload.pr_number, current_ci=proof['ci'])
         require(not eligibility.blockers, 'pcp_local_pm_merge_gates_not_satisfied')
         result['pm_merge_eligibility'] = json.loads(json.dumps(eligibility.model_dump()))
-        readers.authority()  # Recheck revocation immediately before the transaction.
+        from .pcp_local_recovery import reconcile_commit
+        from types import SimpleNamespace
+        require(reconcile_commit(row, SimpleNamespace(base_sha=payload.source_commit))
+                == payload.expected_head, 'pcp_local_review_commit_changed')
+        readers.authority()  # Recheck expiry/revocation after Git, before the transaction.
+        if dry_run:
+            return dict(job_id=job_id, status='ready_for_pm_finalization', merged=False,
+                        pm_merge_eligibility=result['pm_merge_eligibility'])
         with self.storage.connect() as conn:
             from .pcp_local_recovery import project_lock
             project_lock(conn)
             current = conn.execute('SELECT * FROM cp_jobs WHERE id=%s FOR UPDATE', (job_id,)).fetchone()
-            require(current is not None and current['checkpoint'] == row['checkpoint']
-                    and current['result'] == row['result'], 'pcp_local_review_race')
+            require(current == row, 'pcp_local_review_race')
+            receipt_current = conn.execute('SELECT * FROM cp_pcp_local_source_receipts WHERE job_id=%s AND project_id=%s FOR UPDATE',
+                                           (job_id, PROJECT_ID)).fetchone()
+            lease_current = conn.execute('SELECT * FROM cp_project_leases WHERE owner_job_id=%s AND project_id=%s FOR UPDATE',
+                                         (job_id, PROJECT_ID)).fetchone()
+            require(receipt_current == receipt_before, 'pcp_local_review_receipt_changed')
+            require(lease_current == lease_before, 'pcp_local_review_lease_changed')
             receipt = conn.execute("UPDATE cp_pcp_local_source_receipts SET state='delivered', "
                 "generation=generation+1, updated_at=NOW() WHERE repository=%s AND project_id=%s "
                 "AND issue_number=%s AND job_id=%s AND state='running' AND generation=2 "
@@ -286,9 +308,12 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         from .pcp_local_task_queue import require, PROJECT_ID, REPOSITORY
         require(type(readers) is TrustedReaders and readers.engine is self
                 and stable_job_id(task) == job_id, "pcp_local_delivery_admission_required")
-        await readers.refresh(task)
+        await readers.refresh_delivery(task)
         row = self.storage.get(job_id)
         result = deepcopy(row.get("result") or {})
+        require((result.get('delivery') or {}).get('state') != 'ci_success'
+                and result.get('delivery_finalized') is not True,
+                'pcp_local_delivery_already_complete')
         checkpoint = deepcopy(row["checkpoint"])
         proof = checkpoint.get("pcp_local_execution") or {}
         verification = result.get("verification") or {}

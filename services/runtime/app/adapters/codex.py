@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 from pathlib import Path
 
@@ -12,6 +13,39 @@ from .base import (
 )
 from ..developer_stream import agent_lifecycle_event, agent_public_event, emit_developer_event
 from ..shell import CommandResult, CommandTimeoutError, run_command
+
+
+PCP_ISOLATION_CLI_VERSION = "0.160.0"
+
+
+def require_isolated_configuration(workspace: Path) -> None:
+    # Empty tables merge with inherited profile entries in this pinned CLI.
+    # Reject configuration sources before launching; never rely on {} to clear
+    # a broader inherited root. Auth files are retained and never read here.
+    codex_home = Path(os.environ.get('CODEX_HOME', str(Path.home() / '.codex')))
+    configs = [codex_home / 'config.toml', Path('/etc/codex/config.toml')]
+    directories = set(workspace.rglob('.codex')) | {p / '.codex' for p in workspace.parents}
+    if (any(p.exists() or p.is_symlink() for p in configs)
+            or any(p.is_symlink() or (p.exists() and (not p.is_dir() or any(p.iterdir())))
+                   for p in directories)):
+        raise ValueError('pcp_local_unreviewed_codex_configuration')
+
+
+def isolated_permissions(workspace: Path) -> str:
+    """Pinned CLI permission profile; no writable/readable sibling or provider home.
+
+    The CLI itself retains its existing provider transport/auth custody. Only its
+    developer tools receive this filesystem view. The immutable Runtime image
+    supplies /usr and /opt/venv; no new mount, socket or network permission.
+    Use one TOML table override: dotted CLI keys do not parse quoted path keys.
+    """
+    if not workspace.is_absolute() or workspace.is_symlink() or workspace.resolve() != workspace:
+        raise ValueError("PCP isolation requires the exact workspace path")
+    return ('permissions={pcp_local={extends=":workspace", workspace_roots={}, '
+            'filesystem={":root"="deny", ":minimal"="read", ":tmpdir"="deny", '
+            '":slash_tmp"="deny", "/usr"="read", "/bin"="read", "/lib"="read", '
+            '"/lib64"="read", "/opt/venv"="read", '
+            + json.dumps(str(workspace)) + '="write"}, network={enabled=false}}}')
 
 
 class CodexAdapter(AgentAdapter):
@@ -38,6 +72,7 @@ class CodexAdapter(AgentAdapter):
         self, *, workspace: Path, prompt: str, mode: str, timeout: int,
         environment: dict[str, str] | None = None,
         developer_broker: dict[str, str] | None = None,
+        isolate_workspace: bool = False,
     ) -> AgentRun:
         sandbox = "read-only" if mode in {"plan", "evaluate"} else "workspace-write"
         if developer_broker is not None and mode not in {"execute", "repair"}:
@@ -62,6 +97,16 @@ class CodexAdapter(AgentAdapter):
             "--config",
             "memories.generate_memories=false",
         ]
+        if isolate_workspace:
+            if mode not in {"execute", "repair"} or environment is not None or developer_broker is not None:
+                raise ValueError("PCP isolation cannot accept extra tools/environment")
+            require_isolated_configuration(workspace)
+            # PCP-local only. Inherited user/rule configuration cannot widen this
+            # invocation. Auth still uses the original CODEX_HOME, outside tools.
+            argv[3:5] = []  # Named permissions replace legacy --sandbox mode.
+            argv += ["--strict-config", "--ignore-user-config", "--ignore-rules",
+                     "--config", 'default_permissions="pcp_local"',
+                     "--config", isolated_permissions(workspace)]
         if sandbox == "workspace-write":
             argv += ["--config", "sandbox_workspace_write.network_access=false"]
         argv += ["--cd", str(workspace)]

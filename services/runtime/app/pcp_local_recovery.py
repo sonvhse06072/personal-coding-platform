@@ -113,7 +113,7 @@ async def recover_verified_job(engine, readers, task, row):
             and row['branch'] == 'ai/' + job_id[:12], 'pcp_local_recovery_evidence_invalid')
     readers.route = row['route']
     readers.lease_generation = proof['lease_generation']
-    await readers.refresh(task)
+    await readers.refresh_delivery(task)
     if proof['state'] == 'verified_uncommitted':
         require(verified_tree(row['workspace'], task, proof['diff']) == proof['verified_tree'],
                 'pcp_local_recovery_tree_changed')

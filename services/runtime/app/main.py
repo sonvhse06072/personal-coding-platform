@@ -1306,10 +1306,10 @@ async def pcp_local_retry_delivery():
     return {"job_id": row["id"], "status": row["status"], "can_merge": False}
 
 @app.get('/v1/pcp-local/readiness', dependencies=[Depends(auth)])
-async def pcp_local_readiness():
+async def pcp_local_readiness(phase: str = "admission", job_id: str | None = None, review_id: int | None = None):
     if not getattr(app.state, 'pcp_local_worker_ready', False):
         raise HTTPException(403, 'PCP-local worker readiness only')
     from .pcp_local_worker_loop import TrustedReaders
     from .pm_bridge import PMBridgeGitHubClient
     from .pcp_local_readiness import collect_readiness
-    return await collect_readiness(engine)
+    return await collect_readiness(engine, phase=phase, job_id=job_id, review_id=review_id)

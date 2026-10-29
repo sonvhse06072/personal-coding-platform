@@ -54,8 +54,10 @@ def initialize_schema(storage):
         raise TaskStop('pcp_local_schema_permissions_incomplete')
 
 
-async def collect_readiness(engine, readers=None):
+async def collect_readiness(engine, readers=None, *, phase="admission", job_id=None, review_id=None):
     """Collect independent failures together; no receipt registration/claim."""
+    if phase != "admission":
+        return await operation_readiness(engine, phase=phase, job_id=job_id, review_id=review_id, readers=readers)
     from .pcp_local_worker_loop import operational_flag
     from .shell import run_command
     blockers = []
@@ -128,3 +130,156 @@ async def collect_readiness(engine, readers=None):
         check('trusted_sources', trusted, 'Check activation, source, Router, Executor, publisher and provider authentication/connectivity'),
     )
     return dict(ready=not blockers, blockers=blockers, model_invocations=0, job_registrations=0)
+
+
+def operation_snapshot(storage, job_id):
+    """One read-only snapshot; only this project's requested job, no raw secrets."""
+    import re
+    from .pcp_local_task_queue import require, PROJECT_ID
+    require(isinstance(job_id, str) and re.fullmatch('[0-9a-f]{32}', job_id), 'pcp_local_job_id_required')
+    with storage.connect() as conn:
+        conn.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+        row = conn.execute('SELECT * FROM cp_jobs WHERE id=%s AND project_id=%s', (job_id, PROJECT_ID)).fetchone()
+        require(row is not None, 'pcp_local_job_missing')
+        receipt = conn.execute('SELECT * FROM cp_pcp_local_source_receipts WHERE job_id=%s AND project_id=%s', (job_id, PROJECT_ID)).fetchone()
+        lease = conn.execute('SELECT * FROM cp_project_leases WHERE owner_job_id=%s AND project_id=%s', (job_id, PROJECT_ID)).fetchone()
+    return row, receipt, lease
+
+
+def review_payload(row, review_id):
+    from .pcp_local_task_queue import require
+    from .fullpath_pm_review import FullpathPMReviewRequest
+    require(type(review_id) is int and review_id > 0, 'pcp_local_review_id_required')
+    result = row.get('result') or {}
+    return FullpathPMReviewRequest(source_commit=row['source_commit'], expected_head=result.get('commit'),
+        branch=row['branch'], baseline_revision=row['checkpoint']['project_baseline']['revision'],
+        pr_number=result.get('delivery', {}).get('pull_request', {}).get('number'), review_id=review_id).model_dump()
+
+
+def finalization_ownership(row, receipt, lease):
+    """Check retained receipt identity and the operation's exact lease generation."""
+    from .pcp_local_task_queue import require
+    cp = row['checkpoint']
+    expected = cp['pcp_local_source']['receipt']
+    require(receipt is not None and receipt.get('job_id') == row['id']
+        and all(receipt.get(k) == v for k, v in expected.items() if k not in ('state', 'generation')),
+        'pcp_local_receipt_identity_changed')
+    done = row['status'] == 'completed' and (row.get('result') or {}).get('delivery_finalized') is True
+    require((receipt['state'], receipt['generation']) == (('delivered', 3) if done else ('running', 2)),
+            'pcp_local_receipt_state_changed')
+    # A completed job remains completed after a later job legitimately reuses the lease.
+    if not done or lease is not None:
+        require(lease is not None and lease['owner_job_id'] == row['id']
+            and lease['generation'] == cp['pcp_local_execution']['lease_generation']
+            and lease['state'] == ('released' if done else 'active'), 'pcp_local_lease_changed')
+
+
+def delivery_operation(row):
+    """Durable disposition only, never remote publication/CI attestation."""
+    result = row.get('result') or {}
+    delivery = result.get('delivery') or {}
+    if row['status'] == 'completed' and result.get('delivery_finalized') is True:
+        state, actor, action = 'completed', 'none', 'No delivery is needed; retain completed evidence'
+    elif delivery.get('state') == 'ci_success':
+        state, actor, action = 'awaiting_pm_review', 'PM', 'Review the exact delivered head/CI, then use finalization readiness; do not publish again'
+    elif delivery.get('state') == 'ci_waiting':
+        state, actor, action = 'ci_pending', 'operator', 'Observe exact-head remote CI and reconcile before any delivery retry'
+    elif delivery or (row.get('progress') or {}).get('delivery_attempts', 0):
+        state, actor, action = 'reconcile_publication', 'operator', 'Reconcile the remote branch, all-state PR and CI read-only before any retry'
+    else:
+        state, actor, action = 'delivery_needed', 'operator', 'Resolve dependency blockers and use the existing delivery endpoint only under installed authority'
+    return dict(state=state, eligible=state == 'delivery_needed', actor=actor, next_action=action)
+
+
+async def operation_readiness(engine, *, phase, job_id, review_id=None, readers=None):
+    """Phase prerequisites are observations, never an execution authorization."""
+    from types import SimpleNamespace
+    from .pcp_local_task_queue import require
+    from .pcp_local_worker_loop import TrustedReaders, stable_job_id
+    from .pcp_local_recovery import reconcile_commit, verified_tree
+    checks = []
+    view = dict(phase=phase, ready=False, authorized=False, checks=checks, blockers=[],
+                model_invocations=0, job_registrations=0)
+
+    async def check(name, fn, actor='operator', action='Reconcile this dependency before mutation'):
+        try:
+            value = fn()
+            if hasattr(value, '__await__'):
+                value = await value
+            checks.append(dict(component=name, state='pass', actor=actor, next_action='none'))
+            return value
+        except Exception as exc:
+            code = getattr(exc, 'code', None)
+            checks.append(dict(component=name, state='blocked' if code else 'unknown',
+                code=code or 'unobserved', actor=actor, next_action=action))
+
+    def finish():
+        view['blockers'] = [c for c in checks if c['state'] in ('blocked', 'unknown')]
+        view['dependencies_ready'] = not view['blockers']
+        view['ready'] = view['dependencies_ready'] and view.get('operation', {}).get('eligible', True)
+        return view
+
+    if phase not in ('status', 'delivery', 'finalization'):
+        checks.append(dict(component='phase', state='blocked', code='unsupported_phase',
+                           actor='operator', next_action='Choose admission, status, delivery or finalization'))
+        return finish()
+    data = await check('durable_state', lambda: operation_snapshot(engine.storage, job_id))
+    for name in ('provider', 'router', 'fresh_admission'):
+        checks.append(dict(component=name, state='not_applicable', actor='none', next_action='none'))
+    if data is None:
+        return finish()
+    row, receipt, lease = data
+    result = row.get('result') or {}
+    cp = row.get('checkpoint') or {}
+    execution = cp.get('pcp_local_execution') or {}
+    if phase == 'delivery':
+        view['operation'] = delivery_operation(row)
+    view['job'] = dict(id=row['id'], status=row['status'], execution=execution.get('state'),
+        finalized=result.get('delivery_finalized') is True,
+        review_id=result.get('review', {}).get('review_id'),
+        receipt=None if receipt is None else {k:receipt[k] for k in ('state','generation')},
+        lease=None if lease is None else {k:lease[k] for k in ('state','generation')},
+        counters={k:row.get('progress', {}).get(k) for k in ('model_calls','test_runs','delivery_attempts')})
+    if phase == 'status':
+        return finish()
+    payload = await check('identity', lambda: review_payload(row, review_id)) if phase == 'finalization' else None
+    if payload:
+        view['identity'] = payload
+    await check('ownership', lambda: finalization_ownership(row, receipt, lease))
+    if row['status'] == 'completed' and result.get('delivery_finalized') is True:
+        await check('accepted_review', lambda: require(phase != 'finalization' or
+            result.get('review', {}).get('review_id') == review_id, 'pcp_local_review_conflicting_retry'), actor='PM')
+        view['existing_success'] = not any(c['state'] in ('blocked','unknown') for c in checks)
+        return finish()
+    def proof():
+        path = Path(row['workspace'])
+        require(path == engine.workspace_root / job_id and not path.is_symlink()
+            and path.resolve() == path, 'pcp_local_workspace_identity_invalid')
+        require(execution.get('state') in ('verified','verified_uncommitted','commit_uncertain')
+            and 'pcp_local_retirement' not in cp, 'pcp_local_unverified_job')
+        task = SimpleNamespace(base_sha=row['source_commit'])
+        if execution['state'] == 'verified_uncommitted':
+            require(phase == 'delivery' and verified_tree(path, task, execution['diff']) == execution['verified_tree'], 'pcp_local_verified_tree_changed')
+        else:
+            commit = reconcile_commit(row, task)
+            require(commit == execution.get('commit', commit), 'pcp_local_commit_changed')
+    await check('verified_proof', proof)
+    if phase == 'finalization':
+        if payload:
+            await check('authority_review_ci', lambda: engine.finalize_pcp_local_review(SimpleNamespace(**payload), dry_run=True),
+                        actor='PM', action='Check installed authority and exact independent review/CI; never renew implicitly')
+        else:
+            checks.append(dict(component='authority_review_ci', state='unknown', code='identity_unavailable', actor='PM', next_action='Restore exact durable identity evidence'))
+    else:
+        async def delivery():
+            nonlocal readers
+            if readers is None:
+                from .pm_bridge import PMBridgeGitHubClient
+                readers = TrustedReaders(engine, PMBridgeGitHubClient())
+            task, _ = await readers.source()
+            require(stable_job_id(task) == job_id, 'pcp_local_wrong_task')
+            readers.lease_generation = execution['lease_generation']
+            readers.route = row.get('route')
+            await readers.refresh_delivery(task)
+        await check('authority_publisher', delivery)
+    return finish()

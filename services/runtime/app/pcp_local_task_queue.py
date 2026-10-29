@@ -698,8 +698,98 @@ def fence(storage, permit):
         conn.commit()
 
 
+def session_request(path, payload=None):
+    import urllib.request
+    token = os.environ.get('RUNTIME_API_TOKEN')
+    if not token:
+        raise ValueError('authentication_unavailable')
+    req = urllib.request.Request('http://127.0.0.1:8787/v1/pcp-local/' + path,
+        data=None if payload is None else json.dumps(payload).encode(),
+        headers={'Authorization':'Bearer '+token, 'Content-Type':'application/json'})
+    with urllib.request.urlopen(req, timeout=300) as response:
+        value = json.load(response)
+        if not isinstance(value, dict):
+            raise ValueError("invalid_response")
+        return value
+
+
+def session_main(argv=None):
+    import argparse
+    from http.client import HTTPException
+    import urllib.parse
+    parser = argparse.ArgumentParser(description='PCP local status, readiness and PM finalization; default read-only.')
+    parser.add_argument('action', nargs='?', default='status', choices=('status','readiness','finalize'))
+    parser.add_argument('--job-id', required=True)
+    parser.add_argument('--phase', default='admission', choices=('admission','status','delivery','finalization'))
+    parser.add_argument('--review-id', type=int)
+    parser.add_argument('--json', action='store_true')
+    args = parser.parse_args(argv)
+    import re
+    if not re.fullmatch('[0-9a-f]{32}', args.job_id):
+        parser.error('--job-id must be an exact job identity')
+    phase = 'status' if args.action == 'status' else 'finalization' if args.action == 'finalize' else args.phase
+    query = urllib.parse.urlencode({k:v for k,v in dict(phase=phase, job_id=args.job_id, review_id=args.review_id).items() if v is not None})
+    report = dict(action=args.action, job_id=args.job_id, outcome='blocked', mutation_requests=0)
+    try:
+        observed = session_request('readiness?' + query)
+        report['observation'] = observed
+        if args.action != 'finalize':
+            report['outcome'] = 'observed' if observed['ready'] else 'blocked'
+        elif (observed.get('existing_success') and observed.get('ready') is True
+                and observed.get('job', {}).get('id') == args.job_id
+                and observed['job'].get('review_id') == args.review_id):
+            report['outcome'] = 'already_completed'
+        elif observed['ready'] is True and observed.get('job', {}).get('id') == args.job_id:
+            from .fullpath_pm_review import FullpathPMReviewRequest
+            payload = FullpathPMReviewRequest(**observed['identity']).model_dump()
+            if payload['review_id'] != args.review_id:
+                raise ValueError('review_identity_changed')
+            generation = observed['job']['lease']['generation']
+            report['mutation_requests'] = 1
+            try:
+                response = session_request('pm-review', payload)
+                report['result'] = {k: response.get(k) for k in ('job_id', 'status', 'merged')}
+                report['outcome'] = 'response_received'
+            except (OSError, ValueError, HTTPException):
+                report['outcome'] = 'response_uncertain'
+            # Always reconcile after a mutation, including success/lost acknowledgement.
+            after = session_request('readiness?' + urllib.parse.urlencode(dict(phase='status',job_id=args.job_id)))
+            report['after'] = after
+            job = after.get('job', {})
+            if (after.get('ready') is True and job.get('id') == args.job_id
+                    and job.get('status') == 'completed' and job.get('finalized') is True
+                    and job.get('review_id') == args.review_id
+                    and job.get('receipt') == {'state':'delivered','generation':3}
+                    and job.get('lease') == {'state':'released','generation':generation}):
+                report['outcome'] = 'completed'
+            else:
+                report['outcome'] = 'reconcile_before_retry'
+        report['next_action'] = 'none' if report['outcome'] in ('observed','already_completed','completed') else 'Inspect read-only state and blockers; do not replay'
+        if args.action != 'finalize' and observed.get('operation'):
+            report['next_action'] = observed['operation']['next_action']
+    except (OSError, ValueError, HTTPException, KeyError, TypeError):
+        report.update(outcome='reconcile_before_retry' if report['mutation_requests'] else 'unobserved',
+                      next_action='Reconcile read-only; request was not automatically retried')
+    if args.json:
+        print(json.dumps(report, sort_keys=True))
+    else:
+        print(f"PCP {args.action}: {report['outcome']} | job {args.job_id} | writes {report['mutation_requests']}")
+        for check in report.get('observation', {}).get('checks', report.get('observation', {}).get('blockers', [])):
+            print(f"{check['component']}: {check.get('state', check.get('code', 'unknown'))} | {check['actor']} | {check['next_action']}")
+        operation = report.get('observation', {}).get('operation')
+        if operation:
+            print(f"operation: {operation['state']} | {operation['actor']} | eligible {operation['eligible']}")
+        print(report['next_action'])
+    return 0 if report['outcome'] in ('observed','already_completed','completed') else 2
+
+
+
 def main(argv=None):
     """In-container operator client. No token on argv/logs; default is read-only."""
+    import sys
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == 'session':
+        return session_main(argv[1:])
     import argparse
     import urllib.error
     import urllib.request
