@@ -7,7 +7,40 @@ all four suites successfully. One writer on `ai/815-successor-adoption-v4` in
 `/home/sonvh/pcp-successor-adoption-v4`; named physical root
 `/home/sonvh/pcp-local-adoption825-v4`. No protected baseline activation or live job.
 
-## Active observer828 adoption checklist
+## Active observer/worker source integration checklist
+
+[DEC-PCP-815-OBSERVER-WORKER-INTEGRATION-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6492648806).
+Accepted PR829 merge2ff29; postmerge40847169205 executed all four suites.
+One writer: `ai/815-observer-worker-integration`, no agents or physical mutations.
+
+- [x] Complete WorkOrder/ordered docs/current GitHub state; exact accepted base.
+- [x] Read-only exact owned DB/observer/frontend/network/image metadata and
+  trusted HTTPS availability; preserve deployed51349/rollback/V3 resources.
+- [x] Reproduce valid observer rejection through actual observe route (old409).
+- [x] Minimal protected network seam + private-binding helper; exact immutable
+  identities, hard read-only role/mount/env/network/port checks and no HTTP override.
+- [x]100 focused regressions: valid/four-peer paths; absent/malformed binding;
+  forged/replaced/drifted resources; unchanged auth/publisher/verifier gates.
+- [x] Complete non-dispatch [final rollout packet](../project/history/2026-10-29-observer-worker-rollout.md):
+  canonical clone retention, single finalS build window, immutable baseline50
+  classes, exact three-path task, private activation/binding, both service switches,
+  all eight readers/schema/credentials/recovery/readiness and one later admission.
+- [x] Local full suites: structure1742, Executor780, Router132, Runtime2540/134
+  skipped; total5194 passed/134 skipped. No actual PostgreSQL/container coverage
+  is claimed for skipped/in-memory tests.
+- [x] Offline packet validation: captured private Docker metadata replay, new
+  baseline schema preserving all50 protected classes/prior revisions, exact task
+  parser and body/main drift denial; concrete readers reject absent activation.
+- [ ] Independent PM source review/merge/postmerge and combined live execution
+  checkpoint. Physical worker coexistence/new admission remain NOT TESTED here.
+
+No build/deploy/restart/DB/network/activation/credential/source-clone mutation.
+Routine dashboard downtime is not an approved coexistence solution. Existing
+historical evidence below is retained with its original class and date.
+Final-head hosted suite receipts are tracked on [PR830](https://github.com/sonvhse06072/personal-coding-platform/pull/830); local PASS
+does not substitute for executed CI or the independent acceptance checkbox above.
+
+## Historical accepted observer828 adoption checklist
 
 [DEC-PCP-815-OBSERVER828-ADOPT-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6490872107).
 Accepted PR828 source `51349be73b54ca2fb827a4becc30e00ba62acd7d`, reviewed/merged
@@ -43,8 +76,8 @@ One writer in `ai/815-observer828-adoption`; separate pinned application checkou
   with old image; current worker network excludes observer828. Correct private
   canonical-path proposal; retain superseded drafts, do not install/bypass.
 - [x] Update continuity, operations and [one physical receipt](../project/history/2026-10-29-observer828-adoption.md).
-- [ ] Independent PM acceptance of this physical evidence/documentation PR and
-  its applicable exact-head CI via [PR829](https://github.com/sonvhse06072/personal-coding-platform/pull/829); source four-suite acceptance is already recorded.
+- [x] Independent PM acceptance and PR829 merge2ff29; postmerge40847169205
+  executed all four suites,5093 passed/135 skipped.
 - [ ] Separately approved successor operational registration/baseline/activation,
   real issue identity, credential/readiness/ownership checks and clean admission.
 - [ ] VPN ON/parity and true second-machine LAN measurement: NOT TESTED. Current

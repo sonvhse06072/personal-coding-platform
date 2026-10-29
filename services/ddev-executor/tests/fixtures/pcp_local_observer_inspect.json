@@ -1,0 +1,554 @@
+{
+  "evidence_class": "SANITIZED_INSPECT_FIXTURE_NOT_LIVE_WORKER",
+  "root": "/home/sonvh/pcp-local-adoption825-v4",
+  "observer": {
+    "Id": "5d6b3e9b578745877f162f9c34e4413cc855a40a8c4281c32d3c6ed711b05411",
+    "Name": "/pcp-local-adoption825-v4-observer828",
+    "Image": "sha256:d7761e08e8f9318d38d948f1b3ea916825762cec45e47ead5f85c7567b5f586f",
+    "Config": {
+      "Hostname": "5d6b3e9b5787",
+      "Domainname": "",
+      "User": "1000:1000",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "ExposedPorts": {
+        "18443/tcp": {}
+      },
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "DATABASE_URL=postgresql://pcp_dashboard_reader:fixture-only-password@db:5432/pcp_local",
+        "PCP_RUNTIME_STARTUP_MODE=pcp_local_dashboard",
+        "PCP_LOCAL_INSTANCE=pcp-local-adoption825-v4",
+        "PCP_LOCAL_SOURCE_COMMIT=51349be73b54ca2fb827a4becc30e00ba62acd7d",
+        "PYTHONDONTWRITEBYTECODE=1",
+        "HOME=/tmp",
+        "PROJECTS_FILE=/config/projects.pcp-local.yml",
+        "PROJECT_BASELINES_FILE=/config/project-baselines.pcp-local.yml",
+        "MODELS_FILE=/config/models.yml",
+        "ROUTING_POLICY_FILE=/config/routing-policy.yml",
+        "PCP_LOCAL_DASHBOARD_AUTH=loopback_readonly",
+        "PATH=/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "NODE_VERSION=22.23.4",
+        "YARN_VERSION=1.22.22",
+        "PYTHONUNBUFFERED=1"
+      ],
+      "Cmd": [
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "18787",
+        "--no-proxy-headers"
+      ],
+      "Image": "sha256:d7761e08e8f9318d38d948f1b3ea916825762cec45e47ead5f85c7567b5f586f",
+      "Volumes": null,
+      "WorkingDir": "/app",
+      "Entrypoint": [
+        "docker-entrypoint.sh"
+      ],
+      "OnBuild": null,
+      "Labels": {
+        "desktop.docker.io/wsl-distro": "Ubuntu",
+        "org.opencontainers.image.pcp.codex-version": "0.160.0",
+        "org.opencontainers.image.revision": "51349be73b54ca2fb827a4becc30e00ba62acd7d",
+        "org.pcp.local.instance": "pcp-local-adoption825-v4",
+        "org.pcp.workorder": "6490872107"
+      }
+    },
+    "HostConfig": {
+      "Binds": null,
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "4f39b2458e6bbb9cee83bcee01053d4022bc9e49aa4877f3815c1a1161d571d5",
+      "PortBindings": {
+        "18443/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "18443"
+          }
+        ]
+      },
+      "RestartPolicy": {
+        "Name": "no",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": [
+        "ALL"
+      ],
+      "CgroupnsMode": "private",
+      "Dns": [],
+      "DnsOptions": [],
+      "DnsSearch": [],
+      "ExtraHosts": null,
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": true,
+      "SecurityOpt": [
+        "no-new-privileges:true"
+      ],
+      "Tmpfs": {
+        "/tmp": "rw,nosuid,nodev,noexec,size=67108864,mode=1777"
+      },
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 805306368,
+      "NanoCpus": 1000000000,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": [],
+      "BlkioDeviceReadBps": [],
+      "BlkioDeviceWriteBps": [],
+      "BlkioDeviceReadIOps": [],
+      "BlkioDeviceWriteIOps": [],
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": [],
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 805306368,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": 128,
+      "Ulimits": [],
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "Mounts": [
+        {
+          "Type": "bind",
+          "Source": "/home/sonvh/pcp-local-adoption825-v4/releases/observer828-51349be/config/registry",
+          "Target": "/config",
+          "ReadOnly": true,
+          "BindOptions": {
+            "NonRecursive": true
+          }
+        }
+      ],
+      "MaskedPaths": [
+        "/proc/asound",
+        "/proc/acpi",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/sys/firmware",
+        "/sys/devices/virtual/powercap"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Mounts": [
+      {
+        "Type": "bind",
+        "Source": "/home/sonvh/pcp-local-adoption825-v4/releases/observer828-51349be/config/registry",
+        "Destination": "/config",
+        "Mode": "",
+        "RW": false,
+        "Propagation": "rprivate"
+      }
+    ],
+    "NetworkSettings": {
+      "Networks": {
+        "pcp-local-adoption825-v4-private": {
+          "IPAMConfig": null,
+          "Links": null,
+          "Aliases": null,
+          "MacAddress": "46:b6:9d:7d:96:2a",
+          "DriverOpts": null,
+          "GwPriority": 0,
+          "NetworkID": "4f39b2458e6bbb9cee83bcee01053d4022bc9e49aa4877f3815c1a1161d571d5",
+          "EndpointID": "9b3dcbdeee20652ce9f84b6ff1f24ad2cb0bf6ce6ec3cfd8ec7a8b83ae40d5dc",
+          "Gateway": "192.168.64.1",
+          "IPAddress": "192.168.64.3",
+          "IPPrefixLen": 27,
+          "IPv6Gateway": "",
+          "GlobalIPv6Address": "",
+          "GlobalIPv6PrefixLen": 0,
+          "DNSNames": [
+            "pcp-local-adoption825-v4-observer828",
+            "5d6b3e9b5787"
+          ]
+        }
+      },
+      "Ports": {
+        "18443/tcp": [
+          {
+            "HostIp": "127.0.0.1",
+            "HostPort": "18443"
+          }
+        ]
+      }
+    },
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "Dead": false
+    }
+  },
+  "frontend": {
+    "Id": "d22a5bf0ef1adee16464c27ccab10bf3cf22dc7320fa65ed5a995fbd5ea4daf2",
+    "Name": "/pcp-local-adoption825-v4-https828",
+    "Image": "sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609",
+    "Config": {
+      "Hostname": "5d6b3e9b5787",
+      "Domainname": "",
+      "User": "1000:1000",
+      "AttachStdin": false,
+      "AttachStdout": true,
+      "AttachStderr": true,
+      "ExposedPorts": {
+        "80/tcp": {}
+      },
+      "Tty": false,
+      "OpenStdin": false,
+      "StdinOnce": false,
+      "Env": [
+        "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        "NGINX_VERSION=1.28.0",
+        "NJS_VERSION=0.8.10",
+        "NJS_RELEASE=1~bookworm",
+        "PKG_RELEASE=1~bookworm",
+        "DYNPKG_RELEASE=1~bookworm"
+      ],
+      "Cmd": [
+        "-c",
+        "/private/nginx.conf",
+        "-g",
+        "daemon off;"
+      ],
+      "Image": "sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609",
+      "Volumes": null,
+      "WorkingDir": "",
+      "Entrypoint": [
+        "nginx"
+      ],
+      "OnBuild": null,
+      "Labels": {
+        "desktop.docker.io/wsl-distro": "Ubuntu",
+        "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>",
+        "org.pcp.local.instance": "pcp-local-adoption825-v4",
+        "org.pcp.workorder": "6490872107"
+      },
+      "StopSignal": "SIGQUIT"
+    },
+    "HostConfig": {
+      "Binds": null,
+      "ContainerIDFile": "",
+      "LogConfig": {
+        "Type": "json-file",
+        "Config": {}
+      },
+      "NetworkMode": "container:5d6b3e9b578745877f162f9c34e4413cc855a40a8c4281c32d3c6ed711b05411",
+      "PortBindings": {},
+      "RestartPolicy": {
+        "Name": "no",
+        "MaximumRetryCount": 0
+      },
+      "AutoRemove": false,
+      "VolumeDriver": "",
+      "VolumesFrom": null,
+      "ConsoleSize": [
+        0,
+        0
+      ],
+      "CapAdd": null,
+      "CapDrop": [
+        "ALL"
+      ],
+      "CgroupnsMode": "private",
+      "Dns": [],
+      "DnsOptions": [],
+      "DnsSearch": [],
+      "ExtraHosts": null,
+      "GroupAdd": null,
+      "IpcMode": "private",
+      "Cgroup": "",
+      "Links": null,
+      "OomScoreAdj": 0,
+      "PidMode": "",
+      "Privileged": false,
+      "PublishAllPorts": false,
+      "ReadonlyRootfs": true,
+      "SecurityOpt": [
+        "no-new-privileges:true"
+      ],
+      "Tmpfs": {
+        "/tmp": "rw,nosuid,nodev,noexec,size=67108864,mode=1777"
+      },
+      "UTSMode": "",
+      "UsernsMode": "",
+      "ShmSize": 67108864,
+      "Runtime": "runc",
+      "Isolation": "",
+      "CpuShares": 0,
+      "Memory": 134217728,
+      "NanoCpus": 250000000,
+      "CgroupParent": "",
+      "BlkioWeight": 0,
+      "BlkioWeightDevice": [],
+      "BlkioDeviceReadBps": [],
+      "BlkioDeviceWriteBps": [],
+      "BlkioDeviceReadIOps": [],
+      "BlkioDeviceWriteIOps": [],
+      "CpuPeriod": 0,
+      "CpuQuota": 0,
+      "CpuRealtimePeriod": 0,
+      "CpuRealtimeRuntime": 0,
+      "CpusetCpus": "",
+      "CpusetMems": "",
+      "Devices": [],
+      "DeviceCgroupRules": null,
+      "DeviceRequests": null,
+      "MemoryReservation": 0,
+      "MemorySwap": 134217728,
+      "MemorySwappiness": null,
+      "OomKillDisable": null,
+      "PidsLimit": 128,
+      "Ulimits": [],
+      "CpuCount": 0,
+      "CpuPercent": 0,
+      "IOMaximumIOps": 0,
+      "IOMaximumBandwidth": 0,
+      "Mounts": [
+        {
+          "Type": "bind",
+          "Source": "/home/sonvh/pcp-local-adoption825-v4/releases/observer828-51349be/config/localhost.pem",
+          "Target": "/private/localhost.pem",
+          "ReadOnly": true,
+          "BindOptions": {
+            "NonRecursive": true
+          }
+        },
+        {
+          "Type": "bind",
+          "Source": "/home/sonvh/pcp-local-adoption825-v4/releases/observer828-51349be/config/localhost-key.pem",
+          "Target": "/private/localhost-key.pem",
+          "ReadOnly": true,
+          "BindOptions": {
+            "NonRecursive": true
+          }
+        },
+        {
+          "Type": "bind",
+          "Source": "/home/sonvh/pcp-local-adoption825-v4/releases/observer828-51349be/config/nginx.conf",
+          "Target": "/private/nginx.conf",
+          "ReadOnly": true,
+          "BindOptions": {
+            "NonRecursive": true
+          }
+        }
+      ],
+      "MaskedPaths": [
+        "/proc/asound",
+        "/proc/acpi",
+        "/proc/interrupts",
+        "/proc/kcore",
+        "/proc/keys",
+        "/proc/latency_stats",
+        "/proc/timer_list",
+        "/proc/timer_stats",
+        "/proc/sched_debug",
+        "/proc/scsi",
+        "/sys/firmware",
+        "/sys/devices/virtual/powercap"
+      ],
+      "ReadonlyPaths": [
+        "/proc/bus",
+        "/proc/fs",
+        "/proc/irq",
+        "/proc/sys",
+        "/proc/sysrq-trigger"
+      ]
+    },
+    "Mounts": [
+      {
+        "Type": "bind",
+        "Source": "/home/sonvh/pcp-local-adoption825-v4/releases/observer828-51349be/config/localhost-key.pem",
+        "Destination": "/private/localhost-key.pem",
+        "Mode": "",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/sonvh/pcp-local-adoption825-v4/releases/observer828-51349be/config/nginx.conf",
+        "Destination": "/private/nginx.conf",
+        "Mode": "",
+        "RW": false,
+        "Propagation": "rprivate"
+      },
+      {
+        "Type": "bind",
+        "Source": "/home/sonvh/pcp-local-adoption825-v4/releases/observer828-51349be/config/localhost.pem",
+        "Destination": "/private/localhost.pem",
+        "Mode": "",
+        "RW": false,
+        "Propagation": "rprivate"
+      }
+    ],
+    "NetworkSettings": {
+      "Networks": {},
+      "Ports": {}
+    },
+    "State": {
+      "Status": "running",
+      "Running": true,
+      "Paused": false,
+      "Restarting": false,
+      "Dead": false
+    }
+  },
+  "images": {
+    "sha256:d7761e08e8f9318d38d948f1b3ea916825762cec45e47ead5f85c7567b5f586f": {
+      "Id": "sha256:d7761e08e8f9318d38d948f1b3ea916825762cec45e47ead5f85c7567b5f586f",
+      "Config": {
+        "Hostname": "",
+        "Domainname": "",
+        "User": "",
+        "AttachStdin": false,
+        "AttachStdout": false,
+        "AttachStderr": false,
+        "Tty": false,
+        "OpenStdin": false,
+        "StdinOnce": false,
+        "Env": [
+          "PATH=/opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "NODE_VERSION=22.23.4",
+          "YARN_VERSION=1.22.22",
+          "PYTHONUNBUFFERED=1"
+        ],
+        "Cmd": [
+          "uvicorn",
+          "app.main:app",
+          "--host",
+          "0.0.0.0",
+          "--port",
+          "8787"
+        ],
+        "ArgsEscaped": true,
+        "Image": "",
+        "Volumes": null,
+        "WorkingDir": "/app",
+        "Entrypoint": [
+          "docker-entrypoint.sh"
+        ],
+        "OnBuild": null,
+        "Labels": {
+          "org.opencontainers.image.pcp.codex-version": "0.160.0",
+          "org.opencontainers.image.revision": "51349be73b54ca2fb827a4becc30e00ba62acd7d",
+          "org.pcp.local.instance": "pcp-local-adoption825-v4"
+        }
+      }
+    },
+    "sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609": {
+      "Id": "sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609",
+      "Config": {
+        "Hostname": "",
+        "Domainname": "",
+        "User": "",
+        "AttachStdin": false,
+        "AttachStdout": false,
+        "AttachStderr": false,
+        "ExposedPorts": {
+          "80/tcp": {}
+        },
+        "Tty": false,
+        "OpenStdin": false,
+        "StdinOnce": false,
+        "Env": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "NGINX_VERSION=1.28.0",
+          "NJS_VERSION=0.8.10",
+          "NJS_RELEASE=1~bookworm",
+          "PKG_RELEASE=1~bookworm",
+          "DYNPKG_RELEASE=1~bookworm"
+        ],
+        "Cmd": [
+          "nginx",
+          "-g",
+          "daemon off;"
+        ],
+        "Image": "",
+        "Volumes": null,
+        "WorkingDir": "",
+        "Entrypoint": [
+          "/docker-entrypoint.sh"
+        ],
+        "OnBuild": null,
+        "Labels": {
+          "maintainer": "NGINX Docker Maintainers <docker-maint@nginx.com>"
+        },
+        "StopSignal": "SIGQUIT"
+      }
+    }
+  },
+  "network": {
+    "Id": "4f39b2458e6bbb9cee83bcee01053d4022bc9e49aa4877f3815c1a1161d571d5",
+    "Name": "pcp-local-adoption825-v4-private",
+    "Labels": {
+      "com.docker.compose.config-hash": "00f2bce778fc9ae2f1b2bbaf0f0ff76d835d187fba8bcee86a81bfab47458dc3",
+      "com.docker.compose.network": "private",
+      "com.docker.compose.project": "pcp-local-adoption825-v4",
+      "com.docker.compose.version": "2.36.0",
+      "org.pcp.local.instance": "pcp-local-adoption825-v4"
+    },
+    "Containers": {
+      "5d6b3e9b578745877f162f9c34e4413cc855a40a8c4281c32d3c6ed711b05411": {
+        "Name": "pcp-local-adoption825-v4-observer828",
+        "EndpointID": "9b3dcbdeee20652ce9f84b6ff1f24ad2cb0bf6ce6ec3cfd8ec7a8b83ae40d5dc",
+        "MacAddress": "46:b6:9d:7d:96:2a",
+        "IPv4Address": "192.168.64.3/27",
+        "IPv6Address": ""
+      },
+      "8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8": {
+        "Name": "pcp-local-adoption825-v4-db",
+        "EndpointID": "7158dcfb88ca86ae59fb1699b7cf8dfbe01b954480e75531b2ded2d5c598d7b6",
+        "MacAddress": "ca:0f:d3:ab:6d:02",
+        "IPv4Address": "192.168.64.2/27",
+        "IPv6Address": ""
+      }
+    }
+  }
+}
