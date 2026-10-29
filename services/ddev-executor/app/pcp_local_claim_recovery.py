@@ -75,11 +75,11 @@ def release(a, repo, root, inspect):
     paths = git(repo, 'diff', '--no-renames', '--name-only', source, repair, '--').splitlines()
     require(commits == p['repair_commits'] and sorted(paths) == p['repair_paths'],
             'claim_recovery_repair_range_changed')
-    require(not git(repo, 'log', '--format=%H', source+'..'+repair, '--',
+    require(not git(repo, 'log', '--full-history', '--format=%H', source+'..'+repair, '--',
                     *p['receipt_before']['allowed_paths']), 'claim_recovery_pilot_paths_changed')
     # Router at S is permitted only when its complete build context and registry
     # inputs are unchanged across every repair commit, including reverted edits.
-    require(not git(repo, 'log', '--format=%H', source+'..'+repair, '--',
+    require(not git(repo, 'log', '--full-history', '--format=%H', source+'..'+repair, '--',
         'services/router', 'config/models.yml', 'config/routing-policy.yml'),
         'claim_recovery_router_inputs_changed')
     require(set(p['roles']) == {'runtime', 'executor', 'router', 'verifier'})

@@ -48,7 +48,7 @@ history/2026-10-29-claim-recovery832.md), [durable checklist](../pcp-portable/co
 [operations](../pcp-portable/local-operations.md), and [original LIVE receipt](
 history/2026-10-29-successor831-live.md).
 
-Local full verification: **5239 passed/165 skipped**; separate real PostgreSQL/
+Local full verification: **5242 passed/165 skipped**; separate real PostgreSQL/
 permit suite **91 passed**. Final-head hosted receipt is on PR832; verify all four
 executed suites against its current SHA, never substitute the earlier79f7f4 run.
 

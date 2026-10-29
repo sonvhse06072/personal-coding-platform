@@ -64,6 +64,11 @@ SOURCE/FIXTURE evidence: supported permit/registrar/readiness/HTTP/queue checks,
 real temporary-Git history and actual observe-route integration. The new positive
 observe regression on old79f7f4 fails409 `pcp_local_runtime_isolation_invalid`;
 repaired path accepts the explicit mapping, reports actual mainR and verifies S.
+Two additional real-Git RED/GREEN cases exposed default path-history simplification:
+a merged side branch could change then revert a pilot/Router file while the
+filtered log appeared empty. Release validation now uses `--full-history` and
+rejects both cases even with otherwise matching image/configuration proofs. A
+positive reviewed merge with unchanged pilot/Router inputs also passes.
 The original17 lease/readiness regressions are retained. Real PostgreSQL tests
 exercise full receipt/job drift, races, competing ownership, rollback, lost
 COMMIT/enqueue acknowledgements, and running fence crashes. Provider/GitHub/Docker
@@ -104,7 +109,7 @@ all39 V4 container configs/images/mount records/running states match the preimag
 (Docker mount-list enumeration sorted, no fields dropped). Main still S.
 
 Full local verification: structure1742, Runtime2571/165 skipped, Router132,
-Executor794 = **5239 passed/165 skipped**. Separately **91 passed** with actual
+Executor797 = **5242 passed/165 skipped**. Separately **91 passed** with actual
 PostgreSQL enabled (77 database cases plus14 permit/client cases); these do not
 turn the other skipped integrations into passes. Packet shell/Python blocks were
 syntax checked without executing rollout. All four hosted suites must genuinely

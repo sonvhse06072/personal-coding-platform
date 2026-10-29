@@ -102,3 +102,42 @@ def test_observe_reports_real_main_and_preserves_original_verifier(topology,monk
         assert s.activation['runtime_image_id']==s.activation['verification_image']==original_image
     else:
         assert response.status_code==409 and response.json()['detail']=='claim_recovery_actual_main_changed'
+
+
+@pytest.mark.parametrize('path,denial',[
+    ('tests/test_pcp_light_pilot.py','claim_recovery_pilot_paths_changed'),
+    ('services/router/app.py','claim_recovery_router_inputs_changed')])
+def test_merged_reverted_side_history_cannot_hide_protected_input_edits(release,path,denial):
+    s=release;p=s.a['claim_recovery'];source=s.a['base_sha']
+    s.git('checkout','-b','reverted-side',source)
+    file=s.root/path;file.write_text('intermediate side change\n');s.git('commit','-am','side change')
+    file.write_text('original\n');s.git('commit','-am','side revert')
+    s.git('checkout','main');s.git('merge','--no-ff','reverted-side','-m','merge reverted history')
+    repair=s.git('rev-parse','HEAD');p['repair_source']=repair
+    p['repair_commits']=s.git('rev-list','--reverse','--topo-order',source+'..HEAD').splitlines()
+    # Every current image/config is otherwise valid at the synthetic merge R.
+    for role in ('runtime','executor'):
+        binding=p['roles'][role];binding['source_commit']=repair
+        s.items['image',binding['image_id']]['Config']['Labels']['org.opencontainers.image.revision']=repair
+        name=s.root.name+'-'+('coding-runtime' if role=='runtime' else 'ddev-executor')
+        row=s.items['container',name];row['Config']['Labels']['org.opencontainers.image.revision']=repair
+        binding['configuration_sha256']=r.configuration_digest(row)
+    with pytest.raises(HTTPException) as error:check(s)
+    assert error.value.detail==denial
+
+
+def test_reviewed_merge_range_with_unchanged_pilot_and_router_passes(release):
+    s=release;p=s.a['claim_recovery'];source=s.a['base_sha']
+    s.git('checkout','-b','approved-side',source)
+    (s.root/'repair-note.md').write_text('approved release evidence\n');s.git('add','repair-note.md');s.git('commit','-m','evidence')
+    s.git('checkout','main');s.git('merge','--no-ff','approved-side','-m','accepted repair merge')
+    repair=s.git('rev-parse','HEAD');p['repair_source']=repair
+    p['repair_commits']=s.git('rev-list','--reverse','--topo-order',source+'..HEAD').splitlines()
+    p['repair_paths']=sorted(['services/runtime/app.py','repair-note.md'])
+    for role in ('runtime','executor'):
+        binding=p['roles'][role];binding['source_commit']=repair
+        s.items['image',binding['image_id']]['Config']['Labels']['org.opencontainers.image.revision']=repair
+        name=s.root.name+'-'+('coding-runtime' if role=='runtime' else 'ddev-executor')
+        row=s.items['container',name];row['Config']['Labels']['org.opencontainers.image.revision']=repair
+        binding['configuration_sha256']=r.configuration_digest(row)
+    assert check(s)==repair

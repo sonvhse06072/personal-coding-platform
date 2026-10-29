@@ -34,7 +34,7 @@ R is the future independently accepted merge. [Combined evidence/rollout packet]
 - [x] One integrated executable rollout packet: accepted R/CI, image/input mapping,
   private permit/config custody, readiness/plan/register/reconcile/execute,
   verification/publisher/CI/dashboard, scoped shutdown and preserved S baseline.
-- [x] Full local verification5239/165 skipped; separate real PostgreSQL/permit91
+- [x] Full local verification5242/165 skipped; separate real PostgreSQL/permit91
   passed. Final candidate restored-copy rehearsal passed, after dumps retained,
   isolated container stopped. Live full rows/sequences/configs unchanged.
 - Hosted final-head four-suite gate: exact run/head receipt maintained on PR832;
