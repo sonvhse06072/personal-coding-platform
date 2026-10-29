@@ -954,3 +954,32 @@ merge, postmerge checks and the reviewed image-adoption checkpoint; actual fresh
 browser polling and remote-peer rejection are physical deployment gates. The
 [operations packet](../pcp-portable/local-operations.md#tokenless-observer-next-adoption)
 records the concrete frontend/upstream binding and rollback requirements.
+
+### Local observer and worker coexistence (DEC-PCP-815-OBSERVER-WORKER-INTEGRATION-V1)
+
+The accepted singleton read-only observer remains available while its instance's
+worker runs. The trusted private operational activation may bind one exact
+observer/frontend pair: full container IDs, immutable image IDs, observer source
+revision, network ID, configuration root and Docker configuration SHA256 values.
+This is not an observe-request field, automatic discovery or a name/label-based
+exception. An absent binding retains the existing four worker/DB peer rule;
+malformed/stale bindings, unknown peers and unapproved replacements fail closed.
+
+Executor compares live metadata with that approved binding and enforces the
+observer role: non-root/read-only, bounded resources, no privileges, worker mode,
+control/provider/publisher credentials or socket/source/workspace mounts. Only
+the intended read-role configuration and TLS/frontend mounts are permitted.
+Runtime listens on namespace loopback18787; only host loopback18443 is published.
+The exact frontend shares the observer's namespace, with no extra bridge peer.
+Replacement requires a freshly reviewed binding; drift never refreshes its own
+expected proof. These Docker checks complement actual SELECT-only grants,
+trusted mounted-file custody and existing Host/Origin/TLS restrictions. They do
+not attest file contents or replace those physical gates or trusted host control.
+
+The deployed observer retains its truthful accepted source identity. It need not
+be rebuilt or relabeled as the later worker release. Worker task base, canonical
+source and Runtime verification image still obey their existing exact-source
+checks. No observer admission, recovery, retirement or write capability is added.
+[The finite rollout packet](history/2026-10-29-observer-worker-rollout.md) records
+the stable pilot window and separate postmerge execution checkpoint; source/fixture
+acceptance alone permits no physical adoption or dispatch.

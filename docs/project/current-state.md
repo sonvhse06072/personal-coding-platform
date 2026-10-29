@@ -3,53 +3,45 @@
 Tier-1 mutable continuity, not baseline, merge or admission authority. Reverify
 exact source/PM/physical receipts before acting.
 
-## Accepted observer828 physically adopted
+## Observer/worker integration — source candidate
 
-Updated 2026-10-29 under [DEC-PCP-815-OBSERVER828-ADOPT-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6490872107).
-[PR828](https://github.com/sonvhse06072/personal-coding-platform/pull/828) is merged
-at **51349be73b54ca2fb827a4becc30e00ba62acd7d**, independently reviewed. Reviewed
-and merged tree `eb700feb9e43f1b246d315476947e08d3106be78` match. Exact postmerge
-[CI40836381983](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40836381983)
-executed all four suites: **5093 passed / 135 skipped**. This supersedes the
-premerge observer hold, not baseline/admission authority.
+Updated 2026-10-29 under [DEC-PCP-815-OBSERVER-WORKER-INTEGRATION-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6492648806).
+[PR829](https://github.com/sonvhse06072/personal-coding-platform/pull/829) is accepted
+and merged at **2ff29d821c2896c45e3cc5d317195ce1509ce9c9**. Reviewed/merged tree
+`8785989776a7d106217d7acce9d979205cffca9d`; postmerge
+[CI40847169205](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40847169205)
+executed all four suites:5093 passed/135 skipped. This documentation merge did
+not change the deployed application source51349.
+
+One writer in `/home/sonvh/pcp-observer-worker-integration`, branch
+`ai/815-observer-worker-integration`, from accepted2ff29. The source candidate
+fixes the actual Executor observe rejection of the accepted read-only observer:
+optional private exact-ID/image/network/configuration binding, hard role checks
+and existing four-peer default. No HTTP policy override, auto-adoption or broader
+worker privilege. Canonical source and verifier exact-base rules remain intact.
+**FIXTURE:**99 observe-route regressions, including reproduced old409 rejection;
+Docker/GitHub boundaries mocked using sanitized actual inspect metadata.
+Local full suites5193 passed/134 skipped; offline packet schema/task/binding checks
+pass. Missing activation still rejects before any external call.
+[Single durable checklist](../pcp-portable/consolidation.md) and
+[complete non-dispatch rollout/readiness packet](history/2026-10-29-observer-worker-rollout.md).
+Exact final source head/CI belong to the candidate PR, not older-head evidence.
 
 **https://localhost:18443/dashboard — loopback_readonly, no login/token/cookie.**
-Actual fresh Chromium with normal TLS validation passed empty-state rendering,
-six successful polls and offline/reconnect. Actual V4 DB stays empty; this is no
-claim of active development or provider entitlement. Other local OS processes
-can read, as explicitly approved; remote anonymous access is not authorized.
+Still accepted application **51349be73b54ca2fb827a4becc30e00ba62acd7d**; no rebuild,
+restart, config/image/DB mutation or credential change in this source session.
+Read-only exact owned resource inspection and trusted HTTPS empty snapshot passed.
+New worker coexistence is **PHYSICAL NOT TESTED**, successor admission **LIVE NOT TESTED**.
+The earlier [accepted physical adoption receipt](history/2026-10-29-observer828-adoption.md)
+retains actual Chromium polling/reconnect, SELECT-only role denials, private
+before/after DB checksum and74 isolated container fixture cases; those were not
+rerun or promoted to current worker evidence. Actual V4 database remains empty.
 
-One build each from accepted51349, new full-SHA tags and immutable IDs:
-Runtime `d7761e08e8f9…`, Router `9f0d95058423…`, Executor `70a5d315c671…`.
-Only Runtime observer was deployed; Router/Executor are preparation images.
-Image contents/modes/toolchains, non-root/read-only/noexec and immutable askpass
-passed. Live observer has no worker, activation, schema initialization or
-provider/publisher credentials. Runtime upstream is namespace127.0.0.1:18787;
-only host127.0.0.1:18443 is published. Exact frontend peer192.168.64.1 remeasured.
-
-**PHYSICAL PASS:** another container's upstream connection refused; frontend403
-with valid Host/Origin and spoofed headers; foreign Host/Origin/cross-site and
-controls/sessions denied. Own-host non-loopback probes refused/timed out; a true
-second-machine LAN test is **NOT TESTED**. Actual read role denied writes/DDL/
-sequence use; all11 tables and sequences have identical before/after hash.
-**FIXTURE PASS:**74 isolated container tests cover auth, events/SSE sanitization,
-terminal timers and usage provenance. No synthetic jobs were inserted into V4.
-
-V4 has33 retained containers: only DB/new observer/new frontend running,30 stopped.
-Old token-mode pair/config/token/images retained unchanged for rollback. All22 V3
-and4 retirement-rehearsal containers remain stopped; no retirement replay.
-Current VPN state was queried but not reconfirmed; earlier Owner-reported OFF
-remains historical. VPN ON/parity is NOT TESTED; no VPN/DNS changes.
-
-One documentation writer in `/home/sonvh/pcp-observer828-adoption`, branch
-`ai/815-observer828-adoption`, [PR829](https://github.com/sonvhse06072/personal-coding-platform/pull/829).
-Accepted application checkout is separately pinned
-at `/home/sonvh/pcp-local-adoption825-v4/releases/observer828-51349be/source`.
-[Single checklist](../pcp-portable/consolidation.md),
-[physical receipt and successor packet](history/2026-10-29-observer828-adoption.md),
-[exact stop/rollback operations](../pcp-portable/local-operations.md#v4-shutdown-and-retention).
-This documentation PR does not change application source or activate a baseline;
-its own exact-head CI/PM review remains separate from accepted application CI.
+V4 retention receipt:33 containers, only DB/observer/frontend running,30 stopped;
+all22 V3/four retirement rehearsal containers stopped. Current exact DB/pair IDs
+and [scoped stop/rollback commands](../pcp-portable/local-operations.md#v4-shutdown-and-retention)
+are unchanged. Prior configs/token/images/clones/backups retained. VPN ON/parity
+and true second-machine LAN validation remain NOT TESTED; no global changes.
 
 ## Original #824 — retired incomplete, never delivered
 
@@ -69,34 +61,31 @@ Retirement resolves only this reservation; it does not authorize another job.
 
 ## Immediate next safe actions
 
-1. PM independently reviews this physical receipt and documentation PR with its
-   applicable exact-head CI; Developer never self-merges.
-2. Review NEW immutable DRAFT `pcp-local-successor-828-51349be-20261029`, same-source
-   release/image mapping, exact private registry/config diffs and task packet.
-   All50 protected classes and both prior drafts preserved; active_revision null.
-   Installed registries/autonomy stay draft/off. No mixed-source exception needed.
-3. Separately authorize baseline approval/activation, operational project config,
-   canonical source-path succession and expiring worker/Executor activation.
-   Executor requires `sources/personal-coding-platform`, Runtime image revision
-   equal to task base, and a worker network whose peers exclude observer828.
-   Resolve these exact gates in the next WorkOrder; no bypass/relabel here.
-   Retired824 resolves
-   only its old ownership; it grants no successor reservation or dispatch right.
-4. Create a fresh actual issue for the three-path evidence-summary CLI/test/doc
-   contract. Re-read trusted current main and regenerate body/base/goal bindings
-   if docs merge advances main, then provide a separately accepted matching
-   Runtime verification image/binding. Merely editing task base would fail.
-   Baseline authority stays distinct. Synthetic888 is not live issue approval.
-5. Only under the next admission WorkOrder: scoped provider/publisher readiness,
-   physical worker/verification/publisher validation and one clean admission.
-   No credentials, admission, run-once or PCP-managed inference in this session.
+1. Independently review this bounded source PR and all four genuinely executed
+   exact-head suites. Developer does not merge or physically adopt the candidate.
+2. PM's acceptance/merge/postmerge defines actual **S** and one stable pilot
+   window: hold later PCP main merges through admission/delivery. No intermediate
+   docs-only build cycle. Reconcile real main drift; never waive it or relabel images.
+3. Under one later execution record: retain the clean canonical5ad clone, install
+   canonical exactS source; build/verify finalS Runtime/Router/Executor; preserve
+   the existing observer51349 and approve its exact private binding. Physically
+   verify coexistence. New immutable baseline preserves all50 protected classes
+   and prior revisions; current registries/autonomy/activation remain draft/OFF.
+4. That record combines baseline/config activation, fresh actual three-path
+   CLI/test/doc issue, scoped interactive credentials and complete readiness
+   (all eight readers, both Runtime/Executor intake switches, DB/grants, Git,
+   askpass/verifier, quota/publisher/ownership) before one clean admission.
+   No issue, futureS, baseline approval or quota success is invented here.
+5. Preserve same-job receipt/lease/proof/counters; reconcile durable and remote
+   outcomes before uncertain retries. Historical824 stays retired incomplete.
+   See the packet for concrete templates, identity bindings and finite rollout.
 
 ## Active PCP issues and owner attention
 
 GH-815/822/824 remain open; GitHub/Runtime evidence stays scoped. Dashboard is now
 usable locally without a token. Source acceptance, physical adoption and next
-admission are separate checkpoints. Legacy `A3B2_IMAGE_BUILD=STOP` is independent
-of the three explicitly authorized V4 builds; `CODEX_LIVE=STOP` remains in force.
+admission are separate checkpoints. Legacy `A3B2_IMAGE_BUILD=STOP` remains
+independent; current SOURCE scope authorizes no builds; `CODEX_LIVE=STOP` remains.
 
 ## Standing safety boundary
 
@@ -106,7 +95,8 @@ baseline rewrite, V3 worker restart, old activation reuse or model invocation.
 Private-repo review/CI remains a process gate, not claimed server enforcement.
 
 <!-- PCP:CONTINUITY:START -->
-Decision6490872107: accepted51349 same-source images built; real tokenless HTTPS
-observer adopted. Only DB/observer828/https828 run. Successor baseline/task DRAFT,
-not installed/active/admitted. Next: independent physical handoff/PR review.
+Decision6492648806: accepted829/2ff29; source observer-worker integration candidate
+on ai/815-observer-worker-integration. Exact private binding +99 fixture cases;
+new physical coexistence untested. Dashboard51349 remains up/tokenless. One next
+PM record binds finalS builds/baseline/issue/readiness/admission; no dispatch now.
 <!-- PCP:CONTINUITY:END -->

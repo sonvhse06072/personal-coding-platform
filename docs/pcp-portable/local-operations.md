@@ -302,17 +302,45 @@ their explicit PM checkpoint. The corrected draft uses the Executor-required can
 before installing a fresh clone. The earlier alternate-path draft was rejected
 by the actual identity helper in a fixture, retained and superseded. The accepted
 build checkout stays in the release directory.
-Current registration/ddev/autonomy remain draft/disabled/off. Source application
-and image authority stays51349 even if this documentation PR advances main;
-a real task must separately re-read/pin trusted current main/body/goal. However,
-`_pcp_verification_image` also requires Runtime image revision == task base_sha:
-changing only the task SHA after docs merge fails closed. PM must choose a
-consistent current-main window or separately reviewed matching image/build bindings,
-never relabel old images or weaken the checker. The worker-network allowlist also
-excludes the live observer828 peer; a separately approved coexistence change or
-scheduled observer pause is required before workers can pass observe. No worker
-start/network change is authorized here. A synthetic issue fixture grants no live
-author identity, reservation, readiness or dispatch.
+Current registration/ddev/autonomy remain draft/disabled/off. PR829 was accepted
+and merged2ff29; active observer source remains51349. Under
+[decision6492648806](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6492648806),
+the [one final rollout/readiness packet](../project/history/2026-10-29-observer-worker-rollout.md)
+supersedes the prior recurring docs-merge/build proposal. Finish the bounded
+observer/worker source correction first; its independently accepted mergeS defines
+one stable main window through admission/delivery. Build final worker images once
+atS, preserve observer51349, retain/replace the canonical clone only at that later
+checkpoint. Exact Runtime image/task-base equality is unchanged. A real main
+mismatch requires reconciliation, not task-SHA-only editing or image relabeling.
+
+### Observer/worker binding at the next rollout
+
+Optional `observer_binding` belongs only to private activation. Full observer/
+frontend container IDs, immutable image IDs, observer source, network ID and
+configuration fingerprints bind the accepted pair. No binding keeps the original
+four-peer rule; unknown peers, malformed bindings or drift reject. Never fill this
+field from HTTP request data or refresh a mismatched expected fingerprint.
+Read-only Docker metadata validates the exact role/config/mount/port topology;
+frontend shares the observer namespace and contributes no bridge endpoint.
+The existing observer keeps serving `https://localhost:18443/dashboard` without
+login. Routine observer pause is not the solution. Physical coexistence of the
+new worker code is a later gate, not established by inspect fixtures.
+
+Review private configuration/file hashes and SELECT-only grants separately:
+Docker configuration fingerprints include private env values but do not attest
+contents of host-mounted files. Keep those inputs under trusted operator custody;
+never print complete env or secrets in diagnostics/PRs. Replacements require a
+new reviewed binding. The packet includes exact current physical IDs, digest
+procedure, scope limits and all final source/baseline/activation/task templates.
+
+Both Runtime source/worker/operational switches and Executor's separate source
+switch must be approved. `GET /v1/pcp-local/readiness` precedes the one later
+`POST /v1/pcp-local/run-once`; run-once itself repeats readiness and records the
+receipt before admission. The PM-bridge source-check route is intentionally
+unavailable in dedicated worker mode; do not use it as an extra registration step.
+All eight concrete trusted readers and same-job recovery remain mandatory.
+No current SOURCE-session worker start, source succession, activation, credentials
+or dispatch is authorized by this procedure alone.
 
 ### Reviewed retirement procedure
 
@@ -519,8 +547,9 @@ duplicate cases, repeatable ordering, nonzero exit for invalid input and no prom
 of fixture PASS to LIVE PASS. The document describes CLI format and examples.
 This is a proposal, not code implemented or a job admitted in this session.
 
-PM creates a fresh issue after final successor activation/readiness and reservation
-disposition, pins exact accepted source/baseline, canonical body/goal hashes and
+PM creates a fresh issue within the later approved stable-S window after the
+baseline/reservation decisions and before task-bound activation/readiness, pins
+exact accepted source/baseline, fetched body/goal hashes and
 these three paths. `verify_issue` still requires2–4 paths including a test file;
 the prior one-Markdown proposal is invalid and withdrawn. Use one writer and the
 existing approved low-cost resource envelope. Require normal verification, exact

@@ -3648,11 +3648,10 @@ def pcp_local_observe(payload: PcpLocalObservationRequest):
     if set(item.get('NetworkSettings', {}).get('Networks', {})) != {network_name}:
         raise HTTPException(409, 'pcp_local_runtime_network_invalid')
     network = _pcp_docker('network', network_name)
-    permitted = {f'{root.name}-{service}' for service in ('coding-runtime','router','ddev-executor','db')}
     if network_name != root.name + '-private' or network.get('Labels', {}).get('org.pcp.local.instance') != root.name:
         raise HTTPException(409, 'pcp_local_runtime_network_invalid')
-    if any(peer.get('Name') not in permitted for peer in network.get('Containers', {}).values()):
-        raise HTTPException(409, 'pcp_local_foreign_network_peer')
+    from .pcp_local_observer import validate_network_peers
+    validate_network_peers(a, root, network, _pcp_docker)
     _pcp_verification_image(a, root)
     from .github_delivery import ensure_askpass_script
     helper = subprocess.run([ensure_askpass_script(), 'Username for HTTPS'],
