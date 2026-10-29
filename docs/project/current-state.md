@@ -3,56 +3,54 @@
 Tier-1 mutable continuity, not baseline, merge or admission authority. Reverify
 exact source/PM/physical receipts and current GitHub/Runtime state before acting.
 
-## Same #831 delivered as Draft PR #833; independent PM outcome pending
+## Same #831 completed and PM accepted; merge pending
 
-Updated 2026-10-29 under [execution6499496019](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6499496019)
-and narrow [binding disposition6500237978](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6500237978).
-PR #832 is merged; accepted Runtime/Executor repair **R=1f9b5d50a18a7b93e6a22c6191d59985d4d3892a**.
-Actual main stays R. Original task/baseline/verifier/Router **S=b97ade581fecad4db2146258e5ca02c3902189e0**
-and baseline `pcp-local-successor-830-b97ade5-20261029` are unchanged.
-One writer, execution evidence on `ai/815-recovery832-live` in
-`/home/sonvh/pcp-recovery832-live`; no Developer merge.
+[PM finalization decision6501364012](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6501364012)
+accepted exact task [Draft PR #833](https://github.com/sonvhse06072/personal-coding-platform/pull/833)
+head `4161ba059002c7aaf3fd35a88e3b0b80065c62b7` through independent structured
+review **5700617139**. Same job `a8851f89dd3e4e582c697ec1fe6d8cdb` is now
+**completed / pm_review_accepted**, `delivery_finalized=true`; receipt
+**delivered/gen3**, lease **released/gen1** for the same job. One authenticated
+supported POST performed the atomic transition. Original active error was cleared
+normally; its full preimage/history remains in private backups.
 
-**Real Draft [PR #833](https://github.com/sonvhse06072/personal-coding-platform/pull/833)**,
-branch `ai/a8851f89dd3e`, head `4161ba059002c7aaf3fd35a88e3b0b80065c62b7`.
-Same deterministic job `a8851f89dd3e4e582c697ec1fe6d8cdb` is **blocked / verified /
-awaiting_independent_pm_review**. Receipt running/gen2, same-job lease active/gen1;
-`delivery_finalized=false`. Independent PM acceptance/finalization/merge remains
-outstanding. Do not interpret blocked here as failed coding or permission to replay.
+Main remains repair **R=1f9b5d50a18a7b93e6a22c6191d59985d4d3892a**;
+original task/baseline/verifier/Router **S=b97ade581fecad4db2146258e5ca02c3902189e0**,
+baseline `pcp-local-successor-830-b97ade5-20261029`, unchanged. One writer extends
+SAME [evidence PR #834](https://github.com/sonvhse06072/personal-coding-platform/pull/834),
+`ai/815-recovery832-live`, `/home/sonvh/pcp-recovery832-live`. Both PRs unmerged.
+PM alone closes the stable-R hold and governs task-ready/merge/postmerge/evidence merge.
 
-One supported registration preserved full claimed/gen1 receipt and created one
-queued job/audit without model/lease. One execute consumed the fence and ran one
-Luna/low invocation. Actual verifier S phases 13+13 passed (26 total, 2 runs); one
-commit, three original paths, exact Git tree/modes/sole parent S; one publisher
-attempt, no delivery retry. [Exact-head CI40898352672](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40898352672)
-executed all four suites: **5254 passed/166 skipped**. Repair postmergeCI40891720152
-is separately verified 5241/166. Neither substitutes for independent PM review.
+Proof/checkpoint, registration audit, source/tree/modes/sole parent S and full
+progress counters are unchanged: **one Luna/low call, two mandatory verifier runs
+(13+13 PASS), one delivery attempt**. No additional model, job verification,
+admission, execution, delivery, build, permit renewal or manual SQL mutation.
+[Task CI40898352672](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/40898352672)
+actually executed four suites: **5254 passed/166 skipped**. Current evidence-head
+CI is recorded on PR #834; the prior df55886 run remains historical.
 
-The first private permit failed readiness after Docker first start normalized
-only `HostConfig.OomKillDisable` false→null. Original bytes/snapshots were retained;
-no job existed then. PM6500237978 authorized one exact successor after complete
-same-ID/preimage/two-snapshot checks. Only decision/record and Runtime/Executor
-fingerprints changed; original validity 2026-10-29T14:49:39.238744Z through
-2026-10-30T14:49:39.238744Z and all other authority remained exact. Aggregate
-readiness, eight trusted readers and real Executor preflight then passed.
-No source patch, rebuild, counter reset or unreviewed proof refresh.
+Only unchanged, unexpired V2 permit bytes were restored for finalization, raw
+SHA256 `083637a98ba1a63925181830e0b003d439188d86ccbb42393a627e154195c330`;
+original expiry **2026-10-30T14:49:39.238744Z**. Same Runtime/Executor IDs/images/full
+fingerprints checked before/after start. Router stayed stopped. Plan and actual
+remote review/CI checks passed; no fresh-admission absent-workspace preflight.
+The earlier false→null exception and original rejected permit remain audited.
 
 **https://localhost:18443/dashboard — loopback_readonly, no login/token/cookie.**
-Unchanged observer at 51349 now shows the actual #831 job, PR/CI, fixed verified duration
-67.801641624s and trustworthy usage: one invocation, gross 271430/cached 236544,
-cache-miss 34886/output 3482. Reported cost/tool calls Unknown; estimated cost 0.
-Fresh trusted Chromium: 352 HTTP 200 snapshot responses, no form/cookie/page error,
-offline/reload/reconnect after worker shutdown passed. Terminal completed/failed/
-cancelled states, VPN ON/parity and second-machine LAN remain NOT TESTED live.
+Actual completed terminal state, delivered/released ownership, fixed 67.801641624s
+duration, independently changing observation age, usage/CI and trusted Chromium
+reload/reconnect were verified. Reported cost/tool calls Unknown; estimated cost 0.
+Failed/cancelled terminal states, VPN parity and second-machine LAN NOT TESTED.
 
-R Runtime/Executor and reused Router are stopped; both permits and original
-activation disabled intact. **46 V4 containers retained, 3 running/43 stopped**;
-only unchanged DB/observer/frontend remain up. Original S workers/images/configs,
-credentials, workspaces, verification containers, backups and V3 assets preserved.
-Private evidence `/home/sonvh/.local/state/pcp-recovery832-live-v1` includes full
-before/registered/fenced/final snapshots, dumps, proof, original/successor permit
-custody, Docker/CI/browser receipts and job bundle. [Consolidated execution record](
-history/2026-10-29-recovery832-live.md), [single checklist](../pcp-portable/consolidation.md),
+Runtime/Executor stopped again; Router stayed stopped. V2 disabled intact at
+release `rollback/disabled-recovery-permit-v2-after-finalization.json`; original
+V2 copy, rejected permit and original disabled activation retained. **46 containers
+retained, 3 running/43 stopped**: unchanged DB/observer/frontend only. V3, rollback
+assets, scoped credentials, workspaces and verifier containers preserved.
+Private evidence `/home/sonvh/.local/state/pcp-recovery832-live-v1` includes
+pre/post-finalization consistent dumps/full rows/sequences, HTTP/result, browser
+receipts and preserved proof/counters. [Execution and finalization report](
+history/2026-10-29-recovery832-live.md), [checklist](../pcp-portable/consolidation.md),
 [operations/stop commands](../pcp-portable/local-operations.md).
 
 ## Original #824 — retired incomplete, never delivered
@@ -73,24 +71,19 @@ Retirement resolves only this reservation; it does not authorize another job.
 
 ## Immediate next safe actions
 
-1. Independent PM reviews exact Draft PR #833 head/contract, actual verification/CI,
-   preserved proof/counters and execution evidence PR. Keep main at R until the
-   stable-R window is explicitly closed. Developer does not self-accept or merge.
-2. PM determines legitimate finalization before advancing main, and any scoped worker/permit
-   restoration needed for its supported review path. Recheck source/expiry/live
-   ownership first. No execute replay, redundant publication, SQL release/reset,
-   automatic permit chain or backup restoration over consumed ownership.
-3. Future fresh work needs a separately approved immutable successor baseline,
-   final source/image bindings and resolved current ownership. Existing S baseline
-   and historical #824 are never rewritten; no replacement issue for831 is needed.
+1. ChatGPT PM reviews final afterimages and updated PR #834, closes the stable-R
+   hold, marks accepted #833 ready and governs its exact-head merge/postmerge,
+   then evidence PR merge. Developer does not merge either PR.
+2. Keep workers/permits disabled and dashboard available. Completed ownership is
+   not permission for a new task, baseline activation or another recovery call.
+3. Next planning priority is reducing repeated operator interventions and proving
+   repeatable task-to-accepted-PR operation under a separately approved frame.
 
 ## Active PCP issues and owner attention
 
-GH-815/822/824/831 remain open. The current action belongs to independent PM:
-review Draft PR #833 and the execution evidence, then govern finalization/eligible merge.
-No new interactive login or routine Owner continuation is pending. Unrelated
+GH-815/822/824/831 remain scoped; no interactive Owner step is pending.
 `A3B2_IMAGE_BUILD=STOP` and `CODEX_LIVE=STOP` remain effective outside the exact
-finite #831 decisions; this successful pilot did not lift those historical gates.
+finite #831 decisions. New admission/source/baseline authority is not implied.
 
 ## Standing safety boundary
 
@@ -103,11 +96,11 @@ retains premerge history; the new execution record gives actual results and the
 first-start binding disposition. Source/fixture results are separated from LIVE.
 
 <!-- PCP:CONTINUITY:START -->
-PM6499496019 +6500237978: accepted R=1f9b5d5 adopted Runtime/Executor; task/verifier/
-Router S b97ade5 unchanged. Exact one-successor OOM binding, original expiry retained.
-Same #831 registered/executed once: one model,26 configured tests, commit4161ba0,
-Draft PR #833, exact CI40898352672 four suites: 5254/166. Await independent PM; receipt
-running/gen2 / lease active/gen1/proof/counters preserved. Workers and both permits off;
-DB/tokenless HTTPS dashboard up, real populated browser verified. Evidence branch
-ai/815-recovery832-live; report history/2026-10-29-recovery832-live.md. No self-merge.
+PM6501364012 + review5700617139: same831 finalized via one supported POST;
+completed/pm_review_accepted, receipt delivered3, lease released1. Full checkpoint,
+proof/audit/progress unchanged: one model,2 verifier runs,1 delivery. Same unexpired
+V2 restored unchanged, then disabled intact; same two workers stopped, Router never
+started. Real completed tokenless HTTPS dashboard/timer/reconnect PASS. Same834
+contains final evidence; task833/head4161ba0 and both PRs unmerged, mainR1f9b5d5.
+PM controls hold closure/ready/merge/postmerge; no further operator execution.
 <!-- PCP:CONTINUITY:END -->

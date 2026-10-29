@@ -5,7 +5,32 @@ change to the Constitution, approved baseline or retained V3 authority.
 GH-815 and GH-822 are implemented together because the view must explain the
 new durable verification/commit/publication states. No new service/state store.
 
-## Current #831 execution and no-replay checkpoint
+## Current PM-finalized #831 checkpoint
+
+[PM6501364012](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6501364012)
+accepted exact task head4161ba059002c7aaf3fd35a88e3b0b80065c62b7 in review5700617139.
+One supported authenticated `/v1/pcp-local/pm-review` POST completed same job:
+completed/pm_review_accepted, delivery_finalized=true, receipt delivered/gen3,
+lease released/gen1. Full checkpoint/proof/audit/progress unchanged; counters1/2/1.
+No new model, verifier run, delivery, execution, build, permit or SQL repair.
+The original blocked/error/preimage history below is retained, not current state.
+
+Only the existing Runtime/Executor were started, exact configuration checked;
+Router remained stopped. V2 was restored byte-identically under the explicit
+finalization decision, original expiry2026-10-30T14:49:39.238744Z unchanged.
+After shutdown its active copy was moved intact to release rollback file
+`disabled-recovery-permit-v2-after-finalization.json`; original V2 audit copy
+`disabled-recovery-permit-v2.json` remains. Neither is active permission.
+
+Dashboard https://localhost:18443/dashboard now shows actual completed state and
+delivered/released ownership; trusted browser timer/provenance/reconnect passed.
+Same46 resources retained,3 running/43 stopped. Exact worker/dashboard stop
+commands below remain valid. PM alone handles hold closure, task-ready/merge/
+postmerge and evidence merge; keep mainR and both833/834 unmerged meanwhile.
+Do not invoke another recovery/delivery/finalization or activate fresh work.
+See [final afterimages/hashes](../project/history/2026-10-29-recovery832-live.md).
+
+## Pre-finalization #831 execution and no-replay checkpoint
 
 [Execution6499496019](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6499496019)
 and [binding disposition6500237978](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6500237978)

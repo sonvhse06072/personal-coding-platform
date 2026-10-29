@@ -5,13 +5,16 @@ with the narrowly conditioned [binding disposition6500237978](https://github.com
 One operator/writer, evidence branch `ai/815-recovery832-live`, checkout
 `/home/sonvh/pcp-recovery832-live`. No Developer merge or independent acceptance.
 
-**Result:** SAME job `a8851f89dd3e4e582c697ec1fe6d8cdb` delivered one real
+**Pre-finalization result:** SAME job `a8851f89dd3e4e582c697ec1fe6d8cdb` delivered one real
 [Draft PR #833](https://github.com/sonvhse06072/personal-coding-platform/pull/833),
 head `4161ba059002c7aaf3fd35a88e3b0b80065c62b7`; four hosted suites executed and
 passed at that head. Durable status is **blocked / execution verified /
 awaiting_independent_pm_review**, receipt **running/gen2**, lease **active/gen1**.
 `delivery_finalized=false`; this is delivery evidence, not PM acceptance or lease release.
 Workers and both permits are disabled; DB/tokenless HTTPS observer remain available.
+
+Finalization under PM6501364012 subsequently completed the job; see the final
+section for current afterimages. Earlier sections retain the execution audit.
 
 ## Source, identity and evidence classes
 
@@ -223,3 +226,79 @@ Any later startup/permit restoration must follow that disposition and recheck
 the original expiry; no automatic permit chain. A future fresh task needs its
 own approved immutable successor frame, final source/image bindings and legitimate
 ownership resolution; this evidence does not activate a new baseline or task.
+
+## Supported PM finalization — actual completed afterimages
+
+[Decision6501364012](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6501364012)
+accepted exact PR833 head4161ba059002c7aaf3fd35a88e3b0b80065c62b7 through structured
+[review5700617139](https://github.com/sonvhse06072/personal-coding-platform/pull/833#pullrequestreview-5700617139).
+This is independent ChatGPT PM review through the configured Owner account,
+not cross-provider runtime attestation. Both PRs remain unmerged; main stays R.
+
+PHYSICAL/PASS: full retained preimages matched; consistent private dump and full
+row/sequence snapshot preceded mutation. Exact unchanged V2 bytes restored atomically
+from the retained0600 copy. Same raw/canonical permit hashes and original expiry
+2026-10-30T14:49:39.238744Z; original rejected permit/activation stayed disabled.
+Same Runtime/Executor IDs/images/full configuration fingerprints were checked
+before and after startup. Router never started. Finalization-specific health,
+authority/registry/plan passed; verified workspace/PR were expected. No absent-workspace
+fresh-admission preflight or subscription/model readiness was invoked. Health was
+degraded with the deliberately stopped Router; Executor was ok and worker startup
+authority allowed the supported plan/finalization endpoints.
+
+LIVE/PASS: exactly one authenticated POST to internal Runtime8787
+`/v1/pcp-local/pm-review`, using the six exact fields in the decision payload,
+returned HTTP200. The shipped endpoint fetched actual structured review and latest
+four-suite CI, then committed its transaction. Full afterimages—not HTTP alone—confirmed:
+
+| Field | Before | After |
+| --- | --- | --- |
+| Same job | blocked/verified/awaiting_independent_pm_review | completed/verified; active error NULL |
+| acceptance_phase / delivery_finalized | awaiting_independent_pm_review / false | pm_review_accepted / true |
+| receipt | running/gen2 | delivered/gen3 |
+| same-owner lease | active/gen1 | released/gen1 |
+| review | pending | 5700617139, verdict pass |
+| model / verifier / delivery counters | 1 / 2 / 1 | 1 / 2 / 1, entire progress unchanged |
+
+Checkpoint including verified proof and original registration audit remains exact;
+source/baseline/commit/tree/usage/history preserved. Original active error exists
+in preimages/backups and was cleared only by normal finalization. Other receipt/
+lease fields stayed exact except supported state/generation/update timestamps.
+Unrelated tables/sequences unchanged except ordinary quota collector observations.
+No transport ambiguity or second POST occurred. Zero additional coding, job test,
+admission, execute, deliver or build calls; no permit renewal or manual SQL mutation.
+Result eligibility has blockers=[], manual_only=true, eligible=false because
+automatic PM merge is disabled; this is not permission for Developer merge.
+
+LIVE/PASS: actual completed dashboard, terminal_outcome=completed, delivered/released
+ownership, truthful unchanged usage/CI; default trusted Chromium TLS, no cookies/form/
+page errors. Duration stayed67.80164162399888s across polls and offline/reload/reconnect;
+activity age increased independently. Failed/cancelled states, VPN parity and
+second-machine LAN remain NOT TESTED. Verifier noexec limitation above remains.
+
+PHYSICAL/PASS: afterimages/dump captured; only same Runtime/Executor stopped again,
+Router stayed stopped. Installed V2 moved intact to
+`rollback/disabled-recovery-permit-v2-after-finalization.json`, original audit copy
+retained. Proof/progress/ownership unchanged during shutdown.46 containers retained,
+43 stopped; unchanged DB/observer/frontend only running, same exact IDs above.
+All original images/workspaces/verifier containers/credentials/V3 assets retained.
+
+| Finalization artifact | SHA256 |
+| --- | --- |
+| Consistent pre dump | `f2b5001794c5839f98a71191e843b8579ce8e8f8c7122045f3b1c30857dec614` |
+| Consistent post dump | `b27467924e63e1484d231c9e24ad363029eb4cc7de941c45668b1f50da2f29a2` |
+| Full pre rows/sequences | `340cc74e282235c77c740f55517c29f575390fc06cd1765a55f8c778f882395d` |
+| Full final rows/sequences | `ae0955d513bbac055d0eb4a2c156804c26b094d9f313bfced22ebc53d9bf8406` |
+| Unchanged complete checkpoint | `2b17a7ac27ca8ecc0cc6314e848b3c0fc919529f5287548a1eb4f80ae984498c` |
+| Unchanged complete progress | `07a21132ed7e1d8c9bf672fb3a95a903e0a16a31c9fc652a3262e53a1d05458e` |
+| Restored/disabled V2 bytes | `083637a98ba1a63925181830e0b003d439188d86ccbb42393a627e154195c330` |
+
+Private exact payload/request/response, full before/afterimages, result eligibility,
+dump listings, browser snapshots/screenshot and shutdown receipt are under the
+same evidence root. Operator initially used system Python without the existing
+FastAPI/Playwright dependencies; those import failures occurred before operations.
+Using the retained validation venv resolved them without installs or application changes.
+
+Next: ChatGPT PM confirms this after-state, closes stable-R hold, readies/merges
+exact accepted833 and checks postmerge, then reviews/merges updated evidence834.
+No new task/baseline activation or further worker action is authorized here.

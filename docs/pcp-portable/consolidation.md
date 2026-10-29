@@ -8,7 +8,27 @@ all four suites successfully. One writer on `ai/815-successor-adoption-v4` in
 `/home/sonvh/pcp-local-adoption825-v4`. This historical825 campaign did not activate
 a protected baseline or live job. New831 execution is recorded below.
 
-## Current same #831 recovery execution checklist
+## Finalization checkpoint — completed, PM merge pending
+
+[Decision6501364012](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6501364012),
+independent structured task review5700617139; SAME evidence PR #834.
+
+- [x] Full retained preimages, exact task/review/CI/mainR, private consistent backup.
+- [x] Restore byte-identical unexpired V2; same Runtime/Executor IDs/images/full
+  fingerprints before/after start; Router stays stopped, original activation off.
+- [x] Finalization-specific health/authority/plan and actual review/CI checks;
+  one authenticated POST with the exact decision payload, HTTP200.
+- [x] Durable completed/pm_review_accepted/finalized=true, receipt delivered/gen3,
+  same-owner lease released/gen1; checkpoint/proof/audit/progress unchanged.
+- [x] Zero additional model/job-verification/delivery calls; no rebuild/renewal/SQL.
+- [x] LIVE completed dashboard, trusted TLS, fixed duration, changing age,
+  truthful usage/CI, offline/reload/reconnect after shutdown.
+- [x] Final dump/full afterimages; exact two workers stopped, Router still off;
+  permit disabled intact, all46 containers retained, DB/observer/frontend up.
+- [ ] ChatGPT PM closes hold, readies/merges833, checks postmerge, reviews/merges834.
+  Both remain unmerged; mainR unchanged. Failed/cancelled UI/VPN parity untested.
+
+## Pre-finalization same #831 recovery execution checklist
 
 [PM6499496019](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6499496019)
 and [exact binding amendment6500237978](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6500237978).
@@ -43,8 +63,8 @@ Main R=1f9b5d5 held; original task/baseline/verifier/Router S b97ade5 unchanged.
   only DB/observer/frontend running. V3/rollback/foreign resources untouched.
 - [x] Update current-state/operations/report on one evidence PR; exact-head required
   checks are tracked on that PR, distinct from task833's executed four suites.
-- [ ] Independent PM acceptance/finalization/eligible merge. Job is intentionally
-  blocked/verified/awaiting review; receipt running2 and lease active/gen1 stay reserved.
+- [x] Independent PM acceptance and supported finalization completed under the
+  later checkpoint above. Merge remains solely with PM; this block records prior state.
 - [ ] VPN ON/parity, second-machine LAN, actual terminal-job dashboard cases:
   NOT TESTED. No synthetic state insertion or global network changes.
 
