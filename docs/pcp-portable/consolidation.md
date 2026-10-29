@@ -7,7 +7,49 @@ all four suites successfully. One writer on `ai/815-successor-adoption-v4` in
 `/home/sonvh/pcp-successor-adoption-v4`; named physical root
 `/home/sonvh/pcp-local-adoption825-v4`. No protected baseline activation or live job.
 
-## Active integrated checklist — retirement and HTTPS
+## Active postmerge maintenance and local observer checklist
+
+[Execution6489438739](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6489438739)
+and later [Owner observer decision6489495501](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6489495501).
+PR827 merged at `ea6fc0ac5dd101068bf4fe6f8f8813495cc529bf`; exact postmerge
+CI40827639082 passed four executed suites. One writer; frozen maintenance checkout
+`/home/sonvh/pcp-retire824-execute-v1` stays clean at accepted source. New source
+branch `ai/815-local-observer-no-token` in `/home/sonvh/pcp-local-observer-no-token`.
+
+- [x] Reconcile all22 original V3 containers, exact DB/image/volume/network,
+  current three stopped workers, activation disabled and resource headroom.
+- [x] DB-only start; consistent private dump/list/hash and full manifest once.
+  Full job/receipt/lease equal retained final rows;612-file verified snapshot,
+  assisted commit/sole parent/clean Git and original counters freshly matched.
+- [x] New network-none rehearsal DB + three inert stopped placeholders; restore
+  entire backup, identical business preimages/all11 tables; dry-run/APPLY/exact
+  retry/read-only reconciliation pass; stop all4 and retain volume/evidence.
+- [x] Separate original approval bound to actual PM record and manifest digest;
+  unchanged original dry-run, one APPLY, complete postimage/unrelated-table checks,
+  after-dump and read-only reconciliation. No acknowledgement uncertainty/retry.
+- [x] Historical824 retired incomplete/not delivered; cancelled, receiptblocked3,
+  same-owner leasereleased1. All22 V3 stopped; no counters/proof/commit rewritten.
+- [x] Existing V4 observer/DB/HTTPS unchanged; trusted TLS and resource IDs rechecked.
+- [x] Explicit successfully latched local read exception; preserve default token,
+  worker/legacy/control auth, scope, sanitization and no side-effect guarantees.
+- [x] Focused auth/rebinding/proxy/mode/foreign/control regressions; fresh browser
+  fixture without token/form/cookie, repeated polls. Events/SSE sanitization repair.
+- [x] Compare actual service input trees and truthful V4 image labels; frozen
+  draft registry diff validates50 protected paths; next task has code/test/doc.
+- [x] Record later decision to combine Runtime build with reviewed auth adoption;
+  no intermediate build, observer swap, registry activation or new admission.
+- [ ] Independent PM source review, merge/postmerge and exact observer adoption.
+- [ ] Actual tokenless browser/container/LAN checks after reviewed deployment.
+- [ ] Mixed-source service-binding decision, successor activation and fresh task.
+
+[Execution receipt](../project/history/2026-10-29-retire824-execution.md),
+[successor/config/task packet](../project/history/2026-10-29-successor-observer-packet.md).
+Local required suites PASS: root1742, Runtime2540/134 skipped, Router132,
+Executor680. The35 new auth/SSE regressions are included in Runtime. Exact-final-
+head hosted execution is recorded in [PR828](https://github.com/sonvhse06072/personal-coding-platform/pull/828);
+earlier-head CI is supporting evidence only.
+
+## Historical integrated checklist — retirement and HTTPS source preparation
 
 [WorkOrder6488558812](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6488558812).
 One writer on `ai/815-retirement-https-v1`, base `bca7189a53cadba3feb38330dcfd658b95002048`.
@@ -28,8 +70,8 @@ The prior V4 packet is accepted via PR826; its source pin/images remain unchange
   is attached to its final handoff. Earlier-head CI never substitutes for it.
 - [x] Physical retention receipt:23 containers retained, only DB/new observer/TLS
   frontend running; all11 actual DB tables empty; scoped stop/evidence packet.
-- [ ] Independent PM review/merge/postmerge execution checkpoint; real V3 retirement
-  and new admission remain prohibited in this premerge session.
+- [x] Independent PM review/merge/postmerge execution checkpoint completed via
+  execution6489438739; the newer checklist above records actual retirement.
 
 [Current WorkReport](../project/history/2026-10-29-retirement-https-v1.md).
 The items below are retained historical adoption evidence, not new permissions.
@@ -86,11 +128,11 @@ pilot evidence, never a new execution target. Preserve job
 `51a11aa704362d84ae5c7b70e85741f1`, assisted commit
 `7b3833bdb06e59aabcad31e4ad2aed4ac5d003ea`, historical source/baseline,
 verified snapshots, one development invocation and 213 passing local tests.
-Last operator report: delivering/execution verified, publication blocked;
+Pre-retirement historical report: delivering/execution verified, publication blocked;
 receipt running/gen2, lease active/gen1; no remote pilot branch/PR.
-All 22 owned containers were reported stopped, activation disabled. This repair
-session does not freshly inspect or mutate V3. No retry/re-admission, lease
-release, counter reset, source/image rebinding or fabricated completion.
+All22 were stopped, activation disabled in that repair session. The separately
+authorized postmerge maintenance above now records the only retirement mutation. No development retry/re-admission, counter reset, source/image rebinding or
+fabricated completion; only the reviewed retirement released the same lease.
 PM lifted only the scheduling freeze on main for a future eligible merge;
 no baseline succession, replacement job or physical adoption is thereby granted.
 

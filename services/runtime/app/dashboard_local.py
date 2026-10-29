@@ -25,6 +25,15 @@ def safe_code(value):
     return value if isinstance(value, str) and re.fullmatch(r'[a-z][a-z0-9_:,-]{0,200}', value) else 'unclassified_failure'
 
 
+def local_public_event(row, *, workspace=None):
+    """Same sanitization for snapshots, event replay and the live read stream."""
+    event = public_event(row)
+    if event:
+        event['message'] = safe_activity_text(event['message'], workspace=workspace or Path('/unavailable'))
+        event['data'] = {}
+    return event
+
+
 def usage_projection(progress):
     attempts = progress.get('agent_attempts') or []
     fields = ('gross_input_tokens', 'cached_input_tokens', 'input_tokens',
@@ -90,10 +99,8 @@ def job_projection(row, receipt, lease, events, clock):
     freshness = 'unknown' if last_age is None else 'stale' if last_age > 120 else 'recent'
     timeline = []
     for raw in events:
-        event = public_event(raw)
+        event = local_public_event(raw, workspace=Path(row.get('workspace') or '/unavailable'))
         if event:
-            event['message'] = safe_activity_text(event['message'], workspace=Path(row.get('workspace') or '/unavailable'))
-            event['data'] = {}  # No raw command output, paths or credential-bearing data.
             timeline.append(event)
     return dict(id=row['id'], issue=binding.get('issue_number'),
         title=safe(task.get('title')), goal=safe(task.get('description')),

@@ -26,6 +26,41 @@ _STANDALONE_VISIBLE_JOB_STATES = _ACTIVE_JOB_STATES | {"waiting_human", "blocked
 _PLACEHOLDERS = {"", "CHANGE_ME", "change-me"}
 _COOKIE = "pcp_dashboard_session"
 _CONTROL_COOKIE = "pcp_dashboard_control_session"
+_LOCAL_ORIGIN = "https://localhost:18443"
+
+
+def local_readonly_auth(request: Request) -> bool:
+    """Only the successfully started observer can grant the local exception."""
+    return (
+        getattr(request.app.state, "pcp_local_dashboard_ready", False) is True
+        and getattr(request.app.state, "pcp_local_dashboard_auth", None) == "loopback_readonly"
+        and os.getenv("PCP_RUNTIME_STARTUP_MODE") == "pcp_local_dashboard"
+        and os.getenv("PCP_LOCAL_DASHBOARD_AUTH") == "loopback_readonly"
+        and not os.getenv("DASHBOARD_READ_TOKEN")
+    )
+
+
+def require_local_readonly_request(request: Request) -> None:
+    # Check raw headers, including duplicates. Forwarded values never establish
+    # local identity, even if server middleware has rewritten scope.client.
+    headers = request.scope.get("headers", [])
+    def values(name):
+        return [v for k, v in headers if k.lower() == name]
+    forwarded = any(k.lower() == b"forwarded" or k.lower().startswith(b"x-forwarded-")
+                    or k.lower() == b"x-real-ip" for k, _ in headers)
+    if (not local_readonly_auth(request) or request.client is None
+            or request.client.host not in {"127.0.0.1", "::1"}
+            or values(b"host") != [b"localhost:18443"] or forwarded
+            or values(b"origin") not in ([], [_LOCAL_ORIGIN.encode()])
+            or values(b"sec-fetch-site") not in ([], [b"same-origin"], [b"none"])):
+        raise HTTPException(403, "Local observer origin required")
+
+
+def _require_read_session(request: Request, session: str | None) -> None:
+    if local_readonly_auth(request):
+        require_local_readonly_request(request)
+    else:
+        _require_session(session)
 
 
 class DashboardLogin(BaseModel):
@@ -256,10 +291,12 @@ def _job_snapshot(job: dict[str, Any] | None) -> dict[str, Any] | None:
     }
 
 
-def _public_job_events(storage: Any, job_id: str, *, after: int = 0, limit: int = 100) -> list[dict[str, Any]]:
+def _public_job_events(storage: Any, job_id: str, *, after: int = 0, limit: int = 100, workspace=None) -> list[dict[str, Any]]:
+    from .dashboard_local import local_public_event
+    local = local_dashboard_mode()
     events: list[dict[str, Any]] = []
     for row in storage.events_after(job_id, after_id=after, limit=limit):
-        event = public_event(dict(row))
+        event = local_public_event(dict(row), workspace=workspace) if local else public_event(dict(row))
         if event:
             events.append(event)
     return events
@@ -472,7 +509,7 @@ def require_visible_job(storage, job_id):
     if local_dashboard_mode():
         with storage.connect() as conn:
             conn.execute('SET TRANSACTION READ ONLY')
-            job = conn.execute("SELECT id FROM cp_jobs WHERE id=%s AND project_id=%s "
+            job = conn.execute("SELECT id,workspace FROM cp_jobs WHERE id=%s AND project_id=%s "
                 "AND checkpoint ? 'pcp_local_source'", (job_id, 'pcp-local')).fetchone()
     else:
         job = storage.get(job_id)
@@ -490,14 +527,19 @@ def create_dashboard_router(
     router = APIRouter()
 
     @router.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)
-    def dashboard_page() -> str:
+    def dashboard_page(request: Request) -> str:
         if local_dashboard_mode():
-            from .dashboard_ui_local import LOCAL_DASHBOARD_HTML
-            return LOCAL_DASHBOARD_HTML
+            from .dashboard_ui_local import local_dashboard_html
+            local = local_readonly_auth(request)
+            if local:
+                require_local_readonly_request(request)
+            return local_dashboard_html(tokenless=local)
         return DASHBOARD_HTML
 
     @router.post("/v1/dashboard/session", include_in_schema=False)
-    def dashboard_login(payload: DashboardLogin, response: Response) -> dict[str, str]:
+    def dashboard_login(request: Request, payload: DashboardLogin, response: Response) -> dict[str, str]:
+        if local_readonly_auth(request):
+            raise HTTPException(403, "Local observer has no sessions")
         secret = _dashboard_secret()
         if secret in _PLACEHOLDERS:
             raise HTTPException(503, "Dashboard read token is not configured")
@@ -515,7 +557,9 @@ def create_dashboard_router(
         return {"status": "ok"}
 
     @router.delete("/v1/dashboard/session", include_in_schema=False)
-    def dashboard_logout(response: Response) -> dict[str, str]:
+    def dashboard_logout(request: Request, response: Response) -> dict[str, str]:
+        if local_readonly_auth(request):
+            raise HTTPException(403, "Local observer has no sessions")
         response.delete_cookie(_COOKIE, path="/")
         response.delete_cookie(_CONTROL_COOKIE, path="/")
         return {"status": "ok"}
@@ -659,8 +703,8 @@ def create_dashboard_router(
             raise _preview_error(exc) from exc
 
     @router.get("/v1/dashboard/snapshot", include_in_schema=False)
-    def dashboard_snapshot(pcp_dashboard_session: str | None = Cookie(default=None)) -> dict[str, Any]:
-        _require_session(pcp_dashboard_session)
+    def dashboard_snapshot(request: Request, pcp_dashboard_session: str | None = Cookie(default=None)) -> dict[str, Any]:
+        _require_read_session(request, pcp_dashboard_session)
         if local_dashboard_mode():
             from .dashboard_local import build_local_snapshot
             return build_local_snapshot(storage)
@@ -668,14 +712,15 @@ def create_dashboard_router(
 
     @router.get("/v1/dashboard/jobs/{job_id}/events", include_in_schema=False)
     def dashboard_job_events(
+        request: Request,
         job_id: str,
         after: int = Query(0, ge=0),
         limit: int = Query(100, ge=1, le=200),
         pcp_dashboard_session: str | None = Cookie(default=None),
     ) -> dict[str, Any]:
-        _require_session(pcp_dashboard_session)
-        require_visible_job(storage, job_id)
-        events = _public_job_events(storage, job_id, after=after, limit=limit)
+        _require_read_session(request, pcp_dashboard_session)
+        job = require_visible_job(storage, job_id)
+        events = _public_job_events(storage, job_id, after=after, limit=limit, workspace=job.get('workspace'))
         return {"events": events, "last_seq": max([after, *[int(event["seq"]) for event in events]])}
 
     @router.get("/v1/dashboard/jobs/{job_id}/stream", include_in_schema=False)
@@ -685,8 +730,10 @@ def create_dashboard_router(
         after: int = Query(0, ge=0),
         pcp_dashboard_session: str | None = Cookie(default=None),
     ) -> StreamingResponse:
-        _require_session(pcp_dashboard_session)
-        require_visible_job(storage, job_id)
+        _require_read_session(request, pcp_dashboard_session)
+        job = require_visible_job(storage, job_id)
+        local = local_dashboard_mode()
+        from .dashboard_local import local_public_event
 
         async def stream():
             cursor = int(after)
@@ -696,7 +743,7 @@ def create_dashboard_router(
                 if rows:
                     for row in rows:
                         cursor = max(cursor, int(row.get("id") or 0))
-                        event = public_event(dict(row))
+                        event = local_public_event(dict(row), workspace=job.get('workspace')) if local else public_event(dict(row))
                         if not event:
                             continue
                         payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))

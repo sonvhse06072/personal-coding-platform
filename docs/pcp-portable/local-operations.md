@@ -269,7 +269,7 @@ start, credential provision, activation, replacement-job or production authority
 
 ## V4 successor and admission decision packet
 
-Current authority: [DEC-PCP-815-RETIREMENT-HTTPS-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6488558812).
+Original source/HTTPS authority: [DEC-PCP-815-RETIREMENT-HTTPS-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6488558812).
 Owner chat direction was recorded through delegated PM, not fabricated GitHub
 identity proof. [Integrated evidence](../project/history/2026-10-29-retirement-https-v1.md)
 supersedes the earlier no-retirement/no-ingress proposal. Original
@@ -301,9 +301,11 @@ concrete admission checkpoint remain separate.
 
 ### Reviewed retirement procedure
 
-**Preparation only until independent source acceptance, merge, postmerge CI and
-PM's exact execution record.** No original V3 row/schema/lease/activation/worker
-operation occurs in this source session. Known historical target:
+**Postmerge execution completed under [record6489438739](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6489438739).**
+PR827 merged at `ea6fc0ac5dd101068bf4fe6f8f8813495cc529bf`; CI40827639082
+executed four suites successfully. The [actual receipt](../project/history/2026-10-29-retire824-execution.md)
+records one original APPLY, preservation and shutdown. The procedure below remains
+the audit trail; do not repeat APPLY or start old workers from this document. Known historical target:
 
 - Instance/root `pcp-local-pilot815-v3` / `/home/sonvh/pcp-local-pilot815-v3`.
 - Job `51a11aa704362d84ae5c7b70e85741f1`, issue824, source
@@ -509,7 +511,8 @@ Prior12-container shutdown at2026-10-29 01:54:24UTC remains historical evidence;
 this WorkOrder selectively starts the exact DB and new observer/frontend only.
 Private current evidence: `/home/sonvh/.local/state/pcp-retirement-https-v1`.
 Retain failed startup/syntax/browser evidence and all stopped containers; no prune,
-cleanup/down-v, old-worker restart, V3 row mutation or counter reset.
+cleanup/down-v, old-worker restart or counter reset. The only V3 row mutation is
+the separately authorized, now completed retirement in the execution receipt.
 
 To stop ONLY the new frontend/observer and dedicated V4 DB, after verifying these
 IDs against the WorkReport, use this standalone process:
@@ -525,3 +528,111 @@ No volume deletion, data reset or restoration is part of shutdown. Keep observer
 frontend/DB running only after the actual browser/security checks pass. A rollback
 is a scoped stop plus retained evidence, not permission to retry V3 or rebind old
 images/baselines. The final report states what was actually left running.
+
+## Tokenless observer next adoption
+
+[Decision6489495501](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6489495501)
+supersedes the intermediate ea6-only Runtime build plan: combine the Owner's
+local-auth change with the next reviewed Runtime adoption, avoiding two builds.
+The existing observer remains **token mode**, same source/image/config/URL.
+This section is a concrete rollout proposal, not an executed deployment.
+
+Before rollout require independent acceptance, merge, actual four-suite postmerge
+CI and the PM image-adoption checkpoint. Use a clean checkout of that exact merge,
+never floating main. Keep the frozen maintenance checkout at accepted827 untouched.
+Create a NEW private build/evidence directory and full-SHA image tag; refuse
+preexisting paths/tags. Reuse the reviewed bootstrap procedure's committed archive,
+symlink/ownership/secret scan and executable-mode-preserving permissions, but build
+only Runtime. Do not rerun whole-instance bootstrap or overwrite V4 source/config.
+
+Exact reviewed pins: Node
+`node:22-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d`,
+Codex `0.160.0`, OpenCode `1.19.4`, UID/GID1000. Archive
+`git archive "$ACCEPTED_SHA" services/runtime` to the new context; retain its SHA256.
+Replace only the first Dockerfile FROM in `Dockerfile.local` with that Node pin.
+Build using `docker --host unix:///var/run/docker.sock build --builder default`,
+`--file "$CONTEXT/Dockerfile.local"`, `--tag "pcp-local-adoption825-v4-runtime:$ACCEPTED_SHA"`,
+`--iidfile "$NEW_EVIDENCE/runtime.iid"`, labels
+`org.opencontainers.image.revision=$ACCEPTED_SHA` and
+`org.pcp.local.instance=pcp-local-adoption825-v4`, build args
+`CODEX_VERSION=0.160.0 OPENCODE_VERSION=1.19.4 DDEV_UID=1000 DDEV_GID=1000`.
+Retain build output privately. Verify label/image ID against actual archive inputs,
+toolchain and immutable askpass modes, non-root/read-only/noexec/nonrecursive mounts.
+No unreviewed image or label-only source promotion. Router/Executor mixed-source
+binding remains the precise PM decision in the [successor packet](../project/history/2026-10-29-successor-observer-packet.md).
+
+Proposed observer input diff (private destination, not installed):
+
+```diff
+ PCP_RUNTIME_STARTUP_MODE=pcp_local_dashboard
+-DASHBOARD_READ_TOKEN=<private existing value; retain only in rollback custody>
++PCP_LOCAL_DASHBOARD_AUTH=loopback_readonly
+-uvicorn app.main:app --host 0.0.0.0 --port 18787
++uvicorn app.main:app --host 127.0.0.1 --port 18787 --no-proxy-headers
+--p 127.0.0.1:18787:18787
+ -p 127.0.0.1:18443:18443
+```
+
+Keep the exact SELECT-only DB role/actual empty V4 DB, singleton PCP registry,
+HTTPS certificate trust, immutable mounts and fixed project scope. No worker/
+activation/schema/provider/publisher credentials or source hotload. Fresh observer
+and frontend IDs must be recorded; old containers/config/token stay retained for
+rollback. Only the final accepted source/image binding changes at that checkpoint.
+
+Nginx continues sharing the observer's network namespace, reaches only
+127.0.0.1:18787, and publishes only host127.0.0.1:18443. Proposed server changes:
+
+```nginx
+# Preserve existing TLS leaf/key/protocols and noexec temp-path configuration.
+# Measured current Docker publication peer: 192.168.64.1. Reverify gateway and
+# peer on the exact next namespace; STOP on mismatch, never widen to a subnet.
+allow 192.168.64.1;
+allow 127.0.0.1;
+allow ::1;
+deny all;
+if ($http_host != "localhost:18443") { return 444; }
+proxy_set_header Host $http_host;
+proxy_set_header Connection "";
+# Do not add/trust Forwarded, X-Forwarded-* or X-Real-IP. Client-supplied values
+# reach Runtime unchanged and are rejected there, even from a local peer.
+location = /dashboard {
+    limit_except GET { deny all; }
+    proxy_pass http://127.0.0.1:18787;
+}
+location = /v1/dashboard/snapshot {
+    limit_except GET { deny all; }
+    proxy_pass http://127.0.0.1:18787;
+}
+location ~ "^/v1/dashboard/jobs/[a-f0-9]{32}/(events|stream)$" {
+    limit_except GET { deny all; }
+    proxy_buffering off;
+    proxy_pass http://127.0.0.1:18787;
+}
+location / { return 404; }
+# Remove the existing /v1/dashboard/session location entirely.
+```
+
+The gateway allowance is a verified Docker loopback-publication transport detail,
+not a trusted request header or remote-user credential. Before acceptance prove
+that a separate isolated probe container cannot reach upstream on the observer's
+bridge IP and gets denied at frontend even with valid Host/Origin/spoofed headers;
+probe LAN/host non-loopback addresses too. If Docker forwarding makes an external
+peer indistinguishable from the allowed publication peer, **HOLD tokenless rollout**
+and retain token mode; do not broaden allowlists or change global networking.
+No cross-container/LAN proof is claimed from source fixtures.
+
+Run Nginx syntax and real certificate-chain/browser checks before switching.
+With default TLS validation and a fresh browser profile/no cookies, opening the
+existing URL must display/poll without a token/form/session request/cookie.
+Verify offline/reconnect, sanitized event replay/SSE, foreign Host/Origin and
+cross-site rejection, denied controls, unchanged DB rows/counters and real
+SELECT-only privileges. Health probes inside the observer namespace must send
+`Host: localhost:18443`. Native same-origin GET may omit Origin. Other local
+OS users/processes can read this view; this is the explicit Owner-approved boundary.
+
+On failure stop only the new exact observer/frontend IDs, retain their logs and
+restore the retained reviewed token-mode config/images under the rollout permit;
+no DB restore, V3 resurrection, trust-store or global VPN/DNS change. Report actual
+active auth mode. VPN OFF evidence is retained; VPN ON remains NOT TESTED until
+Owner selects it and real probes run. No provider entitlement/inference follows
+from connectivity success.

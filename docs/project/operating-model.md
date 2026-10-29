@@ -925,3 +925,32 @@ postmerge PM checkpoint, consistent private backup, restored-copy rehearsal,
 exact dry-run and same-manifest apply/reconciliation described in
 [local operations](../pcp-portable/local-operations.md#reviewed-retirement-procedure).
 A later independently admitted validation never completes historical #824.
+
+### Local observer authentication exception (DEC-PCP-815-LOCAL-OBSERVER-NO-TOKEN-V1)
+
+[Owner-requested decision](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6489495501)
+permits explicit `PCP_LOCAL_DASHBOARD_AUTH=loopback_readonly` only after successful
+`pcp_local_dashboard` startup with the singleton PCP registry. The default remains
+`token`; worker/legacy startup cannot use this exception. Unknown/empty modes,
+mode changes after startup and a leftover read token in tokenless configuration
+fail closed. No login form, session issuance or dashboard cookie belongs to this mode.
+
+The local OS/user session is the access boundary: other users/processes that can
+reach this machine's loopback can read the view. This is not remote authentication.
+The exact HTTPS origin is `https://localhost:18443`; Runtime accepts only actual
+loopback peers, that exact Host, same Origin when supplied, and same-origin or
+user-navigation fetch metadata. Duplicate/spoofed forwarded/identity headers,
+foreign origins and DNS-rebinding names fail before DB access. Missing Origin on
+native same-origin GET remains valid. No permissive CORS. The frontend must deny
+container/LAN peers before proxying; Runtime must listen on namespace loopback,
+without published upstream ports or trusted forwarded headers. A proxy's local
+connection alone is not proof that its original client was local.
+
+Only scoped sanitized SELECT views/events are available; job/control/preview/
+retirement/admission endpoints, schema initialization, workers and inference
+remain unavailable. Service, publisher, provider and control authentication is
+unchanged. The current token observer stays deployed until independent review,
+merge, postmerge checks and the reviewed image-adoption checkpoint; actual fresh
+browser polling and remote-peer rejection are physical deployment gates. The
+[operations packet](../pcp-portable/local-operations.md#tokenless-observer-next-adoption)
+records the concrete frontend/upstream binding and rollback requirements.
