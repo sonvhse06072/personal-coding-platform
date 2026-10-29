@@ -31,7 +31,7 @@ class _Connection:
     def execute(self, query, params=None):
         compact = " ".join(query.split())
         self.queries.append((compact, params))
-        if compact.startswith("SELECT status, route, workspace FROM cp_jobs"):
+        if compact.startswith("SELECT status, route, workspace, checkpoint, project_id FROM cp_jobs"):
             return _Result(row=self.current)
         if compact.startswith("SELECT COUNT(*) AS active_engineering_jobs FROM cp_jobs"):
             return _Result(row={"active_engineering_jobs": self.active_engineering_jobs})

@@ -174,6 +174,8 @@ class FakeDatabase:
     def execute(self, sql, params=None):
         self.execute_count += 1
         s = sql.strip()
+        if s.startswith("SET LOCAL") or "pg_advisory_xact_lock" in s:
+            return Cursor(None)
         if s.startswith("CREATE TABLE"):
             return Cursor(None)
         if s.startswith("INSERT INTO cp_pcp_local_source_receipts"):

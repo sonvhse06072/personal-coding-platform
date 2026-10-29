@@ -1,11 +1,37 @@
 # PCP Local consolidation execution checklist
 
-Current campaign: [DEC-PCP-815-SUCCESSOR-ADOPTION-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6485231069).
+Prior accepted campaign: [DEC-PCP-815-SUCCESSOR-ADOPTION-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6485231069).
 PR825 is independently accepted and merged at
 `5adfd120dbd6aa4718cf9549ddc6fae0bab8f12d`; postmerge run40780653020 executed
 all four suites successfully. One writer on `ai/815-successor-adoption-v4` in
 `/home/sonvh/pcp-successor-adoption-v4`; named physical root
 `/home/sonvh/pcp-local-adoption825-v4`. No protected baseline activation or live job.
+
+## Active integrated checklist — retirement and HTTPS
+
+[WorkOrder6488558812](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6488558812).
+One writer on `ai/815-retirement-https-v1`, base `bca7189a53cadba3feb38330dcfd658b95002048`.
+The prior V4 packet is accepted via PR826; its source pin/images remain unchanged.
+
+- [x] Full WorkOrder/ordered project docs, exact starting main and clean worktree.
+- [x] Minimal default-dry-run operator CLI, full private preimages/approval,
+  atomic non-delivery audit and exact ownership resolution; no Engine/API/model.
+- [x] Shared project transaction serialization, old recovery/activation denial,
+  exact retry/rollback/lost-ack/full-row-drift and next-admission regressions.
+- [x] Real isolated PostgreSQL/Git matrix; no original V3 data/secrets or mutation.
+- [x] Accepted V4 image + actual empty DB, dedicated read role, real permission
+  denials, loopback-only Nginx frontend, syntax/leaf/chain/immutable mounts.
+- [x] Trusted browser form login, browser session logout and offline/online
+  reconnect after verified exact Owner NSS action; actual empty V4 database.
+- [x] Full local root/Runtime/Executor/Router verification and38 real PG/Git cases.
+- [ ] Genuinely executed four-suite exact-final-head hosted CI.
+- [x] Physical retention receipt:23 containers retained, only DB/new observer/TLS
+  frontend running; all11 actual DB tables empty; scoped stop/evidence packet.
+- [ ] Independent PM review/merge/postmerge execution checkpoint; real V3 retirement
+  and new admission remain prohibited in this premerge session.
+
+[Current WorkReport](../project/history/2026-10-29-retirement-https-v1.md).
+The items below are retained historical adoption evidence, not new permissions.
 
 ## Successor adoption checklist — 2026-10-29
 

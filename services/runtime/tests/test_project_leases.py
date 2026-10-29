@@ -35,7 +35,7 @@ class Connection:
         compact = " ".join(query.split())
         values = tuple(params or ())
 
-        if compact.startswith("SELECT id, project_id, status FROM cp_jobs"):
+        if compact.startswith("SELECT id, project_id, status, checkpoint FROM cp_jobs"):
             return Result(self.jobs.get(values[0]))
         if compact.startswith("SELECT * FROM cp_project_leases WHERE project_id="):
             return Result(self.lease if self.lease and self.lease["project_id"] == values[0] else None)

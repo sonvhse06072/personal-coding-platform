@@ -898,3 +898,30 @@ Mọi thay đổi ở các luồng trên phải báo cáo **thời gian task-to-
 ### Giới hạn giai đoạn
 
 Project Discovery/Business Onboarding cho repository không có doc là vision **Future/Deferred #588**; không thêm vào flow hiện tại. Không thay đổi PCP đang deployed hay Chợ Nhạc TECH-DEC-040 cho đến khi có approved implementation, CI, quiescent rollout và handoff riêng.
+
+### PCP-local non-delivery retirement (DEC-PCP-815-RETIREMENT-HTTPS-V1)
+
+The trusted operator may use the reviewed default-dry-run maintenance command
+only under an exact independent PM execution record within the delegated Owner
+scope. It is not an HTTP/admin/worker/agent capability. Private full job/receipt/
+lease preimages, instance/database/worker identities, source/baseline/commit,
+decision/reason and separately retained operator attestation of actual approval
+are required. A URL, hash, developer assertion or CI success does not grant
+independent PM approval. No Engine, inference, publication or schema initialization
+is part of retirement.
+
+APPLY requires quiescent producers and current reviewed source. Shared project
+serialization and full-row locks/CAS atomically retain the audit in the job,
+set job `cancelled` with disposition `incomplete_not_delivered`, block/advance the
+exact receipt, and release the same lease generation. Original result/error,
+verification/commit/history/usage/counters stay unchanged. Exact repeated approval
+returns the original outcome; drift/conflict fails closed. Admission ignores only
+a specific blocked receipt whose full retained retirement audit/postimages validate;
+arbitrary blocked reservations remain blocking. Old activation/recovery cannot
+resurrect retired work. Normal successful finalization and non-PCP behavior remain.
+
+Source acceptance does not itself execute retirement. Original V3 requires the
+postmerge PM checkpoint, consistent private backup, restored-copy rehearsal,
+exact dry-run and same-manifest apply/reconciliation described in
+[local operations](../pcp-portable/local-operations.md#reviewed-retirement-procedure).
+A later independently admitted validation never completes historical #824.

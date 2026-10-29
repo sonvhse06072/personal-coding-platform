@@ -79,6 +79,8 @@ def job_projection(row, receipt, lease, events, clock):
     def safe(value):
         return safe_activity_text(value, workspace=Path(row.get('workspace') or '/unavailable'), limit=600) if isinstance(value,str) else None
     usage, last_usage = usage_projection(progress)
+    retired = cp.get('pcp_local_retirement') or {}
+    disposition = (retired.get('outcome') or {}).get('disposition')
     terminal = status in {'completed', 'failed', 'cancelled'}
     duration = execution.get('duration_seconds')
     if type(duration) not in (int, float) or duration < 0:
@@ -99,7 +101,7 @@ def job_projection(row, receipt, lease, events, clock):
         issue_url=f'https://github.com/{REPOSITORY}/issues/{binding["issue_number"]}' if type(binding.get('issue_number')) is int else None,
         status=status, stage=execution.get('state') or status,
         activity=status if terminal else 'blocked' if paused else 'stale' if freshness == 'stale' and status in {'executing','verifying','delivering'} else 'active' if status in {'executing','verifying','delivering'} else status,
-        observation_freshness=freshness, terminal_outcome=status if terminal else None,
+        observation_freshness=freshness, terminal_outcome=disposition if disposition == 'incomplete_not_delivered' else status if terminal else None,
         admitted_at=iso(row.get('created_at')), started_at=execution.get('started_at'), last_activity_at=iso(row.get('updated_at')),
         elapsed_seconds=duration if terminal or execution.get('state') in {'verified','verified_uncommitted','commit_uncertain','held'} else age(execution.get('started_at'), clock), activity_age_seconds=last_age,
         observed_execution_seconds=progress['elapsed_minutes']*60 if type(progress.get('elapsed_minutes')) in (int,float) else None,

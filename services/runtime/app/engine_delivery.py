@@ -232,6 +232,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 and result.get('verification', {}).get('passed') is True
                 and result.get('verification', {}).get('test_runs', 0) > 0,
                 'pcp_local_review_unverified_job')
+        require('pcp_local_retirement' not in row['checkpoint'], 'pcp_local_retired_job')
         if row.get('status') == 'completed' and result.get('delivery_finalized') is True:
             require(result.get('review', {}).get('review_id') == payload.review_id,
                     'pcp_local_review_conflicting_retry')
@@ -257,6 +258,8 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         result['pm_merge_eligibility'] = json.loads(json.dumps(eligibility.model_dump()))
         readers.authority()  # Recheck revocation immediately before the transaction.
         with self.storage.connect() as conn:
+            from .pcp_local_recovery import project_lock
+            project_lock(conn)
             current = conn.execute('SELECT * FROM cp_jobs WHERE id=%s FOR UPDATE', (job_id,)).fetchone()
             require(current is not None and current['checkpoint'] == row['checkpoint']
                     and current['result'] == row['result'], 'pcp_local_review_race')

@@ -83,9 +83,6 @@ class Connection:
             return Result()
         if sql.startswith("SELECT pg_advisory_xact_lock"):
             self.acquire()
-            if self.db.before_registration:
-                callback, self.db.before_registration = self.db.before_registration, None
-                callback()
             return Result()
         if sql.startswith("UPDATE cp_pcp_local_source_receipts"):
             self.acquire()
@@ -103,13 +100,16 @@ class Connection:
             self.receipts[number] = deepcopy(row)
             return Result([{k: row[k] for k in ("state", "generation", "job_id")}])
         if "FROM cp_pcp_local_source_receipts" in sql:
+            if "FOR UPDATE" in sql and "issue_number<>" not in sql and self.db.before_registration:
+                callback, self.db.before_registration = self.db.before_registration, None
+                callback()
             assert params[0:2] == (source.REPOSITORY, source.PROJECT_ID)
             rows = list(self.db.receipts.values())
             if "ORDER BY created_at" in sql:
                 return Result(sorted((r for r in rows if r["state"] == "pending"),
                                      key=lambda r: r["issue_number"])[:1])
             if "issue_number<>" in sql:
-                return Result([{"issue_number": r["issue_number"]} for r in rows
+                return Result([deepcopy(r) for r in rows
                     if r["issue_number"] != params[2] and (
                         r["state"] not in {"pending", "delivered"}
                         or (r["state"] == "pending" and (r["job_id"] is not None or r["generation"] != 0))
@@ -888,8 +888,9 @@ def test_pm_outcome_atomically_finishes_original_receipt_and_lease(setup, monkey
         def connect(self): return self
         def __enter__(self): self.pending=deepcopy(self.row);return self
         def __exit__(self,*args): self.pending=None
-        def execute(self,sql,params):
+        def execute(self,sql,params=None):
             self.events.append(sql)
+            if sql.startswith('SET LOCAL') or 'pg_advisory_xact_lock' in sql:return self
             if sql.startswith('SELECT * FROM cp_jobs'):
                 assert 'FOR UPDATE' in sql
                 return Result([self.pending])

@@ -178,7 +178,9 @@ class Storage:
                 {k:v for k,v in checkpoint.items() if k not in {'pcp_local_execution','pcp_local_recovery'}},
                 'pcp_local_recovery_evidence_changed')
         with self.connect() as conn:
-            conn.execute("SELECT pg_advisory_xact_lock(hashtext('pcp-local-recovery'))")
+            from .pcp_local_recovery import project_lock, KEY
+            project_lock(conn)
+            require(KEY not in expected["checkpoint"], "pcp_local_retired_job")
             current = conn.execute('SELECT * FROM cp_jobs WHERE id=%s FOR UPDATE',
                                    (expected['id'],)).fetchone()
             require(exact_value(current, expected) and current['project_id'] == PROJECT_ID,
@@ -276,14 +278,15 @@ class Storage:
             ).fetchall()
             require(not writers, "pcp_local_writer_reservation_conflict")
             claims = conn.execute(
-                """SELECT issue_number FROM cp_pcp_local_source_receipts
+                """SELECT * FROM cp_pcp_local_source_receipts
                    WHERE repository=%s AND project_id=%s AND issue_number<>%s
                    AND (state IS NULL OR state NOT IN ('pending','delivered')
                         OR (state='pending' AND (job_id IS NOT NULL OR generation<>0))
                         OR (state='delivered' AND job_id IS NULL)) FOR UPDATE""",
                 (REPOSITORY, PROJECT_ID, expected["issue_number"]),
             ).fetchall()
-            require(not claims, "pcp_local_other_claim_ownership_unknown")
+            from .pcp_local_recovery import blocking_receipts
+            require(not blocking_receipts(conn, claims), "pcp_local_other_claim_ownership_unknown")
             lease = conn.execute(
                 """SELECT project_id, owner_job_id, generation, state
                    FROM cp_project_leases WHERE project_id=%s FOR UPDATE""",
@@ -382,14 +385,20 @@ class Storage:
         """
         timestamp = now()
         with self.connect() as conn:
+            if project_id == "pcp-local":
+                from .pcp_local_recovery import project_lock
+                project_lock(conn)
             job = conn.execute(
-                "SELECT id, project_id, status FROM cp_jobs WHERE id=%s FOR UPDATE",
+                "SELECT id, project_id, status, checkpoint FROM cp_jobs WHERE id=%s FOR UPDATE",
                 (job_id,),
             ).fetchone()
             if job is None:
                 raise RuntimeError("Cannot acquire project lease for unknown job")
             if str(job.get("project_id") or "") != project_id:
                 raise RuntimeError("Project lease job/project identity mismatch")
+
+            if project_id == "pcp-local" and "pcp_local_retirement" in (job.get("checkpoint") or {}):
+                raise RuntimeError("pcp_local_retired_job")
 
             lease = conn.execute(
                 "SELECT * FROM cp_project_leases WHERE project_id=%s FOR UPDATE",
@@ -621,9 +630,11 @@ class Storage:
         values.append(job_id)
         with self.connect() as conn:
             previous = conn.execute(
-                "SELECT status, route, workspace FROM cp_jobs WHERE id=%s FOR UPDATE",
+                "SELECT status, route, workspace, checkpoint, project_id FROM cp_jobs WHERE id=%s FOR UPDATE",
                 (job_id,),
             ).fetchone()
+            if previous and previous.get("project_id") == "pcp-local" and "pcp_local_retirement" in (previous.get("checkpoint") or {}):
+                raise RuntimeError("pcp_local_retired_job")
             conn.execute(f"UPDATE cp_jobs SET {', '.join(sets)} WHERE id=%s", values)
             if previous:
                 if "route" in fields and fields["route"] != previous.get("route"):
