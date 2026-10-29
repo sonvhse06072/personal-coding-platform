@@ -96,7 +96,7 @@ def verified(tmp_path):
             self.row.update(checkpoint=deepcopy(cp),status=status,result=deepcopy(result))
     store=Memory()
     async def refresh(t): assert t==task
-    reader=SimpleNamespace(authority_digest='a'*64,refresh=refresh)
+    reader=SimpleNamespace(authority_digest='a'*64,refresh=refresh,refresh_delivery=refresh)
     return SimpleNamespace(task=task,store=store,engine=SimpleNamespace(storage=store),reader=reader,git=git,path=tmp_path)
 
 

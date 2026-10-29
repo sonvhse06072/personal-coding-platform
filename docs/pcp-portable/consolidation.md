@@ -8,7 +8,31 @@ all four suites successfully. One writer on `ai/815-successor-adoption-v4` in
 `/home/sonvh/pcp-local-adoption825-v4`. This historical825 campaign did not activate
 a protected baseline or live job. New831 execution is recorded below.
 
-## Finalization checkpoint — completed, PM merge pending
+## Active #835 source / isolated fixture checklist
+
+[WorkOrder835](https://github.com/sonvhse06072/personal-coding-platform/issues/835),
+clarification6502893427; one writer/branch `ai/835-local-repeatability`.
+[WorkReport and one adoption packet](../project/history/2026-10-29-local-repeatability.md).
+
+- [x] Ordered documents, current main34c0e9a, merged833/834 and PM hold closure reconciled.
+- [x] Reproduce retained-A foreign-workspace and missing phase interface at anchor.
+- [x] Measure actual credential-free sandbox sibling read; preserve fail-closed guard.
+- [ ] B ordinary admission with retained A: blocked pending approved read isolation;
+  exact exception/proposal in report. No success inferred from lease storage fixtures.
+- [x] Status/finalization/delivery phases reuse existing authoritative validators;
+  admission retains eight-reader/provider checks. No model or admission from status.
+- [x] Container client defaults read-only; named finalization uses exact server identity,
+  one POST and mandatory reconciliation. No shell/SQL/URL/permit passthrough.
+- [x] Real Git/PostgreSQL finalization, full-row CAS, concurrent requests, rollback,
+  lost acknowledgement, proof/ownership/authority rejection and retained counters.
+- [x] Documentation corrects current merge status and separates SOURCE/FIXTURE/LIVE.
+- [x] Required local verification and fixture shutdown; resources/evidence retained.
+- Final-head hosted gate: exact SHA/run/job results are maintained in the Draft PR
+  WorkReport. All four suites must execute and pass before PM acceptance.
+- [ ] Independent PM acceptance; read-isolation decision/implementation; accepted
+  successor source/baseline/task/rollout authority. None is granted by this checklist.
+
+## Historical finalization checkpoint — completed and subsequently merged
 
 [Decision6501364012](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6501364012),
 independent structured task review5700617139; SAME evidence PR #834.
@@ -25,8 +49,8 @@ independent structured task review5700617139; SAME evidence PR #834.
   truthful usage/CI, offline/reload/reconnect after shutdown.
 - [x] Final dump/full afterimages; exact two workers stopped, Router still off;
   permit disabled intact, all46 containers retained, DB/observer/frontend up.
-- [ ] ChatGPT PM closes hold, readies/merges833, checks postmerge, reviews/merges834.
-  Both remain unmerged; mainR unchanged. Failed/cancelled UI/VPN parity untested.
+- [x] PM6502481811 closed the R hold and merged833/834; main34c0e9a and
+  postmerge40912349585 four suites PASS. Failed/cancelled LIVE UI/VPN parity untested.
 
 ## Pre-finalization same #831 recovery execution checklist
 

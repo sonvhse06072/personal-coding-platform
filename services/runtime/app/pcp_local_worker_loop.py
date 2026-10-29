@@ -762,7 +762,10 @@ class TrustedReaders:
         self.task = task
         return task, issue
 
-    async def refresh(self, task):
+    async def refresh_delivery(self, task):
+        return await self.refresh(task, operation="delivery")
+
+    async def refresh(self, task, *, operation="admission"):
         from .config import model_config
         from .model_capabilities import validate_model_choice
         from .quota_telemetry import CodexQuotaCollector
@@ -817,6 +820,12 @@ class TrustedReaders:
                     and lease['owner_job_id'] == job_id
                     and lease['generation'] == self.lease_generation,
                     'pcp_local_lease_revoked')
+        if operation == 'delivery':
+            # These exact authority/source/isolation/ownership checks still apply.
+            # No Router choice or developer account is consumed by publication.
+            require(time.monotonic() - observed_at < 30, 'pcp_local_observation_expired')
+            self.authority()
+            return proof
         if self.route is None:
             self.route = await self.engine.router.route({
                 'job_id': job_id, 'project_id': PROJECT_ID, 'repository': REPOSITORY,
