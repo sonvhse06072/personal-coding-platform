@@ -8,7 +8,32 @@ all four suites successfully. One writer on `ai/815-successor-adoption-v4` in
 `/home/sonvh/pcp-local-adoption825-v4`. This historical825 campaign did not activate
 a protected baseline or live job. New831 execution is recorded below.
 
-## Active #835 source / isolated fixture checklist
+## Active #837 integrated adoption checklist
+
+[PM6508510691](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6508510691),
+accepted P=a4b273afb3af4b9b4fd23412a547230df0b93011; one writer
+`ai/835-adoption837-live`. [Actual evidence and continuation](../project/history/2026-10-30-adoption837.md).
+
+- [x] Complete decision/accepted report/ordered docs; main P, merged836,
+  independent review and actual four-suite postmerge40955723779 reconciled.
+- [x] Exact task837 body/goal/helper/job; custody and consistent private backup.
+- [x] One Runtime/verifier P build; Executor R/Router S full inputs match P.
+- [x] Actual packaged content/modes/toolchain/immutable askpass; no credential probes.
+- [x] Actual-image isolation without overlay PASS; verifier recipe13 tests and
+  read-only/nonrecursive/effective-noexec PASS. All six disposable probes stopped.
+- [x] Detect and reproduce inherited trust-config rejection with zero model
+  subprocesses. Original config retained; no guard bypass or alternate auth home.
+- [x] Exact successor registry/config/worker proposals prepared, old definitions
+  unchanged; no installation. One concrete PM config-disposition packet.
+- [x] Full11 tables/3 sequences/workspace/config bytes and #831 counters1/2/1
+  unchanged; after backup retained. Same3 services running/53 stopped.
+- [x] Trusted real Chromium dashboard polling/reconnect/fixed timers/provenance.
+- [ ] PM disposition of retained config; then worker adoption/fresh authority,
+  credentials/eight-reader readiness and ordinary837. All remain NOT EXECUTED.
+- [ ] Task Draft PR/exact-head CI and independent PM review; no task PR exists.
+- Evidence PR final-head required CI is recorded in its description.
+
+## Historical accepted #835 source / isolated fixture checklist
 
 [WorkOrder835](https://github.com/sonvhse06072/personal-coding-platform/issues/835),
 clarification6502893427 and continuation6504158102; one writer/branch `ai/835-local-repeatability`.

@@ -5,6 +5,41 @@ change to the Constitution, approved baseline or retained V3 authority.
 GH-815 and GH-822 are implemented together because the view must explain the
 new durable verification/commit/publication states. No new service/state store.
 
+## #837 physical adoption hold and continuation
+
+[PM6508510691](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6508510691)
+accepts P=a4b273afb3af4b9b4fd23412a547230df0b93011 and supersedes the pending
+adoption language below. [Actual report/one continuation packet](../project/history/2026-10-30-adoption837.md)
+contains exact images, backups, stopped probes and config disposition.
+
+P Runtime/verifier image60c4b0ba was built once and passed actual-image isolation
+without overlay plus packaged and physical verifier checks. It is **not deployed**.
+Old R Runtime/Executor and S Router remain stopped/unchanged; canonical source S,
+installed baseline, disabled activation/permits and provider credentials are intact.
+Do not repeat builds for this documentation PR or install its evidence head.
+
+Retained `runtime-home/.codex/config.toml` (118 bytes, SHA256
+304afa3ef9a587b6874f3517d6be979f4d4805ee89e3aca5afce88b30e8ffc52)
+contains #831 project-trust metadata and triggers P's inherited-config guard.
+The actual image reproduces rejection before model invocation. Preserve it for
+PM's exact quarantine disposition; do not silently remove it, replace CODEX_HOME
+or weaken the guard. No837 receipt/job exists; ordinary admission remains pending.
+Private proposals are in `/home/sonvh/.local/state/pcp-adoption837-live-v1` and
+release `releases/repeatability-a4b273afb3af4b9b4fd23412a547230df0b93011`.
+
+Same https://localhost:18443/dashboard remains tokenless/local, no login required.
+Fresh trusted Chromium polling/reconnect passed. All six new probes are stopped;
+V4 retains56 containers, only the exact DB/observer/frontend below are running.
+Existing scoped stop commands remain correct; no dashboard stop was performed.
+All original rows/sequences/workspace/config manifests match before/after.
+
+After PM disposition, use the report's ordered same-instance/P/task continuation:
+backup/canonical custody, reviewed worker intents, stable first-start fingerprints,
+new immutable baseline/fresh bounded activation, scoped credentials, full readiness,
+one ordinary run-once, delivery/CI, dashboard and retained shutdown. Main stays P;
+no new authority from this evidence PR, no old-permit restoration, and no Developer
+finalization or merge. Current VPN/provider readiness is unmeasured.
+
 ## #835 candidate operator interface and adoption gate
 
 Engineering anchor34c0e9ac99a057eef0a08a15f0c3828b3c1addfa follows merged833/834;
