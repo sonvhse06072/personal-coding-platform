@@ -580,7 +580,10 @@ def test_concrete_authority_reloads_baseline_and_detects_in_place_edit(tmp_path,
     monkeypatch.setattr(trusted, 'ACTIVATION_FILE', activation_file)
     project = {'repository': q.REPOSITORY, 'path': str(tmp_path / 'source'),
         'registration_status': 'approved', 'base_branch': 'main',
-        'runtime': {'workspace_mode':'isolated_clone','developer_permission_mode':'bounded'},
+        'runtime': {'workspace_mode':'isolated_clone','developer_permission_mode':'bounded',
+                    'exclusive_project_lease':True},
+        'autonomy': {'allow_commit':True,'allow_push_ai_branch':True,
+                     'allow_create_pr':True,'allow_production_deploy':False},
         'ddev': {'enabled':True}}
     refs = {key: [{'path':'docs/project/constitution.md'}] for key in (
         'goals','non_goals','requirements','architecture_constraints','quality_policy',

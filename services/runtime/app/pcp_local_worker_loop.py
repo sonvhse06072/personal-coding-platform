@@ -170,6 +170,28 @@ class RuntimeTaskAttestor:
         }
 
 
+def require_operational_project(project: dict[str, Any]) -> None:
+    """Same project policy before receipt registration and inside job insertion.
+
+    The queued row reserves admission; execution subsequently acquires the
+    exclusive durable lease. Requiring the old source-only False setting here
+    stranded a claim after readiness had accepted the operational True setting.
+    """
+    runtime = project.get('runtime') or {}
+    rights = project.get('autonomy') or {}
+    require(project.get('repository') == REPOSITORY
+            and project.get('base_branch') == 'main'
+            and project.get('registration_status') == 'approved'
+            and runtime.get('workspace_mode') == 'isolated_clone'
+            and runtime.get('developer_permission_mode') == 'bounded'
+            and runtime.get('exclusive_project_lease') is True
+            and (project.get('ddev') or {}).get('enabled') is True
+            and all(rights.get(k) is True for k in (
+                'allow_commit', 'allow_push_ai_branch', 'allow_create_pr'))
+            and rights.get('allow_production_deploy') is False,
+            'pcp_local_project_not_operational')
+
+
 class RuntimeTaskLauncher:
     """One registration attempt and one existing-queue submission, no worker."""
 
@@ -212,19 +234,12 @@ class RuntimeTaskLauncher:
         cfg = project_config(PROJECT_ID)
         revision = (project_baselines_doc().get("projects", {}).get(PROJECT_ID) or {})
         baseline = resolve_project_baseline(PROJECT_ID, self.task.baseline_revision)
-        require(cfg.get("repository") == REPOSITORY and cfg.get("base_branch") == "main"
-                and cfg.get("registration_status") == "approved"
-                and (cfg.get("runtime") or {}).get("workspace_mode") == "isolated_clone"
-                and (cfg.get("runtime") or {}).get("developer_permission_mode") == "bounded"
-                and (cfg.get("runtime") or {}).get("exclusive_project_lease") is False
-                and all((cfg.get("autonomy") or {}).get(k) is True for k in (
-                    "allow_commit", "allow_push_ai_branch", "allow_create_pr"))
-                and (cfg.get("autonomy") or {}).get("allow_production_deploy") is False
-                and revision.get("active_revision") == self.task.baseline_revision
+        require_operational_project(cfg)
+        require(revision.get("active_revision") == self.task.baseline_revision
                 and baseline is not None and baseline.project_id == PROJECT_ID
                 and baseline.source_commit == self.task.baseline_source_commit,
                 "pcp_local_current_authority_changed")
-        # Observe no direct lease: the transactional queued row is the reservation.
+        # Registration reserves a queued row; execution acquires its lease later.
         if self.source_binding is not None:
             require(exact_value(self.source_binding, self.attestor.binding(self.task)),
                     "pcp_local_registration_binding_changed")
@@ -707,13 +722,7 @@ class TrustedReaders:
         projects = config.projects_doc().get('projects', {})
         require(set(projects) == {PROJECT_ID}, 'pcp_local_singleton_required')
         project = config.project_config(PROJECT_ID)
-        require(project.get('repository') == REPOSITORY
-                and project.get('registration_status') == 'approved'
-                and project.get('base_branch') == 'main'
-                and project['runtime'].get('workspace_mode') == 'isolated_clone'
-                and project['runtime'].get('developer_permission_mode') == 'bounded'
-                and project.get('ddev', {}).get('enabled') is True,
-                'pcp_local_project_not_operational')
+        require_operational_project(project)
         baseline = resolve_project_baseline(PROJECT_ID, self.activation['baseline_revision'])
         active = config.project_baselines_doc()['projects'][PROJECT_ID]['active_revision']
         require(baseline is not None and baseline.revision == active

@@ -5,6 +5,55 @@ change to the Constitution, approved baseline or retained V3 authority.
 GH-815 and GH-822 are implemented together because the view must explain the
 new durable verification/commit/publication states. No new service/state store.
 
+## Current831 execution and no-replay checkpoint
+
+[Execution6494028046](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6494028046)
+advanced the prior preparation packet through real S builds, baseline/config,
+credentials, readiness and one admission attempt. [Actual receipt](../project/history/2026-10-29-successor831-live.md)
+records exact images/resources/hashes. S is b97ade581fecad4db2146258e5ca02c3902189e0;
+main remains held. Prior sections describing draft/OFF preparation are historical,
+not the current installed state or new permission.
+
+Baseline `pcp-local-successor-830-b97ade5-20261029` is approved/active in the private
+registry; all prior definitions remain unchanged. Canonical S clone installed;
+old5ad retained in release rollback. Readiness returned true but missed the
+launcher's obsolete exclusive_project_lease=False predicate. Approved private
+configuration requires True. The sole831 admission left receipt claimed/gen1,
+reserved ID `a8851f89dd3e4e582c697ec1fe6d8cdb`, **without a job or lease**.
+No model, commit, branch or PR exists. Keep the exact receipt; do not repeat
+run-once, reset/re-admit, create a replacement, weaken the lease flag or use
+`/deliver` (which requires verified job evidence). A source correction and reviewed
+same-identity recovery design need a separate PM adoption/continuation checkpoint.
+Owner approved protected worker-loop source correction on the follow-up PR. Its
+shared policy check requires exclusive=True in readiness and JIT registration.
+This candidate is not deployed, and does not recover a consumed claim; no hot patch.
+
+New workers are stopped, intake disabled by moving the original activation to
+`releases/worker-b97ade581fecad4db2146258e5ca02c3902189e0/rollback/activation-831-disabled.json`.
+SHA256bfa447d7e79afe7f53267598d280beb084c6a88ebf6d8dcb5d22f9b05a5752a4;
+original expiry2026-10-30T10:51:28.134568Z, never renewed. Preserve it and private
+scoped session/PAT; publisher expiry2026-11-04T08:29:46Z. Do not start the stopped
+workers or restore activation as an implicit retry. Their exact stop commands,
+if reconciling a later uncertain stop, are scoped to these new IDs only:
+
+```sh
+bash <<'SH'
+set -eu
+unset DOCKER_CONTEXT DOCKER_TLS_VERIFY DOCKER_CERT_PATH
+timeout 90 docker --host unix:///var/run/docker.sock stop --time 15 \
+  f8d63b9721d37883ad111fd1e3cd46b79cb39b8535cfadc856d5dff791ceb938 \
+  cade4f36d11544a1bda50145a3d5095e7a92b7d561d1822e5d168196279479b8 \
+  f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6
+SH
+```
+
+V4 now39 retained containers, only DB/observer/frontend running. The unchanged
+https://localhost:18443/dashboard is tokenless/loopback_readonly with trusted TLS.
+It shows no admitted jobs because claim-only reservations are not job projections;
+check durable receipt state separately before interpreting the empty view as free
+admission. Populated timers/usage remain untested. Existing exact observer/DB stop
+commands below remain valid; no rollback/reset/prune/down-v is authorized.
+
 ## Readiness and schema
 
 Before admission, authenticated `GET /v1/pcp-local/readiness` aggregates blockers
@@ -560,9 +609,10 @@ validation stays distinct from historical assisted #824.
 
 ## V4 shutdown and retention
 
-Current evidence: `/home/sonvh/.local/state/pcp-observer828-adoption-v1` (0700).
-V4 retains33 containers, three running/30 stopped. All22 V3 and four retirement
-rehearsal containers stay stopped. Retain old images/configs/token, original
+Current evidence: `/home/sonvh/.local/state/pcp-successor831-live-v1` (0700).
+V4 retains39 containers, three running/36 stopped. The prior observer828 receipt
+remains retained. All22 V3 and four retirement rehearsal containers stay stopped.
+Retain old images/configs/token, original
 backups/manifests and every stopped probe, including diagnosed harness failures.
 No prune/down-v/reset, V3 restart or retirement replay. The accepted application
 checkout and frozen ea6 maintenance checkout both remain clean and pinned.
