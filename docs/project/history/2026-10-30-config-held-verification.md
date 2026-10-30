@@ -8,6 +8,9 @@ worktree `/home/sonvh/pcp-config-held-835`, starting at accepted
 Q `e3b19700dffcc3e2eae45bdde78230819466c9e1`. The separate PR838 operational
 [report](https://github.com/sonvhse06072/personal-coding-platform/blob/1e5eafb0f9f308ef790bfb6d4a0d8e0d9bc09041/docs/project/history/2026-10-30-q-adoption837.md)
 and receipt6516098356 supersede Q's stale pre-admission continuity.
+[Draft repair PR840](https://github.com/sonvhse06072/personal-coding-platform/pull/840)
+records the exact final source head and four genuinely executed hosted suites.
+No developer acceptance or merge is implied by this evidence.
 
 B837 `ccb57d244cfd1fc069a98fd8c17734a1` remains LIVE blocked/held, receipt
 running/gen2, lease active/gen2, counters1 model/0 mandatory tests/0 delivery.

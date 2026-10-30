@@ -9,7 +9,8 @@ take precedence over older handoffs.
 authorizes one SOURCE/FIXTURE repair from accepted Q
 `e3b19700dffcc3e2eae45bdde78230819466c9e1`, branch
 `ai/835-config-held-verification`, worktree `/home/sonvh/pcp-config-held-835`.
-One writer, separate Draft repair PR. PR838 remains unmerged Q execution evidence
+One writer, [Draft repair PR840](https://github.com/sonvhse06072/personal-coding-platform/pull/840).
+PR838 remains unmerged Q execution evidence
 at1e5eafb0f9f308ef790bfb6d4a0d8e0d9bc09041; its four-suite41011053732 is evidence CI.
 Main remains Q. A future independently accepted repair merge is R2, not yet known.
 
@@ -84,7 +85,7 @@ Historical #752 PARKED/#595 HOLD and unrelated physical gates remain unchanged.
 
 <!-- PCP:CONTINUITY:START -->
 Main Q=e3b19700 held; PR838 evidence1e5eafb0 unmerged.
-PM6516240084 SOURCE/FIXTURE on ai/835-config-held-verification, one separate Draft PR.
+PM6516240084 SOURCE/FIXTURE on ai/835-config-held-verification, Draft PR840.
 CLI lifecycle fixed without config exemption; named held verification has no model path.
 Restored B actual Q tests13+13/commit FIXTURE PASS; original A/B and live state unchanged.
 B running2/active2/counters1/0/0 held; no live task PR. Workers/activation off, dashboard up.

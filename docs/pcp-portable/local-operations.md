@@ -15,7 +15,8 @@ activation disabled. A and both configs/credentials/backups retained. Dashboard
 https://localhost:18443/dashboard remains tokenless/local and unchanged.
 
 [Complete repair WorkReport and one executable PM rollout packet](../project/history/2026-10-30-config-held-verification.md)
-is the current source handoff. No CLI upgrade/config exemption: exact in-memory
+and [Draft PR840](https://github.com/sonvhse06072/personal-coding-platform/pull/840)
+are the current source handoff. No CLI upgrade/config exemption: exact in-memory
 trust prevents the pinned producer write. Future invocations still reject old or
 hostile config. Held continuation never invokes a model; private finite authority,
 full preimages, unverified candidate, per-phase intent/results and original ownership
