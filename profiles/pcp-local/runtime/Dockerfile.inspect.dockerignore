@@ -18,6 +18,7 @@
 !services/runtime/app/capability_context.py
 !services/runtime/app/collaboration.py
 !services/runtime/app/config.py
+!services/runtime/app/context_memory.py
 !services/runtime/app/continuity.py
 !services/runtime/app/control_actions.py
 !services/runtime/app/control_actions_attention.py
@@ -54,6 +55,7 @@
 !services/runtime/app/incident_learning.py
 !services/runtime/app/intake.py
 !services/runtime/app/intake_policy.py
+!services/runtime/app/invocation_context.py
 !services/runtime/app/job_status_publisher.py
 !services/runtime/app/legacy_adaptive_recovery.py
 !services/runtime/app/legacy_delivery_recovery.py
@@ -124,6 +126,7 @@ services/runtime/app/baseline.py/*
 services/runtime/app/capability_context.py/*
 services/runtime/app/collaboration.py/*
 services/runtime/app/config.py/*
+services/runtime/app/context_memory.py/*
 services/runtime/app/continuity.py/*
 services/runtime/app/control_actions.py/*
 services/runtime/app/control_actions_attention.py/*
@@ -160,6 +163,7 @@ services/runtime/app/g0_fixture_execution.py/*
 services/runtime/app/incident_learning.py/*
 services/runtime/app/intake.py/*
 services/runtime/app/intake_policy.py/*
+services/runtime/app/invocation_context.py/*
 services/runtime/app/job_status_publisher.py/*
 services/runtime/app/legacy_adaptive_recovery.py/*
 services/runtime/app/legacy_delivery_recovery.py/*

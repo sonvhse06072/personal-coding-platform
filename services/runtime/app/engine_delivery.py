@@ -305,7 +305,7 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         """Existing publisher/CI machinery; independent PM owns final acceptance."""
         from .pcp_local_worker_loop import TrustedReaders
         from .pcp_local_worker_loop import stable_job_id
-        from .pcp_local_task_queue import require, PROJECT_ID, REPOSITORY
+        from .pcp_local_task_queue import require, PROJECT_ID, REPOSITORY, TaskStop
         require(type(readers) is TrustedReaders and readers.engine is self
                 and stable_job_id(task) == job_id, "pcp_local_delivery_admission_required")
         await readers.refresh_delivery(task)
@@ -327,10 +327,19 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 and rights.get("allow_production_deploy") is False, "pcp_local_delivery_rights_revoked")
         body = pull_request_body(job_id=job_id, branch=row["branch"], commit=result["commit"],
             verification=verification, evaluator=None)
+        from .invocation_context import local_invocation_context, ContextCannotProve
+        try:
+            context = local_invocation_context(row, task, role='reviewer')
+        except ContextCannotProve as exc:
+            checkpoint['invocation_context_failure'] = {'missing': exc.missing}
+            self.storage.update(job_id, checkpoint=checkpoint)
+            raise TaskStop('pcp_local_context_cannot_prove') from exc
+        checkpoint['review_context'] = context['manifest']
+        body += '\n\n' + context['text']
         progress = deepcopy(row.get('progress') or {})
         attempts = int(progress.get('delivery_attempts', 0))
         progress['delivery_attempts'] = attempts + 1
-        self.storage.update(job_id, progress=progress)
+        self.storage.update(job_id, progress=progress, checkpoint=checkpoint)
         try:
             delivery = await deliver_verified_work(ddev=self.ddev, job_id=job_id, project_id=PROJECT_ID,
                 workspace=row["workspace"], branch=row["branch"], source_commit=task.base_sha,

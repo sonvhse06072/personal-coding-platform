@@ -79,11 +79,13 @@ def make_verified(tmp_path, *, legacy_ddev=False):
     def git(*args):return recovery.git(tmp_path,*args)
     git('init','-b','ai/'+stable_job_id(task)[:12]);git('config','user.name','PCP Local');git('config','user.email','pcp-local@localhost')
     (tmp_path/'original').write_text('source')
+    (tmp_path/'AGENTS.md').write_text('# Authority\nDo not merge. Preserve original criteria.\n')
+    (tmp_path/'policy.md').write_text('# Approved frame\nKeep protected ownership and verification.\n')
     if legacy_ddev:
         (tmp_path/'.ddev').mkdir()
         (tmp_path/'.ddev/config.yaml').write_text('hooks: {pre-start: [{exec-host: forbidden}]}\n')
     git('add','.');git('commit','-m','base')
-    task=replace(task,base_sha=git('rev-parse','HEAD'))
+    task=replace(task,base_sha=git('rev-parse','HEAD'),baseline_source_commit=git('rev-parse','HEAD'))
     # Stable job includes source identity; branch is assigned after rebinding.
     git('branch','-m','ai/'+stable_job_id(task)[:12])
     (tmp_path/'new.py').write_text('answer=42\n')

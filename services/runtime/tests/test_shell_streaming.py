@@ -7,6 +7,26 @@ import pytest
 from app.shell import CommandTimeoutError, run_command
 
 
+def test_full_large_context_stdin_round_trip_and_closed_pipe(tmp_path):
+    import hashlib
+    payload = 'Tiêu chí không được cắt — original criteria\n' * 20000
+    result = asyncio.run(run_command([sys.executable, '-c',
+        'import sys,hashlib; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())'],
+        cwd=tmp_path, timeout=5, input_text=payload))
+    assert result.returncode == 0 and result.stdout.strip() == hashlib.sha256(payload.encode()).hexdigest()
+    early = asyncio.run(run_command([sys.executable, '-c', 'pass'],
+        cwd=tmp_path, timeout=5, input_text=payload))
+    assert early.returncode == 0
+
+
+def test_context_stdin_timeout_is_bounded_and_does_not_disclose_prompt(tmp_path):
+    payload = 'private context' * 100000
+    with pytest.raises(CommandTimeoutError) as exc:
+        asyncio.run(run_command([sys.executable, '-c', 'import time;time.sleep(10)'],
+            cwd=tmp_path, timeout=0.1, input_text=payload))
+    assert 'private context' not in str(exc.value)
+
+
 def test_run_command_closes_stdin_for_noninteractive_subprocess(tmp_path: Path):
     result = asyncio.run(
         run_command(

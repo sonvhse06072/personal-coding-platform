@@ -35,6 +35,9 @@ def lifecycle(database, setup, monkeypatch, tmp_path, request):
         subprocess.run(['git','-C',str(path),'config','user.name','PCP Local'],check=True)
         subprocess.run(['git','-C',str(path),'config','user.email','pcp-local@localhost'],check=True)
     base_value=dict(project_id='pcp-local', revision=v.task.baseline_revision, source_commit=v.task.baseline_source_commit, status='approved')
+    base_value['references'] = {k: [dict(path='policy.md')] for k in (
+        'goals','non_goals','requirements','architecture_constraints','quality_policy',
+        'security_policy','budget_policy','roadmap_frame')}
     base=SimpleNamespace(**base_value, model_dump=lambda **kw: deepcopy(base_value))
     cp=deepcopy(row['checkpoint']);cp['project_baseline']=base.model_dump()
     cp['canonical_intake']={'mode':'direct','bounded_direct':True}
@@ -115,6 +118,7 @@ def ordinary_successor(s, monkeypatch, tmp_path):
     retained=s.db.get(s.id);old_receipt,old_lease=ownership(s.db)
     _,issue,_,facts=fixture();issue=deepcopy(issue)
     payload=json.loads(issue['body'].split(q.MARKER,1)[1]);payload['base_sha']=s.v.task.base_sha
+    payload['goal'] += ' Mục đích: giữ bằng chứng cũ. Tiêu chí: kiểm chứng đầy đủ. Ngoài phạm vi: thay đổi quyền.'
     payload['key']=f'fixture-ordinary-{s.v.task.issue_number+1}'
     issue.update(number=s.v.task.issue_number+1,main_sha=s.v.task.base_sha,
         html_url=f'https://github.com/{q.REPOSITORY}/issues/{s.v.task.issue_number+1}',

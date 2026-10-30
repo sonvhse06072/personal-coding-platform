@@ -212,9 +212,11 @@ async def _run_legacy_communicate(
     *,
     argv: list[str],
     timeout: int,
+    input_text: str | None = None,
 ) -> CommandResult:
     try:
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+        pending = proc.communicate(input_text.encode()) if input_text is not None else proc.communicate()
+        stdout, stderr = await asyncio.wait_for(pending, timeout=timeout)
     except asyncio.CancelledError:
         await _terminate_process_group(proc)
         raise
@@ -237,12 +239,13 @@ async def run_command(
     env: dict[str, str] | None = None,
     on_stdout_line: Callable[[str], None] | None = None,
     on_stderr_line: Callable[[str], None] | None = None,
+    input_text: str | None = None,
 ) -> CommandResult:
     merged = agent_subprocess_env(env)
     proc = await asyncio.create_subprocess_exec(
         *argv,
         cwd=str(cwd),
-        stdin=asyncio.subprocess.DEVNULL,
+        stdin=asyncio.subprocess.PIPE if input_text is not None else asyncio.subprocess.DEVNULL,
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.PIPE,
         env=merged,
@@ -254,22 +257,34 @@ async def run_command(
     # that implement only the historical communicate() API. Keep that contract
     # while real asyncio subprocesses take the incremental streaming path below.
     if not hasattr(proc, "stdout") or not hasattr(proc, "stderr") or not hasattr(proc, "wait"):
-        return await _run_legacy_communicate(proc, argv=argv, timeout=timeout)
+        return await _run_legacy_communicate(proc, argv=argv, timeout=timeout, input_text=input_text)
 
     stdout_chunks: list[str] = []
     stderr_chunks: list[str] = []
     stdout_task = asyncio.create_task(_drain_stream(proc.stdout, stdout_chunks, on_stdout_line))
     stderr_task = asyncio.create_task(_drain_stream(proc.stderr, stderr_chunks, on_stderr_line))
+    async def feed():
+        if input_text is not None:
+            try:
+                proc.stdin.write(input_text.encode())
+                await proc.stdin.drain()
+            except (BrokenPipeError, ConnectionResetError):
+                pass  # Child exit is authoritative; never retry an invocation.
+            finally:
+                proc.stdin.close()
+    input_task = asyncio.create_task(feed())
     try:
-        await asyncio.wait_for(proc.wait(), timeout=timeout)
+        await asyncio.wait_for(asyncio.gather(proc.wait(), input_task), timeout=timeout)
         await asyncio.gather(stdout_task, stderr_task)
     except asyncio.CancelledError:
         await _terminate_process_group(proc)
-        await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
+        input_task.cancel()
+        await asyncio.gather(stdout_task, stderr_task, input_task, return_exceptions=True)
         raise
     except TimeoutError as exc:
         await _terminate_process_group(proc)
-        await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
+        input_task.cancel()
+        await asyncio.gather(stdout_task, stderr_task, input_task, return_exceptions=True)
         raise CommandTimeoutError(
             timeout=timeout,
             argv=argv,

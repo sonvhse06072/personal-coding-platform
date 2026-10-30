@@ -1,5 +1,25 @@
 # Current Project State and Handoff
 
+## #604 context continuity SOURCE/FIXTURE candidate — 2026-10-31
+
+[WO6529510627](https://github.com/sonvhse06072/personal-coding-platform/issues/604#issuecomment-6529510627)
+authorizes one bounded ordinary-local implementation on `ai/604-context-continuity-v1`,
+anchored at **0e8065b6bce08bed1e6b027a67fdf52d6ae848ca**. Evidence PR845 is merged;
+postmerge [CI41100344082](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41100344082)
+passed all four executed suites before implementation. This corrects the old premerge index.
+
+[WorkReport, criteria/evidence matrix, measurements and rollout packet](history/2026-10-31-context-continuity.md)
+records shared Composer packaging, pinned task/baseline context at actual execute/repair
+and delivery-review boundaries, read-only Git validation, durable provenance and lossless
+stdin. Real isolated Git/PostgreSQL/fresh-process fixtures use synthetic external transports;
+there is no developer inference or live publication. New-invocation restoration does not
+prove protection during internal CLI compaction. Prose criteria remain prose, not invented IDs.
+
+Next: independent PM reviews the single Draft PR and its exact-head executed CI. #604
+stays open for remaining programme scope; #595 HOLD. No live adoption/build/worker start,
+activation, completed-task replay or merge. The deployed dashboard and historical assets
+remain untouched; the live details below are the retained C843 receipt, not a new observation.
+
 ## C843 completed and retained — 2026-10-30 17:21 UTC
 
 Deployed release/canonical/task/verifier remain accepted N **85e415f1f53c8129056e2f04fb99a9b964b89609** (PR842).
@@ -8,7 +28,7 @@ repository progress does not change the deployed baseline. No source/image/basel
 [Original WO6526365770](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6526365770)
 authorized C843; [corrected finalization6528029320](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6528029320)
 binds independent [review5715474340](https://github.com/sonvhse06072/personal-coding-platform/pull/844#pullrequestreview-5715474340).
-[Draft evidence PR845](https://github.com/sonvhse06072/personal-coding-platform/pull/845),
+[Merged evidence PR845](https://github.com/sonvhse06072/personal-coding-platform/pull/845),
 branch `ai/835-ordinary-c-n-live`, records exact final head and required CI.
 PM commits through28254e6292cf31e2b21502a1be7a964e5481733f are preserved; no force push.
 Reconcile actual GitHub/Runtime state when resuming; historical handoffs may be stale.
@@ -66,11 +86,10 @@ Unknown remains distinct from estimated0. No ignored TLS errors or injected cook
 
 ## Immediate next safe actions
 
-Task PR844 is merged; PM reviews the reconciled evidence PR845 and exact-head CI before
-its merge. Resolve current GitHub main and PR state rather than treating this premerge
-record as a future SHA. The main-at-N hold ended after durable finalization. Finalization is complete:
-do not repeat readiness/finalize as a mutating workflow, restore authority, replay work,
-renew the expiry or start another task. Any later execution needs its own decision.
+Task PR844 and evidence PR845 are merged. The main-at-N hold ended after durable
+finalization. This source candidate does not authorize another execution. Do not repeat
+readiness/finalize as a mutating workflow, restore authority, replay work or renew its expiry.
+A later adoption/execution requires a separate finite decision and the new rollout packet.
 Keep DB/observer/HTTPS available and all historical/rollback assets retained.
 
 ## Active PCP issues and owner attention
@@ -96,5 +115,7 @@ Job4d0f1df36be0b9b971c18b04af870950 completed/pm_review_accepted, finalizedtrue,
 CorrectedPM5715474340; zero-POST GitHub502 command then Owner-authorized replacement, one actual finalization POST.
 Workers/authority OFF17:21:47Z; original expiry2026-10-30T23:23:19Z unchanged. No replay/new task/deployment.
 A/B full evidence preserved; retired824 untouched. DB/N observer/HTTPS retained; terminal dashboard/reconnect PASS.
-Same evidence PR845/ai/835-ordinary-c-n-live includes PM28254e6 documents; PM owns final review and merge ordering.
+Evidence845 merged0e8065b6; its main CI41100344082 passed four executed suites.
+Active SOURCE candidate: ai/604-context-continuity-v1; shared pinned context and Git/PG fixtures.
+No deployed change; PM reviews the Draft candidate/exact-head CI. #604 open, #595 HOLD.
 <!-- PCP:CONTINUITY:END -->

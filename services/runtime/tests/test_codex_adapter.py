@@ -431,3 +431,15 @@ def test_project_trust_is_exact_in_memory_and_does_not_grant_permission(monkeypa
         return CommandResult(argv,0,'{"type":"turn.completed"}','')
     monkeypatch.setattr(codex,'run_command',run)
     asyncio.run(CodexAdapter('fixture').run(workspace=tmp_path,prompt='fixture',mode='execute',timeout=10,isolate_workspace=True))
+
+
+def test_large_pinned_context_reaches_transport_whole_without_argument_limit(monkeypatch,tmp_path):
+    from app.adapters import codex
+    prompt = 'Original acceptance criterion — tiêu chí đầy đủ\n' * 12000
+    monkeypatch.setenv('CODEX_HOME',str(tmp_path/'home'))
+    async def run(argv,**kwargs):
+        assert argv[-1]=='-' and prompt not in argv
+        assert kwargs['input_text']==prompt and len(prompt.encode())>131072
+        return CommandResult(argv,0,'{"type":"turn.completed"}','')
+    monkeypatch.setattr(codex,'run_command',run)
+    asyncio.run(CodexAdapter('fixture').run(workspace=tmp_path,prompt=prompt,mode='repair',timeout=10,isolate_workspace=True))
