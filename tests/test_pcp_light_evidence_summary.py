@@ -98,3 +98,51 @@ def test_cli_invalid_input_returns_nonzero(tmp_path):
                          capture_output=True, text=True, check=False)
     assert run.returncode != 0
     assert json.loads(run.stdout)["status"] == "INVALID"
+
+
+@pytest.mark.parametrize("raw", [
+    # Top-level record object: the last member otherwise silently wins.
+    b'[{"id":"x","class":"FIXTURE","class":"LIVE",'
+    b'"outcome":"PASS","source_sha":"' + SHA.encode() + b'"}]',
+    # A nested object is still part of the same JSON input and must be checked.
+    b'[{"id":"x","class":"SOURCE","outcome":"PASS",'
+    b'"source_sha":"' + SHA.encode() + b'",'
+    b'"nested":{"a":1,"a":2}}]',
+    # Duplicate names in a top-level object are rejected even though the value
+    # would later fail the array schema check.
+    b'{"x":1,"x":2}',
+])
+def test_cli_rejects_duplicate_json_members_without_disclosure_or_partial_counts(tmp_path, raw):
+    path = tmp_path / "ambiguous.json"
+    path.write_bytes(raw)
+    before = path.read_bytes()
+
+    run = subprocess.run([sys.executable, str(SCRIPT), str(path)],
+                         capture_output=True, check=False)
+
+    assert run.returncode != 0
+    assert run.stdout == b'{"reason": "duplicate_json_member", "status": "INVALID"}\n'
+    assert run.stderr == b""
+    assert b"FIXTURE" not in run.stdout and b"LIVE" not in run.stdout
+    assert b"class" not in run.stdout and raw not in run.stdout
+    assert path.read_bytes() == before
+
+
+def test_cli_preserves_input_bytes_on_success_and_source_mismatch_error(tmp_path):
+    valid = json.dumps([record()], separators=(",", ":")).encode()
+    mismatch = json.dumps([record("one"), record("two", source_sha="b" * 40)],
+                          separators=(",", ":")).encode()
+    outputs = []
+    for name, raw in (("valid.json", valid), ("mismatch.json", mismatch)):
+        path = tmp_path / name
+        path.write_bytes(raw)
+        run = subprocess.run([sys.executable, str(SCRIPT), str(path)],
+                             capture_output=True, check=False)
+        outputs.append(run)
+        assert path.read_bytes() == raw
+    assert outputs[0].returncode == 0
+    assert json.loads(outputs[0].stdout) == summary.summarize([record()])
+    assert outputs[1].returncode != 0
+    assert json.loads(outputs[1].stdout) == {
+        "status": "INVALID", "reason": "source_sha_mismatch"
+    }

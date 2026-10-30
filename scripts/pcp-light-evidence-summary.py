@@ -19,6 +19,16 @@ class InputError(ValueError):
     pass
 
 
+def _object_without_duplicate_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """Build a JSON object while refusing ambiguous repeated member names."""
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise InputError("duplicate_json_member")
+        result[key] = value
+    return result
+
+
 def summarize(records: Any) -> dict[str, Any]:
     if not isinstance(records, list):
         raise InputError("top_level_must_be_array")
@@ -69,7 +79,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("input", type=Path, help="JSON file containing an array of evidence records")
     args = parser.parse_args(argv)
     try:
-        records = json.loads(args.input.read_text(encoding="utf-8"))
+        records = json.loads(
+            args.input.read_text(encoding="utf-8"),
+            object_pairs_hook=_object_without_duplicate_members,
+        )
         result = summarize(records)
     except (OSError, UnicodeError, json.JSONDecodeError, InputError) as exc:
         reason = str(exc) if isinstance(exc, InputError) else "input_unavailable_or_invalid"

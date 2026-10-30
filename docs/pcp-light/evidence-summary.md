@@ -19,10 +19,14 @@ Each record must have exactly these fields:
 
 `class` is one of `SOURCE`, `FIXTURE`, `PHYSICAL`, or `LIVE`. `outcome` is one
 of `PASS`, `FAIL`, or `NOT_TESTED`. `id` is a nonempty string and must be unique
-in the input. Every `source_sha` must be the same full, lowercase 40-character
-hexadecimal SHA. The top-level JSON value must be an array; an empty array is
-valid. Invalid JSON or records produce a JSON error on stdout and a nonzero
-exit status.
+in the input. JSON object member names must also be unique in every object,
+including nested objects; duplicate names are rejected before schema validation
+instead of silently taking the last value. Every `source_sha` must be the same
+full, lowercase 40-character hexadecimal SHA. The top-level JSON value must be
+an array; an empty array is valid. Invalid JSON or records produce a sanitized
+JSON error on stdout and a nonzero exit status. The error does not include input
+contents, and validation failures emit no partial summary counts. The CLI reads
+the input without modifying its bytes on success or error.
 
 Example:
 
