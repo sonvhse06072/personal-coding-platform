@@ -5,7 +5,8 @@ Accepted N `85e415f1f53c8129056e2f04fb99a9b964b89609` (merged PR842), four execu
 [41078980568](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41078980568).
 One operator/writer; evidence branch `ai/835-ordinary-c-n-live`.
 Session **15:23:19Z–23:23:19Z**, recorded before operational mutation; no renewal.
-The evidence PR supplies its exact final head and required CI separately.
+[Draft evidence PR845](https://github.com/sonvhse06072/personal-coding-platform/pull/845)
+supplies its exact final head and required CI separately.
 
 ## Outcome and exact identities
 

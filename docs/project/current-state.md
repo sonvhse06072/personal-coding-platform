@@ -6,7 +6,8 @@
 authorized one integrated N adoption/ordinary task session,15:23:19Z–23:23:19Z.
 Accepted N **85e415f1f53c8129056e2f04fb99a9b964b89609** (PR842), postmerge41078980568
 executed all four suites. Main remains N. Evidence branch `ai/835-ordinary-c-n-live`;
-its Draft PR records exact final head/required CI. No Developer merge/finalization.
+[Draft evidence PR845](https://github.com/sonvhse06072/personal-coding-platform/pull/845)
+records exact final head/required CI. No Developer merge/finalization.
 Reconcile actual GitHub/Runtime state when resuming; historical handoffs may be stale.
 
 [Execution report, exact resources/hashes and next PM packet](history/2026-10-30-ordinary-c843-live.md)

@@ -27,7 +27,8 @@ https://localhost:18443/dashboard remains trusted HTTPS/tokenless/local/read-onl
 Actual browser A/B assistance and fixed timers, C ordinary usage/PM wait and reconnect
 PASS. No login required; no TLS bypass/cookie injection. Cost observation Unknown
 remains separate from estimated0. No VPN parity/unattended/benchmark claim; #595 HOLD.
-Evidence branch `ai/835-ordinary-c-n-live` requires normal PR/CI and independent PM.
+[Draft evidence PR845](https://github.com/sonvhse06072/personal-coding-platform/pull/845)
+on `ai/835-ordinary-c-n-live` requires exact-head CI and independent PM.
 Dated sections below remain history; their premerge/deployment statements do not
 supersede this receipt or authorize replay.
 
