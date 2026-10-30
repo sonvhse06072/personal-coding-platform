@@ -6,7 +6,7 @@
 commissions one SOURCE/isolated FIXTURE repair from accepted
 P=`a4b273afb3af4b9b4fd23412a547230df0b93011` on
 `ai/835-sparse-producer-compatibility`, worktree
-`/home/sonvh/pcp-sparse-producer-835`. One writer; separate Draft repair PR.
+`/home/sonvh/pcp-sparse-producer-835`. One writer; separate [Draft repair PR839](https://github.com/sonvhse06072/personal-coding-platform/pull/839).
 PR838 remains operational evidence, unmerged at
 `426a819f4ddf669d05c9dd4bf0577425066a67cd` (run40988953273, four executed suites).
 Its [retained-state receipt](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6513114230)

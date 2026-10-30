@@ -13,7 +13,9 @@ a protected baseline or live job. New831 execution is recorded below.
 [PM6513180988](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6513180988),
 accepted P=a4b273af; one writer on `ai/835-sparse-producer-compatibility`.
 [WorkReport / consolidated rollout packet](../project/history/2026-10-30-sparse-producer-repair.md).
-PR836 is merged; PR838 remains separate operational evidence, not a repair branch.
+[Draft repair PR839](https://github.com/sonvhse06072/personal-coding-platform/pull/839)
+holds the exact final-head CI receipt. PR836 is merged; PR838 remains separate
+operational evidence, not a repair branch.
 
 - [x] Reconcile PR838 successful quarantine/adoption, current stopped workers and
   retained sparse A; replace stale P pre-adoption continuity.

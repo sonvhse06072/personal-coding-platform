@@ -7,7 +7,7 @@ source, PM decisions and current GitHub/Runtime physical state before acting.
 
 [PM6513180988](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6513180988)
 authorizes SOURCE and isolated FIXTURE work on `ai/835-sparse-producer-compatibility`,
-`/home/sonvh/pcp-sparse-producer-835`, one writer and separate Draft repair PR.
+`/home/sonvh/pcp-sparse-producer-835`, one writer and separate [Draft repair PR839](https://github.com/sonvhse06072/personal-coding-platform/pull/839).
 Accepted P/main remains **a4b273afb3af4b9b4fd23412a547230df0b93011** (PR836 merged).
 PR838 remains unmerged operational evidence at426a819f, four-suite CI40988953273.
 Its [receipt6513114230](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6513114230)
