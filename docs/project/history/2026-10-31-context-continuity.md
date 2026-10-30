@@ -98,13 +98,19 @@ prove full goal/criteria plus exact baseline references and actual diff/check ev
   decisions, sensitive assignments, long mandatory text, bounded optional omission,
   unresolved evidence mapping and no raw-log leakage. This is labelled input retention,
   not semantic understanding, guaranteed alignment or full G2 retrieval recall.
+- Hosted root CI41106502038 exposed bytecode generation in the compatibility
+  facade: importing the shared Runtime source created `__pycache__`, which the
+  unchanged provenance guard rejected. An isolated interpreter without `-B` reproduces
+  RED; the facade now compiles exact source bytes without writing Runtime bytecode or
+  changing global interpreter settings. The new regression proves the input tree stays
+  clean; CI/provenance guards were not weakened.
 - Source packaging test imports only copied Runtime module with `python -I -S`; no
   repository mount. The inspection source allowlist adds exactly two `.py` files plus
   descendant denials; its draft input digest and tests are updated. Original 524-case
   Moby oracle hash remains unchanged. No new physical-build/OCI provenance is claimed.
 
 Validation so far: 127 real Git/PostgreSQL cases passed, including ordinary cycles,
-repeatability/ownership and context continuity. Final local verification: root **1760 passed**; Runtime **2748 passed, 331 skipped**;
+repeatability/ownership and context continuity. Final local verification: root **1761 passed**; Runtime **2748 passed, 331 skipped**;
 Executor **808 passed**; Router **132 passed**. The final targeted rerun is **21 passed**
 (10 real Git/PG context cases plus 11 pure cases); it overlaps the earlier 127, not an
 additional independent sample. `git diff --check` passed. Required four-suite hosted CI

@@ -453,3 +453,20 @@ print(compose_invocation_context.__module__, compose_context.__module__)
         cwd=tmp_path, capture_output=True, text=True, timeout=5)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == 'app.context_memory app.context_memory'
+
+
+def test_operator_facade_does_not_generate_runtime_build_inputs(tmp_path):
+    import shutil
+    import subprocess
+    import sys
+    core=tmp_path/'services/runtime/app'; core.mkdir(parents=True)
+    scripts=tmp_path/'scripts'; scripts.mkdir()
+    shutil.copyfile(ROOT/'services/runtime/app/context_memory.py',core/'context_memory.py')
+    shutil.copyfile(ROOT/'scripts/context_memory.py',scripts/'context_memory.py')
+    code='import sys;sys.path.insert(0,sys.argv[1]);import context_memory;assert context_memory.compose_context'
+    # Deliberately no -B. -I ignores caller PYTHONDONTWRITEBYTECODE, as hosted
+    # root tests do not suppress bytecode. The Runtime input tree must stay clean.
+    result=subprocess.run([sys.executable,'-I','-c',code,str(scripts)],
+        cwd=tmp_path,capture_output=True,text=True,timeout=5)
+    assert result.returncode==0,result.stderr
+    assert sorted(p.name for p in core.iterdir())==['context_memory.py']
