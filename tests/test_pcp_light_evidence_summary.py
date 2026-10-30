@@ -33,12 +33,28 @@ def test_summary_counts_classes_and_outcomes_without_live_promotion():
         "count": 4, "source_sha": SHA,
         "by_class": {"SOURCE": 1, "FIXTURE": 1, "PHYSICAL": 1, "LIVE": 1},
         "by_outcome": {"PASS": 2, "FAIL": 1, "NOT_TESTED": 1},
+        "by_class_and_outcome": {
+            "SOURCE": {"PASS": 0, "FAIL": 1, "NOT_TESTED": 0},
+            "FIXTURE": {"PASS": 1, "FAIL": 0, "NOT_TESTED": 0},
+            "PHYSICAL": {"PASS": 1, "FAIL": 0, "NOT_TESTED": 0},
+            "LIVE": {"PASS": 0, "FAIL": 0, "NOT_TESTED": 1},
+        },
         "fixture_evidence_is_live": False,
     }
 
 
 def test_empty_list_is_valid():
-    assert summary.summarize([])["count"] == 0
+    result = summary.summarize([])
+    assert result == {
+        "count": 0, "source_sha": None,
+        "by_class": {"SOURCE": 0, "FIXTURE": 0, "PHYSICAL": 0, "LIVE": 0},
+        "by_outcome": {"PASS": 0, "FAIL": 0, "NOT_TESTED": 0},
+        "by_class_and_outcome": {
+            evidence_class: {"PASS": 0, "FAIL": 0, "NOT_TESTED": 0}
+            for evidence_class in ("SOURCE", "FIXTURE", "PHYSICAL", "LIVE")
+        },
+        "fixture_evidence_is_live": False,
+    }
 
 
 @pytest.mark.parametrize("bad", [
@@ -62,7 +78,8 @@ def test_mixed_source_shas_rejected():
 
 
 def test_order_does_not_change_json_output(tmp_path):
-    items = [record("z", "LIVE", "FAIL"), record("a", "FIXTURE", "PASS")]
+    items = [record("z", "LIVE", "FAIL"), record("a", "FIXTURE", "PASS"),
+             record("b", "SOURCE", "NOT_TESTED"), record("c", "PHYSICAL", "PASS")]
     outputs = []
     for n, data in enumerate((items, list(reversed(items)))):
         path = tmp_path / f"{n}.json"

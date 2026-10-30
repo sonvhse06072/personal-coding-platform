@@ -1,5 +1,26 @@
 # Current Project State and Handoff
 
+## PM merge handoff — 2026-10-30
+
+PM accepted finalization and released the repository R2 hold in
+[decision6524809874](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524809874).
+Task PR841 merged as `9add83dc9a8ebe693c87a27f9925ce4a2d9a0dc9`.
+This documentation branch includes that main commit; subsequent documentation merge
+commits may advance repository HEAD. Resolve current main from GitHub rather than
+treating the historical R2 SHA below as current repository HEAD.
+
+The deployed Runtime/Executor remain R2; canonical/task/verifier remain Q.
+B is completed/PM accepted, delivered/gen3, released/gen2, counters1/2/1.
+All workers and execution authorities remain OFF; DB/observer/HTTPS remain available.
+No source/image/baseline adoption, next admission or permit renewal follows from merge.
+Earlier pending-state sections below are dated campaign history, not instructions to
+repeat recovery or finalization. Frozen reports and manifests remain unchanged.
+
+Immediate remaining work: complete evidence PR838 review/merge and postmerge CI;
+then plan the next bounded repeatability/measurement work against the roadmap.
+Do not claim unattended operation, benchmark PASS, or resolved PostgreSQL/VPN/LAN/
+observer-label limitations.
+
 Mutable continuity only; approved authority and current GitHub/Runtime evidence
 take precedence over older handoffs.
 
@@ -100,11 +121,10 @@ Closure does not mark untested capabilities PASS or authorize resource cleanup.
 
 ## Immediate next safe actions
 
-Independent PM reviews finalization evidence in SAME PR838 and handles eligible
-PR841/PR838 merge ordering, postmerge checks and release of the R2 hold. No operator
-merge or implicit new admission. Keep workers stopped and authority disabled.
-No remaining finalization blocker. Optional PostgreSQL/VPN/LAN and observer-label
-limitations remain; this assisted recovery is not a clean unattended benchmark.
+Task841 is merged and the R2 repository hold is released. Finish evidence838 review,
+merge and postmerge checks; keep local workers stopped and authority disabled.
+Plan subsequent work separately; no implicit admission or baseline change.
+
 
 ## Standing safety boundary
 
@@ -114,7 +134,8 @@ Chợ Nhạc and foreign resources stay untouched. No force push or new paid ser
 Historical #752 remains archived; #595 benchmark remains HOLD.
 
 <!-- PCP:CONTINUITY:START -->
-MainR2 held; taskQ/PR841headb29bc64d unchanged; both PRs unmerged.
+Repository R2 hold released; task841 merged9add83dc. Deployed R2/taskQ unchanged.
+Evidence838 merge/postmerge pending; no live execution authority.
 PM6524535370 exact metadata exception revalidated; no broader drift accepted.
 Review5712944983 finalized once: completed/pm_review_accepted/delivered3/released2.
 Proof/usage/checkpoint/progress unchanged, counters1/2/1; A831/retired824 preserved.

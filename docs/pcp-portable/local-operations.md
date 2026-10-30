@@ -1,5 +1,26 @@
 # Supported readiness, recovery and dashboard adoption
 
+## PM merge handoff — 2026-10-30
+
+PM accepted finalization and released the repository R2 hold in
+[decision6524809874](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524809874).
+Task PR841 merged as `9add83dc9a8ebe693c87a27f9925ce4a2d9a0dc9`.
+This documentation branch includes that main commit; subsequent documentation merge
+commits may advance repository HEAD. Resolve current main from GitHub rather than
+treating the historical R2 SHA below as current repository HEAD.
+
+The deployed Runtime/Executor remain R2; canonical/task/verifier remain Q.
+B is completed/PM accepted, delivered/gen3, released/gen2, counters1/2/1.
+All workers and execution authorities remain OFF; DB/observer/HTTPS remain available.
+No source/image/baseline adoption, next admission or permit renewal follows from merge.
+Earlier pending-state sections below are dated campaign history, not instructions to
+repeat recovery or finalization. Frozen reports and manifests remain unchanged.
+
+Immediate remaining work: complete evidence PR838 review/merge and postmerge CI;
+then plan the next bounded repeatability/measurement work against the roadmap.
+Do not claim unattended operation, benchmark PASS, or resolved PostgreSQL/VPN/LAN/
+observer-label limitations.
+
 ## Finalization completed — 2026-10-30 13:58 UTC
 
 [PM6524535370](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524535370)
@@ -40,7 +61,7 @@ ran actual Q13+13, created commitb29bc64d and real Draft
 [Exact-head task CI41058684258](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41058684258)
 has four genuinely executed successful suites. No model, replay, rebuild or rebinding.
 
-Current B: blocked/verified/ci_success, awaiting independent PM, finalized=false,
+At the prior recovery checkpoint B was blocked/verified/ci_success, awaiting independent PM, finalized=false,
 receipt running/gen2 and lease active/gen2 unchanged, counters1/2/1. A full row/workspace
 and both Codex configs/credentials preserved. V3/retired824 untouched. Main remains R2;
 task/base/canonical/verifier Q. SAME evidence PR838 and task841 remain unmerged.
@@ -71,7 +92,7 @@ The earlier [PM6516240084](https://github.com/sonvhse06072/personal-coding-platf
 authorized SOURCE/FIXTURE only from Q=e3b19700. Historical PR838 evidence records ordinary B
 admission then held config failure1/0/0; the LIVE result above supersedes that state.
 Pre-admission P/Q rebinding is closed. Current canonical/task/verifier Q, workers off,
-authority disabled, B1/2/1 awaiting PM. A and both configs/credentials/backups retained. Dashboard
+authority disabled, B1/2/1 now finalized (the earlier checkpoint awaited PM). A and both configs/credentials/backups retained. Dashboard
 https://localhost:18443/dashboard remains tokenless/local and unchanged.
 
 [Complete repair WorkReport and one executable PM rollout packet](../project/history/2026-10-30-config-held-verification.md)

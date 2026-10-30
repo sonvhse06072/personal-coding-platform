@@ -30,6 +30,17 @@ Example:
 python3 scripts/pcp-light-evidence-summary.py evidence.json
 ```
 
+For example, if the file contains one `SOURCE/PASS` and one `FIXTURE/FAIL`
+record with the same source SHA, the CLI returns:
+
+```json
+{"by_class":{"FIXTURE":1,"LIVE":0,"PHYSICAL":0,"SOURCE":1},"by_class_and_outcome":{"FIXTURE":{"FAIL":1,"NOT_TESTED":0,"PASS":0},"LIVE":{"FAIL":0,"NOT_TESTED":0,"PASS":0},"PHYSICAL":{"FAIL":0,"NOT_TESTED":0,"PASS":0},"SOURCE":{"FAIL":0,"NOT_TESTED":0,"PASS":1}},"by_outcome":{"FAIL":1,"NOT_TESTED":0,"PASS":1},"count":2,"fixture_evidence_is_live":false,"source_sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+```
+
+`by_class_and_outcome` always contains every class and outcome, including
+zero counts. Its counts agree with the existing totals and remain unchanged
+when input records are reordered.
+
 Empty input example:
 
 ```sh
@@ -38,5 +49,6 @@ python3 scripts/pcp-light-evidence-summary.py /tmp/empty-evidence.json
 ```
 
 The output includes total count, the common source SHA (or `null` for no
-records), counts by class and outcome, and the constant
-`fixture_evidence_is_live: false`.
+records), counts by class and outcome, a complete class/outcome cross-tab, and
+the constant `fixture_evidence_is_live: false`. For an empty array all count
+fields are zero and `source_sha` is `null`.
