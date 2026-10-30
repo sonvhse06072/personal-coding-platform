@@ -527,6 +527,7 @@ async def inspection_mode_http_guard(request: Request, call_next):
                 or (request.method, request.url.path) not in {
                     ("GET", "/health"), ("GET", "/v1/pcp-local/readiness"), ("POST", "/v1/pcp-local/run-once"),
                     ("POST", "/v1/pcp-local/pm-review"), ("POST", "/v1/pcp-local/deliver"),
+                    ("GET", "/v1/pcp-local/held-verification"), ("POST", "/v1/pcp-local/held-verification"),
                     ("GET", "/v1/pcp-local/claim-recovery"),
                     ("POST", "/v1/pcp-local/claim-recovery/register"),
                     ("POST", "/v1/pcp-local/claim-recovery/execute")}):
@@ -1265,8 +1266,39 @@ async def pcp_local_claim_recovery_execute():
     return await _claim_recovery('execute')
 
 
+class HeldVerificationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    job_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    permit_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+async def _held_verification(apply=False, expected=None):
+    if (not getattr(app.state, "pcp_local_worker_ready", False)
+            or runtime_startup_mode() != PCP_LOCAL_WORKER_MODE):
+        raise HTTPException(403, "PCP-local dedicated startup required")
+    from .pcp_local_recovery import operate
+    from .pcp_local_task_queue import TaskStop
+    try:
+        return await operate(engine, apply=apply, expected=expected)
+    except TaskStop as exc:
+        raise HTTPException(409, exc.code) from None
+
+
+@app.get('/v1/pcp-local/held-verification', dependencies=[Depends(auth)])
+async def held_verification_plan():
+    return await _held_verification()
+
+
+@app.post('/v1/pcp-local/held-verification', dependencies=[Depends(auth)])
+async def held_verification_apply(payload: HeldVerificationRequest):
+    return await _held_verification(True, payload.model_dump())
+
+
 @app.post("/v1/pcp-local/run-once", dependencies=[Depends(auth)])
 async def pcp_local_run_once():
+    from .pcp_local_recovery import enabled as held_enabled
+    if held_enabled():
+        raise HTTPException(403, "held_admission_forbidden")
     from .pcp_local_task_queue import enabled
     if enabled():
         raise HTTPException(403, 'claim_recovery_fresh_admission_disabled')

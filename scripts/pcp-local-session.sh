@@ -2,7 +2,7 @@
 # Exact existing Runtime container only. No startup, host interpreter or credential argv.
 set -eu
 if [ "$#" -lt 1 ]; then
-  echo 'usage: pcp-local-session.sh FULL_CONTAINER_ID [status|readiness|finalize] --job-id ID [...]' >&2
+  echo 'usage: pcp-local-session.sh FULL_CONTAINER_ID [status|readiness|finalize|verify-held] --job-id ID [...]' >&2
   exit 2
 fi
 pcp_session_container=$1

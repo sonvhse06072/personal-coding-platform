@@ -23,6 +23,8 @@ def require_isolated_configuration(workspace: Path) -> None:
     # Reject configuration sources before launching; never rely on {} to clear
     # a broader inherited root. Auth files are retained and never read here.
     codex_home = Path(os.environ.get('CODEX_HOME', str(Path.home() / '.codex')))
+    if not codex_home.is_absolute() or codex_home.resolve() != codex_home or codex_home.is_symlink():
+        raise ValueError('pcp_local_unreviewed_codex_configuration')
     configs = [codex_home / 'config.toml', Path('/etc/codex/config.toml')]
     directories = set(workspace.rglob('.codex')) | {p / '.codex' for p in workspace.parents}
     if (any(p.exists() or p.is_symlink() for p in configs)
@@ -106,7 +108,13 @@ class CodexAdapter(AgentAdapter):
             argv[3:5] = []  # Named permissions replace legacy --sandbox mode.
             argv += ["--strict-config", "--ignore-user-config", "--ignore-rules",
                      "--config", 'default_permissions="pcp_local"',
-                     "--config", isolated_permissions(workspace)]
+                     "--config", isolated_permissions(workspace),
+                     # 0.160 thread/start persists implicit writable-project
+                     # trust even with --ignore-user-config. Explicit in-memory
+                     # trust suppresses that write; it grants no permissions.
+                     # Project configuration remains forbidden above.
+                     "--config", 'projects={' + json.dumps(str(workspace))
+                     + '={trust_level="trusted"}}']
         if sandbox == "workspace-write":
             argv += ["--config", "sandbox_workspace_write.network_access=false"]
         argv += ["--cd", str(workspace)]
@@ -192,6 +200,8 @@ class CodexAdapter(AgentAdapter):
                 }
                 if environment is not None:
                     invoke["env"] = environment
+                if isolate_workspace:
+                    require_isolated_configuration(workspace)
                 result = await run_command(argv, **invoke)
             except CommandTimeoutError as exc:
                 timed_out = exc

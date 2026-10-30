@@ -219,6 +219,19 @@ async def operation_readiness(engine, *, phase, job_id, review_id=None, readers=
         view['ready'] = view['dependencies_ready'] and view.get('operation', {}).get('eligible', True)
         return view
 
+    if phase == 'held-verification':
+        from .pcp_local_recovery import operate, HeldPermit
+        async def held_plan():
+            permit=HeldPermit()
+            require(job_id==permit.value['before']['job']['id'],'held_readiness_identity')
+            return await operate(engine)
+        observed=await check('held_verification',held_plan)
+        if observed:
+            view['operation']=dict(state=observed['state'],eligible=observed['ready'],actor='operator',
+                next_action='Use separately authorized verify-held --apply only if eligible; otherwise reconcile')
+            view['identity']={k:observed[k] for k in ('job_id','permit_sha256') if k in observed}
+        return finish()
+
     if phase not in ('status', 'delivery', 'finalization'):
         checks.append(dict(component='phase', state='blocked', code='unsupported_phase',
                            actor='operator', next_action='Choose admission, status, delivery or finalization'))

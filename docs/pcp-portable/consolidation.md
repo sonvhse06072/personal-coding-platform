@@ -1,5 +1,30 @@
 # PCP Local consolidation execution checklist
 
+## R2 acceptance and preparation checkpoint — 2026-10-30
+
+PR840 is accepted/merged at R2 `f02d9a14af33d9efeb99aa573d776aab3119dec1`;
+postmerge41028562169 executed all four suites successfully. Main is held at R2.
+[Current PM preparation decision6518824609](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6518824609) supersedes
+the earlier pending-source wording below. It permits one integrated backup/rehearsal,
+serial Runtime/Executor build, reversible authority-OFF adoption and concrete permit
+preparation session until2026-10-31T08:00:00Z (15:00 ICT).
+
+The release observer requires the exact bound Router RUNNING as well as Runtime and
+Executor. A scoped start/stop of that retained Router is included, with truthful older
+source plus complete input-history equality; no routing/model/provider call is needed.
+Finalize stable post-start fingerprints before forming expected permit values.
+
+**Single independent PM checkpoint:** actual R2 images/config fingerprints, exact B
+unverified candidate/full preimages and corroborating legacy returned/shutdown evidence
+must be reviewed before a live held permit is installed/enabled or verify-held/deliver
+is POSTed. Keep ordinary/claim authority disabled. Preparation does not change B1/0/0.
+No model replay, config quarantine, source/task/baseline rebinding or manual publication.
+Use SAME PR838 for consolidated evidence and continuity; do not merge it during R2 hold.
+
+The #593 backlog audit6517035681 makes #835 the current engineering issue and #764
+the portable-local epic. Archived #815/#822/#831 remain historical evidence, not open
+work queues. No physical preparation was performed by the GitHub PM review.
+
 Prior accepted campaign: [DEC-PCP-815-SUCCESSOR-ADOPTION-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6485231069).
 PR825 is independently accepted and merged at
 `5adfd120dbd6aa4718cf9549ddc6fae0bab8f12d`; postmerge run40780653020 executed
@@ -8,67 +33,41 @@ all four suites successfully. One writer on `ai/815-successor-adoption-v4` in
 `/home/sonvh/pcp-local-adoption825-v4`. This historical825 campaign did not activate
 a protected baseline or live job. New831 execution is recorded below.
 
+## Current integrated config / held verification checklist
 
-## Current Q execution / #837 retained blocker
+[PM6516240084](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6516240084)
+authorizes SOURCE/FIXTURE only from Q=e3b19700. PR838 records actual ordinary B
+admission then held config failure, running2/active2/counters1/0/0; its pre-admission
+P/Q rebinding proposal is closed. Current canonical/task/verifier Q, workers off,
+activation disabled. A and both configs/credentials/backups retained. Dashboard
+https://localhost:18443/dashboard remains tokenless/local and unchanged.
 
-[PM6515107429](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6515107429),
-[actual report and one PM decision packet](../project/history/2026-10-30-q-adoption837.md).
-This current receipt supersedes older pending-merge, absent-B and P-adoption instructions
-below; historical receipts remain retained. SAME evidence PR838, main held Q.
+[Complete repair WorkReport and one executable PM rollout packet](../project/history/2026-10-30-config-held-verification.md)
+and [Draft PR840](https://github.com/sonvhse06072/personal-coding-platform/pull/840)
+are the current source handoff. No CLI upgrade/config exemption: exact in-memory
+trust prevents the pinned producer write. Future invocations still reject old or
+hostile config. Held continuation never invokes a model; private finite authority,
+full preimages, unverified candidate, per-phase intent/results and original ownership
+precede mandatory Q tests and existing commit/delivery. Default plan/status is read-only.
 
-- [x] Stopped writers, original A and all zero837 artifacts verified before exact
-  body-only revision; approved new hashes/baseline/job match production helpers.
-- [x] Consistent backup/restored-copy equality; serial required Q Runtime build,
-  unchanged-role reuse, actual-image producer/isolation/verifier checks.
-- [x] Eight retained proof checks2.69s /15.5MB peak of256MB; original A unchanged.
-- [x] Same-instance Q adoption, missing-authority guard/stable bindings, new immutable
-  baseline and authority, scoped credentials/schema/all8readers/phase readiness.
-- [x] ONE ordinary admission: Bblocked/held after1model, receipt running2/lease active2.
-  New Codex project-trust config rejected at post-invocation guard. No retry/reset.
-- [ ] Mandatory task verification, commit, Draft task PR and task CI: NOT REACHED.
-- [x] New config retained in place; old quarantine intact; before/after backup;
-  workers stopped exit0, fresh authority disabled intact,68containers retained.
-- [x] Trusted actual tokenless dashboard Acompleted+Bblocked, polling/reconnect PASS.
-- [ ] Independent PM review and coherent source/same-job continuation disposition.
+- [x] Pinned actual CLI RED→GREEN, repeated/next-task synthetic transport; no inference.
+- [x] Real Git/PostgreSQL full-row/candidate/ownership/concurrency/crash/lost-ack cases.
+- [x] Restored B and actual Q verifier13+13; original A/B unchanged, zero model calls.
+- [x] Source scope preserves historical authority; separate Draft repair PR and CI.
+- [ ] Independent acceptance, exact R2 merge/postmerge CI and finite execution record.
+- [ ] Actual reviewed Runtime/Executor adoption, new private held permit and LIVE
+  verification/task Draft PR/CI. None performed in this source session.
 
-Do not replay old installation/quarantine/admission scripts or rebind another
-baseline around this now-existing job. There is no verified delivery proof to
-resume. Same B identity/counters/ownership remain mandatory; keep dashboard up.
-Exact resources/scoped stop commands and remaining limitations are in the report.
+Supported prepared commands: `session verify-held --job-id ID` (plan),
+`session readiness --phase held-verification --job-id ID`, and only after the later
+PM checkpoint `session verify-held --job-id ID --apply`. One POST then bounded GET;
+unknown tests never become PASS or auto-retry. Verified commit/publication uncertainty
+uses existing delivery reconciliation. No run-once, queue/reset/manual SQL/merge.
+The linked packet includes exact permit schema, task-Q/platform-R2 binding, image
+procedure, backup/rollback, resource IDs, scoped stops and remaining limitations.
 
-
-## Active #835 sparse producer compatibility repair
-
-[PM6513180988](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6513180988),
-accepted P=a4b273af; one writer on `ai/835-sparse-producer-compatibility`.
-[WorkReport / consolidated rollout packet](../project/history/2026-10-30-sparse-producer-repair.md).
-[Draft repair PR839](https://github.com/sonvhse06072/personal-coding-platform/pull/839)
-holds the exact final-head CI receipt. PR836 is merged; PR838 remains separate
-operational evidence, not a repair branch.
-
-- [x] Reconcile PR838 successful quarantine/adoption, current stopped workers and
-  retained sparse A; replace stale P pre-adoption continuity.
-- [x] RED through actual Executor create_workspace → completed sparse A → B;
-  plain clone passes while sparse form rejects at configuration gate.
-- [x] Read-only local/worktree config and exact sparse/index validation; clean-env
-  private proof snapshot, original bytes/metadata and full durable preimage rechecks.
-- [x] Hostile include/exec/read/filesystem/index races rejected; kernel external-file
-  watches and no-execution markers; no original proof/config normalization.
-- [x] Real Git/PG eight-reader ordinary B, one lease advance, duplicate/concurrent/
-  stale/crash/lost-ack rejection; plain and real producer forms, A unchanged.
-- [x] Credential-free pinned CLI probe and pinned Git2.39.5 actual producer tests;
-  existing disposable fixture resources only, candidate overlay explicitly labeled.
-- [x] Required local checks; full exact-head hosted receipt maintained in Draft PR.
-- [x] One next Q pre-admission packet, current-state/operations/history updated;
-  workers stay stopped, fixture resources stopped/retained, dashboard available.
-- [ ] Independent PM acceptance/merge/postmerge CI and exact Q bindings. Future
-  SAME837 issue/baseline revision and consolidated rollout remain separate authority.
-- [ ] LIVE repaired-image adoption/A→B/task PR/CI. No source/fixture PASS substitutes.
-
-Prior PR836 protocol-error/finalization/read-isolation work remains in its
-[accepted report](../project/history/2026-10-29-local-repeatability.md), including
-two unrelated optional PostgreSQL baseline failures. Its original A→B fixture
-omitted the actual sparse producer and did not establish LIVE repeatability.
+The following campaign-specific instructions are retained historical references;
+they do not authorize replay or replace the current packet.
 
 ## Historical finalization checkpoint — completed and subsequently merged
 

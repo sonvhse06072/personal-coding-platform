@@ -743,7 +743,7 @@ def test_dedicated_delivery_requires_concrete_reader_before_mutation(setup):
     assert s.db.jobs == {}
 
 
-@pytest.mark.parametrize('outcome', ['success', 'timeout', 'repair', 'commit_fail', 'publication_fail', 'secondary_fail'])
+@pytest.mark.parametrize('outcome', ['success', 'timeout', 'repair', 'commit_fail', 'publication_fail', 'secondary_fail', 'post_config'])
 def test_dedicated_worker_keeps_durable_identity_and_never_replays(setup, monkeypatch, tmp_path, outcome):
     from pathlib import Path
     from app import pcp_local_worker_loop as trusted
@@ -769,6 +769,9 @@ def test_dedicated_worker_keeps_durable_identity_and_never_replays(setup, monkey
     async def refresh(task):
         assert task == s.task
         refreshes.append(s.db.receipts[s.task.issue_number]['state'])
+        if (outcome == 'post_config' and s.db.jobs[job_id]['checkpoint']
+                .get('pcp_local_execution', {}).get('state') == 'invocation_returned'):
+            raise source.TaskStop('pcp_local_unreviewed_codex_configuration')
         return reader.snapshot
     reader.refresh = refresh
     monkeypatch.setattr(s.db, 'get', lambda key: deepcopy(s.db.jobs.get(key)))
@@ -833,6 +836,15 @@ def test_dedicated_worker_keeps_durable_identity_and_never_replays(setup, monkey
         assert state == ('verified' if outcome == 'publication_fail' else 'commit_uncertain')
         if outcome == 'secondary_fail':
             assert any('checkpoint also failed' in note for note in error.value.__notes__)
+    elif outcome == 'post_config':
+        with pytest.raises(source.TaskStop, match='unreviewed_codex_configuration'):
+            asyncio.run(worker.run_admitted_job(engine,reader,s.task))
+        assert attempts == ['execute'] and not checks and not commits and not deliveries
+        row=s.db.jobs[job_id];proof=row['checkpoint']['pcp_local_execution']
+        assert proof['state']=='held' and proof['held_from']=='invocation_returned'
+        assert proof['returned_invocation']==dict(attempt=1,returncode=0,
+            provider_failed=False,usage_digest=trusted.digest({}),model_calls=1)
+        assert row['progress']['model_calls']==1 and row['progress']['test_runs']==0
     elif outcome == 'timeout':
         with pytest.raises(TimeoutError):
             asyncio.run(worker.run_admitted_job(engine,reader,s.task))

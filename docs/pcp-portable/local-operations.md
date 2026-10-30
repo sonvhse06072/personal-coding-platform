@@ -1,122 +1,68 @@
 # Supported readiness, recovery and dashboard adoption
 
+## R2 acceptance and preparation checkpoint — 2026-10-30
+
+PR840 is accepted/merged at R2 `f02d9a14af33d9efeb99aa573d776aab3119dec1`;
+postmerge41028562169 executed all four suites successfully. Main is held at R2.
+[Current PM preparation decision6518824609](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6518824609) supersedes
+the earlier pending-source wording below. It permits one integrated backup/rehearsal,
+serial Runtime/Executor build, reversible authority-OFF adoption and concrete permit
+preparation session until2026-10-31T08:00:00Z (15:00 ICT).
+
+The release observer requires the exact bound Router RUNNING as well as Runtime and
+Executor. A scoped start/stop of that retained Router is included, with truthful older
+source plus complete input-history equality; no routing/model/provider call is needed.
+Finalize stable post-start fingerprints before forming expected permit values.
+
+**Single independent PM checkpoint:** actual R2 images/config fingerprints, exact B
+unverified candidate/full preimages and corroborating legacy returned/shutdown evidence
+must be reviewed before a live held permit is installed/enabled or verify-held/deliver
+is POSTed. Keep ordinary/claim authority disabled. Preparation does not change B1/0/0.
+No model replay, config quarantine, source/task/baseline rebinding or manual publication.
+Use SAME PR838 for consolidated evidence and continuity; do not merge it during R2 hold.
+
+The #593 backlog audit6517035681 makes #835 the current engineering issue and #764
+the portable-local epic. Archived #815/#822/#831 remain historical evidence, not open
+work queues. No physical preparation was performed by the GitHub PM review.
+
 This is the accepted operational source contract and V4 decision packet, not a
 change to the Constitution, approved baseline or retained V3 authority.
 GH-815 and GH-822 are implemented together because the view must explain the
 new durable verification/commit/publication states. No new service/state store.
 
+## Current held verification source and next execution gate
 
-## Current Q execution / #837 retained blocker
+[PM6516240084](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6516240084)
+authorizes SOURCE/FIXTURE only from Q=e3b19700. PR838 records actual ordinary B
+admission then held config failure, running2/active2/counters1/0/0; its pre-admission
+P/Q rebinding proposal is closed. Current canonical/task/verifier Q, workers off,
+activation disabled. A and both configs/credentials/backups retained. Dashboard
+https://localhost:18443/dashboard remains tokenless/local and unchanged.
 
-[PM6515107429](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6515107429),
-[actual report and one PM decision packet](../project/history/2026-10-30-q-adoption837.md).
-This current receipt supersedes older pending-merge, absent-B and P-adoption instructions
-below; historical receipts remain retained. SAME evidence PR838, main held Q.
+[Complete repair WorkReport and one executable PM rollout packet](../project/history/2026-10-30-config-held-verification.md)
+and [Draft PR840](https://github.com/sonvhse06072/personal-coding-platform/pull/840)
+are the current source handoff. No CLI upgrade/config exemption: exact in-memory
+trust prevents the pinned producer write. Future invocations still reject old or
+hostile config. Held continuation never invokes a model; private finite authority,
+full preimages, unverified candidate, per-phase intent/results and original ownership
+precede mandatory Q tests and existing commit/delivery. Default plan/status is read-only.
 
-- [x] Stopped writers, original A and all zero837 artifacts verified before exact
-  body-only revision; approved new hashes/baseline/job match production helpers.
-- [x] Consistent backup/restored-copy equality; serial required Q Runtime build,
-  unchanged-role reuse, actual-image producer/isolation/verifier checks.
-- [x] Eight retained proof checks2.69s /15.5MB peak of256MB; original A unchanged.
-- [x] Same-instance Q adoption, missing-authority guard/stable bindings, new immutable
-  baseline and authority, scoped credentials/schema/all8readers/phase readiness.
-- [x] ONE ordinary admission: Bblocked/held after1model, receipt running2/lease active2.
-  New Codex project-trust config rejected at post-invocation guard. No retry/reset.
-- [ ] Mandatory task verification, commit, Draft task PR and task CI: NOT REACHED.
-- [x] New config retained in place; old quarantine intact; before/after backup;
-  workers stopped exit0, fresh authority disabled intact,68containers retained.
-- [x] Trusted actual tokenless dashboard Acompleted+Bblocked, polling/reconnect PASS.
-- [ ] Independent PM review and coherent source/same-job continuation disposition.
+The single active [consolidation checklist](consolidation.md) tracks executed
+fixtures and the remaining independent acceptance/adoption gates. No live held
+verification, task publication or worker adoption occurred in this source session.
 
-Do not replay old installation/quarantine/admission scripts or rebind another
-baseline around this now-existing job. There is no verified delivery proof to
-resume. Same B identity/counters/ownership remain mandatory; keep dashboard up.
-Exact resources/scoped stop commands and remaining limitations are in the report.
+Supported prepared commands: `session verify-held --job-id ID` (plan),
+`session readiness --phase held-verification --job-id ID`, and only after the later
+PM checkpoint `session verify-held --job-id ID --apply`. One POST then bounded GET;
+unknown tests never become PASS or auto-retry. Verified commit/publication uncertainty
+uses existing delivery reconciliation. No run-once, queue/reset/manual SQL/merge.
+The linked packet includes exact permit schema, task-Q/platform-R2 binding, image
+procedure, backup/rollback, resource IDs, scoped stops and remaining limitations.
 
+The following campaign-specific instructions are retained historical references;
+they do not authorize replay or replace the current packet.
 
-## #835 sparse repair and next Q gate
-
-[PM6513180988](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6513180988)
-commissions the separate SOURCE/fixture repair from P. The
-[repair WorkReport and complete Q rollout/rebinding packet](../project/history/2026-10-30-sparse-producer-repair.md)
-supersede the earlier proposal below: actual producer sparse A now passes retained
-validation and ordinary B through Git/PG/eight readers in fixtures. Local/worktree
-config, exact non-cone patterns, index flags, filesystem and original full preimages
-are validated; proof runs in private scratch with clean environment, never rewriting
-A. Unsupported/unsafe forms remain blocked. No source-binding or recovery bypass.
-
-After independent review/merge/postmerge CI, PM records actual Q and revises SAME
-issue837 pre-admission with a new immutable Q baseline and derived job ID. Recheck
-zero durable/remote837 artifacts first. Archive old P proposal; preserve budget and
-expiry. Build Runtime/verifier Q; reuse other services only with truthful unchanged
-input proof and ordinary checks. Full actual-image/readiness gates remain mandatory.
-No activation, new auth, live workers or deployment in this source repair session.
-
-## #837 adopted workers retained; readiness blocks admission
-
-[Execution PM6508510691](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6508510691)
-and [config disposition PM6512775494](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6512775494)
-keep application/main P=a4b273afb3af4b9b4fd23412a547230df0b93011 and SAME
-[Draft PR838](https://github.com/sonvhse06072/personal-coding-platform/pull/838).
-[PR838 WorkReport at its reviewed evidence head](https://github.com/sonvhse06072/personal-coding-platform/blob/426a819f4ddf669d05c9dd4bf0577425066a67cd/docs/project/history/2026-10-30-adoption837.md)
-is authoritative for measured identities/hashes, not fresh execution permission.
-
-Exact 118-byte Codex config hash304afa3e was quarantined once by no-clobber rename
-to release `rollback/disabled-codex-project-trust-304afa3e.toml`; inode/UID:GID1000:
-1000/mode0600/bytes/mtime and backup preserved. Source remains absent; credentials
-unchanged. Never repeat quarantine automatically or overwrite regenerated config.
-Unchanged Codex guard passes actual paths before/after account metadata.
-
-P Runtime/verifier image60c4b0ba was reused after integrity checks, without rebuild.
-Canonical checkout now P; original S retained whole plus bundle/archive. New Runtime
-4acbed19 / Executor50fc20a1 and reused Routerf03edbd9 were adopted with truthful
-P/R/S provenance and existing limits. Stable post-start fingerprints preceded
-fresh authority; only known OomKillDisable false→null occurred. New immutable
-baseline was appended/activated without editing old definitions. Activation retained
-budget2/900s/3/USD0 and expiry2026-11-01T17:00:00Z; no recovery mapping.
-
-Actual readiness HTTP200 is **ready=false**:
-`trusted_sources / pcp_local_retained_git_configuration`. Completed #831's original
-Git `extensions.worktreeconfig=true` is produced by existing Executor sparse-checkout
-but rejected by Runtime's retained validator. Credential-free actual P image/real
-Git reproduced the exact generated worktree-config hash and rejection. Do not edit
-A's metadata, weaken the guard or run-once. All eight readers did not complete;
-#837 has no receipt/job/workspace/model/task PR/CI. Source repair requires separate
-review and explicit PM disposition of source bindings/main hold; the report gives
-one concrete regression/rollout proposal, not permission to apply it live.
-
-All three workers are now stopped exit0/OOMfalse. Fresh activation was disabled
-intact at release `rollback/disabled-activation-after-readiness-block.json`, hash
-1747f4d838038fd485d2fbac83e7f79c1b46762cc87c687f3e2b8d112f1e2acc. No old permit
-is active. Installed registry/canonical P remain; old containers/images/source are
-retained. Do not replay installation scripts, restore authority or auto-renew expiry.
-Private evidence `/home/sonvh/.local/state/pcp-adoption837-live-v1/continuation`.
-
-Full11-table/3-sequence snapshots and original A workspace/proofs/counters1/2/1
-are unchanged. Publisher account/API/immutable-askpass and provider entitlement
-passed without inference or Owner login. Actual current network connectivity passed;
-VPN state/ON-OFF parity remain unmeasured. Seven probes are stopped and retained;
-V4 has59 containers, **3 running / 56 stopped**. Trusted browser after shutdown
-shows completed A, absent B, fixed timers/truthful usage, polling and reconnect.
-
-**https://localhost:18443/dashboard — tokenless/local, no login required.**
-The DB/observer/frontend remain available and unchanged. Exact scoped stop commands
-below are for these retained resources only; do not use Compose down or prune:
-
-```sh
-# Already stopped workers; full IDs avoid affecting historical/foreign services.
-docker --host unix:///var/run/docker.sock stop --time 20 \
-  4acbed19a1878b6c2f7ed0a0022b52acc601fc5b3cfa90671c4d16d7874d4414 \
-  50fc20a1c3cdab401a4c5df6d1cbb4b59aebb05a5a7c2f500688997d850b9777 \
-  f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6
-# Optional later scoped observer shutdown; these were intentionally LEFT RUNNING.
-docker --host unix:///var/run/docker.sock stop --time 20 \
-  d22a5bf0ef1adee16464c27ccab10bf3cf22dc7320fa65ed5a995fbd5ea4daf2 \
-  5d6b3e9b578745877f162f9c34e4413cc855a40a8c4281c32d3c6ed711b05411 \
-  8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8
-```
-
-## Accepted P operator interface (future Q uses the same supported commands)
+## Retained P/Q operator interface
 
 Historical #835 engineering anchor34c0e9ac99a057eef0a08a15f0c3828b3c1addfa follows merged833/834;
 [PM6502481811](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6502481811)
@@ -132,6 +78,8 @@ at its accepted image and https://localhost:18443/dashboard stays tokenless/loca
 | `readiness --phase delivery` | Existing authority/source/Executor/publisher/isolation/receipt/lease plus exact retained Git proof and durable delivery disposition | Developer quota/login and Router selection |
 | `readiness --phase finalization --review-id ID` | Same supported PM finalizer in dry-run: exact proof, full ownership, installed authority, authenticated independent review and exact-head CI | Fresh admission's absent-workspace/PR assumptions, developer provider and Router |
 | `finalize --review-id ID` | Re-read finalization readiness, one existing authenticated PM-review POST, then durable status reconciliation | No model, admission, delivery, test, merge, permit renewal or implicit next task |
+| `readiness --phase held-verification` / `verify-held` | Prepared R2 interface: exact private finite authority, full original rows, source/ownership/read-only candidate plan | No provider quota, Router choice, model, admission or schema initialization |
+| `verify-held --apply` | Prepared R2 only: one job/permit-bound POST, actual mandatory Q tests, then existing verified commit/delivery; read-only reconciliation follows | No coding retry, automatic test retry, new job or self-finalization |
 
 Readiness is observation, **never authorization**. Non-admission phase checks report
 `pass`, `blocked`, `unknown` or `not_applicable` with actor/action. Missing transport
@@ -173,8 +121,8 @@ repeat admission/model/delivery to repair an uncertain response. The older
 `app.pcp_local_task_queue` recovery client is retained for its separately authorized
 exact permit flow; #835 does not revive it for completed831.
 
-**Sequential-task adoption gate:** the candidate's ordinary A→B admission is
-FIXTURE PASS; the installed workers are unchanged and cannot use it yet. The
+**Sequential-task evidence:** P/Q source fixtures passed, and the later PR838
+Q report records actual ordinary A→B admission followed by B's config hold. The
 PCP-only adapter pins CLI0.160.0, selects its named read-restricted profile and
 keeps network disabled. It grants current-job writes and immutable toolchain reads;
 provider authentication remains with the existing CLI transport, hidden from tool
