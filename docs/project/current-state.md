@@ -5,72 +5,68 @@ source, PM decisions and current GitHub/Runtime physical state before acting.
 
 ## Active #835 adoption and ordinary task #837
 
-[PM6508510691](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6508510691)
-accepted PR836 at **P=a4b273afb3af4b9b4fd23412a547230df0b93011** and authorized
-one integrated adoption/task837 session. Review5705026563 and exact postmerge
-40955723779 four executed suites passed. This supersedes the prior source-only
-pending-review text. **Main is held at P** for this finite task until PM releases
-it; no evidence merge or future-main substitution is authorized.
+[Execution PM6508510691](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6508510691)
+and [quarantine PM6512775494](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6512775494)
+retain accepted/main **P=a4b273afb3af4b9b4fd23412a547230df0b93011**, merged836,
+review5705026563 and four-suite postmerge40955723779. **Main stays P** pending
+explicit PM disposition; Developer never merges or substitutes a newer source.
+One writer `ai/835-adoption837-live`, `/home/sonvh/pcp-adoption837-live`, SAME
+[Draft evidence PR838](https://github.com/sonvhse06072/personal-coding-platform/pull/838).
+Its description carries exact-final-head executed CI. [Actual WorkReport/packet](history/2026-10-30-adoption837.md).
 
-One writer: `ai/835-adoption837-live`, `/home/sonvh/pcp-adoption837-live`.
-[Draft evidence PR #838](https://github.com/sonvhse06072/personal-coding-platform/pull/838)
-remains unmerged; its description holds exact-final-head executed CI.
-[Actual WorkReport and continuation packet](history/2026-10-30-adoption837.md).
-Runtime/verifier P image built once; actual-image isolation (no overlay), packaged
-bytes/modes/toolchains and verifier recipe13 tests/read-only/nonrecursive/noexec
-PASS. Unchanged complete inputs permit truthful Executor R and Router S reuse.
-Private successor baseline/config/worker intents are prepared, **not installed**.
+**Quarantine and worker adoption passed; ordinary admission is blocked by a source
+compatibility finding.** Exact118-byte provider config hash304afa3e moved once
+by no-clobber rename to approved release rollback path; original inode/bytes/mode/
+UID/GID/mtime and backup/auth preserved. Unchanged inherited-config guard passes.
+P Runtime/verifier image60c4b0ba and prior actual-image isolation/verifier13 evidence
+were integrity-checked and reused, without rebuild. Canonical S retained whole;
+canonical now P. New Runtime4acbed19 / Executor50fc20a1 and same Routerf03edbd9
+adopted with truthful P/R/S image provenance and existing security/resource limits.
+Fresh baseline append and activation installed after stable startup measurements.
 
-**Adoption/admission blocked before mutation:** retained provider home contains
-118-byte `.codex/config.toml`, hash304afa3ef9a587b6874f3517d6be979f4d4805ee89e3aca5afce88b30e8ffc52,
-with only #831 project-trust metadata. P rejects any inherited config. Actual P
-image reproduces the rejection before a model process. Original file/auth/home
-remain intact as required by step7. The report proposes one exact PM disposition
-for quarantining this file with rollback custody, without relaxing the guard.
-No worker startup/replacement, baseline activation, admission, inference or delivery.
+Actual aggregate readiness HTTP200: **ready=false**, sole code
+`pcp_local_retained_git_configuration`. #831's unchanged Git metadata has
+`extensions.worktreeconfig=true` and non-cone sparse-checkout flags. Existing
+Executor produces these; P Runtime rejects all extensions on retained workspaces.
+A credential-free actual-image real-Git probe reproduced the exact generated
+worktree-config hash and rejection. No guard bypass or historical metadata edit.
+The report proposes a narrow reviewed producer/validator repair and regressions;
+separate PM source/binding disposition is required before adoption or admission.
 
-Task837 body/goal and production deterministic helper match the decision:
-job `32ba6eb9c8e207c15459888f9365a3f7`, branch `ai/32ba6eb9c8e2`, successor
-`pcp-local-repeatability-a4b273afb3af-20261030`, source P. No receipt/job/task PR
-exists. Budget2 calls/900s/3 files/USD0 and expiry ceiling2026-11-01T17:00:00Z
-remain; no counters or old permits are renewed. A→B remains FIXTURE-only evidence.
+Task837 unchanged: job `32ba6eb9c8e207c15459888f9365a3f7`, branch `ai/32ba6eb9c8e2`,
+revision `pcp-local-repeatability-a4b273afb3af-20261030`, source/base P. **No receipt,
+job, workspace, model, task verifier, task PR or task CI.** Eight readers did not
+complete. Scoped publisher/provider authentication, schema role, service health
+and source checks passed; no Owner login needed. Budget2/900s/3/USD0 and fixed
+expiry2026-11-01T17:00:00Z unchanged, never renewed.
 
-Consistent before/after backups and full11-table/3-sequence snapshots match;
-original #831 workspace/config bytes/modes/proofs/counters are unchanged. All six
-new disposable probes are stopped;56 V4 containers retained, only the same
-DB/observer/frontend running. Fresh trusted Chromium polling/reconnect passed,
-with completed A/fixed timers/truthful usage and no B. Credentials/current VPN
-connectivity and aggregate live admission readiness remain NOT TESTED. No Owner
-interaction requested. Evidence PR required exact-head CI is recorded in its body.
+All three adopted workers stopped cleanly exit0/OOMfalse; fresh activation disabled
+intact at `rollback/disabled-activation-after-readiness-block.json`, hash1747f4d8.
+Registry/canonical P remain installed; old source/images/containers retained.
+All11 tables/3 sequences and original831 full workspace/proof/counters unchanged.
+59 V4 containers retained:3 running/56 stopped. Do not repeat quarantine, rerun
+installation, restore permits/activation or dispatch against the failing guard.
 
-## Retained completed #831 and deployed services
+## Retained completed #831 and deployed observer
 
-Job `a8851f89dd3e4e582c697ec1fe6d8cdb` remains **completed /
-pm_review_accepted**, receipt **delivered/gen3**, lease **released/gen1**;
-proof/checkpoint/audit and counters **one model / two verifier runs / one delivery**
-are retained. Review5700617139 accepted task head
-`4161ba059002c7aaf3fd35a88e3b0b80065c62b7`; task833 is now merged. The full
-[execution/finalization report](history/2026-10-29-recovery832-live.md) is history,
-including premerge instructions that the newer PM receipt supersedes.
-
-Deployed, stopped Runtime/Executor remain repair
-**R=1f9b5d50a18a7b93e6a22c6191d59985d4d3892a**. Original task/baseline/verifier/Router
-remain **S=b97ade581fecad4db2146258e5ca02c3902189e0** and baseline
-`pcp-local-successor-830-b97ade5-20261029`. Old activation and both permits remain
-disabled intact. The new adoption decision permits only its named successor
-sequence; the inherited-config hold above currently blocks worker adoption.
+Job `a8851f89dd3e4e582c697ec1fe6d8cdb` remains **completed / pm_review_accepted**,
+receipt **delivered/gen3**, lease **released/gen1**, original path/proof/checkpoint/
+usage and counters **one model / two verifier runs / one delivery** unchanged.
+Supported operator read-only status confirms it. Review5700617139 accepted
+head4161ba059002c7aaf3fd35a88e3b0b80065c62b7; task833/evidence834 are merged.
+Original task/baseline source S=b97ade581fecad4db2146258e5ca02c3902189e0 and
+revision `pcp-local-successor-830-b97ade5-20261029` remain immutable historical
+authority. Old activation/recovery permits stay disabled. [Historical report](history/2026-10-29-recovery832-live.md).
 
 **https://localhost:18443/dashboard — loopback_readonly, no login/token/cookie.**
-Existing DB/observer/frontend remain available. Historical LIVE proof includes
-completed terminal state, delivered/released ownership, fixed67.801641624s duration,
-changing observation age, reported-cost/tool-calls Unknown versus estimated cost0,
-and trusted Chromium reconnect. #837 adoption rechecked trusted Chromium polling/reconnect without candidate
-deployment. Failed/cancelled LIVE UI, VPN parity and LAN remain NOT TESTED.
-
-Private historical evidence: `/home/sonvh/.local/state/pcp-recovery832-live-v1`;
-new isolated fixture evidence: `/home/sonvh/.local/state/pcp-repeatability835`.
-[Operations](../pcp-portable/local-operations.md) and [one checklist](../pcp-portable/consolidation.md)
-track exact retained resources, supported commands and the next review gate.
+Unchanged DB/observer/frontend remain available. Fresh trusted Chromium after
+shutdown:7 HTTP200 snapshots, no forms/cookies/errors, offline/reload/reconnect;
+completed A/fixed67.801641624s duration and truthful usage, absent B. Reported cost/
+tool calls Unknown vs estimated0 remain distinct. Current provider/GitHub connectivity
+passed; VPN state/ON-OFF parity, LAN and failed/cancelled LIVE UI are NOT TESTED.
+Private continuation evidence `/home/sonvh/.local/state/pcp-adoption837-live-v1/continuation`.
+[Operations](../pcp-portable/local-operations.md) gives exact IDs/stop commands;
+[one checklist](../pcp-portable/consolidation.md) separates source/fixture/live gates.
 
 ## Original #824 — retired incomplete, never delivered
 
@@ -90,18 +86,20 @@ Retirement resolves only this reservation; it does not authorize another job.
 
 ## Active PCP issues and owner attention
 
-#835 adoption evidence is active; #837 remains unadmitted. No interactive login
-or VPN request is pending. PM must dispose of the exact retained config mismatch;
-independent preparation and physical probes are complete. Two unrelated optional
-baseline PostgreSQL supervision failures remain tracked in the accepted WorkReport.
+#835/#837 evidence is active on SAME Draft PR838. No interactive Owner step is
+pending.
 
 ## Immediate next safe actions
 
-1. PM review the adoption evidence and exact config disposition in the report.
-2. After that disposition, resume the same P/task837 sequence without rebuilding,
-   preserving the original expiry, all eight readers, #831 and normal guards.
-3. Keep dashboard available and historical workers/permits off. No task finalization
-   without independent PM review; Developer never merges either PR.
+PM should review the producer/retained-validator mismatch and commission
+one reviewed source repair with exact source/image/task-binding disposition before
+resuming. Main P hold and immutable837 identity remain until that decision; expiry
+is not automatically extended. Preserve stopped workers, disabled authority and
+running dashboard. No task finalization without independent PM review.
+
+The two unrelated optional baseline PostgreSQL supervision failures remain tracked
+in the accepted #835 WorkReport; this operational session neither repairs nor
+claims to rerun them. Fixture reproduction is not successful LIVE A→B.
 
 ## Standing safety boundary
 
@@ -113,9 +111,10 @@ restart. Unrelated H1b/A3B2/Codex gates remain. CI is a process gate, not server
 branch protection; Developer never merges or self-approves independent review.
 
 <!-- PCP:CONTINUITY:START -->
-PR836 accepted/merged P a4b273a; postmerge40955723779 four suites PASS; main held P.
-PM6508510691 adoption/task837: P Runtime built, actual isolation/verifier probes PASS.
-Retained 118-byte Codex project-trust config blocks adoption; intact for PM disposition.
-Task837 no receipt/job/model/PR; successor config staged only. Six probes stopped.
-Completed831/delivered3/released1/counters1/2/1 and retired824 preserved; dashboard up.
+Main P a4b273a held; SAME DraftPR838 evidence only. PM6512775494 quarantine completed.
+P Runtime/retained Executor-R/Router-S adopted then stopped; authority disabled intact.
+Actual readiness blocked: Executor sparse metadata rejected by retained-workspace guard.
+Task837 no receipt/job/model/PR; complete eight-reader readiness and LIVE A→B unproven.
+Completed831/delivered3/released1/counters1/2/1 and original workspace unchanged;824 preserved.
+59 V4 retained/3 running: unchanged DB/observer/frontend; trusted tokenless dashboard up.
 <!-- PCP:CONTINUITY:END -->

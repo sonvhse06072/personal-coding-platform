@@ -5,40 +5,69 @@ change to the Constitution, approved baseline or retained V3 authority.
 GH-815 and GH-822 are implemented together because the view must explain the
 new durable verification/commit/publication states. No new service/state store.
 
-## #837 physical adoption hold and continuation
+## #837 adopted workers retained; readiness blocks admission
 
-[PM6508510691](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6508510691)
-accepts P=a4b273afb3af4b9b4fd23412a547230df0b93011 and supersedes the pending
-adoption language below. [Actual report/one continuation packet](../project/history/2026-10-30-adoption837.md)
-contains exact images, backups, stopped probes and config disposition.
+[Execution PM6508510691](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6508510691)
+and [config disposition PM6512775494](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6512775494)
+keep application/main P=a4b273afb3af4b9b4fd23412a547230df0b93011 and SAME
+[Draft PR838](https://github.com/sonvhse06072/personal-coding-platform/pull/838).
+[Actual WorkReport and one continuation packet](../project/history/2026-10-30-adoption837.md)
+is authoritative for measured identities/hashes, not fresh execution permission.
 
-P Runtime/verifier image60c4b0ba was built once and passed actual-image isolation
-without overlay plus packaged and physical verifier checks. It is **not deployed**.
-Old R Runtime/Executor and S Router remain stopped/unchanged; canonical source S,
-installed baseline, disabled activation/permits and provider credentials are intact.
-Do not repeat builds for this documentation PR or install its evidence head.
+Exact 118-byte Codex config hash304afa3e was quarantined once by no-clobber rename
+to release `rollback/disabled-codex-project-trust-304afa3e.toml`; inode/UID:GID1000:
+1000/mode0600/bytes/mtime and backup preserved. Source remains absent; credentials
+unchanged. Never repeat quarantine automatically or overwrite regenerated config.
+Unchanged Codex guard passes actual paths before/after account metadata.
 
-Retained `runtime-home/.codex/config.toml` (118 bytes, SHA256
-304afa3ef9a587b6874f3517d6be979f4d4805ee89e3aca5afce88b30e8ffc52)
-contains #831 project-trust metadata and triggers P's inherited-config guard.
-The actual image reproduces rejection before model invocation. Preserve it for
-PM's exact quarantine disposition; do not silently remove it, replace CODEX_HOME
-or weaken the guard. No837 receipt/job exists; ordinary admission remains pending.
-Private proposals are in `/home/sonvh/.local/state/pcp-adoption837-live-v1` and
-release `releases/repeatability-a4b273afb3af4b9b4fd23412a547230df0b93011`.
+P Runtime/verifier image60c4b0ba was reused after integrity checks, without rebuild.
+Canonical checkout now P; original S retained whole plus bundle/archive. New Runtime
+4acbed19 / Executor50fc20a1 and reused Routerf03edbd9 were adopted with truthful
+P/R/S provenance and existing limits. Stable post-start fingerprints preceded
+fresh authority; only known OomKillDisable false→null occurred. New immutable
+baseline was appended/activated without editing old definitions. Activation retained
+budget2/900s/3/USD0 and expiry2026-11-01T17:00:00Z; no recovery mapping.
 
-Same https://localhost:18443/dashboard remains tokenless/local, no login required.
-Fresh trusted Chromium polling/reconnect passed. All six new probes are stopped;
-V4 retains56 containers, only the exact DB/observer/frontend below are running.
-Existing scoped stop commands remain correct; no dashboard stop was performed.
-All original rows/sequences/workspace/config manifests match before/after.
+Actual readiness HTTP200 is **ready=false**:
+`trusted_sources / pcp_local_retained_git_configuration`. Completed #831's original
+Git `extensions.worktreeconfig=true` is produced by existing Executor sparse-checkout
+but rejected by Runtime's retained validator. Credential-free actual P image/real
+Git reproduced the exact generated worktree-config hash and rejection. Do not edit
+A's metadata, weaken the guard or run-once. All eight readers did not complete;
+#837 has no receipt/job/workspace/model/task PR/CI. Source repair requires separate
+review and explicit PM disposition of source bindings/main hold; the report gives
+one concrete regression/rollout proposal, not permission to apply it live.
 
-After PM disposition, use the report's ordered same-instance/P/task continuation:
-backup/canonical custody, reviewed worker intents, stable first-start fingerprints,
-new immutable baseline/fresh bounded activation, scoped credentials, full readiness,
-one ordinary run-once, delivery/CI, dashboard and retained shutdown. Main stays P;
-no new authority from this evidence PR, no old-permit restoration, and no Developer
-finalization or merge. Current VPN/provider readiness is unmeasured.
+All three workers are now stopped exit0/OOMfalse. Fresh activation was disabled
+intact at release `rollback/disabled-activation-after-readiness-block.json`, hash
+1747f4d838038fd485d2fbac83e7f79c1b46762cc87c687f3e2b8d112f1e2acc. No old permit
+is active. Installed registry/canonical P remain; old containers/images/source are
+retained. Do not replay installation scripts, restore authority or auto-renew expiry.
+Private evidence `/home/sonvh/.local/state/pcp-adoption837-live-v1/continuation`.
+
+Full11-table/3-sequence snapshots and original A workspace/proofs/counters1/2/1
+are unchanged. Publisher account/API/immutable-askpass and provider entitlement
+passed without inference or Owner login. Actual current network connectivity passed;
+VPN state/ON-OFF parity remain unmeasured. Seven probes are stopped and retained;
+V4 has59 containers, **3 running / 56 stopped**. Trusted browser after shutdown
+shows completed A, absent B, fixed timers/truthful usage, polling and reconnect.
+
+**https://localhost:18443/dashboard — tokenless/local, no login required.**
+The DB/observer/frontend remain available and unchanged. Exact scoped stop commands
+below are for these retained resources only; do not use Compose down or prune:
+
+```sh
+# Already stopped workers; full IDs avoid affecting historical/foreign services.
+docker --host unix:///var/run/docker.sock stop --time 20 \
+  4acbed19a1878b6c2f7ed0a0022b52acc601fc5b3cfa90671c4d16d7874d4414 \
+  50fc20a1c3cdab401a4c5df6d1cbb4b59aebb05a5a7c2f500688997d850b9777 \
+  f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6
+# Optional later scoped observer shutdown; these were intentionally LEFT RUNNING.
+docker --host unix:///var/run/docker.sock stop --time 20 \
+  d22a5bf0ef1adee16464c27ccab10bf3cf22dc7320fa65ed5a995fbd5ea4daf2 \
+  5d6b3e9b578745877f162f9c34e4413cc855a40a8c4281c32d3c6ed711b05411 \
+  8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8
+```
 
 ## #835 candidate operator interface and adoption gate
 
@@ -97,8 +126,9 @@ repeat admission/model/delivery to repair an uncertain response. The older
 `app.pcp_local_task_queue` recovery client is retained for its separately authorized
 exact permit flow; #835 does not revive it for completed831.
 
-**Sequential-task adoption gate:** the candidate's ordinary A→B admission is
-FIXTURE PASS; the installed workers are unchanged and cannot use it yet. The
+**Sequential-task adoption gate:** accepted P's ordinary A→B admission is
+FIXTURE PASS for its tested repository shape. The actual adoption above exposed
+a missing sparse-producer case; LIVE A→B remains blocked. The
 PCP-only adapter pins CLI0.160.0, selects its named read-restricted profile and
 keeps network disabled. It grants current-job writes and immutable toolchain reads;
 provider authentication remains with the existing CLI transport, hidden from tool

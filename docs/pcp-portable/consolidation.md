@@ -10,28 +10,36 @@ a protected baseline or live job. New831 execution is recorded below.
 
 ## Active #837 integrated adoption checklist
 
-[PM6508510691](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6508510691),
-accepted P=a4b273afb3af4b9b4fd23412a547230df0b93011; one writer
-`ai/835-adoption837-live`. [Actual evidence and continuation](../project/history/2026-10-30-adoption837.md).
+[PM6508510691](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6508510691)
+plus [PM6512775494](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6512775494),
+accepted/main P=a4b273afb3af4b9b4fd23412a547230df0b93011; same writer/branch
+`ai/835-adoption837-live`, Draft PR838. [Actual report/next packet](../project/history/2026-10-30-adoption837.md).
 
-- [x] Complete decision/accepted report/ordered docs; main P, merged836,
-  independent review and actual four-suite postmerge40955723779 reconciled.
-- [x] Exact task837 body/goal/helper/job; custody and consistent private backup.
-- [x] One Runtime/verifier P build; Executor R/Router S full inputs match P.
-- [x] Actual packaged content/modes/toolchain/immutable askpass; no credential probes.
-- [x] Actual-image isolation without overlay PASS; verifier recipe13 tests and
-  read-only/nonrecursive/effective-noexec PASS. All six disposable probes stopped.
-- [x] Detect and reproduce inherited trust-config rejection with zero model
-  subprocesses. Original config retained; no guard bypass or alternate auth home.
-- [x] Exact successor registry/config/worker proposals prepared, old definitions
-  unchanged; no installation. One concrete PM config-disposition packet.
-- [x] Full11 tables/3 sequences/workspace/config bytes and #831 counters1/2/1
-  unchanged; after backup retained. Same3 services running/53 stopped.
-- [x] Trusted real Chromium dashboard polling/reconnect/fixed timers/provenance.
-- [ ] PM disposition of retained config; then worker adoption/fresh authority,
-  credentials/eight-reader readiness and ordinary837. All remain NOT EXECUTED.
-- [ ] Task Draft PR/exact-head CI and independent PM review; no task PR exists.
-- Evidence PR final-head required CI is recorded in its description.
+- [x] Complete decisions/docs/current GitHub; exact P/task837/body/goal/job unchanged.
+- [x] Consistent backup/custody; exact config preimage and stopped writers checked.
+- [x] One no-clobber quarantine to exact approved rollback path; bytes/inode/mode/
+  UID/GID/mtime and backup/auth preserved; no regenerated config or repeated cleanup.
+- [x] Revalidate built P image/packaged inputs/isolation/verifier physical evidence;
+  no rebuild or unchanged full-suite rerun. Truthful Executor R/Router S reuse.
+- [x] Canonical S retained whole/bundled/archived; clean separate canonical P installed.
+- [x] New Runtime/Executor, retained old containers, same Router; existing limits/
+  mounts/security/network. Pre-authority startup guard and stable fingerprints.
+- [x] Append successor baseline; fresh bounded authority installed then disabled intact
+  after blocked readiness. Original expiry2026-11-01T17:00Z, no permit renewal.
+- [x] Actual schema role/health/source/Codex guard and scoped publisher/provider metadata;
+  no new login, model probe, credential import, DDL/grant or global network change.
+- [x] Aggregate readiness measured: HTTP200 ready=false, retained Git config blocker.
+  Real credential-free Git/actual P reproduces shipped sparse producer→validator mismatch.
+- [ ] Full eight-reader readiness and ordinary837: BLOCKED; no receipt/job/workspace.
+- [ ] Task verifier/Draft task PR/exact-head CI/independent PM review: NOT TESTED.
+- [x] Original831 full workspace/rows/proof/counters1/2/1 and all11tables/3sequences unchanged.
+  Fresh after dump and private manifests retained; V3 untouched.
+- [x] Workers stopped exit0; activation disabled intact;59 resources retained,
+  3 running/56 stopped. Same DB/observer/frontend remain available.
+- [x] Trusted real Chromium7 snapshots/reconnect/completed timers/usage; no B.
+- [x] One concrete reviewed-source boundary proposal and same-instance continuation packet;
+  no live workaround. VPN ON/OFF parity and failed/cancelled LIVE UI remain untested.
+- Evidence PR final-head required CI is recorded in its description; main stays P.
 
 ## Historical accepted #835 source / isolated fixture checklist
 
