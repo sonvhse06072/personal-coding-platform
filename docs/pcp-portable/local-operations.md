@@ -23,25 +23,34 @@ Use SAME PR838 for consolidated evidence and continuity; do not merge it during 
 
 The #593 backlog audit6517035681 makes #835 the current engineering issue and #764
 the portable-local epic. Archived #815/#822/#831 remain historical evidence, not open
-work queues. No physical preparation was performed by the GitHub PM review.
+work queues. Physical preparation is now complete under the operator decision; see the
+[concrete manifest, WorkReport and executable continuation packet](../project/history/2026-10-30-r2-held837-preparation.md).
+Final R2 Runtime8018b3d1/Executor78a752c0, Q verifier retained; fresh restore13+13
+and exact retry passed with synthetic external transport/publication. Actual-image
+isolation/config lifecycle/askpass/schema/publisher/observer checks pass. New
+Runtimee5d8a338/Executor9cba24de and retained Routerf03edbd9 are stopped; original
+workers retained. Live B remains1/0/0, running2/active2; all A/B/config preimages equal.
+Candidate873e6e19 remains private/uninstalled, expires Oct31 08Z. Independent PM
+concrete-manifest review precedes live authority and aggregate readiness/plan.
+Runtime missing-permit rejection is intentional; no source or startup guard bypass.
 
 This is the accepted operational source contract and V4 decision packet, not a
 change to the Constitution, approved baseline or retained V3 authority.
 GH-815 and GH-822 are implemented together because the view must explain the
 new durable verification/commit/publication states. No new service/state store.
 
-## Current held verification source and next execution gate
+## Accepted held verification source and next execution gate
 
-[PM6516240084](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6516240084)
-authorizes SOURCE/FIXTURE only from Q=e3b19700. PR838 records actual ordinary B
+The earlier [PM6516240084](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6516240084)
+authorized SOURCE/FIXTURE only from Q=e3b19700; current preparation uses the later decision above. PR838 records actual ordinary B
 admission then held config failure, running2/active2/counters1/0/0; its pre-admission
 P/Q rebinding proposal is closed. Current canonical/task/verifier Q, workers off,
 activation disabled. A and both configs/credentials/backups retained. Dashboard
 https://localhost:18443/dashboard remains tokenless/local and unchanged.
 
 [Complete repair WorkReport and one executable PM rollout packet](../project/history/2026-10-30-config-held-verification.md)
-and [Draft PR840](https://github.com/sonvhse06072/personal-coding-platform/pull/840)
-are the current source handoff. No CLI upgrade/config exemption: exact in-memory
+and [accepted merged PR840](https://github.com/sonvhse06072/personal-coding-platform/pull/840)
+are the accepted source handoff. No CLI upgrade/config exemption: exact in-memory
 trust prevents the pinned producer write. Future invocations still reject old or
 hostile config. Held continuation never invokes a model; private finite authority,
 full preimages, unverified candidate, per-phase intent/results and original ownership

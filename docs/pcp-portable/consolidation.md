@@ -23,7 +23,16 @@ Use SAME PR838 for consolidated evidence and continuity; do not merge it during 
 
 The #593 backlog audit6517035681 makes #835 the current engineering issue and #764
 the portable-local epic. Archived #815/#822/#831 remain historical evidence, not open
-work queues. No physical preparation was performed by the GitHub PM review.
+work queues. Physical preparation is now complete under the operator decision; see the
+[concrete manifest, WorkReport and executable continuation packet](../project/history/2026-10-30-r2-held837-preparation.md).
+Final R2 Runtime8018b3d1/Executor78a752c0, Q verifier retained; fresh restore13+13
+and exact retry passed with synthetic external transport/publication. Actual-image
+isolation/config lifecycle/askpass/schema/publisher/observer checks pass. New
+Runtimee5d8a338/Executor9cba24de and retained Routerf03edbd9 are stopped; original
+workers retained. Live B remains1/0/0, running2/active2; all A/B/config preimages equal.
+Candidate873e6e19 remains private/uninstalled, expires Oct31 08Z. Independent PM
+concrete-manifest review precedes live authority and aggregate readiness/plan.
+Runtime missing-permit rejection is intentional; no source or startup guard bypass.
 
 Prior accepted campaign: [DEC-PCP-815-SUCCESSOR-ADOPTION-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6485231069).
 PR825 is independently accepted and merged at
@@ -33,18 +42,18 @@ all four suites successfully. One writer on `ai/815-successor-adoption-v4` in
 `/home/sonvh/pcp-local-adoption825-v4`. This historical825 campaign did not activate
 a protected baseline or live job. New831 execution is recorded below.
 
-## Current integrated config / held verification checklist
+## Accepted config / held verification source checklist
 
-[PM6516240084](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6516240084)
-authorizes SOURCE/FIXTURE only from Q=e3b19700. PR838 records actual ordinary B
+The earlier [PM6516240084](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6516240084)
+authorized SOURCE/FIXTURE only from Q=e3b19700; current preparation uses the later decision above. PR838 records actual ordinary B
 admission then held config failure, running2/active2/counters1/0/0; its pre-admission
 P/Q rebinding proposal is closed. Current canonical/task/verifier Q, workers off,
 activation disabled. A and both configs/credentials/backups retained. Dashboard
 https://localhost:18443/dashboard remains tokenless/local and unchanged.
 
 [Complete repair WorkReport and one executable PM rollout packet](../project/history/2026-10-30-config-held-verification.md)
-and [Draft PR840](https://github.com/sonvhse06072/personal-coding-platform/pull/840)
-are the current source handoff. No CLI upgrade/config exemption: exact in-memory
+and [accepted merged PR840](https://github.com/sonvhse06072/personal-coding-platform/pull/840)
+are the accepted source handoff. No CLI upgrade/config exemption: exact in-memory
 trust prevents the pinned producer write. Future invocations still reject old or
 hostile config. Held continuation never invokes a model; private finite authority,
 full preimages, unverified candidate, per-phase intent/results and original ownership
@@ -54,9 +63,12 @@ precede mandatory Q tests and existing commit/delivery. Default plan/status is r
 - [x] Real Git/PostgreSQL full-row/candidate/ownership/concurrency/crash/lost-ack cases.
 - [x] Restored B and actual Q verifier13+13; original A/B unchanged, zero model calls.
 - [x] Source scope preserves historical authority; separate Draft repair PR and CI.
-- [ ] Independent acceptance, exact R2 merge/postmerge CI and finite execution record.
-- [ ] Actual reviewed Runtime/Executor adoption, new private held permit and LIVE
-  verification/task Draft PR/CI. None performed in this source session.
+- [x] Independent source acceptance, exact R2 merge/postmerge four executed suites.
+- [x] Finite preparation decision, fresh backup, actual R2 builds/packaging and restore rehearsal.
+- [x] Reversible authority-absent adoption, stable fingerprints, bounded Router start/stop.
+- [x] Private finite candidate and sanitized manifest, unchanged live state, retained shutdown.
+- [ ] Independent concrete-manifest PM execution record; live permit remains uninstalled.
+- [ ] LIVE held verification/task Draft PR/CI after that checkpoint; fixture tests are not live tests.
 
 Supported prepared commands: `session verify-held --job-id ID` (plan),
 `session readiness --phase held-verification --job-id ID`, and only after the later

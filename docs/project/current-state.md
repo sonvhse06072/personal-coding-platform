@@ -19,7 +19,10 @@ physical PREPARATION session: backup/restored-copy rehearsal, one Runtime and on
 Executor R2 build, reversible adoption with execution authority OFF, actual-image
 and post-start fingerprint checks, then one concrete private permit candidate.
 Preparation expires2026-10-31T08:00:00Z (15:00 ICT); no automatic renewal.
-No preparation action has been performed by this GitHub PM review.
+Preparation completed at09:22 UTC under that decision; the independent PM concrete-manifest
+checkpoint remains. [Integrated physical report/manifest](history/2026-10-30-r2-held837-preparation.md)
+records final R2 images, restored-copy13+13 checks, exact stopped resources and rollout.
+No live permit installed; B counters remain1/0/0.
 
 Main is held at R2; SAME evidence PR838 remains unmerged and carries this handoff.
 Task/base/baseline/canonical/verifier remain Q. Existing Router retains truthful
@@ -50,10 +53,13 @@ intact, as do credentials, backups and disabled authorities. No live SQL/model/r
 A831 `a8851f89dd3e4e582c697ec1fe6d8cdb` remains completed/PM accepted,
 delivered/gen3, original workspace/proof/counters1/2/1 unchanged. Project lease is now
 B gen2; A's released gen1 is historical. V3 retired824 and foreign resources untouched.
-Current Q Runtime3c8e847d, Executor50fc20a1, Routerf03edbd9 remain stopped; activation
-and old permits disabled. Existing DB8b72a8d3, observer5d6b3e9b and frontendd22a5bf0
+New R2 Runtimee5d8a338 and Executor9cba24de are prepared/stopped; Routerf03edbd9
+was bounded-started and stopped. Old Runtime3c8e847d/Executor50fc20a1 remain retained.
+All authority files remain absent/disabled; candidate873e6e19 is private/uninstalled.
+Existing DB8b72a8d3, observer5d6b3e9b and frontendd22a5bf0
 stay available. **https://localhost:18443/dashboard — tokenless loopback_readonly.**
-No observer rebuild/swap or new browser/VPN acceptance is claimed.
+No observer rebuild/swap. Fresh trusted-browser tokenless polling/reconnect passed;
+VPN ON and second-machine LAN remain untested.
 
 ## Original #824 — retired incomplete, never delivered
 
@@ -82,18 +88,21 @@ Closure does not mark untested capabilities PASS or authorize resource cleanup.
 
 ## Immediate next safe actions
 
-Execute the integrated preparation decision above using final R2 images and a
-private restored copy. Preserve live B1/0/0 and both config files. Supply one sanitized
-manifest plus private evidence hashes for independent PM review; keep the candidate
-permit disabled. Stop exact current workers; DB/observer/frontend may remain available.
-No interactive authentication request is currently pending. Do not merge evidence
-PR838 while main is held at R2, change issue837/body/baseline, or retry B's model.
+Review the [concrete manifest](history/2026-10-30-r2-held837-preparation.md):
+SHA256 `6bec39b5c14eaee53c1f22514b35f3d593385126efcc2e9c7de7cd0908cae28a`.
+One private permit candidate expires2026-10-31T08:00:00Z; do not install it before
+independent PM exact execution disposition. Continue the SAME operator session afterward.
+Fresh backup/restored rehearsal, final-image/security/publisher/schema checks and retained
+shutdown passed. Aggregate LIVE held readiness/plan remains deferred because authority is
+absent; Runtime correctly rejects startup. No credential interaction pending. Do not merge
+PR838, refresh mismatched proof, change issue837/Q identity or replay unknown tests/model.
 
 ## Standing safety boundary
 
 `A3B2_IMAGE_BUILD=STOP` and `CODEX_LIVE=STOP` remain effective outside exact finite
-approved campaigns. This SOURCE/FIXTURE decision grants no live worker adoption,
-baseline activation, model replay, global network/trust change or production action.
+approved campaigns. Current decision permits the recorded authority-absent preparation,
+not live verification/delivery, baseline activation, model replay, global network/trust
+change or production action.
 Chợ Nhạc and foreign resources stay untouched. No force push or new paid service.
 Historical #752 is archived as unexecuted; #595 remains HOLD. Unproven capabilities stay unproven.
 
@@ -102,6 +111,8 @@ Main R2=f02d9a14 held; PR840 accepted/merged, postmerge41028562169 full4 PASS.
 PM6518824609 authorizes integrated R2 build/rehearsal/adoption preparation only.
 One independent exact-image/candidate/permit checkpoint precedes LIVE held verification.
 B running2/active2/counters1/0/0 held; task/canonical/verifier Q and configs unchanged.
-A completed; retired824 preserved; dashboard up; no PM-host physical operation.
+A completed/unchanged; retired824 preserved; dashboard up, fresh browser check PASS.
+R2 builds/adoption/rehearsal PASS; workers stopped, private permit uninstalled.
+Concrete manifest6bec39b5 awaits independent PM execution disposition; expiry Oct31 08Z.
 SAME PR838 is evidence/continuity, not task delivery; do not merge during R2 hold.
 <!-- PCP:CONTINUITY:END -->
