@@ -8,6 +8,11 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+from contextlib import contextmanager
+import stat
+import subprocess
+import sys
+import tempfile
 from copy import deepcopy
 from dataclasses import dataclass
 import json
@@ -700,6 +705,180 @@ def require_isolated_codex_configuration(workspace):
         raise TaskStop('pcp_local_unreviewed_codex_configuration') from exc
 
 
+def _retained_identity(s):
+    return (s.st_dev, s.st_ino, s.st_mode, s.st_uid, s.st_gid,
+            s.st_nlink, s.st_size, s.st_mtime_ns, s.st_ctime_ns)
+
+
+def _retained_snapshot(path, destination=None):
+    """Descriptor-relative reads; a replaced ancestor cannot redirect descent."""
+    result = {}
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_NOATIME
+
+    def visit(parent, name, rel, target):
+        before = os.stat(name, dir_fd=parent, follow_symlinks=False)
+        directory = stat.S_ISDIR(before.st_mode)
+        require(directory or (stat.S_ISREG(before.st_mode) and before.st_nlink == 1),
+                'pcp_local_retained_git_escape')
+        fd = os.open(name, flags | (os.O_DIRECTORY if directory else 0), dir_fd=parent)
+        try:
+            require(_retained_identity(before) == _retained_identity(os.fstat(fd)), 'pcp_local_retained_files_changed')
+            if directory:
+                if target is not None:
+                    target.mkdir(mode=0o700)
+                for child in sorted(os.listdir(fd)):
+                    visit(fd, child, rel + '/' + child, target / child if target else None)
+                digest = None
+            else:
+                h = hashlib.sha256()
+                output = target.open('xb') if target is not None else None
+                try:
+                    while chunk := os.read(fd, 1024 * 1024):
+                        h.update(chunk)
+                        if output:
+                            output.write(chunk)
+                finally:
+                    if output:
+                        output.close()
+                        target.chmod(stat.S_IMODE(before.st_mode))
+                digest = h.hexdigest()
+            require(_retained_identity(before) == _retained_identity(os.fstat(fd))
+                    == _retained_identity(os.stat(name, dir_fd=parent, follow_symlinks=False)),
+                    'pcp_local_retained_files_changed')
+            result[rel] = (_retained_identity(before), digest)
+        finally:
+            os.close(fd)
+
+    # The caller validates the fixed workspace root; pin it before descent.
+    parent = os.open(path.parent, flags | os.O_DIRECTORY)
+    try:
+        visit(parent, path.name, '', destination)
+    finally:
+        os.close(parent)
+    return result
+
+
+def _retained_environment(home):
+    # No inherited credentials, Git overrides, pager, helper or Python startup.
+    return dict(PATH=os.defpath, HOME=str(home), LC_ALL='C',
+        GIT_CONFIG_NOSYSTEM='1', GIT_CONFIG_SYSTEM='/dev/null',
+        GIT_CONFIG_GLOBAL='/dev/null', GIT_OPTIONAL_LOCKS='0',
+        GIT_NO_REPLACE_OBJECTS='1', GIT_ATTR_NOSYSTEM='1', GIT_ALLOW_PROTOCOL='',
+        GIT_CONFIG_COUNT='1', GIT_CONFIG_KEY_0='core.hooksPath', GIT_CONFIG_VALUE_0='/dev/null',
+        PYTHONDONTWRITEBYTECODE='1')
+
+
+def _retained_run(args, home, **kwargs):
+    return subprocess.run(args, cwd=home, env=_retained_environment(home),
+        capture_output=True, check=True, timeout=30, **kwargs).stdout
+
+
+def _retained_configuration(path, home):
+    # --file does not perform repository discovery; --no-includes never opens
+    # referenced paths. Git's parser supplies the real case/escaping semantics.
+    raw = _retained_run(['git', 'config', '--file', str(path), '--no-includes', '--null', '--list'], home)
+    values = {}
+    for item in raw.split(b'\0'):
+        if not item:
+            continue
+        key, separator, value = item.partition(b'\n')
+        key = key.decode('utf-8').lower()
+        require(key not in values, 'pcp_local_retained_git_configuration')
+        values[key] = value.decode('utf-8') if separator else None
+    return values
+
+
+def _retained_boolean(value, expected):
+    value = value.lower() if isinstance(value, str) else value
+    return value in ((None, 'true', 'yes', 'on', '1') if expected
+                     else ('', 'false', 'no', 'off', '0'))
+
+
+def _retained_validate(path, home):
+    gd = path / '.git'
+    require(gd.is_dir() and not any((gd / p).exists() for p in (
+        'commondir', 'worktrees', 'modules', 'objects/info/alternates',
+        'objects/info/http-alternates', 'info/grafts', 'refs/replace', 'shallow')),
+        'pcp_local_retained_git_escape')
+    config = _retained_configuration(gd / 'config', home)
+    core = {'core.repositoryformatversion', 'core.filemode', 'core.bare', 'core.logallrefupdates'}
+    allowed = core | {'user.name', 'user.email', 'extensions.worktreeconfig',
+                     'remote.origin.url', 'remote.origin.fetch'}
+    # Inert tracking metadata from older non-sparse clones; no remote operation
+    # is performed. All behavioral/extension keys remain denied by default.
+    allowed |= {k for k in config if k.startswith('branch.') and k.endswith(('.remote', '.merge'))}
+    require(core <= config.keys() and config.keys() <= allowed
+        and config['core.repositoryformatversion'] in ('0', '1')
+        and _retained_boolean(config['core.filemode'], True)
+        and _retained_boolean(config['core.bare'], False)
+        and _retained_boolean(config['core.logallrefupdates'], True), 'pcp_local_retained_git_configuration')
+    sparse = 'extensions.worktreeconfig' in config
+    worktree, patterns = gd / 'config.worktree', gd / 'info/sparse-checkout'
+    if sparse:
+        require(_retained_boolean(config['extensions.worktreeconfig'], True), 'pcp_local_retained_git_configuration')
+        wc = _retained_configuration(worktree, home)
+        require(set(wc) == {'core.sparsecheckout', 'core.sparsecheckoutcone'}
+            and _retained_boolean(wc['core.sparsecheckout'], True)
+            and _retained_boolean(wc['core.sparsecheckoutcone'], False), 'pcp_local_retained_git_configuration')
+        require(patterns.read_bytes() == b'/*\n!/.ddev/\n' and not (path / '.ddev').exists(),
+                'pcp_local_retained_sparse_changed')
+    else:
+        require(not worktree.exists() and not patterns.exists(), 'pcp_local_retained_git_configuration')
+    # These commands now use only a validated private configuration. Neither
+    # assume-unchanged nor fsmonitor-valid may suppress a filesystem comparison;
+    # skip-worktree is legal only for the exact producer exclusion.
+    def git(*args):
+        # Sparse-aware index reads can clear skip-worktree for present files.
+        # Inspect the stored flags with sparse interpretation disabled first.
+        return _retained_run(['git', '-C', str(path), '-c', 'core.sparseCheckout=false', *args], home).split(b'\0')
+    for option in ('-v', '-f'):
+        for entry in filter(None, git('ls-files', option, '-z')):
+            tag, name = entry[:1], entry[2:]
+            expected = b'S' if sparse and name.startswith(b'.ddev/') else b'H'
+            require(tag == expected, 'pcp_local_retained_index_changed')
+    names = set()
+    for entry in filter(None, git('ls-files', '--stage', '-z')):
+        identity, name = entry.split(b'\t', 1)
+        mode, _, stage = identity.split()
+        require(mode in (b'100644', b'100755') and stage == b'0' and name not in names
+            and not name.startswith(b'/') and not {b'.', b'..', b'.git'} & set(name.split(b'/')),
+            'pcp_local_retained_index_changed')
+        names.add(name)
+
+
+def _retained_proof(path, row, base_sha, home):
+    # Reuse the authoritative recovery proof unchanged, in an interpreter with a
+    # clean environment. Do not mutate process-wide environment in the server.
+    program = '''
+import json,sys
+from types import SimpleNamespace
+sys.path.insert(0,sys.argv[1])
+from app.pcp_local_recovery import reconcile_commit
+value=json.load(sys.stdin)
+print(reconcile_commit(value['row'],SimpleNamespace(base_sha=value['base'])))
+'''
+    payload = dict(row=dict(workspace=str(path), checkpoint=row['checkpoint']), base=base_sha)
+    return _retained_run([sys.executable, '-I', '-B', '-c', program, str(Path(__file__).resolve().parent.parent)],
+                home, input=json.dumps(payload).encode()).decode().strip()
+
+
+@contextmanager
+def _retained_git(path):
+    """Keep the original byte/metadata preimage across proof AND durable reads."""
+    try:
+        with tempfile.TemporaryDirectory(prefix='pcp-retained-') as scratch:
+            home = Path(scratch)
+            clone = home / 'snapshot'
+            before = _retained_snapshot(path, clone)
+            _retained_validate(clone, home)
+            yield lambda row, base: _retained_proof(clone, row, base, home)
+            require(_retained_snapshot(path) == before, 'pcp_local_retained_files_changed')
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        if isinstance(exc, TaskStop):
+            raise
+        raise TaskStop('pcp_local_retained_git_invalid') from exc
+
+
 def retained_workspaces(storage, root, current_job_id):
     """Read-only validation of authentic completed siblings, never terminal flags alone.
 
@@ -708,9 +887,7 @@ def retained_workspaces(storage, root, current_job_id):
     chmod, deletion, fresh proof or history replacement is permitted here.
     """
     import re
-    from types import SimpleNamespace
     from .pcp_local_readiness import operation_snapshot, finalization_ownership
-    from .pcp_local_recovery import reconcile_commit, git
     require(root.is_absolute() and root.resolve() == root and not root.is_symlink(),
             'pcp_local_workspace_root_invalid')
     for path in root.iterdir():
@@ -718,20 +895,6 @@ def retained_workspaces(storage, root, current_job_id):
                 and re.fullmatch('[a-f0-9]{32}', path.name), 'pcp_local_foreign_workspace')
         if path.name == current_job_id:
             continue
-        git_dir = path / '.git'
-        require(git_dir.is_dir() and not git_dir.is_symlink()
-                and not any(p.is_symlink() for p in git_dir.rglob('*'))
-                and not any((git_dir / p).exists() for p in
-                            ('commondir', 'worktrees', 'objects/info/alternates')),
-                'pcp_local_retained_git_escape')
-        # Reading a retained repo must not execute an edited Git filter/monitor
-        # or load configuration from outside that clone during proof comparison.
-        keys = [v.split('\n', 1)[0].lower() for v in
-                git(path, 'config', '--local', '--no-includes', '--null', '--list').split('\0') if v]
-        require(not any(k.startswith(('include.', 'includeif.', 'filter.', 'diff.', 'extensions.'))
-                or k in {'core.worktree', 'core.fsmonitor', 'core.hookspath',
-                         'core.attributesfile', 'core.excludesfile'} for k in keys),
-                'pcp_local_retained_git_configuration')
         row, receipt, lease = operation_snapshot(storage, path.name)
         cp, result = row['checkpoint'], row.get('result') or {}
         execution = cp.get('pcp_local_execution') or {}
@@ -771,11 +934,12 @@ def retained_workspaces(storage, root, current_job_id):
                 and execution.get('diff') == result.get('diff'),
                 'pcp_local_retained_evidence_invalid')
         finalization_ownership(row, receipt, lease)
-        require(reconcile_commit(row, SimpleNamespace(base_sha=task.base_sha)) == result['commit'],
-                'pcp_local_retained_commit_changed')
-        # A read-only validator cannot silently accept concurrent evidence edits.
-        require(operation_snapshot(storage, path.name) == (row, receipt, lease),
-                'pcp_local_retained_evidence_changed')
+        with _retained_git(path) as reconcile:
+            require(reconcile(row, task.base_sha) == result['commit'],
+                    'pcp_local_retained_commit_changed')
+            # Both filesystem and durable preimages must survive validation.
+            require(operation_snapshot(storage, path.name) == (row, receipt, lease),
+                    'pcp_local_retained_evidence_changed')
 
 
 def read_activation():
