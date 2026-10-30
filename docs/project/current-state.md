@@ -5,7 +5,7 @@
 PR846 merged at accepted H **871fbf2485a1ffb89a88a69e1daaaca10e25b318**;
 postmerge CI41142412566 passed four executed suites. Under
 [WO6535472577](https://github.com/sonvhse06072/personal-coding-platform/issues/604#issuecomment-6535472577),
-branch `ai/604-context-physical-prep-v1` records
+branch `ai/604-context-physical-prep-v1` / [Draft evidence PR847](https://github.com/sonvhse06072/personal-coding-platform/pull/847) records
 [one WorkReport/next decision packet](history/2026-10-31-context-physical-preparation.md).
 One successful H Runtime candidate built; private V4 backup/restored copy, packaged
 isolation/producer/verifier/context-diagnostic rehearsals passed. Fifteen task fixtures

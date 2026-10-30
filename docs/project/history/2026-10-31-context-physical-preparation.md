@@ -1,7 +1,8 @@
 # H context preparation — WorkReport and inactive rollout packet
 
 Authority: [WO6535472577](https://github.com/sonvhse06072/personal-coding-platform/issues/604#issuecomment-6535472577).
-Branch `ai/604-context-physical-prep-v1`, exact accepted H
+[Draft evidence PR847](https://github.com/sonvhse06072/personal-coding-platform/pull/847),
+branch `ai/604-context-physical-prep-v1`, exact accepted H
 `871fbf2485a1ffb89a88a69e1daaaca10e25b318`. PR846 merged after independent
 review5719623294; postmerge [CI41142412566](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41142412566)
 checked: four actual test steps passed. Main is H; deployed baseline remains N85e415f1.
