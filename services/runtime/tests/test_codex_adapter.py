@@ -389,3 +389,45 @@ def test_pcp_inherited_configuration_fails_closed_before_subprocess(monkeypatch,
     monkeypatch.setattr('app.adapters.codex.run_command',forbidden)
     with pytest.raises(ValueError,match='unreviewed_codex_configuration'):
         asyncio.run(CodexAdapter('fixture-model').run(workspace=workspace,prompt='fixture',mode='execute',timeout=10,isolate_workspace=True))
+
+
+@pytest.mark.parametrize('text', [
+    '[projects."/exact"]\ntrust_level="trusted"\n',
+    '[permissions.pcp_local]\nextends=":all"\n',
+    'x=1\nx=2\n', '[mcp_servers.host]\ncommand="unsafe"\n',
+    'include="/foreign"\n', 'model_provider="foreign"\n'])
+def test_generated_looking_or_hostile_config_is_still_denied(monkeypatch,tmp_path,text):
+    home=tmp_path/'home';home.mkdir();workspace=tmp_path/'job';workspace.mkdir()
+    monkeypatch.setenv('CODEX_HOME',str(home));(home/'config.toml').write_text(text)
+    async def forbidden(*a,**k):pytest.fail('configuration-sensitive subprocess executed')
+    monkeypatch.setattr('app.adapters.codex.run_command',forbidden)
+    with pytest.raises(ValueError,match='unreviewed_codex_configuration'):
+        asyncio.run(CodexAdapter('fixture').run(workspace=workspace,prompt='fixture',mode='execute',timeout=10,isolate_workspace=True))
+
+
+def test_config_race_during_invocation_preparation_is_rechecked(monkeypatch,tmp_path):
+    from app.adapters import codex
+    home=tmp_path/'home';home.mkdir();workspace=tmp_path/'job';workspace.mkdir()
+    monkeypatch.setenv('CODEX_HOME',str(home))
+    original=codex.tempfile.NamedTemporaryFile
+    def race(*a,**k):
+        (home/'config.toml').write_text('permissions={pcp_local={extends=":all"}}')
+        return original(*a,**k)
+    monkeypatch.setattr(codex.tempfile,'NamedTemporaryFile',race)
+    async def forbidden(*a,**k):pytest.fail('raced configuration reached subprocess')
+    monkeypatch.setattr(codex,'run_command',forbidden)
+    with pytest.raises(ValueError,match='unreviewed_codex_configuration'):
+        asyncio.run(CodexAdapter('fixture').run(workspace=workspace,prompt='fixture',mode='execute',timeout=10,isolate_workspace=True))
+
+
+def test_project_trust_is_exact_in_memory_and_does_not_grant_permission(monkeypatch,tmp_path):
+    import tomllib
+    from app.adapters import codex
+    monkeypatch.setenv('CODEX_HOME',str(tmp_path/'home'))
+    async def run(argv,**kwargs):
+        projects=tomllib.loads(next(x for x in argv if x.startswith('projects=')))
+        assert projects=={'projects':{str(tmp_path):{'trust_level':'trusted'}}}
+        assert 'default_permissions="pcp_local"' in argv and codex.isolated_permissions(tmp_path) in argv
+        return CommandResult(argv,0,'{"type":"turn.completed"}','')
+    monkeypatch.setattr(codex,'run_command',run)
+    asyncio.run(CodexAdapter('fixture').run(workspace=tmp_path,prompt='fixture',mode='execute',timeout=10,isolate_workspace=True))

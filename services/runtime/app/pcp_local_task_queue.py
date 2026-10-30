@@ -718,15 +718,39 @@ def session_main(argv=None):
     from http.client import HTTPException
     import urllib.parse
     parser = argparse.ArgumentParser(description='PCP local status, readiness and PM finalization; default read-only.')
-    parser.add_argument('action', nargs='?', default='status', choices=('status','readiness','finalize'))
+    parser.add_argument('action', nargs='?', default='status', choices=('status','readiness','finalize','verify-held'))
+    parser.add_argument('--apply', action='store_true', help='Only verify-held: one authorized non-model attempt')
     parser.add_argument('--job-id', required=True)
-    parser.add_argument('--phase', default='admission', choices=('admission','status','delivery','finalization'))
+    parser.add_argument('--phase', default='admission', choices=('admission','status','delivery','finalization','held-verification'))
     parser.add_argument('--review-id', type=int)
     parser.add_argument('--json', action='store_true')
     args = parser.parse_args(argv)
     import re
     if not re.fullmatch('[0-9a-f]{32}', args.job_id):
         parser.error('--job-id must be an exact job identity')
+    if args.apply and args.action != 'verify-held':
+        parser.error('--apply is only valid for verify-held')
+    if args.action == 'verify-held':
+        report=dict(action=args.action,job_id=args.job_id,mutation_requests=0,outcome='unobserved')
+        try:
+            observed=session_request('held-verification')
+            require(observed.get('job_id')==args.job_id,'held_operator_identity')
+            report.update(observation=observed,outcome='observed')
+            if args.apply and observed.get('ready') is True:
+                report['mutation_requests']=1
+                try:
+                    session_request('held-verification',{'job_id':args.job_id,'permit_sha256':observed['permit_sha256']})
+                except (OSError,ValueError,HTTPException):
+                    pass
+                report['after']=session_request('held-verification')
+                require(report['after'].get('job_id')==args.job_id
+                    and report['after'].get('permit_sha256')==observed['permit_sha256'],
+                    'held_reconciliation_identity_changed')
+                report['outcome']='reconciled'
+        except (OSError,ValueError,HTTPException):
+            report['outcome']='reconcile_before_retry'
+        print(json.dumps(report,sort_keys=True))
+        return 0 if report['outcome'] in {'observed','reconciled'} else 2
     phase = 'status' if args.action == 'status' else 'finalization' if args.action == 'finalize' else args.phase
     query = urllib.parse.urlencode({k:v for k,v in dict(phase=phase, job_id=args.job_id, review_id=args.review_id).items() if v is not None})
     report = dict(action=args.action, job_id=args.job_id, outcome='blocked', mutation_requests=0)

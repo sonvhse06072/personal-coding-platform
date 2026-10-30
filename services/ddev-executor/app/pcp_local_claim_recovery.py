@@ -66,8 +66,10 @@ def git(repo, *args):
     return result.stdout.strip()
 
 
-def release(a, repo, root, inspect):
-    p = a['claim_recovery']
+def release(a, repo, root, inspect, *, binding_key="claim_recovery"):
+    require(binding_key in {"claim_recovery", "held_verification"})
+    p = a[binding_key]
+    receipt_before = p["receipt_before"] if binding_key == "claim_recovery" else p["before"]["receipt"]
     source, repair = a['base_sha'], p['repair_source']
     require(re.fullmatch('[0-9a-f]{40}', repair) and repair != source)
     git(repo, 'merge-base', '--is-ancestor', source, repair)
@@ -76,7 +78,7 @@ def release(a, repo, root, inspect):
     require(commits == p['repair_commits'] and sorted(paths) == p['repair_paths'],
             'claim_recovery_repair_range_changed')
     require(not git(repo, 'log', '--full-history', '--format=%H', source+'..'+repair, '--',
-                    *p['receipt_before']['allowed_paths']), 'claim_recovery_pilot_paths_changed')
+                    *receipt_before['allowed_paths']), 'claim_recovery_pilot_paths_changed')
     # Router at S is permitted only when its complete build context and registry
     # inputs are unchanged across every repair commit, including reverted edits.
     require(not git(repo, 'log', '--full-history', '--format=%H', source+'..'+repair, '--',
@@ -85,6 +87,12 @@ def release(a, repo, root, inspect):
     require(set(p['roles']) == {'runtime', 'executor', 'router', 'verifier'})
     for role, binding in p['roles'].items():
         expected_source = repair if role in ('runtime', 'executor') else source
+        if binding_key == 'held_verification' and role == 'router':
+            expected_source = binding['source_commit']
+            require(re.fullmatch('[0-9a-f]{40}', expected_source))
+            git(repo, 'merge-base', '--is-ancestor', expected_source, source)
+            require(not git(repo, 'log', '--full-history', '--format=%H', expected_source+'..'+repair, '--',
+                'services/router', 'config/models.yml', 'config/routing-policy.yml'), 'held_router_inputs_changed')
         require(binding['source_commit'] == expected_source
             and re.fullmatch('sha256:[0-9a-f]{64}', binding['image_id']))
         image = inspect('image', binding['image_id'])

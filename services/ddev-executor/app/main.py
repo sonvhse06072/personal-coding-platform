@@ -3563,6 +3563,9 @@ def _pcp_digest(value):
 
 
 def _pcp_activation():
+    from .pcp_local_held import enabled as held_enabled, activation as held_activation
+    if held_enabled():
+        return held_activation()
     from .pcp_local_claim_recovery import enabled, activation
     if enabled():
         return activation()
@@ -3639,8 +3642,8 @@ def pcp_local_observe(payload: PcpLocalObservationRequest):
     if (set(host.get('Tmpfs') or {}) != {'/tmp'}
             or any(m.get('Destination') != '/tmp' for m in item.get('Mounts', []) if m.get('Type') == 'tmpfs')
             or item.get('Name') != '/' + name or not item.get('State', {}).get('Running')
-            or item.get('Image') != (a['claim_recovery']['roles']['runtime']['image_id']
-                if 'claim_recovery' in a else a['runtime_image_id'])
+            or item.get('Image') != ((a.get('held_verification') or a.get('claim_recovery'))['roles']['runtime']['image_id']
+                if 'claim_recovery' in a or 'held_verification' in a else a['runtime_image_id'])
             or host.get('Privileged') is not False or host.get('PidMode') == 'host'
             or host.get('NetworkMode') == 'host' or host.get('CapAdd')
             or host.get('ReadonlyRootfs') is not True
@@ -3666,11 +3669,12 @@ def pcp_local_observe(payload: PcpLocalObservationRequest):
     delivery, repository = _github_context(cfg)
     if repository != _PCP_REPOSITORY:
         raise HTTPException(403, 'pcp_local_publisher_repository_invalid')
-    if 'claim_recovery' in a:
+    if 'claim_recovery' in a or 'held_verification' in a:
         from .pcp_local_claim_recovery import release
-        current_main = release(a, Path(cfg['path']), root, _pcp_docker)
+        current_main = (release(a, Path(cfg['path']), root, _pcp_docker, binding_key='held_verification')
+            if 'held_verification' in a else release(a, Path(cfg['path']), root, _pcp_docker))
     with delivery._client() as client:
-        if 'claim_recovery' in a:
+        if 'claim_recovery' in a or 'held_verification' in a:
             main = client.get(f'{delivery.base}/repos/{repository}/git/ref/heads/main')
             main.raise_for_status()
             if main.json().get('object', {}).get('sha') != current_main:

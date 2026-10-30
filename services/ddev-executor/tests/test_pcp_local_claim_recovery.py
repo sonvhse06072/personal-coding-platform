@@ -141,3 +141,42 @@ def test_reviewed_merge_range_with_unchanged_pilot_and_router_passes(release):
         row=s.items['container',name];row['Config']['Labels']['org.opencontainers.image.revision']=repair
         binding['configuration_sha256']=r.configuration_digest(row)
     assert check(s)==repair
+
+
+@pytest.mark.parametrize('drift',['none','paths','verifier','runtime','task'])
+def test_distinct_held_binding_keeps_task_Q_and_platform_repair(release,drift):
+    s=release;p=s.a.pop('claim_recovery');p['before']={'receipt':p.pop('receipt_before')}
+    s.a['held_verification']=p
+    if drift=='paths':p['repair_paths']=['other.py']
+    elif drift=='verifier':p['roles']['verifier']['source_commit']=p['repair_source']
+    elif drift=='runtime':p['roles']['runtime']['source_commit']=s.a['base_sha']
+    elif drift=='task':p['before']['receipt']['allowed_paths']=['services/runtime/app.py']
+    if drift=='none':assert r.release(s.a,s.root,s.root,s.inspect,binding_key='held_verification')==p['repair_source']
+    else:
+        with pytest.raises(HTTPException):r.release(s.a,s.root,s.root,s.inspect,binding_key='held_verification')
+
+
+@pytest.mark.parametrize('kind',['regular','hardlink','symlink','directory_link','permissions','replace'])
+def test_held_authority_file_cannot_be_substituted(tmp_path,monkeypatch,kind):
+    import os
+    from app import pcp_local_held as h
+    root=tmp_path/'private';root.mkdir();path=root/'permit.json'
+    path.write_text('{}');path.chmod(0o600)
+    if kind=='regular':assert h._read(path)==b'{}';return
+    if kind=='hardlink':os.link(path,root/'alias')
+    elif kind=='symlink':path.rename(root/'original');path.symlink_to(root/'original')
+    elif kind=='directory_link':
+        alias=tmp_path/'alias';alias.symlink_to(root,target_is_directory=True);path=alias/path.name
+    elif kind=='permissions':path.chmod(0o644)
+    else:
+        real_read=os.read;replaced=False
+        def race(fd,n):
+            nonlocal replaced
+            result=real_read(fd,n)
+            if not replaced:
+                replaced=True
+                replacement=root/'replacement';replacement.write_text('{}');replacement.chmod(0o600)
+                replacement.replace(path)
+            return result
+        monkeypatch.setattr(os,'read',race)
+    with pytest.raises(HTTPException):h._read(path)

@@ -818,27 +818,30 @@ class RuntimeEngine(_RuntimeEngine):
         task, _ = await readers.source()
         job_id = stable_job_id(task)
         async with self.project_operation_lock(PROJECT_ID):
-            row = self.storage.get(job_id)
-            require(row is not None and row['project_id'] == PROJECT_ID,
-                    'pcp_local_delivery_job_missing')
-            require(row['checkpoint']['project_baseline'] == baseline.model_dump(mode='json'),
-                    'pcp_local_delivery_baseline_changed')
-            execution = row['checkpoint'].get('pcp_local_execution') or {}
-            if execution.get('state') in {'verified_uncommitted', 'commit_uncertain'}:
-                from .pcp_local_recovery import recover_verified_job
-                row = await recover_verified_job(self, readers, task, row)
-                execution = row['checkpoint']['pcp_local_execution']
+            from contextlib import nullcontext
+            from .pcp_local_recovery import operation_lock
+            with operation_lock(self.storage) if getattr(readers, "held", None) else nullcontext():
+                row = self.storage.get(job_id)
+                require(row is not None and row['project_id'] == PROJECT_ID,
+                        'pcp_local_delivery_job_missing')
+                require(row['checkpoint']['project_baseline'] == baseline.model_dump(mode='json'),
+                        'pcp_local_delivery_baseline_changed')
+                execution = row['checkpoint'].get('pcp_local_execution') or {}
+                if execution.get('state') in {'verified_uncommitted', 'commit_uncertain'}:
+                    from .pcp_local_recovery import recover_verified_job
+                    row = await recover_verified_job(self, readers, task, row)
+                    execution = row['checkpoint']['pcp_local_execution']
 
-            require(execution.get('state') == 'verified'
-                    and execution.get('authority_digest') == readers.authority_digest
-                    and row['checkpoint']['project_baseline'] == baseline.model_dump(mode='json'),
-                    'pcp_local_delivery_not_resumable')
-            readers.lease_generation = execution['lease_generation']
-            readers.route = row['route']
-            await self.deliver_pcp_local(job_id, readers, task)
+                require(execution.get('state') == 'verified'
+                        and execution.get('authority_digest') == readers.authority_digest
+                        and row['checkpoint']['project_baseline'] == baseline.model_dump(mode='json'),
+                        'pcp_local_delivery_not_resumable')
+                readers.lease_generation = execution['lease_generation']
+                readers.route = row['route']
+                await self.deliver_pcp_local(job_id, readers, task)
         return self.storage.get(job_id)
 
-    async def verify_pcp_local(self, job_id, workspace, project, *, timeout_seconds=900):
+    async def verify_pcp_local(self, job_id, workspace, project, *, timeout_seconds=900, phase_observer=None):
         """Real mandatory checks only; disabled/empty/all-skipped is never PASS."""
         from .pcp_local_task_queue import require
         require(project.get("ddev", {}).get("enabled") is True,
@@ -857,8 +860,12 @@ class RuntimeEngine(_RuntimeEngine):
             require(bool(project["ddev"].get(phase)), "pcp_local_mandatory_tests_missing")
             remaining = timeout_seconds - int(time.monotonic() - started)
             require(remaining >= 10, "pcp_local_verification_wall_envelope_exhausted")
+            if phase_observer is not None:
+                phase_observer(phase, None)
             result = await self.ddev.phase(job_id=job_id, project_id="pcp-local",
                 workspace=str(workspace), phase=phase, timeout_seconds=remaining)
+            if phase_observer is not None:
+                phase_observer(phase, result)
             outputs.append(result)
             commands = result.get("commands", [])
             valid = result.get("passed") is True and bool(commands)
