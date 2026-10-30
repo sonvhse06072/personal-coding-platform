@@ -1,28 +1,23 @@
 # Current Project State and Handoff
 
-## #604 context continuity SOURCE/FIXTURE candidate — 2026-10-31
+## #604 H physical preparation — 2026-10-31
 
-[WO6529510627](https://github.com/sonvhse06072/personal-coding-platform/issues/604#issuecomment-6529510627)
-authorizes one bounded ordinary-local implementation on `ai/604-context-continuity-v1` ([Draft PR846](https://github.com/sonvhse06072/personal-coding-platform/pull/846)),
-anchored at **0e8065b6bce08bed1e6b027a67fdf52d6ae848ca**. Evidence PR845 is merged;
-postmerge [CI41100344082](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41100344082)
-passed all four executed suites before implementation. This corrects the old premerge index.
+PR846 merged at accepted H **871fbf2485a1ffb89a88a69e1daaaca10e25b318**;
+postmerge CI41142412566 passed four executed suites. Under
+[WO6535472577](https://github.com/sonvhse06072/personal-coding-platform/issues/604#issuecomment-6535472577),
+branch `ai/604-context-physical-prep-v1` records
+[one WorkReport/next decision packet](history/2026-10-31-context-physical-preparation.md).
+One successful H Runtime candidate built; private V4 backup/restored copy, packaged
+isolation/producer/verifier/context-diagnostic rehearsals passed. Fifteen task fixtures
+stopped, data retained. Fresh original DB/config/authority/A/B/C snapshots unchanged;
+V3's22 containers stopped. No live workers/model/adoption or baseline installation.
 
-[WorkReport, criteria/evidence matrix, measurements and rollout packet](history/2026-10-31-context-continuity.md)
-records shared Composer packaging, pinned task/baseline context at actual execute/repair
-and delivery-review boundaries, read-only Git validation, durable provenance and lossless
-stdin. Real isolated Git/PostgreSQL/fresh-process fixtures use synthetic external transports;
-there is no developer inference or live publication. New-invocation restoration does not
-prove protection during internal CLI compaction. Prose criteria remain prose, not invented IDs.
-
-PM review5719486019 required actionable repair diagnostics. The same PR now carries
-bounded sanitized verifier excerpts, explicitly non-authoritative, with diagnostic-driven
-repair regressions; see the WorkReport correction and final-head CI receipt.
-
-Next: independent PM reviews the single Draft PR and its exact-head executed CI. #604
-stays open for remaining programme scope; #595 HOLD. No live adoption/build/worker start,
-activation, completed-task replay or merge. The deployed dashboard and historical assets
-remain untouched; the live details below are the retained C843 receipt, not a new observation.
+H candidate image d9f553ac… is proposed only. Draft successor source H, honest reused
+Executor R2/Router S, unchanged N observer, exact config hashes and three-path functional
+task proposal are in the machine-readable packet. All authority remains inactive/uninstalled.
+PM reviews source/image/frame/task value and finite budget together before live execution.
+Preparation window23:13:59Z Oct30 ->07:13:59Z Oct31; no renewal. #604 open; #595 HOLD.
+The deployed details below remain N; repository H does not silently advance that baseline.
 
 ## C843 completed and retained — 2026-10-30 17:21 UTC
 

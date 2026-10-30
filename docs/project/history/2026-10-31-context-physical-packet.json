@@ -1,0 +1,552 @@
+{
+  "source": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+  "baseline": "pcp-local-context-871fbf2485a1-20261031-draft",
+  "previous_baseline": "pcp-local-ordinary-c-85e415f1f53c-20261030",
+  "baseline_status": "draft",
+  "active_revision_unchanged": true,
+  "installed": false,
+  "images": {
+    "ddev-executor": "sha256:78a752c0dbfc6bb9f4120660a0cba4ad6bc6dd1673b1240fd651597d6edf6aae",
+    "router": "sha256:422d41413115ce46c24a063a018f942dfd63e04205b167d0b97e6e4d10660319",
+    "runtime": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b"
+  },
+  "reuse": {
+    "ddev-executor": {
+      "image": "sha256:78a752c0dbfc6bb9f4120660a0cba4ad6bc6dd1673b1240fd651597d6edf6aae",
+      "original_source": "f02d9a14af33d9efeb99aa573d776aab3119dec1",
+      "complete_service_inputs_equal": true,
+      "source_binding": "retain original label; validate existing production readers, never relabel H"
+    },
+    "router": {
+      "image": "sha256:422d41413115ce46c24a063a018f942dfd63e04205b167d0b97e6e4d10660319",
+      "original_source": "b97ade581fecad4db2146258e5ca02c3902189e0",
+      "complete_service_inputs_equal": true,
+      "source_binding": "retain original label; validate existing production readers, never relabel H"
+    }
+  },
+  "task": {
+    "issue_number": null,
+    "job_id": null,
+    "body_sha256": "f8dec08b75ebabe524ba446ba5f1d18faa9c2a9db13beb7813f54d7181e853b8",
+    "allowed_paths": [
+      "scripts/pcp-light-evidence-summary.py",
+      "tests/test_pcp_light_evidence_summary.py",
+      "docs/pcp-light/evidence-summary.md"
+    ],
+    "budget": {
+      "model_calls": 3,
+      "max_wall_seconds": 900,
+      "max_changed_files": 3,
+      "cash_ceiling_usd": 0
+    },
+    "status": "proposal only; PM issue/baseline approval and immutable binding required"
+  },
+  "metrics": {
+    "developer": {
+      "packet_bytes": 88280,
+      "mandatory_bytes": 87792,
+      "composition_ms": 15.627
+    },
+    "reviewer": {
+      "packet_bytes": 5238,
+      "mandatory_bytes": 4750,
+      "composition_ms": 15.606
+    }
+  },
+  "config_sha256": {
+    "routing-policy.yml": "cc71c65bec662e4726ee056525f0a02a6a1bfd9e1f09f92abad22a37b9c9d615",
+    "models.yml": "a748faf933fe5c792679a687f2b0870f97fb6f6af8bd70887cc9bb4d8758844d",
+    "projects.pcp-local.yml": "21f5df8c08c38c65a6f861702b2de9d287e89a32656a4ceb81c958369c057983",
+    "project-baselines.draft.yml": "b870fb44a846253d559568e016a3655e4420ed06717a4968ccbb21d9d033c53f",
+    "baseline.diff": "f79991e20f65c1a158c2961e84e9535e0c00af020a0b10adfa1292cacd41b680"
+  },
+  "constraints_coverage": "all prior reference categories and authority rules retained; no section narrowing",
+  "proposed_baseline_definition": {
+    "status": "draft",
+    "source_commit": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+    "authority": [
+      {
+        "path": ".github/workflows/guardian-static.yml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": ".github/workflows/pcp-guardian.yml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": ".github/workflows/pcp-local-inspect-image.yml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": ".github/workflows/tests.yml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "AGENTS.md",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "config/models.yml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "config/pm-bridge.yml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "config/project-baselines.pcp-local.yml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "config/project-baselines.yml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "config/projects.pcp-local.yml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "config/projects.yml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "config/routing-policy.yml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "docs/pcp-portable/h1b3-oci-evidence-plan.md",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "docs/pcp-portable/h1c-ddev-install-plan.md",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "docs/project/README.md",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "docs/project/architecture.md",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "docs/project/business-strategy.md",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "docs/project/constitution.md",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "docs/project/context-memory-architecture.md",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "docs/project/efficiency-model.md",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "docs/project/operating-model.md",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "docs/project/provider-policy.md",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "docs/project/provider-quota-telemetry.md",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "docs/project/roadmap.md",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "docs/project/service-secret-upgrades.md",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "docs/project/telegram-terminal-operations.md",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "profiles/pcp-local/.ddev/config.yaml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "profiles/pcp-local/.ddev/docker-compose.platform.yaml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "profiles/pcp-local/ddev-install-plan.example.yml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "profiles/pcp-local/docker-compose.local.yaml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "profiles/pcp-local/image-provenance.example.yml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "profiles/pcp-local/oci-evidence-plan.example.yml",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "profiles/pcp-local/runtime/Dockerfile.inspect",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "profiles/pcp-local/runtime/Dockerfile.inspect.dockerignore",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "profiles/pcp-local/runtime/requirements-inspect.lock",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "scripts/check_project_doc_authority.py",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "scripts/pcp-local-ddev-install-plan.py",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "scripts/pcp-local-gate-a-inspect.sh",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "scripts/pcp-local-image-provenance-plan.py",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "scripts/pcp-local-oci-evidence-plan.py",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "scripts/pcp-local-trusted-bootstrap.sh",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "scripts/pcp-shared-docker-ownership-check.sh",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "services/ddev-executor/app/main.py",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "services/runtime/app/engine.py",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "services/runtime/app/engine_core.py",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "services/runtime/app/engine_delivery.py",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "services/runtime/app/main.py",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "services/runtime/app/pcp_local_trusted_readers.py",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "services/runtime/app/pcp_local_worker_loop.py",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "services/runtime/app/storage.py",
+        "authority": "human_owner_protected"
+      },
+      {
+        "path": "README.md",
+        "authority": "mutable_execution"
+      },
+      {
+        "path": "docs/project/current-state.md",
+        "authority": "mutable_execution"
+      },
+      {
+        "path": "docs/project/history",
+        "authority": "evidence_history"
+      },
+      {
+        "path": "docs/pcp-portable/consolidation.md",
+        "authority": "evidence_history"
+      },
+      {
+        "path": "docs/pcp-portable/local-operations.md",
+        "authority": "mutable_execution"
+      }
+    ],
+    "references": {
+      "goals": [
+        {
+          "path": "docs/project/constitution.md",
+          "section": "2. Project goals"
+        }
+      ],
+      "non_goals": [
+        {
+          "path": "docs/project/constitution.md",
+          "section": "3. Non-goals"
+        }
+      ],
+      "requirements": [
+        {
+          "path": "docs/project/roadmap.md",
+          "section": "PCP Local execution priority \u2014 GH-815, 2026-10-27"
+        }
+      ],
+      "architecture_constraints": [
+        {
+          "path": "docs/project/architecture.md"
+        }
+      ],
+      "quality_policy": [
+        {
+          "path": "docs/project/operating-model.md",
+          "section": "8. Deterministic verification"
+        }
+      ],
+      "security_policy": [
+        {
+          "path": "docs/project/constitution.md",
+          "section": "9. Trust and security invariants"
+        }
+      ],
+      "budget_policy": [
+        {
+          "path": "docs/project/constitution.md",
+          "section": "11. Budget principles"
+        }
+      ],
+      "roadmap_frame": [
+        {
+          "path": "docs/project/roadmap.md"
+        }
+      ]
+    }
+  },
+  "baseline_delta": {
+    "new_revision_only": true,
+    "previous_revisions_exactly_preserved": true,
+    "active_revision_changed": false,
+    "source_from": "85e415f1f53c8129056e2f04fb99a9b964b89609",
+    "source_to": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+    "authority_and_references": "unchanged; no narrowing",
+    "previous_definition_bytes_preserved": true
+  },
+  "evidence_class": "PHYSICAL/FIXTURE",
+  "approval_state": "draft",
+  "workorder": "https://github.com/sonvhse06072/personal-coding-platform/issues/604#issuecomment-6535472577",
+  "backup": {
+    "at": "2026-10-30T23:14:32.724613+00:00",
+    "db_id": "8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8",
+    "backup_sha256": "8cc0944416678efeed4c3acc6f4b5678677ba4f4b5cf6e0d8f434ecbac39d50c",
+    "backup_bytes": 228687,
+    "contents_sha256": "7f68cfc50b3ae0f884208dd8d6907b13b6e3d54325382b14d7a320eae2f3ebde",
+    "snapshot_sha256": "e7ffb472d502d454813f12f6651215a1bb6a5cd618e6561d439b494f7b04b75b",
+    "role_permissions_sha256": "473ff8a215efdbbcc2f007a9e83072ec902ee92af37d47a4138cd4656047bbb5",
+    "tables": 11,
+    "completed831_preserved": true,
+    "schema_change_required": false,
+    "runtime_nine_tables_three_sequences": "PASS",
+    "observer_no_write_or_sequence_usage": "PASS"
+  },
+  "build": {
+    "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+    "seconds": 3.2330662129970733,
+    "log_sha256": "1a37d8db2ba23067e747b0f387923abc522973343ae5618a0f42ab9656c1a8b3",
+    "archive_sha256": "d779995ed9cf5fca6758fb8564b6baf017a7ee2d3d4e0353e51f9e66e3ece648"
+  },
+  "context": {
+    "id": "c0689721378fbe5a8a0aa7f6b0b8b02b362a5f2692942c259488f239265196e5",
+    "exit": 0,
+    "log_sha256": "fdb1b15facd74e7200b93cc65bf6522ebb70723ea5a4df5bd2c4f9cb274974fd"
+  },
+  "measurement": {
+    "id": "fdac2edf185e9f6c5b4c731f8862151af54f7217a0283ffb1e0965975d592fee",
+    "exit": 0,
+    "report": {
+      "synthetic_identity_only": true,
+      "not_admitted": true,
+      "packet_bytes": 88470,
+      "total_context_ms": 77.632,
+      "composition_ms": 15.946,
+      "sources": 9,
+      "max_rss_kib": 32480
+    }
+  },
+  "resources": [
+    {
+      "id": "fdac2edf185e9f6c5b4c731f8862151af54f7217a0283ffb1e0965975d592fee",
+      "name": "/pcp604-h-context-measure-v2",
+      "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+      "exit": 0,
+      "running": false
+    },
+    {
+      "id": "52a4ae33630650715d59335ba3bc240522241df5ca66032da67fa0abb3a73af3",
+      "name": "/pcp604-h-context-measure",
+      "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+      "exit": 1,
+      "running": false
+    },
+    {
+      "id": "dff95b9bdf5a7087598ecc860b2f8e3da819a6166b9f6a8e94ba59456ad9ef1a",
+      "name": "/pcp604-h-task-repro",
+      "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+      "exit": 1,
+      "running": false
+    },
+    {
+      "id": "c0689721378fbe5a8a0aa7f6b0b8b02b362a5f2692942c259488f239265196e5",
+      "name": "/pcp604-h-context-integration-v2",
+      "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+      "exit": 0,
+      "running": false
+    },
+    {
+      "id": "8e6c9d30478355f05701f3f34fcc51c8ffd9afc4496e0070552ec53e7f596ecc",
+      "name": "/pcp604-h-context-integration",
+      "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+      "exit": 1,
+      "running": false
+    },
+    {
+      "id": "6aa35b534962f496499891f92f9c79bb2793e1dc1db1136ec46b293bba811c1f",
+      "name": "/pcp-local-adoption825-v4-604-h-prep-verifier",
+      "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+      "exit": 0,
+      "running": false
+    },
+    {
+      "id": "597555cf894969ed5e32d5a3dbfe5f21ae7c58836a4998f0d8a536b1ae69ddb8",
+      "name": "/pcp-local-adoption825-v4-h-producer-proof",
+      "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+      "exit": 0,
+      "running": false
+    },
+    {
+      "id": "54232a1eabab285f76006c0f415c8340b8cecf4305b2fdbc09026285944bb03b",
+      "name": "/pcp-local-adoption825-v4-h-producer-workspace",
+      "image": "sha256:78a752c0dbfc6bb9f4120660a0cba4ad6bc6dd1673b1240fd651597d6edf6aae",
+      "exit": 0,
+      "running": false
+    },
+    {
+      "id": "a2a09399d3738d5d7601ffe58ea12310c8d9753ab592a733504df54c8effbab1",
+      "name": "/pcp-local-adoption825-v4-h-producer-source",
+      "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+      "exit": 0,
+      "running": false
+    },
+    {
+      "id": "3d2e90b28915de90107b2067fe12e21faf48e91fbeba2ab917d294970425dad7",
+      "name": "/pcp-local-adoption825-v4-604-h-prep-isolation",
+      "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+      "exit": 137,
+      "running": false
+    },
+    {
+      "id": "d90b2a33fc75f788f7b4eddba4833f89a5806547079d19e5efa246ecf6586f8f",
+      "name": "/pcp-604-h-prep-restored-check",
+      "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+      "exit": 0,
+      "running": false
+    },
+    {
+      "id": "86d2d95eb62fa84a2543f0353efb076b7ed8bb78db24c5650cca51d775a09505",
+      "name": "/pcp-local-adoption825-v4-604-h-prep-router-packaging",
+      "image": "sha256:422d41413115ce46c24a063a018f942dfd63e04205b167d0b97e6e4d10660319",
+      "exit": 0,
+      "running": false
+    },
+    {
+      "id": "72df8b02656980d2142ae51222d77f7db34ded0790201224edb54259f3953978",
+      "name": "/pcp-local-adoption825-v4-604-h-prep-executor-packaging",
+      "image": "sha256:78a752c0dbfc6bb9f4120660a0cba4ad6bc6dd1673b1240fd651597d6edf6aae",
+      "exit": 0,
+      "running": false
+    },
+    {
+      "id": "be7d30fad52806bcc52c25c4bea56d755222e5904a43f565c737372bf8b151ed",
+      "name": "/pcp-local-adoption825-v4-604-h-prep-runtime-packaging",
+      "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+      "exit": 0,
+      "running": false
+    },
+    {
+      "id": "5fcaefe2f542fcdfc702629dc7d1480652a64c711fa8df3d5fb698d84beb4f69",
+      "name": "/pcp604-h-prep-pg",
+      "image": "sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27",
+      "exit": 0,
+      "running": false
+    }
+  ],
+  "retained_resources": [
+    {
+      "role": "runtime",
+      "id": "f55b55ded4f2479214233244def8b34e9da36b93e057cdf4c3eda75149df7e14",
+      "image": "sha256:a925ddf0e4fe120889412b282af8556ba96dab05eb83f5f170303a5b66b5e536",
+      "running": false
+    },
+    {
+      "role": "ddev-executor",
+      "id": "fc32fd0a0bf632a185aad7d83f21234988359a9d803f8dcc0be36145a9d93e1d",
+      "image": "sha256:78a752c0dbfc6bb9f4120660a0cba4ad6bc6dd1673b1240fd651597d6edf6aae",
+      "running": false
+    },
+    {
+      "role": "router",
+      "id": "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6",
+      "image": "sha256:422d41413115ce46c24a063a018f942dfd63e04205b167d0b97e6e4d10660319",
+      "running": false
+    },
+    {
+      "role": "db",
+      "id": "8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8",
+      "image": "sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27",
+      "running": true
+    },
+    {
+      "role": "observer",
+      "id": "da6c434797c46a3312f0ca185b20e0b5fbb9234ce137aee9f81ebc2fb9241660",
+      "image": "sha256:a925ddf0e4fe120889412b282af8556ba96dab05eb83f5f170303a5b66b5e536",
+      "running": true
+    },
+    {
+      "role": "https",
+      "id": "601c552bd0562b947529a591b84c70570a1eaa556fb43e50a8c2ae0d76e362aa",
+      "image": "sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609",
+      "running": true
+    }
+  ],
+  "pins": {
+    "node": "node:22-bookworm-slim@sha256:de170b39439eb0e5a3444ad7d60b015614a381e10fecae2e30ec9e735122f38d",
+    "python": "python:3.13-slim-bookworm@sha256:93498f36dc7e24ef233bfdf6cc17d4b8bd32d94ee737143e906460d5f5a914c5",
+    "postgres": "postgres:17-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27",
+    "codex": "0.160.0",
+    "opencode": "1.19.4",
+    "origin": "read-only retained V3 logs/build-inputs; historical source is not reused"
+  },
+  "preparation_window": {
+    "started_at": "2026-10-30T23:13:59.933001+00:00",
+    "expires_at": "2026-10-31T07:13:59.933001+00:00",
+    "source": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+    "operator_model": "gpt-6.1-sol",
+    "operator_effort": "Unknown (not exposed)",
+    "operator_usage": "Unknown (not exposed)",
+    "owner_interactions": 0,
+    "pcp_managed_invocations": 0
+  },
+  "baseline_registry_diff": "--- retained\n+++ proposed-inactive\n@@ -962,3 +962,140 @@\n             section: 11. Budget principles\n           roadmap_frame:\n           - path: docs/project/roadmap.md\n+      pcp-local-context-871fbf2485a1-20261031-draft:\n+        status: draft\n+        source_commit: 871fbf2485a1ffb89a88a69e1daaaca10e25b318\n+        authority:\n+        - path: .github/workflows/guardian-static.yml\n+          authority: human_owner_protected\n+        - path: .github/workflows/pcp-guardian.yml\n+          authority: human_owner_protected\n+        - path: .github/workflows/pcp-local-inspect-image.yml\n+          authority: human_owner_protected\n+        - path: .github/workflows/tests.yml\n+          authority: human_owner_protected\n+        - path: AGENTS.md\n+          authority: human_owner_protected\n+        - path: config/models.yml\n+          authority: human_owner_protected\n+        - path: config/pm-bridge.yml\n+          authority: human_owner_protected\n+        - path: config/project-baselines.pcp-local.yml\n+          authority: human_owner_protected\n+        - path: config/project-baselines.yml\n+          authority: human_owner_protected\n+        - path: config/projects.pcp-local.yml\n+          authority: human_owner_protected\n+        - path: config/projects.yml\n+          authority: human_owner_protected\n+        - path: config/routing-policy.yml\n+          authority: human_owner_protected\n+        - path: docs/pcp-portable/h1b3-oci-evidence-plan.md\n+          authority: human_owner_protected\n+        - path: docs/pcp-portable/h1c-ddev-install-plan.md\n+          authority: human_owner_protected\n+        - path: docs/project/README.md\n+          authority: human_owner_protected\n+        - path: docs/project/architecture.md\n+          authority: human_owner_protected\n+        - path: docs/project/business-strategy.md\n+          authority: human_owner_protected\n+        - path: docs/project/constitution.md\n+          authority: human_owner_protected\n+        - path: docs/project/context-memory-architecture.md\n+          authority: human_owner_protected\n+        - path: docs/project/efficiency-model.md\n+          authority: human_owner_protected\n+        - path: docs/project/operating-model.md\n+          authority: human_owner_protected\n+        - path: docs/project/provider-policy.md\n+          authority: human_owner_protected\n+        - path: docs/project/provider-quota-telemetry.md\n+          authority: human_owner_protected\n+        - path: docs/project/roadmap.md\n+          authority: human_owner_protected\n+        - path: docs/project/service-secret-upgrades.md\n+          authority: human_owner_protected\n+        - path: docs/project/telegram-terminal-operations.md\n+          authority: human_owner_protected\n+        - path: profiles/pcp-local/.ddev/config.yaml\n+          authority: human_owner_protected\n+        - path: profiles/pcp-local/.ddev/docker-compose.platform.yaml\n+          authority: human_owner_protected\n+        - path: profiles/pcp-local/ddev-install-plan.example.yml\n+          authority: human_owner_protected\n+        - path: profiles/pcp-local/docker-compose.local.yaml\n+          authority: human_owner_protected\n+        - path: profiles/pcp-local/image-provenance.example.yml\n+          authority: human_owner_protected\n+        - path: profiles/pcp-local/oci-evidence-plan.example.yml\n+          authority: human_owner_protected\n+        - path: profiles/pcp-local/runtime/Dockerfile.inspect\n+          authority: human_owner_protected\n+        - path: profiles/pcp-local/runtime/Dockerfile.inspect.dockerignore\n+          authority: human_owner_protected\n+        - path: profiles/pcp-local/runtime/requirements-inspect.lock\n+          authority: human_owner_protected\n+        - path: scripts/check_project_doc_authority.py\n+          authority: human_owner_protected\n+        - path: scripts/pcp-local-ddev-install-plan.py\n+          authority: human_owner_protected\n+        - path: scripts/pcp-local-gate-a-inspect.sh\n+          authority: human_owner_protected\n+        - path: scripts/pcp-local-image-provenance-plan.py\n+          authority: human_owner_protected\n+        - path: scripts/pcp-local-oci-evidence-plan.py\n+          authority: human_owner_protected\n+        - path: scripts/pcp-local-trusted-bootstrap.sh\n+          authority: human_owner_protected\n+        - path: scripts/pcp-shared-docker-ownership-check.sh\n+          authority: human_owner_protected\n+        - path: services/ddev-executor/app/main.py\n+          authority: human_owner_protected\n+        - path: services/runtime/app/engine.py\n+          authority: human_owner_protected\n+        - path: services/runtime/app/engine_core.py\n+          authority: human_owner_protected\n+        - path: services/runtime/app/engine_delivery.py\n+          authority: human_owner_protected\n+        - path: services/runtime/app/main.py\n+          authority: human_owner_protected\n+        - path: services/runtime/app/pcp_local_trusted_readers.py\n+          authority: human_owner_protected\n+        - path: services/runtime/app/pcp_local_worker_loop.py\n+          authority: human_owner_protected\n+        - path: services/runtime/app/storage.py\n+          authority: human_owner_protected\n+        - path: README.md\n+          authority: mutable_execution\n+        - path: docs/project/current-state.md\n+          authority: mutable_execution\n+        - path: docs/project/history\n+          authority: evidence_history\n+        - path: docs/pcp-portable/consolidation.md\n+          authority: evidence_history\n+        - path: docs/pcp-portable/local-operations.md\n+          authority: mutable_execution\n+        references:\n+          goals:\n+          - path: docs/project/constitution.md\n+            section: 2. Project goals\n+          non_goals:\n+          - path: docs/project/constitution.md\n+            section: 3. Non-goals\n+          requirements:\n+          - path: docs/project/roadmap.md\n+            section: \"PCP Local execution priority \\u2014 GH-815, 2026-10-27\"\n+          architecture_constraints:\n+          - path: docs/project/architecture.md\n+          quality_policy:\n+          - path: docs/project/operating-model.md\n+            section: 8. Deterministic verification\n+          security_policy:\n+          - path: docs/project/constitution.md\n+            section: 9. Trust and security invariants\n+          budget_policy:\n+          - path: docs/project/constitution.md\n+            section: 11. Budget principles\n+          roadmap_frame:\n+          - path: docs/project/roadmap.md\n"
+}
