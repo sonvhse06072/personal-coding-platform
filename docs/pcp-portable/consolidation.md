@@ -1,5 +1,86 @@
 # PCP Local consolidation execution checklist
 
+## PM merge handoff — 2026-10-30
+
+PM accepted finalization and released the repository R2 hold in
+[decision6524809874](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524809874).
+Task PR841 merged as `9add83dc9a8ebe693c87a27f9925ce4a2d9a0dc9`.
+This documentation branch includes that main commit; subsequent documentation merge
+commits may advance repository HEAD. Resolve current main from GitHub rather than
+treating the historical R2 SHA below as current repository HEAD.
+
+The deployed Runtime/Executor remain R2; canonical/task/verifier remain Q.
+B is completed/PM accepted, delivered/gen3, released/gen2, counters1/2/1.
+All workers and execution authorities remain OFF; DB/observer/HTTPS remain available.
+No source/image/baseline adoption, next admission or permit renewal follows from merge.
+Earlier pending-state sections below are dated campaign history, not instructions to
+repeat recovery or finalization. Frozen reports and manifests remain unchanged.
+
+Immediate remaining work: complete evidence PR838 review/merge and postmerge CI;
+then plan the next bounded repeatability/measurement work against the roadmap.
+Do not claim unattended operation, benchmark PASS, or resolved PostgreSQL/VPN/LAN/
+observer-label limitations.
+
+## Finalization completed — 2026-10-30 13:58 UTC
+
+[PM6524535370](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524535370)
+accepted only the measured preflight directory timestamps under
+[finalization6524074680](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524074680).
+Both snapshots, original manifest/permit bytes and Oct31 08Z expiry were preserved.
+Revalidation passed with no additional drift. Only Runtime and Executor started;
+Router was not required by finalization and stayed stopped. Supported readiness PASS,
+then ONE `session finalize` WITHOUT `--apply`, HTTP200, read-only reconciliation PASS.
+
+B837 `ccb57d244cfd1fc069a98fd8c17734a1` is **completed / pm_review_accepted**,
+`delivery_finalized=true`, review5712944983, receipt **delivered/gen3**, lease
+**released/gen2**. Complete checkpoint/proof, verification, original usage and progress
+are unchanged; counters **1 model / 2 tests / 1 delivery**. No model, mandatory-test,
+delivery replay, admission, rebuild, guard change, timestamp reset or merge.
+
+At13:59:09 UTC the two workers were stopped, authority disabled intact again; all three
+approved workers are stopped. DB/observer/HTTPS remain running. A831 full row/workspace
+unchanged; retired824/V3 and historical resources untouched. Main remains R2; task,
+canonical and verifier Q; PR841 headb29bc64d and PR838 remain unmerged for PM.
+
+LIVE dashboard https://localhost:18443/dashboard remains tokenless loopback_readonly.
+After shutdown, normal-TLS Chromium showed both jobs completed, B delivered3/released2,
+fixed47.582929s across seven200 polls and offline/reconnect, no cookies/forms/page errors.
+Known old assisted_recovery label limitation remains; this is assisted recovery, not
+an unattended benchmark. PM now reviews finalization evidence and owns merge ordering.
+
+[Final afterimages, hashes, timing, lessons and retained resources](../project/history/2026-10-30-held837-finalization.md).
+
+## Prior R2 held #837 LIVE recovery result — 2026-10-30
+
+[Independent PM execution6522058894](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6522058894)
+approved the EXACT prepared bytes from PR838 head ef37d11e22744841e65f846293eb6de0e15e900d.
+Full preimages/bindings and fresh backup passed; exact permit installed; only the three
+named workers started. Aggregate held readiness and plan passed; ONE supported apply
+ran actual Q13+13, created commitb29bc64d and real Draft
+[task PR841](https://github.com/sonvhse06072/personal-coding-platform/pull/841).
+[Exact-head task CI41058684258](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41058684258)
+has four genuinely executed successful suites. No model, replay, rebuild or rebinding.
+
+At the prior recovery checkpoint B was blocked/verified/ci_success, awaiting independent PM, finalized=false,
+receipt running/gen2 and lease active/gen2 unchanged, counters1/2/1. A full row/workspace
+and both Codex configs/credentials preserved. V3/retired824 untouched. Main remains R2;
+task/base/canonical/verifier Q. SAME evidence PR838 and task841 remain unmerged.
+
+At12:57 UTC exact Runtimee5d8a338/Executor9cba24de/Routerf03edbd9 were stopped;
+both approved authority files disabled intact. Original expiryOct31 08Z, no renewal.
+Only DB/observer/HTTPS remain running. Dashboard https://localhost:18443/dashboard
+is tokenless/local, trusted-browser polling/reconnect PASS after shutdown. It shows
+actual verification/CI and stable47.583s; reported cost Unknown differs from estimated0.
+
+[Current integrated WorkReport and next PM packet](../project/history/2026-10-30-r2-held837-execution.md)
+contains full IDs, hashes, scoped stops, backup retention and time/intervention limits.
+[Preparation manifest](../project/history/2026-10-30-r2-held837-preparation.md) is retained
+unchanged as earlier fixture/physical evidence. Its pending-PM gate is now satisfied;
+no fresh authority or replay follows from that. Independent task review and separately
+authorized supported non-model finalization remain. Delivery readiness correctly says
+awaiting_pm_review, dependencies PASS, eligible=false: do not publish again.
+Historical optional PostgreSQL failures and VPN/LAN unknowns remain explicit.
+
 Prior accepted campaign: [DEC-PCP-815-SUCCESSOR-ADOPTION-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6485231069).
 PR825 is independently accepted and merged at
 `5adfd120dbd6aa4718cf9549ddc6fae0bab8f12d`; postmerge run40780653020 executed
@@ -8,18 +89,18 @@ all four suites successfully. One writer on `ai/815-successor-adoption-v4` in
 `/home/sonvh/pcp-local-adoption825-v4`. This historical825 campaign did not activate
 a protected baseline or live job. New831 execution is recorded below.
 
-## Current integrated config / held verification checklist
+## Accepted config / held verification source checklist
 
-[PM6516240084](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6516240084)
-authorizes SOURCE/FIXTURE only from Q=e3b19700. PR838 records actual ordinary B
-admission then held config failure, running2/active2/counters1/0/0; its pre-admission
-P/Q rebinding proposal is closed. Current canonical/task/verifier Q, workers off,
-activation disabled. A and both configs/credentials/backups retained. Dashboard
+The earlier [PM6516240084](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6516240084)
+authorized SOURCE/FIXTURE only from Q=e3b19700. Historical PR838 evidence records ordinary B
+admission then held config failure1/0/0; the LIVE result above supersedes that state.
+Pre-admission P/Q rebinding is closed. Current canonical/task/verifier Q, workers off,
+authority disabled, B1/2/1 now finalized (the earlier checkpoint awaited PM). A and both configs/credentials/backups retained. Dashboard
 https://localhost:18443/dashboard remains tokenless/local and unchanged.
 
 [Complete repair WorkReport and one executable PM rollout packet](../project/history/2026-10-30-config-held-verification.md)
-and [Draft PR840](https://github.com/sonvhse06072/personal-coding-platform/pull/840)
-are the current source handoff. No CLI upgrade/config exemption: exact in-memory
+and [accepted merged PR840](https://github.com/sonvhse06072/personal-coding-platform/pull/840)
+are the accepted source handoff. No CLI upgrade/config exemption: exact in-memory
 trust prevents the pinned producer write. Future invocations still reject old or
 hostile config. Held continuation never invokes a model; private finite authority,
 full preimages, unverified candidate, per-phase intent/results and original ownership
@@ -29,13 +110,17 @@ precede mandatory Q tests and existing commit/delivery. Default plan/status is r
 - [x] Real Git/PostgreSQL full-row/candidate/ownership/concurrency/crash/lost-ack cases.
 - [x] Restored B and actual Q verifier13+13; original A/B unchanged, zero model calls.
 - [x] Source scope preserves historical authority; separate Draft repair PR and CI.
-- [ ] Independent acceptance, exact R2 merge/postmerge CI and finite execution record.
-- [ ] Actual reviewed Runtime/Executor adoption, new private held permit and LIVE
-  verification/task Draft PR/CI. None performed in this source session.
+- [x] Independent source acceptance, exact R2 merge/postmerge four executed suites.
+- [x] Finite preparation decision, fresh backup, actual R2 builds/packaging and restore rehearsal.
+- [x] Reversible authority-absent adoption, stable fingerprints, bounded Router start/stop.
+- [x] Private finite candidate and sanitized manifest, unchanged live state, retained shutdown.
+- [x] Independent exact-manifest execution6522058894; approved bytes installed, then disabled intact.
+- [x] LIVE Q13+13, Draft841, exact-head41058684258 four executed suites; scoped shutdown.
+- [x] Independent review5712944983 and supported non-model finalization; completed/delivered3/released2, no replay.
 
-Supported prepared commands: `session verify-held --job-id ID` (plan),
-`session readiness --phase held-verification --job-id ID`, and only after the later
-PM checkpoint `session verify-held --job-id ID --apply`. One POST then bounded GET;
+Supported commands (execution is complete; these are historical procedure): `session verify-held --job-id ID` (plan),
+`session readiness --phase held-verification --job-id ID`, and only under an exact
+PM execution decision `session verify-held --job-id ID --apply`. One POST then bounded GET;
 unknown tests never become PASS or auto-retry. Verified commit/publication uncertainty
 uses existing delivery reconciliation. No run-once, queue/reset/manual SQL/merge.
 The linked packet includes exact permit schema, task-Q/platform-R2 binding, image
