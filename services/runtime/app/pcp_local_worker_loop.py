@@ -334,6 +334,8 @@ class LocalWorkerLoop:
         source_worker_flags()
         from .pcp_local_task_queue import enabled
         require(not enabled(), 'claim_recovery_fresh_admission_disabled')
+        from .pcp_local_recovery import enabled as held_enabled
+        require(not held_enabled(), 'held_admission_forbidden')
         # Do not even read DB or GitHub if no approved trusted evidence
         # integration was installed. Model/issue-reported proofs are invalid.
         require(self.trusted_attestor is not None
@@ -594,6 +596,10 @@ async def run_admitted_job(engine, readers, task):
             engine._record_usage(progress, choice['id'], run.usage)
             engine._record_agent_attempt(progress, choice, run)
             checkpoint['pcp_local_execution']['state'] = 'invocation_returned'
+            checkpoint['pcp_local_execution']['returned_invocation'] = dict(
+                attempt=attempt + 1, returncode=run.returncode,
+                provider_failed=run.provider_failed, usage_digest=digest(run.usage),
+                model_calls=progress['model_calls'])
             progress['elapsed_minutes'] = (time.monotonic() - started) / 60
             engine.storage.update(job_id, checkpoint=checkpoint, progress=progress)
             # No retry after provider/timeout/ambiguous CLI failure, even if the
@@ -653,6 +659,7 @@ async def run_admitted_job(engine, readers, task):
                 if execution.get('state') == 'verified':
                     execution['delivery_uncertain'] = True
                 elif execution.get('state') not in {'verified_uncommitted', 'commit_uncertain'}:
+                    execution['held_from'] = execution.get('state')
                     execution['state'] = 'held'
                 engine.storage.update(job_id, status='blocked', checkpoint=cp,
                     error=exc.code if isinstance(exc, TaskStop) else 'pcp_local_uncertain_execution_no_retry')
@@ -944,6 +951,10 @@ def retained_workspaces(storage, root, current_job_id):
 
 def read_activation():
     """A switch is not authority: require an independently installed document."""
+    from .pcp_local_recovery import enabled as held_enabled, HeldPermit
+    if held_enabled():
+        require(not ACTIVATION_FILE.exists(), "held_ordinary_activation_forbidden")
+        return HeldPermit().activation
     from .pcp_local_task_queue import enabled, RecoveryPermit
     if enabled():
         return RecoveryPermit().activation
@@ -968,6 +979,9 @@ class TrustedReaders:
         self.activation = read_activation()
         from .pcp_local_task_queue import enabled, RecoveryPermit
         self.recovery = RecoveryPermit() if enabled() else None
+        from .pcp_local_recovery import enabled as held_enabled, HeldPermit
+        self.held = HeldPermit() if held_enabled() else None
+        require(not (self.held and self.recovery), "held_conflicting_authority")
         self.route = None
         self.task = None
         self.snapshot = None
@@ -1009,7 +1023,8 @@ class TrustedReaders:
         self.authority()
         a = self.activation
         issue = await self.github.local_source_issue(issue_number=a['issue_number'])
-        task = self.recovery.verify_issue(issue) if getattr(self, 'recovery', None) is not None else verify_issue(issue, **{k: a[k] for k in (
+        source_permit = getattr(self, 'held', None) or getattr(self, 'recovery', None)
+        task = source_permit.verify_issue(issue) if source_permit is not None else verify_issue(issue, **{k: a[k] for k in (
             'issue_number', 'body_sha256', 'base_sha', 'baseline_revision', 'baseline_source_commit')})
         require(self.task is None or task == self.task, 'pcp_local_source_revoked')
         self.task = task
@@ -1023,6 +1038,7 @@ class TrustedReaders:
         from .model_capabilities import validate_model_choice
         from .quota_telemetry import CodexQuotaCollector
         from .shell import run_command
+        require(not getattr(self, "held", None) or operation == "delivery", "held_admission_forbidden")
         observed_at = time.monotonic()
         project, baseline = self.authority()
         checked, issue = await self.source()
@@ -1074,6 +1090,9 @@ class TrustedReaders:
                     and lease['generation'] == self.lease_generation,
                     'pcp_local_lease_revoked')
         if operation == 'delivery':
+            if getattr(self, 'held', None) is not None:
+                from .pcp_local_recovery import snapshot, classify
+                classify(snapshot(self.engine.storage, self.held), self.held)
             # These exact authority/source/isolation/ownership checks still apply.
             # No Router choice or developer account is consumed by publication.
             require(time.monotonic() - observed_at < 30, 'pcp_local_observation_expired')

@@ -337,3 +337,343 @@ def retire(storage, manifest, approval, *, apply=False, check_quiescent=None):
         require(read_rows(conn,current['job']['id'])==post, 'retirement_postimage_invalid')
         conn.commit()
         return deepcopy(post['job']['checkpoint'][KEY]['outcome'])
+
+
+# Held UNVERIFIED work: separate operation and authority from verified recovery.
+"""Named held-work verification. No adapter, scheduler, enqueue or coding retry.
+
+All input authority comes from a private independently approved file. A plan is
+read-only. The original full rows remain in the audit, never reconstructed.
+"""
+from copy import deepcopy
+from contextlib import contextmanager
+from pathlib import Path
+import json
+import os
+import re
+import tempfile
+import time
+
+from .pcp_local_task_queue import (require, LocalSourceTask, PROJECT_ID, REPOSITORY,
+    _unique, _verify_issue)
+
+HELD_KEY = 'pcp_local_held_verification'
+HELD_PERMIT = Path('/config/pcp-local-held-verification.json')
+HELD_ORIGINAL = Path('/config/pcp-local-held-original-activation.json')
+ERROR = 'pcp_local_unreviewed_codex_configuration'
+
+
+def private_bytes(path):
+    import stat
+    require(path.is_absolute() and path.resolve()==path,'held_private_path_substitution')
+    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+    try:
+        before=os.fstat(fd)
+        require(stat.S_ISREG(before.st_mode) and before.st_nlink==1
+            and before.st_uid in (0,os.getuid()) and before.st_mode & 0o077==0
+            and before.st_size<=2_000_000,'held_private_file_invalid')
+        data=b''
+        while chunk:=os.read(fd,65536):
+            data+=chunk
+            require(len(data)<=2_000_000,'held_private_file_invalid')
+        def identity(s):return (s.st_dev,s.st_ino,s.st_mode,s.st_uid,s.st_gid,s.st_nlink,s.st_size,s.st_mtime_ns,s.st_ctime_ns)
+        require(identity(os.fstat(fd))==identity(before)==identity(path.stat(follow_symlinks=False)),'held_private_file_raced')
+        return data
+    finally:os.close(fd)
+
+
+def enabled():
+    return os.getenv('PCP_LOCAL_HELD_VERIFY_ENABLED') == 'owner-approved'
+
+
+class HeldPermit:
+    def __init__(self):
+        import hashlib
+        require(enabled(), 'held_verification_disabled')
+        self.raw = private_bytes(HELD_PERMIT)
+        self.value = json.loads(self.raw, object_pairs_hook=_unique)
+        p = self.value
+        original = private_bytes(HELD_ORIGINAL)
+        a = json.loads(original, object_pairs_hook=_unique)
+        require(set(p) == {'version','decision_id','execution_record','not_before','expires_at',
+            'original_activation_sha256','before','candidate','invocation_attestation',
+            'repair_source','repair_commits','repair_paths','roles','verification_seconds'}, 'held_permit_shape')
+        require(p['version'] == 1 and type(p['version']) is int
+            and re.fullmatch('[A-Za-z0-9._-]{8,100}', p['decision_id'])
+            and p['execution_record'].startswith('https://github.com/'+REPOSITORY+'/issues/835#issuecomment-')
+            and p['original_activation_sha256'] == hashlib.sha256(original).hexdigest(), 'held_authority_invalid')
+        b = p['before']; r = b['receipt']
+        self.task = LocalSourceTask(**{k: tuple(r[k]) if k == 'allowed_paths' else r[k]
+            for k in LocalSourceTask.__dataclass_fields__})
+        require(all(a[k] == r[k] for k in ('issue_number','base_sha','body_sha256',
+            'baseline_revision','baseline_source_commit')) and self.task.base_sha == self.task.baseline_source_commit,
+            'held_original_identity_changed')
+        require(re.fullmatch('[0-9a-f]{40}', p['repair_source']) and p['repair_source'] != self.task.base_sha
+            and p['repair_commits'] and p['repair_commits'][-1] == p['repair_source']
+            and p['repair_paths'] == sorted(set(p['repair_paths']))
+            and not set(p['repair_paths']) & set(self.task.allowed_paths), 'held_repair_invalid')
+        require(type(p['verification_seconds']) is int and 10 <= p['verification_seconds'] <= 900,
+            'held_verification_envelope_invalid')
+        require(set(p['roles']) == {'runtime','executor','router','verifier'}, 'held_roles_invalid')
+        for role,binding in p['roles'].items():
+            require(set(binding)==({'image_id','source_commit'} | (set() if role=='verifier' else {'configuration_sha256'}))
+                and re.fullmatch('sha256:[0-9a-f]{64}',binding['image_id'])
+                and re.fullmatch('[0-9a-f]{40}',binding['source_commit'])
+                and (role=='router' or binding['source_commit']==(self.task.base_sha if role=='verifier' else p['repair_source']))
+                and (role=='verifier' or re.fullmatch('[0-9a-f]{64}',binding['configuration_sha256'])), 'held_roles_invalid')
+        require(p['roles']['verifier']['image_id']==a['verification_image']==a['runtime_image_id'], 'held_verifier_changed')
+        self.sha256 = digest(p)
+        self.activation = {**a, 'held_verification': deepcopy(p)}
+        validate_eligibility(b, self.task, p['invocation_attestation'])
+        self.require_fresh()
+
+    def require_fresh(self):
+        import hashlib
+        p = self.value
+        require(enabled() and all(type(p[k]) in (int,float) for k in ('not_before','expires_at'))
+            and p['not_before'] <= time.time() < p['expires_at']
+            and 0 < p['expires_at']-p['not_before'] <= 86400, 'held_authority_expired')
+        require(private_bytes(HELD_PERMIT) == self.raw and digest(self.value) == self.sha256
+            and hashlib.sha256(private_bytes(HELD_ORIGINAL)).hexdigest() == p['original_activation_sha256'],
+            'held_authority_revoked')
+
+    def verify_issue(self, issue):
+        self.require_fresh()
+        task = _verify_issue(issue, expected_main=self.value['repair_source'], **{k:getattr(self.task,k)
+            for k in ('issue_number','body_sha256','base_sha','baseline_revision','baseline_source_commit')})
+        require(task == self.task, 'held_task_changed')
+        return task
+
+
+def validate_eligibility(b, task, attestation):
+    from .pcp_local_worker_loop import stable_job_id, claimed_source_receipt
+    j,r,l = b['job'],b['receipt'],b['lease']
+    cp = j['checkpoint']; e = cp.get('pcp_local_execution',{})
+    require(set(b) == {'job','receipt','lease'} and j['id'] == stable_job_id(task)
+        and j['project_id'] == PROJECT_ID and j['source_commit'] == task.base_sha
+        and j['status'] == 'blocked' and j['error'] == ERROR and j['result'] is None
+        and j['branch'] == 'ai/'+j['id'][:12] and e.get('state') == 'held'
+        and type(e.get('attempt')) is int and e['attempt'] == 1 and not {'verified_tree','verification','commit'} & e.keys()
+        and 'pcp_local_retirement' not in cp and HELD_KEY not in cp
+        and cp['pcp_local_source']['receipt'] == claimed_source_receipt(task), 'held_job_ineligible')
+    require(r['state'] == 'running' and type(r['generation']) is int and r['generation'] == 2
+        and all(canonical(r[k]) == canonical(v) for k,v in vars(task).items())
+        and r['job_id'] == j['id'] and l['state'] == 'active' and l['owner_job_id'] == j['id']
+        and type(l['generation']) is int and l['generation'] == e['lease_generation'], 'held_ownership_invalid')
+    progress = j['progress']
+    require(type(progress.get('model_calls')) is int and progress['model_calls'] == 1
+        and progress.get('test_runs',0) == 0 and progress.get('delivery_attempts',0) == 0,
+        'held_counters_invalid')
+    attempts=progress.get('agent_attempts',[])
+    require(len(attempts)==1 and attempts[0].get('returncode')==0
+        and attempts[0].get('failure_kind') is None and attempts[0].get('adapter')=='codex_cli'
+        and isinstance(attempts[0].get('usage'),dict), 'held_invocation_uncertain')
+    # A legacy attestation is explicit PM authority over corroborating evidence,
+    # not a retroactive Runtime checkpoint. Hashes identify private retained files.
+    require(type(attestation) is dict and set(attestation) == {'kind','attempt','progress_sha256',
+        'returned_log_sha256','shutdown_sha256','returncode','provider_failed'}
+        and attestation['kind'] == 'independent_pm_legacy_returned'
+        and attestation['attempt'] == 1 and attestation['returncode'] == 0
+        and attestation['provider_failed'] is False
+        and attestation['progress_sha256'] == digest(progress)
+        and all(re.fullmatch('[0-9a-f]{64}', attestation[k]) for k in ('returned_log_sha256','shutdown_sha256')),
+        'held_invocation_evidence_missing')
+
+
+def candidate(path, task):
+    """Unverified candidate from a validated read-only snapshot, no original Git writes."""
+    from .pcp_local_worker_loop import _retained_snapshot, _retained_validate, _retained_run
+    import sys
+    with tempfile.TemporaryDirectory(prefix='pcp-held-') as scratch:
+        home=Path(scratch); clone=home/'snapshot'
+        before=_retained_snapshot(Path(path),clone)
+        _retained_validate(clone,home)
+        hooks=clone/'.git/hooks'
+        require(not hooks.exists() or all(p.is_file() and p.name.endswith('.sample') for p in hooks.iterdir()),
+                'held_git_hooks_forbidden')
+        program='''import sys,json
+from types import SimpleNamespace
+sys.path.insert(0,sys.argv[1])
+from app.repo import diff_state
+from app.pcp_local_recovery import verified_tree
+p=sys.argv[2];t=SimpleNamespace(base_sha=sys.argv[3])
+d=diff_state(__import__('pathlib').Path(p),750000,base_ref=t.base_sha)
+print(json.dumps(dict(identity=verified_tree(p,t,d),diff=d)))
+'''
+        value=json.loads(_retained_run([sys.executable,'-I','-B','-c',program,
+            str(Path(__file__).resolve().parent.parent),str(clone),task.base_sha],home))
+        require(_retained_snapshot(Path(path)) == before, 'held_candidate_raced')
+    identity=value['identity'];diff=value['diff']
+    from .pcp_local_worker_loop import stable_job_id
+    require(identity['parent'] == task.base_sha and identity['branch'] == 'ai/'+stable_job_id(task)[:12]
+        and diff['changed_files'] and set(diff['changed_files']) <= set(task.allowed_paths), 'held_candidate_scope')
+    # This is a current UNVERIFIED binding. The key never asserts previous tests.
+    value['workspace_manifest_sha256']=digest(before)
+    return value
+
+
+def snapshot(storage, permit):
+    with storage.connect() as c:
+        c.execute('SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY')
+        return read_rows(c,permit.value['before']['job']['id'])
+
+
+def classify(current, permit):
+    p=permit.value; audit=current['job']['checkpoint'].get(HELD_KEY)
+    if not audit:
+        require(canonical(current) == canonical(p['before']), 'held_preimage_drift')
+        return 'eligible'
+    require(audit['permit_sha256'] == permit.sha256 and canonical(audit['original']) == canonical(p['before'])
+        and canonical(current['receipt']) == canonical(p['before']['receipt']) and canonical(current['lease']) == canonical(p['before']['lease']),
+        'held_conflicting_operation')
+    # Recovery/delivery legitimately change job columns after verified handoff.
+    if audit['state'] == 'verified_uncommitted':
+        original=p['before']['job'];j=current['job'];cp=j['checkpoint'];execution=cp['pcp_local_execution']
+        mutable={'checkpoint','progress','status','result','updated_at','error'}
+        require(all(j[k]==v for k,v in original.items() if k not in mutable)
+            and all(cp.get(k)==v for k,v in original['checkpoint'].items() if k!='pcp_local_execution')
+            and all(j['progress'].get(k)==v for k,v in original['progress'].items()
+                    if k not in {'test_runs','required_checks_passed','elapsed_minutes','delivery_attempts'})
+            and execution.get('verified_tree')==p['candidate']['identity']
+            and execution.get('diff')==p['candidate']['diff']
+            and execution.get('verification')==audit['history'][-1]['verification']
+            and execution.get('route')==original['route'], 'held_verified_evidence_drift')
+        require(j['progress'].get('test_runs') == execution['verification']['test_runs']
+            and j['progress'].get('required_checks_passed') is True
+            and j['progress'].get('elapsed_minutes',0) >= original['progress'].get('elapsed_minutes',0)+audit['history'][-1]['seconds']/60
+            and j['progress'].get('delivery_attempts',0) >= original['progress'].get('delivery_attempts',0),
+            'held_verified_counter_drift')
+    else:
+        stripped=deepcopy(current['job']);del stripped['checkpoint'][HELD_KEY]
+        require(digest(stripped) == audit['after_sha256'], 'held_afterimage_drift')
+    return audit['state']
+
+
+def transition(storage, permit, expected, *, state, verification=None, seconds=0):
+    """Existing project lock plus full three-row CAS; receipt and lease never UPDATE."""
+    from .storage import now
+    p=permit.value
+    with storage.connect() as c:
+        project_lock(c); permit.require_fresh()
+        current=read_rows(c,expected['job']['id'],lock=True)
+        require(canonical(current) == canonical(expected), 'held_stale_preimage')
+        old=classify(current,permit)
+        require((old,state) in {('eligible','verifying'),('verifying','verification_failed'),
+            ('verifying','verified_uncommitted')}, 'held_transition_denied')
+        j=deepcopy(current['job']); cp=j['checkpoint']; progress=j['progress']
+        audit=deepcopy(cp.get(HELD_KEY) or dict(permit_sha256=permit.sha256,original=p['before'],
+            candidate=p['candidate'],invocation_attestation=p['invocation_attestation'],history=[]))
+        audit.update(state=state)
+        audit['history'].append(dict(state=state,at=now().isoformat(),verification=verification,seconds=seconds))
+        if verification is not None:
+            require(progress.get('test_runs',0) == verification['test_runs'], 'held_test_accounting_changed')
+            progress['elapsed_minutes']=p['before']['job']['progress'].get('elapsed_minutes',0)+seconds/60
+            progress['required_checks_passed']=verification['passed']
+        if state == 'verified_uncommitted':
+            cp['pcp_local_execution'].update(state=state,verification=verification,
+                verified_tree=p['candidate']['identity'],diff=p['candidate']['diff'],route=j['route'],
+                duration_seconds=progress['elapsed_minutes']*60)
+        j['updated_at']=now().isoformat()
+        cp.pop(HELD_KEY,None);audit['after_sha256']=digest(j);cp[HELD_KEY]=audit
+        c.execute('UPDATE cp_jobs SET checkpoint=%s::jsonb,progress=%s::jsonb,updated_at=%s WHERE id=%s',
+            (canonical(cp),canonical(progress),j['updated_at'],j['id']))
+        c.commit()
+    return snapshot(storage,permit)
+
+
+def phase_record(storage,permit,expected,phase,result,seconds):
+    """Account each returned command before another phase; unknown stays intent."""
+    from .storage import now
+    with storage.connect() as c:
+        project_lock(c);permit.require_fresh()
+        current=read_rows(c,expected['job']['id'],lock=True)
+        require(canonical(current)==canonical(expected) and classify(current,permit)=='verifying','held_phase_stale')
+        j=deepcopy(current['job']);cp=j['checkpoint'];audit=cp.pop(HELD_KEY)
+        phases=audit.setdefault('phases',[])
+        if result is None:
+            require(phase==('targeted_tests' if not phases else 'full_tests')
+                and (not phases or phases[-1].get('result') is not None),'held_phase_order')
+            phases.append(dict(phase=phase,intent_at=now().isoformat(),result=None))
+        else:
+            require(phases and phases[-1]['phase']==phase and phases[-1]['result'] is None,'held_phase_duplicate')
+            phases[-1]['result']=result
+            j['progress']['test_runs']=j['progress'].get('test_runs',0)+len(result.get('commands',[]))
+        j['progress']['elapsed_minutes']=permit.value['before']['job']['progress'].get('elapsed_minutes',0)+seconds/60
+        j['updated_at']=now().isoformat();audit['after_sha256']=digest(j);cp[HELD_KEY]=audit
+        c.execute('UPDATE cp_jobs SET checkpoint=%s::jsonb,progress=%s::jsonb,updated_at=%s WHERE id=%s',
+            (canonical(cp),canonical(j['progress']),j['updated_at'],j['id']))
+        c.commit()
+    return snapshot(storage,permit)
+
+
+@contextmanager
+def operation_lock(storage):
+    # Session lock spans verifier/Git/publication awaits; transaction CAS keeps
+    # the existing registrar lock. Separate key avoids self-deadlock at CAS.
+    with storage.connect() as c:
+        require(c.execute('SELECT pg_try_advisory_lock(%s,%s) AS locked',(5260112,809)).fetchone()['locked'],
+                'held_operation_busy')
+        try:yield
+        finally:c.execute('SELECT pg_advisory_unlock(%s,%s)',(5260112,809))
+
+
+async def prepare(engine):
+    from .pcp_local_worker_loop import TrustedReaders
+    from .pm_bridge import PMBridgeGitHubClient
+    from .pcp_local_readiness import schema_readiness
+    require(not schema_readiness(engine.storage), "held_schema_unready")
+    permit=HeldPermit(); readers=TrustedReaders(engine,PMBridgeGitHubClient())
+    task,_=await readers.source()
+    require(task == permit.task and readers.held.sha256 == permit.sha256, 'held_reader_identity')
+    project,baseline=readers.authority()
+    original=permit.value['before']['job']
+    require(canonical(original['checkpoint']['project_baseline'])==canonical(baseline.model_dump(mode='json'))
+        and original['checkpoint']['pcp_local_execution']['authority_digest']==readers.authority_digest,
+        'held_original_authority_changed')
+    readers.route=original['route']
+    readers.lease_generation=permit.value['before']['lease']['generation']
+    await readers.refresh_delivery(task)
+    require(Path(permit.value['before']['job']['workspace']) == engine.workspace_root / permit.value['before']['job']['id'], 'held_workspace_changed')
+    require(engine.worker_task is None and not engine.active_jobs and engine.queue.empty(), 'held_active_worker')
+    return permit,readers
+
+
+async def operate(engine, *, apply=False, expected=None):
+    """One named verification attempt; repeat/uncertain calls only observe intent.
+
+    No import/call of an adapter is reachable. Failed or unknown verification
+    cannot be retried by this permit. Commit and publication use existing seams.
+    """
+    permit,readers=await prepare(engine)
+    if apply:
+        require(expected == {'job_id':permit.value['before']['job']['id'], 'permit_sha256':permit.sha256},
+                'held_request_identity_changed')
+    async with engine.project_operation_lock(PROJECT_ID):
+        with operation_lock(engine.storage):
+            return await _operate_locked(engine,permit,readers,apply)
+
+
+async def _operate_locked(engine,permit,readers,apply):
+    before=snapshot(engine.storage,permit); state=classify(before,permit)
+    if state != 'eligible':
+        return dict(job_id=before['job']['id'],permit_sha256=permit.sha256,state=state,ready=False,reconcile=True)
+    require(canonical(candidate(before['job']['workspace'],permit.task)) == canonical(permit.value['candidate']), 'held_candidate_drift')
+    if not apply:return dict(job_id=before['job']['id'],state=state,ready=True,permit_sha256=permit.sha256)
+    current=transition(engine.storage,permit,before,state='verifying')
+    # Durable intent BEFORE tests. Crash/lost response cannot repeat tests.
+    started=time.monotonic()
+    def observe(phase,result):
+        nonlocal current
+        current=phase_record(engine.storage,permit,current,phase,result,time.monotonic()-started)
+    verification=await engine.verify_pcp_local(before['job']['id'],Path(before['job']['workspace']),
+        readers.authority()[0],timeout_seconds=permit.value['verification_seconds'],phase_observer=observe)
+    await readers.refresh_delivery(permit.task)
+    require(canonical(candidate(before['job']['workspace'],permit.task)) == canonical(permit.value['candidate']), 'held_tested_candidate_drift')
+    state='verified_uncommitted' if verification['passed'] else 'verification_failed'
+    current=transition(engine.storage,permit,current,state=state,verification=verification,seconds=time.monotonic()-started)
+    if verification['passed']:
+        from .pcp_local_recovery import recover_verified_job
+        row=engine.storage.get(before['job']['id'])
+        await recover_verified_job(engine,readers,permit.task,row)
+        await engine.deliver_pcp_local(row['id'],readers,permit.task)
+    return dict(job_id=before['job']['id'],state=state,ready=False,reconcile=True)
