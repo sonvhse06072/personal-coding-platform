@@ -18,7 +18,7 @@ from ..shell import CommandResult, CommandTimeoutError, run_command
 PCP_ISOLATION_CLI_VERSION = "0.160.0"
 
 
-def require_isolated_configuration(workspace: Path) -> None:
+def require_isolated_provider_configuration() -> None:
     # Empty tables merge with inherited profile entries in this pinned CLI.
     # Reject configuration sources before launching; never rely on {} to clear
     # a broader inherited root. Auth files are retained and never read here.
@@ -26,10 +26,15 @@ def require_isolated_configuration(workspace: Path) -> None:
     if not codex_home.is_absolute() or codex_home.resolve() != codex_home or codex_home.is_symlink():
         raise ValueError('pcp_local_unreviewed_codex_configuration')
     configs = [codex_home / 'config.toml', Path('/etc/codex/config.toml')]
+    if any(p.exists() or p.is_symlink() for p in configs):
+        raise ValueError('pcp_local_unreviewed_codex_configuration')
+
+
+def require_isolated_configuration(workspace: Path) -> None:
+    require_isolated_provider_configuration()
     directories = set(workspace.rglob('.codex')) | {p / '.codex' for p in workspace.parents}
-    if (any(p.exists() or p.is_symlink() for p in configs)
-            or any(p.is_symlink() or (p.exists() and (not p.is_dir() or any(p.iterdir())))
-                   for p in directories)):
+    if any(p.is_symlink() or (p.exists() and (not p.is_dir() or any(p.iterdir())))
+           for p in directories):
         raise ValueError('pcp_local_unreviewed_codex_configuration')
 
 

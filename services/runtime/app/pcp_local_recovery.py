@@ -74,6 +74,50 @@ def commit_verified(engine, job_id, task, workspace, checkpoint):
 
 def reconcile_commit(row, task):
     """Read-only reconciliation; an absent/unknown commit is never retried."""
+    return _inspect_git_proof(row, task, committed=True)
+
+
+def inspect_verified_tree(row, task):
+    """Inspect uncommitted proof without index/object writes in the original."""
+    return _inspect_git_proof(row, task, committed=False)
+
+
+def _inspect_git_proof(row, task, *, committed):
+    # Reuse the descriptor-safe reader, configuration/index validator and clean
+    # child environment. Git status/add/write-tree may change even existing
+    # object metadata; GIT_OPTIONAL_LOCKS=0 alone cannot make this a read.
+    from .pcp_local_worker_loop import _retained_snapshot, _retained_validate, _retained_run
+    import sys
+    path = Path(row['workspace'])
+    try:
+        with tempfile.TemporaryDirectory(prefix='pcp-inspect-') as scratch:
+            home = Path(scratch); clone = home / 'snapshot'
+            before = _retained_snapshot(path, clone)
+            _retained_validate(clone, home)
+            program = '''import json,sys
+from types import SimpleNamespace
+sys.path.insert(0,sys.argv[1])
+from app.pcp_local_recovery import _reconcile_commit_snapshot, verified_tree
+value=json.load(sys.stdin);row=value['row'];task=SimpleNamespace(base_sha=value['base'])
+result=(_reconcile_commit_snapshot(row,task) if value['committed'] else
+        verified_tree(row['workspace'],task,row['checkpoint']['pcp_local_execution']['diff']))
+print(json.dumps(result))
+'''
+            payload = dict(row=dict(workspace=str(clone), checkpoint=row['checkpoint']),
+                           base=task.base_sha, committed=committed)
+            result = json.loads(_retained_run([sys.executable, '-I', '-B', '-c', program,
+                str(Path(__file__).resolve().parent.parent)], home, input=json.dumps(payload).encode()))
+            require(_retained_snapshot(path) == before, 'pcp_local_retained_files_changed')
+            return result
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        from .pcp_local_task_queue import TaskStop
+        if isinstance(exc, TaskStop):
+            raise
+        raise TaskStop('pcp_local_inspection_invalid') from exc
+
+
+def _reconcile_commit_snapshot(row, task):
+    """Only for the validated disposable snapshot in the clean Git subprocess."""
     from .repo import diff_state
     proof = row['checkpoint']['pcp_local_execution']
     workspace = Path(row['workspace'])

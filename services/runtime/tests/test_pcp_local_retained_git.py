@@ -182,3 +182,37 @@ def test_git_case_and_boolean_aliases_are_explicit(committed):
     config.write_text(config.read_text().replace('FileMode = YeS', 'FileMode ='))
     with pytest.raises(TaskStop):
         check(v)
+
+
+def test_direct_commit_inspection_preserves_original_metadata(committed):
+    """The public reconciliation entrypoint must not refresh the live index."""
+    from app.pcp_local_recovery import reconcile_commit
+    v = committed
+    before = guard._retained_snapshot(v.path)
+    for _ in range(2):
+        assert reconcile_commit(v.store.row, v.task) == v.store.row['result']['commit']
+    assert guard._retained_snapshot(v.path) == before
+
+
+@pytest.mark.parametrize('location', ['config', 'config.worktree'])
+def test_direct_inspection_rejects_include_without_external_read(committed, watched, location):
+    from app.pcp_local_recovery import reconcile_commit
+    v = committed
+    with (v.path / '.git' / location).open('a') as out:
+        out.write('\n[include]\npath = {}\n'.format(watched))
+    before = guard._retained_snapshot(v.path)
+    with pytest.raises(TaskStop):
+        reconcile_commit(v.store.row, v.task)
+    assert guard._retained_snapshot(v.path) == before
+
+
+def test_direct_inspection_detects_original_drift_after_snapshot(committed, monkeypatch):
+    from app.pcp_local_recovery import reconcile_commit
+    v = committed
+    validate = guard._retained_validate
+    def racing(path, home):
+        validate(path, home)
+        (v.path / 'new.py').write_text('post-snapshot drift')
+    monkeypatch.setattr(guard, '_retained_validate', racing)
+    with pytest.raises(TaskStop, match='retained_files_changed'):
+        reconcile_commit(v.store.row, v.task)

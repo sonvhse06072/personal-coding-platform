@@ -400,3 +400,15 @@ def test_verified_counter_drift_blocks_delivery(held,field,value):
     s.db.update(row['id'],progress=row['progress'])
     with pytest.raises(TaskStop,match='held_verified_'):
         h.classify(h.snapshot(s.db,s.permit),s.permit)
+
+
+def test_held_recording_is_visible_as_assisted_recovery(held):
+    from app.dashboard_local import build_local_snapshot
+    s = held
+    asyncio.run(execute(s))
+    before = h.snapshot(s.db, s.permit)
+    view = build_local_snapshot(s.db)
+    assert view['observation'] == 'available'
+    job = next(j for j in view['jobs'] if j['id'] == before['job']['id'])
+    assert job['assisted_recovery'] is True
+    assert h.snapshot(s.db, s.permit) == before
