@@ -573,7 +573,6 @@ async def run_admitted_job(engine, readers, task):
         engine.storage.update(job_id, workspace=str(workspace), branch=ws['branch'])
         project, _ = readers.authority()
         limits = readers.activation['budget']
-        prompt = row['task']['description']
         verification = None
         for attempt in range(limits['model_calls']):
             await readers.refresh(task)
@@ -585,12 +584,26 @@ async def run_admitted_job(engine, readers, task):
             require(float(progress.get('cost_usd', 0)) <= limits['cash_ceiling_usd'],
                     'pcp_local_material_budget_exhausted')
             choice = readers.snapshot['model_choice']
+            from .invocation_context import local_invocation_context, ContextCannotProve
+            try:
+                packet = local_invocation_context(engine.storage.get(job_id), task, verification=verification)
+            except ContextCannotProve as exc:
+                checkpoint['invocation_context_failure'] = {'missing': exc.missing}
+                engine.storage.update(job_id, checkpoint=checkpoint)
+                raise TaskStop('pcp_local_context_cannot_prove') from exc
+            remaining = limits['max_wall_seconds'] - int(time.monotonic() - started)
+            require(remaining > 0, 'pcp_local_resource_envelope_exhausted')
+            checkpoint['invocation_context'] = packet['manifest']
+            checkpoint.setdefault('context_invocations', []).append(dict(
+                attempt=attempt+1, mode='execute' if attempt == 0 else 'repair',
+                **{k: packet['manifest'][k] for k in ('authority_sha256', 'packet_sha256',
+                    'packet_bytes', 'total_context_ms')}))
             checkpoint['pcp_local_execution'].update(state='invocation_started', attempt=attempt + 1,
-                                                     model_choice=choice)
+                model_choice=choice, context_sha256=packet['manifest']['packet_sha256'])
             progress['model_calls'] = int(progress.get('model_calls', 0)) + 1
             engine.storage.update(job_id, checkpoint=checkpoint, progress=progress)
             run = await CodexAdapter(choice['model'], choice['reasoning_effort']).run(
-                workspace=workspace, prompt=prompt + '\nAllowed paths: ' + ', '.join(task.allowed_paths),
+                workspace=workspace, prompt=packet['text'],
                 mode='execute' if attempt == 0 else 'repair', timeout=remaining,
                 isolate_workspace=True)
             engine._record_usage(progress, choice['id'], run.usage)
@@ -626,7 +639,6 @@ async def run_admitted_job(engine, readers, task):
                     'pcp_local_infrastructure_failure_no_retry')
             if verification['passed']:
                 break
-            prompt = row['task']['description'] + '\nRepair deterministic failure:\n' + json.dumps(verification)
         require(verification is not None and verification['passed'], 'pcp_local_engineering_verification_failed')
         await readers.refresh(task)
         # Recheck after tests, which must not mutate the developer source copy.
@@ -870,20 +882,27 @@ print(reconcile_commit(value['row'],SimpleNamespace(base_sha=value['base'])))
 
 
 @contextmanager
-def _retained_git(path):
-    """Keep the original byte/metadata preimage across proof AND durable reads."""
+def _retained_repository(path):
+    """Validated private snapshot for proof and pinned context object reads."""
     try:
         with tempfile.TemporaryDirectory(prefix='pcp-retained-') as scratch:
             home = Path(scratch)
             clone = home / 'snapshot'
             before = _retained_snapshot(path, clone)
             _retained_validate(clone, home)
-            yield lambda row, base: _retained_proof(clone, row, base, home)
+            yield clone, home
             require(_retained_snapshot(path) == before, 'pcp_local_retained_files_changed')
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         if isinstance(exc, TaskStop):
             raise
         raise TaskStop('pcp_local_retained_git_invalid') from exc
+
+
+@contextmanager
+def _retained_git(path):
+    """Keep the original byte/metadata preimage across proof AND durable reads."""
+    with _retained_repository(path) as (clone, home):
+        yield lambda row, base: _retained_proof(clone, row, base, home)
 
 
 def retained_workspaces(storage, root, current_job_id):

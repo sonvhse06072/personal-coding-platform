@@ -1,5 +1,30 @@
 # Supported readiness, recovery and dashboard adoption
 
+## #604 context continuity candidate — SOURCE/FIXTURE only
+
+[WO6529510627](https://github.com/sonvhse06072/personal-coding-platform/issues/604#issuecomment-6529510627),
+branch `ai/604-context-continuity-v1` ([Draft PR846](https://github.com/sonvhse06072/personal-coding-platform/pull/846)), starts from merged evidence845/0e8065b6;
+main CI41100344082 passed four executed suites before edits.
+[One WorkReport and future rollout packet](../project/history/2026-10-31-context-continuity.md)
+is the durable checklist for this slice:
+
+- Shared Composer packaged in Runtime; existing script facade retained.
+- Each new ordinary execute/repair receives original prose criteria/scope and pinned
+  baseline content; missing or changed mandatory evidence stops before model dispatch.
+- Existing PR handoff carries original criteria, immutable policy links/hashes, actual
+  check/diff evidence and unresolved assessment; no automatic criterion acceptance.
+- Fresh-process, repair, drift, hostile configuration and publication-reconciliation
+  regressions use isolated Git/PostgreSQL and synthetic provider/GitHub transport.
+- Final source verification, exact-head hosted CI and stopped fixture inventory are
+  recorded in the report/PR. Independent PM acceptance and physical adoption remain gates.
+
+This does not add a resume route, internal CLI compaction guarantee, live baseline or
+worker authority. Historical A/B/C and retired824, credentials, dashboard and old permits
+are untouched. No image build occurred. The inspection allowlist/draft digest changes
+only package the two new Python source modules; all unresolved artifact pins stay null.
+Broad baseline references can produce large mandatory packets; use reviewed successor
+section pointers if needed, never truncate constraints or rewrite an approved revision.
+
 ## C843 completed and retained — 2026-10-30 17:21 UTC
 
 [Corrected finalization6528029320](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6528029320)

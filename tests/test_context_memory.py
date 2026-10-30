@@ -434,3 +434,39 @@ def test_memory_evaluation_includes_content_and_project_scope_cases():
         and "hiện tại" in case["request"]["task"]["title"]
         for case in cases
     )
+
+
+def test_runtime_packaging_keeps_one_stdlib_composer_without_repository_mount(tmp_path):
+    """Mirror Docker COPY app, without a Runtime image build or repo mount."""
+    import shutil
+    import subprocess
+    import sys
+    runtime = tmp_path / 'app'
+    runtime.mkdir()
+    shutil.copyfile(ROOT / 'services/runtime/app/context_memory.py', runtime / 'context_memory.py')
+    code = '''import sys
+sys.path.insert(0,sys.argv[1])
+from app.context_memory import compose_invocation_context, compose_context
+print(compose_invocation_context.__module__, compose_context.__module__)
+'''
+    result = subprocess.run([sys.executable, '-I', '-S', '-B', '-c', code, str(tmp_path)],
+        cwd=tmp_path, capture_output=True, text=True, timeout=5)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == 'app.context_memory app.context_memory'
+
+
+def test_operator_facade_does_not_generate_runtime_build_inputs(tmp_path):
+    import shutil
+    import subprocess
+    import sys
+    core=tmp_path/'services/runtime/app'; core.mkdir(parents=True)
+    scripts=tmp_path/'scripts'; scripts.mkdir()
+    shutil.copyfile(ROOT/'services/runtime/app/context_memory.py',core/'context_memory.py')
+    shutil.copyfile(ROOT/'scripts/context_memory.py',scripts/'context_memory.py')
+    code='import sys;sys.path.insert(0,sys.argv[1]);import context_memory;assert context_memory.compose_context'
+    # Deliberately no -B. -I ignores caller PYTHONDONTWRITEBYTECODE, as hosted
+    # root tests do not suppress bytecode. The Runtime input tree must stay clean.
+    result=subprocess.run([sys.executable,'-I','-c',code,str(scripts)],
+        cwd=tmp_path,capture_output=True,text=True,timeout=5)
+    assert result.returncode==0,result.stderr
+    assert sorted(p.name for p in core.iterdir())==['context_memory.py']

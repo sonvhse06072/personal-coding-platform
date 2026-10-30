@@ -745,6 +745,11 @@ def test_dedicated_delivery_requires_concrete_reader_before_mutation(setup):
 
 @pytest.mark.parametrize('outcome', ['success', 'timeout', 'repair', 'commit_fail', 'publication_fail', 'secondary_fail', 'post_config'])
 def test_dedicated_worker_keeps_durable_identity_and_never_replays(setup, monkeypatch, tmp_path, outcome):
+    # This test doubles Git/Executor. Real context/object/transport integration
+    # is covered by test_pcp_local_context_continuity with real Git/PostgreSQL.
+    monkeypatch.setattr('app.invocation_context.local_invocation_context', lambda row, task, **kw:
+        dict(text=row['task']['description'], manifest=dict(packet_sha256='a'*64, authority_sha256='b'*64,
+                                                          packet_bytes=100, total_context_ms=0)))
     from pathlib import Path
     from app import pcp_local_worker_loop as trusted
     from app.adapters.base import AgentRun
@@ -984,6 +989,8 @@ def test_delivery_recovery_cannot_reenter_codex(setup, monkeypatch, execution_st
 
 
 def test_publication_failure_keeps_reconciliation_evidence_without_model(setup, monkeypatch):
+    monkeypatch.setattr('app.invocation_context.local_invocation_context', lambda row, task, **kw:
+        dict(text=row['task']['description'], manifest=dict(packet_sha256='a'*64, authority_sha256='b'*64)))
     from app import engine_delivery
     from app.delivery import DeliveryError
     from app.adapters.codex import CodexAdapter

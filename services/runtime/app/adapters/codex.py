@@ -167,7 +167,9 @@ class CodexAdapter(AgentAdapter):
         last_message_path = Path(last_message_file.name)
         last_message_file.close()
         argv += ["--output-last-message", str(last_message_path)]
-        argv.append(prompt)
+        # Pinned mandatory context can exceed Linux's per-argument limit. stdin
+        # preserves every byte and keeps the contract out of process listings.
+        argv.append('-' if isolate_workspace else prompt)
 
         try:
             emit_developer_event(
@@ -207,6 +209,7 @@ class CodexAdapter(AgentAdapter):
                     invoke["env"] = environment
                 if isolate_workspace:
                     require_isolated_configuration(workspace)
+                    invoke['input_text'] = prompt
                 result = await run_command(argv, **invoke)
             except CommandTimeoutError as exc:
                 timed_out = exc
