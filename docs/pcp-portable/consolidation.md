@@ -33,8 +33,9 @@ estimated0. No TLS bypass/cookie injection or unattended/benchmark/VPN-parity cl
 
 SAME [Draft evidence PR845](https://github.com/sonvhse06072/personal-coding-platform/pull/845)
 records final head and required executed CI. [Task PR844](https://github.com/sonvhse06072/personal-coding-platform/pull/844)
-CI41083619406 passed all four actual suites. Both PRs stay unmerged; main N unchanged.
-PM owns final evidence review and eligible merge ordering. The critique/index and both
+CI41083619406 passed all four actual suites. Task PR844 merged3fc1dec52d9b3ec643883334404684b79c585ae6 after finalization;
+deployed release/baseline stays N. Resolve current GitHub main/PR845 state at resume.
+PM owns final evidence review, CI and eligible evidence merge. The critique/index and both
 failure episodes remain; finalization requested one replacement-command clarification,
 with explicit Owner answer. Owner active time Unknown, authentication interactions0.
 
