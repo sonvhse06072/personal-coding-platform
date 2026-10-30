@@ -15,9 +15,9 @@ head **871e50454faf37a0e1b551c8d2981d22ad57f797**, branch `ai/4d0f1df36be0`.
 [Exact-head CI41083619406](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41083619406)
 executed all four suites: root **1758 passed /1 skipped**, Runtime **2734 /321 skipped**,
 Executor **808**, Router **132**. These were actual test steps, not skipped service jobs.
-Independent PM review5715171332 accepts the task, but its diff binding mismatches the
-durable proof. Finalization is blocked before authority restoration; see the closeout
-section below. Developer did not approve, alter the review, finalize or merge.
+Corrected independent PM review5715474340 accepts the task and matches durable proof.
+The subsequent single finalize command stopped on a GitHub502 CI read before POST;
+see the corrected-review execution section. Developer did not alter proof/reviews or merge.
 
 - Fresh [issue843](https://github.com/sonvhse06072/personal-coding-platform/issues/843),
   exactly three allowed evidence-summary script/test/document paths. PCP produced
@@ -54,7 +54,7 @@ are retained; no old permit was restored. Main remains N.
 | PHYSICAL | PASS | Actual original A/B read-only inspection with restored DB, nested snapshots under unchanged Runtime2CPU/3GiB/256pids/256MiB noexec tmpfs;0.928403s, peak103866368B. Restored-copy check0.809571s/105472000B. A/B file bytes13959138/14401234; Engine backing free about865.86GB at measurement |
 | LIVE | PASS | Exact config archive, fresh baseline and same-instance worker/observer adoption; actual scoped publisher entitlement/quota, schema/peers/stable fingerprints, aggregate readiness and all eight production readers; ordinary843 admission, one developer, mandatory verification, Draft PR, hosted CI |
 | LIVE | PASS | Trusted browser HTTPS, tokenless local observer, A/B assisted=true and fixed67.801642/47.582929s timers; C assisted=false, actual usage and PM wait; polling/offline/reconnect, no login/cookies/forms, mutation/foreign routes denied; ownership unchanged by observer |
-| LIVE | BLOCKED | Finalization preflight: independent review diff hash mismatches retained proof. No restoration/startup/readiness/finalize; delivered/gen3 and released/gen3 have not occurred |
+| LIVE | BLOCKED | Corrected review preflight/readiness passed; the single finalize command hit GitHub502 before POST. Delivered/gen3 and released/gen3 have not occurred |
 | NOT TESTED | — | VPN ON/OFF parity, LAN/remote access, future task D, direct-Codex comparison, unattended operation or benchmark. #595 remains HOLD |
 
 Existing unrelated optional PostgreSQL failures remain tracked in the
@@ -231,13 +231,81 @@ lease, events and sequences are unchanged. Original manifest c6e2d80f… and dis
 activation9e4c8b0d… are unchanged. All three workers and prior fixtures remain stopped;
 only the exact DB/observer/HTTPS above stay running. No data cleanup or authority renewal.
 
-## Conditional finalization packet — blocked pending corrected PM binding
+## Corrected-review execution — GitHub CI read failure, 2026-10-30 17:14 UTC
 
-The original packet below remains conditional. Decision6527515040 supplied
-review5715171332, but its hash mismatch prevents step3 and every later live action.
-Do not substitute a new review ID without PM's explicit disposition. Once PM resolves
-the binding, revalidate all original afterimages and original expiry again; no
-expectation refresh, checkpoint rewrite, replay, build or baseline change is permitted.
+[Decision6528029320](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6528029320)
+replaces only the review ID with5715474340 and correct durable hash e7129de0… .
+PM documentation through28254e6292cf31e2b21502a1be7a964e5481733f was fetched and
+fast-forwarded before operational work; critique and episode-index files are preserved.
+No source/proof/config/guard change was made.
+
+Fresh full DB/sequence, A/B/C workspace bytes/metadata, authority/manifest, source/image/
+config, task head and CI checks passed at17:09:55Z. Initial GitHub jobs reads timed out;
+subsequent read-only paginated responses confirmed all four actual test steps. No
+cached observation substituted for fresh preflight. Authority9e4c8b0d… was restored
+by no-overwrite rename/fsync at17:10:21Z. Exact Runtimef55b55de and Executorfc32fd0a
+started17:10:22Z; Router stayed stopped.
+
+Supported explicit readiness passed17:10:36Z, including proof/ownership/authority/
+corrected review/CI. Provider, Router and fresh admission were not applicable.
+ONE supported `finalize --review-id 5715474340 --json` (without --apply) was invoked
+17:10:56.636979Z. It returned17:11:10.148627Z, rc2, elapsed13.511667s,
+`outcome=blocked`, **mutation_requests=0**. Its internal read-only readiness hit:
+
+```text
+GitHub HTTP502 Bad Gateway
+/repos/sonvhse06072/personal-coding-platform/actions/runs/41083619406/jobs?filter=latest&per_page=100
+authority_review_ci: unknown / unobserved
+```
+
+Executor's retained traceback identifies `httpx.HTTPStatusError` at that GET. Runtime
+logs contain only readiness GETs, no PM-finalization POST. Full DB/sequence snapshots
+before/after the command are identical. A bounded read-only readiness at17:12:26Z
+passed again with no blockers. This is a transient external read failure, separate
+from the earlier PM diff-representation error; it is not evidence of task/proof drift.
+
+The instruction explicitly limited this continuation to ONE finalize command. The
+operator requested clarification for one replacement command after proving zero
+POSTs; no replacement or direct endpoint bypass was attempted, and silence is not
+approval. No model, mandatory-test, delivery replay, admission, rebuild or merge.
+
+| Class | Result | Corrected-review continuation evidence |
+| --- | --- | --- |
+| SOURCE | PASS | Exact N unchanged; PM documentation through28254e6 preserved; readiness/finalize code inspected without edits |
+| FIXTURE | NOT RUN | No new fixture/model/test invocation or container; prior isolated hash reproduction remains history |
+| PHYSICAL | PASS | Same named images/configs/workers, original authority bytes/expiry; Router stopped; scoped Runtime/Executor start/stop only |
+| LIVE | PASS | Fresh preflight and explicit finalization readiness; later diagnostic readiness recovered; all full afterimages unchanged |
+| LIVE | BLOCKED | Single finalize command stopped on GitHub502 before POST. Completed/accepted, delivered3/released3 did not occur |
+| LIVE | PASS, retained state only | Trusted tokenless browser, eight polls and reconnect, no TLS bypass/cookie/form; C still blocked/running2/active3, counters1/2/1; A/B fixed completed timers. Completed C timer remains NOT TESTED |
+
+At17:14:48.920216Z the two workers were stopped and authority disabled intact again.
+Router remained stopped, DB8b72a8d3/observerda6c4347/HTTPS601c552b stay running.
+Full A/B/C workspace metadata and all11-table/3-sequence rows match the original.
+Fresh consistent227744B backup SHA256:
+`2bef98ddb0fe357852da0f7ac74a3cba3f4c670f0ab0002165e74d285f2f152e`.
+Archive listing PASS. Afterimage SHA256 remains
+`14bdf9c95158e342c485f978ad638b9207d37e1fe4e16634874c021dae04d71b`.
+Original manifestc6e2d80f… and disabled activation9e4c8b0d… are unchanged.
+Private evidence is under `finalization-v2/`: preflight, review/CI reads, restore/start
+intents, readiness/finalize stdout and return receipts, bounded worker logs, diagnostic
+readiness, retained backup, shutdown receipt and browser observations.
+
+Corrected review arrived16:36:35Z,1467s after the superseded review16:12:08Z; corrected
+review to fresh-preflight completion is2000.030111s. These are observed wall waits,
+not measured PM/Owner active work. Operator preparation/diagnosis time is separate
+from developer execution64.303379s. Original delivery requested0 interactive actions;
+this continuation requested1 command-scope clarification,0 authentication actions.
+Owner active minutes and successful-finalization duration remain Unknown. The PM
+formatting failure, corrective review delay and GitHub read failure remain in the
+measurement record; no unattended-operation or benchmark claim.
+
+## Conditional finalization packet — replacement-command boundary
+
+Decision6528029320 corrected the review to5715474340 without changing proof. Fresh
+preflight/readiness passed, but the single finalize command sent zero POSTs after a
+GitHub502. A replacement command requires resolution of the explicit one-command
+boundary. Do not substitute a different review, use a direct endpoint or refresh
+expected evidence. Original expiry and all afterimages remain binding.
 
 1. Independently review issue843, exact PR844 head871e50454faf37a0e1b551c8d2981d22ad57f797,
    its real verification/four-suite CI and this evidence PR. Keep main N and task/evidence
@@ -251,8 +319,8 @@ expectation refresh, checkpoint rewrite, replay, build or baseline change is per
    rename into `/home/sonvh/pcp-local-adoption825-v4/instance/config/pcp-local-activation.json`,
    verify SHA256 above and fsync. No old claim/held permit. Start only Runtime/Executor
    IDs above as needed; finalization excludes provider, Router and fresh-admission work.
-4. Use the accepted container-resident operator. These commands remain blocked by the
-   review mismatch; `PCP_PM_REVIEW_ID` must come from the resolving PM decision:
+4. Use the accepted container-resident operator. These commands remain conditional on
+   replacement-command authority; `PCP_PM_REVIEW_ID` is5715474340:
 
 ```sh
 (
@@ -284,8 +352,8 @@ not a workaround for a new guard failure. No global network/VPN/DNS change.
 
 ## Evidence PR validation
 
-Local evidence-document verification after the finalization blocker update:
-**1755 passed in21.36s**; stable continuity headings,
+Local evidence-document verification after the corrected-review continuation:
+**1755 passed in21.32s**; stable continuity headings,
 standing stop markers and the GitHub/Runtime reconciliation reminder are preserved.
 Packet shell blocks passed syntax validation without executing later finalization.
 `git diff --check` passed. The exact evidence-PR head/hosted results belong to the PR

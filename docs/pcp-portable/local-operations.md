@@ -1,6 +1,6 @@
 # Supported readiness, recovery and dashboard adoption
 
-## Current C843 finalization blocked at review binding — 2026-10-30
+## Current C843 finalization stopped before POST — 2026-10-30
 
 [WO6526365770](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6526365770)
 executed accepted N `85e415f1f53c8129056e2f04fb99a9b964b89609`; original session15:23:19Z–23:23:19Z.
@@ -16,22 +16,23 @@ Job4d0f1df36be0b9b971c18b04af870950 is verified/ci_success, blocked awaiting ind
 PM in durable state, finalized=false, receipt running2/lease active3, counters1/2/1; mandatory17+17.
 No manual task solution, replay, old permit or Developer acceptance/merge.
 
-[Finalization decision6527515040](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6527515040)
-accepted independent review5715171332, but read-only preflight blocked before authority
-restore/start: review hash `ae80bf174bd41bbe115a49467c3cf405db9b9292fc564817da1a4e1996b2f9e5`
-differs from durable result/checkpoint/proof
-`e7129de0abd18887749302f8b0f47d7f4a7990f38b12e043fccf364626a431e5`.
-Isolated exact-head Git reproduces this solely by adding `--full-index` to Runtime's
-stripped `git diff --binary`; parent/tree match. Full DB/workspace/config/image
-preimages and original authority match. No readiness/finalize request or replay.
-PM must reconcile the hash and identify corrected independent acceptance; never
-rewrite proof or silently substitute a review. Original expiry23:23:19Z remains.
-Fresh private backup and unchanged full afterimages are recorded in the report.
-Actual trusted browser still shows C awaiting PM; completed C/timer is NOT TESTED.
+[Corrected decision6528029320](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6528029320)
+replaced review5715171332 with5715474340, matching durable hash e7129de0…; proof
+unchanged. PM commits through28254e6 were fast-forwarded/preserved. Fresh preflight
+and explicit supported readiness PASS. Original authority restored; same Runtime/
+Executor started; Router stayed stopped. The ONE finalize command returned blocked
+with zero mutation requests: GitHub502 while fetching task CI jobs during internal
+readiness. Full DB afterimages unchanged; diagnostic read-only readiness then passed.
+No replacement command or direct endpoint bypass; the explicit one-command boundary
+was surfaced for clarification. No answer is assumed. The report retains precise
+failure/commands/times and separates this from the prior PM formatting error.
+Workers stopped again17:14:48Z, authority disabled intact; same original23:23:19Z
+expiry. Fresh227744B backup2bef98dd… and unchanged afterimage14bdf9c9… recorded.
+Trusted browser still shows C awaiting PM; completed C/timer is NOT TESTED.
 
 A/B complete rows/workspace/proof/counters unchanged; old resources/configs/credentials
 and retired824 preserved. Shared lease advances normally to C; historical B release
-remains evidence. Workersf55b55de/fc32fd0a/f03edbd9 stopped15:51:47Z, ordinary authority
+remains evidence. Workersf55b55de/fc32fd0a/f03edbd9 stopped at closeout17:14:48Z, ordinary authority
 disabled intact with unchanged23:23:19Z expiry. All fixtures stopped. DB8b72a8d3,
 N observerda6c4347 and HTTPS601c552b run. Full IDs, hashes, shutdown/rollback and
 conditional supported finalization commands are in the report.

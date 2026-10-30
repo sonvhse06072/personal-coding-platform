@@ -1,13 +1,13 @@
 # Current Project State and Handoff
 
-## Ordinary C843 delivered; corrected PM binding, finalization pending — 2026-10-30
+## C843 corrected review accepted; finalization command blocked by GitHub read — 2026-10-30
 
 [WO6526365770](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6526365770)
 authorized one integrated N adoption/ordinary task session,15:23:19Z–23:23:19Z.
 Accepted N **85e415f1f53c8129056e2f04fb99a9b964b89609** (PR842), postmerge41078980568
 executed all four suites. Main remains N. Evidence branch `ai/835-ordinary-c-n-live`;
 [Draft evidence PR845](https://github.com/sonvhse06072/personal-coding-platform/pull/845)
-records exact final head/required CI. No Developer merge/finalization.
+records exact final head/required CI. No Developer merge or successful finalization.
 Reconcile actual GitHub/Runtime state when resuming; historical handoffs may be stale.
 
 [Execution report, exact resources/hashes and next PM packet](history/2026-10-30-ordinary-c843-live.md)
@@ -29,22 +29,22 @@ checks and aggregate/eight-reader admission readiness passed.
   finalized=false; receipt running/gen2, lease active/gen3. Durable acceptance has not occurred.
   Delivery readiness dependencies PASS and correctly refuses duplicate publication.
 
-[Finalization decision6527515040](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6527515040)
-accepted task review5715171332, but preflight stopped before authority restoration:
-the review declares `ae80bf174bd41bbe115a49467c3cf405db9b9292fc564817da1a4e1996b2f9e5`,
-while result/checkpoint/verified proof retain
-`e7129de0abd18887749302f8b0f47d7f4a7990f38b12e043fccf364626a431e5`.
-Isolated Git reproduction establishes full-index versus abbreviated index headers only;
-task parent/tree match the original proof. All DB rows/sequences, A/B/C workspace
-bytes/metadata, original authority, source/images/config and open task/head/CI match.
-No worker startup, authority restoration, readiness/finalize request or replay occurred.
-The report records the fresh backup and exact PM correction needed; expectations remain frozen.
+Initial review5715171332 used a full-index diff hash and stopped the prior preflight
+before mutation. PM corrected only that binding with
+[review5715474340](https://github.com/sonvhse06072/personal-coding-platform/pull/844#pullrequestreview-5715474340)
+and [decision6528029320](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6528029320).
+Original proof `e7129de0abd18887749302f8b0f47d7f4a7990f38b12e043fccf364626a431e5`
+is unchanged. PM commits through28254e6292cf31e2b21502a1be7a964e5481733f were
+fast-forwarded and preserved before work.
 
-PM independently reproduced both Git hash formats and corrected the review to
-[5715474340](https://github.com/sonvhse06072/personal-coding-platform/pull/844#pullrequestreview-5715474340).
-[Decision6528029320](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6528029320)
-supersedes the old review binding only. Durable proof and original expiry are unchanged;
-actual finalization remains pending and requires fresh afterimage/readiness checks.
+Fresh exact preflight PASS17:09:55Z; original authority restored, only Runtime/Executor
+started17:10:22Z. Explicit finalization readiness PASS17:10:36Z. The ONE finalize
+command17:10:56Z returned blocked17:11:10Z with **zero mutation requests**: Executor
+received GitHub502 reading task CI run41083619406's jobs. It did not POST finalization.
+Read-only diagnostic readiness PASS17:12:26Z; full DB/sequence snapshots still match.
+No replacement command was issued under the explicit one-command instruction.
+Command-scope clarification was requested; no answer is assumed. The report preserves
+both incidents, timings and evidence. No model/verification/delivery replay.
 
 [Owner-requested critique analysis](history/2026-10-30-managed-agents-critique.md)
 is indexed in T3 episodes: same-job versus replaceable workspace, existing event/criteria
@@ -60,8 +60,8 @@ release evidence remains. V3/#824 retains cancelled/incomplete_not_delivered,
 blocked3/released1 and assisted commit7b3833bd; no V3 mutation. Earlier configs,
 credentials, workers, images, backups and disabled authorities remain intact.
 
-At15:51:47Z Runtimef55b55de, Executorfc32fd0a and Routerf03edbd9 were stopped;
-fresh ordinary activation disabled intact, expiry23:23:19Z unchanged. All fixtures
+At17:14:48Z Runtimef55b55de and Executorfc32fd0a were stopped again; Routerf03edbd9
+remained stopped throughout. Fresh ordinary activation is disabled intact, expiry23:23:19Z unchanged. All fixtures
 stopped, volumes/data retained. Only DB8b72a8d3, new N observerda6c4347 and
 HTTPS601c552b remain running. Full IDs and scoped commands are in the report.
 
@@ -72,20 +72,23 @@ from estimated0. No TLS bypass. Old observer/frontend remain stopped rollback as
 
 ## Immediate next safe actions
 
-Use corrected review5715474340 under decision6528029320, not superseded5715171332.
-Fetch the evidence branch including PM documentation before further commits; no force push.
-Revalidate the original manifest, afterimages, exact task head/CI and unchanged authority,
-then supported readiness -> one finalize (no --apply). The prior attempt sent no POST.
-Original expiry2026-10-30T23:23:19Z remains fixed; expiry or drift stops dependent actions.
-After success verify delivered3/released3, unchanged counters1/2/1 and terminal dashboard;
-stop workers, disable authority intact and update the same evidence PR with actual results.
-No test/model/delivery replay, new admission, automatic renewal or developer merge.
+The corrected hash is no longer a blocker. Resolve only whether one replacement
+supported finalize command is authorized after the first command sent zero POSTs.
+The subsequent read-only readiness passed; do not silently retry the command or
+bypass its internal checks. Once explicitly authorized, revalidate original full
+preimages, source/head/CI and unexpired authority, restore only the same bytes, start
+only the same Runtime/Executor, and use readiness -> replacement finalize without
+--apply. Reconcile read-only after any uncertain POST; never replay it.
+Original expiry2026-10-30T23:23:19Z remains fixed. No renewal, proof refresh, model/test/
+delivery replay, new task or merge. Keep DB/observer/HTTPS available.
 
 ## Active PCP issues and owner attention
 
 #835 remains the campaign index; #595 stays HOLD. This is one repeatability task,
 not unattended operation or a benchmark. No direct-Codex comparison, VPN ON/OFF parity
-or LAN validation; Owner active minutes Unknown, interactive requests this session0.
+or LAN validation; Owner active minutes Unknown. The original delivery requested0
+interactive actions; this continuation requested1 command-scope clarification after
+the zero-POST GitHub502 failure. No authentication interaction was requested.
 Known unrelated optional PostgreSQL failures remain in the accepted source report.
 SOURCE/FIXTURE/PHYSICAL/LIVE evidence are explicitly separated in the execution report.
 
@@ -97,9 +100,9 @@ workload/Chợ Nhạc changes, global networking, force push, cleanup/prune or n
 
 <!-- PCP:CONTINUITY:START -->
 Accepted N85e415f1; WO6526365770 ordinary C843 delivered Draft844/head871e5045, CI41083619406 four executed PASS.
-Job4d0f1df36be0b9b971c18b04af870950 verified/ci_success, running2/active3, counters1/2/1; finalization NOT RUN.
+Job4d0f1df36be0b9b971c18b04af870950 verified/ci_success, running2/active3, counters1/2/1; finalize command blocked, zero POST.
 PM5715474340 corrects review hash to durable e7129de0; decision6528029320 permits conditional same-job finalization.
-Workers/authority OFF15:51:47Z; expiry2026-10-30T23:23:19Z unchanged. No self-finalization/merge.
+Workers/authority OFF17:14:48Z; expiry2026-10-30T23:23:19Z unchanged. No self-finalization/merge.
 A/B full evidence preserved; retired824 untouched. DB/N observer/HTTPS retained; tokenless localhost18443.
 Evidence branch ai/835-ordinary-c-n-live; see2026-10-30-ordinary-c843-live for exact IDs/hashes/PM packet.
 <!-- PCP:CONTINUITY:END -->
