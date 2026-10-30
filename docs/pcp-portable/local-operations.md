@@ -5,6 +5,35 @@ change to the Constitution, approved baseline or retained V3 authority.
 GH-815 and GH-822 are implemented together because the view must explain the
 new durable verification/commit/publication states. No new service/state store.
 
+
+## Current Q execution / #837 retained blocker
+
+[PM6515107429](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6515107429),
+[actual report and one PM decision packet](../project/history/2026-10-30-q-adoption837.md).
+This current receipt supersedes older pending-merge, absent-B and P-adoption instructions
+below; historical receipts remain retained. SAME evidence PR838, main held Q.
+
+- [x] Stopped writers, original A and all zero837 artifacts verified before exact
+  body-only revision; approved new hashes/baseline/job match production helpers.
+- [x] Consistent backup/restored-copy equality; serial required Q Runtime build,
+  unchanged-role reuse, actual-image producer/isolation/verifier checks.
+- [x] Eight retained proof checks2.69s /15.5MB peak of256MB; original A unchanged.
+- [x] Same-instance Q adoption, missing-authority guard/stable bindings, new immutable
+  baseline and authority, scoped credentials/schema/all8readers/phase readiness.
+- [x] ONE ordinary admission: Bblocked/held after1model, receipt running2/lease active2.
+  New Codex project-trust config rejected at post-invocation guard. No retry/reset.
+- [ ] Mandatory task verification, commit, Draft task PR and task CI: NOT REACHED.
+- [x] New config retained in place; old quarantine intact; before/after backup;
+  workers stopped exit0, fresh authority disabled intact,68containers retained.
+- [x] Trusted actual tokenless dashboard Acompleted+Bblocked, polling/reconnect PASS.
+- [ ] Independent PM review and coherent source/same-job continuation disposition.
+
+Do not replay old installation/quarantine/admission scripts or rebind another
+baseline around this now-existing job. There is no verified delivery proof to
+resume. Same B identity/counters/ownership remain mandatory; keep dashboard up.
+Exact resources/scoped stop commands and remaining limitations are in the report.
+
+
 ## #835 sparse repair and next Q gate
 
 [PM6513180988](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6513180988)

@@ -3,52 +3,38 @@
 Tier-1 mutable continuity, not baseline, merge or admission authority. Reverify
 source, PM decisions and current GitHub/Runtime physical state before acting.
 
-## Active source WorkOrder #835 — sparse producer repair
+## Active #837 Q execution — retained post-invocation blocker
 
-[PM6513180988](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6513180988)
-authorizes SOURCE and isolated FIXTURE work on `ai/835-sparse-producer-compatibility`,
-`/home/sonvh/pcp-sparse-producer-835`, one writer and separate [Draft repair PR839](https://github.com/sonvhse06072/personal-coding-platform/pull/839).
-Accepted P/main remains **a4b273afb3af4b9b4fd23412a547230df0b93011** (PR836 merged).
-PR838 remains unmerged operational evidence at426a819f, four-suite CI40988953273.
-Its [receipt6513114230](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6513114230)
-records successful quarantine/adoption followed by readiness rejection of the
-Executor-produced sparse A. This supersedes P's pre-adoption continuity.
+[PM6515107429](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6515107429)
+accepted PR839 merge **Q=e3b19700dffcc3e2eae45bdde78230819466c9e1**, postmerge41003723364 four suites PASS.
+Main held Q; SAME [evidence PR838](https://github.com/sonvhse06072/personal-coding-platform/pull/838)
+continues on `ai/835-adoption837-live`, merged onto Q without force push.
 
-**Producer A→ordinary B FIXTURE PASS:** actual Executor handler, real Git/PostgreSQL,
-all eight readers and existing registrar; A bytes/config/index/metadata/rows/proof/
-counters preserved and lease1→2 exactly once. The candidate validates local and
-worktree config, exact sparse/index semantics and original preimages, then reuses
-unchanged proof checks in a private snapshot. Unsafe config/read/exec paths and
-races reject without admission. 104 Git cases and102 final PG repeatability cases;
-pinned Git2.39.5 and credential-free Codex0.160.0 probes pass. No model or live task.
-Full local/hosted evidence and limits are in the repair PR receipt and
-[WorkReport / one next rollout packet](history/2026-10-30-sparse-producer-repair.md).
-Two unrelated optional PG supervision failures remain tracked, not silently fixed.
+Fresh zero-artifact checks preceded the exact approved SAME837 body-only P→Q
+revision. Production-derived job **ccb57d244cfd1fc069a98fd8c17734a1**, immutable baseline `pcp-local-repeatability-e3b19700dffc-20261030`.
+Actual Q build/adoption, backup/restored copy, producer/validator/isolation/verifier
+checks, snapshot performance and all eight readers PASS. One ordinary run-once
+executed: B is **blocked/held**, receipt **running/gen2**, lease **active/gen2**,
+counters **1 model / 0 mandatory tests / 0 delivery**. No task PR or task CI.
+
+Blocker: `pcp_local_unreviewed_codex_configuration`. A new118-byte project-trust
+config appeared during invocation, rejected on post-invocation refresh. It remains
+intact in place; original quarantine unchanged. No replay/quarantine/guard bypass.
+Agent-reported13 tests are not Runtime verification. No verified proof exists.
+Full evidence, hashes, exact resources and next PM packet: [Q execution WorkReport / blocker packet](history/2026-10-30-q-adoption837.md).
 
 ## Retained completed #831 and deployed services
 
-V4 `/home/sonvh/pcp-local-adoption825-v4` has59 retained containers, only existing
-DB/observer/frontend available. Current Runtime4acbed19 (P image60c4b0ba), Executor
-50fc20a1 (R image3cd95064) and Routerf03edbd9 (S image422d4141) are stopped. Canonical
-P and installed immutable P baseline remain; new activation disabled intact.
-118-byte inherited config was quarantined once under release `repeatability-P`;
-credentials/metadata/backups preserved, guard unchanged. Never automatically
-quarantine new config, restore old permits, edit A metadata or repeat admission.
+A831 `a8851f89dd3e4e582c697ec1fe6d8cdb` full row/proof/workspace/counters1/2/1 unchanged; completed/PM accepted,
+receipt delivered/gen3. Project ownership legitimately advanced to B active/gen2.
+Current Q Runtime3c8e847d, reused Executor50fc20a1/Routerf03edbd9 are stopped
+exit0/OOMfalse. Fresh Q activation disabled intact; canonical/registry Q retained.
+No older baseline/permit/config was rewritten. All68 containers retained,3 running.
 
-A831 `a8851f89dd3e4e582c697ec1fe6d8cdb` remains completed/PM accepted,
-receipt delivered/gen3, lease released/gen1, counters1 model/2 tests/1 delivery;
-original workspace/proof retained. Task833/evidence834 were merged before P.
-PR838's complete live DB/A manifests remain historical evidence; this source
-session neither mutates nor re-verifies live SQL. #837 has no durable job/receipt/
-workspace/reservation/invocation or task PR in the latest operational receipt.
-No repaired worker deployment or LIVE A→B success is claimed.
-
-**https://localhost:18443/dashboard — loopback_readonly, no login/token/cookie.**
-Existing observer unchanged and available. Prior trusted-browser completed state,
-fixed67.801641624s duration, usage/Unknown semantics and reconnect are PR838 evidence.
-This session does not claim new browser/VPN parity. Exact resource IDs, fixture
-shutdown, private evidence locations and scoped stop commands are in the WorkReport
-and [operations](../pcp-portable/local-operations.md).
+**https://localhost:18443/dashboard — tokenless/local, no login.** Existing
+DB/observer/frontend remain available. Trusted actual browser shows completed A
+and blocked B, seven HTTP200 polls, zero forms/cookies/errors and reconnect PASS.
+Original A terminal evidence retained; no VPN ON/OFF parity claimed.
 
 ## Original #824 — retired incomplete, never delivered
 
@@ -68,23 +54,19 @@ Retirement resolves only this reservation; it does not authorize another job.
 
 ## Active PCP issues and owner attention
 
-No authentication/Owner continuation step is pending in this source session.
-Independent PM acceptance, exact repair merge Q and postmerge CI remain required.
-PM then rechecks zero837 artifacts/unchanged A, archives the old unadmitted P
-proposal and revises SAME issue837 to Q with a NEW immutable baseline. Production
-helpers derive the new body/job/branch identity. No P/Q bypass, recovery permit,
-issue replacement or invented Q. Budget2/900s/3/USD0 and original expiry
-2026-11-01T17:00:00Z unchanged; expiration is a later explicit PM decision.
+No authentication or routine Owner continuation request is pending. Main Q hold
+and B ownership remain. The old pre-admission rebinding strategy no longer applies
+because a durable job exists. PM must review the generated-config integration
+finding and commission supported same-job continuation/disposition; no source
+workaround was installed. Budget2/900s/3/USD0 and expiry2026-11-01T17:00Z unchanged.
 
 ## Immediate next safe actions
 
-1. Review the separate Draft repair PR, exact-head four executed suites and the
-   [integrated packet](history/2026-10-30-sparse-producer-repair.md).
-2. PM alone handles eligible merge/Q hold and exact pre-admission bindings. Keep
-   PR838 unmerged during the task window; no arbitrary main advancement.
-3. Only after the consolidated execution checkpoint: serial required image builds,
-   actual-image gates/backups, same-instance adoption, all eight readers, one ordinary
-   task837 admission/delivery and retained shutdown. No such action is authorized here.
+1. Review SAME PR838 evidence and the consolidated blocker packet.
+2. Preserve B rows/workspace/config/ownership and all A/history; no run-once retry,
+   model replay, manual verification-to-delivery promotion or receipt reset.
+3. Keep workers/authority off and dashboard available pending PM source/recovery
+   disposition. Developer does not finalize/merge; no replacement task or permit.
 
 ## Standing safety boundary
 
@@ -96,10 +78,10 @@ restart. Unrelated H1b/A3B2/Codex gates remain. CI is a process gate, not server
 branch protection; Developer never merges or self-approves independent review.
 
 <!-- PCP:CONTINUITY:START -->
-P=a4b273af held; PR836 merged. PR838 evidence426a819f retains stopped adopted workers.
-PM6513180988 SOURCE/FIXTURE sparse producer repair on ai/835-sparse-producer-compatibility.
-Real producer A→ordinary B passes Git/PG/eight readers; hostile configs/index/races reject.
-Exact repair head/hosted CI in its separate Draft PR; independent PM acceptance pending.
-Future SAME837 pre-admission Q baseline/identity revision only; no recovery exception.
-Completed831/delivered3/released1/counters1/2/1 and retired824 preserved; dashboard up.
+Q=e3b19700dffcc3e2eae45bdde78230819466c9e1 held. SAME evidencePR838 mergedontoQ, noforcepush.
+Approved837bodyrevision+Qbaseline/adoption/all8readers passed; oneordinaryrunonce.
+Bccb57d244cfd1fc069a98fd8c17734a1 blocked/held on regeneratedCodexconfig; running2/active2,1model0verifier0delivery.
+No taskPR/CI, no verifiedproof. A831 unchanged; workers stopped, Qactivationdisabled.
+Newconfig retainedinplace; oldquarantine/permits preserved; trusted dashboardA+B available.
+PM coherent source/samejob disposition needed; no replay/reset/pre-admissionrebinding.
 <!-- PCP:CONTINUITY:END -->
