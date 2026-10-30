@@ -24,6 +24,10 @@ def summarize(records: Any) -> dict[str, Any]:
         raise InputError("top_level_must_be_array")
     by_class = dict.fromkeys(CLASSES, 0)
     by_outcome = dict.fromkeys(OUTCOMES, 0)
+    by_class_and_outcome = {
+        evidence_class: dict.fromkeys(OUTCOMES, 0)
+        for evidence_class in CLASSES
+    }
     seen_ids: set[str] = set()
     common_sha: str | None = None
     for index, record in enumerate(records):
@@ -49,11 +53,13 @@ def summarize(records: Any) -> dict[str, Any]:
         common_sha = source_sha
         by_class[evidence_class] += 1
         by_outcome[outcome] += 1
+        by_class_and_outcome[evidence_class][outcome] += 1
     return {
         "count": len(records),
         "source_sha": common_sha,
         "by_class": by_class,
         "by_outcome": by_outcome,
+        "by_class_and_outcome": by_class_and_outcome,
         "fixture_evidence_is_live": False,
     }
 
