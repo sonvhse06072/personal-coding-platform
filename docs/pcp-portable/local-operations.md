@@ -1,26 +1,43 @@
 # Supported readiness, recovery and dashboard adoption
 
-## Current ordinary next-task preparation — 2026-10-30
+## C843 completed and retained — 2026-10-30 17:21 UTC
 
-[PM closeout6524940358](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524940358)
-closed #837 and merged task841/evidence838. Engineering anchor72d71a80 has successful
-four-suite postmerge41069779438; resolve current GitHub main separately. Deployed
-Runtime/Executor R2 and canonical/task/verifier Q are unchanged. B is completed,
-delivered/gen3, released/gen2, counters1/2/1; A and retired824 retained. Workers and
-authorities remain OFF; existing DB/observer/HTTPS remain available.
+[Corrected finalization6528029320](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6528029320)
+uses independent review5715474340, exact task head871e50454faf37a0e1b551c8d2981d22ad57f797
+and original source N85e415f1f53c8129056e2f04fb99a9b964b89609. PM documents through28254e6
+were fast-forwarded and preserved. [Full report](../project/history/2026-10-30-ordinary-c843-live.md)
+retains original ordinary delivery, hash-review correction and transient GitHub502 history.
 
-[WO6525074512](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6525074512)
-is SOURCE/FIXTURE only. Its [single WorkReport and execution packet](../project/history/2026-10-30-ordinary-next-task.md)
-cover the complete ordinary lifecycle, Git metadata repair, config producer/readiness
-boundary, honest assistance projection, useful three-path task C and measurement.
-The candidate has not been adopted. The preserved legacy provider config still needs
-an exact future disposition; a fresh successful fixture is not permission to archive
-it. No new credential custody, old-permit reuse or automatic quarantine is allowed.
+Fresh preflight and explicit readiness passed. First finalize command hit GitHub502
+inside its CI read and sent zero POSTs; full DB state remained unchanged. Read-only
+readiness recovered. Owner explicitly authorized one replacement command. Fresh original
+preflight/readiness passed again; replacement sent **one actual finalization POST** and
+reconciled completed at17:20:51Z. No model/test/delivery replay, reset, rebuild or merge.
 
-The current packet supersedes next-task instructions in dated campaign sections
-below. They remain history and do not authorize replay. Frozen reports/manifests are
-unchanged. In particular, old "unmerged", "main remains R2" and pending-PM statements
-below describe their recording time, not the current repository state.
+Job4d0f1df36be0b9b971c18b04af870950 is **completed / pm_review_accepted**, verified/
+ci_success, finalized=true, receipt **delivered/gen3**, lease **released/gen3**, counters
+**1/2/1**. Original checkpoint/proof/verification/usage/progress preserved. A/B full rows
+and all A/B/C workspace bytes/metadata unchanged; retired824 and historical assets intact.
+
+At17:21:47Z exact Runtimef55b55de/Executorfc32fd0a stopped; Routerf03edbd9 never started.
+Authority disabled intact, original expiry2026-10-30T23:23:19Z unchanged. All13 fixtures
+stopped; DB8b72a8d3/N observerda6c4347/HTTPS601c552b remain running. Consistent228687B
+backup5c216ef4… and full completed afterimagee7ffb472… retained; full hashes/IDs/stop
+commands are in the report. Do not restore consumed authority or start another task.
+
+https://localhost:18443/dashboard remains tokenless, trusted HTTPS, loopback read-only.
+Actual post-shutdown Chromium: C completed/delivered3/released3; terminal elapsed63.870699s
+fixed across eight polls and offline/reconnect. Observed execution64.303379s is separate.
+A/B completed timers and original usage/provenance unchanged; reported cost Unknown versus
+estimated0. No TLS bypass/cookie injection or unattended/benchmark/VPN-parity claim.
+
+SAME [Draft evidence PR845](https://github.com/sonvhse06072/personal-coding-platform/pull/845)
+records final head and required executed CI. [Task PR844](https://github.com/sonvhse06072/personal-coding-platform/pull/844)
+CI41083619406 passed all four actual suites. Task PR844 merged3fc1dec52d9b3ec643883334404684b79c585ae6 after finalization;
+deployed release/baseline stays N. Resolve current GitHub main/PR845 state at resume.
+PM owns final evidence review, CI and eligible evidence merge. The critique/index and both
+failure episodes remain; finalization requested one replacement-command clarification,
+with explicit Owner answer. Owner active time Unknown, authentication interactions0.
 
 ## Historical finalization completed — 2026-10-30 13:58 UTC
 

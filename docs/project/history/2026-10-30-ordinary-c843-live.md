@@ -1,0 +1,435 @@
+# Ordinary C843 — N adoption and LIVE delivery
+
+Date: 2026-10-30. Authority: [WO6526365770](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6526365770).
+Accepted N `85e415f1f53c8129056e2f04fb99a9b964b89609` (merged PR842), four executed postmerge suites
+[41078980568](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41078980568).
+One operator/writer; evidence branch `ai/835-ordinary-c-n-live`.
+Session **15:23:19Z–23:23:19Z**, recorded before operational mutation; no renewal.
+[Draft evidence PR845](https://github.com/sonvhse06072/personal-coding-platform/pull/845)
+supplies its exact final head and required CI separately.
+
+## Outcome and exact identities
+
+The ordinary task reached a real Draft [PR844](https://github.com/sonvhse06072/personal-coding-platform/pull/844),
+head **871e50454faf37a0e1b551c8d2981d22ad57f797**, branch `ai/4d0f1df36be0`.
+[Exact-head CI41083619406](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41083619406)
+executed all four suites: root **1758 passed /1 skipped**, Runtime **2734 /321 skipped**,
+Executor **808**, Router **132**. These were actual test steps, not skipped service jobs.
+Corrected independent PM review5715474340 accepts the task and matches durable proof.
+The first corrected-review finalize command stopped on a GitHub502 CI read before POST.
+Owner then authorized one replacement; it completed with one POST and read-only
+reconciliation. See final closeout below. Developer did not alter proof/reviews or merge.
+
+- Fresh [issue843](https://github.com/sonvhse06072/personal-coding-platform/issues/843),
+  exactly three allowed evidence-summary script/test/document paths. PCP produced
+  duplicate-member rejection and raw JSON regressions; the operator did not implement C.
+- Production-derived job `4d0f1df36be0b9b971c18b04af870950`.
+- Body SHA256 `7276b8d3c191a1366708c199bac211341548af0ffd06dc1b1157bc895102172f`;
+  goal SHA256 `afa31d81e63b383cbf3a1191d6d8ab3236c4a2af6db1a5f3d321a666ecc6c17d`.
+- Immutable local baseline `pcp-local-ordinary-c-85e415f1f53c-20261030`;
+  canonical/task/verifier N. Old revision definitions remain byte-identical.
+- Final durable state **completed / pm_review_accepted**, execution **verified**,
+  delivery **ci_success**, `delivery_finalized=true`; receipt **delivered/gen3**,
+  project lease **released/gen3**. Independent review5715474340 is recorded.
+- Counters **1 model /2 mandatory test phases /1 delivery**, no repair/replay.
+  Both mandatory phases actually ran **17 tests**,34 total. The supported run-once
+  request returned an acknowledged response. No duplicate POST/publication was sent.
+- Pre-review delivery readiness had no dependency blockers, proof/ownership/publisher
+  checks PASS, operation `awaiting_pm_review`, eligible=false. Its nonzero CLI exit
+  correctly prevents republishing; finalization requires the independent review.
+
+A831 and B837 complete job rows, receipts, proof, usage, counters1/2/1 and original
+workspace byte/metadata snapshots remain unchanged. Earlier events remain present.
+The shared project lease legitimately advanced from B's released/gen2 to C's active/gen3;
+B's historical release evidence is retained; C closeout released that same gen3 lease.
+Retired824/V3 was not touched. Original
+workers/images, old canonical Q, credentials, earlier quarantines and disabled permits
+are retained; no old permit was restored. Main remains N.
+
+## Evidence by class
+
+| Class | Result | Actually exercised |
+| --- | --- | --- |
+| SOURCE | PASS | Exact N clean detached service archive and pinned build recipe; complete Executor/Router relevant input history unchanged, packaged hashes/modes match N inputs. No application repair in this evidence PR |
+| FIXTURE | PASS | Consistent live backup restored into new isolated PG17.11; all11 public tables/3 sequences identical. Scoped real Runtime role grants pass. Copied A/B proofs validated in built N image against restored rows, no inference |
+| PHYSICAL | PASS | New Runtime/verifier image, no source overlay; pinned CLI lifecycle RED/retained rejection/GREEN/repeat/next, read isolation, real Executor sparse producer -> N validator; actual verifier13 tests, read-only/nonrecursive mount, effective noexec; immutable executable askpass outside tmpfs |
+| PHYSICAL | PASS | Actual original A/B read-only inspection with restored DB, nested snapshots under unchanged Runtime2CPU/3GiB/256pids/256MiB noexec tmpfs;0.928403s, peak103866368B. Restored-copy check0.809571s/105472000B. A/B file bytes13959138/14401234; Engine backing free about865.86GB at measurement |
+| LIVE | PASS | Exact config archive, fresh baseline and same-instance worker/observer adoption; actual scoped publisher entitlement/quota, schema/peers/stable fingerprints, aggregate readiness and all eight production readers; ordinary843 admission, one developer, mandatory verification, Draft PR, hosted CI |
+| LIVE | PASS | Trusted browser HTTPS, tokenless local observer, A/B assisted=true and fixed67.801642/47.582929s timers; C assisted=false, actual usage and PM wait; polling/offline/reconnect, no login/cookies/forms, mutation/foreign routes denied; ownership unchanged by observer |
+| LIVE | PASS | Corrected review finalization after explicitly authorized replacement: one actual POST, completed/accepted, delivered3/released3, proof/counters unchanged; actual terminal dashboard and retained shutdown |
+| NOT TESTED | — | VPN ON/OFF parity, LAN/remote access, future task D, direct-Codex comparison, unattended operation or benchmark. #595 remains HOLD |
+
+Existing unrelated optional PostgreSQL failures remain tracked in the
+[accepted source WorkReport](2026-10-30-ordinary-next-task.md); hosted321 skips do
+not resolve them. No full optional-PG green claim is made. This restored-copy check
+used real PG, not mocked database evidence; external inference was absent in fixtures.
+
+## Source, images and resource custody
+
+Only Runtime/verifier needed a serial build. Existing base/toolchain pins were used:
+Codex0.160.0/OpenCode1.19.4; actual Runtime Python3.11.2, Node22.23.4, Git2.39.5,
+pytest8.4.1/PyYAML6.0.2. Executor keeps Docker20.10.24/DDEV1.25.4/buildx0.37.0.
+Executor and Router images retain honest original source labels R2 and S.
+
+| Role | Image | Binding |
+| --- | --- | --- |
+| Runtime/verifier/observer | `sha256:a925ddf0e4fe120889412b282af8556ba96dab05eb83f5f170303a5b66b5e536` | N |
+| Executor | `sha256:78a752c0dbfc6bb9f4120660a0cba4ad6bc6dd1673b1240fd651597d6edf6aae` | R2 f02d9a14af33d9efeb99aa573d776aab3119dec1; unchanged complete inputs |
+| Router | `sha256:422d41413115ce46c24a063a018f942dfd63e04205b167d0b97e6e4d10660319` | S b97ade581fecad4db2146258e5ca02c3902189e0; unchanged service/models/policy |
+| Database | sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27 | retained PostgreSQL17.11 |
+| HTTPS | sha256:552e7481ca93ffccd046aa658dbbed22caefbc09c66fa7cd247cbb90b8a5c609 | retained Nginx image/TLS/config boundaries |
+
+Private release: `/home/sonvh/pcp-local-adoption825-v4/releases/ordinary-c-85e415f1f53c8129056e2f04fb99a9b964b89609`. Old Q canonical is retained at
+`rollback/canonical-Q-e3b19700` with bundle/filesystem archive and manifest.
+New worker containers remove held/claim recovery switches; original old containers
+remain stopped. Missing-ordinary-authority startup failed before DB work as required.
+Only measured first-start `OomKillDisable false -> null` normalization occurred;
+stable post-start fingerprints were frozen before fresh activation, not refreshed
+to waive later drift. Non-root/read-only/resource/nonrecursive/tmpfs guards remain.
+
+The exact legacy config hash323b12e7fb0dce3cf5c4984aebf7dc513e89b9bf3991ac227dbc275716af10fc
+(118B,0600,uid1000) was renamed once with `renameat2(RENAME_NOREPLACE)` and directory
+fsync to `rollback/legacy-B-config-323b12e7.toml`. Bytes/inode/owner/mode/atime/mtime
+remain; rename ctime and parent-directory deltas are explicitly recorded. Auth assets
+were unchanged by archival; no new login/credential issuance was needed. The clean
+provider home did not recreate config through account checks or C execution. Never
+archive a new config automatically. Restore only with stopped writers and absent destination.
+
+## Timing, usage and operating limitations
+
+Session start15:23:19Z; executable-dispatch intent15:43:17.921751Z; acknowledged
+response15:47:38.481322Z; workers stopped/authority disabled at15:51:47.230121Z.
+Setup/build/archive precede executable dispatch and are separate from task latency.
+The private stage ledger retains both UTC and same-process monotonic measurements.
+Run-once driver measured236.207094s including its final custody checks; UTC intent
+to response is260.559571s. These distinct clock measurements are preserved without
+normalizing the difference or attributing an unmeasured cause. Review receipt timing
+and final durable acceptance are recorded below. Developer execution was64.303379s; hosted CI ran
+15:45:22Z–15:47:35Z. Do not add overlapping intervals as a total.
+
+Observed tokens: gross input468637, cached430848, net input37789, output3933.
+Reported monetary cost is **Unknown**, provenance=false, despite normalization's
+zero field; estimated cost is0.0 and is labeled estimated. Subscription-only policy
+and cash ceiling0 remained; no paid fallback was enabled. Tool count is Unknown in
+the dashboard, not a claimed zero. One returned developer invocation is observed.
+
+Interactive Owner requests during original delivery:0; later finalization clarification
+is counted separately below. Owner active minutes **Unknown**.
+This required substantial operator preparation/observation and is not unattended
+operation. Routine harness corrections were diagnosed with retained evidence:
+PG init completed but bootstrap client used the wrong Unix socket (same fixture
+resumed without reset); JSON tuple/list comparison; added retained-next CLI output;
+dashboard `id` collector field (exact rollback, then same-container readoption).
+Delivery-readiness nonzero was the intended PM gate. No application guard was weakened.
+The developer's prose still referenced the immutable source packet's pre-adoption
+wording; durable Runtime verification/CI supersede that prose. Legacy progress
+booleans are not substituted for the authoritative verification checkpoint.
+
+## Hashes, private evidence and final retention
+
+Private evidence root: `/home/sonvh/.local/state/pcp-ordinary-c-n-live-v1`. Full manifests, DB dumps, auth/env and preimages
+remain local. Only sanitized identities/digests are published.
+
+| Artifact | SHA256 |
+| --- | --- |
+| Before backup174965B | `6f3dc6cecd664745a0a2c960fb07bc0d9b3a245d3a9383bc6c5d0e02d0a7dfdd` |
+| After shutdown backup227744B | `954ba6b3b2e23353c2271de622ccda063c10033bd3c6fc76111019371e0ed71b` |
+| Fresh ordinary activation bytes, disabled intact | `9e4c8b0da409fa91befd448ddbe53c9c00bc4fa08c403ff0a4ee2c4f0e52407c` |
+| Activation manifest | `5762ce2a1eb5620a0f203fc8d9d878469aae62074fe71b4394e47af6bb3c69d9` |
+| Dispatch manifest | `477e056e7665db4c09eb7356baa2fb9eedac2abc0b5f9464540c70f8e317a769` |
+| Finalization afterimage manifest | `c6e2d80f10b2737ef1dd078bfc63689db7fd57660b6fbff86cf15dbf01c3084e` |
+| Config archival receipt | `45adb46b24523af8ea7ab0dae9314da8e79ca3a19d4fd2c2e15bd926a986b0b8` |
+
+Runtime `f55b55ded4f2479214233244def8b34e9da36b93e057cdf4c3eda75149df7e14`, Executor `fc32fd0a0bf632a185aad7d83f21234988359a9d803f8dcc0be36145a9d93e1d` and Router
+`f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6` are **stopped**. Supported finalization released C's gen3 lease; shutdown itself
+does not release ownership. Authority is disabled intact at
+`/home/sonvh/.local/state/pcp-ordinary-c-n-live-v1/disabled-authority/pcp-local-activation.json`, same expiry **2026-10-30T23:23:19Z**.
+
+Running retained services:
+
+- DB `8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8`.
+- N observer `da6c434797c46a3312f0ca185b20e0b5fbb9234ce137aee9f81ebc2fb9241660`.
+- HTTPS frontend `601c552bd0562b947529a591b84c70570a1eaa556fb43e50a8c2ae0d76e362aa`.
+
+**https://localhost:18443/dashboard** — open locally; no token, login or cookie.
+Access remains loopback-only, read-only, using SELECT-only `pcp_dashboard_reader`.
+No TLS errors were ignored and no cookies were injected. Old observer5d6b3e9b and
+HTTPSd22a5bf0 are stopped rollback assets; original leaf certificate and Nginx allowlist
+are unchanged. A bounded observer switch/rollback occurred during preparation;
+current availability and post-shutdown HTTPS200 are verified.
+
+Scoped worker stop (already executed; never prune/remove):
+
+```sh
+env -u DOCKER_CONTEXT -u DOCKER_TLS_VERIFY -u DOCKER_CERT_PATH \
+  docker --host unix:///var/run/docker.sock stop \
+  f55b55ded4f2479214233244def8b34e9da36b93e057cdf4c3eda75149df7e14 \
+  fc32fd0a0bf632a185aad7d83f21234988359a9d803f8dcc0be36145a9d93e1d \
+  f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6
+```
+
+All campaign fixtures below are stopped/exited; no fixture remains running.
+PG volume `pcp-ordinary-c-n-rehearsal-pg-data` and private copied data/logs are retained.
+
+| Fixture | Container ID |
+| --- | --- |
+| pcp-local-adoption825-v4-https-n-syntax | `e3943ce95ba629a69e0633bbdaf18c95cb74e9f26dd91307fb98641f01dbff36` |
+| pcp-ordinary-c-n-retained-check | `d7377691910e6fd23c0e4aa97618a4a7005e11160a73aea75642d40ad9905d3c` |
+| pcp-local-adoption825-v4-ordinary-c-n-verifier | `691dbe6290b0ef55a5abd09412cdacb7838baa85cc1f6013feaa0eded1abc2cb` |
+| pcp-local-adoption825-v4-n-producer-proof | `22e3301e89d8fa834b688cb94e432694d5c0b34c923bcea964ca21d010b9fe77` |
+| pcp-local-adoption825-v4-n-producer-workspace | `36172b76d8bd7ce05570397a9ad4197e0c3ea494af379efc30dc5ac8eef76edd` |
+| pcp-local-adoption825-v4-n-producer-source | `e8e845669069a244fbf0484a8c24b292b183c1b14ea9eecf5a8646558f6f3625` |
+| pcp-ordinary-c-n-restored-check | `040e9dae6d2d0acfbcadf3dedf5041dda3777c09297099ada569486184519ebf` |
+| pcp-local-adoption825-v4-ordinary-c-n-config-lifecycle | `29d6d21a4b9208a96a1a0aa325579b44d3bae9203361199f04b29ea6414c46cf` |
+| pcp-local-adoption825-v4-ordinary-c-n-isolation | `1dd6a8daf46c9d8dccbb104c2e2cc4ff55cb5a7c49b292b0f5faf4c6ac940df2` |
+| pcp-local-adoption825-v4-ordinary-c-n-router-packaging | `3c97e98fc67dc67cf7597684d0c2d0405e9decfb69010c01fc989ae03b18786a` |
+| pcp-local-adoption825-v4-ordinary-c-n-executor-packaging | `0e254d36844446daf4dd54f2c02c4115c10a76f5924bece7d9df1e2f394df66b` |
+| pcp-local-adoption825-v4-ordinary-c-n-runtime-packaging | `cf785e0ea94d0eaff45540fb22f042b48b6f660eb5f32fc7c6ba7a29451c1da2` |
+| pcp-ordinary-c-n-rehearsal-pg | `7322f0128313d0352a288ec23508257b9679a10b94b06dccff58f48d8cd08839` |
+
+## Finalization preflight closeout — 2026-10-30 16:18 UTC
+
+This historical checkpoint preceded the corrected review and final completion below.
+
+[Decision6527515040](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6527515040)
+authorizes only exact matched evidence and original unexpired authority. Preflight
+started16:13:46Z; the original23:23:19Z expiry was valid and was not changed.
+[Review5715171332](https://github.com/sonvhse06072/personal-coding-platform/pull/844#pullrequestreview-5715171332)
+was submitted16:12:08Z for the exact head, source, baseline, job, branch and CI.
+Task delivery acknowledgement15:47:38.481322Z -> independent review is1469.518678s;
+review -> first preflight observation is98s. Durable finalization time remains Unknown
+because no finalization request was made. These wall intervals are separate from
+developer execution64.303379s and do not establish unattended performance.
+
+**BLOCKER:** the review's declared hash is
+`ae80bf174bd41bbe115a49467c3cf405db9b9292fc564817da1a4e1996b2f9e5`;
+result diff, execution checkpoint and verified-tree proof all retain
+`e7129de0abd18887749302f8b0f47d7f4a7990f38b12e043fccf364626a431e5`.
+Accepted `fullpath_pm_review.py` requires exact equality and would reject this as
+`pm_fullpath_review_report_binding_invalid`. No endpoint was invoked to test rejection.
+
+| Class | Result | Finalization-session evidence |
+| --- | --- | --- |
+| SOURCE | PASS | Accepted `repo.py:diff_state` hashes stripped `git diff <base> --binary`; `_git` strips stdout. Review binding check requires that durable hash; no application change |
+| FIXTURE | PASS, diagnostic only | Credential-free Git diff on an isolated fetched copy of exact PR844. `--binary` gives5378B/hash e7129de0; adding `--full-index` gives5576B/hash ae80bf17. Replacing only three40-character index header pairs by their seven-character prefixes makes the strings identical. No tests, model or original-workspace Git commands |
+| PHYSICAL/LIVE | PASS, read-only | Original manifest/activation hashes, full11-table/3-sequence snapshots, all A/B/C file bytes/metadata, clean N canonical, worker image/config fingerprints, running observer/frontend, exact open PR/head and both previous four-suite CI runs match |
+| LIVE | BLOCKED | Review hash comparison fails before restore/start. Zero worker starts, authority restores, readiness/finalize POSTs, model/test/delivery invocations; no new fixture containers |
+| LIVE | PASS, retained state only | Trusted Chromium HTTPS200, eight snapshot polls and offline/reconnect; no TLS bypass, cookies or forms. C still blocked/ci_success, running2/active3, observed execution64.303379s and counters1/2/1. A/B remain completed with fixed timers. C completed/terminal timer is NOT TESTED because finalization did not occur |
+
+Remote exact commit has sole parent N and tree
+`a4d7c0d222c04aa478dd1dbdb30807fe3899b038`, matching retained proof.
+The diagnosis explains the formatting mismatch; it does not authorize changing
+expected evidence or substituting tree equality for the required review binding.
+The independent reviewer must reconcile and issue corrected structured acceptance
+with durable hash e7129de0…; PM must identify the review permitted for continuation.
+No ordinary Owner interaction or authentication was requested in this closeout.
+
+Private `finalization/diagnosis.json`, `remote-diff-diagnostic.json`, browser snapshot
+and screenshot preserve this bounded diagnosis. The isolated bare diagnostic repository
+is retained under the same private directory; it has no running process or service.
+Fresh consistent backup at16:18:36Z is227744B:
+`ac7d6632d4e202905f9debf73e552bd2da09459f249be0b21b21f1d90ca36f41`.
+Its archive listing passes. Full afterimage SHA256 remains
+`14bdf9c95158e342c485f978ad638b9207d37e1fe4e16634874c021dae04d71b`,
+identical to the pinned post-shutdown snapshot. Proof, usage, counters, receipts,
+lease, events and sequences are unchanged. Original manifest c6e2d80f… and disabled
+activation9e4c8b0d… are unchanged. All three workers and prior fixtures remain stopped;
+only the exact DB/observer/HTTPS above stay running. No data cleanup or authority renewal.
+
+## Corrected-review execution — GitHub CI read failure, 2026-10-30 17:14 UTC
+
+This historical zero-POST attempt preceded the explicitly authorized replacement below.
+
+[Decision6528029320](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6528029320)
+replaces only the review ID with5715474340 and correct durable hash e7129de0… .
+PM documentation through28254e6292cf31e2b21502a1be7a964e5481733f was fetched and
+fast-forwarded before operational work; critique and episode-index files are preserved.
+No source/proof/config/guard change was made.
+
+Fresh full DB/sequence, A/B/C workspace bytes/metadata, authority/manifest, source/image/
+config, task head and CI checks passed at17:09:55Z. Initial GitHub jobs reads timed out;
+subsequent read-only paginated responses confirmed all four actual test steps. No
+cached observation substituted for fresh preflight. Authority9e4c8b0d… was restored
+by no-overwrite rename/fsync at17:10:21Z. Exact Runtimef55b55de and Executorfc32fd0a
+started17:10:22Z; Router stayed stopped.
+
+Supported explicit readiness passed17:10:36Z, including proof/ownership/authority/
+corrected review/CI. Provider, Router and fresh admission were not applicable.
+ONE supported `finalize --review-id 5715474340 --json` (without --apply) was invoked
+17:10:56.636979Z. It returned17:11:10.148627Z, rc2, elapsed13.511667s,
+`outcome=blocked`, **mutation_requests=0**. Its internal read-only readiness hit:
+
+```text
+GitHub HTTP502 Bad Gateway
+/repos/sonvhse06072/personal-coding-platform/actions/runs/41083619406/jobs?filter=latest&per_page=100
+authority_review_ci: unknown / unobserved
+```
+
+Executor's retained traceback identifies `httpx.HTTPStatusError` at that GET. Runtime
+logs contain only readiness GETs, no PM-finalization POST. Full DB/sequence snapshots
+before/after the command are identical. A bounded read-only readiness at17:12:26Z
+passed again with no blockers. This is a transient external read failure, separate
+from the earlier PM diff-representation error; it is not evidence of task/proof drift.
+
+The instruction explicitly limited this continuation to ONE finalize command. The
+operator requested clarification for one replacement command after proving zero
+POSTs; no replacement or direct endpoint bypass was attempted, and silence is not
+approval. No model, mandatory-test, delivery replay, admission, rebuild or merge.
+
+| Class | Result | Corrected-review continuation evidence |
+| --- | --- | --- |
+| SOURCE | PASS | Exact N unchanged; PM documentation through28254e6 preserved; readiness/finalize code inspected without edits |
+| FIXTURE | NOT RUN | No new fixture/model/test invocation or container; prior isolated hash reproduction remains history |
+| PHYSICAL | PASS | Same named images/configs/workers, original authority bytes/expiry; Router stopped; scoped Runtime/Executor start/stop only |
+| LIVE | PASS | Fresh preflight and explicit finalization readiness; later diagnostic readiness recovered; all full afterimages unchanged |
+| LIVE | BLOCKED | Single finalize command stopped on GitHub502 before POST. Completed/accepted, delivered3/released3 did not occur |
+| LIVE | PASS, retained state only | Trusted tokenless browser, eight polls and reconnect, no TLS bypass/cookie/form; C still blocked/running2/active3, counters1/2/1; A/B fixed completed timers. Completed C timer remains NOT TESTED |
+
+At17:14:48.920216Z the two workers were stopped and authority disabled intact again.
+Router remained stopped, DB8b72a8d3/observerda6c4347/HTTPS601c552b stay running.
+Full A/B/C workspace metadata and all11-table/3-sequence rows match the original.
+Fresh consistent227744B backup SHA256:
+`2bef98ddb0fe357852da0f7ac74a3cba3f4c670f0ab0002165e74d285f2f152e`.
+Archive listing PASS. Afterimage SHA256 remains
+`14bdf9c95158e342c485f978ad638b9207d37e1fe4e16634874c021dae04d71b`.
+Original manifestc6e2d80f… and disabled activation9e4c8b0d… are unchanged.
+Private evidence is under `finalization-v2/`: preflight, review/CI reads, restore/start
+intents, readiness/finalize stdout and return receipts, bounded worker logs, diagnostic
+readiness, retained backup, shutdown receipt and browser observations.
+
+Corrected review arrived16:36:35Z,1467s after the superseded review16:12:08Z; corrected
+review to fresh-preflight completion is2000.030111s. These are observed wall waits,
+not measured PM/Owner active work. Operator preparation/diagnosis time is separate
+from developer execution64.303379s. Original delivery requested0 interactive actions;
+this continuation requested1 command-scope clarification,0 authentication actions.
+Owner active minutes and successful-finalization duration remain Unknown. The PM
+formatting failure, corrective review delay and GitHub read failure remain in the
+measurement record; no unattended-operation or benchmark claim.
+
+## Final LIVE closeout — 2026-10-30 17:21 UTC
+
+After the evidenced zero-POST GitHub failure, Owner answered **"Authorize one replacement
+command"** in this same session (recorded17:19:58.413268Z). This resolved only the
+one-command boundary, with same job/review/source/images/proof/authority and expiry.
+No automatic permission or renewal was inferred. Fresh complete original preflight
+passed17:20:04.588215Z. Same activation bytes were restored by no-overwrite rename/fsync;
+same Runtime/Executor started17:20:18Z, Router remained stopped. Supported explicit
+readiness passed17:20:29Z.
+
+The replacement supported command, without --apply, ran17:20:40.742343Z–17:20:51.076708Z,
+**10.334385s**, rc0, `outcome=completed`, **mutation_requests=1**. It received the completed
+response then reconciled through supported read-only status. No uncertain write was
+retried. Across the two corrected-review finalize commands, total finalization POSTs=1.
+
+Actual durable update17:20:51.000085Z:
+
+- Job4d0f1df36be0b9b971c18b04af870950 **completed / pm_review_accepted**,
+  execution verified, delivery ci_success, `delivery_finalized=true`, review5715474340.
+- Receipt **delivered/gen3**; original owned lease **released/gen3**.
+- Counters **1/2/1**, full checkpoint/progress/verification/diff/proof and usage unchanged.
+  Result changes limited to accepted review, finalization/acceptance, refreshed observed
+  CI and merge-eligibility evidence; job error cleared as the accepted path specifies.
+- A/B full rows and receipts, all A/B/C workspace bytes/metadata, unrelated tables and
+  all sequences unchanged. No model, verification, delivery, admission, build or merge.
+
+Actual trusted browser checks before and after scoped shutdown each passed eight polls
+and offline/reconnect. C is completed, delivered3/released3. Its terminal elapsed value
+is fixed **63.870698983s**; observed developer execution **64.303379268s** is a separate
+field, not the same measurement. A/B fixed timers remain67.801641624/47.582929316s.
+Original usage/counters and provenance remain; reported cost Unknown, estimated0.
+Tokenless loopback_readonly remains at https://localhost:18443/dashboard, no TLS bypass,
+cookies or login forms. C's `assisted_recovery=false` describes its ordinary execution;
+it does not erase operator/PM work or the explicit replacement-command authorization.
+
+Runtime/Executor stopped and authority disabled intact at **17:21:47.054848Z**. Router
+never started. Same exact worker IDs above are exited; only DB/observer/HTTPS are running.
+All13 earlier fixtures remain stopped; no new fixture container was created. Original
+manifestc6e2d80f… and activation9e4c8b0d… are preserved, expiry23:23:19Z unchanged.
+No further authority restoration or task is authorized by this completed closeout.
+
+| Final retained artifact | SHA256 |
+| --- | --- |
+| Consistent post-finalization backup228687B, archive listing PASS | `5c216ef406d6c008bdc3426cf774f96ab394a0a6697aaf43f312e46756fc58cf` |
+| Full completed DB afterimages, unchanged across shutdown | `e7ffb472d502d454813f12f6651215a1bb6a5cd618e6561d439b494f7b04b75b` |
+| Original disabled activation, unchanged | `9e4c8b0da409fa91befd448ddbe53c9c00bc4fa08c403ff0a4ee2c4f0e52407c` |
+| Original preflight manifest, retained unchanged | `c6e2d80f10b2737ef1dd078bfc63689db7fd57660b6fbff86cf15dbf01c3084e` |
+
+Private `finalization-v2/replacement/` retains authorization, fresh preflight, restore/
+start intents, readiness, exactly-once command intent/stdout/return, shutdown/backup and
+post-shutdown browser evidence. `finalization-v2/after-check.json` records complete
+preservation assertions; before/after snapshots remain private. Prior failed commands,
+backups and raw evidence are retained, never overwritten.
+
+Durable acceptance occurred2656.000085s after corrected review,4123.000085s after the
+original wrong-format review, and5592.518763s after delivery acknowledgement. These are
+wall waits, not additive Owner/PM active work. The1467s review-correction interval and
+GitHub502/diagnosis/clarification overhead remain visible. Original delivery requested0
+interactive actions; finalization requested1 clarification and received1 explicit
+replacement authorization; authentication interactions0. Owner active minutes Unknown.
+No unattended operation or benchmark claim; PM's critique/index remain unchanged.
+
+SOURCE: application N unchanged, PM docs preserved. FIXTURE: no new test/container run
+for finalization. PHYSICAL: same workers/authority, exact scoped shutdown and backup.
+LIVE: supported readiness/one actual finalization POST, full afterimage preservation,
+real completed dashboard, fixed timers/reconnect PASS. Evidence-PR local/hosted tests
+are separate from C's unchanged mandatory verification counters.
+
+## Executed finalization packet — audit reference, do not replay
+
+The procedure below is retained as an audit reference. Corrected review5715474340 and
+the explicit replacement-command authorization have now produced durable completion.
+Do not restore authority or rerun it. PM's next action is final evidence/CI review and
+eligible task/evidence merge ordering; Developer performs no merge or new task.
+
+1. Independently review issue843, exact PR844 head871e50454faf37a0e1b551c8d2981d22ad57f797,
+   its real verification/four-suite CI and this evidence PR. Keep main N and task/evidence
+   PRs unmerged during finalization. PM owns acceptance, review identity and merge order.
+2. Issue a finite non-model finalization decision naming the exact independent structured
+   review ID, job, source/images/config and `finalization-manifest.private.json` digest
+   above. Revalidate full post-shutdown DB/workspace/config afterimages and exact open
+   task PR/head/CI. Original ordinary activation must be unchanged and unexpired.
+   After23:23:19Z no automatic renewal/restoration is permitted; PM must resolve authority.
+3. Under that later decision only, restore the exact disabled activation with no-overwrite
+   rename into `/home/sonvh/pcp-local-adoption825-v4/instance/config/pcp-local-activation.json`,
+   verify SHA256 above and fsync. No old claim/held permit. Start only Runtime/Executor
+   IDs above as needed; finalization excludes provider, Router and fresh-admission work.
+4. Use the accepted container-resident operator. The commands below were executed under
+   the recorded decisions; `PCP_PM_REVIEW_ID` was5715474340. Do not repeat them:
+
+```sh
+(
+  set -eu
+  : "${PCP_PM_REVIEW_ID:?Exact independent accepted review ID required}"
+  cd /home/sonvh/pcp-ordinary-c-n-live
+  sh scripts/pcp-local-session.sh f55b55ded4f2479214233244def8b34e9da36b93e057cdf4c3eda75149df7e14 \
+    readiness --job-id 4d0f1df36be0b9b971c18b04af870950 \
+    --phase finalization --review-id "$PCP_PM_REVIEW_ID" --json
+  # Only readiness success reaches the single supported finalization request.
+  sh scripts/pcp-local-session.sh f55b55ded4f2479214233244def8b34e9da36b93e057cdf4c3eda75149df7e14 \
+    finalize --job-id 4d0f1df36be0b9b971c18b04af870950 \
+    --review-id "$PCP_PM_REVIEW_ID" --json
+)
+```
+
+No `--apply` on finalize. Reconcile uncertain acknowledgement using supported status
+and finalization readiness, never blind POST retry. Require completed/pm_review_accepted,
+finalized=true, delivered/gen3, released/gen3 with unchanged proof/usage/counters1/2/1.
+Capture backup/afterimages/browser terminal state; stop exact workers and disable
+same authority intact. Preserve DB/observer/HTTPS and all history. No model/test/
+delivery replay, task reset, new admission, rebuild or self-merge.
+
+Rollback is scoped: retain old source/images/config/observer pair; never restore an
+old DB over new ownership or reactivate an expired/consumed permit. Observer rollback
+must restore its exact previous binding before any worker authority is enabled.
+Legacy config restoration is an explicit stopped-writer/absent-destination operation,
+not a workaround for a new guard failure. No global network/VPN/DNS change.
+
+## Evidence PR validation
+
+Local evidence-document verification after successful final closeout:
+**1755 passed in21.78s**; stable continuity headings,
+standing stop markers and the GitHub/Runtime reconciliation reminder are preserved.
+Packet shell blocks passed syntax validation; documentation checks did not replay finalization.
+`git diff --check` passed. The exact evidence-PR head/hosted results belong to the PR
+receipt; task844's four-suite CI above is separate. No protected repository path or
+application source was changed by this evidence branch.
