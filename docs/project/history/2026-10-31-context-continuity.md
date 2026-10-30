@@ -2,7 +2,7 @@
 
 Authority: [WO6529510627](https://github.com/sonvhse06072/personal-coding-platform/issues/604#issuecomment-6529510627).
 Engineering anchor `0e8065b6bce08bed1e6b027a67fdf52d6ae848ca`; branch
-`ai/604-context-continuity-v1`. One writer, no agents, model calls or live adoption.
+`ai/604-context-continuity-v1` ([Draft PR846](https://github.com/sonvhse06072/personal-coding-platform/pull/846)). One writer, no agents, model calls or live adoption.
 This is the bounded ordinary-local slice; #604 stays open, #595 remains HOLD and
 G2 programme activation/remaining dependencies are unchanged.
 

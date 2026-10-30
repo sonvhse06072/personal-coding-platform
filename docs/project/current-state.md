@@ -3,7 +3,7 @@
 ## #604 context continuity SOURCE/FIXTURE candidate — 2026-10-31
 
 [WO6529510627](https://github.com/sonvhse06072/personal-coding-platform/issues/604#issuecomment-6529510627)
-authorizes one bounded ordinary-local implementation on `ai/604-context-continuity-v1`,
+authorizes one bounded ordinary-local implementation on `ai/604-context-continuity-v1` ([Draft PR846](https://github.com/sonvhse06072/personal-coding-platform/pull/846)),
 anchored at **0e8065b6bce08bed1e6b027a67fdf52d6ae848ca**. Evidence PR845 is merged;
 postmerge [CI41100344082](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41100344082)
 passed all four executed suites before implementation. This corrects the old premerge index.

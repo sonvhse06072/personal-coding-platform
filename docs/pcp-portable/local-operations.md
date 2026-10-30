@@ -3,7 +3,7 @@
 ## #604 context continuity candidate — SOURCE/FIXTURE only
 
 [WO6529510627](https://github.com/sonvhse06072/personal-coding-platform/issues/604#issuecomment-6529510627),
-branch `ai/604-context-continuity-v1`, starts from merged evidence845/0e8065b6;
+branch `ai/604-context-continuity-v1` ([Draft PR846](https://github.com/sonvhse06072/personal-coding-platform/pull/846)), starts from merged evidence845/0e8065b6;
 main CI41100344082 passed four executed suites before edits.
 [One WorkReport and future rollout packet](../project/history/2026-10-31-context-continuity.md)
 is the durable checklist for this slice:
