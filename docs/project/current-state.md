@@ -3,7 +3,21 @@
 Mutable continuity only; approved authority and current GitHub/Runtime evidence
 take precedence over older handoffs.
 
-## R2 held #837 recovered to real Draft PR and exact-head CI
+## Current finalization checkpoint — metadata mismatch, no mutation
+
+[PM6524074680](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524074680)
+accepted exact task review5712944983 and authorized finalization. Revalidation found
+only B `.git` directory mtime/ctime changed from1793364984255976286 to1793365011103344837;
+every file identity/byte, all DB rows, proof, counters, configs and bindings match.
+The timestamp falls during the previous read-only delivery-readiness Git check, but
+no filesystem event independently proves that cause. Frozen expectations were preserved.
+No authority restoration, worker start or finalization POST occurred. B remains
+verified/ci_success, running2/active2/counters1/2/1; A unchanged, dashboard available.
+[Exact delta, retained backup, diagnosis and single PM proposal](history/2026-10-30-held837-finalization.md)
+are the current handoff. Only an explicit disposition of this measured delta permits
+dependent continuation; no renewal/rewrite/reset/replay. Original expiryOct31 08Z.
+
+## Prior recovery result — task now independently accepted
 
 Main remains accepted R2 `f02d9a14af33d9efeb99aa573d776aab3119dec1` (PR840;
 [postmerge41028562169](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41028562169), four executed suites PASS).
@@ -84,18 +98,12 @@ Closure does not mark untested capabilities PASS or authorize resource cleanup.
 
 ## Immediate next safe actions
 
-Independent PM reviews exact task PR841 and this same evidence PR838, then publishes
-structured acceptance and a separate non-model finalization decision if eligible.
-The [execution packet](history/2026-10-30-r2-held837-execution.md) supplies exact
-identity, future supported readiness/finalize sequence, reconciliation and shutdown.
-Do not restore authority, start workers, rerun verification/delivery, merge, finalize,
-reset ownership or admit another task under this completed execution session.
-
-No live execution blocker remains; PM acceptance/finalization is pending. Known optional
-PostgreSQL supervision failures remain historical; VPN ON and second-machine LAN are
-NOT TESTED. This is assisted recovery, not a clean unattended run or benchmark PASS.
-One initiating Owner decision relay was observed; zero additional interactive steps;
-Owner active minutes and historical intervention total remain unknown.
+PM accepted task PR841 via review5712944983. Resolve only the exact metadata delta
+in the current checkpoint above before any restoration/start/finalization. All other
+bindings and original expiry remain unchanged. The proposed narrow disposition is
+not permission to proceed; do not refresh expected proof or replay verification/delivery.
+Known optional PostgreSQL failures and VPN/LAN unknowns remain historical. Owner active
+minutes unknown; this remains assisted recovery, not an unattended benchmark.
 
 ## Standing safety boundary
 
@@ -111,5 +119,6 @@ Receipt running2/lease active2/counters1/2/1; no finalization. A fullrow/workspa
 Only one verify-heldPOST; actual Q13+13; no model/admission/replay/rebuild.
 Scoped3workers stopped, authority disabled intact; original expiryOct31 08Z.
 Dashboard remains up/tokenless/trusted/reconnectPASS; assisted recovery, not benchmark.
-SAME PR838 carries execution evidence; both PRs unmerged pending independent PM.
+SAME PR838 carries evidence; task accepted by review5712944983, both PRs unmerged.
+Finalization preflight blocked only on exact .git directory timestamps; no mutation.
 <!-- PCP:CONTINUITY:END -->

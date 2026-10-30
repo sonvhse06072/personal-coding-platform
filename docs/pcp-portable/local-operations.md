@@ -1,6 +1,20 @@
 # Supported readiness, recovery and dashboard adoption
 
-## R2 held #837 LIVE result — 2026-10-30
+## Current finalization checkpoint — metadata mismatch, no mutation
+
+[PM6524074680](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524074680)
+accepted exact task review5712944983 and authorized finalization. Revalidation found
+only B `.git` directory mtime/ctime changed from1793364984255976286 to1793365011103344837;
+every file identity/byte, all DB rows, proof, counters, configs and bindings match.
+The timestamp falls during the previous read-only delivery-readiness Git check, but
+no filesystem event independently proves that cause. Frozen expectations were preserved.
+No authority restoration, worker start or finalization POST occurred. B remains
+verified/ci_success, running2/active2/counters1/2/1; A unchanged, dashboard available.
+[Exact delta, retained backup, diagnosis and single PM proposal](../project/history/2026-10-30-held837-finalization.md)
+are the current handoff. Only an explicit disposition of this measured delta permits
+dependent continuation; no renewal/rewrite/reset/replay. Original expiryOct31 08Z.
+
+## Prior R2 held #837 LIVE recovery result — 2026-10-30
 
 [Independent PM execution6522058894](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6522058894)
 approved the EXACT prepared bytes from PR838 head ef37d11e22744841e65f846293eb6de0e15e900d.
