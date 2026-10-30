@@ -3,7 +3,7 @@ No credentials or inference. The sole writer is the actual pinned CLI exec
 process, with a loopback synthetic SSE transport; never run in a live worker.
 The imported adapter must be the candidate version (record any source overlay).
 """
-import asyncio,json,os,pathlib,subprocess,tempfile,threading,ctypes,struct
+import asyncio,json,os,pathlib,subprocess,tempfile,threading,ctypes,struct,hashlib
 from http.server import BaseHTTPRequestHandler,HTTPServer
 class Handler(BaseHTTPRequestHandler):
  def log_message(self,*a): pass
@@ -17,6 +17,10 @@ threading.Thread(target=server.serve_forever,daemon=True).start()
 from unittest.mock import patch
 from app.adapters import codex
 from app.shell import CommandResult
+version=subprocess.check_output(['codex','--version'],text=True).strip()
+assert version=='codex-cli 0.160.0',version
+print(json.dumps(dict(label='provenance',cli=version,
+ adapter_sha256=hashlib.sha256(pathlib.Path(codex.__file__).read_bytes()).hexdigest())),flush=True)
 root=pathlib.Path(tempfile.mkdtemp(prefix='pcp-config-probe-'))
 for label,prevent in [('red',False),('green',True),('repeat',True),('next',True)]:
  home=root/('red' if label=='red' else 'green')/'home';ws=root/('green' if label=='repeat' else label)/'workspace';home.mkdir(parents=True,exist_ok=True);ws.mkdir(parents=True,exist_ok=True)
@@ -62,3 +66,16 @@ for label,prevent in [('red',False),('green',True),('repeat',True),('next',True)
  assert config.exists() is (not prevent)
  if not prevent:assert any(e['name']=='config.toml' for e in events)
  print(json.dumps(dict(label=label,code=r.returncode,pid=process.pid,file_events=events,config=config.read_text() if config.exists() else None,stdout=r.stdout[-1500:],stderr=r.stderr[-1500:])),flush=True)
+ if not prevent:
+  # The actual producer's retained config, not a hand-shaped dictionary. A
+  # fresh ordinary invocation in this SAME home must stop before subprocess.
+  prior=(config.read_bytes(),config.stat().st_mtime_ns,config.stat().st_ctime_ns)
+  next_workspace=root/'retained-next';next_workspace.mkdir()
+  captured.clear()
+  with patch.dict(os.environ,env,clear=True),patch.object(codex,'run_command',capture):
+   try:
+    asyncio.run(codex.CodexAdapter('fixture','low').run(workspace=next_workspace,prompt='no inference',mode='execute',timeout=30,isolate_workspace=True))
+   except ValueError as exc:assert str(exc)=='pcp_local_unreviewed_codex_configuration'
+   else:raise AssertionError('retained configuration bypassed the strict guard')
+  assert not captured and (config.read_bytes(),config.stat().st_mtime_ns,config.stat().st_ctime_ns)==prior
+  print(json.dumps(dict(label='retained_next',outcome='BLOCKED_BEFORE_SUBPROCESS',config_preserved=True)),flush=True)

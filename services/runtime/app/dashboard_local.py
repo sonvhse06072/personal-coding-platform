@@ -123,7 +123,11 @@ def job_projection(row, receipt, lease, events, clock):
         pr_url=f'https://github.com/{REPOSITORY}/pull/{number}' if type(number) is int else None,
         receipt={k:receipt.get(k) for k in ('state','generation','job_id')} if receipt else None,
         lease={k:lease.get(k) for k in ('state','generation','owner_job_id')} if lease else None,
-        assisted_recovery=bool(cp.get('pcp_local_assisted_recovery')),
+        # Retain legacy salvage evidence and the supported recovery producers.
+        # This reports assistance, not successful verification or acceptance.
+        assisted_recovery=any(bool(cp.get(k)) for k in (
+            'pcp_local_assisted_recovery', 'pcp_local_claim_recovery',
+            'pcp_local_held_verification', 'pcp_local_recovery')),
         timeline=timeline,
         milestones=dict(admission=bool(binding), execution=progress.get('model_calls'),
             verification=verification.get('passed'), delivery=delivery.get('state'),

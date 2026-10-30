@@ -21,16 +21,31 @@ def sparse_verified(tmp_path):
     (root / 'home').mkdir()
     v = make_verified(source, legacy_ddev=True)
     v.git('branch', '-m', 'main')  # A canonical source is not already the task branch.
+    path = Path(produce_workspace(root, v.task)['workspace'])
+    assert not (path/'.ddev').exists() and (source/'.ddev/config.yaml').is_file()
+    (path/'new.py').write_bytes((source/'new.py').read_bytes())
+    # Construct verified A only AFTER the real producer has created its metadata.
+    v.path = path
+    v.git = lambda *args: recovery.git(path, *args)
+    v.store.row['workspace'] = str(path)
+    proof = v.store.row['checkpoint']['pcp_local_execution']
+    proof['verified_tree'] = recovery.verified_tree(path, v.task, proof['diff'])
+    return v
+
+
+def produce_workspace(root, task):
+    """Use the real Executor handler for each distinct synthetic job."""
+    source = root / "sources/personal-coding-platform"
     registry = root / 'projects.yml'
     registry.write_text(yaml.safe_dump({'projects': {'pcp-local': {
-        'path': str(source), 'repository': v.task.repository,
+        'path': str(source), 'repository': task.repository,
         'registration_status': 'approved', 'base_branch': 'main',
         'runtime': {'workspace_mode': 'isolated_clone', 'developer_permission_mode': 'bounded'},
         'ddev': {'enabled': True},
     }}}))
-    activation = dict(root=str(root), issue_number=v.task.issue_number,
-        body_sha256=v.task.body_sha256, base_sha=v.task.base_sha,
-        baseline_revision=v.task.baseline_revision)
+    activation = dict(root=str(root), issue_number=task.issue_number,
+        body_sha256=task.body_sha256, base_sha=task.base_sha,
+        baseline_revision=task.baseline_revision)
     executor = Path(__file__).resolve().parents[2] / 'ddev-executor'
     program = '''
 import json,sys
@@ -48,16 +63,7 @@ print(json.dumps(result))
         CODING_WORKSPACES_ROOT=str(root/'workspaces'),
         PLATFORM_INTERNAL_TOKEN='synthetic-executor-token')
     result = subprocess.run([sys.executable, '-I', '-B', '-c', program, str(executor)],
-        input=json.dumps(dict(activation=activation, job_id=stable_job_id(v.task))),
+        input=json.dumps(dict(activation=activation, job_id=stable_job_id(task))),
         cwd=root, env=env, text=True, capture_output=True, timeout=30)
     assert result.returncode == 0, result.stderr
-    path = Path(json.loads(result.stdout)['workspace'])
-    assert not (path/'.ddev').exists() and (source/'.ddev/config.yaml').is_file()
-    (path/'new.py').write_bytes((source/'new.py').read_bytes())
-    # Construct verified A only AFTER the real producer has created its metadata.
-    v.path = path
-    v.git = lambda *args: recovery.git(path, *args)
-    v.store.row['workspace'] = str(path)
-    proof = v.store.row['checkpoint']['pcp_local_execution']
-    proof['verified_tree'] = recovery.verified_tree(path, v.task, proof['diff'])
-    return v
+    return json.loads(result.stdout)

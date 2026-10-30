@@ -118,6 +118,13 @@ async def collect_readiness(engine, readers=None, *, phase="admission", job_id=N
 
     async def provider():
         from .quota_telemetry import CodexQuotaCollector
+        from .adapters.codex import require_isolated_provider_configuration
+        # The account collector starts app-server, which also consumes user
+        # configuration. The parallel trusted-source check cannot fence it.
+        try:
+            require_isolated_provider_configuration()
+        except (ValueError, OSError) as exc:
+            raise TaskStop('pcp_local_unreviewed_codex_configuration') from exc
         await CodexQuotaCollector().collect()  # Account metadata only, no inference.
 
 
@@ -196,7 +203,7 @@ async def operation_readiness(engine, *, phase, job_id, review_id=None, readers=
     from types import SimpleNamespace
     from .pcp_local_task_queue import require
     from .pcp_local_worker_loop import TrustedReaders, stable_job_id
-    from .pcp_local_recovery import reconcile_commit, verified_tree
+    from .pcp_local_recovery import reconcile_commit, inspect_verified_tree
     checks = []
     view = dict(phase=phase, ready=False, authorized=False, checks=checks, blockers=[],
                 model_invocations=0, job_registrations=0)
@@ -272,7 +279,7 @@ async def operation_readiness(engine, *, phase, job_id, review_id=None, readers=
             and 'pcp_local_retirement' not in cp, 'pcp_local_unverified_job')
         task = SimpleNamespace(base_sha=row['source_commit'])
         if execution['state'] == 'verified_uncommitted':
-            require(phase == 'delivery' and verified_tree(path, task, execution['diff']) == execution['verified_tree'], 'pcp_local_verified_tree_changed')
+            require(phase == 'delivery' and inspect_verified_tree(row, task) == execution['verified_tree'], 'pcp_local_verified_tree_changed')
         else:
             commit = reconcile_commit(row, task)
             require(commit == execution.get('commit', commit), 'pcp_local_commit_changed')

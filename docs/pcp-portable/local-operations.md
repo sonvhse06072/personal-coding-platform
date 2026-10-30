@@ -1,27 +1,28 @@
 # Supported readiness, recovery and dashboard adoption
 
-## PM merge handoff — 2026-10-30
+## Current ordinary next-task preparation — 2026-10-30
 
-PM accepted finalization and released the repository R2 hold in
-[decision6524809874](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524809874).
-Task PR841 merged as `9add83dc9a8ebe693c87a27f9925ce4a2d9a0dc9`.
-This documentation branch includes that main commit; subsequent documentation merge
-commits may advance repository HEAD. Resolve current main from GitHub rather than
-treating the historical R2 SHA below as current repository HEAD.
+[PM closeout6524940358](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524940358)
+closed #837 and merged task841/evidence838. Engineering anchor72d71a80 has successful
+four-suite postmerge41069779438; resolve current GitHub main separately. Deployed
+Runtime/Executor R2 and canonical/task/verifier Q are unchanged. B is completed,
+delivered/gen3, released/gen2, counters1/2/1; A and retired824 retained. Workers and
+authorities remain OFF; existing DB/observer/HTTPS remain available.
 
-The deployed Runtime/Executor remain R2; canonical/task/verifier remain Q.
-B is completed/PM accepted, delivered/gen3, released/gen2, counters1/2/1.
-All workers and execution authorities remain OFF; DB/observer/HTTPS remain available.
-No source/image/baseline adoption, next admission or permit renewal follows from merge.
-Earlier pending-state sections below are dated campaign history, not instructions to
-repeat recovery or finalization. Frozen reports and manifests remain unchanged.
+[WO6525074512](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6525074512)
+is SOURCE/FIXTURE only. Its [single WorkReport and execution packet](../project/history/2026-10-30-ordinary-next-task.md)
+cover the complete ordinary lifecycle, Git metadata repair, config producer/readiness
+boundary, honest assistance projection, useful three-path task C and measurement.
+The candidate has not been adopted. The preserved legacy provider config still needs
+an exact future disposition; a fresh successful fixture is not permission to archive
+it. No new credential custody, old-permit reuse or automatic quarantine is allowed.
 
-Immediate remaining work: complete evidence PR838 review/merge and postmerge CI;
-then plan the next bounded repeatability/measurement work against the roadmap.
-Do not claim unattended operation, benchmark PASS, or resolved PostgreSQL/VPN/LAN/
-observer-label limitations.
+The current packet supersedes next-task instructions in dated campaign sections
+below. They remain history and do not authorize replay. Frozen reports/manifests are
+unchanged. In particular, old "unmerged", "main remains R2" and pending-PM statements
+below describe their recording time, not the current repository state.
 
-## Finalization completed — 2026-10-30 13:58 UTC
+## Historical finalization completed — 2026-10-30 13:58 UTC
 
 [PM6524535370](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524535370)
 accepted only the measured preflight directory timestamps under

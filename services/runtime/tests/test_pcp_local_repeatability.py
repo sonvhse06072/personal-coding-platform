@@ -104,15 +104,18 @@ def test_phase_blocks_drift_without_refreshing_evidence(lifecycle,monkeypatch,dr
 @pytest.fixture
 def ordinary_B(lifecycle,monkeypatch,tmp_path):
     """Real ordinary queue/registrar and all eight readers; transport facts are doubles."""
+    return ordinary_successor(lifecycle, monkeypatch, tmp_path)
+
+
+def ordinary_successor(s, monkeypatch, tmp_path):
     import hashlib,json
     from app import config, engine as engine_module, pcp_local_task_queue as q
     from test_pcp_local_worker_loop import fixture
-    s=lifecycle
     asyncio.run(s.engine.finalize_pcp_local_review(SimpleNamespace(**view(s)['identity'])))
     retained=s.db.get(s.id);old_receipt,old_lease=ownership(s.db)
     _,issue,_,facts=fixture();issue=deepcopy(issue)
     payload=json.loads(issue['body'].split(q.MARKER,1)[1]);payload['base_sha']=s.v.task.base_sha
-    payload['key']='fixture-ordinary-b'
+    payload['key']=f'fixture-ordinary-{s.v.task.issue_number+1}'
     issue.update(number=s.v.task.issue_number+1,main_sha=s.v.task.base_sha,
         html_url=f'https://github.com/{q.REPOSITORY}/issues/{s.v.task.issue_number+1}',
         body=q.MARKER+'\n'+json.dumps(payload))
@@ -134,7 +137,7 @@ def ordinary_B(lifecycle,monkeypatch,tmp_path):
     monkeypatch.setattr(w.TrustedReaders,'authority',TRUSTED_AUTHORITY)
     for key in ('GITHUB_TOKEN','GH_TOKEN','GITHUB_DELIVERY_TOKEN','PCP_LOCAL_CLAIM_RECOVERY_ENABLED'):
         monkeypatch.delenv(key,raising=False)
-    home=tmp_path/'synthetic-home';home.mkdir();monkeypatch.setenv('HOME',str(home));monkeypatch.setenv('CODEX_HOME',str(home/'codex'))
+    home=tmp_path/'synthetic-home';home.mkdir(exist_ok=True);monkeypatch.setenv('HOME',str(home));monkeypatch.setenv('CODEX_HOME',str(home/'codex'))
     real_exists=w.Path.exists
     monkeypatch.setattr(w.Path,'exists',lambda p:False if str(p)=='/var/run/docker.sock' else real_exists(p))
     async def quota(*a):return [dict(provider='openai',state_key='provider:openai',authoritative=True,available=True)]
@@ -174,7 +177,8 @@ def ordinary_B(lifecycle,monkeypatch,tmp_path):
         return await fresh.dispatch_pcp_local_once(issue_number=task.issue_number,
             github=github,readers=observed.readers())
     return SimpleNamespace(s=s,task=task,id=w.stable_job_id(task),engine=engine,reader=reader,
-        dispatch=dispatch,restarted=restarted,reads=reads,queue=queue,retained=retained,old_receipt=old_receipt,old_lease=old_lease)
+        dispatch=dispatch,restarted=restarted,reads=reads,queue=queue,retained=retained,old_receipt=old_receipt,old_lease=old_lease,
+        activation=activation, project=project)
 
 
 def test_retained_A_to_ordinary_B_all_eight_readers_and_registrar(ordinary_B):
@@ -540,3 +544,13 @@ def test_already_delivered_mutation_cannot_increment_or_publish(lifecycle,monkey
     with pytest.raises(TaskStop,match='pcp_local_delivery_already_complete'):
         asyncio.run(s.engine.deliver_pcp_local(s.id,reader,s.v.task))
     assert s.db.get(s.id)==before and ownership(s.db)==owners
+
+
+def test_readiness_and_finalizer_preserve_full_workspace_preimage(lifecycle):
+    s = lifecycle
+    before = w._retained_snapshot(s.path)
+    result = view(s)
+    assert result['ready'], result
+    assert w._retained_snapshot(s.path) == before
+    asyncio.run(s.engine.finalize_pcp_local_review(SimpleNamespace(**result['identity'])))
+    assert w._retained_snapshot(s.path) == before

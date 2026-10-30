@@ -72,6 +72,10 @@ def test_plan_real_registration_preserves_receipt_and_all_counters(recovery):
     assert r.plan(s.db,s.permit.load())['state']=='unregistered' and snapshot(s)==before
     result=register(s);after=snapshot(s)
     assert result['state']=='registered_not_started' and register(s)==result and snapshot(s)==after
+    from app.dashboard_local import build_local_snapshot
+    view = build_local_snapshot(s.db)
+    assert view['observation'] == 'available' and view['jobs'][0]['assisted_recovery'] is True
+    assert snapshot(s) == after
     assert after['cp_pcp_local_source_receipts']==before['cp_pcp_local_source_receipts']
     assert after['cp_project_leases']==[] and len(after['cp_jobs'])==len(after['cp_job_events'])==1
     job=after['cp_jobs'][0]['value'];audit=job['checkpoint'][r.KEY]

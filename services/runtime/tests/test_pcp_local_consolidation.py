@@ -51,7 +51,8 @@ def test_schema_readiness_collects_missing_tables_without_writes():
     assert all(s.startswith(('SET TRANSACTION','SELECT')) for s in db.trace)
 
 
-def test_readiness_aggregates_no_identity_schema_provider_and_switches(monkeypatch):
+def test_readiness_aggregates_no_identity_schema_provider_and_switches(monkeypatch, tmp_path):
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "provider"))
     from app import shell, quota_telemetry
     calls=[]
     async def command(*a,**kw):calls.append('identity');return SimpleNamespace(returncode=128,stdout='')
@@ -186,7 +187,8 @@ def test_real_checkpoint_cas_preserves_receipt_lease_counters(verified,change):
     assert before==(current['progress'],receipt,lease)
 
 
-def test_readiness_success_uses_existing_admission_checks_without_mutation(monkeypatch):
+def test_readiness_success_uses_existing_admission_checks_without_mutation(monkeypatch, tmp_path):
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "provider"))
     from app import shell, quota_telemetry
     import importlib.metadata
     task,issue,_,facts=fixture()
@@ -310,3 +312,32 @@ def test_candidate_tree_preserves_sparse_source_and_real_index(verified):
     assert v.git('show', tree+':.ddev/config.yaml')=='name: retained'
     commit=commit_changes(v.path,'candidate')
     assert v.git('rev-parse',commit+'^{tree}')==tree
+
+
+def test_admission_readiness_rejects_config_before_quota_subprocess(monkeypatch, tmp_path):
+    from app import quota_telemetry, shell
+    home = tmp_path / 'provider'; home.mkdir()
+    (home / 'config.toml').write_text('[mcp_servers.untrusted]\ncommand="forbidden"\n')
+    monkeypatch.setenv('CODEX_HOME', str(home))
+    calls = []
+    async def quota(*args): calls.append('configuration-sensitive CLI'); return []
+    async def command(*args, **kwargs):
+        return SimpleNamespace(returncode=0, stdout='PCP Local <pcp-local@localhost>')
+    async def source(): raise TaskStop('pcp_local_source_revoked')
+    monkeypatch.setattr(quota_telemetry.CodexQuotaCollector, 'collect', quota)
+    monkeypatch.setattr(shell, 'run_command', command)
+    view = asyncio.run(readiness.collect_readiness(
+        SimpleNamespace(storage=Schema()), SimpleNamespace(source=source)))
+    assert calls == []
+    assert any(b['component'] == 'provider' and b['code'] == 'pcp_local_unreviewed_codex_configuration'
+               for b in view['blockers'])
+
+
+def test_uncommitted_read_inspection_never_changes_index_or_object_metadata(verified):
+    from app.pcp_local_worker_loop import _retained_snapshot
+    v = verified
+    before = _retained_snapshot(v.path)
+    expected = deepcopy(v.store.row['checkpoint']['pcp_local_execution']['verified_tree'])
+    assert recovery.inspect_verified_tree(v.store.row, v.task) == expected
+    assert recovery.inspect_verified_tree(v.store.row, v.task) == expected
+    assert _retained_snapshot(v.path) == before

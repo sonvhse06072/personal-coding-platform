@@ -18,8 +18,9 @@ from test_pcp_local_runtime_dispatch import setup, claimed
 
 
 @pytest.fixture
-def operational(setup, monkeypatch):
+def operational(setup, monkeypatch, tmp_path):
     s = setup
+    monkeypatch.setenv('CODEX_HOME', str(tmp_path / 'synthetic-provider'))
     activation = {key: getattr(s.task, key) for key in (
         'issue_number', 'body_sha256', 'base_sha', 'baseline_revision',
         'baseline_source_commit')}
