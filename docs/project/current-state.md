@@ -2,8 +2,9 @@
 
 ## C843 completed and retained — 2026-10-30 17:21 UTC
 
-Accepted N **85e415f1f53c8129056e2f04fb99a9b964b89609** (PR842) remains main;
-canonical/task/verifier N. No source/image/baseline replacement occurred in closeout.
+Deployed release/canonical/task/verifier remain accepted N **85e415f1f53c8129056e2f04fb99a9b964b89609** (PR842).
+Task PR844 merged at **3fc1dec52d9b3ec643883334404684b79c585ae6** after durable finalization;
+repository progress does not change the deployed baseline. No source/image/baseline replacement occurred in closeout.
 [Original WO6526365770](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6526365770)
 authorized C843; [corrected finalization6528029320](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6528029320)
 binds independent [review5715474340](https://github.com/sonvhse06072/personal-coding-platform/pull/844#pullrequestreview-5715474340).
@@ -17,7 +18,7 @@ supersedes earlier pending-state packets. Immutable baseline
 `pcp-local-ordinary-c-85e415f1f53c-20261030` and historical revisions remain unchanged.
 
 - C [issue843](https://github.com/sonvhse06072/personal-coding-platform/issues/843),
-  job `4d0f1df36be0b9b971c18b04af870950`, [Draft task PR844](https://github.com/sonvhse06072/personal-coding-platform/pull/844),
+  job `4d0f1df36be0b9b971c18b04af870950`, [Merged task PR844](https://github.com/sonvhse06072/personal-coding-platform/pull/844),
   head `871e50454faf37a0e1b551c8d2981d22ad57f797`.
 - **completed / pm_review_accepted**, execution verified, delivery ci_success,
   finalized=true, receipt **delivered/gen3**, lease **released/gen3**.
@@ -65,8 +66,9 @@ Unknown remains distinct from estimated0. No ignored TLS errors or injected cook
 
 ## Immediate next safe actions
 
-PM reviews this final evidence and required exact-head CI, then owns eligible task/evidence
-merge ordering. Both PRs remain Draft/unmerged; main stays N. Finalization is complete:
+Task PR844 is merged; PM reviews the reconciled evidence PR845 and exact-head CI before
+its merge. Resolve current GitHub main and PR state rather than treating this premerge
+record as a future SHA. The main-at-N hold ended after durable finalization. Finalization is complete:
 do not repeat readiness/finalize as a mutating workflow, restore authority, replay work,
 renew the expiry or start another task. Any later execution needs its own decision.
 Keep DB/observer/HTTPS available and all historical/rollback assets retained.
@@ -89,10 +91,10 @@ approved campaigns. Workers/authority are OFF. No production/foreign workload/Ch
 changes, global networking, force push, cleanup/prune, paid service or Developer merge.
 
 <!-- PCP:CONTINUITY:START -->
-Accepted N85e415f1; C843 Draft844/head871e5045, taskCI41083619406 four executed PASS.
+Deployed N85e415f1; C843 PR844 merged3fc1dec5, original head871e5045/taskCI41083619406 preserved.
 Job4d0f1df36be0b9b971c18b04af870950 completed/pm_review_accepted, finalizedtrue, delivered3/released3, counters1/2/1.
 CorrectedPM5715474340; zero-POST GitHub502 command then Owner-authorized replacement, one actual finalization POST.
-Workers/authority OFF17:21:47Z; original expiry2026-10-30T23:23:19Z unchanged. No replay/new task/merge.
+Workers/authority OFF17:21:47Z; original expiry2026-10-30T23:23:19Z unchanged. No replay/new task/deployment.
 A/B full evidence preserved; retired824 untouched. DB/N observer/HTTPS retained; terminal dashboard/reconnect PASS.
 Same evidence PR845/ai/835-ordinary-c-n-live includes PM28254e6 documents; PM owns final review and merge ordering.
 <!-- PCP:CONTINUITY:END -->
