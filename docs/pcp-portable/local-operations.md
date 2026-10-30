@@ -1,26 +1,35 @@
 # Supported readiness, recovery and dashboard adoption
 
-## Current ordinary next-task preparation — 2026-10-30
+## Current ordinary C843 LIVE delivery — 2026-10-30
 
-[PM closeout6524940358](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524940358)
-closed #837 and merged task841/evidence838. Engineering anchor72d71a80 has successful
-four-suite postmerge41069779438; resolve current GitHub main separately. Deployed
-Runtime/Executor R2 and canonical/task/verifier Q are unchanged. B is completed,
-delivered/gen3, released/gen2, counters1/2/1; A and retired824 retained. Workers and
-authorities remain OFF; existing DB/observer/HTTPS remain available.
+[WO6526365770](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6526365770)
+executed accepted N `85e415f1f53c8129056e2f04fb99a9b964b89609`; original session15:23:19Z–23:23:19Z.
+[Complete execution evidence and pinned next PM packet](../project/history/2026-10-30-ordinary-c843-live.md)
+records backup/rehearsal, exact-N Runtime build, unchanged Executor/Router input reuse,
+actual-image/no-overlay probes, full A/B snapshot cost, exact one-time config archive,
+fresh baseline/issue843, worker/observer adoption and all eight production readers.
 
-[WO6525074512](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6525074512)
-is SOURCE/FIXTURE only. Its [single WorkReport and execution packet](../project/history/2026-10-30-ordinary-next-task.md)
-cover the complete ordinary lifecycle, Git metadata repair, config producer/readiness
-boundary, honest assistance projection, useful three-path task C and measurement.
-The candidate has not been adopted. The preserved legacy provider config still needs
-an exact future disposition; a fresh successful fixture is not permission to archive
-it. No new credential custody, old-permit reuse or automatic quarantine is allowed.
+Task [Draft PR844](https://github.com/sonvhse06072/personal-coding-platform/pull/844),
+head871e50454faf37a0e1b551c8d2981d22ad57f797, four executed
+[CI41083619406](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41083619406) PASS.
+Job4d0f1df36be0b9b971c18b04af870950 is verified/ci_success, blocked awaiting independent
+PM, finalized=false, receipt running2/lease active3, counters1/2/1; mandatory17+17.
+No manual task solution, replay, old permit or Developer acceptance/merge.
 
-The current packet supersedes next-task instructions in dated campaign sections
-below. They remain history and do not authorize replay. Frozen reports/manifests are
-unchanged. In particular, old "unmerged", "main remains R2" and pending-PM statements
-below describe their recording time, not the current repository state.
+A/B complete rows/workspace/proof/counters unchanged; old resources/configs/credentials
+and retired824 preserved. Shared lease advances normally to C; historical B release
+remains evidence. Workersf55b55de/fc32fd0a/f03edbd9 stopped15:51:47Z, ordinary authority
+disabled intact with unchanged23:23:19Z expiry. All fixtures stopped. DB8b72a8d3,
+N observerda6c4347 and HTTPS601c552b run. Full IDs, hashes, shutdown/rollback and
+conditional supported finalization commands are in the report.
+
+https://localhost:18443/dashboard remains trusted HTTPS/tokenless/local/read-only.
+Actual browser A/B assistance and fixed timers, C ordinary usage/PM wait and reconnect
+PASS. No login required; no TLS bypass/cookie injection. Cost observation Unknown
+remains separate from estimated0. No VPN parity/unattended/benchmark claim; #595 HOLD.
+Evidence branch `ai/835-ordinary-c-n-live` requires normal PR/CI and independent PM.
+Dated sections below remain history; their premerge/deployment statements do not
+supersede this receipt or authorize replay.
 
 ## Historical finalization completed — 2026-10-30 13:58 UTC
 

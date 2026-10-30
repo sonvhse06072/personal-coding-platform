@@ -1,36 +1,43 @@
 # PCP Local consolidation execution checklist
 
-## Current ordinary next-task preparation — 2026-10-30
+## Current ordinary C843 LIVE delivery — 2026-10-30
 
-[PM closeout6524940358](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524940358)
-closed #837 and merged task841/evidence838. Engineering anchor72d71a80 has successful
-four-suite postmerge41069779438; resolve current GitHub main separately. Deployed
-Runtime/Executor R2 and canonical/task/verifier Q are unchanged. B is completed,
-delivered/gen3, released/gen2, counters1/2/1; A and retired824 retained. Workers and
-authorities remain OFF; existing DB/observer/HTTPS remain available.
+[WO6526365770](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6526365770)
+executed accepted N `85e415f1f53c8129056e2f04fb99a9b964b89609`; original session15:23:19Z–23:23:19Z.
+[Complete execution evidence and pinned next PM packet](../project/history/2026-10-30-ordinary-c843-live.md)
+records backup/rehearsal, exact-N Runtime build, unchanged Executor/Router input reuse,
+actual-image/no-overlay probes, full A/B snapshot cost, exact one-time config archive,
+fresh baseline/issue843, worker/observer adoption and all eight production readers.
 
-[WO6525074512](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6525074512)
-is SOURCE/FIXTURE only. Its [single WorkReport and execution packet](../project/history/2026-10-30-ordinary-next-task.md)
-cover the complete ordinary lifecycle, Git metadata repair, config producer/readiness
-boundary, honest assistance projection, useful three-path task C and measurement.
-The candidate has not been adopted. The preserved legacy provider config still needs
-an exact future disposition; a fresh successful fixture is not permission to archive
-it. No new credential custody, old-permit reuse or automatic quarantine is allowed.
+Task [Draft PR844](https://github.com/sonvhse06072/personal-coding-platform/pull/844),
+head871e50454faf37a0e1b551c8d2981d22ad57f797, four executed
+[CI41083619406](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41083619406) PASS.
+Job4d0f1df36be0b9b971c18b04af870950 is verified/ci_success, blocked awaiting independent
+PM, finalized=false, receipt running2/lease active3, counters1/2/1; mandatory17+17.
+No manual task solution, replay, old permit or Developer acceptance/merge.
 
-- [x] Read full authority/accepted reports; reconcile merged841/838 and completed837.
-- [x] Reproduce read-only Git metadata writes; inspect validated scratch copies instead.
-- [x] Reproduce retained CLI config STOP and clean repeated/next-workspace lifecycle.
-- [x] Fence readiness account subprocess before inherited config; keep strict guard.
-- [x] Real isolated Git/PostgreSQL ordinary A -> B -> C, preserved earlier evidence.
-- [x] Durable recovery recording -> observer assistance projection regressions.
-- [x] Define useful task C without implementing it; measurement and rollout packet.
-- [ ] Independent PM acceptance and new execution decision (not source-session work).
-- [ ] Exact legacy-config disposition, accepted-image physical checks and fresh authority.
-- [ ] Live ordinary C, independent review/finalization and any controlled comparison.
+A/B complete rows/workspace/proof/counters unchanged; old resources/configs/credentials
+and retired824 preserved. Shared lease advances normally to C; historical B release
+remains evidence. Workersf55b55de/fc32fd0a/f03edbd9 stopped15:51:47Z, ordinary authority
+disabled intact with unchanged23:23:19Z expiry. All fixtures stopped. DB8b72a8d3,
+N observerda6c4347 and HTTPS601c552b run. Full IDs, hashes, shutdown/rollback and
+conditional supported finalization commands are in the report.
 
-Final source/fixture verification and stopped inventory are in the WorkReport; exact
-final-head hosted CI belongs to the Draft PR. All dated campaign checklists below
-are historical, including premerge wording. No historical approval authorizes replay.
+https://localhost:18443/dashboard remains trusted HTTPS/tokenless/local/read-only.
+Actual browser A/B assistance and fixed timers, C ordinary usage/PM wait and reconnect
+PASS. No login required; no TLS bypass/cookie injection. Cost observation Unknown
+remains separate from estimated0. No VPN parity/unattended/benchmark claim; #595 HOLD.
+Evidence branch `ai/835-ordinary-c-n-live` requires normal PR/CI and independent PM.
+Dated sections below remain history; their premerge/deployment statements do not
+supersede this receipt or authorize replay.
+
+- [x] Exact N custody, backup/real restore, service inputs/pins and serial necessary build.
+- [x] Built-image config/isolation/producer/verifier and actual retained-set capacity.
+- [x] Authorized one-time archive, fresh immutable baseline/task, scoped credentials.
+- [x] Aggregate/eight-reader readiness, ordinary C, mandatory tests, real Draft/CI.
+- [x] Trusted tokenless N observer, actual A/B/C evidence and reconnect.
+- [x] Afterimages/backups, workers/fixtures stopped, authority disabled intact.
+- [ ] Independent exact-head PM review/finalization; delivered3/released3 not claimed.
 
 ## Historical finalization completed — 2026-10-30 13:58 UTC
 

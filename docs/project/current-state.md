@@ -1,87 +1,79 @@
 # Current Project State and Handoff
 
-## Ordinary next-task SOURCE/FIXTURE candidate — 2026-10-30
+## Ordinary C843 delivered; independent PM pending — 2026-10-30
 
-[WorkOrder6525074512](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6525074512)
-authorizes one source/fixture session on `ai/835-ordinary-next-task`, engineering
-anchor `72d71a80fa5a0ec2a742fb9ff1d15a3709cc632f`. This is not live execution authority.
-[WorkReport, lifecycle matrix and consolidated rollout packet](history/2026-10-30-ordinary-next-task.md)
-contain regressions, evidence boundaries, fixture inventory, proposed task C and
-measurement. The Draft PR records its exact head and actually executed hosted CI.
-Independent PM review and a separate integrated execution decision remain required.
+[WO6526365770](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6526365770)
+authorized one integrated N adoption/ordinary task session,15:23:19Z–23:23:19Z.
+Accepted N **85e415f1f53c8129056e2f04fb99a9b964b89609** (PR842), postmerge41078980568
+executed all four suites. Main remains N. Evidence branch `ai/835-ordinary-c-n-live`;
+its Draft PR records exact final head/required CI. No Developer merge/finalization.
+Reconcile actual GitHub/Runtime state when resuming; historical handoffs may be stale.
 
-The candidate inspects Git proof in a validated disposable snapshot, fences the
-provider readiness subprocess before inherited configuration can load, and derives
-observer assistance from actual recovery checkpoints. Strict filesystem/config/
-index/proof/ownership checks remain. Real isolated Git/PostgreSQL fixtures exercise
-finalized A -> ordinary B -> ordinary C; CLI/container probes use synthetic transport,
-zero inference and no live mounts. These are not deployment or unattended results.
+[Execution report, exact resources/hashes and next PM packet](history/2026-10-30-ordinary-c843-live.md)
+supersedes proposal-only wording in the [accepted source packet](history/2026-10-30-ordinary-next-task.md).
+One serial Runtime/verifier N build; ExecutorR2/RouterS reused with complete unchanged
+inputs and honest labels. Canonical/task/verifier N and fresh immutable local baseline
+`pcp-local-ordinary-c-85e415f1f53c-20261030`; prior revisions unchanged.
+The approved exact legacy config was archived once, credentials retained and no config
+recreated. No old permit was used. Real restored PG/Git/CLI/image/security/capacity
+checks and aggregate/eight-reader admission readiness passed.
 
-**Remaining installed-state boundary:** the preserved legacy provider config still
-blocks ordinary admission. The packet proposes one exact legacy-config disposition
-followed by the already accepted no-config-write producer; no exemption, automatic
-quarantine, credential migration or new authority is implemented. Actual new-image
-adoption, whole-retained-set capacity, credentials, VPN/LAN and live C remain untested.
+- C [issue843](https://github.com/sonvhse06072/personal-coding-platform/issues/843),
+  job `4d0f1df36be0b9b971c18b04af870950`, [Draft task PR844](https://github.com/sonvhse06072/personal-coding-platform/pull/844),
+  head `871e50454faf37a0e1b551c8d2981d22ad57f797`.
+- One supported ordinary request, acknowledged;1 model /2 mandatory phases /1 delivery.
+  Actual17+17 tests; [exact-head41083619406](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41083619406)
+  four executed suites PASS. Operator did not implement task C.
+- **blocked / awaiting_independent_pm_review**, execution verified, ci_success,
+  finalized=false; receipt running/gen2, lease active/gen3. No acceptance claimed.
+  Delivery readiness dependencies PASS and correctly refuses duplicate publication.
 
-## Retained accepted state
+## Retained historical evidence and deployed observer
 
-[PM closeout6524940358](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524940358)
-supersedes stale premerge handoffs: task841 merged `9add83dc9a8ebe693c87a27f9925ce4a2d9a0dc9`
-(postmerge41069252064); evidence838 merged at engineering anchor72d71a80
-(postmerge41069779438). Both postmerge runs executed all four suites successfully.
-Resolve current GitHub main when resuming; this document need not name its own
-future merge SHA. GitHub/Runtime evidence takes precedence over historical handoffs.
+A831 completed/PM accepted, delivered3/historical released1; B837 completed/PM accepted,
+delivered3/historical released2. Both original full rows, receipts, workspaces/proofs,
+usage and counters1/2/1 are unchanged. Shared lease now belongs to C gen3; B's historical
+release evidence remains. V3/#824 retains cancelled/incomplete_not_delivered,
+blocked3/released1 and assisted commit7b3833bd; no V3 mutation. Earlier configs,
+credentials, workers, images, backups and disabled authorities remain intact.
 
-Deployed Runtime/Executor remain R2 `f02d9a14af33d9efeb99aa573d776aab3119dec1`;
-canonical/task/verifier remain Q `e3b19700dffcc3e2eae45bdde78230819466c9e1`.
-Repository progress does not advance the approved baseline or these image bindings.
+At15:51:47Z Runtimef55b55de, Executorfc32fd0a and Routerf03edbd9 were stopped;
+fresh ordinary activation disabled intact, expiry23:23:19Z unchanged. All fixtures
+stopped, volumes/data retained. Only DB8b72a8d3, new N observerda6c4347 and
+HTTPS601c552b remain running. Full IDs and scoped commands are in the report.
 
-- B837 `ccb57d244cfd1fc069a98fd8c17734a1`: completed/pm_review_accepted,
-  finalized=true, review5712944983, delivered/gen3, released/gen2, counters1/2/1.
-- A831 `a8851f89dd3e4e582c697ec1fe6d8cdb`: completed/PM accepted, delivered/gen3,
-  historical released/gen1; original workspace/proof/counters1/2/1 retained.
-- V3/#824 `51a11aa704362d84ae5c7b70e85741f1`: cancelled/incomplete_not_delivered,
-  blocked/gen3, released/gen1. Assisted commit7b3833bd and original verification,
-  usage/error remain evidence of incomplete work; no task PR was published.
-
-[Finalization report](history/2026-10-30-held837-finalization.md) retains exact IDs,
-hashes and measured LIVE evidence. Runtime/Executor/Router are stopped and authority
-disabled intact. DB/observer/HTTPS stay available at https://localhost:18443/dashboard,
-tokenless loopback_readonly. No live state was mutated or browser test repeated by
-this source session. The observer's old assistance label awaits reviewed adoption.
-Both configs, credentials, backups, old manifests and all historical assets remain.
-
-## Active PCP issues and owner attention
-
-#835 is the active engineering index; #837 is closed/completed and task841/evidence838
-are merged. #593 roadmap and #764 portable-local epic remain; #595 benchmark remains
-HOLD. #665/#822/#831 are closed for their completed scope. #493/#512 consolidated
-into #600/#602; superseded #524/#752/#777/#782/#786/#795/#800/#808/#815/#824 are history.
-Issue closure does not establish untested capability or authorize cleanup.
-Known unrelated optional PostgreSQL regressions remain explicitly tracked in the
-WorkReport. No claim of VPN parity, unattended operation or benchmark PASS.
+**https://localhost:18443/dashboard** — tokenless `loopback_readonly`; no login/cookie.
+Trusted browser polling/reconnect and denials passed; A/B assistance=true and fixed
+timers, C assistance=false and correct PM wait/usage. Reported cost Unknown is distinct
+from estimated0. No TLS bypass. Old observer/frontend remain stopped rollback assets.
 
 ## Immediate next safe actions
 
-PM reviews the single candidate, exact-head CI and complete packet together.
-Resolve the legacy-config disposition, exact accepted source/image/baseline/task
-bindings and finite execution authority before any later physical action. No old
-held/claim permit is reusable for C. Keep all live workers stopped meanwhile.
-Task C is a useful evidence-input ambiguity repair proposal, not implemented here.
+PM independently reviews exact task844 plus this evidence candidate and owns the
+non-model finalization decision. Follow the report's pinned afterimage/authority
+packet; require the exact review and still-valid original authority before startup.
+Then supported finalization readiness -> one finalize command (no --apply), read-only
+uncertainty reconciliation, afterimages/backup and scoped shutdown. No test/model/
+delivery replay, new admission, receipt reset, automatic renewal or Developer merge.
+
+## Active PCP issues and owner attention
+
+#835 remains the campaign index; #595 stays HOLD. This is one repeatability task,
+not unattended operation or a benchmark. No direct-Codex comparison, VPN ON/OFF parity
+or LAN validation; Owner active minutes Unknown, interactive requests this session0.
+Known unrelated optional PostgreSQL failures remain in the accepted source report.
+SOURCE/FIXTURE/PHYSICAL/LIVE evidence are explicitly separated in the execution report.
 
 ## Standing safety boundary
 
 `A3B2_IMAGE_BUILD=STOP` and `CODEX_LIVE=STOP` remain effective outside exact finite
-approved campaigns. This source WorkOrder permits only its isolated fixtures.
-No live worker start, permit restoration, baseline activation, task creation/admission,
-provider login/inference, publication/finalization, merge or deployment. No force
-push, new paid service, Chợ Nhạc/global networking/foreign workload changes.
+approved campaigns. Current workers/authority are OFF. Standing boundaries: no production/foreign
+workload/Chợ Nhạc changes, global networking, force push, cleanup/prune or new paid service.
 
 <!-- PCP:CONTINUITY:START -->
-Task841/evidence838 merged; issue837 completed. Source anchor72d71a80, deployed R2/taskQ distinct.
-WO6525074512 source/fixture candidate ai/835-ordinary-next-task; PM acceptance pending.
-Git inspection/config probe/observer provenance repairs; ordinary A-B-C isolated evidence only.
-Legacy config disposition and accepted release/baseline/task/authority remain prerequisites.
-A831/B837/retired824 retained; workers/authority OFF; DB/observer/HTTPS unchanged.
-No unattended or benchmark PASS; see 2026-10-30-ordinary-next-task WorkReport.
+Accepted N85e415f1; WO6526365770 ordinary C843 delivered Draft844/head871e5045, CI41083619406 four executed PASS.
+Job4d0f1df36be0b9b971c18b04af870950 verified/ci_success, pending independent PM, running2/active3, counters1/2/1.
+Workers/authority OFF15:51:47Z; expiry2026-10-30T23:23:19Z unchanged. No self-finalization/merge.
+A/B full evidence preserved; retired824 untouched. DB/N observer/HTTPS retained; tokenless localhost18443.
+Evidence branch ai/835-ordinary-c-n-live; see2026-10-30-ordinary-c843-live for exact IDs/hashes/PM packet.
 <!-- PCP:CONTINUITY:END -->
