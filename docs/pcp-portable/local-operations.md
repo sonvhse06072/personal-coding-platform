@@ -5,13 +5,31 @@ change to the Constitution, approved baseline or retained V3 authority.
 GH-815 and GH-822 are implemented together because the view must explain the
 new durable verification/commit/publication states. No new service/state store.
 
+## #835 sparse repair and next Q gate
+
+[PM6513180988](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6513180988)
+commissions the separate SOURCE/fixture repair from P. The
+[repair WorkReport and complete Q rollout/rebinding packet](../project/history/2026-10-30-sparse-producer-repair.md)
+supersede the earlier proposal below: actual producer sparse A now passes retained
+validation and ordinary B through Git/PG/eight readers in fixtures. Local/worktree
+config, exact non-cone patterns, index flags, filesystem and original full preimages
+are validated; proof runs in private scratch with clean environment, never rewriting
+A. Unsupported/unsafe forms remain blocked. No source-binding or recovery bypass.
+
+After independent review/merge/postmerge CI, PM records actual Q and revises SAME
+issue837 pre-admission with a new immutable Q baseline and derived job ID. Recheck
+zero durable/remote837 artifacts first. Archive old P proposal; preserve budget and
+expiry. Build Runtime/verifier Q; reuse other services only with truthful unchanged
+input proof and ordinary checks. Full actual-image/readiness gates remain mandatory.
+No activation, new auth, live workers or deployment in this source repair session.
+
 ## #837 adopted workers retained; readiness blocks admission
 
 [Execution PM6508510691](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6508510691)
 and [config disposition PM6512775494](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6512775494)
 keep application/main P=a4b273afb3af4b9b4fd23412a547230df0b93011 and SAME
 [Draft PR838](https://github.com/sonvhse06072/personal-coding-platform/pull/838).
-[Actual WorkReport and one continuation packet](../project/history/2026-10-30-adoption837.md)
+[PR838 WorkReport at its reviewed evidence head](https://github.com/sonvhse06072/personal-coding-platform/blob/426a819f4ddf669d05c9dd4bf0577425066a67cd/docs/project/history/2026-10-30-adoption837.md)
 is authoritative for measured identities/hashes, not fresh execution permission.
 
 Exact 118-byte Codex config hash304afa3e was quarantined once by no-clobber rename
@@ -69,9 +87,9 @@ docker --host unix:///var/run/docker.sock stop --time 20 \
   8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8
 ```
 
-## #835 candidate operator interface and adoption gate
+## Accepted P operator interface (future Q uses the same supported commands)
 
-Engineering anchor34c0e9ac99a057eef0a08a15f0c3828b3c1addfa follows merged833/834;
+Historical #835 engineering anchor34c0e9ac99a057eef0a08a15f0c3828b3c1addfa follows merged833/834;
 [PM6502481811](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6502481811)
 closed the stable-R hold. #835 source/fixtures do not deploy the candidate, start
 workers, restore permits or activate a baseline. The commands below become usable
@@ -126,9 +144,8 @@ repeat admission/model/delivery to repair an uncertain response. The older
 `app.pcp_local_task_queue` recovery client is retained for its separately authorized
 exact permit flow; #835 does not revive it for completed831.
 
-**Sequential-task adoption gate:** accepted P's ordinary A→B admission is
-FIXTURE PASS for its tested repository shape. The actual adoption above exposed
-a missing sparse-producer case; LIVE A→B remains blocked. The
+**Sequential-task adoption gate:** the candidate's ordinary A→B admission is
+FIXTURE PASS; the installed workers are unchanged and cannot use it yet. The
 PCP-only adapter pins CLI0.160.0, selects its named read-restricted profile and
 keeps network disabled. It grants current-job writes and immutable toolchain reads;
 provider authentication remains with the existing CLI transport, hidden from tool
