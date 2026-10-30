@@ -3,19 +3,32 @@
 Mutable continuity only; approved authority and current GitHub/Runtime evidence
 take precedence over older handoffs.
 
-## Current finalization checkpoint — metadata mismatch, no mutation
+## Finalization completed — 2026-10-30 13:58 UTC
 
-[PM6524074680](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524074680)
-accepted exact task review5712944983 and authorized finalization. Revalidation found
-only B `.git` directory mtime/ctime changed from1793364984255976286 to1793365011103344837;
-every file identity/byte, all DB rows, proof, counters, configs and bindings match.
-The timestamp falls during the previous read-only delivery-readiness Git check, but
-no filesystem event independently proves that cause. Frozen expectations were preserved.
-No authority restoration, worker start or finalization POST occurred. B remains
-verified/ci_success, running2/active2/counters1/2/1; A unchanged, dashboard available.
-[Exact delta, retained backup, diagnosis and single PM proposal](history/2026-10-30-held837-finalization.md)
-are the current handoff. Only an explicit disposition of this measured delta permits
-dependent continuation; no renewal/rewrite/reset/replay. Original expiryOct31 08Z.
+[PM6524535370](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524535370)
+accepted only the measured preflight directory timestamps under
+[finalization6524074680](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6524074680).
+Both snapshots, original manifest/permit bytes and Oct31 08Z expiry were preserved.
+Revalidation passed with no additional drift. Only Runtime and Executor started;
+Router was not required by finalization and stayed stopped. Supported readiness PASS,
+then ONE `session finalize` WITHOUT `--apply`, HTTP200, read-only reconciliation PASS.
+
+B837 `ccb57d244cfd1fc069a98fd8c17734a1` is **completed / pm_review_accepted**,
+`delivery_finalized=true`, review5712944983, receipt **delivered/gen3**, lease
+**released/gen2**. Complete checkpoint/proof, verification, original usage and progress
+are unchanged; counters **1 model / 2 tests / 1 delivery**. No model, mandatory-test,
+delivery replay, admission, rebuild, guard change, timestamp reset or merge.
+
+At13:59:09 UTC the two workers were stopped, authority disabled intact again; all three
+approved workers are stopped. DB/observer/HTTPS remain running. A831 full row/workspace
+unchanged; retired824/V3 and historical resources untouched. Main remains R2; task,
+canonical and verifier Q; PR841 headb29bc64d and PR838 remain unmerged for PM.
+
+LIVE dashboard https://localhost:18443/dashboard remains tokenless loopback_readonly.
+After shutdown, normal-TLS Chromium showed both jobs completed, B delivered3/released2,
+fixed47.582929s across seven200 polls and offline/reconnect, no cookies/forms/page errors.
+Known old assisted_recovery label limitation remains; this is assisted recovery, not
+an unattended benchmark. PM now reviews finalization evidence and owns merge ordering.
 
 ## Prior recovery result — task now independently accepted
 
@@ -39,37 +52,26 @@ executed all four suites: structure1754/1 skipped, Runtime2724/313 skipped,
 Executor808, Router132 passed. No model/admission/test replay or second publication.
 
 [Integrated execution WorkReport, hashes, resources, time and next packet](history/2026-10-30-r2-held837-execution.md)
-is current. [Preparation report](history/2026-10-30-r2-held837-preparation.md) remains
+records prior recovery. [Preparation report](history/2026-10-30-r2-held837-preparation.md) remains
 historical FIXTURE/PHYSICAL evidence; its prior pending-PM language is superseded.
 SAME evidence PR838 remains unmerged on `ai/835-adoption837-live`.
 
-## Retained LIVE state — verified and published, awaiting independent PM
+## Retained LIVE state — completed / PM accepted
 
-B837 `ccb57d244cfd1fc069a98fd8c17734a1`: blocked / execution verified /
-ci_success / `awaiting_independent_pm_review`, finalized=false. Receipt running/gen2,
-lease active/gen2, same full ownership rows; counters1 model/2 mandatory test runs/
-1 delivery. Original model usage and all identity fields preserved. Durable execution
-47.582929s includes5.944246s recorded held verification, not hours waiting for review.
-The held audit marker `verified_uncommitted` records the successful verification stage;
-current commit/delivery proof supersedes it for observation and does not permit replay.
+B837 `ccb57d244cfd1fc069a98fd8c17734a1`: completed/pm_review_accepted,
+finalized=true, review5712944983, delivered/gen3, released/gen2, counters1/2/1.
+Full checkpoint/proof/usage/progress unchanged, fixed execution47.582929s.
+[Final afterimages and operational lessons](history/2026-10-30-held837-finalization.md)
+are current; previous recovery and initial metadata-stop reports are historical.
 
 A831 `a8851f89dd3e4e582c697ec1fe6d8cdb`: completed/PM accepted, delivered/gen3,
 full row/workspace/proof/counters1/2/1 unchanged. A released/gen1 lease is historical;
-current lease belongs to B gen2. Retired824/V3 and foreign resources untouched.
+B gen2 lease is now released. Retired824/V3 and foreign resources untouched.
 Both Codex configs, scoped credentials, backups and original authorities preserved.
 
-At12:57:18 UTC Runtimee5d8a338, Executor9cba24de and Routerf03edbd9 were stopped;
-approved permit and held original disabled intact under private execution/disabled-authority.
-No ordinary/claim/held authority remains installed. Original deadline is
-**2026-10-31T08:00:00Z**; no renewal. Old workers and verifier/rehearsal containers retained.
-84 owned containers:3 running/81 stopped. DB8b72a8d3, observer5d6b3e9b and
-frontendd22a5bf0 remain available with unchanged bindings.
-
-**https://localhost:18443/dashboard — tokenless loopback_readonly.** Fresh trusted
-Chromium after shutdown passed seven200 polls and offline/reconnect; no cookies,
-login forms or page errors. It shows A completed, B verified/ci_success awaiting PM,
-stable47.582929s, reported cost Unknown distinct from estimated0. The unchanged old
-observer's assisted_recovery=false does not establish an unattended run.
+Runtime and Executor stopped13:59:09 UTC; Router never started for finalization.
+Authority disabled intact, original expiryOct31 08Z; DB/observer/HTTPS remain available.
+Terminal dashboard trusted-TLS polling/reconnect PASS, both jobs completed, fixed B47.583s.
 
 ## Original #824 — retired incomplete, never delivered
 
@@ -91,19 +93,18 @@ Retirement resolves only this reservation; it does not authorize another job.
 
 [Completed backlog audit6517035681](https://github.com/sonvhse06072/personal-coding-platform/issues/593#issuecomment-6517035681):
 35 open issues reduced to20. #593 roadmap, #764 portable-local epic, #835 current
-engineering and #837 held task are canonical; #595 benchmark remains HOLD.
+engineering and #837 completed task are canonical; #595 benchmark remains HOLD.
 #665/#822/#831 closed for completed scope; #493/#512 consolidated into #600/#602.
 Superseded #524/#752/#777/#782/#786/#795/#800/#808/#815/#824 remain historical.
 Closure does not mark untested capabilities PASS or authorize resource cleanup.
 
 ## Immediate next safe actions
 
-PM accepted task PR841 via review5712944983. Resolve only the exact metadata delta
-in the current checkpoint above before any restoration/start/finalization. All other
-bindings and original expiry remain unchanged. The proposed narrow disposition is
-not permission to proceed; do not refresh expected proof or replay verification/delivery.
-Known optional PostgreSQL failures and VPN/LAN unknowns remain historical. Owner active
-minutes unknown; this remains assisted recovery, not an unattended benchmark.
+Independent PM reviews finalization evidence in SAME PR838 and handles eligible
+PR841/PR838 merge ordering, postmerge checks and release of the R2 hold. No operator
+merge or implicit new admission. Keep workers stopped and authority disabled.
+No remaining finalization blocker. Optional PostgreSQL/VPN/LAN and observer-label
+limitations remain; this assisted recovery is not a clean unattended benchmark.
 
 ## Standing safety boundary
 
@@ -113,12 +114,10 @@ Chợ Nhạc and foreign resources stay untouched. No force push or new paid ser
 Historical #752 remains archived; #595 benchmark remains HOLD.
 
 <!-- PCP:CONTINUITY:START -->
-Main R2=f02d9a14 held; task/canonical/verifier Q preserved. PM6522058894 executed.
-B samejobccb57d24 verified/ci_success, Draft841 headb29bc64d, taskCI41058684258 full4PASS.
-Receipt running2/lease active2/counters1/2/1; no finalization. A fullrow/workspace unchanged.
-Only one verify-heldPOST; actual Q13+13; no model/admission/replay/rebuild.
-Scoped3workers stopped, authority disabled intact; original expiryOct31 08Z.
-Dashboard remains up/tokenless/trusted/reconnectPASS; assisted recovery, not benchmark.
-SAME PR838 carries evidence; task accepted by review5712944983, both PRs unmerged.
-Finalization preflight blocked only on exact .git directory timestamps; no mutation.
+MainR2 held; taskQ/PR841headb29bc64d unchanged; both PRs unmerged.
+PM6524535370 exact metadata exception revalidated; no broader drift accepted.
+Review5712944983 finalized once: completed/pm_review_accepted/delivered3/released2.
+Proof/usage/checkpoint/progress unchanged, counters1/2/1; A831/retired824 preserved.
+Runtime/Executor stopped, Router never started; authority disabled intact; expiryOct31 08Z.
+Terminal dashboard trustedTLS/reconnect/fixedtimer PASS. PM owns merge ordering.
 <!-- PCP:CONTINUITY:END -->
