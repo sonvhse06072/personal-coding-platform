@@ -1,38 +1,35 @@
 # PCP Local consolidation execution checklist
 
-## R2 acceptance and preparation checkpoint — 2026-10-30
+## R2 held #837 LIVE result — 2026-10-30
 
-PR840 is accepted/merged at R2 `f02d9a14af33d9efeb99aa573d776aab3119dec1`;
-postmerge41028562169 executed all four suites successfully. Main is held at R2.
-[Current PM preparation decision6518824609](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6518824609) supersedes
-the earlier pending-source wording below. It permits one integrated backup/rehearsal,
-serial Runtime/Executor build, reversible authority-OFF adoption and concrete permit
-preparation session until2026-10-31T08:00:00Z (15:00 ICT).
+[Independent PM execution6522058894](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6522058894)
+approved the EXACT prepared bytes from PR838 head ef37d11e22744841e65f846293eb6de0e15e900d.
+Full preimages/bindings and fresh backup passed; exact permit installed; only the three
+named workers started. Aggregate held readiness and plan passed; ONE supported apply
+ran actual Q13+13, created commitb29bc64d and real Draft
+[task PR841](https://github.com/sonvhse06072/personal-coding-platform/pull/841).
+[Exact-head task CI41058684258](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41058684258)
+has four genuinely executed successful suites. No model, replay, rebuild or rebinding.
 
-The release observer requires the exact bound Router RUNNING as well as Runtime and
-Executor. A scoped start/stop of that retained Router is included, with truthful older
-source plus complete input-history equality; no routing/model/provider call is needed.
-Finalize stable post-start fingerprints before forming expected permit values.
+Current B: blocked/verified/ci_success, awaiting independent PM, finalized=false,
+receipt running/gen2 and lease active/gen2 unchanged, counters1/2/1. A full row/workspace
+and both Codex configs/credentials preserved. V3/retired824 untouched. Main remains R2;
+task/base/canonical/verifier Q. SAME evidence PR838 and task841 remain unmerged.
 
-**Single independent PM checkpoint:** actual R2 images/config fingerprints, exact B
-unverified candidate/full preimages and corroborating legacy returned/shutdown evidence
-must be reviewed before a live held permit is installed/enabled or verify-held/deliver
-is POSTed. Keep ordinary/claim authority disabled. Preparation does not change B1/0/0.
-No model replay, config quarantine, source/task/baseline rebinding or manual publication.
-Use SAME PR838 for consolidated evidence and continuity; do not merge it during R2 hold.
+At12:57 UTC exact Runtimee5d8a338/Executor9cba24de/Routerf03edbd9 were stopped;
+both approved authority files disabled intact. Original expiryOct31 08Z, no renewal.
+Only DB/observer/HTTPS remain running. Dashboard https://localhost:18443/dashboard
+is tokenless/local, trusted-browser polling/reconnect PASS after shutdown. It shows
+actual verification/CI and stable47.583s; reported cost Unknown differs from estimated0.
 
-The #593 backlog audit6517035681 makes #835 the current engineering issue and #764
-the portable-local epic. Archived #815/#822/#831 remain historical evidence, not open
-work queues. Physical preparation is now complete under the operator decision; see the
-[concrete manifest, WorkReport and executable continuation packet](../project/history/2026-10-30-r2-held837-preparation.md).
-Final R2 Runtime8018b3d1/Executor78a752c0, Q verifier retained; fresh restore13+13
-and exact retry passed with synthetic external transport/publication. Actual-image
-isolation/config lifecycle/askpass/schema/publisher/observer checks pass. New
-Runtimee5d8a338/Executor9cba24de and retained Routerf03edbd9 are stopped; original
-workers retained. Live B remains1/0/0, running2/active2; all A/B/config preimages equal.
-Candidate873e6e19 remains private/uninstalled, expires Oct31 08Z. Independent PM
-concrete-manifest review precedes live authority and aggregate readiness/plan.
-Runtime missing-permit rejection is intentional; no source or startup guard bypass.
+[Current integrated WorkReport and next PM packet](../project/history/2026-10-30-r2-held837-execution.md)
+contains full IDs, hashes, scoped stops, backup retention and time/intervention limits.
+[Preparation manifest](../project/history/2026-10-30-r2-held837-preparation.md) is retained
+unchanged as earlier fixture/physical evidence. Its pending-PM gate is now satisfied;
+no fresh authority or replay follows from that. Independent task review and separately
+authorized supported non-model finalization remain. Delivery readiness correctly says
+awaiting_pm_review, dependencies PASS, eligible=false: do not publish again.
+Historical optional PostgreSQL failures and VPN/LAN unknowns remain explicit.
 
 Prior accepted campaign: [DEC-PCP-815-SUCCESSOR-ADOPTION-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/815#issuecomment-6485231069).
 PR825 is independently accepted and merged at
@@ -45,10 +42,10 @@ a protected baseline or live job. New831 execution is recorded below.
 ## Accepted config / held verification source checklist
 
 The earlier [PM6516240084](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6516240084)
-authorized SOURCE/FIXTURE only from Q=e3b19700; current preparation uses the later decision above. PR838 records actual ordinary B
-admission then held config failure, running2/active2/counters1/0/0; its pre-admission
-P/Q rebinding proposal is closed. Current canonical/task/verifier Q, workers off,
-activation disabled. A and both configs/credentials/backups retained. Dashboard
+authorized SOURCE/FIXTURE only from Q=e3b19700. Historical PR838 evidence records ordinary B
+admission then held config failure1/0/0; the LIVE result above supersedes that state.
+Pre-admission P/Q rebinding is closed. Current canonical/task/verifier Q, workers off,
+authority disabled, B1/2/1 awaiting PM. A and both configs/credentials/backups retained. Dashboard
 https://localhost:18443/dashboard remains tokenless/local and unchanged.
 
 [Complete repair WorkReport and one executable PM rollout packet](../project/history/2026-10-30-config-held-verification.md)
@@ -67,12 +64,13 @@ precede mandatory Q tests and existing commit/delivery. Default plan/status is r
 - [x] Finite preparation decision, fresh backup, actual R2 builds/packaging and restore rehearsal.
 - [x] Reversible authority-absent adoption, stable fingerprints, bounded Router start/stop.
 - [x] Private finite candidate and sanitized manifest, unchanged live state, retained shutdown.
-- [ ] Independent concrete-manifest PM execution record; live permit remains uninstalled.
-- [ ] LIVE held verification/task Draft PR/CI after that checkpoint; fixture tests are not live tests.
+- [x] Independent exact-manifest execution6522058894; approved bytes installed, then disabled intact.
+- [x] LIVE Q13+13, Draft841, exact-head41058684258 four executed suites; scoped shutdown.
+- [ ] Independent exact task review and separately authorized non-model finalization; no replay.
 
-Supported prepared commands: `session verify-held --job-id ID` (plan),
-`session readiness --phase held-verification --job-id ID`, and only after the later
-PM checkpoint `session verify-held --job-id ID --apply`. One POST then bounded GET;
+Supported commands (execution is complete; these are historical procedure): `session verify-held --job-id ID` (plan),
+`session readiness --phase held-verification --job-id ID`, and only under an exact
+PM execution decision `session verify-held --job-id ID --apply`. One POST then bounded GET;
 unknown tests never become PASS or auto-retry. Verified commit/publication uncertainty
 uses existing delivery reconciliation. No run-once, queue/reset/manual SQL/merge.
 The linked packet includes exact permit schema, task-Q/platform-R2 binding, image

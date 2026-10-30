@@ -3,63 +3,59 @@
 Mutable continuity only; approved authority and current GitHub/Runtime evidence
 take precedence over older handoffs.
 
-## Accepted R2 and integrated preparation for held #837
+## R2 held #837 recovered to real Draft PR and exact-head CI
 
-PR840 independently accepted by [PM review5709956728](https://github.com/sonvhse06072/personal-coding-platform/pull/840#pullrequestreview-5709956728)
-and merged as R2 `f02d9a14af33d9efeb99aa573d776aab3119dec1`.
-Reviewed head `fa3399095b2d1bba972393cf5bc46ad28322f543` and R2 share tree
-`e3198d7de9579e683083b5ae5314ddf935b0f832`; R2's sole parent is Q
-`e3b19700dffcc3e2eae45bdde78230819466c9e1`.
-[Postmerge41028562169](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41028562169)
-passed all four actually executed suites. PR-head reported5418 passed/314 skipped
-is source evidence; the two known optional PostgreSQL supervision failures remain.
+Main remains accepted R2 `f02d9a14af33d9efeb99aa573d776aab3119dec1` (PR840;
+[postmerge41028562169](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41028562169), four executed suites PASS).
+Task/base/canonical/verifier remain Q `e3b19700dffcc3e2eae45bdde78230819466c9e1`.
+No source/image/baseline rebinding or rebuild occurred in this continuation.
 
-[DEC-PCP-835-R2-PREPARE-HELD837-V1](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6518824609) authorizes one integrated
-physical PREPARATION session: backup/restored-copy rehearsal, one Runtime and one
-Executor R2 build, reversible adoption with execution authority OFF, actual-image
-and post-start fingerprint checks, then one concrete private permit candidate.
-Preparation expires2026-10-31T08:00:00Z (15:00 ICT); no automatic renewal.
-Preparation completed at09:22 UTC under that decision; the independent PM concrete-manifest
-checkpoint remains. [Integrated physical report/manifest](history/2026-10-30-r2-held837-preparation.md)
-records final R2 images, restored-copy13+13 checks, exact stopped resources and rollout.
-No live permit installed; B counters remain1/0/0.
+[Execution decision6522058894](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6522058894)
+independently approved the exact private candidate from PR838 head
+`ef37d11e22744841e65f846293eb6de0e15e900d`. All original preimages and bindings
+revalidated; exact permit/original installed, three approved workers started,
+aggregate held readiness and read-only plan passed. ONE supported verify-held apply
+ran genuine Q targeted13/full13, committed and published real Draft
+[task PR841](https://github.com/sonvhse06072/personal-coding-platform/pull/841).
 
-Main is held at R2; SAME evidence PR838 remains unmerged and carries this handoff.
-Task/base/baseline/canonical/verifier remain Q. Existing Router retains truthful
-older provenance only after full input-history equality. Its scoped start is needed
-by release observation, even though no Router selection/provider/model call occurs.
+Task head `b29bc64d082e8fff924142e5aef48e93a15ef482`, exact sole parent Q;
+tree `2e177f80e21f9d16cafeba5b8679820f504c8a87` and original candidate diff/modes
+preserved. [Task CI41058684258](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41058684258)
+executed all four suites: structure1754/1 skipped, Runtime2724/313 skipped,
+Executor808, Router132 passed. No model/admission/test replay or second publication.
 
-One independent PM checkpoint reviews actual images/fingerprints, the UNVERIFIED
-candidate and legacy returned-invocation corroboration BEFORE live permit installation
-or verification/delivery. Continue the same operator session after that exact decision.
-No Owner micro-approval is requested for routine preparation within the recorded scope.
+[Integrated execution WorkReport, hashes, resources, time and next packet](history/2026-10-30-r2-held837-execution.md)
+is current. [Preparation report](history/2026-10-30-r2-held837-preparation.md) remains
+historical FIXTURE/PHYSICAL evidence; its prior pending-PM language is superseded.
+SAME evidence PR838 remains unmerged on `ai/835-adoption837-live`.
 
-[Source WorkReport and rollout procedure](history/2026-10-30-config-held-verification.md)
-remains the implementation packet; the newer PM decision supplies exact R2, current
-scope and the Router observation clarification. Pinned CLI trust stays in memory;
-all inherited config remains denied. Held verification retains full-row CAS,
-cross-process locking and durable phase accounting without a developer-model path.
-Failed/unknown tests cannot replay automatically. No new service/schema/CLI upgrade.
+## Retained LIVE state — verified and published, awaiting independent PM
 
-## Retained LIVE state — ordinary B admitted, not verified
+B837 `ccb57d244cfd1fc069a98fd8c17734a1`: blocked / execution verified /
+ci_success / `awaiting_independent_pm_review`, finalized=false. Receipt running/gen2,
+lease active/gen2, same full ownership rows; counters1 model/2 mandatory test runs/
+1 delivery. Original model usage and all identity fields preserved. Durable execution
+47.582929s includes5.944246s recorded held verification, not hours waiting for review.
+The held audit marker `verified_uncommitted` records the successful verification stage;
+current commit/delivery proof supersedes it for observation and does not permit replay.
 
-B837 `ccb57d244cfd1fc069a98fd8c17734a1`: blocked/held,
-`pcp_local_unreviewed_codex_configuration`, receipt running/gen2, lease active/gen2,
-counters1 model/0 mandatory tests/0 delivery. No proof/commit/task PR/task CI.
-Task/base/canonical/verifier remain Q; issue body45d3a35f unchanged. Old pre-admission
-rebinding is CLOSED. Both generated config323b12e7 and old quarantine304afa3e remain
-intact, as do credentials, backups and disabled authorities. No live SQL/model/run.
+A831 `a8851f89dd3e4e582c697ec1fe6d8cdb`: completed/PM accepted, delivered/gen3,
+full row/workspace/proof/counters1/2/1 unchanged. A released/gen1 lease is historical;
+current lease belongs to B gen2. Retired824/V3 and foreign resources untouched.
+Both Codex configs, scoped credentials, backups and original authorities preserved.
 
-A831 `a8851f89dd3e4e582c697ec1fe6d8cdb` remains completed/PM accepted,
-delivered/gen3, original workspace/proof/counters1/2/1 unchanged. Project lease is now
-B gen2; A's released gen1 is historical. V3 retired824 and foreign resources untouched.
-New R2 Runtimee5d8a338 and Executor9cba24de are prepared/stopped; Routerf03edbd9
-was bounded-started and stopped. Old Runtime3c8e847d/Executor50fc20a1 remain retained.
-All authority files remain absent/disabled; candidate873e6e19 is private/uninstalled.
-Existing DB8b72a8d3, observer5d6b3e9b and frontendd22a5bf0
-stay available. **https://localhost:18443/dashboard — tokenless loopback_readonly.**
-No observer rebuild/swap. Fresh trusted-browser tokenless polling/reconnect passed;
-VPN ON and second-machine LAN remain untested.
+At12:57:18 UTC Runtimee5d8a338, Executor9cba24de and Routerf03edbd9 were stopped;
+approved permit and held original disabled intact under private execution/disabled-authority.
+No ordinary/claim/held authority remains installed. Original deadline is
+**2026-10-31T08:00:00Z**; no renewal. Old workers and verifier/rehearsal containers retained.
+84 owned containers:3 running/81 stopped. DB8b72a8d3, observer5d6b3e9b and
+frontendd22a5bf0 remain available with unchanged bindings.
+
+**https://localhost:18443/dashboard — tokenless loopback_readonly.** Fresh trusted
+Chromium after shutdown passed seven200 polls and offline/reconnect; no cookies,
+login forms or page errors. It shows A completed, B verified/ci_success awaiting PM,
+stable47.582929s, reported cost Unknown distinct from estimated0. The unchanged old
+observer's assisted_recovery=false does not establish an unattended run.
 
 ## Original #824 — retired incomplete, never delivered
 
@@ -88,31 +84,32 @@ Closure does not mark untested capabilities PASS or authorize resource cleanup.
 
 ## Immediate next safe actions
 
-Review the [concrete manifest](history/2026-10-30-r2-held837-preparation.md):
-SHA256 `6bec39b5c14eaee53c1f22514b35f3d593385126efcc2e9c7de7cd0908cae28a`.
-One private permit candidate expires2026-10-31T08:00:00Z; do not install it before
-independent PM exact execution disposition. Continue the SAME operator session afterward.
-Fresh backup/restored rehearsal, final-image/security/publisher/schema checks and retained
-shutdown passed. Aggregate LIVE held readiness/plan remains deferred because authority is
-absent; Runtime correctly rejects startup. No credential interaction pending. Do not merge
-PR838, refresh mismatched proof, change issue837/Q identity or replay unknown tests/model.
+Independent PM reviews exact task PR841 and this same evidence PR838, then publishes
+structured acceptance and a separate non-model finalization decision if eligible.
+The [execution packet](history/2026-10-30-r2-held837-execution.md) supplies exact
+identity, future supported readiness/finalize sequence, reconciliation and shutdown.
+Do not restore authority, start workers, rerun verification/delivery, merge, finalize,
+reset ownership or admit another task under this completed execution session.
+
+No live execution blocker remains; PM acceptance/finalization is pending. Known optional
+PostgreSQL supervision failures remain historical; VPN ON and second-machine LAN are
+NOT TESTED. This is assisted recovery, not a clean unattended run or benchmark PASS.
+One initiating Owner decision relay was observed; zero additional interactive steps;
+Owner active minutes and historical intervention total remain unknown.
 
 ## Standing safety boundary
 
 `A3B2_IMAGE_BUILD=STOP` and `CODEX_LIVE=STOP` remain effective outside exact finite
-approved campaigns. Current decision permits the recorded authority-absent preparation,
-not live verification/delivery, baseline activation, model replay, global network/trust
-change or production action.
+approved campaigns. No automatic renewal, source/baseline advancement or next admission.
 Chợ Nhạc and foreign resources stay untouched. No force push or new paid service.
-Historical #752 is archived as unexecuted; #595 remains HOLD. Unproven capabilities stay unproven.
+Historical #752 remains archived; #595 benchmark remains HOLD.
 
 <!-- PCP:CONTINUITY:START -->
-Main R2=f02d9a14 held; PR840 accepted/merged, postmerge41028562169 full4 PASS.
-PM6518824609 authorizes integrated R2 build/rehearsal/adoption preparation only.
-One independent exact-image/candidate/permit checkpoint precedes LIVE held verification.
-B running2/active2/counters1/0/0 held; task/canonical/verifier Q and configs unchanged.
-A completed/unchanged; retired824 preserved; dashboard up, fresh browser check PASS.
-R2 builds/adoption/rehearsal PASS; workers stopped, private permit uninstalled.
-Concrete manifest6bec39b5 awaits independent PM execution disposition; expiry Oct31 08Z.
-SAME PR838 is evidence/continuity, not task delivery; do not merge during R2 hold.
+Main R2=f02d9a14 held; task/canonical/verifier Q preserved. PM6522058894 executed.
+B samejobccb57d24 verified/ci_success, Draft841 headb29bc64d, taskCI41058684258 full4PASS.
+Receipt running2/lease active2/counters1/2/1; no finalization. A fullrow/workspace unchanged.
+Only one verify-heldPOST; actual Q13+13; no model/admission/replay/rebuild.
+Scoped3workers stopped, authority disabled intact; original expiryOct31 08Z.
+Dashboard remains up/tokenless/trusted/reconnectPASS; assisted recovery, not benchmark.
+SAME PR838 carries execution evidence; both PRs unmerged pending independent PM.
 <!-- PCP:CONTINUITY:END -->
