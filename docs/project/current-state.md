@@ -15,6 +15,10 @@ stdin. Real isolated Git/PostgreSQL/fresh-process fixtures use synthetic externa
 there is no developer inference or live publication. New-invocation restoration does not
 prove protection during internal CLI compaction. Prose criteria remain prose, not invented IDs.
 
+PM review5719486019 required actionable repair diagnostics. The same PR now carries
+bounded sanitized verifier excerpts, explicitly non-authoritative, with diagnostic-driven
+repair regressions; see the WorkReport correction and final-head CI receipt.
+
 Next: independent PM reviews the single Draft PR and its exact-head executed CI. #604
 stays open for remaining programme scope; #595 HOLD. No live adoption/build/worker start,
 activation, completed-task replay or merge. The deployed dashboard and historical assets

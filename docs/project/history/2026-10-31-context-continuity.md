@@ -54,8 +54,8 @@ before the model counter/fence. Unsafe Git configuration/index remains its exist
 fail-closed error. Nothing refreshes expected proof to accept drift.
 
 The latest compact manifest and a digest/size/time entry per invocation are persisted
-before dispatch. Mutable summaries and raw logs are excluded. Repairs get authoritative
-check names/return codes/counts and can inspect allowed source; this is not agent-reported
+before dispatch. Mutable summaries and unrestricted raw logs are excluded. Repairs get check
+names/return codes/counts and bounded sanitized, NON-AUTHORITATIVE verifier excerpts; this is not agent-reported
 verification. No schema change, budget reset, receipt reset or ownership change is added.
 
 An already registered queued job can run in a fresh interpreter with empty chat state.
@@ -215,3 +215,38 @@ Owner scope; deterministic PR approval fields are not proof of human identity.
 No protected architecture decision is required for this additive boundary repair.
 Structured local rubric IDs and provable internal compaction retention remain explicit
 future scope, not invented capability or a reason to replay completed work.
+
+## PM review5719486019 correction — same PR846
+
+[Independent review](https://github.com/sonvhse06072/personal-coding-platform/pull/846#pullrequestreview-5719486019)
+identified lost repair diagnostics: identical command/exit metadata hid different
+assertion failures. The original turn-count-driven fixture proved context retention,
+not useful repair feedback; that limitation is now corrected.
+
+SOURCE: the existing check projection retains sanitized stdout/stderr excerpts for
+failed phases, capped at1536 UTF-8 bytes per stream and4096 in total. Head/tail selection
+keeps initial errors and final failed-test identities; explicit markers and per-stream
+omitted sanitized-byte/redaction metadata disclose loss. Credential assignments (including quoted
+values), bearer/provider tokens, credential URLs, private keys, control sequences and
+local paths are sanitized before clipping. Arbitrary unlabelled secrets cannot be
+universally detected; no permission, secret access or raw-log retrieval was added.
+Excerpts are JSON-quoted NON-AUTHORITATIVE evidence, never instructions or baseline
+amendments. Original contract/source hashes remain identical across different failures.
+
+RED: same-command different-error tests fail on the reviewed source. The revised real
+Git/PostgreSQL fresh-process fixture also fails mandatory verification without useful
+diagnostics. GREEN: its synthetic adapter fixes FIRST_VALUE_REQUIRED only when the
+received assertion error identifies it, then fixes SECOND_VALUE_REQUIRED from the next
+error. Repair selection does not use invocation count. The same job retains3/4/1
+model/test/delivery fixture counters and A's original evidence. Pure cases cover secret
+redaction, instruction-like output, truncation and bounded aggregate excerpts.
+
+The corrected focused run passed23 cases (13 pure,10 real Git/PostgreSQL), with
+synthetic external transports. The third repair packet measured3099 UTF-8 bytes;
+composition3.2ms / total validated snapshot-read12.815ms in this fixture. These replace
+neither the earlier measurements nor live/token evidence. Full verification and renewed
+exact-head CI are recorded in the PR receipt. This remains SOURCE /
+FIXTURE only. The same isolated PG fixture is stopped after checks; no live worker,
+model, authority restoration, completed-task replay, adoption or merge. The consolidated
+rollout packet above still applies, with diagnostic retention/redaction included in its
+synthetic rehearsal gate. Internal CLI compaction and semantic compliance remain unproven.
