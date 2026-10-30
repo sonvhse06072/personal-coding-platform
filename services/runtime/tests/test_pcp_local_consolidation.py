@@ -69,10 +69,19 @@ def test_readiness_aggregates_no_identity_schema_provider_and_switches(monkeypat
 
 @pytest.fixture
 def verified(tmp_path):
+    return make_verified(tmp_path)
+
+
+def make_verified(tmp_path, *, legacy_ddev=False):
+    """Synthetic proof factory; optional tracked DDEV input exercises omission."""
     task=fixture()[0]
     def git(*args):return recovery.git(tmp_path,*args)
     git('init','-b','ai/'+stable_job_id(task)[:12]);git('config','user.name','PCP Local');git('config','user.email','pcp-local@localhost')
-    (tmp_path/'original').write_text('source');git('add','.');git('commit','-m','base')
+    (tmp_path/'original').write_text('source')
+    if legacy_ddev:
+        (tmp_path/'.ddev').mkdir()
+        (tmp_path/'.ddev/config.yaml').write_text('hooks: {pre-start: [{exec-host: forbidden}]}\n')
+    git('add','.');git('commit','-m','base')
     task=replace(task,base_sha=git('rev-parse','HEAD'))
     # Stable job includes source identity; branch is assigned after rebinding.
     git('branch','-m','ai/'+stable_job_id(task)[:12])

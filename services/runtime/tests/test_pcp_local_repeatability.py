@@ -12,23 +12,28 @@ from app.pcp_local_task_queue import TaskStop
 from test_pcp_local_consolidation_postgres import database, seed, ownership  # noqa:F401
 from test_pcp_local_consolidation import verified  # noqa:F401
 from test_pcp_local_runtime_dispatch import setup  # noqa:F401
+from pcp_sparse_fixture import sparse_verified  # noqa:F401
 
 TRUSTED_INIT = w.TrustedReaders.__init__
 TRUSTED_AUTHORITY = w.TrustedReaders.authority
 
 
-@pytest.fixture
-def lifecycle(database, verified, setup, monkeypatch, tmp_path):
-    db,v,s=database,verified,setup
+@pytest.fixture(params=['plain', 'executor_sparse'])
+def lifecycle(database, setup, monkeypatch, tmp_path, request):
+    db,s=database,setup
+    v=request.getfixturevalue('sparse_verified' if request.param=='executor_sparse' else 'verified')
     seed(db,v)
     row=asyncio.run(recover_verified_job(SimpleNamespace(storage=db),v.reader,v.task,db.get(v.store.row['id'])))
     # Fixture repositories move to their final isolated path before use by the session.
-    root=tmp_path/'retained';root.mkdir();path=root/row['id']
-    # verified fixture lives at tmp_path itself; clone its exact committed Git tree.
-    import subprocess
-    subprocess.run(['git','clone','--no-hardlinks',str(v.path),str(path)],check=True,capture_output=True)
-    subprocess.run(['git','-C',str(path),'config','user.name','PCP Local'],check=True)
-    subprocess.run(['git','-C',str(path),'config','user.email','pcp-local@localhost'],check=True)
+    if request.param=='executor_sparse':
+        root,path=v.path.parent,v.path  # Preserve the actual producer output intact.
+    else:
+        root=tmp_path/'retained';root.mkdir();path=root/row['id']
+        # Plain pre-feature repositories remain supported too.
+        import subprocess
+        subprocess.run(['git','clone','--no-hardlinks',str(v.path),str(path)],check=True,capture_output=True)
+        subprocess.run(['git','-C',str(path),'config','user.name','PCP Local'],check=True)
+        subprocess.run(['git','-C',str(path),'config','user.email','pcp-local@localhost'],check=True)
     base_value=dict(project_id='pcp-local', revision=v.task.baseline_revision, source_commit=v.task.baseline_source_commit, status='approved')
     base=SimpleNamespace(**base_value, model_dump=lambda **kw: deepcopy(base_value))
     cp=deepcopy(row['checkpoint']);cp['project_baseline']=base.model_dump()
@@ -174,10 +179,12 @@ def ordinary_B(lifecycle,monkeypatch,tmp_path):
 
 def test_retained_A_to_ordinary_B_all_eight_readers_and_registrar(ordinary_B):
     import hashlib
+    from app.pcp_local_worker_loop import _retained_snapshot
     b=ordinary_B;s=b.s
     def files():return {str(p.relative_to(s.path)):hashlib.sha256(p.read_bytes()).hexdigest()
         for p in s.path.rglob('*') if p.is_file()}
     original_files=files()
+    original_metadata=_retained_snapshot(s.path)
     result=asyncio.run(b.dispatch())
     assert result['runtime_job_state']=='queued' and result['job_id']==b.id and result['model_calls']==0
     row=s.db.get(b.id)
@@ -194,6 +201,7 @@ def test_retained_A_to_ordinary_B_all_eight_readers_and_registrar(ordinary_B):
     assert s.db.get(s.id)==b.retained
     with pytest.raises(TaskStop):asyncio.run(b.dispatch())  # queue/receipt already reserved
     assert s.db.get(b.id)==row and s.db.get(s.id)==b.retained and files()==original_files
+    assert _retained_snapshot(s.path)==original_metadata
 
 
 @pytest.mark.parametrize('fault',['before_commit','lost_ack'])
@@ -243,6 +251,7 @@ def test_concurrent_ordinary_B_requests_register_once_and_preserve_A(ordinary_B)
 
 
 @pytest.mark.parametrize('fault',['unknown','symlink','content','mode','git_alternate','git_worktree','git_monitor',
+    'worktree_monitor','sparse_pattern','index_skip','index_assume',
     'receipt','terminal_only','reserved','branch','review_diff','verification','baseline'])
 def test_retained_A_rejection_preserves_history_and_blocks_B(ordinary_B,fault):
     b=ordinary_B;s=b.s
@@ -254,6 +263,12 @@ def test_retained_A_rejection_preserves_history_and_blocks_B(ordinary_B,fault):
     elif fault=='git_worktree':(s.path/'.git/commondir').write_text('/synthetic/other/git')
     elif fault=='git_monitor':
         with (s.path/'.git/config').open('a') as out:out.write('\n[core]\nfsmonitor = /synthetic/not-executable\n')
+    elif fault=='worktree_monitor':
+        with (s.path/'.git/config.worktree').open('a') as out:out.write('\n[core]\nfsmonitor = /synthetic/not-executable\n')
+    elif fault=='sparse_pattern':(s.path/'.git/info/sparse-checkout').write_text('/*\n!/new.py\n')
+    elif fault in ('index_skip','index_assume'):
+        from app.pcp_local_recovery import git
+        git(s.path,'update-index','--skip-worktree' if fault=='index_skip' else '--assume-unchanged','new.py')
     elif fault=='receipt':
         with s.db.connect() as c:c.execute("UPDATE cp_pcp_local_source_receipts SET generation=4 WHERE job_id=%s",(s.id,))
     elif fault=='terminal_only':s.db.update(s.id,result={})
@@ -287,6 +302,19 @@ def test_retained_row_race_is_not_promoted_to_fresh_proof(ordinary_B,monkeypatch
     after=s.db.get(s.id)
     assert after['progress']['model_calls']==2 and after['checkpoint']==b.retained['checkpoint']
     assert s.db.get(b.id) is None and ownership(s.db)[1]==b.old_lease
+
+
+def test_git_configuration_race_blocks_registrar_without_changing_rows(ordinary_B,monkeypatch):
+    from app import pcp_local_worker_loop as guard
+    b=ordinary_B;s=b.s;proof=guard._retained_proof
+    before=s.db.get(s.id);owners=ownership(s.db)
+    def racing(*args):
+        with (s.path/'.git/config.worktree').open('a') as out:
+            out.write('\n[core]\nfsmonitor = /synthetic/forbidden\n')
+        return proof(*args)
+    monkeypatch.setattr(guard,'_retained_proof',racing)
+    with pytest.raises(TaskStop,match='retained_files_changed'):asyncio.run(b.dispatch())
+    assert s.db.get(s.id)==before and ownership(s.db)==owners and s.db.get(b.id) is None
 
 
 def test_unrelated_blocked_receipt_without_workspace_still_blocks_B(ordinary_B):

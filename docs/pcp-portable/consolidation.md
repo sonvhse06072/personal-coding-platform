@@ -8,35 +8,38 @@ all four suites successfully. One writer on `ai/815-successor-adoption-v4` in
 `/home/sonvh/pcp-local-adoption825-v4`. This historical825 campaign did not activate
 a protected baseline or live job. New831 execution is recorded below.
 
-## Active #835 source / isolated fixture checklist
+## Active #835 sparse producer compatibility repair
 
-[WorkOrder835](https://github.com/sonvhse06072/personal-coding-platform/issues/835),
-clarification6502893427 and continuation6504158102; one writer/branch `ai/835-local-repeatability`.
-[Draft PR #836 / exact-head hosted receipt](https://github.com/sonvhse06072/personal-coding-platform/pull/836).
-[WorkReport and one adoption packet](../project/history/2026-10-29-local-repeatability.md).
+[PM6513180988](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6513180988),
+accepted P=a4b273af; one writer on `ai/835-sparse-producer-compatibility`.
+[WorkReport / consolidated rollout packet](../project/history/2026-10-30-sparse-producer-repair.md).
+[Draft repair PR839](https://github.com/sonvhse06072/personal-coding-platform/pull/839)
+holds the exact final-head CI receipt. PR836 is merged; PR838 remains separate
+operational evidence, not a repair branch.
 
-- [x] Ordered documents, current main34c0e9a, merged833/834 and PM hold closure reconciled.
-- [x] Reproduce retained-A foreign-workspace and missing phase interface at anchor.
-- [x] Reproduce both review5702385825 findings; HTTP parser errors now reconcile
-  read-only once, and already-delivered readiness/mutation cannot republish.
-- [x] Inspect pinned CLI0.160.0 and actual adapter argv/config/environment; prove
-  candidate read restrictions in credential-free, network-none container fixtures.
-  Inherited config is rejected; no CLI/image/service/credential-boundary expansion.
-- [x] A→ordinary B FIXTURE PASS through all eight readers and original registrar;
-  preserve A and advance lease1→2. Strict proof/ownership validation rejects unknown,
-  drifting, reserved or arbitrary terminal siblings; no directory removal/bypass.
-- [x] Status/finalization/delivery phases reuse existing authoritative validators;
-  admission retains eight-reader/provider checks. No model or admission from status.
-- [x] Container client defaults read-only; named finalization uses exact server identity,
-  one POST and mandatory reconciliation. No shell/SQL/URL/permit passthrough.
-- [x] Real Git/PostgreSQL finalization, full-row CAS, concurrent requests, rollback,
-  lost acknowledgement, proof/ownership/authority rejection and retained counters.
-- [x] Documentation corrects current merge status and separates SOURCE/FIXTURE/LIVE.
-- [x] Required local verification and fixture shutdown; resources/evidence retained.
-- Final-head hosted gate: exact SHA/run/job results are maintained in the Draft PR
-  WorkReport. All four suites must execute and pass before PM acceptance.
-- [ ] Independent PM acceptance of the repaired source and measured isolation; accepted
-  successor source/baseline/task/rollout authority. None is granted by this checklist.
+- [x] Reconcile PR838 successful quarantine/adoption, current stopped workers and
+  retained sparse A; replace stale P pre-adoption continuity.
+- [x] RED through actual Executor create_workspace → completed sparse A → B;
+  plain clone passes while sparse form rejects at configuration gate.
+- [x] Read-only local/worktree config and exact sparse/index validation; clean-env
+  private proof snapshot, original bytes/metadata and full durable preimage rechecks.
+- [x] Hostile include/exec/read/filesystem/index races rejected; kernel external-file
+  watches and no-execution markers; no original proof/config normalization.
+- [x] Real Git/PG eight-reader ordinary B, one lease advance, duplicate/concurrent/
+  stale/crash/lost-ack rejection; plain and real producer forms, A unchanged.
+- [x] Credential-free pinned CLI probe and pinned Git2.39.5 actual producer tests;
+  existing disposable fixture resources only, candidate overlay explicitly labeled.
+- [x] Required local checks; full exact-head hosted receipt maintained in Draft PR.
+- [x] One next Q pre-admission packet, current-state/operations/history updated;
+  workers stay stopped, fixture resources stopped/retained, dashboard available.
+- [ ] Independent PM acceptance/merge/postmerge CI and exact Q bindings. Future
+  SAME837 issue/baseline revision and consolidated rollout remain separate authority.
+- [ ] LIVE repaired-image adoption/A→B/task PR/CI. No source/fixture PASS substitutes.
+
+Prior PR836 protocol-error/finalization/read-isolation work remains in its
+[accepted report](../project/history/2026-10-29-local-repeatability.md), including
+two unrelated optional PostgreSQL baseline failures. Its original A→B fixture
+omitted the actual sparse producer and did not establish LIVE repeatability.
 
 ## Historical finalization checkpoint — completed and subsequently merged
 
