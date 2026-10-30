@@ -410,6 +410,25 @@ Durable lesson:
 
 Evidence: [T3 first paired outcome](g0-02-first-paired-outcome-2026-10-12.md), [PCP #595](https://github.com/sonvhse06072/personal-coding-platform/issues/595#issuecomment-6116517408), fixture [PR #4](https://github.com/sonvhse06072/pcp-g0-drupal-fixture/pull/4) / [PR #5](https://github.com/sonvhse06072/pcp-g0-drupal-fixture/pull/5).
 
+## 2026-10 — ordinary PCP lifecycle and PM critique
+
+### Managed Agents critique and C843 review-binding lesson — #835 / PR845
+
+Outcome: source-level critique recorded; C843 delivery reached PR/CI, finalization
+remains a separate live checkpoint. Owner approved retaining this analysis.
+
+Lessons: durable job identity does not require permanent worker identity;
+existing event logs are not proof of replayability; criterion schemas need
+evidence mapping; measure operator effort separately from Owner prompts.
+A PM-created full-index diff hash mismatched Runtime's abbreviated diff hash.
+Correct the review representation, never the retained proof to fit a review.
+
+Sources: [analysis and bounded recommendations](2026-10-30-managed-agents-critique.md),
+[execution and binding incident](2026-10-30-ordinary-c843-live.md).
+Tags: recovery, acceptance, operator-attention, review-binding.
+Status: T3 analysis/lesson; no new architecture, authority or benchmark claim.
+Current finalization/review IDs belong in T1 and GitHub.
+
 ## Retrieval guidance
 
 Use this file when the current task asks:
