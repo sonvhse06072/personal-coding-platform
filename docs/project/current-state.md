@@ -1,6 +1,6 @@
 # Current Project State and Handoff
 
-## Ordinary C843 delivered; independent PM pending — 2026-10-30
+## Ordinary C843 delivered; finalization blocked by review binding — 2026-10-30
 
 [WO6526365770](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6526365770)
 authorized one integrated N adoption/ordinary task session,15:23:19Z–23:23:19Z.
@@ -26,8 +26,19 @@ checks and aggregate/eight-reader admission readiness passed.
   Actual17+17 tests; [exact-head41083619406](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41083619406)
   four executed suites PASS. Operator did not implement task C.
 - **blocked / awaiting_independent_pm_review**, execution verified, ci_success,
-  finalized=false; receipt running/gen2, lease active/gen3. No acceptance claimed.
+  finalized=false; receipt running/gen2, lease active/gen3. Durable acceptance has not occurred.
   Delivery readiness dependencies PASS and correctly refuses duplicate publication.
+
+[Finalization decision6527515040](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6527515040)
+accepted task review5715171332, but preflight stopped before authority restoration:
+the review declares `ae80bf174bd41bbe115a49467c3cf405db9b9292fc564817da1a4e1996b2f9e5`,
+while result/checkpoint/verified proof retain
+`e7129de0abd18887749302f8b0f47d7f4a7990f38b12e043fccf364626a431e5`.
+Isolated Git reproduction establishes full-index versus abbreviated index headers only;
+task parent/tree match the original proof. All DB rows/sequences, A/B/C workspace
+bytes/metadata, original authority, source/images/config and open task/head/CI match.
+No worker startup, authority restoration, readiness/finalize request or replay occurred.
+The report records the fresh backup and exact PM correction needed; expectations remain frozen.
 
 ## Retained historical evidence and deployed observer
 
@@ -50,12 +61,12 @@ from estimated0. No TLS bypass. Old observer/frontend remain stopped rollback as
 
 ## Immediate next safe actions
 
-PM independently reviews exact task844 plus this evidence candidate and owns the
-non-model finalization decision. Follow the report's pinned afterimage/authority
-packet; require the exact review and still-valid original authority before startup.
-Then supported finalization readiness -> one finalize command (no --apply), read-only
-uncertainty reconciliation, afterimages/backup and scoped shutdown. No test/model/
-delivery replay, new admission, receipt reset, automatic renewal or Developer merge.
+PM must reconcile the reproduced review-hash mismatch, publish a corrected independent
+structured acceptance bound to the retained `e7129de0…` proof and explicitly identify
+the accepted review for continuation. Developer must not edit the review or proof.
+Only then revalidate the original packet and unexpired authority before supported
+readiness -> one finalize (no --apply). Original expiry23:23:19Z is unchanged; after
+expiry STOP, no automatic renewal. No test/model/delivery replay, new admission or merge.
 
 ## Active PCP issues and owner attention
 
@@ -73,7 +84,8 @@ workload/Chợ Nhạc changes, global networking, force push, cleanup/prune or n
 
 <!-- PCP:CONTINUITY:START -->
 Accepted N85e415f1; WO6526365770 ordinary C843 delivered Draft844/head871e5045, CI41083619406 four executed PASS.
-Job4d0f1df36be0b9b971c18b04af870950 verified/ci_success, pending independent PM, running2/active3, counters1/2/1.
+Job4d0f1df36be0b9b971c18b04af870950 verified/ci_success, running2/active3, counters1/2/1; finalization NOT RUN.
+PM5715171332 accepted source; hash ae80bf17 mismatches durable e7129de0. Decision6527515040 stops dependent mutation.
 Workers/authority OFF15:51:47Z; expiry2026-10-30T23:23:19Z unchanged. No self-finalization/merge.
 A/B full evidence preserved; retired824 untouched. DB/N observer/HTTPS retained; tokenless localhost18443.
 Evidence branch ai/835-ordinary-c-n-live; see2026-10-30-ordinary-c843-live for exact IDs/hashes/PM packet.

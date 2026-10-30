@@ -1,6 +1,6 @@
 # PCP Local consolidation execution checklist
 
-## Current ordinary C843 LIVE delivery — 2026-10-30
+## Current C843 finalization blocked at review binding — 2026-10-30
 
 [WO6526365770](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6526365770)
 executed accepted N `85e415f1f53c8129056e2f04fb99a9b964b89609`; original session15:23:19Z–23:23:19Z.
@@ -13,8 +13,21 @@ Task [Draft PR844](https://github.com/sonvhse06072/personal-coding-platform/pull
 head871e50454faf37a0e1b551c8d2981d22ad57f797, four executed
 [CI41083619406](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41083619406) PASS.
 Job4d0f1df36be0b9b971c18b04af870950 is verified/ci_success, blocked awaiting independent
-PM, finalized=false, receipt running2/lease active3, counters1/2/1; mandatory17+17.
+PM in durable state, finalized=false, receipt running2/lease active3, counters1/2/1; mandatory17+17.
 No manual task solution, replay, old permit or Developer acceptance/merge.
+
+[Finalization decision6527515040](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6527515040)
+accepted independent review5715171332, but read-only preflight blocked before authority
+restore/start: review hash `ae80bf174bd41bbe115a49467c3cf405db9b9292fc564817da1a4e1996b2f9e5`
+differs from durable result/checkpoint/proof
+`e7129de0abd18887749302f8b0f47d7f4a7990f38b12e043fccf364626a431e5`.
+Isolated exact-head Git reproduces this solely by adding `--full-index` to Runtime's
+stripped `git diff --binary`; parent/tree match. Full DB/workspace/config/image
+preimages and original authority match. No readiness/finalize request or replay.
+PM must reconcile the hash and identify corrected independent acceptance; never
+rewrite proof or silently substitute a review. Original expiry23:23:19Z remains.
+Fresh private backup and unchanged full afterimages are recorded in the report.
+Actual trusted browser still shows C awaiting PM; completed C/timer is NOT TESTED.
 
 A/B complete rows/workspace/proof/counters unchanged; old resources/configs/credentials
 and retired824 preserved. Shared lease advances normally to C; historical B release
@@ -38,7 +51,8 @@ supersede this receipt or authorize replay.
 - [x] Aggregate/eight-reader readiness, ordinary C, mandatory tests, real Draft/CI.
 - [x] Trusted tokenless N observer, actual A/B/C evidence and reconnect.
 - [x] Afterimages/backups, workers/fixtures stopped, authority disabled intact.
-- [ ] Independent exact-head PM review/finalization; delivered3/released3 not claimed.
+- [x] Independent review received; mismatch diagnosed read-only; original evidence retained.
+- [ ] Corrected PM review binding and finalization; delivered3/released3 not claimed.
 
 ## Historical finalization completed — 2026-10-30 13:58 UTC
 

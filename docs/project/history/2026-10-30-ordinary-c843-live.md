@@ -15,7 +15,9 @@ head **871e50454faf37a0e1b551c8d2981d22ad57f797**, branch `ai/4d0f1df36be0`.
 [Exact-head CI41083619406](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41083619406)
 executed all four suites: root **1758 passed /1 skipped**, Runtime **2734 /321 skipped**,
 Executor **808**, Router **132**. These were actual test steps, not skipped service jobs.
-Independent PM review/finalization is pending. Developer did not approve or merge.
+Independent PM review5715171332 accepts the task, but its diff binding mismatches the
+durable proof. Finalization is blocked before authority restoration; see the closeout
+section below. Developer did not approve, alter the review, finalize or merge.
 
 - Fresh [issue843](https://github.com/sonvhse06072/personal-coding-platform/issues/843),
   exactly three allowed evidence-summary script/test/document paths. PCP produced
@@ -27,7 +29,7 @@ Independent PM review/finalization is pending. Developer did not approve or merg
   canonical/task/verifier N. Old revision definitions remain byte-identical.
 - Durable state **blocked / awaiting_independent_pm_review**, execution **verified**,
   delivery **ci_success**, `delivery_finalized=false`; receipt **running/gen2**,
-  project lease **active/gen3**. This is honest pending acceptance, not completion.
+  project lease **active/gen3**. Independent review exists; durable acceptance is blocked.
 - Counters **1 model /2 mandatory test phases /1 delivery**, no repair/replay.
   Both mandatory phases actually ran **17 tests**,34 total. The supported run-once
   request returned an acknowledged response. No duplicate POST/publication was sent.
@@ -52,7 +54,7 @@ are retained; no old permit was restored. Main remains N.
 | PHYSICAL | PASS | Actual original A/B read-only inspection with restored DB, nested snapshots under unchanged Runtime2CPU/3GiB/256pids/256MiB noexec tmpfs;0.928403s, peak103866368B. Restored-copy check0.809571s/105472000B. A/B file bytes13959138/14401234; Engine backing free about865.86GB at measurement |
 | LIVE | PASS | Exact config archive, fresh baseline and same-instance worker/observer adoption; actual scoped publisher entitlement/quota, schema/peers/stable fingerprints, aggregate readiness and all eight production readers; ordinary843 admission, one developer, mandatory verification, Draft PR, hosted CI |
 | LIVE | PASS | Trusted browser HTTPS, tokenless local observer, A/B assisted=true and fixed67.801642/47.582929s timers; C assisted=false, actual usage and PM wait; polling/offline/reconnect, no login/cookies/forms, mutation/foreign routes denied; ownership unchanged by observer |
-| LIVE | PENDING | Independent PM acceptance/finalization, delivered/gen3 and released/gen3. These were deliberately not performed |
+| LIVE | BLOCKED | Finalization preflight: independent review diff hash mismatches retained proof. No restoration/startup/readiness/finalize; delivered/gen3 and released/gen3 have not occurred |
 | NOT TESTED | — | VPN ON/OFF parity, LAN/remote access, future task D, direct-Codex comparison, unattended operation or benchmark. #595 remains HOLD |
 
 Existing unrelated optional PostgreSQL failures remain tracked in the
@@ -99,8 +101,8 @@ Setup/build/archive precede executable dispatch and are separate from task laten
 The private stage ledger retains both UTC and same-process monotonic measurements.
 Run-once driver measured236.207094s including its final custody checks; UTC intent
 to response is260.559571s. These distinct clock measurements are preserved without
-normalizing the difference or attributing an unmeasured cause. Independent-acceptance
-wall time remains open. Durable developer execution was64.303379s; hosted CI ran
+normalizing the difference or attributing an unmeasured cause. Review receipt timing
+is recorded below; durable finalization remains blocked. Developer execution was64.303379s; hosted CI ran
 15:45:22Z–15:47:35Z. Do not add overlapping intervals as a total.
 
 Observed tokens: gross input468637, cached430848, net input37789, output3933.
@@ -182,7 +184,60 @@ PG volume `pcp-ordinary-c-n-rehearsal-pg-data` and private copied data/logs are 
 | pcp-local-adoption825-v4-ordinary-c-n-runtime-packaging | `cf785e0ea94d0eaff45540fb22f042b48b6f660eb5f32fc7c6ba7a29451c1da2` |
 | pcp-ordinary-c-n-rehearsal-pg | `7322f0128313d0352a288ec23508257b9679a10b94b06dccff58f48d8cd08839` |
 
-## Concrete next PM checkpoint and finalization packet
+## Finalization preflight closeout — 2026-10-30 16:18 UTC
+
+[Decision6527515040](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6527515040)
+authorizes only exact matched evidence and original unexpired authority. Preflight
+started16:13:46Z; the original23:23:19Z expiry was valid and was not changed.
+[Review5715171332](https://github.com/sonvhse06072/personal-coding-platform/pull/844#pullrequestreview-5715171332)
+was submitted16:12:08Z for the exact head, source, baseline, job, branch and CI.
+Task delivery acknowledgement15:47:38.481322Z -> independent review is1469.518678s;
+review -> first preflight observation is98s. Durable finalization time remains Unknown
+because no finalization request was made. These wall intervals are separate from
+developer execution64.303379s and do not establish unattended performance.
+
+**BLOCKER:** the review's declared hash is
+`ae80bf174bd41bbe115a49467c3cf405db9b9292fc564817da1a4e1996b2f9e5`;
+result diff, execution checkpoint and verified-tree proof all retain
+`e7129de0abd18887749302f8b0f47d7f4a7990f38b12e043fccf364626a431e5`.
+Accepted `fullpath_pm_review.py` requires exact equality and would reject this as
+`pm_fullpath_review_report_binding_invalid`. No endpoint was invoked to test rejection.
+
+| Class | Result | Finalization-session evidence |
+| --- | --- | --- |
+| SOURCE | PASS | Accepted `repo.py:diff_state` hashes stripped `git diff <base> --binary`; `_git` strips stdout. Review binding check requires that durable hash; no application change |
+| FIXTURE | PASS, diagnostic only | Credential-free Git diff on an isolated fetched copy of exact PR844. `--binary` gives5378B/hash e7129de0; adding `--full-index` gives5576B/hash ae80bf17. Replacing only three40-character index header pairs by their seven-character prefixes makes the strings identical. No tests, model or original-workspace Git commands |
+| PHYSICAL/LIVE | PASS, read-only | Original manifest/activation hashes, full11-table/3-sequence snapshots, all A/B/C file bytes/metadata, clean N canonical, worker image/config fingerprints, running observer/frontend, exact open PR/head and both previous four-suite CI runs match |
+| LIVE | BLOCKED | Review hash comparison fails before restore/start. Zero worker starts, authority restores, readiness/finalize POSTs, model/test/delivery invocations; no new fixture containers |
+| LIVE | PASS, retained state only | Trusted Chromium HTTPS200, eight snapshot polls and offline/reconnect; no TLS bypass, cookies or forms. C still blocked/ci_success, running2/active3, observed execution64.303379s and counters1/2/1. A/B remain completed with fixed timers. C completed/terminal timer is NOT TESTED because finalization did not occur |
+
+Remote exact commit has sole parent N and tree
+`a4d7c0d222c04aa478dd1dbdb30807fe3899b038`, matching retained proof.
+The diagnosis explains the formatting mismatch; it does not authorize changing
+expected evidence or substituting tree equality for the required review binding.
+The independent reviewer must reconcile and issue corrected structured acceptance
+with durable hash e7129de0…; PM must identify the review permitted for continuation.
+No ordinary Owner interaction or authentication was requested in this closeout.
+
+Private `finalization/diagnosis.json`, `remote-diff-diagnostic.json`, browser snapshot
+and screenshot preserve this bounded diagnosis. The isolated bare diagnostic repository
+is retained under the same private directory; it has no running process or service.
+Fresh consistent backup at16:18:36Z is227744B:
+`ac7d6632d4e202905f9debf73e552bd2da09459f249be0b21b21f1d90ca36f41`.
+Its archive listing passes. Full afterimage SHA256 remains
+`14bdf9c95158e342c485f978ad638b9207d37e1fe4e16634874c021dae04d71b`,
+identical to the pinned post-shutdown snapshot. Proof, usage, counters, receipts,
+lease, events and sequences are unchanged. Original manifest c6e2d80f… and disabled
+activation9e4c8b0d… are unchanged. All three workers and prior fixtures remain stopped;
+only the exact DB/observer/HTTPS above stay running. No data cleanup or authority renewal.
+
+## Conditional finalization packet — blocked pending corrected PM binding
+
+The original packet below remains conditional. Decision6527515040 supplied
+review5715171332, but its hash mismatch prevents step3 and every later live action.
+Do not substitute a new review ID without PM's explicit disposition. Once PM resolves
+the binding, revalidate all original afterimages and original expiry again; no
+expectation refresh, checkpoint rewrite, replay, build or baseline change is permitted.
 
 1. Independently review issue843, exact PR844 head871e50454faf37a0e1b551c8d2981d22ad57f797,
    its real verification/four-suite CI and this evidence PR. Keep main N and task/evidence
@@ -196,8 +251,8 @@ PG volume `pcp-ordinary-c-n-rehearsal-pg-data` and private copied data/logs are 
    rename into `/home/sonvh/pcp-local-adoption825-v4/instance/config/pcp-local-activation.json`,
    verify SHA256 above and fsync. No old claim/held permit. Start only Runtime/Executor
    IDs above as needed; finalization excludes provider, Router and fresh-admission work.
-4. Use the accepted container-resident operator. These commands are preparation, not
-   permission in this completed session; `PCP_PM_REVIEW_ID` must come from PM's decision:
+4. Use the accepted container-resident operator. These commands remain blocked by the
+   review mismatch; `PCP_PM_REVIEW_ID` must come from the resolving PM decision:
 
 ```sh
 (
@@ -229,7 +284,8 @@ not a workaround for a new guard failure. No global network/VPN/DNS change.
 
 ## Evidence PR validation
 
-Local root verification: **1755 passed in19.67s**; stable continuity headings,
+Local evidence-document verification after the finalization blocker update:
+**1755 passed in21.36s**; stable continuity headings,
 standing stop markers and the GitHub/Runtime reconciliation reminder are preserved.
 Packet shell blocks passed syntax validation without executing later finalization.
 `git diff --check` passed. The exact evidence-PR head/hosted results belong to the PR
