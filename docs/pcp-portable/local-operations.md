@@ -1,50 +1,42 @@
 # Supported readiness, recovery and dashboard adoption
 
-## Current C843 finalization stopped before POST — 2026-10-30
+## C843 completed and retained — 2026-10-30 17:21 UTC
 
-[WO6526365770](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6526365770)
-executed accepted N `85e415f1f53c8129056e2f04fb99a9b964b89609`; original session15:23:19Z–23:23:19Z.
-[Complete execution evidence and pinned next PM packet](../project/history/2026-10-30-ordinary-c843-live.md)
-records backup/rehearsal, exact-N Runtime build, unchanged Executor/Router input reuse,
-actual-image/no-overlay probes, full A/B snapshot cost, exact one-time config archive,
-fresh baseline/issue843, worker/observer adoption and all eight production readers.
+[Corrected finalization6528029320](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6528029320)
+uses independent review5715474340, exact task head871e50454faf37a0e1b551c8d2981d22ad57f797
+and original source N85e415f1f53c8129056e2f04fb99a9b964b89609. PM documents through28254e6
+were fast-forwarded and preserved. [Full report](../project/history/2026-10-30-ordinary-c843-live.md)
+retains original ordinary delivery, hash-review correction and transient GitHub502 history.
 
-Task [Draft PR844](https://github.com/sonvhse06072/personal-coding-platform/pull/844),
-head871e50454faf37a0e1b551c8d2981d22ad57f797, four executed
-[CI41083619406](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41083619406) PASS.
-Job4d0f1df36be0b9b971c18b04af870950 is verified/ci_success, blocked awaiting independent
-PM in durable state, finalized=false, receipt running2/lease active3, counters1/2/1; mandatory17+17.
-No manual task solution, replay, old permit or Developer acceptance/merge.
+Fresh preflight and explicit readiness passed. First finalize command hit GitHub502
+inside its CI read and sent zero POSTs; full DB state remained unchanged. Read-only
+readiness recovered. Owner explicitly authorized one replacement command. Fresh original
+preflight/readiness passed again; replacement sent **one actual finalization POST** and
+reconciled completed at17:20:51Z. No model/test/delivery replay, reset, rebuild or merge.
 
-[Corrected decision6528029320](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6528029320)
-replaced review5715171332 with5715474340, matching durable hash e7129de0…; proof
-unchanged. PM commits through28254e6 were fast-forwarded/preserved. Fresh preflight
-and explicit supported readiness PASS. Original authority restored; same Runtime/
-Executor started; Router stayed stopped. The ONE finalize command returned blocked
-with zero mutation requests: GitHub502 while fetching task CI jobs during internal
-readiness. Full DB afterimages unchanged; diagnostic read-only readiness then passed.
-No replacement command or direct endpoint bypass; the explicit one-command boundary
-was surfaced for clarification. No answer is assumed. The report retains precise
-failure/commands/times and separates this from the prior PM formatting error.
-Workers stopped again17:14:48Z, authority disabled intact; same original23:23:19Z
-expiry. Fresh227744B backup2bef98dd… and unchanged afterimage14bdf9c9… recorded.
-Trusted browser still shows C awaiting PM; completed C/timer is NOT TESTED.
+Job4d0f1df36be0b9b971c18b04af870950 is **completed / pm_review_accepted**, verified/
+ci_success, finalized=true, receipt **delivered/gen3**, lease **released/gen3**, counters
+**1/2/1**. Original checkpoint/proof/verification/usage/progress preserved. A/B full rows
+and all A/B/C workspace bytes/metadata unchanged; retired824 and historical assets intact.
 
-A/B complete rows/workspace/proof/counters unchanged; old resources/configs/credentials
-and retired824 preserved. Shared lease advances normally to C; historical B release
-remains evidence. Workersf55b55de/fc32fd0a/f03edbd9 stopped at closeout17:14:48Z, ordinary authority
-disabled intact with unchanged23:23:19Z expiry. All fixtures stopped. DB8b72a8d3,
-N observerda6c4347 and HTTPS601c552b run. Full IDs, hashes, shutdown/rollback and
-conditional supported finalization commands are in the report.
+At17:21:47Z exact Runtimef55b55de/Executorfc32fd0a stopped; Routerf03edbd9 never started.
+Authority disabled intact, original expiry2026-10-30T23:23:19Z unchanged. All13 fixtures
+stopped; DB8b72a8d3/N observerda6c4347/HTTPS601c552b remain running. Consistent228687B
+backup5c216ef4… and full completed afterimagee7ffb472… retained; full hashes/IDs/stop
+commands are in the report. Do not restore consumed authority or start another task.
 
-https://localhost:18443/dashboard remains trusted HTTPS/tokenless/local/read-only.
-Actual browser A/B assistance and fixed timers, C ordinary usage/PM wait and reconnect
-PASS. No login required; no TLS bypass/cookie injection. Cost observation Unknown
-remains separate from estimated0. No VPN parity/unattended/benchmark claim; #595 HOLD.
-[Draft evidence PR845](https://github.com/sonvhse06072/personal-coding-platform/pull/845)
-on `ai/835-ordinary-c-n-live` requires exact-head CI and independent PM.
-Dated sections below remain history; their premerge/deployment statements do not
-supersede this receipt or authorize replay.
+https://localhost:18443/dashboard remains tokenless, trusted HTTPS, loopback read-only.
+Actual post-shutdown Chromium: C completed/delivered3/released3; terminal elapsed63.870699s
+fixed across eight polls and offline/reconnect. Observed execution64.303379s is separate.
+A/B completed timers and original usage/provenance unchanged; reported cost Unknown versus
+estimated0. No TLS bypass/cookie injection or unattended/benchmark/VPN-parity claim.
+
+SAME [Draft evidence PR845](https://github.com/sonvhse06072/personal-coding-platform/pull/845)
+records final head and required executed CI. [Task PR844](https://github.com/sonvhse06072/personal-coding-platform/pull/844)
+CI41083619406 passed all four actual suites. Both PRs stay unmerged; main N unchanged.
+PM owns final evidence review and eligible merge ordering. The critique/index and both
+failure episodes remain; finalization requested one replacement-command clarification,
+with explicit Owner answer. Owner active time Unknown, authentication interactions0.
 
 ## Historical finalization completed — 2026-10-30 13:58 UTC
 
