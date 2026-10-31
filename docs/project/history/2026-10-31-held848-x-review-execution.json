@@ -1,0 +1,308 @@
+{
+  "decision": "https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6542464088",
+  "decision_body_sha256": "512b70175faa08d8ed24931b4828ff0c0ef27818dff967a31056c7f7f96dae10",
+  "approval_record": "https://github.com/sonvhse06072/personal-coding-platform/pull/847#issuecomment-6542612995",
+  "blocker_record": "https://github.com/sonvhse06072/personal-coding-platform/pull/847#issuecomment-6542697999",
+  "evidence_branch": "ai/604-context-physical-prep-v1",
+  "accepted_preparation_head": "96da4d4ab042d3f0b1e93b499bcea1add81cfc35",
+  "source_X": "ee7ea0d824bf8b2aa568cbc5d03b222fd74d0275",
+  "task_base_canonical_baseline_verifier_H": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+  "status": "BLOCKED_BEFORE_PLAN_APPLY",
+  "actual": {
+    "readiness_GET_commands": 1,
+    "Runtime_HTTP": 409,
+    "Executor_source_reader_HTTP": 403,
+    "read_only_plan_commands": 0,
+    "initial_apply_commands": 0,
+    "repair_HTTP_POSTs": 0,
+    "new_verification_phases": 0,
+    "new_commits": 0,
+    "new_task_head": null,
+    "new_task_CI": null,
+    "worker_starts": {
+      "runtime": 1,
+      "executor": 1,
+      "router": 1
+    }
+  },
+  "root_cause": {
+    "classification": "selected_Executor_configuration_missing_required_read_only_source_reader_flag",
+    "runtime_http": 409,
+    "executor_http": 403,
+    "executor_route": "/v1/github/pm-bridge/local-source/issues/848?project_id=pcp-local",
+    "sanitized_Runtime_code": "executor_local_source_unavailable",
+    "source": "services/ddev-executor/app/pm_bridge_github.py:214",
+    "source_sha256": "5e8745e6e6092a0b652d7bbb94963b599f4c6deac076c2532d4c5da88fc701de",
+    "actual_executor_source_flag_present": false,
+    "actual_executor_config_digest": "0e8b155edb01ad14b3053f027f74f38b83d351186d92b9998a72ec4fdf8032af",
+    "selected_executor_config_digest": "0e8b155edb01ad14b3053f027f74f38b83d351186d92b9998a72ec4fdf8032af",
+    "config_equals_selected": true,
+    "guard_fails_before_registry_or_GitHub": true,
+    "ordinary_Runtime_admission_off": true,
+    "cause_of_preparation_gap": "operator removed Executor source-reader flag with ordinary Runtime admission flags; restored fixture substituted Github source transport so missed actual endpoint gate",
+    "no_runtime_or_source_change": true,
+    "no_restart": true,
+    "recommended_next": "PM independently commissions a minimal successor configuration/binding packet for the existing read-only Executor source reader; keep Runtime ordinary admission/model flags OFF; prove real reader gate before selecting any new exact IDs/bytes; current exact decision cannot authorize changed bindings"
+  },
+  "permit": {
+    "raw_sha256": "996eec62bce1b329bef1fa51d3a25eabc5894a21168b1381167607bf7e84a86d",
+    "bytes": 1026815,
+    "sidecar_sha256": "dabbc24b6fae2216cec7eb74cfcb0864121fa61a1c43c30fa03f9da8efe2ee10",
+    "patch_sha256": "bf3a6c53cf8adce7dcc47b7c8ad4234884804a0d6ba9785e47fd61499166fffb",
+    "patch_bytes": 1973,
+    "original_V2_sha256": "ec1d28f13f44d149001e1657b9122f3a1eb3947e966c3bebe5e99fcb59dbc665",
+    "not_before": "2026-10-31T10:21:43Z",
+    "expires_at": "2026-10-31T13:15:00Z",
+    "verification_seconds": 120,
+    "sealed_PROPOSED_and_provenance_and_null_approval_fields_unchanged": true,
+    "installed_once": true,
+    "now_disabled_intact": true,
+    "renewed": false
+  },
+  "original": {
+    "job_id": "15271df1a36b1281010465538a9318ae",
+    "head": "cf41cad08434f930841ced57a773f35783a1f537",
+    "task_PR": 850,
+    "original_CI": 41175379839,
+    "CI_state": "failure",
+    "status": "blocked",
+    "error": "pcp_local_hosted_ci_not_passed",
+    "execution": "verified",
+    "delivery": "ci_failure",
+    "finalized": false,
+    "counters": [
+      1,
+      2,
+      1
+    ],
+    "receipt": "running/gen2",
+    "lease": "active/gen4",
+    "full_rows_sha256": "85e75192d26f72db3ba5a21ad429b0f3bae821dd87005314a526ed51d015081f",
+    "workspace_sha256": "a27b232ded68824cfaf6644c47008d07a30f722cdf6a5ceb643e0aee87328384",
+    "patch_plan_sha256": "97ea7d072efd3ee9c48f36531069e580b729f8ef6eed4aeaded6ca92c7620ca4",
+    "candidate_sha256": "7021627bb761b99ab06cae6682bd060491a2445d76090b4a241931026b954521",
+    "tree": "b14a0bb25ef7bfb82609c87f88a1f0d37b63b95b",
+    "diff_sha256": "b7f49de89ffa98cf20f549a4cfdbfc8ce9263a995e23b484faa21e2264f685cf",
+    "proof_history_usage_all54custody_ABC_unknown_copies_unchanged": true,
+    "whole_database_and_sequences_unchanged": true
+  },
+  "roles": {
+    "runtime": {
+      "image_id": "sha256:102d316d3d38d4e0608c2ce663f0d3d07e32ee034819f821be32f33ced872815",
+      "source_commit": "ee7ea0d824bf8b2aa568cbc5d03b222fd74d0275",
+      "configuration_sha256": "2af1422999dd5405b8840715ab452285a54f44249dd4fb4ce914f7e1d1061748"
+    },
+    "executor": {
+      "image_id": "sha256:4c54043a8c304ecea62147300bc3321cd0325e19c1ccb4080a85a28364bea851",
+      "source_commit": "ee7ea0d824bf8b2aa568cbc5d03b222fd74d0275",
+      "configuration_sha256": "0e8b155edb01ad14b3053f027f74f38b83d351186d92b9998a72ec4fdf8032af"
+    },
+    "router": {
+      "image_id": "sha256:422d41413115ce46c24a063a018f942dfd63e04205b167d0b97e6e4d10660319",
+      "source_commit": "b97ade581fecad4db2146258e5ca02c3902189e0",
+      "configuration_sha256": "f7fd0acc9ce7eb78f36bf4afb13c8ac051640411e542b4ce3037c51a5a4da5ee"
+    },
+    "verifier": {
+      "image_id": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+      "source_commit": "871fbf2485a1ffb89a88a69e1daaaca10e25b318"
+    }
+  },
+  "worker_ids": {
+    "runtime": "2933e0bc750854c21e3ff8353c6c68b76c6215339ad6666df594f8240b7b0b0e",
+    "executor": "a546d6e5c4e3f5b19ae54147159f07317cdd8207516ab77fa582026adda209e4",
+    "router": "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6"
+  },
+  "retained_running": {
+    "db": "8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8",
+    "observer": "da6c434797c46a3312f0ca185b20e0b5fbb9234ce137aee9f81ebc2fb9241660",
+    "https": "601c552bd0562b947529a591b84c70570a1eaa556fb43e50a8c2ae0d76e362aa"
+  },
+  "network_id": "4f39b2458e6bbb9cee83bcee01053d4022bc9e49aa4877f3815c1a1161d571d5",
+  "postgres_volume": "pcp-local-adoption825-v4-postgres-data",
+  "configuration_files_manifest_sha256": "c4712f65140698197c3947dc3237285d8b24cc78bc228fbb5d84266c34181821",
+  "original_target_filesystem": "ext4 /dev/sdd; selected logical host bind unchanged",
+  "shutdown": {
+    "at": "2026-10-31T11:14:27.068677+00:00",
+    "reason": "actual_readiness_or_plan_or_before_apply_blocker",
+    "workers": {
+      "runtime": "2933e0bc750854c21e3ff8353c6c68b76c6215339ad6666df594f8240b7b0b0e",
+      "executor": "a546d6e5c4e3f5b19ae54147159f07317cdd8207516ab77fa582026adda209e4",
+      "router": "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6"
+    },
+    "decision": "https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6542464088",
+    "completed_at": "2026-10-31T11:14:28.702608+00:00",
+    "all_workers_stopped": true,
+    "authority_disabled_intact": true,
+    "files": [
+      {
+        "name": "pcp-local-review-repair.json",
+        "sha256": "996eec62bce1b329bef1fa51d3a25eabc5894a21168b1381167607bf7e84a86d",
+        "expected_sha256": "996eec62bce1b329bef1fa51d3a25eabc5894a21168b1381167607bf7e84a86d",
+        "exact_bytes": true
+      },
+      {
+        "name": "pcp-local-review-original-activation.json",
+        "sha256": "ec1d28f13f44d149001e1657b9122f3a1eb3947e966c3bebe5e99fcb59dbc665",
+        "expected_sha256": "ec1d28f13f44d149001e1657b9122f3a1eb3947e966c3bebe5e99fcb59dbc665",
+        "exact_bytes": true
+      },
+      {
+        "name": "pcp-local-review-repair.patch",
+        "sha256": "bf3a6c53cf8adce7dcc47b7c8ad4234884804a0d6ba9785e47fd61499166fffb",
+        "expected_sha256": "bf3a6c53cf8adce7dcc47b7c8ad4234884804a0d6ba9785e47fd61499166fffb",
+        "exact_bytes": true
+      }
+    ],
+    "verification_children": [],
+    "errors": [],
+    "retained_running": {
+      "db": "8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8",
+      "observer": "da6c434797c46a3312f0ca185b20e0b5fbb9234ce137aee9f81ebc2fb9241660",
+      "https": "601c552bd0562b947529a591b84c70570a1eaa556fb43e50a8c2ae0d76e362aa"
+    },
+    "expiry": "2026-10-31T13:15:00Z",
+    "proposal_bytes_unchanged": true
+  },
+  "backups": {
+    "before": {
+      "sha256": "f127b7e48708ed2a1da1e98a98abde866314f827c3e95c80be10d6a54b8d0454",
+      "bytes": 463469,
+      "consistent": true,
+      "archive_list_valid": true,
+      "whole_preimage_equal": true
+    },
+    "after": {
+      "sha256": "56f5ea31b853b6d92e1fa7bd0b0c6eddddf8e454b3f5ee276a48e89b6c8973e4",
+      "bytes": 463469,
+      "consistent": true,
+      "archive_list_valid": true,
+      "not_restored_again": true
+    }
+  },
+  "dashboard": {
+    "at": "2026-10-31T11:17:35.280786+00:00",
+    "url": "https://localhost:18443/dashboard",
+    "snapshot_http": 200,
+    "trusted_TLS": true,
+    "auth": "tokenless_loopback_readonly",
+    "cookies_or_credentials_injected": false,
+    "status": "blocked",
+    "local_verification": {
+      "passed": true,
+      "test_runs": 2,
+      "passed_tests": 38,
+      "failed_tests": 0,
+      "skipped_tests": 0
+    },
+    "hosted_ci": {
+      "state": "ci_failure",
+      "head": "cf41cad08434f930841ced57a773f35783a1f537",
+      "observed": true,
+      "runs": [
+        {
+          "state": "completed",
+          "conclusion": "failure",
+          "head": "cf41cad08434f930841ced57a773f35783a1f537",
+          "url": "https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41175379839"
+        }
+      ]
+    },
+    "receipt": {
+      "state": "running",
+      "generation": 2,
+      "job_id": "15271df1a36b1281010465538a9318ae"
+    },
+    "lease": {
+      "state": "active",
+      "generation": 4,
+      "owner_job_id": "15271df1a36b1281010465538a9318ae"
+    },
+    "usage": {
+      "model_calls": 1,
+      "test_runs": 2,
+      "gross_input_tokens": 601376,
+      "cached_input_tokens": 559104,
+      "input_tokens": 42272,
+      "output_tokens": 1711,
+      "cost_usd": null,
+      "estimated_cost_usd": 0.0,
+      "coverage": {
+        "gross_input_tokens": "complete",
+        "cached_input_tokens": "complete",
+        "input_tokens": "complete",
+        "output_tokens": "complete",
+        "reported_cost_usd": "unknown"
+      },
+      "observed_partial_totals": {
+        "gross_input_tokens": 601376,
+        "cached_input_tokens": 559104,
+        "input_tokens": 42272,
+        "output_tokens": 1711,
+        "reported_cost_usd": null
+      },
+      "tool_calls": null,
+      "returned_invocations": 1
+    },
+    "no_new_task_head": true,
+    "observer_unchanged": true
+  },
+  "measurements": {
+    "started_at": "2026-10-31T11:08:39Z",
+    "worker_shutdown_at": "2026-10-31T11:14:28.702608+00:00",
+    "seconds_until_stopped": 349.702608,
+    "operator": "gpt-6.1-sol",
+    "requested_effort": "high",
+    "actual_effort": null,
+    "tokens": null,
+    "cost": null,
+    "owner_active_minutes": null,
+    "additional_owner_requests": 0,
+    "PCP_managed_model_calls": 0,
+    "provider_login": 0,
+    "admissions": 0,
+    "finalizations": 0,
+    "merges": 0,
+    "subagents": 0,
+    "unattended_or_benchmark_claim": false
+  },
+  "operator_diagnostics": [
+    "Preflight initially overbroad absence check rejected inert original-activation reference already present in selected manifest; verified identical hash/metadata and retained it, no expectation refresh",
+    "Exclusive evidence write prevented same-label retry; new named audit retained both attempts",
+    "Read-only dashboard assertion initially omitted job_id/owner_job_id projected fields; authoritative full rows already equal original; complete projected identities verified without live action"
+  ],
+  "evidence_hashes": {
+    "execution-decision.private.json": "dda6e30d30dbdc4a282622279bec78d5e85cd7e3ebb2a6495e5d148ef4d0d830",
+    "external-execution-approval.json": "c5d153e9f6269fa4494c09f93e5e26a6ee1e7fe366e248ca6cdf5847473060a5",
+    "before-install-v2-audit.json": "88f7c1c5821ccf566253045e5dd0b9f16c5eda4eb409aad757e796944b0bc0e5",
+    "install-gate-audit.json": "10714c7390ea93c9e51f7af4bfe5fb74d58b062dd0081dc36fb685c7e982e9fb",
+    "installed-before-start-audit.json": "d6de4a85923ba5bbdd49e92f192ee8ee03121b9c3637bba327fa1b801805fba9",
+    "post-start-audit.json": "ea322f282d4ba20fc49ee486547d7fbf3654f69a0253eeb714ad69b0cd2df211",
+    "installation-intent.json": "7c432b0110238bb95ff60a5d453532870a285a0f0242472f39ebba78541d759c",
+    "installed.json": "5fa84e5ac58c3c91e8e8d32b90caba03004f13143275acee05280c967d94552c",
+    "readiness-intent.json": "c2f655d95883ae2038b6e1b685de7c30420c2b9600702fbe8c9f3a478454e760",
+    "readiness.stdout": "0075d955f1b419011bdae9cbea634bba96ff4d1cee3908757c8ab7f5b79a5cdd",
+    "readiness.stderr": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "readiness-failure.json": "a57b9b6c4586bb0ef9f2e677a2782054755115d6a196afbf4d83a72d94755871",
+    "shutdown.json": "d5f3d1720329727c37bdde48dd32eca81b1e191f701985e83c61e8addf8d92bc",
+    "after-blocker-preservation.json": "e3bec754f2458149a6fd0b0aab17431fe747873af6e6a3d7248899f31b7c4491",
+    "root-cause.json": "7cc6e2d5c1f376a136d22207f7056e4d4fa47df4071d45271b57d83b056938dc",
+    "closeout.json": "ce2b9b4b07c1e844ed8527aae6810648893fdd3e637a459ad6489ec02b25a54b",
+    "backup.json": "0a4639c033c44afc020c7c11edcd19e0e38c03a2416c5a7e3b62dde2abc5c295",
+    "after-backup.json": "459cadde30c3c8c73fb9c7d5e5fbd83968e8bb569f1715acdaf0eba990596b20",
+    "dashboard.json": "0a18086331ae5f0e0f90b3a551fa612b163fc66c92bbe31ef792917ef6440178",
+    "inert-original-reference-diagnosis.json": "17bd371b84e22bcaad46fbb228f51ee041c68bb3a9e22ce038268dd7f0405338",
+    "dashboard-projection-diagnosis.json": "1a47e70843e7b0b2dfdedd908cf4e79af262ae097d5a056f371f3d1a6f909ed8",
+    "runtime-logs.stdout.private": "f32d2bb2302e11c77bde8ad1c0ab14eff76ff1da526353d07e1c75a2d455f9d6",
+    "runtime-logs.stderr.private": "52d04414b51a420e87f018be0ca2c41f4bd7b72a08e2a8e5c49b98f8e22564e5",
+    "executor-logs.stdout.private": "7ca17df6a737f5effa745c26bf39f753ce3b9c5aa7df76efaa8f89b4459e682c",
+    "executor-logs.stderr.private": "aef233d877ac71d99a3f522d0472d71748461f1a368672f987c6de3b30de0730",
+    "router-logs.stderr.private": "99412c923f88df99407c57e03cc151835ea97ed5c4e125dc6e0f4abd2082121c"
+  },
+  "required_final_head_evidence_CI": "REQUIRED_IN_PR847_CHECKS_AND_PRIVATE_FINAL_RECEIPT",
+  "next_safe_action": "Independent PM reviews actual config-only blocker and commissions/selects a successor configuration/binding packet if desired. No retry/start/authority restoration or changed binding under this exact decision. No source/image feature work was opened.",
+  "local_evidence_checks": {
+    "passed": 1761,
+    "seconds": 20.03,
+    "log_sha256": "5a14f35256187d1e8af5dd8b0416addfd93b897c32ed8bf73dfd775ec5187fcb"
+  }
+}
