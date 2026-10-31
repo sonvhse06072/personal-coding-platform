@@ -29,7 +29,11 @@ def ordinary_execution(b, monkeypatch, *, lost_ack=False):
     changed = next(p for p in task.allowed_paths if p.startswith('tests/'))
     async def command(argv, **kwargs):
         assert argv[:3] == ['codex', 'exec', '--json'] and kwargs['cwd'] == path and 'env' not in kwargs
-        assert '--ignore-user-config' in argv and codex.isolated_permissions(path) in argv
+        temporary=path/b.s.db.get(b.id)['checkpoint']['pcp_local_temporary']['created']['root']
+        assert '--ignore-user-config' in argv and codex.isolated_permissions(path,temporary) in argv
+        assert any(v.startswith('shell_environment_policy.set=') and str(temporary) in v
+                   and 'PYTEST_ADDOPTS' in v and 'pytest-cache' in v for v in argv)
+        (temporary/'ordinary-output').write_text('synthetic private output')
         calls.append('synthetic_provider')
         target = path / changed; target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text('def test_synthetic_task(): assert 2 + 2 == 4\n')

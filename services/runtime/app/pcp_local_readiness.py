@@ -227,9 +227,9 @@ async def operation_readiness(engine, *, phase, job_id, review_id=None, readers=
         return view
 
     if phase == 'held-verification':
-        from .pcp_local_recovery import operate, HeldPermit
+        from .pcp_local_recovery import operate, load_held_permit
         async def held_plan():
-            permit=HeldPermit()
+            permit=load_held_permit()
             require(job_id==permit.value['before']['job']['id'],'held_readiness_identity')
             return await operate(engine)
         observed=await check('held_verification',held_plan)

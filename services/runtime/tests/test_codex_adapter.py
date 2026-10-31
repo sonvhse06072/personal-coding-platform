@@ -443,3 +443,32 @@ def test_large_pinned_context_reaches_transport_whole_without_argument_limit(mon
         return CommandResult(argv,0,'{"type":"turn.completed"}','')
     monkeypatch.setattr(codex,'run_command',run)
     asyncio.run(CodexAdapter('fixture').run(workspace=tmp_path,prompt=prompt,mode='repair',timeout=10,isolate_workspace=True))
+
+
+def test_private_tool_environment_contains_plain_pytest_cache_and_bytecode(monkeypatch,tmp_path):
+    """Consume the actual adapter config in real pytest; no inference transport."""
+    import os
+    import subprocess
+    import sys
+    import tomllib
+    from app.adapters import codex
+    from app import pcp_local_artifacts as artifacts
+    workspace=tmp_path/'job with spaces';workspace.mkdir()
+    claim=artifacts.claim(workspace);temporary=workspace/claim['root']
+    (workspace/'test_temp.py').write_text('def test_temp(tmp_path):\n (tmp_path/"output").write_text("fixture")\n')
+    monkeypatch.setenv('CODEX_HOME',str(tmp_path/'provider'))
+    async def command(argv,**kwargs):
+        setting=tomllib.loads(next(v for v in argv if v.startswith('shell_environment_policy.set=')))
+        child=setting['shell_environment_policy']['set']
+        assert 'env' not in kwargs  # TMPDIR must not configure the outer CLI alias.
+        result=subprocess.run([sys.executable,'-m','pytest','-q','test_temp.py'],cwd=workspace,
+            env={**os.environ,**child},capture_output=True,text=True,timeout=20)
+        assert result.returncode==0,result.stdout+result.stderr
+        assert (temporary/'pytest-cache').is_dir()
+        assert list(temporary.glob('pytest-of-*'))
+        assert not (workspace/'.pytest_cache').exists() and not (workspace/'__pycache__').exists()
+        assert all(p==temporary or p.name=='test_temp.py' for p in workspace.iterdir())
+        return CommandResult(argv,0,'{"type":"turn.completed"}','')
+    monkeypatch.setattr(codex,'run_command',command)
+    asyncio.run(CodexAdapter('fixture').run(workspace=workspace,prompt='fixture',mode='execute',
+        timeout=30,isolate_workspace=True,tool_tmp=temporary))

@@ -600,12 +600,19 @@ async def run_admitted_job(engine, readers, task):
                     'packet_bytes', 'total_context_ms')}))
             checkpoint['pcp_local_execution'].update(state='invocation_started', attempt=attempt + 1,
                 model_choice=choice, context_sha256=packet['manifest']['packet_sha256'])
+            from . import pcp_local_artifacts as artifacts
+            import uuid
+            temporary_name='.pcp-temp-'+uuid.uuid4().hex
+            checkpoint[artifacts.TEMP_KEY]=dict(attempt=attempt+1,creating=temporary_name)
+            engine.storage.update(job_id,checkpoint=checkpoint)
+            temporary=artifacts.claim(workspace,root=temporary_name)
+            checkpoint[artifacts.TEMP_KEY]=dict(attempt=attempt+1,created=temporary)
             progress['model_calls'] = int(progress.get('model_calls', 0)) + 1
             engine.storage.update(job_id, checkpoint=checkpoint, progress=progress)
             run = await CodexAdapter(choice['model'], choice['reasoning_effort']).run(
                 workspace=workspace, prompt=packet['text'],
                 mode='execute' if attempt == 0 else 'repair', timeout=remaining,
-                isolate_workspace=True)
+                isolate_workspace=True,tool_tmp=workspace/temporary['root'])
             engine._record_usage(progress, choice['id'], run.usage)
             engine._record_agent_attempt(progress, choice, run)
             checkpoint['pcp_local_execution']['state'] = 'invocation_returned'
@@ -619,6 +626,8 @@ async def run_admitted_job(engine, readers, task):
             # process may have left useful edits in the original workspace.
             require(not run.provider_failed, 'pcp_local_provider_failure_no_retry')
             require(run.returncode == 0, 'pcp_local_invocation_uncertain_no_retry')
+            await readers.refresh_delivery(task)
+            checkpoint=artifacts.finish_future(engine,task,temporary,attempt+1,require_fresh=readers.authority)
             diff = diff_state(workspace, int(project['runtime'].get('max_diff_bytes', 750000)),
                               base_ref=task.base_sha)
             require(bool(diff['changed_files']) and set(diff['changed_files']) <= set(task.allowed_paths)
@@ -813,7 +822,7 @@ def _retained_boolean(value, expected):
                      else ('', 'false', 'no', 'off', '0'))
 
 
-def _retained_validate(path, home):
+def _retained_validate(path, home, *, artifact_roots=()):
     gd = path / '.git'
     require(gd.is_dir() and not any((gd / p).exists() for p in (
         'commondir', 'worktrees', 'modules', 'objects/info/alternates',
@@ -859,7 +868,8 @@ def _retained_validate(path, home):
     for entry in filter(None, git('ls-files', '--stage', '-z')):
         identity, name = entry.split(b'\t', 1)
         mode, _, stage = identity.split()
-        require(mode in (b'100644', b'100755') and stage == b'0' and name not in names
+        artifact=any(name.startswith(os.fsencode(root) + b'/') for root in artifact_roots)
+        require((mode in (b'100644', b'100755') or (artifact and mode==b'120000')) and stage == b'0' and name not in names
             and not name.startswith(b'/') and not {b'.', b'..', b'.git'} & set(name.split(b'/')),
             'pcp_local_retained_index_changed')
         names.add(name)
@@ -917,6 +927,10 @@ def retained_workspaces(storage, root, current_job_id):
     require(root.is_absolute() and root.resolve() == root and not root.is_symlink(),
             'pcp_local_workspace_root_invalid')
     for path in root.iterdir():
+        from . import pcp_local_artifacts as artifacts
+        if path.name==artifacts.CUSTODY:
+            artifacts.validate_custody_root(storage,root,current_job_id)
+            continue
         require(path.is_dir() and not path.is_symlink() and path.resolve() == path
                 and re.fullmatch('[a-f0-9]{32}', path.name), 'pcp_local_foreign_workspace')
         if path.name == current_job_id:
@@ -970,10 +984,10 @@ def retained_workspaces(storage, root, current_job_id):
 
 def read_activation():
     """A switch is not authority: require an independently installed document."""
-    from .pcp_local_recovery import enabled as held_enabled, HeldPermit
+    from .pcp_local_recovery import enabled as held_enabled, load_held_permit
     if held_enabled():
         require(not ACTIVATION_FILE.exists(), "held_ordinary_activation_forbidden")
-        return HeldPermit().activation
+        return load_held_permit().activation
     from .pcp_local_task_queue import enabled, RecoveryPermit
     if enabled():
         return RecoveryPermit().activation
@@ -998,8 +1012,8 @@ class TrustedReaders:
         self.activation = read_activation()
         from .pcp_local_task_queue import enabled, RecoveryPermit
         self.recovery = RecoveryPermit() if enabled() else None
-        from .pcp_local_recovery import enabled as held_enabled, HeldPermit
-        self.held = HeldPermit() if held_enabled() else None
+        from .pcp_local_recovery import enabled as held_enabled, load_held_permit
+        self.held = load_held_permit() if held_enabled() else None
         require(not (self.held and self.recovery), "held_conflicting_authority")
         self.route = None
         self.task = None
