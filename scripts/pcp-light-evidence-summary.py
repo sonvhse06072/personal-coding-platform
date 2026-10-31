@@ -84,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
             object_pairs_hook=_object_without_duplicate_members,
         )
         result = summarize(records)
-    except (OSError, UnicodeError, json.JSONDecodeError, InputError) as exc:
+    except (OSError, UnicodeError, json.JSONDecodeError, InputError, RecursionError) as exc:
         reason = str(exc) if isinstance(exc, InputError) else "input_unavailable_or_invalid"
         print(json.dumps({"status": "INVALID", "reason": reason}, sort_keys=True))
         return 2

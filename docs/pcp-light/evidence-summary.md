@@ -26,7 +26,10 @@ full, lowercase 40-character hexadecimal SHA. The top-level JSON value must be
 an array; an empty array is valid. Invalid JSON or records produce a sanitized
 JSON error on stdout and a nonzero exit status. The error does not include input
 contents, and validation failures emit no partial summary counts. The CLI reads
-the input without modifying its bytes on success or error.
+the input without modifying its bytes on success or error. Excessively nested
+arrays or objects that exceed the JSON parser's recursion limit are rejected
+deterministically with the same sanitized `INVALID` status and a nonzero exit;
+their contents and partial counts are not emitted.
 
 Example:
 

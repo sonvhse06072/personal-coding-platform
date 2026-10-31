@@ -146,3 +146,23 @@ def test_cli_preserves_input_bytes_on_success_and_source_mismatch_error(tmp_path
     assert json.loads(outputs[1].stdout) == {
         "status": "INVALID", "reason": "source_sha_mismatch"
     }
+
+
+@pytest.mark.parametrize("nested", [
+    b"[" * 2000 + b"0" + b"]" * 2000,
+    b"{" * 2000 + b'"private-sentinel":"never-disclose"' + b"}" * 2000,
+])
+def test_cli_rejects_deep_nesting_sanitized_and_preserves_input(tmp_path, nested):
+    path = tmp_path / "deep.json"
+    path.write_bytes(nested)
+    before = path.read_bytes()
+
+    run = subprocess.run([sys.executable, str(SCRIPT), str(path)],
+                         capture_output=True, check=False)
+
+    assert run.returncode != 0
+    assert run.stdout == b'{"reason": "input_unavailable_or_invalid", "status": "INVALID"}\n'
+    assert run.stderr == b""
+    assert b"never-disclose" not in run.stdout + run.stderr
+    assert b"count" not in run.stdout
+    assert path.read_bytes() == before
