@@ -2549,6 +2549,17 @@ def publish_branch(payload: PublishBranchRequest) -> dict[str, Any]:
         except G1IsolationStop as exc:
             raise HTTPException(403, "G1 T02 delivery isolation invalid") from exc
 
+    if payload.project_id == 'pcp-local':
+        a, _, _ = _pcp_identity(payload.job_id,payload.source_commit)
+        if 'local_review_repair' in a:
+            p=a['local_review_repair']
+            if (payload.review_repair_pr_number!=p['pr_number']
+                    or payload.review_repair_previous_commit!=p['expected_head']
+                    or git(workspace,'show','-s','--format=%P',expected).split()!=[p['expected_head']]
+                    or git(workspace,'rev-parse',expected+'^{tree}')!=p['patch_plan']['candidate']['identity']['tree']
+                    or git(workspace,'diff','--name-only',p['expected_head'],expected,'--').splitlines()!=[p['patch_plan']['path']]):
+                raise HTTPException(409,'local_repair_publish_binding_changed')
+
     _, origin = _source_origin(cfg)
     repository = github_repository_from_origin(origin)
     if payload.project_id == G1_T02_ID and repository != G1_T02_DELIVERY_REPO:
@@ -3563,6 +3574,9 @@ def _pcp_digest(value):
 
 
 def _pcp_activation():
+    from .pcp_local_review_repair import enabled as review_enabled, activation as review_activation
+    if review_enabled():
+        return review_activation()
     from .pcp_local_held import enabled as held_enabled, activation as held_activation
     if held_enabled():
         return held_activation()
@@ -3642,8 +3656,8 @@ def pcp_local_observe(payload: PcpLocalObservationRequest):
     if (set(host.get('Tmpfs') or {}) != {'/tmp'}
             or any(m.get('Destination') != '/tmp' for m in item.get('Mounts', []) if m.get('Type') == 'tmpfs')
             or item.get('Name') != '/' + name or not item.get('State', {}).get('Running')
-            or item.get('Image') != ((a.get('held_verification') or a.get('claim_recovery'))['roles']['runtime']['image_id']
-                if 'claim_recovery' in a or 'held_verification' in a else a['runtime_image_id'])
+            or item.get('Image') != ((a.get('local_review_repair') or a.get('held_verification') or a.get('claim_recovery'))['roles']['runtime']['image_id']
+                if 'claim_recovery' in a or 'held_verification' in a or 'local_review_repair' in a else a['runtime_image_id'])
             or host.get('Privileged') is not False or host.get('PidMode') == 'host'
             or host.get('NetworkMode') == 'host' or host.get('CapAdd')
             or host.get('ReadonlyRootfs') is not True
@@ -3669,12 +3683,12 @@ def pcp_local_observe(payload: PcpLocalObservationRequest):
     delivery, repository = _github_context(cfg)
     if repository != _PCP_REPOSITORY:
         raise HTTPException(403, 'pcp_local_publisher_repository_invalid')
-    if 'claim_recovery' in a or 'held_verification' in a:
+    if 'claim_recovery' in a or 'held_verification' in a or 'local_review_repair' in a:
         from .pcp_local_claim_recovery import release
-        current_main = (release(a, Path(cfg['path']), root, _pcp_docker, binding_key='held_verification')
-            if 'held_verification' in a else release(a, Path(cfg['path']), root, _pcp_docker))
+        current_main = (release(a, Path(cfg['path']), root, _pcp_docker, binding_key=('local_review_repair' if 'local_review_repair' in a else 'held_verification'))
+            if ('held_verification' in a or 'local_review_repair' in a) else release(a, Path(cfg['path']), root, _pcp_docker))
     with delivery._client() as client:
-        if 'claim_recovery' in a or 'held_verification' in a:
+        if 'claim_recovery' in a or 'held_verification' in a or 'local_review_repair' in a:
             main = client.get(f'{delivery.base}/repos/{repository}/git/ref/heads/main')
             main.raise_for_status()
             if main.json().get('object', {}).get('sha') != current_main:
@@ -3949,6 +3963,8 @@ def _pcp_draft_pr(payload):
     if (payload.branch != 'ai/' + payload.job_id[:12]
             or cfg.get('autonomy', {}).get('allow_create_pr') is not True):
         raise HTTPException(403, 'pcp_local_draft_identity_invalid')
+    if 'local_review_repair' in a and payload.expected_pr_number!=a['local_review_repair']['pr_number']:
+        raise HTTPException(409,'local_repair_pr_identity_required')
     delivery, repository = _github_context(cfg)
     if repository != _PCP_REPOSITORY:
         raise HTTPException(403, 'pcp_local_publisher_repository_invalid')
@@ -3961,6 +3977,8 @@ def _pcp_draft_pr(payload):
         existing = response.json()
         if len(existing) > 1:
             raise HTTPException(409, 'pcp_local_ambiguous_pr')
+        if payload.expected_pr_number is not None and (len(existing)!=1 or existing[0].get('number')!=payload.expected_pr_number):
+            raise HTTPException(409,'pcp_local_repair_pr_changed')
         if existing:
             data = existing[0]
             # Never overwrite an independently reviewed PR during retry.
@@ -3977,6 +3995,12 @@ def _pcp_draft_pr(payload):
             or data.get('head', {}).get('repo', {}).get('full_name') != repository
             or data.get('draft') is not True):
         raise HTTPException(409, 'pcp_local_draft_proof_invalid')
+    if payload.expected_pr_number is not None:
+        with delivery._client() as client:
+            updated=client.patch(f'{delivery.base}/repos/{repository}/pulls/{payload.expected_pr_number}',json={'body':payload.body})
+            updated.raise_for_status()
+            if updated.json().get('head',{}).get('sha')!=payload.expected_commit:
+                raise HTTPException(409,'pcp_local_repair_pr_update_uncertain')
     return dict(job_id=payload.job_id, created=created, number=data['number'],
         url=data['html_url'], state=data['state'], head=payload.expected_commit,
         head_ref=payload.branch, base_ref='main', repository=repository, draft=True)

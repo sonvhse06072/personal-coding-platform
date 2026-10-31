@@ -1,95 +1,95 @@
 # Current Project State and Handoff
 
-## #835 temporary artifacts and held848 source candidate — 2026-10-31
+## #835 local PM test review-repair — SOURCE/FIXTURE
 
-[WO6537270657](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6537270657)
-authorizes SOURCE/FIXTURE work on `ai/835-temp-artifacts-held848-v1`
-([Draft source PR849](https://github.com/sonvhse06072/personal-coding-platform/pull/849)), anchored at
-accepted H **871fbf2485a1ffb89a88a69e1daaaca10e25b318**. PR846 is merged;
-postmerge CI41142412566 passed four executed suites. This replaces stale premerge
-context continuity. Current source work does not adopt another image or baseline.
+[WO6540919383](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6540919383):
+[Draft source PR851](https://github.com/sonvhse06072/personal-coding-platform/pull/851),
+one writer on `ai/835-local-ci-review-repair848-v1`, engineering/main/platform
+**R44b79c7e05235c402e426db1b713b1df802a3538**. Task/base/canonical/baseline/verifier
+**H871fbf2485a1ffb89a88a69e1daaaca10e25b318** unchanged. This replaces stale main T1
+pre-publication848 state using actual evidence847, not a new authority/baseline.
+[One WorkReport, evidence checklist and full future packet](history/2026-10-31-local-review-repair848.md)
+is the source handoff; reconcile actual GitHub/Runtime on resume.
 
-[One WorkReport, evidence matrix, retained fixture inventory and future rollout packet](history/2026-10-31-temp-artifacts-held848.md)
-records actual pinned CLI reproduction, private Runtime-created temp output, explicit
-inventory/CAS custody and separate non-model artifact recovery via existing verify-held.
-Actual H mandatory verifier passed19+19 on an isolated restored copy; Git/PostgreSQL/
-eight-reader/HTTP and synthetic external transports exercise verification/commit/delivery.
-No original848 proof or task delivery follows from those fixtures. Required exact-head
-hosted suites are recorded in the source PR. Two unrelated optional PostgreSQL supervision
-failures reproduce unchanged on pristine H and remain explicitly tracked.
+Separate private1973B **test-only** patch SHA
+bf3a6c53cf8adce7dcc47b7c8ad4234884804a0d6ba9785e47fd61499166fffb changes only
+tests/test_pcp_light_evidence_summary.py. Real H Python3.11.2 and existing Executor3.13.18
+copied CLI19 PASS each; original hosted failure was3.13.17, not exact patch-version parity.
+Valid arrays/objects/known bounded reasons and no disclosure/counts/stderr/input mutation;
+old duplicate/schema tests and script/task docs unchanged. Malformed-object/removal-of-catch
+controls RED. Task patch is not applied or committed into platform source.
 
-## Retained live848 and historical state
+Default-OFF local review-repair uses exact private approval/full-row CAS/standard proof
+history/real verifier/verified recovery/same-PR append/latest-head PM gates, without model,
+admission, legacy-runner bypass, old-permit reuse or counter reset. Unknown tests never
+replay. Real Git/PG/authenticated HTTP fault coverage; restored copy actual H19+19/private
+Git/synthetic GitHub+PM finalization PASS, copied1/4/2/delivered3/released4. Earlier copy
+remains verifying/unknown intact. Actual repair-image adoption/live repair NOT TESTED.
+All16 source fixtures stopped/retained, dumps and unknown state preserved.
+Required exact-final-head four-suite source CI is recorded in PR851 checks/closeout
+receipt. Independent source/patch review remains a gate; CI is not acceptance.
 
-Latest execution evidence is [unmerged Draft PR847](https://github.com/sonvhse06072/personal-coding-platform/pull/847)
-head **e97fa327596914e6d29644924f7f0e6f9cbf9dae**, executed CI41155407650 PASS.
-Its report is `docs/project/history/2026-10-31-task848-h-execution.md` on that branch;
-it is evidence, not accepted platform source. Reconcile actual GitHub/Runtime state.
+## Original848 and retained state
 
-- Issue848 job **15271df1a36b1281010465538a9318ae** remains blocked /
-  `pcp_local_changed_paths_denied`, held from invocation_returned; successful returned
-  development invocation, receipt **running/gen2**, lease **active/gen4**.
-- Counters **1 model /0 mandatory phases /0 delivery**, usage unchanged; no proof,
-  commit or task PR. Original task/base/canonical/verifier H remain immutable.
-- Three allowed tracked edits and31 pytest entries were reported. Full no-follow
-  inventory also found two ignored bytecodes: a future recovery requires independent
-  approval of all three exact roots/54 nodes. No filename/ignore-based cleanup.
-- Original ordinary V2 is disabled intact, expiry **2026-10-31T07:00:00Z** unchanged;
-  auth absent; exact workers stopped. No cleanup, login, verification replay or renewal.
-- Source-session final read-only audit matches all 831 entries in848’s workspace, entire
-  V4 DB/sequences and A/B/C original bytes/metadata. Fixture copies alone were mutated.
+[Task850](https://github.com/sonvhse06072/personal-coding-platform/pull/850) remains Draft,
+open/unmerged at **cf41cad08434f930841ced57a773f35783a1f537**. Independent
+[review5721908834](https://github.com/sonvhse06072/personal-coding-platform/pull/850#pullrequestreview-5721908834)
+requests bounded test correction. Actual CI41175379839 executed4: root one nesting reason
+failure, other3 PASS. Actual H mandatory19+19 already passed and must not replay under
+SOURCE permission. [Evidence847](https://github.com/sonvhse06072/personal-coding-platform/pull/847)
+head5340d978ebb2a22542cc45b83f9c3990ea3da37a/CI41176395853 all4 executed PASS retains
+actual recovery/publication; its latest handoff points to this source work, not acceptance.
 
-A831, B837 and C843 remain completed/PM accepted with original proof, usage, receipt
-history and counters1/2/1. C task PR844/evidence845 are merged; original closeout is
-[retained in history](history/2026-10-30-ordinary-c843-live.md). Shared lease is now
-active/gen4 for848; historical release evidence does not claim current admission is free.
-Retired V3/#824 remains cancelled/incomplete_not_delivered, assisted commit7b3833bd,
-blocked3/released1. All historical resources, configs, credentials, rollback assets and
-old disabled authorities remain retained. No resurrection/reset/publication.
+Job **15271df1a36b1281010465538a9318ae** remains blocked/pcp_local_hosted_ci_not_passed,
+execution verified, delivery ci_failure, finalized=false; **running/gen2**, **active/gen4**,
+counters **1/2/1**. Original tree b14a0bb25ef7bfb82609c87f88a1f0d37b63b95b and diff
+b7f49de89ffa98cf20f549a4cfdbfc8ce9263a995e23b484faa21e2264f685cf with single-parent H
+commit preserved. Full rows and848/A/B/C workspace bytes/metadata unchanged. All54 custody
+nodes, original/derived configs, disabled permits, credentials, usage and backups retained.
+Historical finite13:15Z recovery authority remains OFF; it cannot authorize this new class.
 
-## Deployed observer and retained resources
-
-**https://localhost:18443/dashboard** — tokenless `loopback_readonly`; no login/cookie.
-Existing N observer and HTTPS remain unchanged and trusted HTTPS availability is checked.
-No fixture result claims a new dashboard deployment, VPN parity or provider access.
-Full IDs and scoped fixture stop commands are in the WorkReport. Only original
-DB8b72a8d3/N observerda6c4347/HTTPS601c552b stay running for observation. Original
-Runtime1b094922/Executorfc32fd0a/Routerf03edbd9 remain stopped; source-session task-owned
-containers are stopped and retained, with dumps/tmp archives/workspace custody preserved.
+A831/B837/C843 remain completed/PM accepted with original proof/counters1/2/1. V3/retired824
+and assisted commit7b3833bd remain incomplete historical evidence, never resurrected.
+**https://localhost:18443/dashboard** remains N/tokenless loopback_readonly. Original
+DB8b72a8d3/N observerda6c4347/HTTPS601c552b running; exact R Runtime9d046f4f/Executor
+d4d056f1/Routerf03edbd9 OFF, ordinary/artifact/review authority absent. Source fixtures,
+private dumps and scoped stop commands are in WorkReport; no new deployment/VPN claim.
 
 ## Immediate next safe actions
 
-Independent PM reviews the ONE Draft source candidate, exact diff and four executed
-final-head suites. Keep evidence847 unmerged while selecting accepted repairR and stable
-main-at-R recovery window. A separately approved finite execution decision and exact
-concrete artifact-permit checkpoint are required before original848 mutation. The packet
-keeps Runtime/ExecutorR distinct from task/baseline/verifierH; it does not invent R,
-renew original authority, manually solve848 or auto-replay unknown verification.
+Independent PM reviews ONE Draft source candidate, separate exact test artifact, failure
+history, executed final-head4-suite CI and integrated packet. Only after accepted mergeX/
+postmerge CI may a NEW concrete finite decision select actual build/adoption/private permit.
+Preserve H/issue/body/job/proof/usage/ownership; exact images/configs/preimages/review/patch
+must be independently bound. No ad-hoc task edit/push, proof refresh or generic requeue.
+Later finalization needs a NEW accepted review/head/diff/CI; old review requests changes.
 
 ## Active PCP issues and owner attention
 
-#835 remains campaign index; #604 remains open for programme scope; #595 HOLD.
-Source-session Owner requests0; operator model gpt-6.1-sol, effort/tokens/cost Unknown.
-Measured operator/fixture/hosted time is separate from PCP counters. The known static
-2-call admission limitation is not changed here. No unattended/benchmark/direct-Codex
-comparison or internal CLI compaction guarantee is established.
+#835/#604 remain open; #595 HOLD. Static2-call admission limit and two unrelated optional
+supervision PG failures remain separate, not broadly rerun/fixed here. Operator gpt-6.1-sol,
+requested effort high; actual exposed effort/tokens/cost/Owner minutes Unknown; additional
+Owner requests0. Operator/fixture/CI measurements are separate from PCP counters. Return
+to Drupal/DDEV benchmark after848 closeout; no new canary/benchmark PASS is introduced.
 
 ## Standing safety boundary
 
-Workers/authority OFF. Outside separately approved finite operations,
-`A3B2_IMAGE_BUILD=STOP` and `CODEX_LIVE=STOP`. No live cleanup/adoption/build/login,
-admission/inference, original-task replay, permit restoration, baseline activation,
-publication/finalization/merge, foreign workload/Chợ Nhạc/global networking or prune.
-Developer does not accept or merge its own source. Retain DB/observer/HTTPS and evidence.
+`A3B2_IMAGE_BUILD=STOP`, `CODEX_LIVE=STOP`; live workers/authority OFF. SOURCE/FIXTURE
+allows owned isolated fixtures only. No original848/A/B/C/custody mutation, task-branch
+push/test replay, permit restoration/renewal, baseline activation, login/inference,
+finalization, merge/deploy, foreign/Chợ Nhạc/global network change or prune. Preserve
+DB/observer/HTTPS and all history. Source overlays are not accepted repair images;
+no unattended-operation or internal CLI compaction guarantee is inferred.
 
 <!-- PCP:CONTINUITY:START -->
-Accepted source H871fbf2485a1; PR846 merged, postmerge41142412566 four suites PASS.
-Active SOURCE/FIXTURE candidate ai/835-temp-artifacts-held848-v1, WO6537270657.
-Evidence847 unmerged e97fa327; CI41155407650 four executed suites PASS; no source promotion.
-Original848 job15271df1a36b1281010465538a9318ae held/changed_paths_denied; running2/active4; counters1/0/0.
-Task/base/canonical/verifierH unchanged; no proof/commit/taskPR. No original artifact movement.
-V2 disabled intact; expiry2026-10-31T07:00:00Z unchanged; auth absent; exact workers OFF.
-Restored-copy19+19 PASS, real Git/PG/eight-reader/HTTP with synthetic external transports only.
-Private temp/custody inventory never authorizes arbitrary cleanup; future R/H permit needs independent PM.
-A/B/C completed evidence/counters1/2/1 and retired824 preserved. DB/N observer/HTTPS retained.
-Source fixtures stopped/retained; #604 open/#595 HOLD. Next: independent source review, no live recovery authority.
+GitHub/Runtime: main/platformR44b79c7e; task/canonical/baseline/verifierH871fbf24 unchanged.
+WO6540919383 SOURCE/FIXTURE ai/835-local-ci-review-repair848-v1, one writer/one source PR.
+Separate test-only artifactbf3a6c53; script/docs unchanged; actual3.11.2/3.13.18 CLI19 PASS each.
+Private local approval/full-row CAS/proof epochs/verified recovery/same-PR/latest PM; no model/legacy bypass.
+Restored copy actual H19+19/private Git/synthetic PM finalization PASS; copied1/4/2/delivered3/released4.
+Prior fixture unknown verification retained/fenced, not replayed/reset. Actual repair deployment NOT TESTED.
+Original84815271df1a36b1281010465538a9318ae verified/ci_failure/running2/active4/counters1/2/1.
+Task850cf41cad0 changes-required5721908834/actual CI41175379839 rootFAIL; evidence8475340d978 CI41176395853 all4PASS.
+Original rows/workspaces/proof/usage/ABC/retired824 preserved; exact live workers/authority OFF.
+DB/N observer/HTTPS available. Next independent source/patch review, actualX/postmerge CI, NEW finite packet.
 <!-- PCP:CONTINUITY:END -->

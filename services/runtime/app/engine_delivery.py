@@ -248,6 +248,12 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         execution = row['checkpoint']['pcp_local_execution']
         require(execution.get('state') == 'verified' and execution.get('commit') == payload.expected_head,
                 'pcp_local_review_unverified_job')
+        if 'pcp_local_review_repair' in row['checkpoint']:
+            from .pcp_local_review_repair import validate_latest
+            require(readers.local_review is not None, 'local_repair_finalization_authority_required')
+            require(row['checkpoint']['pcp_local_review_repair']['state']=='awaiting_pm_review',
+                    'local_repair_not_awaiting_review')
+            validate_latest(row, readers.local_review)
         proof = await readers.executor('/v1/pcp-local/pm-review', dict(job_id=job_id,
             source_commit=payload.source_commit, expected_head=payload.expected_head,
             activation_digest=digest(a), pr_number=payload.pr_number, review_id=payload.review_id))
@@ -255,6 +261,9 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 and proof.get('activation_digest') == digest(a)
                 and proof.get('report', {}).get('diff_hash') == result.get('diff', {}).get('diff_hash'),
                 'pcp_local_review_proof_changed')
+        if 'pcp_local_review_repair' in row['checkpoint']:
+            require(required_github_actions_pass(proof.get('ci') or {},repository=REPOSITORY,
+                commit=payload.expected_head,workflow_name='tests'),'local_repair_latest_ci_unproven')
         result['review'] = {'verdict': 'pass', 'source': 'authenticated_github_pm',
                             'review_id': payload.review_id, 'report': proof['report']}
         result['delivery_finalized'] = True
@@ -348,7 +357,9 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                              "auto_merge_low_risk": False, "production_deploy": False},
                 max_wait_seconds=max(1, min(900, int(readers.activation['budget']['max_wall_seconds']
                     - float(progress.get('elapsed_minutes', 0)) * 60))),
-                reconcile_existing=attempts > 0, required_ci=(REPOSITORY, "tests"))
+                reconcile_existing=attempts > 0, required_ci=(REPOSITORY, "tests"),
+                expected_pr_number=(checkpoint.get('pcp_local_review_repair') or {}).get('original', {}).get('job', {}).get('result', {}).get('delivery', {}).get('pull_request', {}).get('number'),
+                expected_previous_commit=(checkpoint.get('pcp_local_review_repair') or {}).get('original', {}).get('job', {}).get('result', {}).get('commit'))
         except DeliveryError as exc:
             # Publication may already have happened. Retain all metadata so the
             # next delivery-only attempt reconciles remote state before writes.

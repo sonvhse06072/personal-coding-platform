@@ -1,41 +1,26 @@
 # Supported readiness, recovery and dashboard adoption
 
-## #835 temporary artifacts and held848 — SOURCE/FIXTURE candidate
+## Local PM test review-repair — SOURCE/FIXTURE
 
-[WO6537270657](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6537270657),
-anchor H871fbf2485a1, branch `ai/835-temp-artifacts-held848-v1`,
-[Draft source PR849](https://github.com/sonvhse06072/personal-coding-platform/pull/849).
-[One WorkReport, evidence matrix, exact resources/shutdown and complete future rollout packet](../project/history/2026-10-31-temp-artifacts-held848.md)
-is the durable checklist:
+[WO6540919383](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6540919383),
+main/platform R44b79c7e; task/base/canonical/baseline/verifier H unchanged. One writer on
+`ai/835-local-ci-review-repair848-v1`; ONE source PR, separate exact private test patch.
+[WorkReport, durable checklist and full source→rollout→repair→finalization packet](../project/history/2026-10-31-local-review-repair848.md).
 
-- [x] Actual pinned H CLI0.160.0/pytest reproduces cwd fallback and command-policy refusal;
-  candidate private child temp passes without shared /tmp/sibling/provider/network access.
-- [x] Explicit provenance/full Git candidate; durable CAS intent, no-overwrite preservation,
-  partial/crash/lost-ack reconciliation; unknown files/ignored files/forged markers deny.
-- [x] Separate version2 artifact permit through existing authenticated verify-held;
-  successful returned invocation/usage/counters/ownership/taskH remain bound; no model path.
-- [x] Real Git/PostgreSQL/eight-reader/registrar/HTTP and restored-copy verification19+19,
-  commit and synthetic delivery; A/B/C unchanged. Actual candidate source overlay is not
-  a built/adopted repair image. Required final-head hosted suites are recorded in the PR.
-- [x] Original848/full V4 DB and historical evidence retained; source fixtures stopped
-  with private dumps/tmp/workspace custody. Existing N observer/HTTPS unchanged.
-- [ ] Independent source review/accepted R/postmerge CI, then separate finite live decision,
-  actual R Runtime/Executor builds/adoption and exact concrete permit checkpoint.
-- [ ] Original848 supported recovery, real Draft task PR/CI and independent PM review.
+- [x] Actual Python3.11.2/3.13.18 portable test patch19 PASS each; valid deep JSON,
+  bounded reasons/negative controls, production/task docs and old schema tests unchanged.
+- [x] Default-OFF authenticated local exact review/patch/PR/head/full-row CAS and original
+  proof/history; real verifier/commit recovery/same-PR/new-head PM compatibility, no model.
+- [x] Real Git/PG/HTTP drift/concurrency/crash/lost-ack coverage; restored copy H19+19/
+  private bare Git/synthetic GitHub+PM finalization PASS. Unknown copy preserved/fenced.
+- [ ] Final-head source CI/independent source+patch review; actual acceptedX/new finite
+  image/config/permit checkpoint before any original mutation. No live permission here.
 
-Original848 remains held/changed_paths_denied, running2/active4, counters1/0/0 with no
-proof/commit. Evidence847 stays unmerged e97fa327. Three explicitly proposed roots include
-ignored bytecode:54 full nodes, not merely31 Git entries. No live quarantine/cleanup.
-Original authority remains disabled, expiry07:00Z unchanged. No login/build/worker startup,
-admission/model/replay/finalization/merge. Two optional supervision PG failures reproduce
-unchanged on H; static2-call admission limitation remains separate. #604/#835 stay open.
-
-The report's single packet preserves task/canonical/verifierH while future platform is R;
-R is not yet known. New version2 private files/flag cannot replace or widen the old config
-permit. Readiness/read-only plan precede one apply under later explicit permission.
-Unknown verification cannot replay. Retain output/candidate/preimages on every failure.
-
-The following C843 sections are historical receipts, not the current848 lease/authority.
+Original848 verified/ci_failure/running2/active4/1/2/1 at task850cf41cad0 unchanged.
+Evidence8475340d978/CI41176395853 records actual delivery and root task CI failure.
+Dashboard/DB/HTTPS available, original workers and authority OFF. No task edit/push/test
+replay, old-permit renewal, baseline activation, login/inference/finalization or merge.
+Following C843 receipts are historical, not current848 ownership or new authority.
 
 ## C843 completed and retained — 2026-10-30 17:21 UTC
 

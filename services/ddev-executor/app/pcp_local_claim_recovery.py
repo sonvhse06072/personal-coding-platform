@@ -67,7 +67,7 @@ def git(repo, *args):
 
 
 def release(a, repo, root, inspect, *, binding_key="claim_recovery"):
-    require(binding_key in {"claim_recovery", "held_verification"})
+    require(binding_key in {"claim_recovery", "held_verification", "local_review_repair"})
     p = a[binding_key]
     receipt_before = p["receipt_before"] if binding_key == "claim_recovery" else p["before"]["receipt"]
     source, repair = a['base_sha'], p['repair_source']
@@ -87,7 +87,7 @@ def release(a, repo, root, inspect, *, binding_key="claim_recovery"):
     require(set(p['roles']) == {'runtime', 'executor', 'router', 'verifier'})
     for role, binding in p['roles'].items():
         expected_source = repair if role in ('runtime', 'executor') else source
-        if binding_key == 'held_verification' and role == 'router':
+        if binding_key != 'claim_recovery' and role == 'router':
             expected_source = binding['source_commit']
             require(re.fullmatch('[0-9a-f]{40}', expected_source))
             git(repo, 'merge-base', '--is-ancestor', expected_source, source)
