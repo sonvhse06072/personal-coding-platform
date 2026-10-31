@@ -3,6 +3,7 @@
 ## #835 local PM test review-repair — SOURCE/FIXTURE
 
 [WO6540919383](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6540919383):
+[Draft source PR851](https://github.com/sonvhse06072/personal-coding-platform/pull/851),
 one writer on `ai/835-local-ci-review-repair848-v1`, engineering/main/platform
 **R44b79c7e05235c402e426db1b713b1df802a3538**. Task/base/canonical/baseline/verifier
 **H871fbf2485a1ffb89a88a69e1daaaca10e25b318** unchanged. This replaces stale main T1
@@ -25,7 +26,8 @@ replay. Real Git/PG/authenticated HTTP fault coverage; restored copy actual H19+
 Git/synthetic GitHub+PM finalization PASS, copied1/4/2/delivered3/released4. Earlier copy
 remains verifying/unknown intact. Actual repair-image adoption/live repair NOT TESTED.
 All16 source fixtures stopped/retained, dumps and unknown state preserved.
-Required final-head source CI and independent source/patch review remain PR gates.
+Required exact-final-head four-suite source CI is recorded in PR851 checks/closeout
+receipt. Independent source/patch review remains a gate; CI is not acceptance.
 
 ## Original848 and retained state
 
