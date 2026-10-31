@@ -1,0 +1,125 @@
+{
+  "decision": 6535853784,
+  "source": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+  "task": {
+    "job": "15271df1a36b1281010465538a9318ae",
+    "issue": 848,
+    "body_sha256": "ffb68e1930c9e1dae24e7b6943bf0763248e2003a9f9edec73d06333d24caf7e",
+    "goal_sha256": "367ff0aecc818759aeb39ae245e94c366817c7f8d22ac270a5e58316fa2cc2d7",
+    "baseline": "pcp-local-context-871fbf2485a1-20261031-draft",
+    "installed": false,
+    "configs": {
+      "projects.pcp-local.yml": "21f5df8c08c38c65a6f861702b2de9d287e89a32656a4ceb81c958369c057983",
+      "project-baselines.pcp-local.yml": "2bc987ccad3232a3f14d7585a2523cf1146ae40861c6d64df533a3bd0dc718f9",
+      "models.yml": "a748faf933fe5c792679a687f2b0870f97fb6f6af8bd70887cc9bb4d8758844d",
+      "routing-policy.yml": "cc71c65bec662e4726ee056525f0a02a6a1bfd9e1f09f92abad22a37b9c9d615"
+    }
+  },
+  "outcome": "BLOCKED_BEFORE_ADMISSION",
+  "readiness_blocker": "budget_not_independently_approved",
+  "source_contract": "pcp_local_worker_admission.py requires 1 <= model_calls <= 2; approved activation has 3",
+  "proof": {
+    "container": "df3b557b6ee863121305fc698d36b70d4ec98d5a129efb653ceaf9f32873f74f",
+    "exit": 0,
+    "report": {
+      "candidate_outcomes": [
+        {
+          "model_calls": 2,
+          "outcome": "PASS_EVIDENCE_ONLY"
+        },
+        {
+          "model_calls": 3,
+          "outcome": "budget_not_independently_approved"
+        }
+      ],
+      "synthetic_only": true,
+      "provider_calls": 0,
+      "registration_calls": 0
+    }
+  },
+  "closeout": {
+    "at": "2026-10-31T00:07:29.169790+00:00",
+    "reason": "budget_not_independently_approved",
+    "workers": {
+      "runtime": "1b0949227f267d6d0b9144348e8e4dd5cd73d2ca9b74c69597e1d5bab7ecdf35",
+      "ddev-executor": "fc32fd0a0bf632a185aad7d83f21234988359a9d803f8dcc0be36145a9d93e1d",
+      "router": "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6"
+    },
+    "all_stopped": true,
+    "activation_disabled_sha256": "4a354af21b2c4f2fd6104ad507feaaf77ada74f0b2de25ea48d2feee425a1a9c",
+    "logout_exit": 0,
+    "scoped_auth_absent": true,
+    "jobs_receipts_leases_events_unchanged": true,
+    "ABC_metadata_unchanged": true,
+    "admission_requests": 0,
+    "model_invocations": 0,
+    "source": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+    "canonical_H_retained": true,
+    "expiry": "2026-10-31T07:00:00Z"
+  },
+  "backup_reused": {
+    "accepted_backup_sha256": "8cc0944416678efeed4c3acc6f4b5678677ba4f4b5cf6e0d8f434ecbac39d50c",
+    "fresh_entire_DB_match": true,
+    "restored_rehearsal_reused": true
+  },
+  "after_backup": {
+    "sha256": "3a23ec19afd9d62dc2b03e23afe43b68f0ef30401ac476093bea579905d37c88",
+    "bytes": 228689
+  },
+  "database_after_sha256": "de4629cb1caf42e5407bf5608c295e1abf9294ab043cbf75333449e07d159b4d",
+  "database_delta": [
+    {
+      "table": "cp_quota_collectors",
+      "sequence": null,
+      "before_count": 2,
+      "after_count": 2
+    },
+    {
+      "table": "cp_quota_snapshots",
+      "sequence": null,
+      "before_count": 1,
+      "after_count": 1
+    }
+  ],
+  "adoption": {
+    "runtime": [
+      "f55b55ded4f2479214233244def8b34e9da36b93e057cdf4c3eda75149df7e14",
+      "1b0949227f267d6d0b9144348e8e4dd5cd73d2ca9b74c69597e1d5bab7ecdf35"
+    ],
+    "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+    "environment_changed": [
+      "PCP_LOCAL_SOURCE_COMMIT"
+    ],
+    "host_lifecycle_delta": {
+      "OomKillDisable": [
+        null,
+        false
+      ]
+    },
+    "executor_reused_exact": true,
+    "router_reused_exact": true
+  },
+  "publisher": {
+    "user_http": 200,
+    "expiry": "2026-11-04 08:29:46 UTC",
+    "repository_http": 200,
+    "main_http": 200,
+    "issue_http": 200,
+    "actions_http": 200,
+    "status_http": 200,
+    "write_operations": 0,
+    "retained_credential": true,
+    "credential_values": "not published"
+  },
+  "activation_sha256": "4a354af21b2c4f2fd6104ad507feaaf77ada74f0b2de25ea48d2feee425a1a9c",
+  "manifest_sha256": "5797551eb97665450443475d900ca079002a57ca4bd29b087386e8204b12b16d",
+  "runtime_model_calls": 0,
+  "owner_interactions": 0,
+  "operator_model": "gpt-6.1-sol",
+  "operator_effort": null,
+  "operator_usage": null,
+  "remaining_decision": "PM disposition: current H can admit at most2 calls; preferred source repair plus renewed source/image/task/baseline binding if retaining accepted3-call envelope; no automatic restart/retry",
+  "baseline_installed_status": "approved",
+  "active_revision": "pcp-local-context-871fbf2485a1-20261031-draft",
+  "execution_authority": "disabled"
+}

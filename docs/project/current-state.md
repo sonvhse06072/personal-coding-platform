@@ -1,15 +1,19 @@
 # Current Project State and Handoff
 
-## Approved issue848 H execution — 2026-10-31
+## Issue848 H adoption retained — blocked before admission
 
 [Decision6535853784](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6535853784)
-approves the exact PR847 packet815e90c. [Execution record](history/2026-10-31-task848-h-execution.md)
-is written before authority installation. Final issue848 hashes are validated; production
-job15271df1a36b1281010465538a9318ae has no prior artifacts. Main remains H, PR847 stays
-unmerged. Fixed expiry07:00Z Oct31, no renewal. Preparation is preserved unchanged.
-Fresh preimages match original A/B/C proof/counters and released3 ownership; new authority
-is staged inactive. Proceed only through approved adoption/readiness/one ordinary request;
-stop workers/disable intact at delivery or blocker. No Developer task solution/finalization.
+approved3 developer calls; H admission validator accepts at most2. Aggregate readiness
+returned budget_not_independently_approved. [Actual execution/next disposition](history/2026-10-31-task848-h-execution.md)
+records source/image proof and one bounded startup. Zero admissions/jobs/model calls.
+Identity15271df1a36b1281010465538a9318ae is unconsumed; no task848 PR or workspace.
+
+H Runtime1b094922… and canonical/successor are installed; N assets retained. At00:07:29Z
+Runtime/Executor/Router stopped, activation4a354af2… disabled intact, scoped logout passed.
+A/B/C proof/counters/ownership unchanged, lease released3; only quota observations changed.
+DB/N observer/HTTPS stay running (trusted HTTPS200). Main H; SAME PR847 unmerged.
+Fixed expiry07:00Z Oct31 is not renewed. PM must resolve the budget/source binding mismatch
+before any restart/admission; no automatic downgrade, source patch or replay.
 
 ## #604 H physical preparation — 2026-10-31
 

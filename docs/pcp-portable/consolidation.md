@@ -1,5 +1,17 @@
 # PCP Local consolidation execution checklist
 
+## Issue848 execution blocked, workers retained OFF
+
+[Decision6535853784](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6535853784)
+authorized3 calls, but H admission gate accepts1–2. Aggregate readiness stopped before
+registration/admission/model; no task PR. [Execution report, source proof, exact IDs and
+one PM disposition packet](../project/history/2026-10-31-task848-h-execution.md) supersede
+preparation-only next actions. H canonical/Runtime and approved active successor retained, execution authority OFF; N retained.
+All three workers stopped00:07:29Z, activation disabled byte-identically, scoped logout0.
+A/B/C evidence/counters/lease unchanged; only quota observations refreshed. DB/observer/
+HTTPS stay available. Do not restart, reduce envelope or patch source without disposition.
+Main H, PR847 unmerged; expiry07:00Z unchanged. Full final-head CI is in the PR receipt.
+
 ## #604 H candidate preparation retained
 
 PR846 merged H871fbf2485a1ffb89a88a69e1daaaca10e25b318; CI41142412566 four executed
