@@ -1,41 +1,43 @@
 # PCP Local consolidation execution checklist
 
-## #835 temporary artifacts and held848 — SOURCE/FIXTURE candidate
+## Held848 exact-R preparation — completed, execution permission pending
 
-[WO6537270657](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6537270657),
-anchor H871fbf2485a1, branch `ai/835-temp-artifacts-held848-v1`,
-[Draft source PR849](https://github.com/sonvhse06072/personal-coding-platform/pull/849).
-[One WorkReport, evidence matrix, exact resources/shutdown and complete future rollout packet](../project/history/2026-10-31-temp-artifacts-held848.md)
-is the durable checklist:
+[WO6538839020](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6538839020),
+accepted R44b79c7e05235c402e426db1b713b1df802a3538; postmerge CI41167440142 verified
+four actual suites PASS before physical work. SAME [Draft evidence PR847](https://github.com/sonvhse06072/personal-coding-platform/pull/847)
+normally merged R; main stays R, no force push/merge. Task/canonical/baseline/verifier H unchanged.
+[One WorkReport, concrete PM packet, exact IDs/hashes/scoped shutdown and rollback](../project/history/2026-10-31-held848-r-preparation.md)
+is the durable checklist; historical847/849 reports remain retained.
 
-- [x] Actual pinned H CLI0.160.0/pytest reproduces cwd fallback and command-policy refusal;
-  candidate private child temp passes without shared /tmp/sibling/provider/network access.
-- [x] Explicit provenance/full Git candidate; durable CAS intent, no-overwrite preservation,
-  partial/crash/lost-ack reconciliation; unknown files/ignored files/forged markers deny.
-- [x] Separate version2 artifact permit through existing authenticated verify-held;
-  successful returned invocation/usage/counters/ownership/taskH remain bound; no model path.
-- [x] Real Git/PostgreSQL/eight-reader/registrar/HTTP and restored-copy verification19+19,
-  commit and synthetic delivery; A/B/C unchanged. Actual candidate source overlay is not
-  a built/adopted repair image. Required final-head hosted suites are recorded in the PR.
-- [x] Original848/full V4 DB and historical evidence retained; source fixtures stopped
-  with private dumps/tmp/workspace custody. Existing N observer/HTTPS unchanged.
-- [ ] Independent source review/accepted R/postmerge CI, then separate finite live decision,
-  actual R Runtime/Executor builds/adoption and exact concrete permit checkpoint.
-- [ ] Original848 supported recovery, real Draft task PR/CI and independent PM review.
+- [x] Exact originals/disabled authorities/831-entry workspace/54-node three-root inventory,
+  fresh private backup, isolated restored copy and truthful unchanged RouterS binding.
+- [x] ONE serial Runtime/Executor R build each; actual packaging/toolchain/non-root/RO/noexec/
+  askpass/isolation and real actual-image producer→validator checks. No app overlay/model.
+- [x] Packaged R Git/PG/eight-reader/registrar/HTTP regressions74 pass; restored same848 using
+  H verifier19+19, copied commit/synthetic delivery; A/B/C/usage/ownership preserved.
+- [x] Disposable missing-authority rejection before bounded exact replacement cold starts;
+  ordinary authority OFF, workers stopped, old workers retained. Router start/stop bounded,
+  route calls0, stop137/OOMfalse recorded without claiming graceful shutdown.
+- [x] Stable post-start configuration hashes; one UNINSTALLED360426B private version2 proposal
+  SHA1e42acbcfe6663ed50aeda4051f86a313f9542de2b675fbd4799ee0707f6633e, exact-ID sidecar
+  SHA2206863d259df8cab005ac40b34bc0f2a95fee02ee99fb9e2e94e7484b0eecc1.
+- [x] Full original state/config/authority unchanged; new workers and all12 fixtures OFF;
+  dumps/tmp/custody/volume retained. DB/N observer/HTTPS available and unchanged.
+- [ ] Independent finite execution decision selects exact proposal bytes/validity/full IDs,
+  replacement command/config delta and sidecar preflight. Proposed07:15–13:15Z is not granted.
+- [ ] Only under that decision: exact install, start, held readiness/read-only plan, one
+  supported verify-held apply; genuine H mandatory verification, real task Draft PR/CI,
+  independent PM review. Unknown outcomes reconcile read-only, no replay/self-finalization.
 
-Original848 remains held/changed_paths_denied, running2/active4, counters1/0/0 with no
-proof/commit. Evidence847 stays unmerged e97fa327. Three explicitly proposed roots include
-ignored bytecode:54 full nodes, not merely31 Git entries. No live quarantine/cleanup.
-Original authority remains disabled, expiry07:00Z unchanged. No login/build/worker startup,
-admission/model/replay/finalization/merge. Two optional supervision PG failures reproduce
-unchanged on H; static2-call admission limitation remains separate. #604/#835 stay open.
+Original848 remains held/changed_paths_denied, running2/active4, counters1/0/0, no proof/commit.
+Original ordinary expiry07:00Z unchanged, no renewal. Closed permit schema has no full-ID
+field: sealed sidecar/operator exact-ID checks are explicit, not parser enforcement.
+Executor replacement command tightens startup through existing activation() before serving;
+Runtime ordinary flags are absent, Executor source flag remains read-only observation.
+No Compose/up, baseline advance, provider login/inference, new admission, live cleanup,
+verification or publication occurred. Preparation deadline07:00Z; retain everything at stop.
 
-The report's single packet preserves task/canonical/verifierH while future platform is R;
-R is not yet known. New version2 private files/flag cannot replace or widen the old config
-permit. Readiness/read-only plan precede one apply under later explicit permission.
-Unknown verification cannot replay. Retain output/candidate/preimages on every failure.
-
-The following C843 sections are historical receipts, not the current848 lease/authority.
+The following C843 sections are historical receipts, not current848 ownership or authority.
 
 ## C843 completed and retained — 2026-10-30 17:21 UTC
 
