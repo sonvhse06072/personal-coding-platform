@@ -3,7 +3,8 @@
 ## #835 temporary artifacts and held848 — SOURCE/FIXTURE candidate
 
 [WO6537270657](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6537270657),
-anchor H871fbf2485a1, branch `ai/835-temp-artifacts-held848-v1`.
+anchor H871fbf2485a1, branch `ai/835-temp-artifacts-held848-v1`,
+[Draft source PR849](https://github.com/sonvhse06072/personal-coding-platform/pull/849).
 [One WorkReport, evidence matrix, exact resources/shutdown and complete future rollout packet](../project/history/2026-10-31-temp-artifacts-held848.md)
 is the durable checklist:
 

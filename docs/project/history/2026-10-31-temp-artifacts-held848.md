@@ -2,7 +2,7 @@
 
 Authority: [WO6537270657](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6537270657).
 Anchor H **871fbf2485a1ffb89a88a69e1daaaca10e25b318**; branch
-`ai/835-temp-artifacts-held848-v1`. One writer, one source Draft PR. Exact head and
+`ai/835-temp-artifacts-held848-v1`. One writer, one [Draft source PR849](https://github.com/sonvhse06072/personal-coding-platform/pull/849). Exact head and
 four executed hosted suites are recorded in that PR's checks/description, avoiding
 a self-referential commit hash. Evidence [PR847](https://github.com/sonvhse06072/personal-coding-platform/pull/847)
 remains unmerged at e97fa327596914e6d29644924f7f0e6f9cbf9dae.
@@ -118,7 +118,7 @@ model usage unchanged. Fixture role bindings are synthetic R/H; candidate source
 explicit /tmp overlay of H image, not a built/adopted R image or release provenance.
 
 Required local suites: root1761 (final scoped run20.54s), Router132, Executor815; final standard Runtime **2783 passed /366 skipped in87.84s**.
-Final hosted counts below are authoritative for Python3.13.
+Final hosted counts in the PR checks are authoritative for Python3.13.
 Focused Git/PostgreSQL/artifact/context73 and eight-reader/HTTP6 pass (overlap, not additive).
 The broader optional PostgreSQL run initially found two stale adapter-argument assertions
 in ordinary-cycle fixtures; those now assert the real recorded private temp and output.

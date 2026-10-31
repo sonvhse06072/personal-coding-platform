@@ -3,7 +3,8 @@
 ## #835 temporary artifacts and held848 source candidate — 2026-10-31
 
 [WO6537270657](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6537270657)
-authorizes SOURCE/FIXTURE work on `ai/835-temp-artifacts-held848-v1`, anchored at
+authorizes SOURCE/FIXTURE work on `ai/835-temp-artifacts-held848-v1`
+([Draft source PR849](https://github.com/sonvhse06072/personal-coding-platform/pull/849)), anchored at
 accepted H **871fbf2485a1ffb89a88a69e1daaaca10e25b318**. PR846 is merged;
 postmerge CI41142412566 passed four executed suites. This replaces stale premerge
 context continuity. Current source work does not adopt another image or baseline.
