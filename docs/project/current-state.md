@@ -1,88 +1,90 @@
 # Current Project State and Handoff
 
-## Same848 exact X execution — BLOCKED before plan/apply; workers OFF
+## Same848 delivered after exact config correction — awaiting PM; workers OFF
 
-[DEC6542464088](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6542464088) selected accepted evidence96da4d4/review5722425136,
-exact sealed permit996eec62/sidecardabbc24b/1973B patchbf3a6c53 and exact X workers.
-SAME [Draft evidence847](https://github.com/sonvhse06072/personal-coding-platform/pull/847),
-`ai/604-context-physical-prep-v1`; one writer, no subagents.
-[ONE execution WorkReport/root cause/rollback/next-action packet](history/2026-10-31-held848-x-review-execution.md),
-[sanitized exact receipt](history/2026-10-31-held848-x-review-execution.json),
-[pre-mutation decision record](https://github.com/sonvhse06072/personal-coding-platform/pull/847#issuecomment-6542612995) and
-[actual blocker record](https://github.com/sonvhse06072/personal-coding-platform/pull/847#issuecomment-6542697999) provide continuity.
+[DEC6542820804](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6542820804) executed; SAME
+[Draft evidence847](https://github.com/sonvhse06072/personal-coding-platform/pull/847),
+`ai/604-context-physical-prep-v1`, one writer/no subagents.
+[ONE actual continuation WorkReport/full next-action and rollback packet](history/2026-10-31-held848-x-config-continuation.md),
+[sanitized exact receipt](history/2026-10-31-held848-x-config-continuation.json),
+[pre-mutation decision](https://github.com/sonvhse06072/personal-coding-platform/pull/847#issuecomment-6543074566),
+[derived hashes/complete semantic deltas published BEFORE installation](https://github.com/sonvhse06072/personal-coding-platform/pull/847#issuecomment-6543137928),
+[actual delivery record](https://github.com/sonvhse06072/personal-coding-platform/pull/847#issuecomment-6543286225). Prior403 failure remains history.
 
-Fresh full original rows/workspace/custody/whole-DB/ABC/unknown-copy/source/review/CI/
-config/full-ID preflight and consistent backup PASS; original workspace **ext4**.
-Exact permit/original/patch installed atomically0600, exact Executor/Router/Runtime
-started once each in ONE fail-closed process; post-start preimages/config digests PASS.
-Actual authenticated readiness GET: Runtime409 after Executor source-reader GET403.
-**Zero read-only plan, zero apply/repair POSTs, zero new verification/commit/task head/CI.**
+NEW [task850](https://github.com/sonvhse06072/personal-coding-platform/pull/850) head
+**`9574d62d9a7d385deb107bc8108b4b6802132fa3`**, sole parentcf41cad08434f930841ced57a773f35783a1f537.
+Actual [CI41199954657](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41199954657) **all4 test steps PASS**:
+root1762/1skip, Router132, Runtime2790/423skip, Executor835. Draft/open/unmerged.
+Actual authenticated source GET848=200/exact body/main/project (no substitution),
+aggregate readiness/read-only plan/fresh original preimages PASS before ONE initial
+apply/ONE repair POST. Genuine H mandatory **19+19 PASS**, no unknown verification/replay.
+Only approved1973B test patch appended; script/task docs unchanged; latest proof tree
+`ec77318b2a4a901877d49b6670b5410c1b7f149c`, cumulative diff`902a91634b03cc946cff15a01c4ac1af55d69344f8c59a16b4e760d06a64eb22`.
 
-Selected Executor config`0e8b155edb01ad14b3053f027f74f38b83d351186d92b9998a72ec4fdf8032af`
-lacks `PCP_LOCAL_TASK_SOURCE_ENABLED`; exact X pm_bridge_github.py:214-216 requires this
-existing read-only source-reader flag before filesystem/GitHub access. Config equals
-selected sidecar, no drift. Operator removed it in preparation with ordinary Runtime
-admission flags. Prior restored fixture substituted GitHub source transport and missed
-this real endpoint gate. No config/source/guard change/restart or expectation refresh.
+## Current job, authority and retained resources
 
-At **11:14:28Z** exact workers stopped gracefully; all three installed files disabled
-intact in private execution custody. Sealed PROPOSED/provenance/null fields unchanged,
-external decision recorded separately. Fixed **2026-10-31T13:15:00Z** expiry not renewed.
-Earlier source/restored PASS remains historical fixture evidence, not real readiness.
+Job`15271df1a36b1281010465538a9318ae` blocked/awaiting_independent_pm_review,
+verified/ci_success, repair state awaiting_pm_review, **finalized=false**. Counters
+**1/4/2**, full receipt running/gen2 and lease active/gen4 unchanged. Original full rows/
+result/cf41cad0 proof/failed CI41175379839/model usage/agent_attempts retained in new
+repair epoch/history. ABC/workspaces/all54 custody/unknown copies preserved; no reset.
+Normal same-job events/telemetry and monotonic sequences audited; all unrelated data exact.
 
-## Original848 and retained installation
+Main/platform X=`ee7ea0d824bf8b2aa568cbc5d03b222fd74d0275` stable. Task/base/canonical/approved
+baseline/verifier H=`871fbf2485a1ffb89a88a69e1daaaca10e25b318` unchanged; no source/build/CLI change.
+ONE same-X-image Executor successor`14c608a23d473029c3dde440475453088141204f2b661fae1fc66e66f0874dc7`,
+config`4feea261766aa6e196fd56dab96ae446bf3f901b2a3fdb901a787d08c2206959`. Only semantic config addition
+`PCP_LOCAL_TASK_SOURCE_ENABLED=owner-approved`; every other Config/HostConfig/mount/
+alias/resource/security/DNS/credential/command exact. PredecessorA546 retained OFF/renamed.
+One missing-permit cold rejection settled known first-start metadata; no normalization.
+Runtime2933e0bc/Routerf03edbd9 unchanged. Runtime source/ordinary admission flags OFF;
+actual Runtime admission guard FORBIDDEN; no discovery polling or model/login.
 
-Main/platform X=`ee7ea0d824bf8b2aa568cbc5d03b222fd74d0275` stable; task/base/canonical/baseline/verifier
-H=`871fbf2485a1ffb89a88a69e1daaaca10e25b318` unchanged. No baseline/source/image/CLI change.
-[Task850](https://github.com/sonvhse06072/personal-coding-platform/pull/850) remains Draft/
-open/unmerged at`cf41cad08434f930841ced57a773f35783a1f537`; actual CI41175379839 FAIL, review5721908834
-requests changes. Original job`15271df1a36b1281010465538a9318ae` blocked/verified/ci_failure,
-finalized=false, receipt running2/lease active4/counters **1/2/1**. Full original rows
-`85e75192d26f72db3ba5a21ad429b0f3bae821dd87005314a526ed51d015081f`, workspace
-`a27b232ded68824cfaf6644c47008d07a30f722cdf6a5ceb643e0aee87328384`, proof/history/usage/agent_attempts/all54 custody/ABC/
-unknown verification copies and whole DB/sequences unchanged. No tests replayed.
+Approved mechanical DERIVED permit **`13e8797fb63f40639d4181cf17033d479bdc4bda45e4dee1063ea4203e7af2fa`**,
+sidecar **`f668745248bd581fd734030927f2459b72f19d2206d3ea58ca97a2bf259ae339`**; permit onlyExecutor config digest changed, sidecar onlyExecutor
+ID/config, explicit env delta and direct permit digest changed. All other values/types,
+full original preimages/candidate/patch/review/H/X/IDs and PROPOSED/provenance/null fields
+unchanged. Original996eec62/dabbc24b/V2/patch byte-identical. No hash relay required.
+Not_before10:21:43Z and fixed **2026-10-31T13:15:00Z** expiry/verifier120s unchanged.
 
-Exact Runtime2933e0bc/Executora546d6e5/Routerf03edbd9 OFF; full IDs/images/config hashes
-in packet and sealed sidecar. Old R/H workers/images/authorities/credentials and retired
-824/V3 retained. Config file/metadata manifestc4712f65 unchanged; source files/H HEAD/index
-unchanged. DB8b72a8d3/N observerda6c4347/HTTPS601c552b remain running;
-**https://localhost:18443/dashboard**, tokenless trusted HTTPS snapshot200, shows original
-blocked848/local38/ci_failure/cf41cad0/running2/active4/usage unchanged. Before/after
-consistent463469B dumps retained; archive lists valid, no restore-over-live or prune.
+At **12:13:38Z**, exact Runtime2933e0bc/new Executor14c608a2/Routerf03edbd9 OFF; derived
+permit/originalV2/patch disabled intact. H children/offline fixtures/all predecessors
+retained OFF. DB8b72a8d3/N observerda6c4347/HTTPS601c552b running unchanged. Trusted
+**https://localhost:18443/dashboard** snapshot200 shows NEW9574 ci_success/local38 PASS,
+model1/tests4/running2/active4 and original usage; cost Unknown. Fresh consistent before/
+after dumps retained/list validated, not restored again. No cleanup/prune/foreign actions.
 
 ## Immediate next safe actions
 
-Independent PM reviews actual configuration-only blocker and final-head evidence CI
-in SAME847. A minimal successor config/binding packet can preserve Runtime admission OFF
-while enabling the existing Executor read-only source reader, with actual reader/readiness
-proof before new exact IDs/bytes are selected. No changed binding/restart/reinstall/apply
-under this exact consumed-start decision. No source feature/new canary opened.
-Keep847/850 unmerged and main X stable. No NEW task head/CI; old review requests changes.
-Later finalization needs NEW repaired-head/diff/real CI/independent review and explicit
-permission; none is granted here. Preserve stopped resources/disabled files/custody.
+Independent PM reviews exact NEW9574/head/diff/actual CI41199954657 and SAME847 final-head
+evidence checks. Old finding5721908834 requests changes and cannot accept NEW head.
+NEW independent structured review plus explicit finalization decision required within
+valid authority or separately reviewed new window; no automatic renewal/future wait.
+No finalization, merge, new admission, reset, replay or predecessor rollback here.
+Keep847/850 unmerged and main X stable. Preserve complete old/new proof/history/usage.
 
 ## Active PCP issues and owner attention
 
-#835/#604 open; #595 HOLD. Static2-call limit and unrelated optional supervision PG failures
-remain separate. Return to Drupal/DDEV benchmark after848 closeout; no benchmark PASS.
-Operator Sol requested high, actual effort/tokens/cost/Owner active minutes Unknown;
-additional Owner requests0, managed model calls0. Operator/fixture/CI usage separate.
+#835/#604 open; #595 HOLD. Static2-call admission limit and optional supervision PG
+residuals remain separate. Return to Drupal/DDEV benchmark after848 closeout; no new
+canary/platform feature or benchmark PASS. Sol requested high, actual effort/operator
+tokens/cost/Owner minutes Unknown; additional Owner requests0, new managed model calls0.
 
 ## Standing safety boundary
 
-`A3B2_IMAGE_BUILD=STOP`, `CODEX_LIVE=STOP`; workers and usable authority OFF. No model/login/
-admission, original patch/test/proof refresh/push, finalization/merge/deploy, counter/lease
-reset, old-permit renewal, cleanup/prune or foreign/global network action. Preserve
-DB/N observer/HTTPS, original848/ABC/54 custody/unknown copies and all data/history.
+`A3B2_IMAGE_BUILD=STOP`, `CODEX_LIVE=STOP`; workers/usable authority OFF. No model/login/
+admission replay, source/build/global networking, finalization/merge/deploy, counter/lease
+reset, old-permit renewal, cleanup/prune or foreign action. Preserve DB/N observer/HTTPS,
+ABC/retired824/all54 custody/unknown copies, all originals/derived bytes and new proof.
 
 <!-- PCP:CONTINUITY:START -->
 GitHub/Runtime: mainXee7ea0d8; task/base/canonical/baseline/verifierH871fbf24 unchanged.
-DEC6542464088 selected exact preparation96da4d4; record6542612995 precedes installation.
-Fresh original/full-ID/ext4 preflight+backup PASS; exact3 files installed; exact3 workers started once.
-Actual readiness409/Executor sourceGET403: selected Executor lacks required read-only source flag.
-Zero plan/apply/repairPOST/newverification/commit/head/CI; original848cf41cad0/1/2/1/running2/active4 unchanged.
-All3 workers stopped gracefully11:14:28Z; all3 authority files disabled intact; sealed bytes unchanged.
-Whole DB/ABC/workspaces/proof/history/usage/54custody/unknown copies preserved; DB/Nobserver/HTTPS running.
-SAME847 execution report/requiredCI;847/850 unmerged; main heldX. No finalization/merge/restart/renewal.
-Next independentPM minimal successor config/binding decision; no expectation refresh or guard bypass.
+DEC6542820804 executed; oneflag Executor14c608a2/config4feea261; predecessorA546 retained OFF.
+Approved semantic-only derived permit13e8797f/sidecarf6687452 published6543137928 before install.
+REAL authenticated source848=200; readiness/plan/original preimagesPASS; ONE initial apply/POST.
+GenuineH19+19; SAME850 new9574d62/sole-parentcf41cad0/treeec77318/diff902a9163/actualCI41199954657 all4PASS.
+Job15271df1a36b1281010465538a9318ae awaitingPM/verified/ci_success/finalizedfalse/1/4/2/running2/active4.
+Original complete rows/result/proof/failedCI/modelusage/history/ABC/54custody/unknown copies preserved.
+Exact current workersOFF12:13:38Z; all3 authority filesdisabledintact; DB/Nobserver/HTTPS running.
+Expiry13:15Z unchanged;847/850unmerged/mainXheld. Next NEW independent review+explicit finalization decision.
 <!-- PCP:CONTINUITY:END -->

@@ -1,32 +1,30 @@
 # PCP Local consolidation execution checklist
 
-## Same848 exact X execution — BLOCKED before plan/apply
+## Same848 config continuation — delivered / awaiting independent PM
 
-[DEC6542464088](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6542464088) accepted evidence96da4d4/review5722425136 and selected
-exact permit996eec62/sidecardabbc24b/1973B patchbf3a6c53. Approval recorded on SAME847
-before mutation. [ONE execution/root-cause/rollback packet](../project/history/2026-10-31-held848-x-review-execution.md)
-and [sanitized exact receipt](../project/history/2026-10-31-held848-x-review-execution.json).
+[DEC6542820804](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6542820804), SAME evidence847. [ONE actual WorkReport/full packet](../project/history/2026-10-31-held848-x-config-continuation.md)
+and [sanitized exact receipt](../project/history/2026-10-31-held848-x-config-continuation.json).
 
-- [x] Fresh original sealed full rows/workspaces/custody/whole-DB/ABC/unknown-copy/
-  source/remote/config/full-ID preflight and scoped consistent backup PASS; ext4 confirmed.
-- [x] Exact3 files atomically installed0600; exact Executor/Router/Runtime started once
-  inside one fail-closed process; post-start full preimages/fingerprints PASS.
-- [ ] Actual readiness PASS: **blocked Runtime409/Executor source-reader403**. Selected
-  Executor lacks existing read-only `PCP_LOCAL_TASK_SOURCE_ENABLED` gate. No config drift,
-  source/flag/guard edit or restart. Prior synthetic transport missed actual endpoint.
-- [ ] Read-only plan/apply/H tests/commit/new task850 head/CI: **NOT EXECUTED**. One readiness
-  command, zero repair POSTs/new verification. No unknown verification from this attempt.
-- [x] Exact3 workers stopped gracefully11:14:28Z; all3 authority/patch/original files
-  disabled intact, fixed13:15Z expiry unchanged. Sealed sources/sidecar untouched.
-- [x] Original848 cf41cad0/verified/ci_failure/1/2/1/running2/active4 and whole proof/history/
-  usage/DB/workspace/ABC/54custody/unknown copies unchanged; fresh after-dump and HTTPS200.
-- [ ] Independent PM reviews actual blocker/evidence CI and chooses successor minimal
-  config/binding scope. No changed IDs/bytes/restart/reinstall under current exact decision.
+- [x] Fresh original/full-ID/ext4/custody/ABC/unknown-copy/config/remote preflight+backup.
+- [x] ONE same-image Executor successor14c608a2; ONLY source-reader flag added. Complete
+  other config/resources/mounts exact; predecessor retained. Cold guard rejection PASS.
+- [x] Permit ONLY Executor config digest; sidecar ONLY Executor ID/config/env delta/direct
+  permit digest. Derived13e8797f/f6687452 semantic deltas/hashes published6543137928 BEFORE
+  install, actual X parsers/release validation PASS; no further hash-selection relay.
+- [x] REAL authenticated source GET848=200, exact body/main/project; actual readiness/
+  read-only plan/fresh original preimages PASS. Runtime ordinary admission FORBIDDEN.
+- [x] ONE apply/repair POST; genuine H19+19; sole-parent test-only append to SAME850
+  **9574d62d9a7d385deb107bc8108b4b6802132fa3**; real CI41199954657 all4 actual suites PASS.
+- [x] Original full proof/result/usage/failed CI/history retained; new cumulative1/4/2,
+  running2/active4, finalized=false. ABC/54custody/unknown copies preserved, no reset.
+- [x] Exact current workersOFF12:13:38Z, derived permit/V2/patch disabled intact; all
+  predecessors/H children/fixtures retained, DB/N observer/HTTPS running; after-backup.
+- [ ] NEW independent review/head/diff/CI acceptance and explicit finalization decision.
+  Old review5721908834 requested changes. No finalization/merge authorized here.
 
-Keep847/850 unmerged, main X stable, task/baseline/verifier H. DB/N observer/HTTPS running.
-No source/image/CLI/network/credential/model/login/admission/finalization/merge/reset/prune.
-[Accepted preparation](../project/history/2026-10-31-held848-x-review-preparation.md) and
-its fixture PASS remain historical; this actual403 supersedes the proposed ready path.
+Main X/task-baseline-verifier H unchanged,847/850 unmerged. Fixed13:15Z expiry unchanged,
+no renewal/future wait, model/login/admission replay/source/build/global changes/prune.
+Prior403/preparation reports remain historical; actual production source route now proved.
 
 ## C843 completed and retained — 2026-10-30 17:21 UTC
 
