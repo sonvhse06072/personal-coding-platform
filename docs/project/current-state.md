@@ -1,21 +1,18 @@
 # Current Project State and Handoff
 
-## #835 held848 exact-R physical preparation — 2026-10-31
+## #835 exact finite held848 recovery — waiting for not-before
 
-[WO6538839020](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6538839020)
-authorizes preparation only, fixed deadline **2026-10-31T07:00:00Z**.
-Accepted PR849/review5721143811 merged as platform repair
-**R44b79c7e05235c402e426db1b713b1df802a3538**. Before physical work,
-[postmerge CI41167440142](https://github.com/sonvhse06072/personal-coding-platform/actions/runs/41167440142)
-passed all four actually executed suites. Main remains R. Task/base/canonical/
-approved baseline/verifier remain **H871fbf2485a1ffb89a88a69e1daaaca10e25b318**.
-
+[DEC6539534137](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6539534137)
+accepts exact PR847 packet610ed799f456b06a946d2ac5c3a86c53d4bc423f/review5721453660.
+Separate non-model execution validity **2026-10-31T07:15:00Z–13:15:00Z**. Before07:15Z:
+read-only audit/documentation ONLY; no authority installation or worker start. Main/platform
+R44b79c7e05235c402e426db1b713b1df802a3538, task/canonical/baseline/verifier H unchanged.
 SAME [Draft evidence PR847](https://github.com/sonvhse06072/personal-coding-platform/pull/847),
-`ai/604-context-physical-prep-v1`, normally merged R with historical execution receipts
-preserved; no force push or merge to main. Reconcile actual GitHub/Runtime state before
-resuming; historical phase reports do not grant authority. [One preparation WorkReport/PM packet](history/2026-10-31-held848-r-preparation.md)
-and [sanitized exact hashes/resources](history/2026-10-31-held848-r-preparation.json)
-supersede stale premerge/source-only continuity. Final-head required CI is in PR847 checks.
+branch `ai/604-context-physical-prep-v1`, remains unmerged. Reconcile actual GitHub/Runtime
+state on every resume. [Current execution record](history/2026-10-31-held848-r-recovery.md)
+is the active handoff; [accepted preparation packet](history/2026-10-31-held848-r-preparation.md)
+and its sanitized JSON remain history. Early05:34:47Z exact read-only audit PASS;
+original848/running2/active4/counters1/0/0 unchanged, authority uninstalled, workers OFF.
 
 ## Preparation completed, execution authority OFF
 
@@ -39,7 +36,8 @@ Canonical H HEAD/index unchanged; accepted R objects only fetched for release an
 One UNINSTALLED private proposal SHA256
 **1e42acbcfe6663ed50aeda4051f86a313f9542de2b675fbd4799ee0707f6633e**;
 resource sidecar SHA256 **2206863d259df8cab005ac40b34bc0f2a95fee02ee99fb9e2e94e7484b0eecc1**.
-Proposed07:15–13:15Z validity is **not approved** and does not renew old07:00 authority.
+The exact07:15–13:15Z interval is now externally approved by DEC6539534137, but not
+yet active; it does not renew old ordinary07:00 authority. Sealed metadata stays unchanged.
 Current-clock rejection/future-clock offline parser test passed; no permit or original
 activation copy installed. Closed permit schema binds names/images/config fingerprints;
 full IDs are an explicit sidecar/operator preflight condition. Live readiness NOT TESTED.
@@ -71,11 +69,12 @@ SOURCE/FIXTURE/PHYSICAL/LIVE evidence are separated; no new deployment/browser/V
 
 ## Immediate next safe actions
 
-Independent PM reviews this concrete image/config/permit/sidecar packet and PR847 final-head
-CI. A NEW finite original-job execution decision selecting exact bytes/validity/full IDs
-is required before installation/start/readiness/verify-held. Recheck all original preimages;
-never refresh expectations on drift. Unknown verification cannot replay. Keep847 unmerged
-through stable main-at-R recovery; no automatic renewal or task solution by the operator.
+Wait until07:15Z using the real clock; no installation/start beforehand. Within validity,
+repeat exact sidecar/source/configuration/full-row/workspace/inventory checks, install only
+approved bytes and start exact services once. Actual held readiness/read-only plan PASS
+must precede the single initial verify-held apply. Reconcile uncertainty read-only; never
+replay unknown tests or refresh proof. Stop at delivery/blocker/13:15Z and disable authority
+intact. Keep main R/evidence847 unmerged; await independent task review, no finalization.
 
 ## Active PCP issues and owner attention
 
@@ -89,18 +88,19 @@ internal CLI compaction guarantee.
 
 All owned workers/fixtures OFF; artifact and ordinary authority uninstalled/disabled.
 `A3B2_IMAGE_BUILD=STOP` and `CODEX_LIVE=STOP` outside separately approved finite work.
-Preparation ends07:00Z; no later physical action is inferred. No original artifact movement,
+Prior preparation deadline07:00Z is historical; the new operation starts no earlier07:15Z
+and ends13:15Z. No action outside that exact finite decision, inference/login/admission,
 model/provider/login/admission/replay, baseline activation, task publication/finalization,
 merge, foreign/Chợ Nhạc/global networking or prune. Preserve DB/observer/HTTPS and history.
 
 <!-- PCP:CONTINUITY:START -->
-Accepted platformR44b79c7e, PR849 merged; postmerge41167440142 four actual suites PASS.
-Task/canonical/baseline/verifierH871fbf2485a1 unchanged; main R. SAME847 normally merged R, unmerged.
-Physical preparation WO6538839020 completed; exact R Runtime/Executor built once, RouterS retained.
-Prepared9d046f4f/d4d056f1/f03edbd9 OFF; missing-authority cold starts bounded, no permission installed.
-Restored R/H19+19 PASS, packaged74 Git/PG/readers tests, synthetic external transports only;12 fixtures OFF.
-Original848 job15271df1a36b1281010465538a9318ae held/changed_paths_denied; running2/active4; counters1/0/0.
-Full original DB/workspace/candidate/A/B/C/configs preserved. Original V2 disabled/expiry07:00Z unchanged.
-Uninstalled proposal1e42acbc…, sidecar2206863d…; proposed07:15–13:15 not authority; live readiness NOT TESTED.
-DB/N observer/HTTPS available; retired824 and rollback assets retained. Next independent finite PM decision.
+Accepted platformR44b79c7e; task/canonical/baseline/verifierH unchanged; main R; SAME847 unmerged.
+DEC6539534137 accepts packet610ed799/review5721453660; exact sealed permit1e42acbc/sidecar2206863d unchanged.
+New non-model validity07:15–13:15Z; BEFORE07:15 read-only audit/docs only, NO authority installation/start.
+05:34:47 early audit PASS: original848/full raw rows/831 entries/54-node inventory/ABC unchanged.
+Original15271df1a36b1281010465538a9318ae held/changed_paths_denied; running2/active4; counters1/0/0, no proof/commit/PR.
+Prepared9d046f4f/d4d056f1/f03edbd9 OFF; originalV2 disabled/ordinary expiry07:00 unchanged; all fixtures OFF.
+At valid time repeat exact audit -> approved install/start -> actual readiness/plan -> ONE initial verify-held apply.
+Unknown verification never replays. Stop at delivery/blocker/expiry, disable intact; no finalization/merge.
+DB/N observer/HTTPS available; A/B/C/retired824 and rollback assets preserved. No inference or new task.
 <!-- PCP:CONTINUITY:END -->

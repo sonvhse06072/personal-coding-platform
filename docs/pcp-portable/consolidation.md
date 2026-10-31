@@ -1,5 +1,23 @@
 # PCP Local consolidation execution checklist
 
+## Exact finite held848 recovery — not-before gate
+
+[DEC6539534137](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6539534137)
+accepts exact packet610ed799/review5721453660. SAME847 stays unmerged, main R/taskH.
+Approved separate validity07:15–13:15Z; before07:15 only read-only audit/documentation.
+Early exact audit PASS; no authority installed/start/apply. Original848 remains held,
+running2/active4/counters1/0/0. Sealed proposal/sidecar metadata unchanged; external decision
+record is separate. [Active execution record and sequence](../project/history/2026-10-31-held848-r-recovery.md)
+supersede preparation's pending-permission next action; preparation evidence below remains history.
+
+- [x] Read accepted packet/decision; early exact rows/workspace/config/IDs/bytes audit PASS.
+- [ ] Within validity: fresh exact audit, approved install/start, actual readiness/read-only plan.
+- [ ] ONE supported initial verify-held apply; genuine mandatory H checks/commit/real Draft PR/CI.
+- [ ] Actual evidence/backup, exact shutdown/authority disablement, independent PM task review.
+
+No new model/login/admission/solution/fixture proof/replay/finalization/merge. Unknown
+verification remains fenced; no expectation refresh or automatic expiry extension.
+
 ## Held848 exact-R preparation — completed, execution permission pending
 
 [WO6538839020](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6538839020),
