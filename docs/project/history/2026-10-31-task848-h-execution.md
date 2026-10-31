@@ -120,3 +120,21 @@ The operational instruction explicitly requires stopping/reporting at a meaningf
 readiness blocker; it does not authorize unreviewed source, rebuild or authority changes.
 Evidence PR847 remains unmerged; required CI at its final evidence head is in the PR
 receipt. No task Draft PR/CI can be delivered until this contract mismatch is resolved.
+
+## V2 PM correction — offline checkpoint before authentication/startup
+
+[Decision6536474373](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6536474373)
+authorizes exactly model_calls3->2 and one fresh bounded startup/readiness cycle; the
+single ordinary admission is still unused. Main/source/task/image/baseline/identity and
+original07:00Z expiry are unchanged. V1 remains disabled byte-identically; its manifest
+5797551e… is retained. Fresh complete DB matches de4629cb…; A/B/C/lease/848 absence checked.
+
+Offline H production read_activation/check_worker_admission validation passes with the
+real848 task identity and synthetic admission facts. This does not establish live readiness.
+V2 activation SHA `ec1d28f13f44d149001e1657b9122f3a1eb3947e966c3bebe5e99fcb59dbc665`;
+V2 manifest SHA `53b95372e77ef563e4fa527d4bebb42a92720981ac1681e18ffd026d2de6fea8`.
+Activation semantic diff is solely budget.model_calls3->2; manifest diff is solely decision
+reference/activation hash. One offline helper invocation had duplicate keyword arguments,
+failed before proof/auth/startup, and was corrected without replacing V2 bytes. No code patch.
+This operational lesson is mandatory: validate proposed activation OFFLINE before credentials
+or workers. The known static2-call limit remains incomplete healthy-progress behavior.

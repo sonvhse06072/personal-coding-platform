@@ -1,5 +1,15 @@
 # Current Project State and Handoff
 
+## Issue848 V2 continuation authorized — 2026-10-31
+
+[PM correction6536474373](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6536474373)
+authorizes only3->2 calls, one new readiness cycle and still-unused ordinary admission.
+V2ec1d28f1… /manifest53b95372… passed offline accepted-H validation before credentials/
+startup. V1 and all original source/image/baseline/task/expiry bindings remain untouched.
+[Execution record](history/2026-10-31-task848-h-execution.md) records the exact diff.
+No848 job/receipt/workspace/branch/PR exists; live readiness still required. Main H;
+PR847 unmerged, fixed07:00Z expiry. Do not replay unknown effects or finalize/merge.
+
 ## Issue848 H adoption retained — blocked before admission
 
 [Decision6535853784](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6535853784)

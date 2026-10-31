@@ -121,5 +121,29 @@
   "remaining_decision": "PM disposition: current H can admit at most2 calls; preferred source repair plus renewed source/image/task/baseline binding if retaining accepted3-call envelope; no automatic restart/retry",
   "baseline_installed_status": "approved",
   "active_revision": "pcp-local-context-871fbf2485a1-20261031-draft",
-  "execution_authority": "disabled"
+  "execution_authority": "disabled",
+  "v2_offline_checkpoint": {
+    "decision": 6536474373,
+    "source": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+    "job": "15271df1a36b1281010465538a9318ae",
+    "expiry": 1793430000.0,
+    "activation_v1_sha256": "4a354af21b2c4f2fd6104ad507feaaf77ada74f0b2de25ea48d2feee425a1a9c",
+    "activation_v2_sha256": "ec1d28f13f44d149001e1657b9122f3a1eb3947e966c3bebe5e99fcb59dbc665",
+    "manifest_v1_sha256": "5797551eb97665450443475d900ca079002a57ca4bd29b087386e8204b12b16d",
+    "manifest_v2_sha256": "53b95372e77ef563e4fa527d4bebb42a92720981ac1681e18ffd026d2de6fea8",
+    "activation_semantic_diff": {
+      "budget.model_calls": [
+        3,
+        2
+      ]
+    },
+    "manifest_changed_fields": [
+      "decision",
+      "activation_sha256"
+    ],
+    "offline_H_production_validation": "PASS synthetic admission facts, actual task identity/budget; no real readiness claim",
+    "no_job_receipt_workspace_branch_PR": true,
+    "all_workers_stopped": true,
+    "credentials_or_startup": false
+  }
 }
