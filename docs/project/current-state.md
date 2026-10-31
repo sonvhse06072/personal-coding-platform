@@ -3,7 +3,8 @@
 ## #835 separate finite finalization authority — SOURCE/FIXTURE
 
 [PM WorkOrder6544621726](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6544621726)
-authorizes ONE narrow source candidate on `ai/835-finalization-authority-v1`, based on
+authorizes [ONE Draft source PR852](https://github.com/sonvhse06072/personal-coding-platform/pull/852)
+on `ai/835-finalization-authority-v1`, based on
 main/platform **Xee7ea0d824bf8b2aa568cbc5d03b222fd74d0275**. One writer, no subagents.
 [Complete WorkReport, verification, resource inventory and future adoption/finalization packet](history/2026-10-31-finalization-authority848.md).
 [SAME evidence847](https://github.com/sonvhse06072/personal-coding-platform/pull/847)

@@ -1,7 +1,8 @@
 # Separate finite finalization authority — #835 SOURCE/FIXTURE
 
 WorkOrder [6544621726](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6544621726).
-One writer/branch `ai/835-finalization-authority-v1`, based on
+[ONE Draft source PR852](https://github.com/sonvhse06072/personal-coding-platform/pull/852),
+one writer/branch `ai/835-finalization-authority-v1`, based on
 X `ee7ea0d824bf8b2aa568cbc5d03b222fd74d0275`. Return at independent PM source review.
 This source candidate grants no live installation, adoption, worker start, finalization,
 repair, provider login/inference, merge or foreign-resource action.

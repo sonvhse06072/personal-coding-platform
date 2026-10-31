@@ -168,5 +168,7 @@
   "subagents": 0,
   "additional_Owner_requests": 0,
   "operator_effort": "requested high; actual exposed Unknown",
-  "tokens_cost_owner_active_minutes": "Unknown"
+  "tokens_cost_owner_active_minutes": "Unknown",
+  "source_PR": 852,
+  "source_branch": "ai/835-finalization-authority-v1"
 }
