@@ -234,5 +234,21 @@
     "operator_effort": null,
     "operator_usage": null,
     "remaining_checkpoint": "fresh scoped interactive authentication and PM disposition for bounded restart; no automatic renewal/replay"
+  },
+  "fresh_auth_continuation": {
+    "decision": 6536904513,
+    "at": "2026-10-31T01:09:13.740919+00:00",
+    "all_original_preimages_match": true,
+    "backup_reused": "V1 closeout3a23ec19 and accepted restored rehearsal; exact full DB freshness match",
+    "V1_V2_unchanged": true,
+    "job": "15271df1a36b1281010465538a9318ae",
+    "workers": {
+      "runtime": "1b0949227f267d6d0b9144348e8e4dd5cd73d2ca9b74c69597e1d5bab7ecdf35",
+      "ddev-executor": "fc32fd0a0bf632a185aad7d83f21234988359a9d803f8dcc0be36145a9d93e1d",
+      "router": "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6"
+    },
+    "expiry": "2026-10-31T07:00:00Z",
+    "no_task_artifacts": true,
+    "scoped_auth_absent": true
   }
 }

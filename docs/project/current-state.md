@@ -1,5 +1,15 @@
 # Current Project State and Handoff
 
+## Issue848 fresh-auth continuation authorized — 2026-10-31
+
+[PM6536904513](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6536904513)
+authorizes ONE new scoped device auth and bounded startup/readiness with exact V2.
+Fresh stopped/auth-absent/full DB/A-B-C/848-absence checks match retained state.
+[Continuation record](history/2026-10-31-task848-h-execution.md) written before restoration.
+New verification instructions must be displayed immediately in the private UI, never GitHub.
+Only Runtime starts until auth succeeds; readiness and admission remain gated. Main H,
+PR847 unmerged, unchanged07:00Z expiry; no second automatic login or code/source changes.
+
 ## Issue848 V2 retained OFF — authentication blocked
 
 [Correction6536474373](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6536474373)

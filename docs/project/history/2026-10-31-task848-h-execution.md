@@ -188,3 +188,18 @@ the separate static2-call healthy-progress limitation without claiming this cana
 [Sanitized JSON](2026-10-31-task848-h-execution.json) contains both the preserved V1
 outcome and V2 outcome, exact hashes/IDs, provider result and attention ledger. Required
 final-head evidence CI is in PR847; no task CI or independent task acceptance is claimed.
+
+## Fresh-auth continuation6536904513 — pre-restoration checkpoint
+
+[PM decision6536904513](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6536904513)
+authorizes one fresh scoped device-login attempt and one bounded startup/readiness cycle,
+with unchanged V2ec1d28f1…/manifest53b95372…, source/image/baseline/task and07:00Z expiry.
+Fresh full DB/preimages match de4629cb…, workers stopped, auth absent,848 artifact-free;
+A/B/C and released3 ownership unchanged. Backup/rehearsal reused after freshness check.
+This continuation is recorded before restoration; V1/V2 original audits are immutable.
+Only Runtime starts for authentication; Executor/Router start once after actual auth
+success, before readiness. The NEW verification URL/code/expiry will be surfaced directly
+in this private session; no code/auth contents are published in GitHub evidence.
+No ordinary intake during authentication; actual CLI/auth/quota and all-eight/aggregate
+PASS are mandatory before the still-unused single admission. Failure -> scoped shutdown/
+logout and exact V2 disablement. No automatic second login, renewal or replay.
