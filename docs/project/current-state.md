@@ -1,45 +1,42 @@
 # Current Project State and Handoff
 
-## Issue848 fresh-auth continuation authorized — 2026-10-31
+## Latest LIVE result — issue848 held, workers OFF
 
-[PM6536904513](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6536904513)
-authorizes ONE new scoped device auth and bounded startup/readiness with exact V2.
-Fresh stopped/auth-absent/full DB/A-B-C/848-absence checks match retained state.
-[Continuation record](history/2026-10-31-task848-h-execution.md) written before restoration.
-New verification instructions must be displayed immediately in the private UI, never GitHub.
-Only Runtime starts until auth succeeds; readiness and admission remain gated. Main H,
-PR847 unmerged, unchanged07:00Z expiry; no second automatic login or code/source changes.
+[Fresh-auth decision6536904513](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6536904513)
+was executed with unchanged V2 and original07:00Z expiry. Fresh scoped CLI authentication,
+authoritative quota, retained publisher entitlements, all eight trusted readers and
+aggregate readiness **PASS**. ONE ordinary admission was acknowledged. PCP performed
+one developer invocation; the operator did not implement the task.
 
-## Issue848 V2 retained OFF — authentication blocked
+Job `15271df1a36b1281010465538a9318ae` is **blocked / pcp_local_changed_paths_denied**,
+execution **held** from **invocation_returned**, attempt1. Receipt **running/gen2**;
+lease **active/gen4**, owned by this job. Counters **1 model /0 mandatory verification /
+0 delivery**. No commit, verified proof, task PR or task CI. The single admission is
+consumed; it must not be dispatched again.
 
-[Correction6536474373](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6536474373)
-authorized exactly3->2 calls. Offline H validation passed, V2 installed, exact workers
-started once. Fresh scoped device login was requested; provider timed out after15 minutes
-(exit1, no auth file). Live readiness/all-eight-reader acceptance were not attempted.
-Zero ordinary admissions/jobs/receipts/model calls/task PRs;848 identity remains unconsumed.
-[Full V2 result/next checkpoint](history/2026-10-31-task848-h-execution.md).
+The three allowed tracked files changed, plus **31 untracked pytest temporary entries**
+under `pytest-of-node/` (34 changed entries total). Retained CLI logs show developer
+self-tests19 passed, then cleanup `rm -rf pytest-of-node` rejected by the pinned CLI:
+`rm -f style commands are not permitted. Use a safer approach`. These self-tests do
+not establish Runtime mandatory verification. The scope gate correctly stopped before
+verification; no artifact deletion, ignore rule, manual Git publication or model replay.
+The inferred temporary-directory fallback into cwd is not yet an isolated reproduction.
 
-At00:46:27Z Runtime1b094922…/Executorfc32fd0a…/Routerf03edbd9… stopped; logout0, V2ec1d28f1…
-disabled intact, manifest53b95372… retained. V1 activation/manifest unchanged. Full DB and
-A/B/C evidence/counters/ownership unchanged; lease released3. H canonical/approved active
-successor retained, execution authority OFF. DB/N observer/HTTPS running, trusted HTTPS200.
-Next: genuine fresh authentication and PM disposition for bounded restart/readiness;
-no automatic retry/code/authority renewal. Main H, SAME PR847 unmerged; expiry07:00Z fixed.
+At **01:16:45.826295Z**, exact Runtime1b094922…/Executorfc32fd0a…/Routerf03edbd9… are
+stopped; supported logout0 and scoped auth absent. V2 SHAec1d28f1… is disabled intact,
+manifest53b95372… and V1 preserved. A/B/C full rows/proof/usage/counters and workspace
+metadata unchanged; shared lease legitimately advanced released3 -> active4 for848.
+DB/N observer/HTTPS remain running. Main/canonical/task/verifier H and approved active
+successor retained, execution authority OFF. No source/build/binding/expiry change.
 
-## Issue848 H adoption retained — blocked before admission
-
-[Decision6535853784](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6535853784)
-approved3 developer calls; H admission validator accepts at most2. Aggregate readiness
-returned budget_not_independently_approved. [Actual execution/next disposition](history/2026-10-31-task848-h-execution.md)
-records source/image proof and one bounded startup. Zero admissions/jobs/model calls.
-Identity15271df1a36b1281010465538a9318ae is unconsumed; no task848 PR or workspace.
-
-H Runtime1b094922… and canonical/successor are installed; N assets retained. At00:07:29Z
-Runtime/Executor/Router stopped, activation4a354af2… disabled intact, scoped logout passed.
-A/B/C proof/counters/ownership unchanged, lease released3; only quota observations changed.
-DB/N observer/HTTPS stay running (trusted HTTPS200). Main H; SAME PR847 unmerged.
-Fixed expiry07:00Z Oct31 is not renewed. PM must resolve the budget/source binding mismatch
-before any restart/admission; no automatic downgrade, source patch or replay.
+[Integrated report](history/2026-10-31-task848-h-execution.md) and
+[sanitized receipt](history/2026-10-31-task848-h-execution.json) preserve all earlier
+budget/auth failures as history. Actual trusted Chromium dashboard shows held ordinary848,
+Unknown mandatory verification/CI/cost, observed usage, fixed A/B/C terminal timers and
+successful offline/reconnect. No ignored TLS errors, injected cookies or login.
+Next: independent PM disposition for the held unverified workspace/scope contract.
+Existing held-verification eligibility requires a different error and repair binding;
+there is no authorized continuation here. Preserve all evidence and active ownership.
 
 ## #604 H physical preparation — 2026-10-31
 
@@ -150,12 +147,12 @@ approved campaigns. Workers/authority are OFF. No production/foreign workload/Ch
 changes, global networking, force push, cleanup/prune, paid service or Developer merge.
 
 <!-- PCP:CONTINUITY:START -->
-Deployed N85e415f1; C843 PR844 merged3fc1dec5, original head871e5045/taskCI41083619406 preserved.
-Job4d0f1df36be0b9b971c18b04af870950 completed/pm_review_accepted, finalizedtrue, delivered3/released3, counters1/2/1.
-CorrectedPM5715474340; zero-POST GitHub502 command then Owner-authorized replacement, one actual finalization POST.
-Workers/authority OFF17:21:47Z; original expiry2026-10-30T23:23:19Z unchanged. No replay/new task/deployment.
-A/B full evidence preserved; retired824 untouched. DB/N observer/HTTPS retained; terminal dashboard/reconnect PASS.
-Evidence845 merged0e8065b6; its main CI41100344082 passed four executed suites.
-Active SOURCE candidate: ai/604-context-continuity-v1; shared pinned context and Git/PG fixtures.
-No deployed change; PM reviews the Draft candidate/exact-head CI. #604 open, #595 HOLD.
+Main/canonical/task/verifier H871fbf24; H Runtime installed, reused Executor R2/Router S, N observer unchanged.
+848 job15271df1a36b1281010465538a9318ae held/changed_paths_denied after one ordinary admission and model.
+Receipt running2/lease active4; counters1/0/0; 3 allowed tracked changes+31 pytest entries; no verified proof/task PR.
+Fresh scoped login/quota/publisher/eight readers/aggregate PASS; no automatic second login or replay.
+Workers OFF01:16:45Z; V2ec1d28f1 disabled intact, expiry2026-10-31T07:00:00Z unchanged; auth logged out.
+A/B/C full evidence preserved; retired824 untouched. DB/N observer/HTTPS ON; actual held dashboard/reconnect PASS.
+SAME Draft PR847 records source/fixture/physical/live evidence; PM disposition needed for held scope/temp contract.
+#604 open, #595 HOLD. No merge, finalization, cleanup, ownership reset or new task.
 <!-- PCP:CONTINUITY:END -->

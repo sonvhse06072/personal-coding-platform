@@ -5,7 +5,49 @@ accepts exact [PR847 preparation815e90c](https://github.com/sonvhse06072/persona
 Main/task/canonical/verifier source stays H871fbf2485a1ffb89a88a69e1daaaca10e25b318.
 This evidence PR remains unmerged. Fixed expiry2026-10-31T07:00:00Z, no renewal.
 
-## Actual outcome: blocked before admission
+## Latest LIVE result — issue848 held, workers OFF
+
+[Fresh-auth decision6536904513](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6536904513)
+was executed with unchanged V2 and original07:00Z expiry. Fresh scoped CLI authentication,
+authoritative quota, retained publisher entitlements, all eight trusted readers and
+aggregate readiness **PASS**. ONE ordinary admission was acknowledged. PCP performed
+one developer invocation; the operator did not implement the task.
+
+Job `15271df1a36b1281010465538a9318ae` is **blocked / pcp_local_changed_paths_denied**,
+execution **held** from **invocation_returned**, attempt1. Receipt **running/gen2**;
+lease **active/gen4**, owned by this job. Counters **1 model /0 mandatory verification /
+0 delivery**. No commit, verified proof, task PR or task CI. The single admission is
+consumed; it must not be dispatched again.
+
+The three allowed tracked files changed, plus **31 untracked pytest temporary entries**
+under `pytest-of-node/` (34 changed entries total). Retained CLI logs show developer
+self-tests19 passed, then cleanup `rm -rf pytest-of-node` rejected by the pinned CLI:
+`rm -f style commands are not permitted. Use a safer approach`. These self-tests do
+not establish Runtime mandatory verification. The scope gate correctly stopped before
+verification; no artifact deletion, ignore rule, manual Git publication or model replay.
+The inferred temporary-directory fallback into cwd is not yet an isolated reproduction.
+
+At **01:16:45.826295Z**, exact Runtime1b094922…/Executorfc32fd0a…/Routerf03edbd9… are
+stopped; supported logout0 and scoped auth absent. V2 SHAec1d28f1… is disabled intact,
+manifest53b95372… and V1 preserved. A/B/C full rows/proof/usage/counters and workspace
+metadata unchanged; shared lease legitimately advanced released3 -> active4 for848.
+DB/N observer/HTTPS remain running. Main/canonical/task/verifier H and approved active
+successor retained, execution authority OFF. No source/build/binding/expiry change.
+
+[Integrated report](2026-10-31-task848-h-execution.md) and
+[sanitized receipt](2026-10-31-task848-h-execution.json) preserve all earlier
+budget/auth failures as history. Actual trusted Chromium dashboard shows held ordinary848,
+Unknown mandatory verification/CI/cost, observed usage, fixed A/B/C terminal timers and
+successful offline/reconnect. No ignored TLS errors, injected cookies or login.
+Next: independent PM disposition for the held unverified workspace/scope contract.
+Existing held-verification eligibility requires a different error and repair binding;
+there is no authorized continuation here. Preserve all evidence and active ownership.
+
+Earlier sections below are phase history; their zero-artifact/unconsumed statements
+apply only at their recorded pre-admission checkpoints. The latest LIVE result above
+supersedes their next-action instructions.
+
+## V1 historical outcome: blocked before admission
 
 Aggregate admission readiness returned `budget_not_independently_approved`. Source H
 `pcp_local_worker_admission.py` accepts only1–2 developer calls; the exact approved
@@ -203,3 +245,81 @@ in this private session; no code/auth contents are published in GitHub evidence.
 No ordinary intake during authentication; actual CLI/auth/quota and all-eight/aggregate
 PASS are mandatory before the still-unused single admission. Failure -> scoped shutdown/
 logout and exact V2 disablement. No automatic second login, renewal or replay.
+
+## Fresh-auth completed cycle — evidence and next PM packet
+
+The NEW URL/code/15-minute expiry were shown immediately in the private UI at01:10:28Z;
+CLI returned Successfully logged in (exit0), auth/quota evidence observed01:12:30.972921Z.
+Only Runtime ran for authentication; Executor/Router started after actual auth/quota PASS.
+Each service started once, original post-start fingerprints exact. Device code/token/auth
+bytes are excluded from repository evidence. One browser authentication interaction this
+cycle, active Owner minutes Unknown; previous timeout remains separately recorded.
+Immediate live display of device instructions is the coordination requirement.
+
+Eight-reader/aggregate observation took17.073062s; single request01:13:40.322321Z returned
+acknowledged at01:14:58.786302Z (76.564232s). Durable developer execution37.318948s is
+separate. Context packet89111B, assembly66.298ms, packet SHA
+`a11bd2ad30871fe1b8e2af930649259ccf48c62d278c450961da5cf00bed2004`;
+immutable authority SHA
+`9d0077d5f761124b16f9d8fa7c3b4f97f2921e7a4693683d3403a9a775618976`.
+One execute invocation, zero repair invocations; no internal CLI compaction guarantee.
+
+Actual developer model codex_gpt6_luna/gpt-6-luna/low, returncode0/provider_failed=false.
+Observed gross input601376, cached559104, uncached42272, output1711 tokens. Reported
+provider cost **Unknown** (normalizer zero is unobserved); estimated cost0 is separate.
+Operator model gpt-6.1-sol; operator effort/tokens/cost and active Owner minutes Unknown.
+No direct-Codex comparison or unattended/benchmark PASS. Preparation/auth/wait/shutdown/
+evidence CI time are not developer execution time. Full session started00:04:07.072731Z,
+authority fixed expiry07:00Z; worker shutdown01:16:45.826295Z (4358.753564s since start).
+
+SOURCE diagnosis: H `pcp_local_worker_loop.py` checks diff scope immediately after a
+returned invocation and before verify_pcp_local. The isolated Codex profile denies shared
+:tmpdir/:slash_tmp and permits only this workspace writes. Retained pytest output proves
+temporary entries appeared in cwd; fallback cause remains an inference. The cleanup
+command rejection is directly logged. The existing `pcp_local_recovery.py`
+validate_eligibility requires `pcp_local_unreviewed_codex_configuration` and an independently
+accepted distinct repair_source. This held error is ineligible; receipt/gen2 alone is not
+a recovery entitlement. Symlink entries also require explicit safe handling. No helper
+was invoked to convert scope artifacts into acceptable proof or to erase evidence.
+
+PHYSICAL/LIVE: exact worker images/configs unchanged, accepted H reused; no new build.
+Original A/B/C full rows and byte/metadata evidence pass, V3/retired824 untouched. Private
+read-only no-follow/no-atime848 workspace manifest captured831 entries without Git writes,
+SHA `5079f123c1fc8a59ab2cef23e5fc22e51f79f8c12aa5e5b951cd15e8b80eb665`.
+It is an **unverified** evidence binding. Remote exact ai/15271df1a36b refs and PR query
+returned empty. No completed-task replay. FIXTURE: accepted preparation59 cases and
+V2 offline budget proof are reused historical evidence; no new fixture proves this blocker.
+LIVE mandatory verification/delivery/task CI remain **NOT TESTED**, not failed tests.
+
+Consistent private after-backup240271B SHA
+`1f3fe522d2295117323d32eeb281a51651d06bc32ed93085a60ae06f36b5a029`;
+full DB afterimage SHA
+`14ea3d3f33fa30451be76e9986205e3e17407fc105f8ac90b20ccb3c3a9282de`.
+Private evidence `/home/sonvh/.local/state/pcp848-h-live-v1/v2/fresh-auth` retains
+original preimages/manifests, intent, acknowledged result, returned invocation/logs,
+unverified diff/workspace manifest, browser snapshots/screenshot and shutdown receipt.
+Disabled authority is `fresh-auth/disabled-authority/pcp-local-activation.json` under
+that V2 directory; same bytes and expiry. No full private manifest is published.
+
+One retention helper stopped workers/logged out, then failed because its local copied
+activation reference had a different filename. Read-only reconciliation established
+workers already OFF and V2 still installed. A finish-only guarded step compared exact
+original V2 bytes, disabled them intact and captured afterimages/backup. No worker/login/
+admission was repeated. A host Python HTTPS probe failed CA validation; actual trusted
+Chromium subsequently passed, without bypass. This probe is not counted as dashboard PASS.
+
+Next independent PM decision: authorize a SOURCE/FIXTURE investigation of private scoped
+temporary storage and safe lifecycle cleanup with actual pinned CLI/tool arguments; keep
+sibling/config/credential isolation, fail-closed scope/proof/CAS checks and data retention.
+Include a supported non-model continuation design for this exact held unverified job,
+with full preimage/receipt/lease/counter binding, mandatory verification and explicit
+uncertainty reconciliation. Do not broaden the current unrelated-error permit in place.
+Only after separate acceptance and a concrete execution decision may any artifact custody
+change or continuation occur; no live cleanup, new job, model replay, ownership release,
+permit creation or authority restoration is authorized now. Original expiry is unchanged;
+if later work needs another window, PM must explicitly decide, never auto-renew.
+
+Evidence-only validation: root suite1761 passed in20.89s; JSON parse and git diff --check PASS.
+Source/evidence required final-head CI is recorded on PR847. It is not task848 CI.
+The existing exact stop command above applies; retain DB8b72a8d3…, observerda6c4347…
+and HTTPS601c552b…. Dashboard stays https://localhost:18443/dashboard, tokenless loopback.

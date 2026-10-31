@@ -1,27 +1,42 @@
 # PCP Local consolidation execution checklist
 
-## Issue848 V2: offline PASS, authentication blocked, workers OFF
+## Latest LIVE result — issue848 held, workers OFF
 
-[PM6536474373](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6536474373)
-authorized only3->2 and one fresh cycle. V2ec1d28f1…/manifest53b95372… validated offline
-before authentication/startup; V1 preserved. Scoped device auth timed out after15 minutes,
-no auth file; one Owner interaction requested. No live readiness or ordinary request.
-[Execution result, exact hashes/IDs and next checkpoint](../project/history/2026-10-31-task848-h-execution.md).
-At00:46:27Z all exact workers stopped, logout0, V2 disabled intact; DB/observer/HTTPS ON.
-Full DB/A/B/C ownership/counters unchanged, lease released3;848 remains unconsumed.
-No automatic new code/startup/admission or expiry renewal. Fixed07:00Z; main H/PR847 unmerged.
+[Fresh-auth decision6536904513](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6536904513)
+was executed with unchanged V2 and original07:00Z expiry. Fresh scoped CLI authentication,
+authoritative quota, retained publisher entitlements, all eight trusted readers and
+aggregate readiness **PASS**. ONE ordinary admission was acknowledged. PCP performed
+one developer invocation; the operator did not implement the task.
 
-## Issue848 execution blocked, workers retained OFF
+Job `15271df1a36b1281010465538a9318ae` is **blocked / pcp_local_changed_paths_denied**,
+execution **held** from **invocation_returned**, attempt1. Receipt **running/gen2**;
+lease **active/gen4**, owned by this job. Counters **1 model /0 mandatory verification /
+0 delivery**. No commit, verified proof, task PR or task CI. The single admission is
+consumed; it must not be dispatched again.
 
-[Decision6535853784](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6535853784)
-authorized3 calls, but H admission gate accepts1–2. Aggregate readiness stopped before
-registration/admission/model; no task PR. [Execution report, source proof, exact IDs and
-one PM disposition packet](../project/history/2026-10-31-task848-h-execution.md) supersede
-preparation-only next actions. H canonical/Runtime and approved active successor retained, execution authority OFF; N retained.
-All three workers stopped00:07:29Z, activation disabled byte-identically, scoped logout0.
-A/B/C evidence/counters/lease unchanged; only quota observations refreshed. DB/observer/
-HTTPS stay available. Do not restart, reduce envelope or patch source without disposition.
-Main H, PR847 unmerged; expiry07:00Z unchanged. Full final-head CI is in the PR receipt.
+The three allowed tracked files changed, plus **31 untracked pytest temporary entries**
+under `pytest-of-node/` (34 changed entries total). Retained CLI logs show developer
+self-tests19 passed, then cleanup `rm -rf pytest-of-node` rejected by the pinned CLI:
+`rm -f style commands are not permitted. Use a safer approach`. These self-tests do
+not establish Runtime mandatory verification. The scope gate correctly stopped before
+verification; no artifact deletion, ignore rule, manual Git publication or model replay.
+The inferred temporary-directory fallback into cwd is not yet an isolated reproduction.
+
+At **01:16:45.826295Z**, exact Runtime1b094922…/Executorfc32fd0a…/Routerf03edbd9… are
+stopped; supported logout0 and scoped auth absent. V2 SHAec1d28f1… is disabled intact,
+manifest53b95372… and V1 preserved. A/B/C full rows/proof/usage/counters and workspace
+metadata unchanged; shared lease legitimately advanced released3 -> active4 for848.
+DB/N observer/HTTPS remain running. Main/canonical/task/verifier H and approved active
+successor retained, execution authority OFF. No source/build/binding/expiry change.
+
+[Integrated report](../project/history/2026-10-31-task848-h-execution.md) and
+[sanitized receipt](../project/history/2026-10-31-task848-h-execution.json) preserve all earlier
+budget/auth failures as history. Actual trusted Chromium dashboard shows held ordinary848,
+Unknown mandatory verification/CI/cost, observed usage, fixed A/B/C terminal timers and
+successful offline/reconnect. No ignored TLS errors, injected cookies or login.
+Next: independent PM disposition for the held unverified workspace/scope contract.
+Existing held-verification eligibility requires a different error and repair binding;
+there is no authorized continuation here. Preserve all evidence and active ownership.
 
 ## #604 H candidate preparation retained
 

@@ -118,7 +118,7 @@
   "operator_model": "gpt-6.1-sol",
   "operator_effort": null,
   "operator_usage": null,
-  "remaining_decision": "PM disposition: current H can admit at most2 calls; preferred source repair plus renewed source/image/task/baseline binding if retaining accepted3-call envelope; no automatic restart/retry",
+  "remaining_decision": "Independent PM disposition for same held unverified job; existing held verification rejects this error. No cleanup/replay/recovery authority.",
   "baseline_installed_status": "approved",
   "active_revision": "pcp-local-context-871fbf2485a1-20261031-draft",
   "execution_authority": "disabled",
@@ -249,6 +249,235 @@
     },
     "expiry": "2026-10-31T07:00:00Z",
     "no_task_artifacts": true,
-    "scoped_auth_absent": true
-  }
+    "scoped_auth_absent": true,
+    "outcome": "HELD_UNVERIFIED_CHANGED_PATHS_DENIED",
+    "authentication": {
+      "cli_exit": 0,
+      "cli_message": "Successfully logged in",
+      "observed_at": "2026-10-31T01:12:30.972921+00:00",
+      "owner_requests": 1,
+      "owner_active_minutes": null,
+      "device_code_not_published": true
+    },
+    "instructions": {
+      "cli": "codex0.160.0",
+      "one_time_instructions_displayed_immediately": true,
+      "login_attempts": 1,
+      "one_time_code_published_to_GitHub": false,
+      "process_pending": true,
+      "owner_requests": 1,
+      "owner_active_minutes": null,
+      "first_output_checked_at": "2026-10-31T01:10:28Z",
+      "cli_displayed_expiry": "expires in 15 minutes"
+    },
+    "services": {
+      "workers": {
+        "runtime": "1b0949227f267d6d0b9144348e8e4dd5cd73d2ca9b74c69597e1d5bab7ecdf35",
+        "ddev-executor": "fc32fd0a0bf632a185aad7d83f21234988359a9d803f8dcc0be36145a9d93e1d",
+        "router": "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6"
+      },
+      "at": "2026-10-31T01:12:32.640547+00:00",
+      "each_started_once": true,
+      "original_fingerprints_unchanged": true,
+      "admission_requests": 0
+    },
+    "readiness": {
+      "aggregate_ready": true,
+      "blockers": [],
+      "eight_readers": "PASS",
+      "provider_quota": "authoritative_available",
+      "publisher": "read_only_entitlements_PASS",
+      "seconds": 17.07306173
+    },
+    "admission": {
+      "requests": 1,
+      "acknowledged": true,
+      "response_seconds": 76.564231755
+    },
+    "live_job": {
+      "id": "15271df1a36b1281010465538a9318ae",
+      "status": "blocked",
+      "error": "pcp_local_changed_paths_denied",
+      "execution": {
+        "state": "held",
+        "attempt": 1,
+        "held_from": "invocation_returned",
+        "started_at": "2026-10-31T01:14:19.052158+00:00",
+        "model_choice": {
+          "id": "codex_gpt6_luna",
+          "model": "gpt-6-luna",
+          "adapter": "codex_cli",
+          "reasoning_effort": "low"
+        },
+        "context_sha256": "a11bd2ad30871fe1b8e2af930649259ccf48c62d278c450961da5cf00bed2004",
+        "authority_digest": "597ed9844cb813542b3fffe6fff423d926e565a04cf57b54fb952bb3e53d4f37",
+        "lease_generation": 4,
+        "returned_invocation": {
+          "attempt": 1,
+          "returncode": 0,
+          "model_calls": 1,
+          "usage_digest": "af9f05f1f64dfd6d183c2244efe36fe176da0bb1392a208685f23bf4d058acb3",
+          "provider_failed": false
+        }
+      },
+      "context_invocations": [
+        {
+          "mode": "execute",
+          "attempt": 1,
+          "packet_bytes": 89111,
+          "packet_sha256": "a11bd2ad30871fe1b8e2af930649259ccf48c62d278c450961da5cf00bed2004",
+          "authority_sha256": "9d0077d5f761124b16f9d8fa7c3b4f97f2921e7a4693683d3403a9a775618976",
+          "total_context_ms": 66.298
+        }
+      ],
+      "receipt": {
+        "state": "running",
+        "generation": 2,
+        "job_id": "15271df1a36b1281010465538a9318ae"
+      },
+      "lease": {
+        "state": "active",
+        "generation": 4,
+        "owner_job_id": "15271df1a36b1281010465538a9318ae"
+      },
+      "model_calls": 1,
+      "mandatory_test_runs": 0,
+      "delivery_attempts": 0,
+      "usage": {
+        "model_calls": 1,
+        "test_runs": 0,
+        "gross_input_tokens": 601376,
+        "cached_input_tokens": 559104,
+        "input_tokens": 42272,
+        "output_tokens": 1711,
+        "cost_usd": null,
+        "estimated_cost_usd": 0,
+        "coverage": {
+          "gross_input_tokens": "complete",
+          "cached_input_tokens": "complete",
+          "input_tokens": "complete",
+          "output_tokens": "complete",
+          "reported_cost_usd": "unknown"
+        },
+        "observed_partial_totals": {
+          "gross_input_tokens": 601376,
+          "cached_input_tokens": 559104,
+          "input_tokens": 42272,
+          "output_tokens": 1711,
+          "reported_cost_usd": null
+        },
+        "tool_calls": null,
+        "returned_invocations": 1
+      },
+      "observed_execution_seconds": 37.31894825201016,
+      "agent_self_tests": "19 passed; not mandatory verification",
+      "task_PR": null,
+      "task_CI": null
+    },
+    "scope": {
+      "changed_entries": 34,
+      "allowed_tracked_files": 3,
+      "unexpected_pytest_entries": 31,
+      "cleanup_rejected": true,
+      "cleanup_performed": false,
+      "temporary_directory_fallback": "inference; not isolated-reproduced",
+      "workspace_evidence": {
+        "sha256": "5079f123c1fc8a59ab2cef23e5fc22e51f79f8c12aa5e5b951cd15e8b80eb665",
+        "entries": 831,
+        "nofollow": true,
+        "noatime": true,
+        "metadata_preserved": true,
+        "unverified": true,
+        "git_operations": 0
+      }
+    },
+    "shutdown": {
+      "at": "2026-10-31T01:16:45.826295+00:00",
+      "workers": {
+        "runtime": "1b0949227f267d6d0b9144348e8e4dd5cd73d2ca9b74c69597e1d5bab7ecdf35",
+        "ddev-executor": "fc32fd0a0bf632a185aad7d83f21234988359a9d803f8dcc0be36145a9d93e1d",
+        "router": "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6"
+      },
+      "all_stopped": true,
+      "activation_v2_sha256": "ec1d28f13f44d149001e1657b9122f3a1eb3947e966c3bebe5e99fcb59dbc665",
+      "activation_v1_sha256": "4a354af21b2c4f2fd6104ad507feaaf77ada74f0b2de25ea48d2feee425a1a9c",
+      "logout_exit": 0,
+      "auth_absent": true,
+      "ABC_full_rows_metadata_preserved": true,
+      "backup_sha256": "1f3fe522d2295117323d32eeb281a51651d06bc32ed93085a60ae06f36b5a029",
+      "backup_bytes": 240271,
+      "afterimage_sha256": "14ea3d3f33fa30451be76e9986205e3e17407fc105f8ac90b20ccb3c3a9282de",
+      "expiry": "2026-10-31T07:00:00Z",
+      "running": [
+        "8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8",
+        "da6c434797c46a3312f0ca185b20e0b5fbb9234ce137aee9f81ebc2fb9241660",
+        "601c552bd0562b947529a591b84c70570a1eaa556fb43e50a8c2ae0d76e362aa"
+      ]
+    },
+    "dashboard": {
+      "result": "PASS",
+      "job": "15271df1a36b1281010465538a9318ae",
+      "status": "blocked",
+      "usage": {
+        "model_calls": 1,
+        "test_runs": 0,
+        "gross_input_tokens": 601376,
+        "cached_input_tokens": 559104,
+        "input_tokens": 42272,
+        "output_tokens": 1711,
+        "cost_usd": null,
+        "estimated_cost_usd": 0,
+        "coverage": {
+          "gross_input_tokens": "complete",
+          "cached_input_tokens": "complete",
+          "input_tokens": "complete",
+          "output_tokens": "complete",
+          "reported_cost_usd": "unknown"
+        },
+        "observed_partial_totals": {
+          "gross_input_tokens": 601376,
+          "cached_input_tokens": 559104,
+          "input_tokens": 42272,
+          "output_tokens": 1711,
+          "reported_cost_usd": null
+        },
+        "tool_calls": null,
+        "returned_invocations": 1
+      },
+      "receipt": {
+        "state": "running",
+        "generation": 2,
+        "job_id": "15271df1a36b1281010465538a9318ae"
+      },
+      "lease": {
+        "state": "active",
+        "generation": 4,
+        "owner_job_id": "15271df1a36b1281010465538a9318ae"
+      },
+      "observed_execution_seconds": 37.31894825201016,
+      "observer_source": "85e415f1f53c8129056e2f04fb99a9b964b89609",
+      "url": "https://localhost:18443/dashboard",
+      "auth": "loopback_readonly",
+      "trusted_tls": true,
+      "ignored_tls_errors": false,
+      "cookies": 0,
+      "forms": 0,
+      "reconnect": "PASS",
+      "fixed_ABC_timers": true,
+      "ordinary_not_assisted": true
+    },
+    "owner_attention": {
+      "requests": 1,
+      "authenticated_sessions": 1,
+      "code_display_to_auth_observed_seconds": 122.972921,
+      "active_minutes": null
+    },
+    "operator_model": "gpt-6.1-sol",
+    "operator_effort": null,
+    "operator_usage": null,
+    "remaining_checkpoint": "Independent PM disposition for same held unverified job; existing held verification rejects this error. No cleanup/replay/recovery authority."
+  },
+  "current_outcome": "HELD_UNVERIFIED_CHANGED_PATHS_DENIED",
+  "latest_phase": "fresh_auth_continuation; earlier phase outcomes retained as history",
+  "root_fields_scope": "Original V1 phase history; current_outcome and fresh_auth_continuation are latest. Earlier zero-artifact assertions refer to their recorded phase only."
 }
