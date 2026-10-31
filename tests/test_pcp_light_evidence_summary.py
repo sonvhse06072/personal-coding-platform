@@ -146,3 +146,40 @@ def test_cli_preserves_input_bytes_on_success_and_source_mismatch_error(tmp_path
     assert json.loads(outputs[1].stdout) == {
         "status": "INVALID", "reason": "source_sha_mismatch"
     }
+
+
+@pytest.mark.parametrize("nested", [
+    pytest.param(b"[" * 2000 + b'"never-disclose"' + b"]" * 2000, id="deep-array"),
+    pytest.param(b"[" + b'{"child":' * 2000
+                 + b'{"private-sentinel":"never-disclose"}' + b"}" * 2000 + b"]",
+                 id="deep-object-in-array"),
+])
+def test_cli_rejects_deep_nesting_sanitized_and_preserves_input(tmp_path, nested):
+    # Prove structural validity independently of the decoder's ordinary depth
+    # ceiling. This is real JSON parsing in a separate process, not a mocked
+    # exception. The CLI below retains the interpreter's default limits.
+    syntax = subprocess.run([
+        sys.executable, "-c",
+        "import json,sys; sys.setrecursionlimit(20000); "
+        "json.loads(sys.stdin.buffer.read()); print('valid')",
+    ], input=nested, capture_output=True, check=False)
+    assert syntax.returncode == 0 and syntax.stdout == b"valid\n"
+    assert syntax.stderr == b""
+    path = tmp_path / "deep.json"
+    path.write_bytes(nested)
+    before = path.read_bytes()
+
+    run = subprocess.run([sys.executable, str(SCRIPT), str(path)],
+                         capture_output=True, check=False)
+
+    assert run.returncode != 0
+    # Python 3.11 can hit its decoder recursion ceiling; newer decoders can
+    # reach the unchanged record-schema guard. Both are bounded INVALID paths.
+    assert json.loads(run.stdout) in (
+        {"reason": "input_unavailable_or_invalid", "status": "INVALID"},
+        {"reason": "record_0_schema_invalid", "status": "INVALID"},
+    )
+    assert run.stderr == b""
+    assert b"never-disclose" not in run.stdout + run.stderr
+    assert b"count" not in run.stdout
+    assert path.read_bytes() == before
