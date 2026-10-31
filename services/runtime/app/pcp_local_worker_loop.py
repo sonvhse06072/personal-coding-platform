@@ -283,6 +283,8 @@ class RuntimeTaskLauncher:
 
 
 def source_worker_flags() -> None:
+    from .pcp_local_review_repair import enabled as review_enabled
+    require(not review_enabled(), "local_repair_admission_forbidden")
     """Two independent opt-ins. All are ABSENT from shipped DDEV Compose."""
     require(
         os.getenv("PCP_LOCAL_TASK_SOURCE_ENABLED", "") == "owner-approved"
@@ -984,6 +986,9 @@ def retained_workspaces(storage, root, current_job_id):
 
 def read_activation():
     """A switch is not authority: require an independently installed document."""
+    from .pcp_local_review_repair import enabled as review_enabled, Permit
+    if review_enabled():
+        return Permit().activation
     from .pcp_local_recovery import enabled as held_enabled, load_held_permit
     if held_enabled():
         require(not ACTIVATION_FILE.exists(), "held_ordinary_activation_forbidden")
@@ -1010,6 +1015,8 @@ class TrustedReaders:
     def __init__(self, engine, github):
         self.engine, self.github = engine, github
         self.activation = read_activation()
+        from .pcp_local_review_repair import enabled as review_enabled, Permit
+        self.local_review = Permit() if review_enabled() else None
         from .pcp_local_task_queue import enabled, RecoveryPermit
         self.recovery = RecoveryPermit() if enabled() else None
         from .pcp_local_recovery import enabled as held_enabled, load_held_permit
@@ -1056,7 +1063,7 @@ class TrustedReaders:
         self.authority()
         a = self.activation
         issue = await self.github.local_source_issue(issue_number=a['issue_number'])
-        source_permit = getattr(self, 'held', None) or getattr(self, 'recovery', None)
+        source_permit = getattr(self, 'local_review', None) or getattr(self, 'held', None) or getattr(self, 'recovery', None)
         task = source_permit.verify_issue(issue) if source_permit is not None else verify_issue(issue, **{k: a[k] for k in (
             'issue_number', 'body_sha256', 'base_sha', 'baseline_revision', 'baseline_source_commit')})
         require(self.task is None or task == self.task, 'pcp_local_source_revoked')
@@ -1071,7 +1078,7 @@ class TrustedReaders:
         from .model_capabilities import validate_model_choice
         from .quota_telemetry import CodexQuotaCollector
         from .shell import run_command
-        require(not getattr(self, "held", None) or operation == "delivery", "held_admission_forbidden")
+        require(not (getattr(self, "held", None) or getattr(self, "local_review", None)) or operation == "delivery", "held_admission_forbidden")
         observed_at = time.monotonic()
         project, baseline = self.authority()
         checked, issue = await self.source()
@@ -1123,6 +1130,9 @@ class TrustedReaders:
                     and lease['generation'] == self.lease_generation,
                     'pcp_local_lease_revoked')
         if operation == 'delivery':
+            if getattr(self, 'local_review', None) is not None:
+                from .pcp_local_review_repair import snapshot, classify
+                classify(snapshot(self.engine.storage,self.local_review),self.local_review)
             if getattr(self, 'held', None) is not None:
                 from .pcp_local_recovery import snapshot, classify
                 classify(snapshot(self.engine.storage, self.held), self.held)

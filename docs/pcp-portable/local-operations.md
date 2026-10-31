@@ -1,75 +1,26 @@
 # Supported readiness, recovery and dashboard adoption
 
-## Held848 recovery — real publication, hosted CI blocked
+## Local PM test review-repair — SOURCE/FIXTURE
 
-[DEC6539534137](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6539534137)
-plus [exact timing correction6539840379](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6539840379)
-executed; SAME847 unmerged/main R/task H. Original sealed permit/sidecar retained; separately
-named derivative changes only not_before07:15→06:00Z and direct sidecar references, expiry
-13:15 unchanged. Derived permit681a728f…/sidecarcc452de8… validated offline and published
-before install. All original evidence/preimages/fingerprints passed fresh checks.
-[Consolidated LIVE report, exact hashes/IDs/backup/stop commands](../project/history/2026-10-31-held848-r-recovery.md)
-and its JSON supersede the historical preparation next action below.
+[WO6540919383](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6540919383),
+main/platform R44b79c7e; task/base/canonical/baseline/verifier H unchanged. One writer on
+`ai/835-local-ci-review-repair848-v1`; ONE source PR, separate exact private test patch.
+[WorkReport, durable checklist and full source→rollout→repair→finalization packet](../project/history/2026-10-31-local-review-repair848.md).
 
-- [x] Exact fresh preflight, no-overwrite0600 install, approved three workers start once;
-  actual held readiness and read-only plan PASS against original expected evidence.
-- [x] ONE supported verify-held apply/ONE mutation; audited54-node custody, actual H19+19 PASS,
-  exact candidate Git identity/single parent H, real Draft task850/headcf41cad0.
-- [x] Actual exact-head hosted41175379839 all4 suites executed: Router132/Runtime2783/
-  Executor815 PASS; root1 failed/1761 passed/1 skipped (new nesting reason assertion).
-- [x] Reconciled blocked/pcp_local_hosted_ci_not_passed, verified/ci_failure/finalizedfalse;
-  receipt running2/lease active4 full rows unchanged; counters1/2/1, usage/ABC preserved.
-- [x] After-backup/archive list, real trusted Chromium/reconnect/ABC fixed timers; exact
-  workers stopped06:13:38Z, derived authority/original-V2 copy disabled intact, all fixtures OFF.
-- [ ] Independent PM disposition for bounded same-job task repair and supported transition;
-  no finalization while task CI red. Evidence847 required CI does not accept task850.
+- [x] Actual Python3.11.2/3.13.18 portable test patch19 PASS each; valid deep JSON,
+  bounded reasons/negative controls, production/task docs and old schema tests unchanged.
+- [x] Default-OFF authenticated local exact review/patch/PR/head/full-row CAS and original
+  proof/history; real verifier/commit recovery/same-PR/new-head PM compatibility, no model.
+- [x] Real Git/PG/HTTP drift/concurrency/crash/lost-ack coverage; restored copy H19+19/
+  private bare Git/synthetic GitHub+PM finalization PASS. Unknown copy preserved/fenced.
+- [ ] Final-head source CI/independent source+patch review; actual acceptedX/new finite
+  image/config/permit checkpoint before any original mutation. No live permission here.
 
-Hosted Python3.13 returns sanitized record_0_schema_invalid where task test expects
-input_unavailable_or_invalid; H Python3.11 mandatory checks pass. Read-only source/log
-inspection only, no operator solution/test edits or replay. Do not restore authority,
-refresh proof, reset ownership/counters, re-admit, invoke a model or publish manually.
-Dashboard/DB/HTTPS remain available; historical A/B/C/V3/retired824 retained.
-
-## Historical held848 exact-R preparation — before finite execution approval
-
-[WO6538839020](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6538839020),
-accepted R44b79c7e05235c402e426db1b713b1df802a3538; postmerge CI41167440142 verified
-four actual suites PASS before physical work. SAME [Draft evidence PR847](https://github.com/sonvhse06072/personal-coding-platform/pull/847)
-normally merged R; main stays R, no force push/merge. Task/canonical/baseline/verifier H unchanged.
-[One WorkReport, concrete PM packet, exact IDs/hashes/scoped shutdown and rollback](../project/history/2026-10-31-held848-r-preparation.md)
-is the durable checklist; historical847/849 reports remain retained.
-
-- [x] Exact originals/disabled authorities/831-entry workspace/54-node three-root inventory,
-  fresh private backup, isolated restored copy and truthful unchanged RouterS binding.
-- [x] ONE serial Runtime/Executor R build each; actual packaging/toolchain/non-root/RO/noexec/
-  askpass/isolation and real actual-image producer→validator checks. No app overlay/model.
-- [x] Packaged R Git/PG/eight-reader/registrar/HTTP regressions74 pass; restored same848 using
-  H verifier19+19, copied commit/synthetic delivery; A/B/C/usage/ownership preserved.
-- [x] Disposable missing-authority rejection before bounded exact replacement cold starts;
-  ordinary authority OFF, workers stopped, old workers retained. Router start/stop bounded,
-  route calls0, stop137/OOMfalse recorded without claiming graceful shutdown.
-- [x] Stable post-start configuration hashes; one UNINSTALLED360426B private version2 proposal
-  SHA1e42acbcfe6663ed50aeda4051f86a313f9542de2b675fbd4799ee0707f6633e, exact-ID sidecar
-  SHA2206863d259df8cab005ac40b34bc0f2a95fee02ee99fb9e2e94e7484b0eecc1.
-- [x] Full original state/config/authority unchanged; new workers and all12 fixtures OFF;
-  dumps/tmp/custody/volume retained. DB/N observer/HTTPS available and unchanged.
-- [ ] Independent finite execution decision selects exact proposal bytes/validity/full IDs,
-  replacement command/config delta and sidecar preflight. Proposed07:15–13:15Z is not granted.
-- [ ] Only under that decision: exact install, start, held readiness/read-only plan, one
-  supported verify-held apply; genuine H mandatory verification, real task Draft PR/CI,
-  independent PM review. Unknown outcomes reconcile read-only, no replay/self-finalization.
-
-Original848 remains held/changed_paths_denied, running2/active4, counters1/0/0, no proof/commit.
-Original ordinary expiry07:00Z unchanged, no renewal. Closed permit schema has no full-ID
-field: sealed sidecar/operator exact-ID checks are explicit, not parser enforcement.
-Executor replacement command tightens startup through existing activation() before serving;
-Runtime ordinary flags are absent, Executor source flag remains read-only observation.
-No Compose/up, baseline advance, provider login/inference, new admission, live cleanup,
-verification or publication occurred. Preparation deadline07:00Z; retain everything at stop.
-
-The preceding preparation checklist records its pre-approval state; execution supersedes
-its unchecked permission/operation items above. The following C843 sections are historical
-receipts, not current848 ownership or authority.
+Original848 verified/ci_failure/running2/active4/1/2/1 at task850cf41cad0 unchanged.
+Evidence8475340d978/CI41176395853 records actual delivery and root task CI failure.
+Dashboard/DB/HTTPS available, original workers and authority OFF. No task edit/push/test
+replay, old-permit renewal, baseline activation, login/inference/finalization or merge.
+Following C843 receipts are historical, not current848 ownership or new authority.
 
 ## C843 completed and retained — 2026-10-30 17:21 UTC
 

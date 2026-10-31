@@ -527,6 +527,7 @@ async def inspection_mode_http_guard(request: Request, call_next):
                 or (request.method, request.url.path) not in {
                     ("GET", "/health"), ("GET", "/v1/pcp-local/readiness"), ("POST", "/v1/pcp-local/run-once"),
                     ("POST", "/v1/pcp-local/pm-review"), ("POST", "/v1/pcp-local/deliver"),
+                    ("GET", "/v1/pcp-local/review-repair"), ("POST", "/v1/pcp-local/review-repair"),
                     ("GET", "/v1/pcp-local/held-verification"), ("POST", "/v1/pcp-local/held-verification"),
                     ("GET", "/v1/pcp-local/claim-recovery"),
                     ("POST", "/v1/pcp-local/claim-recovery/register"),
@@ -1339,9 +1340,42 @@ async def pcp_local_retry_delivery():
 
 @app.get('/v1/pcp-local/readiness', dependencies=[Depends(auth)])
 async def pcp_local_readiness(phase: str = "admission", job_id: str | None = None, review_id: int | None = None):
+    if phase=='review-repair':
+        result=await _local_review_repair()
+        if result['job_id']!=job_id:raise HTTPException(409,'local_repair_wrong_job')
+        return result
     if not getattr(app.state, 'pcp_local_worker_ready', False):
         raise HTTPException(403, 'PCP-local worker readiness only')
     from .pcp_local_worker_loop import TrustedReaders
     from .pm_bridge import PMBridgeGitHubClient
     from .pcp_local_readiness import collect_readiness
     return await collect_readiness(engine, phase=phase, job_id=job_id, review_id=review_id)
+
+
+class LocalReviewRepairRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    job_id: str = Field(pattern=r"^[0-9a-f]{32}$")
+    permit_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    expected_head: str = Field(pattern=r"^[0-9a-f]{40}$")
+    pr_number: int = Field(gt=0)
+    patch_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+
+
+async def _local_review_repair(apply=False,expected=None):
+    if (not getattr(app.state,"pcp_local_worker_ready",False)
+            or runtime_startup_mode()!=PCP_LOCAL_WORKER_MODE):
+        raise HTTPException(403,"PCP-local dedicated startup required")
+    from .pcp_local_review_repair import operate
+    from .pcp_local_task_queue import TaskStop
+    try:return await operate(engine,apply=apply,expected=expected)
+    except TaskStop as exc:raise HTTPException(409,exc.code) from None
+
+
+@app.get('/v1/pcp-local/review-repair',dependencies=[Depends(auth)])
+async def local_review_repair_plan():
+    return await _local_review_repair()
+
+
+@app.post('/v1/pcp-local/review-repair',dependencies=[Depends(auth)])
+async def local_review_repair_apply(payload: LocalReviewRepairRequest):
+    return await _local_review_repair(True,payload.model_dump())
