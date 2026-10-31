@@ -1,26 +1,35 @@
 # PCP Local consolidation execution checklist
 
-## Local PM test review-repair — SOURCE/FIXTURE
+## Same848 exact X physical preparation — COMPLETE / UNINSTALLED
 
-[WO6540919383](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6540919383),
-main/platform R44b79c7e; task/base/canonical/baseline/verifier H unchanged. One writer on
-`ai/835-local-ci-review-repair848-v1`; ONE source PR, separate exact private test patch.
-[WorkReport, durable checklist and full source→rollout→repair→finalization packet](../project/history/2026-10-31-local-review-repair848.md).
+[WO6541933394](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6541933394), SAME Draft evidence847;
+X`ee7ea0d8`, actual postmerge41190565820 four executed suites PASS before serial builds.
+Task/base/canonical/baseline/verifier H unchanged. [ONE WorkReport/full execution and
+phase-aware rollback packet](../project/history/2026-10-31-held848-x-review-preparation.md) and
+[sanitized exact resources/hashes](../project/history/2026-10-31-held848-x-review-preparation.json).
 
-- [x] Actual Python3.11.2/3.13.18 portable test patch19 PASS each; valid deep JSON,
-  bounded reasons/negative controls, production/task docs and old schema tests unchanged.
-- [x] Default-OFF authenticated local exact review/patch/PR/head/full-row CAS and original
-  proof/history; real verifier/commit recovery/same-PR/new-head PM compatibility, no model.
-- [x] Real Git/PG/HTTP drift/concurrency/crash/lost-ack coverage; restored copy H19+19/
-  private bare Git/synthetic GitHub+PM finalization PASS. Unknown copy preserved/fenced.
-- [ ] Final-head source CI/independent source+patch review; actual acceptedX/new finite
-  image/config/permit checkpoint before any original mutation. No live permission here.
+- [x] Fresh original full-row/workspace/custody/whole-DB/source/review/CI equality and
+  consistent backup actually restored; originals and unknown copies unchanged.
+- [x] Exact X Runtime/Executor builds, actual packaged tools/producer/readers/repair
+  regressions; documented tmpfs restriction,17 matching-ext4 repairs PASS; no source edits.
+- [x] Actual X no-overlay restored848 authenticated repair/H19+19/private Git/synthetic
+  latest-proof PM finalization; COPIED1/4/2/delivered3/released4 only.
+- [x] Stopped exact X replacements; old R retained, H verifier/N observer unchanged;
+  missing-permit startup fail-closed before work, one cold start each, stable fingerprints.
+- [x] ONE sealed UNINSTALLED/UNAPPROVED permit996eec62… and full-ID sidecardabbc24b…;
+  patchbf3a6c53…1973B. Real-clock production parsers PASS, not_before recorded10:21:43Z,
+  fixed expiry2026-10-31T13:15:00Z/verifier120s, no future wait or usable authority.
+- [x] All owned fixtures/workers OFF/retained10:32:30Z; DB/N observer/HTTPS available.
+- [ ] Independent PM exact packet/final-head evidence CI review and NEW execution
+  permission selecting exact hashes/IDs. No original repair/finalization/merge here.
 
-Original848 verified/ci_failure/running2/active4/1/2/1 at task850cf41cad0 unchanged.
-Evidence8475340d978/CI41176395853 records actual delivery and root task CI failure.
-Dashboard/DB/HTTPS available, original workers and authority OFF. No task edit/push/test
-replay, old-permit renewal, baseline activation, login/inference/finalization or merge.
-Following C843 receipts are historical, not current848 ownership or new authority.
+Original848 cf41cad0/verified/ci_failure/running2/active4/counters1/2/1 unchanged;
+850 Draft/open/unmerged/actual CI41175379839 FAIL, review5721908834 requests changes.
+Keep847/850 unmerged, main X stable. Proposed bytes are not permission. Full original
+preimages/real readiness before any installation/apply; later independent NEW-head/
+diff/CI acceptance and new review ID before finalization. No old-permit reuse/renewal,
+expectation refresh, task test/patch/push, inference/login/admission/reset or cleanup.
+Historical sections below remain evidence only.
 
 ## C843 completed and retained — 2026-10-30 17:21 UTC
 
