@@ -52,7 +52,12 @@ def run(data):
         prompt = kw.get('input_text', argv[-1])
         assert 'Keep protected ownership and verification.' in prompt, 'missing pinned approved constraints at actual invocation'
         assert argv[:3] == ['codex','exec','--json'] and argv[-1] == '-'
-        assert '--ignore-user-config' in argv and codex.isolated_permissions(path) in argv
+        row=db.get(job)
+        temporary=path/row['checkpoint']['pcp_local_temporary']['created']['root']
+        assert '--ignore-user-config' in argv and codex.isolated_permissions(path,temporary) in argv
+        assert any(v.startswith('shell_environment_policy.set=') and str(temporary) in v for v in argv)
+        # Real durable claim -> output -> custody, even with synthetic transport.
+        (temporary/'diagnostic.txt').write_text('synthetic private execution output')
         prompts.append(kw['input_text']); events.append('synthetic_provider_transport')
         row = db.get(job)
         assert row['checkpoint']['invocation_context']['packet_sha256'] == __import__('hashlib').sha256(prompts[-1].encode()).hexdigest()

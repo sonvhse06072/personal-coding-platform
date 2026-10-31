@@ -60,6 +60,15 @@ def test_fresh_process_multiple_repairs_actual_payloads_and_review(ordinary_B):
     assert '/blob/'+b.task.baseline_source_commit+'/policy.md' in review
     assert 'UNRESOLVED' in review and 'DROP ORIGINAL CRITERIA' not in review
     row=b.s.db.get(b.id)
+    from app import pcp_local_artifacts as artifacts
+    audits=row['checkpoint'][artifacts.KEY]
+    assert len(audits)==3 and all(x['state']=='preserved' for x in audits)
+    # Healthy repair turns retain counters and prior audits without exponential
+    # checkpoint nesting or an additional owner continuation/counter gate.
+    for i,audit in enumerate(audits):
+        assert artifacts.KEY not in audit['original']['job']['checkpoint']
+        assert artifacts.original(audits[:i+1])['job']['progress']['model_calls']==i+1
+    artifacts.validate_custody_root(b.s.db,b.s.root,b.id)
     assert (row['progress']['model_calls'],row['progress']['test_runs'],row['progress']['delivery_attempts']) == (3,4,1)
     assert row['checkpoint']['invocation_context']['authority_sha256'] == row['checkpoint']['review_context']['authority_sha256']
     manifests=row['checkpoint']['context_invocations']

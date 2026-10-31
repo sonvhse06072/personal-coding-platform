@@ -24,7 +24,15 @@ def held(database,verified,monkeypatch):
     row['progress']={'model_calls':1,'test_runs':0,'delivery_attempts':0,'input_tokens':99,
         'agent_attempts':[{'returncode':0,'failure_kind':None,'adapter':'codex_cli','usage':{'input_tokens':99}}]}
     row['error']=h.ERROR
-    row['task']={'title':'Synthetic held task'}
+    # The production review path now requires immutable goal/baseline context.
+    # Supply real fixture authority rather than bypassing Composer in delivery.
+    import json
+    from test_pcp_local_worker_loop import fixture as source_fixture
+    goal=json.loads(source_fixture()[1]['body'].split('\n',1)[1])['goal']
+    row['task']={'title':'Synthetic held task','description':goal}
+    row['checkpoint']['project_baseline']=dict(project_id='pcp-local',revision=v.task.baseline_revision,
+        source_commit=v.task.base_sha,status='approved',references={k:[dict(path='policy.md')] for k in
+            ('goals','non_goals','requirements','architecture_constraints','quality_policy','security_policy','budget_policy','roadmap_frame')})
     seed(db,v)
     with db.connect() as c:
         c.execute('UPDATE cp_project_leases SET generation=2')
@@ -306,7 +314,8 @@ from test_pcp_local_runtime_dispatch import setup  # noqa:F401,E402
 from pcp_sparse_fixture import sparse_verified  # noqa:F401,E402
 
 
-def test_completed_A_ordinary_B_readers_to_held_verification(ordinary_B,monkeypatch):
+@pytest.mark.parametrize('recovery_kind,lost_ack',[('config',False),('artifact',False),('artifact',True)])
+def test_completed_A_ordinary_B_readers_to_held_verification(ordinary_B,monkeypatch,recovery_kind,lost_ack):
     """Original all-eight/registrar path followed by non-provider recovery readers."""
     import subprocess
     b=ordinary_B;s=b.s
@@ -324,11 +333,26 @@ def test_completed_A_ordinary_B_readers_to_held_verification(ordinary_B,monkeypa
     file=path/changed;file.parent.mkdir(parents=True,exist_ok=True);file.write_text('def test_answer(): assert 2+2==4\n')
     cp=deepcopy(row['checkpoint']);cp['pcp_local_execution']=dict(state='held',attempt=1,lease_generation=2,authority_digest=b.reader.authority_digest)
     progress={**row['progress'],'model_calls':1,'test_runs':0,'agent_attempts':[dict(returncode=0,failure_kind=None,adapter='codex_cli',usage={})]}
-    s.db.update(b.id,status='blocked',error=h.ERROR,workspace=str(path),branch='ai/'+b.id[:12],checkpoint=cp,progress=progress,route=b.reader.route)
+    if recovery_kind=='artifact':
+        returned=dict(attempt=1,returncode=0,model_calls=1,provider_failed=False,usage_digest=h.digest({}))
+        cp['pcp_local_execution'].update(held_from='invocation_returned',returned_invocation=returned)
+        output=path/'synthetic-output';output.mkdir();(output/'data').write_text('preserve output')
+        (output/'current').symlink_to('data')
+        from app.repo import diff_state
+        diff_state(path,750000,base_ref=b.task.base_sha)
+    s.db.update(b.id,status='blocked',error='pcp_local_changed_paths_denied' if recovery_kind=='artifact' else h.ERROR,
+        workspace=str(path),branch='ai/'+b.id[:12],checkpoint=cp,progress=progress,route=b.reader.route)
     before=h.snapshot(s.db,SimpleNamespace(value={'before':{'job':{'id':b.id}}}))
     att=dict(kind='independent_pm_legacy_returned',attempt=1,progress_sha256=h.digest(before['job']['progress']),returned_log_sha256='d'*64,shutdown_sha256='e'*64,returncode=0,provider_failed=False)
-    h.validate_eligibility(before,b.task,att)
-    permit=SimpleNamespace(task=b.task,sha256='f'*64,value=dict(before=before,candidate=h.candidate(path,b.task),invocation_attestation=att,verification_seconds=60),require_fresh=lambda:None)
+    if recovery_kind=='artifact':
+        from app import pcp_local_artifacts as artifacts
+        att=dict(kind='durable_returned',progress_sha256=h.digest(before['job']['progress']),returned_invocation_sha256=h.digest(returned))
+        plan=artifacts.make_plan(path,b.task,output.name,dict(kind='independent_pm_inventory',evidence_sha256='d'*64))
+        candidate=plan['candidate']
+    else:candidate=h.candidate(path,b.task)
+    h.validate_eligibility(before,b.task,att,artifact=recovery_kind=='artifact')
+    permit=SimpleNamespace(task=b.task,sha256='f'*64,value=dict(before=before,candidate=candidate,invocation_attestation=att,verification_seconds=60),require_fresh=lambda:None)
+    if recovery_kind=='artifact':permit.value.update(version=2,artifact_plan=plan)
     b.reader.lease_generation=2
     # Actual phase-aware readers now avoid quota/Router/version and retain A.
     def forbidden(*a,**k):pytest.fail('provider or model reached during held verification')
@@ -344,8 +368,13 @@ def test_completed_A_ordinary_B_readers_to_held_verification(ordinary_B,monkeypa
     from app.pcp_local_task_queue import verify_issue
     permit.verify_issue=lambda issue:verify_issue(issue,**{k:getattr(b.task,k) for k in
         ('issue_number','body_sha256','base_sha','baseline_revision','baseline_source_commit')})
-    monkeypatch.setattr(h,'HeldPermit',lambda:permit)
-    monkeypatch.setenv('PCP_LOCAL_HELD_VERIFY_ENABLED','owner-approved')
+    if recovery_kind=='artifact':
+        monkeypatch.setattr(h,'ArtifactPermit',lambda:permit)
+        monkeypatch.setenv('PCP_LOCAL_ARTIFACT_RECOVERY_ENABLED','owner-approved')
+        monkeypatch.delenv('PCP_LOCAL_HELD_VERIFY_ENABLED',raising=False)
+    else:
+        monkeypatch.setattr(h,'HeldPermit',lambda:permit)
+        monkeypatch.setenv('PCP_LOCAL_HELD_VERIFY_ENABLED','owner-approved')
     monkeypatch.setattr('app.pm_bridge.PMBridgeGitHubClient',lambda:b.reader.github)
     async def phase(**kw):
         import sys
@@ -353,7 +382,26 @@ def test_completed_A_ordinary_B_readers_to_held_verification(ordinary_B,monkeypa
         return dict(passed=result.returncode==0,commands=[dict(returncode=result.returncode,stdout=result.stdout)])
     b.engine.ddev=SimpleNamespace(phase=phase)
     async def delivered(*a):pass
-    b.engine.deliver_pcp_local=delivered
+    if recovery_kind!='artifact':b.engine.deliver_pcp_local=delivered
+    else:
+        # Actual review-context/publication handoff, only the external remote is synthetic.
+        remote={};publications=[]
+        async def publish(**kw):publications.append('publish');return dict(commit=kw['expected_commit'])
+        async def pr(**kw):
+            assert before['job']['task']['description'] in kw['body']
+            assert '/blob/'+b.task.baseline_source_commit+'/policy.md' in kw['body']
+            assert 'UNRESOLVED' in kw['body']
+            publications.append('pr');remote.update(number=7,head=kw['expected_commit'],head_ref=kw['branch'],base_ref='main',repository=b.task.repository,state='open',merged=False)
+            if lost_ack:raise ConnectionError('synthetic PR acknowledgement lost')
+            return remote
+        async def checks(**kw):return dict(state='success',repository=b.task.repository,commit=kw['commit'],actions_runs=[dict(
+            source='github_actions',run_id=9,id=9,head_sha=kw['commit'],name='tests',status='completed',conclusion='success',
+            details_url='https://github.com/'+b.task.repository+'/actions/runs/9')])
+        b.engine.ddev.publish_branch=publish;b.engine.ddev.upsert_pull_request=pr;b.engine.ddev.github_ci=checks
+        async def reconcile(**kw):
+            publications.append('reconcile');assert kw['expected_commit']==remote['head']
+            return dict(reconciled=True,delivery={**remote,'ci':await checks(commit=remote['head'])})
+        b.engine.ddev.github_reconcile_delivery=reconcile
     import httpx
     from app import main,pcp_local_readiness
     monkeypatch.setattr(main,'engine',b.engine)
@@ -371,9 +419,18 @@ def test_completed_A_ordinary_B_readers_to_held_verification(ordinary_B,monkeypa
             assert plan.status_code==200 and plan.json()['ready']
             expected={k:plan.json()[k] for k in ('job_id','permit_sha256')}
             assert (await client.post('/v1/pcp-local/held-verification',json={})).status_code==422
-            result=await client.post('/v1/pcp-local/held-verification',json=expected)
-            assert result.status_code==200,result.text
-            assert result.json()['state']=='verified_uncommitted'
+            if lost_ack:
+                from app.delivery import DeliveryError
+                with pytest.raises(DeliveryError):await client.post('/v1/pcp-local/held-verification',json=expected)
+                observed=await client.get('/v1/pcp-local/held-verification')
+                assert not observed.json()['ready']
+                result=await client.post('/v1/pcp-local/deliver')
+                assert result.status_code==200,result.text
+                assert publications==['publish','pr','reconcile']
+            else:
+                result=await client.post('/v1/pcp-local/held-verification',json=expected)
+                assert result.status_code==200,result.text
+                assert result.json()['state']=='verified_uncommitted'
             assert (await client.post('/v1/pcp-local/run-once')).status_code==403
             again=await client.post('/v1/pcp-local/held-verification',json=expected)
             assert again.status_code==200 and not again.json()['ready']

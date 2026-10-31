@@ -451,14 +451,14 @@ def context_cases():
 
 
 def test_context_matches_pinned_upstream_moby_oracle(plan):
-    # Preserve the exact historical 524-case upstream-oracle matrix. Six
+    # Preserve the exact historical 524-case upstream-oracle matrix. Seven
     # new literal Runtime Python inputs extend the SOURCE context; they do not
     # turn historical oracle evidence into a new physical build claim.
     allowed, forbidden = context_cases()
     additions = {"services/runtime/app/" + name + ".py" for name in (
         "dashboard_local", "dashboard_ui_local", "pcp_local_readiness", "pcp_local_recovery",
-        "context_memory", "invocation_context")}
-    assert len(allowed) == 108 and len(forbidden) == 446
+        "context_memory", "invocation_context", "pcp_local_artifacts")}
+    assert len(allowed) == 109 and len(forbidden) == 450
     assert plan["context_paths"](IGNORE.read_bytes()) == allowed
     original_allowed = allowed - additions
     added_forbidden = {p + suffix for p in additions for suffix in (".secret", "/secret.env", "/unexpected.py")}
@@ -513,7 +513,7 @@ def test_source_context_tar_is_exact_deterministic_regular_files(plan):
     expected.update({str(p.relative_to(ROOT)): p.read_bytes() for p in (DOCKERFILE, LOCK, IGNORE)})
     with tarfile.open(fileobj=io.BytesIO(raw), mode="r:") as archive:
         members = archive.getmembers()
-        assert len(members) == len(expected) == 109
+        assert len(members) == len(expected) == 110
         assert {item.name for item in members} == set(expected)
         for item in members:
             assert item.isfile() and not item.issym() and not item.islnk()

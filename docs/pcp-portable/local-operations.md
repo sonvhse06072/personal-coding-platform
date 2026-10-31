@@ -1,29 +1,40 @@
 # Supported readiness, recovery and dashboard adoption
 
-## #604 context continuity candidate — SOURCE/FIXTURE only
+## #835 temporary artifacts and held848 — SOURCE/FIXTURE candidate
 
-[WO6529510627](https://github.com/sonvhse06072/personal-coding-platform/issues/604#issuecomment-6529510627),
-branch `ai/604-context-continuity-v1` ([Draft PR846](https://github.com/sonvhse06072/personal-coding-platform/pull/846)), starts from merged evidence845/0e8065b6;
-main CI41100344082 passed four executed suites before edits.
-[One WorkReport and future rollout packet](../project/history/2026-10-31-context-continuity.md)
-is the durable checklist for this slice:
+[WO6537270657](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6537270657),
+anchor H871fbf2485a1, branch `ai/835-temp-artifacts-held848-v1`.
+[One WorkReport, evidence matrix, exact resources/shutdown and complete future rollout packet](../project/history/2026-10-31-temp-artifacts-held848.md)
+is the durable checklist:
 
-- Shared Composer packaged in Runtime; existing script facade retained.
-- Each new ordinary execute/repair receives original prose criteria/scope and pinned
-  baseline content; missing or changed mandatory evidence stops before model dispatch.
-- Existing PR handoff carries original criteria, immutable policy links/hashes, actual
-  check/diff evidence and unresolved assessment; no automatic criterion acceptance.
-- Fresh-process, repair, drift, hostile configuration and publication-reconciliation
-  regressions use isolated Git/PostgreSQL and synthetic provider/GitHub transport.
-- Final source verification, exact-head hosted CI and stopped fixture inventory are
-  recorded in the report/PR. Independent PM acceptance and physical adoption remain gates.
+- [x] Actual pinned H CLI0.160.0/pytest reproduces cwd fallback and command-policy refusal;
+  candidate private child temp passes without shared /tmp/sibling/provider/network access.
+- [x] Explicit provenance/full Git candidate; durable CAS intent, no-overwrite preservation,
+  partial/crash/lost-ack reconciliation; unknown files/ignored files/forged markers deny.
+- [x] Separate version2 artifact permit through existing authenticated verify-held;
+  successful returned invocation/usage/counters/ownership/taskH remain bound; no model path.
+- [x] Real Git/PostgreSQL/eight-reader/registrar/HTTP and restored-copy verification19+19,
+  commit and synthetic delivery; A/B/C unchanged. Actual candidate source overlay is not
+  a built/adopted repair image. Required final-head hosted suites are recorded in the PR.
+- [x] Original848/full V4 DB and historical evidence retained; source fixtures stopped
+  with private dumps/tmp/workspace custody. Existing N observer/HTTPS unchanged.
+- [ ] Independent source review/accepted R/postmerge CI, then separate finite live decision,
+  actual R Runtime/Executor builds/adoption and exact concrete permit checkpoint.
+- [ ] Original848 supported recovery, real Draft task PR/CI and independent PM review.
 
-This does not add a resume route, internal CLI compaction guarantee, live baseline or
-worker authority. Historical A/B/C and retired824, credentials, dashboard and old permits
-are untouched. No image build occurred. The inspection allowlist/draft digest changes
-only package the two new Python source modules; all unresolved artifact pins stay null.
-Broad baseline references can produce large mandatory packets; use reviewed successor
-section pointers if needed, never truncate constraints or rewrite an approved revision.
+Original848 remains held/changed_paths_denied, running2/active4, counters1/0/0 with no
+proof/commit. Evidence847 stays unmerged e97fa327. Three explicitly proposed roots include
+ignored bytecode:54 full nodes, not merely31 Git entries. No live quarantine/cleanup.
+Original authority remains disabled, expiry07:00Z unchanged. No login/build/worker startup,
+admission/model/replay/finalization/merge. Two optional supervision PG failures reproduce
+unchanged on H; static2-call admission limitation remains separate. #604/#835 stay open.
+
+The report's single packet preserves task/canonical/verifierH while future platform is R;
+R is not yet known. New version2 private files/flag cannot replace or widen the old config
+permit. Readiness/read-only plan precede one apply under later explicit permission.
+Unknown verification cannot replay. Retain output/candidate/preimages on every failure.
+
+The following C843 sections are historical receipts, not the current848 lease/authority.
 
 ## C843 completed and retained — 2026-10-30 17:21 UTC
 

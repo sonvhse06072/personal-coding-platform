@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import tempfile
 from pathlib import Path
 
@@ -38,7 +39,7 @@ def require_isolated_configuration(workspace: Path) -> None:
         raise ValueError('pcp_local_unreviewed_codex_configuration')
 
 
-def isolated_permissions(workspace: Path) -> str:
+def isolated_permissions(workspace: Path, tool_tmp: Path | None = None) -> str:
     """Pinned CLI permission profile; no writable/readable sibling or provider home.
 
     The CLI itself retains its existing provider transport/auth custody. Only its
@@ -48,8 +49,16 @@ def isolated_permissions(workspace: Path) -> str:
     """
     if not workspace.is_absolute() or workspace.is_symlink() or workspace.resolve() != workspace:
         raise ValueError("PCP isolation requires the exact workspace path")
+    if tool_tmp is not None and (tool_tmp.parent != workspace or tool_tmp.is_symlink()
+            or not tool_tmp.is_dir() or tool_tmp.resolve()!=tool_tmp):
+        raise ValueError('PCP temporary tools require a private child of this workspace')
+    # :tmpdir resolves from the TOOL environment, not the outer CLI. When that
+    # path is a private job child, inherited :workspace temp access is already
+    # inside this exact writable boundary. Keep shared /tmp denied; root=deny
+    # still excludes every sibling, provider home and unrelated temporary path.
+    temporary_denial='":tmpdir"="deny", ' if tool_tmp is None else ''
     return ('permissions={pcp_local={extends=":workspace", workspace_roots={}, '
-            'filesystem={":root"="deny", ":minimal"="read", ":tmpdir"="deny", '
+            'filesystem={":root"="deny", ":minimal"="read", '+temporary_denial+
             '":slash_tmp"="deny", "/usr"="read", "/bin"="read", "/lib"="read", '
             '"/lib64"="read", "/opt/venv"="read", '
             + json.dumps(str(workspace)) + '="write"}, network={enabled=false}}}')
@@ -80,8 +89,11 @@ class CodexAdapter(AgentAdapter):
         environment: dict[str, str] | None = None,
         developer_broker: dict[str, str] | None = None,
         isolate_workspace: bool = False,
+        tool_tmp: Path | None = None,
     ) -> AgentRun:
         sandbox = "read-only" if mode in {"plan", "evaluate"} else "workspace-write"
+        if tool_tmp is not None and not isolate_workspace:
+            raise ValueError('Private temporary tools require PCP isolation')
         if developer_broker is not None and mode not in {"execute", "repair"}:
             raise ValueError("Scoped developer tools never run in plan/evaluate")
         # Runtime is non-interactive: a Codex approval prompt has no valid human
@@ -113,13 +125,18 @@ class CodexAdapter(AgentAdapter):
             argv[3:5] = []  # Named permissions replace legacy --sandbox mode.
             argv += ["--strict-config", "--ignore-user-config", "--ignore-rules",
                      "--config", 'default_permissions="pcp_local"',
-                     "--config", isolated_permissions(workspace),
+                     "--config", isolated_permissions(workspace, tool_tmp),
                      # 0.160 thread/start persists implicit writable-project
                      # trust even with --ignore-user-config. Explicit in-memory
                      # trust suppresses that write; it grants no permissions.
                      # Project configuration remains forbidden above.
                      "--config", 'projects={' + json.dumps(str(workspace))
                      + '={trust_level="trusted"}}']
+            if tool_tmp is not None:
+                pytest_options='-o '+shlex.quote('cache_dir='+str(tool_tmp/'pytest-cache'))
+                argv += ['--config','shell_environment_policy.set={TMPDIR='+json.dumps(str(tool_tmp))
+                    +',TMP='+json.dumps(str(tool_tmp))+',TEMP='+json.dumps(str(tool_tmp))
+                    +',PYTHONDONTWRITEBYTECODE="1",PYTEST_ADDOPTS='+json.dumps(pytest_options)+'}']
         if sandbox == "workspace-write":
             argv += ["--config", "sandbox_workspace_write.network_access=false"]
         argv += ["--cd", str(workspace)]
