@@ -1,24 +1,36 @@
 # Supported readiness, recovery and dashboard adoption
 
-## Exact finite held848 recovery — not-before gate
+## Held848 recovery — real publication, hosted CI blocked
 
 [DEC6539534137](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6539534137)
-accepts exact packet610ed799/review5721453660. SAME847 stays unmerged, main R/taskH.
-Approved separate validity07:15–13:15Z; before07:15 only read-only audit/documentation.
-Early exact audit PASS; no authority installed/start/apply. Original848 remains held,
-running2/active4/counters1/0/0. Sealed proposal/sidecar metadata unchanged; external decision
-record is separate. [Active execution record and sequence](../project/history/2026-10-31-held848-r-recovery.md)
-supersede preparation's pending-permission next action; preparation evidence below remains history.
+plus [exact timing correction6539840379](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6539840379)
+executed; SAME847 unmerged/main R/task H. Original sealed permit/sidecar retained; separately
+named derivative changes only not_before07:15→06:00Z and direct sidecar references, expiry
+13:15 unchanged. Derived permit681a728f…/sidecarcc452de8… validated offline and published
+before install. All original evidence/preimages/fingerprints passed fresh checks.
+[Consolidated LIVE report, exact hashes/IDs/backup/stop commands](../project/history/2026-10-31-held848-r-recovery.md)
+and its JSON supersede the historical preparation next action below.
 
-- [x] Read accepted packet/decision; early exact rows/workspace/config/IDs/bytes audit PASS.
-- [ ] Within validity: fresh exact audit, approved install/start, actual readiness/read-only plan.
-- [ ] ONE supported initial verify-held apply; genuine mandatory H checks/commit/real Draft PR/CI.
-- [ ] Actual evidence/backup, exact shutdown/authority disablement, independent PM task review.
+- [x] Exact fresh preflight, no-overwrite0600 install, approved three workers start once;
+  actual held readiness and read-only plan PASS against original expected evidence.
+- [x] ONE supported verify-held apply/ONE mutation; audited54-node custody, actual H19+19 PASS,
+  exact candidate Git identity/single parent H, real Draft task850/headcf41cad0.
+- [x] Actual exact-head hosted41175379839 all4 suites executed: Router132/Runtime2783/
+  Executor815 PASS; root1 failed/1761 passed/1 skipped (new nesting reason assertion).
+- [x] Reconciled blocked/pcp_local_hosted_ci_not_passed, verified/ci_failure/finalizedfalse;
+  receipt running2/lease active4 full rows unchanged; counters1/2/1, usage/ABC preserved.
+- [x] After-backup/archive list, real trusted Chromium/reconnect/ABC fixed timers; exact
+  workers stopped06:13:38Z, derived authority/original-V2 copy disabled intact, all fixtures OFF.
+- [ ] Independent PM disposition for bounded same-job task repair and supported transition;
+  no finalization while task CI red. Evidence847 required CI does not accept task850.
 
-No new model/login/admission/solution/fixture proof/replay/finalization/merge. Unknown
-verification remains fenced; no expectation refresh or automatic expiry extension.
+Hosted Python3.13 returns sanitized record_0_schema_invalid where task test expects
+input_unavailable_or_invalid; H Python3.11 mandatory checks pass. Read-only source/log
+inspection only, no operator solution/test edits or replay. Do not restore authority,
+refresh proof, reset ownership/counters, re-admit, invoke a model or publish manually.
+Dashboard/DB/HTTPS remain available; historical A/B/C/V3/retired824 retained.
 
-## Held848 exact-R preparation — completed, execution permission pending
+## Historical held848 exact-R preparation — before finite execution approval
 
 [WO6538839020](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6538839020),
 accepted R44b79c7e05235c402e426db1b713b1df802a3538; postmerge CI41167440142 verified
@@ -55,7 +67,9 @@ Runtime ordinary flags are absent, Executor source flag remains read-only observ
 No Compose/up, baseline advance, provider login/inference, new admission, live cleanup,
 verification or publication occurred. Preparation deadline07:00Z; retain everything at stop.
 
-The following C843 sections are historical receipts, not current848 ownership or authority.
+The preceding preparation checklist records its pre-approval state; execution supersedes
+its unchecked permission/operation items above. The following C843 sections are historical
+receipts, not current848 ownership or authority.
 
 ## C843 completed and retained — 2026-10-30 17:21 UTC
 
