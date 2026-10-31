@@ -404,6 +404,8 @@ from .pcp_local_task_queue import (require, LocalSourceTask, PROJECT_ID, REPOSIT
 HELD_KEY = 'pcp_local_held_verification'
 HELD_PERMIT = Path('/config/pcp-local-held-verification.json')
 HELD_ORIGINAL = Path('/config/pcp-local-held-original-activation.json')
+ARTIFACT_PERMIT = Path('/config/pcp-local-artifact-recovery.json')
+ARTIFACT_ORIGINAL = Path('/config/pcp-local-artifact-original-activation.json')
 ERROR = 'pcp_local_unreviewed_codex_configuration'
 
 
@@ -427,22 +429,38 @@ def private_bytes(path):
 
 
 def enabled():
-    return os.getenv('PCP_LOCAL_HELD_VERIFY_ENABLED') == 'owner-approved'
+    return os.getenv('PCP_LOCAL_HELD_VERIFY_ENABLED') == 'owner-approved' or artifact_enabled()
+
+
+def artifact_enabled():
+    return os.getenv('PCP_LOCAL_ARTIFACT_RECOVERY_ENABLED') == 'owner-approved'
+
+
+def load_held_permit():
+    require(not (artifact_enabled() and os.getenv('PCP_LOCAL_HELD_VERIFY_ENABLED')=='owner-approved'),
+            'held_conflicting_authority')
+    return ArtifactPermit() if artifact_enabled() else HeldPermit()
 
 
 class HeldPermit:
-    def __init__(self):
+    def __init__(self, *, _artifact=False):
         import hashlib
         require(enabled(), 'held_verification_disabled')
-        self.raw = private_bytes(HELD_PERMIT)
+        self.artifact_mode=_artifact
+        self.permit_path=ARTIFACT_PERMIT if _artifact else HELD_PERMIT
+        self.original_path=ARTIFACT_ORIGINAL if _artifact else HELD_ORIGINAL
+        require(artifact_enabled() if _artifact else os.getenv('PCP_LOCAL_HELD_VERIFY_ENABLED')=='owner-approved',
+                'held_verification_disabled')
+        self.raw = private_bytes(self.permit_path)
         self.value = json.loads(self.raw, object_pairs_hook=_unique)
         p = self.value
-        original = private_bytes(HELD_ORIGINAL)
+        original = private_bytes(self.original_path)
         a = json.loads(original, object_pairs_hook=_unique)
         require(set(p) == {'version','decision_id','execution_record','not_before','expires_at',
             'original_activation_sha256','before','candidate','invocation_attestation',
-            'repair_source','repair_commits','repair_paths','roles','verification_seconds'}, 'held_permit_shape')
-        require(p['version'] == 1 and type(p['version']) is int
+            'repair_source','repair_commits','repair_paths','roles','verification_seconds'}
+            | ({'artifact_plan'} if _artifact else set()), 'held_permit_shape')
+        require(p['version'] == (2 if _artifact else 1) and type(p['version']) is int
             and re.fullmatch('[A-Za-z0-9._-]{8,100}', p['decision_id'])
             and p['execution_record'].startswith('https://github.com/'+REPOSITORY+'/issues/835#issuecomment-')
             and p['original_activation_sha256'] == hashlib.sha256(original).hexdigest(), 'held_authority_invalid')
@@ -468,17 +486,30 @@ class HeldPermit:
         require(p['roles']['verifier']['image_id']==a['verification_image']==a['runtime_image_id'], 'held_verifier_changed')
         self.sha256 = digest(p)
         self.activation = {**a, 'held_verification': deepcopy(p)}
-        validate_eligibility(b, self.task, p['invocation_attestation'])
+        validate_eligibility(b, self.task, p['invocation_attestation'],artifact=_artifact)
+        if _artifact:
+            from .pcp_local_artifacts import root_name
+            plan=p['artifact_plan'];root_name(plan['root'])
+            from .pcp_local_artifacts import roots
+            roots(plan)
+            require(set(plan)=={'version','workspace','job_id','task_sha256','root','extra_roots','provenance','before','candidate'}
+                and plan['version']==1 and type(plan['version']) is int
+                and plan['workspace']==b['job']['workspace'] and plan['job_id']==b['job']['id']
+                and plan['task_sha256']==digest(vars(self.task)) and plan['candidate']==p['candidate']
+                and plan['provenance']['kind']=='independent_pm_inventory'
+                and re.fullmatch('[0-9a-f]{64}',plan['provenance']['evidence_sha256']), 'artifact_permit_plan_invalid')
         self.require_fresh()
 
     def require_fresh(self):
         import hashlib
         p = self.value
-        require(enabled() and all(type(p[k]) in (int,float) for k in ('not_before','expires_at'))
+        require((artifact_enabled() if self.artifact_mode else os.getenv('PCP_LOCAL_HELD_VERIFY_ENABLED')=='owner-approved')
+            and not (artifact_enabled() and os.getenv('PCP_LOCAL_HELD_VERIFY_ENABLED')=='owner-approved')
+            and all(type(p[k]) in (int,float) for k in ('not_before','expires_at'))
             and p['not_before'] <= time.time() < p['expires_at']
             and 0 < p['expires_at']-p['not_before'] <= 86400, 'held_authority_expired')
-        require(private_bytes(HELD_PERMIT) == self.raw and digest(self.value) == self.sha256
-            and hashlib.sha256(private_bytes(HELD_ORIGINAL)).hexdigest() == p['original_activation_sha256'],
+        require(private_bytes(self.permit_path) == self.raw and digest(self.value) == self.sha256
+            and hashlib.sha256(private_bytes(self.original_path)).hexdigest() == p['original_activation_sha256'],
             'held_authority_revoked')
 
     def verify_issue(self, issue):
@@ -489,13 +520,18 @@ class HeldPermit:
         return task
 
 
-def validate_eligibility(b, task, attestation):
+class ArtifactPermit(HeldPermit):
+    """Separate version/file/opt-in. Never reinterpret the old configuration permit."""
+    def __init__(self):super().__init__(_artifact=True)
+
+
+def validate_eligibility(b, task, attestation, *, artifact=False):
     from .pcp_local_worker_loop import stable_job_id, claimed_source_receipt
     j,r,l = b['job'],b['receipt'],b['lease']
     cp = j['checkpoint']; e = cp.get('pcp_local_execution',{})
     require(set(b) == {'job','receipt','lease'} and j['id'] == stable_job_id(task)
         and j['project_id'] == PROJECT_ID and j['source_commit'] == task.base_sha
-        and j['status'] == 'blocked' and j['error'] == ERROR and j['result'] is None
+        and j['status'] == 'blocked' and j['error'] == ('pcp_local_changed_paths_denied' if artifact else ERROR) and j['result'] is None
         and j['branch'] == 'ai/'+j['id'][:12] and e.get('state') == 'held'
         and type(e.get('attempt')) is int and e['attempt'] == 1 and not {'verified_tree','verification','commit'} & e.keys()
         and 'pcp_local_retirement' not in cp and HELD_KEY not in cp
@@ -512,6 +548,17 @@ def validate_eligibility(b, task, attestation):
     require(len(attempts)==1 and attempts[0].get('returncode')==0
         and attempts[0].get('failure_kind') is None and attempts[0].get('adapter')=='codex_cli'
         and isinstance(attempts[0].get('usage'),dict), 'held_invocation_uncertain')
+    if artifact:
+        returned=e.get('returned_invocation',{})
+        require(e.get('held_from')=='invocation_returned'
+            and set(returned)=={'attempt','returncode','model_calls','usage_digest','provider_failed'}
+            and canonical({k:returned[k] for k in ('attempt','returncode','model_calls','provider_failed')})==
+                canonical(dict(attempt=1,returncode=0,model_calls=1,provider_failed=False))
+            and re.fullmatch('[0-9a-f]{64}',returned['usage_digest'])
+            and canonical(attestation)==canonical(dict(kind='durable_returned',
+                progress_sha256=digest(progress),returned_invocation_sha256=digest(returned))),
+            'artifact_returned_invocation_missing')
+        return
     # A legacy attestation is explicit PM authority over corroborating evidence,
     # not a retroactive Runtime checkpoint. Hashes identify private retained files.
     require(type(attestation) is dict and set(attestation) == {'kind','attempt','progress_sha256',
@@ -564,12 +611,23 @@ def snapshot(storage, permit):
 
 def classify(current, permit):
     p=permit.value; audit=current['job']['checkpoint'].get(HELD_KEY)
+    artifact=p.get('version')==2
     if not audit:
+        if artifact:
+            from .pcp_local_artifacts import custody_state
+            return custody_state(current,p['before'],p['artifact_plan'],permit.sha256)
         require(canonical(current) == canonical(p['before']), 'held_preimage_drift')
         return 'eligible'
     require(audit['permit_sha256'] == permit.sha256 and canonical(audit['original']) == canonical(p['before'])
         and canonical(current['receipt']) == canonical(p['before']['receipt']) and canonical(current['lease']) == canonical(p['before']['lease']),
         'held_conflicting_operation')
+    if artifact:
+        from .pcp_local_artifacts import KEY,check_preserved,original
+        custody=current['job']['checkpoint'][KEY][-1]
+        require(custody['state']=='preserved' and custody['plan']==p['artifact_plan']
+            and custody['token']==permit.sha256 and original(current['job']['checkpoint'][KEY])==p['before']
+            and digest(current['job']['checkpoint'][KEY])==audit['artifact_audit_sha256'],'artifact_audit_drift')
+        check_preserved(custody['plan'],custody['after'])
     # Recovery/delivery legitimately change job columns after verified handoff.
     if audit['state'] == 'verified_uncommitted':
         original=p['before']['job'];j=current['job'];cp=j['checkpoint'];execution=cp['pcp_local_execution']
@@ -602,11 +660,14 @@ def transition(storage, permit, expected, *, state, verification=None, seconds=0
         current=read_rows(c,expected['job']['id'],lock=True)
         require(canonical(current) == canonical(expected), 'held_stale_preimage')
         old=classify(current,permit)
-        require((old,state) in {('eligible','verifying'),('verifying','verification_failed'),
+        require((old,state) in {('eligible','verifying'),('custody_preserved','verifying'),('verifying','verification_failed'),
             ('verifying','verified_uncommitted')}, 'held_transition_denied')
         j=deepcopy(current['job']); cp=j['checkpoint']; progress=j['progress']
         audit=deepcopy(cp.get(HELD_KEY) or dict(permit_sha256=permit.sha256,original=p['before'],
             candidate=p['candidate'],invocation_attestation=p['invocation_attestation'],history=[]))
+        if p.get('version')==2:
+            from .pcp_local_artifacts import KEY
+            audit['artifact_audit_sha256']=digest(cp[KEY])
         audit.update(state=state)
         audit['history'].append(dict(state=state,at=now().isoformat(),verification=verification,seconds=seconds))
         if verification is not None:
@@ -666,7 +727,7 @@ async def prepare(engine):
     from .pm_bridge import PMBridgeGitHubClient
     from .pcp_local_readiness import schema_readiness
     require(not schema_readiness(engine.storage), "held_schema_unready")
-    permit=HeldPermit(); readers=TrustedReaders(engine,PMBridgeGitHubClient())
+    permit=load_held_permit(); readers=TrustedReaders(engine,PMBridgeGitHubClient())
     task,_=await readers.source()
     require(task == permit.task and readers.held.sha256 == permit.sha256, 'held_reader_identity')
     project,baseline=readers.authority()
@@ -699,9 +760,31 @@ async def operate(engine, *, apply=False, expected=None):
 
 async def _operate_locked(engine,permit,readers,apply):
     before=snapshot(engine.storage,permit); state=classify(before,permit)
+    if permit.value.get('version')==2:
+        from . import pcp_local_artifacts as artifacts
+        plan=permit.value['artifact_plan']
+        if state=='eligible':
+            require(canonical(artifacts.make_plan(Path(plan['workspace']),permit.task,plan['root'],plan['provenance'],extra_roots=plan['extra_roots']))==canonical(plan),
+                    'artifact_plan_drift')
+        elif state not in {'custody_intent','custody_preserved'}:
+            return dict(job_id=before['job']['id'],permit_sha256=permit.sha256,state=state,ready=False,reconcile=True)
+        if state=='custody_intent':artifacts.inspect_intent(plan)
+        if not apply:
+            return dict(job_id=before['job']['id'],state=state,ready=True,permit_sha256=permit.sha256)
+        if state=='eligible':before=artifacts.record(engine.storage,before,plan,permit.sha256,require_fresh=permit.require_fresh)
+        if state in {'eligible','custody_intent'}:
+            permit.require_fresh();after=artifacts.preserve(plan)
+            before=artifacts.record(engine.storage,before,plan,permit.sha256,after=after,require_fresh=permit.require_fresh)
+        require(canonical(artifacts.source_candidate(Path(plan['workspace']),permit.task,artifacts.roots(plan)))==canonical(permit.value['candidate']),
+                'artifact_candidate_drift')
+        state='eligible'  # Existing verification handoff; CAS sees custody_preserved.
     if state != 'eligible':
         return dict(job_id=before['job']['id'],permit_sha256=permit.sha256,state=state,ready=False,reconcile=True)
-    require(canonical(candidate(before['job']['workspace'],permit.task)) == canonical(permit.value['candidate']), 'held_candidate_drift')
+    def checked_candidate():
+        if permit.value.get('version')==2:
+            return artifacts.source_candidate(Path(before['job']['workspace']),permit.task,artifacts.roots(permit.value['artifact_plan']))
+        return candidate(before['job']['workspace'],permit.task)
+    require(canonical(checked_candidate()) == canonical(permit.value['candidate']), 'held_candidate_drift')
     if not apply:return dict(job_id=before['job']['id'],state=state,ready=True,permit_sha256=permit.sha256)
     current=transition(engine.storage,permit,before,state='verifying')
     # Durable intent BEFORE tests. Crash/lost response cannot repeat tests.
@@ -712,7 +795,15 @@ async def _operate_locked(engine,permit,readers,apply):
     verification=await engine.verify_pcp_local(before['job']['id'],Path(before['job']['workspace']),
         readers.authority()[0],timeout_seconds=permit.value['verification_seconds'],phase_observer=observe)
     await readers.refresh_delivery(permit.task)
-    require(canonical(candidate(before['job']['workspace'],permit.task)) == canonical(permit.value['candidate']), 'held_tested_candidate_drift')
+    require(canonical(checked_candidate()) == canonical(permit.value['candidate']), 'held_tested_candidate_drift')
+    if permit.value.get('version')==2 and verification['passed']:
+        custody=current['job']['checkpoint'][artifacts.KEY][-1]
+        artifacts.check_preserved(permit.value['artifact_plan'],custody['after'],source=True)
+        # Mandatory commands really succeeded. The ordinary proof producer may
+        # now reconcile H's stale intent-to-add entries in the ORIGINAL index.
+        # This is not another verifier/model call or an expected-proof refresh.
+        require(verified_tree(Path(before['job']['workspace']),permit.task,permit.value['candidate']['diff'])
+            ==permit.value['candidate']['identity'],'artifact_verified_candidate_changed')
     state='verified_uncommitted' if verification['passed'] else 'verification_failed'
     current=transition(engine.storage,permit,current,state=state,verification=verification,seconds=time.monotonic()-started)
     if verification['passed']:

@@ -180,3 +180,43 @@ def test_held_authority_file_cannot_be_substituted(tmp_path,monkeypatch,kind):
             return result
         monkeypatch.setattr(os,'read',race)
     with pytest.raises(HTTPException):h._read(path)
+
+
+@pytest.mark.parametrize('drift',['none','old_flag','version','expiry','error','model_replay','verifier'])
+def test_artifact_permit_is_separate_and_release_retains_original_verifier(release,tmp_path,monkeypatch,drift):
+    import json,time,hashlib
+    from app import pcp_local_held as h
+    s=release;a=deepcopy(s.a);mapping=a.pop('claim_recovery')
+    before=dict(receipt=dict(state='running',generation=2,job_id='a'*32,issue_number=999,
+        base_sha=a['base_sha'],body_sha256='b'*64,baseline_revision='fixture-H',baseline_source_commit=a['base_sha'],
+        allowed_paths=['tests/test_pcp_light_pilot.py']),
+        job=dict(id='a'*32,status='blocked',result=None,error='pcp_local_changed_paths_denied',workspace=str(s.root/'workspace'),
+            progress=dict(model_calls=1,test_runs=0,delivery_attempts=0),checkpoint={'pcp_local_execution':dict(
+                state='held',held_from='invocation_returned',returned_invocation=dict(returncode=0,provider_failed=False))}),
+        lease=dict(state='active',owner_job_id='a'*32))
+    a.update({k:before['receipt'][k] for k in ('issue_number','body_sha256','baseline_revision','baseline_source_commit')})
+    original=tmp_path/'original-artifact.json';original.write_text(json.dumps(a));original.chmod(0o600)
+    candidate={'identity':{},'diff':{}}
+    p=dict(version=2,decision_id='fixture-artifact-decision',execution_record='fixture',
+        not_before=time.time()-1,expires_at=time.time()+600,original_activation_sha256=hashlib.sha256(original.read_bytes()).hexdigest(),
+        before=before,candidate=candidate,artifact_plan=dict(version=1,workspace=before['job']['workspace'],job_id='a'*32,
+            root='pytest-of-node',extra_roots=[],before={},provenance=dict(kind='independent_pm_inventory'),candidate=candidate),
+        invocation_attestation={},repair_source=mapping['repair_source'],repair_commits=mapping['repair_commits'],
+        repair_paths=mapping['repair_paths'],roles=mapping['roles'],verification_seconds=60)
+    path=tmp_path/'artifact-permit.json'
+    if drift=='old_flag':monkeypatch.setenv('PCP_LOCAL_HELD_VERIFY_ENABLED','owner-approved')
+    else:monkeypatch.delenv('PCP_LOCAL_HELD_VERIFY_ENABLED',raising=False)
+    if drift=='version':p['version']=1
+    elif drift=='expiry':p['expires_at']=time.time()-1
+    elif drift=='error':p['before']['job']['error']='another_scope_failure'
+    elif drift=='model_replay':p['before']['job']['progress']['model_calls']=2
+    elif drift=='verifier':p['roles']['verifier']['source_commit']=mapping['repair_source']
+    path.write_text(json.dumps(p));path.chmod(0o600)
+    monkeypatch.setattr(h,'ARTIFACT_PERMIT',path);monkeypatch.setattr(h,'ARTIFACT_ORIGINAL',original)
+    monkeypatch.setenv('PCP_LOCAL_ARTIFACT_RECOVERY_ENABLED','owner-approved')
+    if drift=='none':
+        value=h.activation();assert value['base_sha']==a['base_sha']
+        assert r.release(value,s.root,s.root,s.inspect,binding_key='held_verification')==mapping['repair_source']
+    else:
+        with pytest.raises(HTTPException):
+            value=h.activation();r.release(value,s.root,s.root,s.inspect,binding_key='held_verification')

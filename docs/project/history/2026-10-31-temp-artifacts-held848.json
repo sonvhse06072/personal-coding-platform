@@ -1,0 +1,185 @@
+{
+  "workorder": 6537270657,
+  "anchor": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+  "branch": "ai/835-temp-artifacts-held848-v1",
+  "started_at": "2026-10-31T01:45:01.032974+00:00",
+  "fixture_closeout_at": "2026-10-31T02:56:47.640527+00:00",
+  "operator_elapsed_to_fixture_closeout_seconds": 4306.608,
+  "operator": {
+    "model": "gpt-6.1-sol",
+    "effort": null,
+    "usage": null,
+    "cost": null,
+    "owner_attention_requests": 0,
+    "owner_active_minutes": null,
+    "provider_inference_calls": 0,
+    "hosted_waiting": "recorded in final PR run timestamps; excluded from this closeout interval"
+  },
+  "original": {
+    "job_id": "15271df1a36b1281010465538a9318ae",
+    "status": "blocked",
+    "error": "pcp_local_changed_paths_denied",
+    "proof": false,
+    "counters": [
+      1,
+      0,
+      0
+    ],
+    "receipt": "running/gen2",
+    "lease": "active/gen4",
+    "expiry": "2026-10-31T07:00:00Z",
+    "authority": "disabled_intact",
+    "full_DB_sequences_workspace_ABC_unchanged": true
+  },
+  "restored_fixture": {
+    "outcome": "PASS_RESTORED_FIXTURE_ONLY",
+    "counters": [
+      1,
+      2,
+      1
+    ],
+    "mandatory_tests": [
+      19,
+      19
+    ],
+    "source_diff_sha256": "b7f49de89ffa98cf20f549a4cfdbfc8ce9263a995e23b484faa21e2264f685cf",
+    "candidate_tree": "b14a0bb25ef7bfb82609c87f88a1f0d37b63b95b",
+    "copied_commit": "09e7dd0b9b45d584ddd600139659f08788ee68ad",
+    "real_publication": false,
+    "release_binding": "synthetic_R_H; candidate-source overlay on accepted H image",
+    "artifact_inventory_nodes": 54,
+    "artifact_roots": {
+      "pytest-of-node": 50,
+      "scripts/__pycache__": 2,
+      "tests/__pycache__": 2
+    }
+  },
+  "fixtures": {
+    "at": "2026-10-31T02:56:20.700502+00:00",
+    "ids": [
+      "6bfe00d7a8caf96ffa65ddef70acfd46deeb8ca12571c2b828d444a2dff5cd6a",
+      "458b1b38f90af3901fe6bc3dc0b8add62940e2070fde3ee2aeb89e44e9099b86",
+      "c55edb5759fecbb19d2f7e983c1abd0f4acaf85797fbbf90c9a8348f6b889c0f"
+    ],
+    "verifiers": [
+      "9b098029ed1c1e136e4a0d64e54b8a7138b1366284b1864dea23ce1943a70f32",
+      "509405b87a133587785c86c952db774549881f6b51c57a36d8c1e5503773059c"
+    ],
+    "all_stopped": true,
+    "removed": false,
+    "volume": "pcp848-temp-source-pg-data",
+    "retained": [
+      "restored/workspaces",
+      "probe-tmp.tar",
+      "restored-tmp.tar",
+      "restored-after.dump"
+    ]
+  },
+  "dashboard": {
+    "url": "https://localhost:18443/dashboard",
+    "authentication": "loopback_readonly",
+    "deployment_changed": false,
+    "trusted_TLS_HTTP_status": 200
+  },
+  "optional_postgres": {
+    "passed": 3146,
+    "failed": 2,
+    "seconds": 300.23,
+    "baseline_H_same_failures": true,
+    "failures": [
+      "test_initial_supervised_hold_rejects_mutated_ready_set",
+      "test_pr_acceptance_does_not_hold_but_durable_merge_does"
+    ]
+  },
+  "evidence": {
+    "848-original-preimage.private.json": {
+      "sha256": "5c1db08e713c2c89757b122ab0ada67284ade16f5509784e8109fa54f965891d",
+      "bytes": 182627
+    },
+    "restore-capture.json": {
+      "sha256": "d3887df28c852cd4a0651b6b3aff400c05592dfa20494d2d9868b21e868b4b88",
+      "bytes": 301
+    },
+    "restored-setup-reconciliation.json": {
+      "sha256": "241a5fbb47c1509074f9625469a17587d9d69edec3b6d5ea0bccf2b6b2b3992f",
+      "bytes": 341
+    },
+    "restored-v2-result.json": {
+      "sha256": "9f11bf5483fbb784714968b1db78a86cdb251c18b01a25cd14d3058162174773",
+      "bytes": 908
+    },
+    "candidate-cli-pytest-cache.stdout": {
+      "sha256": "dbd38b95e32f23d768e5bc4385094127ee3521f79f77dbbd1b7a1c74c03c2cbb",
+      "bytes": 4612
+    },
+    "candidate-cli-pytest-cache.stderr": {
+      "sha256": "8b7af288818e63ae248a00620596a7e273507c507b83a6e35ce86a14f7a0350f",
+      "bytes": 1073
+    },
+    "red-default-pytest-cache.log": {
+      "sha256": "846ddd3856f3d32201976550d4e3f5d41400584bbd1ae229245379ede9dcf75e",
+      "bytes": 5313
+    },
+    "full-root.log": {
+      "sha256": "6840632e1d17469adf3ecbe4fd8e315849ac88a194bcc473558ee0315654a38e",
+      "bytes": 2022
+    },
+    "final-root-scoped.log": {
+      "sha256": "09d61d5574ffc04d991af1d644203102626d64d0b8955bc288610366ff8474f0",
+      "bytes": 2022
+    },
+    "final-runtime-postgres.log": {
+      "sha256": "7f7c56ab7d5da0884ba764a5257b793c19e66e71a190b9d6c239527daf00a7ad",
+      "bytes": 7049
+    },
+    "baseline-supervision-v2.log": {
+      "sha256": "b354ecaeedc97acbb5d8274caf9514fa9f5da86d7327786e0fcb5d2c26e85c5f",
+      "bytes": 3589
+    },
+    "final-adapter-ordinary.log": {
+      "sha256": "727ed1e928df6c867190ce16eb00aa65474126b6597e47098571e3e150a4e296",
+      "bytes": 110
+    },
+    "live-source-closeout.json": {
+      "sha256": "4ee738137f6d61183d8f2dc4f0831c9eedcaf4ed7980d375e8a7ea4018af1ade",
+      "bytes": 480
+    },
+    "db-source-closeout.private.json": {
+      "sha256": "222dd8e3e5c78f85d669da8c547746e5b6e4606765b8cb9439c955b817b85f62",
+      "bytes": 853138
+    },
+    "fixtures-stopped.json": {
+      "sha256": "7d2a2a1fefae52cf8510dcf1b4b37fe36f68c04152845c191ae7a594472bdcda",
+      "bytes": 582
+    },
+    "fixture-permit-disabled.json": {
+      "sha256": "3d1c402a7e35f0d1850949a4963cc55bf6355c0903d8490fb02c37e9550f8b67",
+      "bytes": 104
+    },
+    "probe-tmp.tar": {
+      "sha256": "6844e63fe39b0bdb39694bc583ead00ab4199b0374498c0eab62879985528754",
+      "bytes": 1743872
+    },
+    "restored-tmp.tar": {
+      "sha256": "6844e63fe39b0bdb39694bc583ead00ab4199b0374498c0eab62879985528754",
+      "bytes": 1743872
+    },
+    "restored-after.dump": {
+      "sha256": "e2f57f3acb9644c3f727f5055fb95ab0ed7e64db090fcb1a3715c2fe7d685ffe",
+      "bytes": 454158
+    },
+    "final-runtime-standard.log": {
+      "sha256": "6e43ce3b69e86d6963ef3c38462065ca768e74ecb218c0c2d3dcaf1235b1ff78",
+      "bytes": 4144
+    }
+  },
+  "local_required_suites": {
+    "root": 1761,
+    "router": 132,
+    "executor": 815,
+    "runtime": 2783,
+    "runtime_skipped": 366
+  },
+  "candidate_adapter_sha256": "afbf432e10ef657b5fae92fe914d0b1e0b669aac27a65afd57d9a3a8c06a3731",
+  "candidate_helper_sha256": "c16bf3bfecafcfa8dbed3e5ecb2e8b650b1466dacd3fddf04d96fb9f640a0887"
+}

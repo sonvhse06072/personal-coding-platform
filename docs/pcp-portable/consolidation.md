@@ -1,56 +1,41 @@
 # PCP Local consolidation execution checklist
 
-## Latest LIVE result — issue848 held, workers OFF
+## #835 temporary artifacts and held848 — SOURCE/FIXTURE candidate
 
-[Fresh-auth decision6536904513](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6536904513)
-was executed with unchanged V2 and original07:00Z expiry. Fresh scoped CLI authentication,
-authoritative quota, retained publisher entitlements, all eight trusted readers and
-aggregate readiness **PASS**. ONE ordinary admission was acknowledged. PCP performed
-one developer invocation; the operator did not implement the task.
+[WO6537270657](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6537270657),
+anchor H871fbf2485a1, branch `ai/835-temp-artifacts-held848-v1`,
+[Draft source PR849](https://github.com/sonvhse06072/personal-coding-platform/pull/849).
+[One WorkReport, evidence matrix, exact resources/shutdown and complete future rollout packet](../project/history/2026-10-31-temp-artifacts-held848.md)
+is the durable checklist:
 
-Job `15271df1a36b1281010465538a9318ae` is **blocked / pcp_local_changed_paths_denied**,
-execution **held** from **invocation_returned**, attempt1. Receipt **running/gen2**;
-lease **active/gen4**, owned by this job. Counters **1 model /0 mandatory verification /
-0 delivery**. No commit, verified proof, task PR or task CI. The single admission is
-consumed; it must not be dispatched again.
+- [x] Actual pinned H CLI0.160.0/pytest reproduces cwd fallback and command-policy refusal;
+  candidate private child temp passes without shared /tmp/sibling/provider/network access.
+- [x] Explicit provenance/full Git candidate; durable CAS intent, no-overwrite preservation,
+  partial/crash/lost-ack reconciliation; unknown files/ignored files/forged markers deny.
+- [x] Separate version2 artifact permit through existing authenticated verify-held;
+  successful returned invocation/usage/counters/ownership/taskH remain bound; no model path.
+- [x] Real Git/PostgreSQL/eight-reader/registrar/HTTP and restored-copy verification19+19,
+  commit and synthetic delivery; A/B/C unchanged. Actual candidate source overlay is not
+  a built/adopted repair image. Required final-head hosted suites are recorded in the PR.
+- [x] Original848/full V4 DB and historical evidence retained; source fixtures stopped
+  with private dumps/tmp/workspace custody. Existing N observer/HTTPS unchanged.
+- [ ] Independent source review/accepted R/postmerge CI, then separate finite live decision,
+  actual R Runtime/Executor builds/adoption and exact concrete permit checkpoint.
+- [ ] Original848 supported recovery, real Draft task PR/CI and independent PM review.
 
-The three allowed tracked files changed, plus **31 untracked pytest temporary entries**
-under `pytest-of-node/` (34 changed entries total). Retained CLI logs show developer
-self-tests19 passed, then cleanup `rm -rf pytest-of-node` rejected by the pinned CLI:
-`rm -f style commands are not permitted. Use a safer approach`. These self-tests do
-not establish Runtime mandatory verification. The scope gate correctly stopped before
-verification; no artifact deletion, ignore rule, manual Git publication or model replay.
-The inferred temporary-directory fallback into cwd is not yet an isolated reproduction.
+Original848 remains held/changed_paths_denied, running2/active4, counters1/0/0 with no
+proof/commit. Evidence847 stays unmerged e97fa327. Three explicitly proposed roots include
+ignored bytecode:54 full nodes, not merely31 Git entries. No live quarantine/cleanup.
+Original authority remains disabled, expiry07:00Z unchanged. No login/build/worker startup,
+admission/model/replay/finalization/merge. Two optional supervision PG failures reproduce
+unchanged on H; static2-call admission limitation remains separate. #604/#835 stay open.
 
-At **01:16:45.826295Z**, exact Runtime1b094922…/Executorfc32fd0a…/Routerf03edbd9… are
-stopped; supported logout0 and scoped auth absent. V2 SHAec1d28f1… is disabled intact,
-manifest53b95372… and V1 preserved. A/B/C full rows/proof/usage/counters and workspace
-metadata unchanged; shared lease legitimately advanced released3 -> active4 for848.
-DB/N observer/HTTPS remain running. Main/canonical/task/verifier H and approved active
-successor retained, execution authority OFF. No source/build/binding/expiry change.
+The report's single packet preserves task/canonical/verifierH while future platform is R;
+R is not yet known. New version2 private files/flag cannot replace or widen the old config
+permit. Readiness/read-only plan precede one apply under later explicit permission.
+Unknown verification cannot replay. Retain output/candidate/preimages on every failure.
 
-[Integrated report](../project/history/2026-10-31-task848-h-execution.md) and
-[sanitized receipt](../project/history/2026-10-31-task848-h-execution.json) preserve all earlier
-budget/auth failures as history. Actual trusted Chromium dashboard shows held ordinary848,
-Unknown mandatory verification/CI/cost, observed usage, fixed A/B/C terminal timers and
-successful offline/reconnect. No ignored TLS errors, injected cookies or login.
-Next: independent PM disposition for the held unverified workspace/scope contract.
-Existing held-verification eligibility requires a different error and repair binding;
-there is no authorized continuation here. Preserve all evidence and active ownership.
-
-## #604 H candidate preparation retained
-
-PR846 merged H871fbf2485a1ffb89a88a69e1daaaca10e25b318; CI41142412566 four executed
-suites passed. [WO6535472577](https://github.com/sonvhse06072/personal-coding-platform/issues/604#issuecomment-6535472577)
-and [one WorkReport/inactive rollout packet](../project/history/2026-10-31-context-physical-preparation.md)
-record the completed preparation: consistent private backup/restore, one pinned H build,
-physical packaging/isolation/producer/verifier checks and59 context/diagnostic cases.
-Fifteen fixtures stopped and retained; full original afterimages unchanged. Draft baseline,
-images/configs/task are uninstalled; PM reviews the complete packet before any execution.
-No login, inference, live worker start, authority restoration, admission or merge.
-Existing N observer/DB/HTTPS and historical resources remain retained. Exact resource IDs,
-stop/rollback commands, measured overhead, setup failures and remaining gates are in the
-report/JSON. #604 stays open and #595 HOLD. No internal-compaction/benchmark guarantee.
+The following C843 sections are historical receipts, not the current848 lease/authority.
 
 ## C843 completed and retained — 2026-10-30 17:21 UTC
 

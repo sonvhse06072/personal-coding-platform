@@ -779,6 +779,12 @@ def test_dedicated_worker_keeps_durable_identity_and_never_replays(setup, monkey
             raise source.TaskStop('pcp_local_unreviewed_codex_configuration')
         return reader.snapshot
     reader.refresh = refresh
+    reader.refresh_delivery = refresh
+    # This fixture doubles Git/Executor, so it cannot inventory a real repository.
+    # Real artifact custody/CAS is covered by test_pcp_local_artifact_held and
+    # fresh-process Git/PostgreSQL context tests using the ordinary entrypoint.
+    monkeypatch.setattr('app.pcp_local_artifacts.finish_future',
+        lambda engine,task,created,attempt,**kw:deepcopy(s.db.jobs[job_id]['checkpoint']))
     monkeypatch.setattr(s.db, 'get', lambda key: deepcopy(s.db.jobs.get(key)))
     def update(key, **fields):
         if outcome == 'secondary_fail' and fields.get('status') == 'blocked':
