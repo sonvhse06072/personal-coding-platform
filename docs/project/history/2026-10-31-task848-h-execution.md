@@ -138,3 +138,53 @@ reference/activation hash. One offline helper invocation had duplicate keyword a
 failed before proof/auth/startup, and was corrected without replacing V2 bytes. No code patch.
 This operational lesson is mandatory: validate proposed activation OFFLINE before credentials
 or workers. The known static2-call limit remains incomplete healthy-progress behavior.
+
+## V2 actual result: external authentication timeout, no admission
+
+V2 was installed by no-overwrite link/fsync after the offline checkpoint was pushed.
+The same three workers started once; original post-start fingerprints remained exact.
+The retained publisher again passed read-only entitlements (expiryNov4). No container
+replacement, rebuild, source/baseline/config change or V1 overwrite occurred.
+
+Fresh scoped `codex login --device-auth` was required because the prior supported logout
+left no auth file. One genuine Owner browser interaction was requested at00:29:48Z using
+private instructions; no code/token was posted. The CLI returned exit1 at00:45:38.766741Z:
+**device auth timed out after15 minutes**. No fresh auth file was created. This is an
+external authentication blocker, not a repeated budget gate or task failure. No second
+code was issued; elapsed time was never treated as approval/authentication. Owner active
+minutes and operator token/cost/effort usage remain Unknown; requested interactions1,
+completed authenticated sessions0 observed. Operator model gpt-6.1-sol.
+
+LIVE startup PASS; offline budget/schema PASS; LIVE authentication FAIL; aggregate
+readiness/all eight readers/admission/mandatory verification/task PR/task CI **NOT TESTED**.
+There were zero readiness requests, ordinary requests, job/receipt registrations and
+PCP-managed model invocations. The prepared single-request script was not executed.
+Identity15271df1a36b1281010465538a9318ae remains unconsumed and issue848 open. A later
+continuation still requires current production checks; offline evidence is not their PASS.
+
+At **00:46:27.551309Z**, exact Runtime1b094922…, Executorfc32fd0a… and Routerf03edbd9…
+are stopped. Supported logout exited0; auth remains absent. V2 disabled by no-overwrite
+rename/fsync and retained byte-identically at
+`/home/sonvh/.local/state/pcp848-h-live-v1/v2/disabled-authority/pcp-local-activation.json`.
+Its ec1d28f1… hash and manifest53b95372… match the offline records. V1 activation4a354af2…
+and manifest5797551e… remain untouched. Original07:00Z expiry is not extended.
+
+Full11-table/3-sequence DB before/after V2 is identical, SHAde4629cb…; original A/B/C
+proof/usage/counters/ownership/workspace metadata preserved, lease released/gen3.
+Fresh consistent backup228689B SHA
+`bd205cc8dad4667de7723a291dace92232efa2a750d895648938d5f76762c3ab`, listing verified.
+No848 workspace/remote branch/PR exists. DB/N observer/HTTPS remain running and trusted
+HTTPS200 was checked. H canonical/approved active successor remain installed with
+execution authority OFF; N rollback assets and retired824/V3 remain retained.
+
+The exact idempotent worker stop commands above still apply. The old device attempt is
+finished; do not reuse its code or restore credentials from host/foreign scopes. No
+automatic startup/admission retry. Next external checkpoint is completed fresh scoped
+interactive authentication plus PM disposition for another bounded service startup/
+readiness allowance, within the same fixed expiry if authorized. No source patch or
+identity/baseline rebuild is needed for this authentication blocker. Continue to track
+the separate static2-call healthy-progress limitation without claiming this canary fixes it.
+
+[Sanitized JSON](2026-10-31-task848-h-execution.json) contains both the preserved V1
+outcome and V2 outcome, exact hashes/IDs, provider result and attention ledger. Required
+final-head evidence CI is in PR847; no task CI or independent task acceptance is claimed.

@@ -1,14 +1,20 @@
 # Current Project State and Handoff
 
-## Issue848 V2 continuation authorized — 2026-10-31
+## Issue848 V2 retained OFF — authentication blocked
 
-[PM correction6536474373](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6536474373)
-authorizes only3->2 calls, one new readiness cycle and still-unused ordinary admission.
-V2ec1d28f1… /manifest53b95372… passed offline accepted-H validation before credentials/
-startup. V1 and all original source/image/baseline/task/expiry bindings remain untouched.
-[Execution record](history/2026-10-31-task848-h-execution.md) records the exact diff.
-No848 job/receipt/workspace/branch/PR exists; live readiness still required. Main H;
-PR847 unmerged, fixed07:00Z expiry. Do not replay unknown effects or finalize/merge.
+[Correction6536474373](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6536474373)
+authorized exactly3->2 calls. Offline H validation passed, V2 installed, exact workers
+started once. Fresh scoped device login was requested; provider timed out after15 minutes
+(exit1, no auth file). Live readiness/all-eight-reader acceptance were not attempted.
+Zero ordinary admissions/jobs/receipts/model calls/task PRs;848 identity remains unconsumed.
+[Full V2 result/next checkpoint](history/2026-10-31-task848-h-execution.md).
+
+At00:46:27Z Runtime1b094922…/Executorfc32fd0a…/Routerf03edbd9… stopped; logout0, V2ec1d28f1…
+disabled intact, manifest53b95372… retained. V1 activation/manifest unchanged. Full DB and
+A/B/C evidence/counters/ownership unchanged; lease released3. H canonical/approved active
+successor retained, execution authority OFF. DB/N observer/HTTPS running, trusted HTTPS200.
+Next: genuine fresh authentication and PM disposition for bounded restart/readiness;
+no automatic retry/code/authority renewal. Main H, SAME PR847 unmerged; expiry07:00Z fixed.
 
 ## Issue848 H adoption retained — blocked before admission
 

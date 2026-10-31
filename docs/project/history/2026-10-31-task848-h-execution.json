@@ -145,5 +145,94 @@
     "no_job_receipt_workspace_branch_PR": true,
     "all_workers_stopped": true,
     "credentials_or_startup": false
+  },
+  "v2_result": {
+    "decision": 6536474373,
+    "outcome": "BLOCKED_AT_INTERACTIVE_AUTHENTICATION",
+    "source": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+    "job": "15271df1a36b1281010465538a9318ae",
+    "offline": {
+      "decision": 6536474373,
+      "source": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+      "job": "15271df1a36b1281010465538a9318ae",
+      "expiry": 1793430000.0,
+      "activation_v1_sha256": "4a354af21b2c4f2fd6104ad507feaaf77ada74f0b2de25ea48d2feee425a1a9c",
+      "activation_v2_sha256": "ec1d28f13f44d149001e1657b9122f3a1eb3947e966c3bebe5e99fcb59dbc665",
+      "manifest_v1_sha256": "5797551eb97665450443475d900ca079002a57ca4bd29b087386e8204b12b16d",
+      "manifest_v2_sha256": "53b95372e77ef563e4fa527d4bebb42a92720981ac1681e18ffd026d2de6fea8",
+      "activation_semantic_diff": {
+        "budget.model_calls": [
+          3,
+          2
+        ]
+      },
+      "manifest_changed_fields": [
+        "decision",
+        "activation_sha256"
+      ],
+      "offline_H_production_validation": "PASS synthetic admission facts, actual task identity/budget; no real readiness claim",
+      "no_job_receipt_workspace_branch_PR": true,
+      "all_workers_stopped": true,
+      "credentials_or_startup": false
+    },
+    "startup": {
+      "workers": {
+        "runtime": "1b0949227f267d6d0b9144348e8e4dd5cd73d2ca9b74c69597e1d5bab7ecdf35",
+        "ddev-executor": "fc32fd0a0bf632a185aad7d83f21234988359a9d803f8dcc0be36145a9d93e1d",
+        "router": "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6"
+      },
+      "original_configuration_fingerprints_unchanged": true,
+      "at": "2026-10-31T00:29:29.491407+00:00",
+      "ordinary_admissions": 0
+    },
+    "authentication": {
+      "exit": 1,
+      "reason": "device auth timed out after 15 minutes",
+      "auth_file_created": false,
+      "instructions_or_code_published": false
+    },
+    "owner_attention": {
+      "reason": "fresh Runtime scoped device authentication after supported logout",
+      "requested_at": "2026-10-31T00:29:48Z",
+      "requests": 1,
+      "active_owner_minutes": null,
+      "status": "device authentication timed out; no authenticated session established",
+      "code_or_token_published": false,
+      "result_at": "2026-10-31T00:45:38.766741+00:00"
+    },
+    "shutdown": {
+      "at": "2026-10-31T00:46:27.551309+00:00",
+      "workers": {
+        "runtime": "1b0949227f267d6d0b9144348e8e4dd5cd73d2ca9b74c69597e1d5bab7ecdf35",
+        "ddev-executor": "fc32fd0a0bf632a185aad7d83f21234988359a9d803f8dcc0be36145a9d93e1d",
+        "router": "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6"
+      },
+      "all_stopped": true,
+      "activation_v2_sha256": "ec1d28f13f44d149001e1657b9122f3a1eb3947e966c3bebe5e99fcb59dbc665",
+      "activation_v1_sha256": "4a354af21b2c4f2fd6104ad507feaaf77ada74f0b2de25ea48d2feee425a1a9c",
+      "logout_exit": 0,
+      "auth_absent": true,
+      "ABC_full_rows_metadata_preserved": true,
+      "backup_sha256": "bd205cc8dad4667de7723a291dace92232efa2a750d895648938d5f76762c3ab",
+      "backup_bytes": 228689,
+      "afterimage_sha256": "de4629cb1caf42e5407bf5608c295e1abf9294ab043cbf75333449e07d159b4d",
+      "expiry": "2026-10-31T07:00:00Z",
+      "running": [
+        "8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8",
+        "da6c434797c46a3312f0ca185b20e0b5fbb9234ce137aee9f81ebc2fb9241660",
+        "601c552bd0562b947529a591b84c70570a1eaa556fb43e50a8c2ae0d76e362aa"
+      ]
+    },
+    "full_DB_before_after_identical": true,
+    "readiness_requests": 0,
+    "eight_readers_accepted": false,
+    "admission_requests": 0,
+    "model_invocations": 0,
+    "task_PR": null,
+    "task_CI": null,
+    "operator_model": "gpt-6.1-sol",
+    "operator_effort": null,
+    "operator_usage": null,
+    "remaining_checkpoint": "fresh scoped interactive authentication and PM disposition for bounded restart; no automatic renewal/replay"
   }
 }

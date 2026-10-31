@@ -1,5 +1,16 @@
 # Supported readiness, recovery and dashboard adoption
 
+## Issue848 V2: offline PASS, authentication blocked, workers OFF
+
+[PM6536474373](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6536474373)
+authorized only3->2 and one fresh cycle. V2ec1d28f1…/manifest53b95372… validated offline
+before authentication/startup; V1 preserved. Scoped device auth timed out after15 minutes,
+no auth file; one Owner interaction requested. No live readiness or ordinary request.
+[Execution result, exact hashes/IDs and next checkpoint](../project/history/2026-10-31-task848-h-execution.md).
+At00:46:27Z all exact workers stopped, logout0, V2 disabled intact; DB/observer/HTTPS ON.
+Full DB/A/B/C ownership/counters unchanged, lease released3;848 remains unconsumed.
+No automatic new code/startup/admission or expiry renewal. Fixed07:00Z; main H/PR847 unmerged.
+
 ## Issue848 execution blocked, workers retained OFF
 
 [Decision6535853784](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6535853784)
