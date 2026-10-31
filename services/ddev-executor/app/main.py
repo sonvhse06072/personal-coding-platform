@@ -3573,7 +3573,11 @@ def _pcp_digest(value):
     return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
 
 
-def _pcp_activation():
+def _pcp_activation(*, finalization=False):
+    from .pcp_local_finalization import Authority, execution_forbidden
+    if finalization:
+        return Authority().activation
+    execution_forbidden()
     from .pcp_local_review_repair import enabled as review_enabled, activation as review_activation
     if review_enabled():
         return review_activation()
@@ -3595,8 +3599,8 @@ def _pcp_activation():
     return value
 
 
-def _pcp_identity(job_id, source_commit=None):
-    a = _pcp_activation()
+def _pcp_identity(job_id, source_commit=None, *, finalization=False):
+    a = _pcp_activation(finalization=True) if finalization else _pcp_activation()
     cfg = project(_PCP_LOCAL)
     root = Path(a['root'])
     expected_id = hashlib.sha256((f"pcp-local:v1:{_PCP_REPOSITORY}:{a['issue_number']}:"
@@ -4016,7 +4020,13 @@ class PcpLocalReviewRequest(PcpLocalObservationRequest):
 def pcp_local_review(payload: PcpLocalReviewRequest):
     """Read-only GitHub review and actual four-job evidence; never merge."""
     import json
-    a, cfg, _ = _pcp_identity(payload.job_id, payload.source_commit)
+    from .pcp_local_finalization import Authority, enabled as finalization_enabled
+    finalization = Authority() if finalization_enabled() else None
+    a, cfg, root = (_pcp_identity(payload.job_id,payload.source_commit,finalization=True) if finalization
+                    else _pcp_identity(payload.job_id,payload.source_commit))
+    if finalization:
+        finalization.request(payload)
+        finalization.resources(Path(cfg['path']),root,_pcp_docker)
     if _pcp_digest(a) != payload.activation_digest:
         raise HTTPException(403, 'pcp_local_delegation_mismatch')
     delivery, repository = _github_context(cfg)
@@ -4027,6 +4037,10 @@ def pcp_local_review(payload: PcpLocalReviewRequest):
             response = client.get(f'{delivery.base}/repos/{repository}/' + path)
             response.raise_for_status()
             return response.json()
+        if finalization:
+            from .pcp_local_claim_recovery import require
+            require(get('git/ref/heads/main').get('object',{}).get('sha') == finalization.value['repair_source'],
+                'local_finalization_actual_main_changed')
         pr = get(f'pulls/{payload.pr_number}')
         review = get(f'pulls/{payload.pr_number}/reviews/{payload.review_id}')
         if (pr.get('state') != 'open' or pr.get('merged') is True
@@ -4042,7 +4056,17 @@ def pcp_local_review(payload: PcpLocalReviewRequest):
         body = review.get('body', '')
         if not body.startswith(marker) or len(body.encode()) > 16000:
             raise HTTPException(409, 'pcp_local_pm_report_missing')
-        report = json.loads(body[len(marker):].strip())
+        if finalization:
+            from .pcp_local_held import unique
+            report = json.loads(body[len(marker):].strip(),object_pairs_hook=unique)
+            require(review.get('id') == payload.review_id
+                and hashlib.sha256(body.encode()).hexdigest() == finalization.value['review']['body_sha256']
+                and report.get('branch') == 'ai/'+payload.job_id[:12]
+                and report.get('pr_number') == payload.pr_number
+                and report.get('ci_run_id') == finalization.value['review']['ci_run_id']
+                and report.get('diff_hash') == finalization.value['diff_hash'], 'local_finalization_review_changed')
+        else:
+            report = json.loads(body[len(marker):].strip())
         if (report.get('verdict') != 'pass' or report.get('findings') != []
                 or report.get('job_id') != payload.job_id
                 or report.get('source_commit') != payload.source_commit
@@ -4056,6 +4080,8 @@ def pcp_local_review(payload: PcpLocalReviewRequest):
         if not selected:
             raise HTTPException(409, 'pcp_local_exact_ci_missing')
         run = max(selected, key=lambda r: r['id'])
+        if finalization:
+            require(run['id'] == finalization.value['review']['ci_run_id'], 'local_finalization_ci_changed')
         if run.get('status') != 'completed' or run.get('conclusion') != 'success':
             raise HTTPException(409, 'pcp_local_exact_ci_not_successful')
         jobs = get(f"actions/runs/{run['id']}/jobs?filter=latest&per_page=100")['jobs']
@@ -4070,8 +4096,11 @@ def pcp_local_review(payload: PcpLocalReviewRequest):
                     and step.get('conclusion') == 'success' for step in matches[0].get('steps', [])):
                 raise HTTPException(409, 'pcp_local_required_suite_not_executed')
     ci = github_ci(_PCP_LOCAL, payload.expected_head)
+    if finalization:
+        finalization.resources(Path(cfg['path']),root,_pcp_docker)
+        finalization.revalidate()
     return dict(job_id=payload.job_id, expected_head=payload.expected_head,
         activation_digest=payload.activation_digest, report=report, review_id=payload.review_id,
-        ci=ci, ci_run_id=run['id'], suites=sorted(required),
+        ci=ci, ci_run_id=run['id'], suites=sorted(required), review_body_sha256=hashlib.sha256(body.encode()).hexdigest(),
         pr=dict(number=payload.pr_number, repository=repository, state='open', merged=False,
             head=payload.expected_head, head_ref=pr['head']['ref'], base_ref='main'))

@@ -65,6 +65,7 @@
 !services/runtime/app/orchestrator_notifications.py
 !services/runtime/app/orchestrator_resume.py
 !services/runtime/app/pcp_local_artifacts.py
+!services/runtime/app/pcp_local_finalization.py
 !services/runtime/app/pcp_local_readiness.py
 !services/runtime/app/pcp_local_recovery.py
 !services/runtime/app/pcp_local_review_repair.py
@@ -175,6 +176,7 @@ services/runtime/app/orchestrator_merge.py/*
 services/runtime/app/orchestrator_notifications.py/*
 services/runtime/app/orchestrator_resume.py/*
 services/runtime/app/pcp_local_artifacts.py/*
+services/runtime/app/pcp_local_finalization.py/*
 services/runtime/app/pcp_local_readiness.py/*
 services/runtime/app/pcp_local_recovery.py/*
 services/runtime/app/pcp_local_review_repair.py/*

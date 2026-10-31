@@ -13,7 +13,7 @@ build:
   startup_mode: pcp_local_inspect
   base_image: "python:3.13.17-slim-bookworm@sha256:4cea12ab7d78a3312c85f8cab19b6971d4fe9704da25443986c0bc20a6678850"
   context_ignore: profiles/pcp-local/runtime/Dockerfile.inspect.dockerignore
-  context_ignore_sha256: 30d4edef98abc5b87ccbf5b65bc7daa14a8e736b5e0ebf01c33846b46d158029
+  context_ignore_sha256: f67a5f5c17dbedc0bb40bdabc81796e80cd26e4c03c16aaabeccc4e9c7ec60fd
   dockerfile_sha256: bace204f3fae06449981d7e90a5bd90e789e456e5f2abee6bfb0856555aff70b
   requirements_sha256: 63361fbbe8b76e25c080ff86954822301439c62a5ea5635f865001814ce49ff7
   app_tree_sha256: null

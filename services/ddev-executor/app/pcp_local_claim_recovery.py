@@ -67,7 +67,7 @@ def git(repo, *args):
 
 
 def release(a, repo, root, inspect, *, binding_key="claim_recovery"):
-    require(binding_key in {"claim_recovery", "held_verification", "local_review_repair"})
+    require(binding_key in {"claim_recovery", "held_verification", "local_review_repair", "local_finalization"})
     p = a[binding_key]
     receipt_before = p["receipt_before"] if binding_key == "claim_recovery" else p["before"]["receipt"]
     source, repair = a['base_sha'], p['repair_source']
@@ -106,7 +106,7 @@ def release(a, repo, root, inspect, *, binding_key="claim_recovery"):
             continue
         name = root.name + '-' + {'runtime': 'coding-runtime', 'executor': 'ddev-executor', 'router': 'router'}[role]
         row = inspect('container', name)
-        require(row['Name'] == '/'+name and row['State']['Running'] is True
+        require(row['Name'] == '/'+name and row['State']['Running'] is (not (binding_key == 'local_finalization' and role == 'router'))
             and row['Image'] == row['Config']['Image'] == binding['image_id']
             and row['Config']['Labels'].get('org.opencontainers.image.revision') == expected_source
             and row['Config']['Labels'].get('org.pcp.local.instance') == root.name

@@ -17,8 +17,17 @@ def enabled():return os.getenv('PCP_LOCAL_REVIEW_REPAIR_ENABLED')=='owner-approv
 
 
 def activation():
+    require(not os.getenv('PCP_LOCAL_FINALIZATION_ENABLED'), 'local_finalization_execution_forbidden')
     require(enabled() and not held_enabled() and not claim_enabled()
         and not Path('/config/pcp-local-activation.json').exists(),'local_repair_conflicting_authority')
+    a = historical_activation()
+    p = a['local_review_repair']
+    require(p['not_before']<=time.time()<p['expires_at'], 'local_repair_authority_invalid')
+    return a
+
+
+def historical_activation():
+    """Private integrity parser; only the separate finalizer may use expired history."""
     original=_read(ORIGINAL);a=json.loads(original,object_pairs_hook=unique)
     p=json.loads(_read(PERMIT),object_pairs_hook=unique)
     require(set(p)=={'version','decision_id','execution_record','not_before','expires_at',
@@ -29,7 +38,7 @@ def activation():
         and p['execution_record'].startswith('https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-')
         and p['original_activation_sha256']==hashlib.sha256(original).hexdigest()
         and all(type(p[k]) in (int,float) for k in ('not_before','expires_at'))
-        and p['not_before']<=time.time()<p['expires_at'] and 0<p['expires_at']-p['not_before']<=86400,
+        and 0<p['expires_at']-p['not_before']<=86400,
         'local_repair_authority_invalid')
     j,r,l=p['before']['job'],p['before']['receipt'],p['before']['lease'];e=j['checkpoint']['pcp_local_execution']
     plan=p['patch_plan'];result=j['result']

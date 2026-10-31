@@ -1,0 +1,172 @@
+{
+  "work_order": "https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6544621726",
+  "scope": "SOURCE_FIXTURE_ONLY_RETURN_FOR_INDEPENDENT_PM",
+  "base": "ee7ea0d824bf8b2aa568cbc5d03b222fd74d0275",
+  "task_head": "9574d62d9a7d385deb107bc8108b4b6802132fa3",
+  "task_review": 5723218707,
+  "task_CI": 41199954657,
+  "prior_evidence_PR": 847,
+  "prior_evidence_head": "cac81324ee295fa9782ec42eadb16a0df9602643",
+  "prior_evidence_CI": 41201046117,
+  "baseline_verifier_H": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+  "original_expiry": "2026-10-31T13:15:00Z",
+  "original_consumed_repair_sha256": "13e8797fb63f40639d4181cf17033d479bdc4bda45e4dee1063ea4203e7af2fa",
+  "regression_RED": {
+    "anchor": "X",
+    "reason": "local_repair_authority_expired",
+    "before_mutation": true
+  },
+  "tests": {
+    "new_Runtime_real_PG_initial": "34 passed52.67s",
+    "Runtime_finalization_repair_operator_real_PG_final": "99 passed90.69s",
+    "Runtime_ordinary_compatibility_real_PG_final": "326 passed98.43s",
+    "Runtime_required": "2790 passed458 skipped86.22s",
+    "Executor_finalization_release_real_Git": "86 passed2.05s",
+    "Executor_required_final": "866 passed24.28s",
+    "Router_required": "132 passed3.29s",
+    "root_required": "1761 passed19.42s",
+    "packaging": "109 passed1.93s",
+    "hosted_final_source_four_suite_CI": "REQUIRED_separate_receipt_and_PR_checks"
+  },
+  "restored_fixture": {
+    "status": "PASS_RESTORED_FINALIZATION_ONLY_FIXTURE",
+    "original_expired_repair_raw_sha256": "13e8797fb63f40639d4181cf17033d479bdc4bda45e4dee1063ea4203e7af2fa",
+    "original_digest": "13e8797fb63f40639d4181cf17033d479bdc4bda45e4dee1063ea4203e7af2fa",
+    "original_permit_activation_patch_unchanged": true,
+    "no_audit_history_metadata_rebinding": true,
+    "job_id": "15271df1a36b1281010465538a9318ae",
+    "head": "9574d62d9a7d385deb107bc8108b4b6802132fa3",
+    "review_id": 5723218707,
+    "ci_run_id": 41199954657,
+    "real_Git_and_PostgreSQL": true,
+    "authenticated_ASGI": true,
+    "external_resources_review_CI": "SYNTHETIC_FIXTURE_not_live_revalidation",
+    "real_live_review_bytes_retained": true,
+    "copied_finalized": true,
+    "receipt": "delivered/gen3",
+    "lease": "released/gen4",
+    "counters": [
+      1,
+      4,
+      2
+    ],
+    "progress_and_entire_checkpoint_unchanged": true,
+    "siblings_unchanged": true,
+    "workspace_unchanged": true,
+    "execution_sentinels_unreached": true,
+    "remote_reads": 3,
+    "idempotent_retry_no_extra_reads_or_DML": true,
+    "live_finalized": false
+  },
+  "preservation": {
+    "full_original_rows_unchanged": true,
+    "job_workspace_unchanged": true,
+    "ABC_workspaces_unchanged": true,
+    "all54custody_unchanged": true,
+    "unknown_copies_hashes_unchanged": true,
+    "exact_live_worker_configurations_unchanged": true,
+    "live_finalized": false,
+    "counters": [
+      1,
+      4,
+      2
+    ],
+    "workers_off": {
+      "runtime": "2933e0bc750854c21e3ff8353c6c68b76c6215339ad6666df594f8240b7b0b0e",
+      "executor": "14c608a23d473029c3dde440475453088141204f2b661fae1fc66e66f0874dc7",
+      "router": "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6"
+    },
+    "predecessor_off": "a546d6e5c4e3f5b19ae54147159f07317cdd8207516ab77fa582026adda209e4",
+    "retained_running": {
+      "db": "8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8",
+      "observer": "da6c434797c46a3312f0ca185b20e0b5fbb9234ce137aee9f81ebc2fb9241660",
+      "https": "601c552bd0562b947529a591b84c70570a1eaa556fb43e50a8c2ae0d76e362aa"
+    },
+    "authority_absent": true,
+    "old_expired_bytes_exact": true
+  },
+  "stopped_at": "2026-10-31T15:09:40.065642+00:00",
+  "fixtures": [
+    {
+      "id": "dac1483f70c2f8e5b5f3bcfc53a45742dcec512db499e475aade7469d8e4dd13",
+      "image": "sha256:102d316d3d38d4e0608c2ce663f0d3d07e32ee034819f821be32f33ced872815",
+      "exit_code": 0,
+      "running": false,
+      "source_overlay": true,
+      "network": "none",
+      "read_only": true,
+      "user": "1000:1000"
+    },
+    {
+      "id": "a89e0d01301df31347961307c9e809133e7079f5a0ac146503c554be54d68826",
+      "image": "sha256:102d316d3d38d4e0608c2ce663f0d3d07e32ee034819f821be32f33ced872815",
+      "exit_code": 0,
+      "running": false,
+      "source_overlay": true,
+      "network": "none",
+      "read_only": true,
+      "user": "1000:1000"
+    }
+  ],
+  "PostgreSQL": {
+    "version": "17",
+    "data_directory": "/home/sonvh/.local/state/pcp848-finalization-source-v1/pgdata",
+    "private_unix_socket": true,
+    "TCP_listen": false,
+    "stopped": true,
+    "restored_databases_retained": [
+      "pcp848_finalization_restore",
+      "pcp848_finalization_restore_final"
+    ]
+  },
+  "evidence_hashes": {
+    "red.log": "0b1257cb5dbbec72c5a60497d8522848ae8051c172a2dd54e26a2e1b5e60b863",
+    "runtime-focused.log": "c56eb9a6bf31520ceecc1032fd298cc4279411aeca08d72544067fb770214a35",
+    "runtime-final-serial.log": "19663ef16ed40188e84fa6fe4d7427d58bff90f9507fdaeac158e754620e7356",
+    "runtime-compatibility-pg.log": "4bf743638d782d2f865abc651f76038acb6a025689712e97dec331eb8302a744",
+    "runtime-required.log": "1c050460184db10b7a664207a9c71eef33e000d25f5d7ec253e129d14f9bd0d4",
+    "executor-focused.log": "0545e7cc5907bfbf70a5d5f6f3e396215db1f3fd3c9ebc39dc24d648f0d059e9",
+    "executor-final-affected.log": "bd7ccf8293a9b8fa02568b46f8ebf0c3569df07a34eae44e261fe14d137e88c4",
+    "executor-final-all.log": "d8eda71c4b7ea97e2fd24d35bb291cf6b254ea2be07d386ef610288dcfe906bb",
+    "router-all.log": "1c29a5e3b6c2106d71ee3b50551bd62535b36c51a6e92094b218d0e198a629ca",
+    "root-final.log": "4e7b627aba873054fb7097f485e8e928226a61fcb26bb9a28803624e249e4732",
+    "packaging.log": "a2f04e62fd733983d3009e323d841d06d0ec54caa59f4b7bff8b2b35e001b5c0",
+    "final-restore/after.dump": "14ed82f06d0f7d8c1f0a552da12daffd0a44ff9ad96829c5e48ab0866d156a15",
+    "final-restore/restored-after.private.json": "396a1b0e84263b99b069f30bad4e7811700f8c9ada4cf929050abb938dd105c2",
+    "final-restore/restored-result.json": "3b9ae774ce655b0f12a4eeb811e70b7c1541f1e793752c924fbae5bd9eaff46d",
+    "final-restore/restored-readiness.json": "bc9100745c1ca775ea3e8d1c115c19a11fd8e7e8ea959d4f79cb9b1fc94a70b3",
+    "original-workspace.private.json": "26c6e5e254ff52061d6dea147636e614940efd7699859812f88d10acceb9bc60",
+    "live-preservation.json": "00b8192b59fc394351a0ef7ddb597c8910a2cfdfd0405b20e6f11e3d70befd42",
+    "actual-review.json": "562133a01c208620519a8d0d3f538558d18fd37da80335eddce1bdca33539103"
+  },
+  "diagnostics": {
+    "initial_root_packaging": "sorted literal context addition, draft digest and archive count corrected; original oracle matrix preserved",
+    "interleaved_PG": "obsolete broad optional scan overlapped focused scan:97 pass2 expected held_operation_busy setup errors; serial final99PASS, no product guard bypass",
+    "broad_optional_scan": "interrupted obsolete diagnostic; no complete result or baseline residual PASS claimed",
+    "operator_harness_corrections": "service test CWD/private-backup hash reader corrected; no live mutation"
+  },
+  "historical_optional_PG_residuals": [
+    "test_initial_supervised_hold_rejects_mutated_ready_set",
+    "test_pr_acceptance_does_not_hold_but_durable_merge_does"
+  ],
+  "original_live_finalized": false,
+  "original_usage_counters": [
+    1,
+    4,
+    2
+  ],
+  "original_permit_history_bytes_unchanged": true,
+  "task850_unchanged": true,
+  "models": 0,
+  "login": 0,
+  "live_admissions": 0,
+  "live_authority_installs": 0,
+  "live_worker_startups": 0,
+  "live_finalizations": 0,
+  "merges": 0,
+  "foreign_changes": 0,
+  "subagents": 0,
+  "additional_Owner_requests": 0,
+  "operator_effort": "requested high; actual exposed Unknown",
+  "tokens_cost_owner_active_minutes": "Unknown"
+}

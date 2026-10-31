@@ -31,10 +31,9 @@ def enabled():
     return os.getenv(FLAG) == 'owner-approved'
 
 
-class Permit:
+class HistoricalPermit:
+    """Integrity/provenance only. This object grants no execution capability."""
     def __init__(self):
-        require(enabled() and not h.enabled() and not os.getenv('PCP_LOCAL_CLAIM_RECOVERY_ENABLED')
-            and not Path('/config/pcp-local-activation.json').exists(), 'local_repair_conflicting_authority')
         self.raw=h.private_bytes(PERMIT);self.value=json.loads(self.raw,object_pairs_hook=_unique)
         p=self.value;raw=h.private_bytes(ORIGINAL);a=json.loads(raw,object_pairs_hook=_unique)
         require(set(p)=={'version','decision_id','execution_record','not_before','expires_at',
@@ -67,18 +66,38 @@ class Permit:
             and type(p['pr_number']) is int and p['pr_number']>0 and re.fullmatch('[a-f0-9]{40}',p['expected_head']), 'local_repair_request_identity_invalid')
         eligibility(p,self.task)
         require(hashlib.sha256(self.patch).hexdigest()==p['patch_plan']['patch_sha256'], 'local_repair_patch_hash')
+        require(all(type(p[k]) in (float,int) and __import__('math').isfinite(p[k])
+            for k in ('not_before','expires_at')) and 0<p['expires_at']-p['not_before']<=86400,
+            'local_repair_window_invalid')
+        self.require_integrity()
+
+    def require_integrity(self):
+        require(h.private_bytes(PERMIT)==self.raw and h.digest(self.value)==self.sha256
+            and hashlib.sha256(h.private_bytes(ORIGINAL)).hexdigest()==self.value['original_activation_sha256']
+            and h.private_bytes(PATCH)==self.patch, 'local_repair_authority_revoked')
+
+
+class Permit(HistoricalPermit):
+    def __init__(self):
+        self.require_mode()
+        super().__init__()
         self.require_fresh()
 
+    @staticmethod
+    def require_mode():
+        require(enabled() and not h.enabled() and not os.getenv('PCP_LOCAL_CLAIM_RECOVERY_ENABLED')
+            and not os.getenv('PCP_LOCAL_FINALIZATION_ENABLED')
+            and not Path('/config/pcp-local-activation.json').exists(), 'local_repair_conflicting_authority')
+
     def require_fresh(self):
+        self.require_mode()
         p=self.value
         require(enabled() and not h.enabled() and not os.getenv('PCP_LOCAL_CLAIM_RECOVERY_ENABLED')
             and not Path('/config/pcp-local-activation.json').exists()
             and all(type(p[k]) in (float,int) for k in ('not_before','expires_at'))
             and p['not_before']<=time.time()<p['expires_at']
             and 0<p['expires_at']-p['not_before']<=86400, 'local_repair_authority_expired')
-        require(h.private_bytes(PERMIT)==self.raw and h.digest(p)==self.sha256
-            and hashlib.sha256(h.private_bytes(ORIGINAL)).hexdigest()==p['original_activation_sha256']
-            and h.private_bytes(PATCH)==self.patch, 'local_repair_authority_revoked')
+        self.require_integrity()
 
     def verify_issue(self,issue):
         self.require_fresh()

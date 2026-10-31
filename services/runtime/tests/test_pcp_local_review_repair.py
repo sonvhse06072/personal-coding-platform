@@ -199,13 +199,12 @@ def test_latest_proof_finalization_compatibility(local_repair,monkeypatch,fault)
         assert s.db.get(id)['result']['delivery_finalized'] is False
         assert ownership(s.db)[0][0]['state']=='running'
     else:
-        ready=asyncio.run(operation_readiness(s.e,phase='finalization',job_id=id,review_id=81));assert ready['ready'],ready
-        assert asyncio.run(s.e.finalize_pcp_local_review(payload))['status']=='completed'
-        after=s.db.get(id);receipt,lease=ownership(s.db)
-        assert after['result']['acceptance_phase']=='pm_review_accepted' and after['result']['delivery_finalized']
-        assert (receipt[0]['state'],receipt[0]['generation'],lease[0]['state'],lease[0]['generation'])==('delivered',3,'released',4)
-        assert after['checkpoint']==before['checkpoint'] and after['progress']==before['progress']
-        assert after['checkpoint'][repair.KEY]['original']==s.before
+        # Repair execution authority no longer implies PM finalization authority.
+        ready=asyncio.run(operation_readiness(s.e,phase='finalization',job_id=id,review_id=81))
+        assert not ready['ready']
+        with pytest.raises(TaskStop,match='local_repair_finalization_authority_required'):
+            asyncio.run(s.e.finalize_pcp_local_review(payload))
+        assert s.db.get(id)==before and ownership(s.db)[0][0]['state']=='running'
     assert w._retained_snapshot(s.v.path)==workspace
 
 
