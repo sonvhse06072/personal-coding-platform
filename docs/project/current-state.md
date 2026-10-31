@@ -38,7 +38,7 @@ Next: independent PM disposition for the held unverified workspace/scope contrac
 Existing held-verification eligibility requires a different error and repair binding;
 there is no authorized continuation here. Preserve all evidence and active ownership.
 
-## #604 H physical preparation — 2026-10-31
+## Historical #604 H preparation — before848 adoption
 
 PR846 merged at accepted H **871fbf2485a1ffb89a88a69e1daaaca10e25b318**;
 postmerge CI41142412566 passed four executed suites. Under
@@ -50,7 +50,7 @@ isolation/producer/verifier/context-diagnostic rehearsals passed. Fifteen task f
 stopped, data retained. Fresh original DB/config/authority/A/B/C snapshots unchanged;
 V3's22 containers stopped. No live workers/model/adoption or baseline installation.
 
-H candidate image d9f553ac… is proposed only. Draft successor source H, honest reused
+At that preparation checkpoint H candidate d9f553ac… was proposed only. Draft source H, honest reused
 Executor R2/Router S, unchanged N observer, exact config hashes and three-path functional
 task proposal are in the machine-readable packet. All authority remains inactive/uninstalled.
 PM reviews source/image/frame/task value and finite budget together before live execution.
@@ -103,8 +103,8 @@ Recommendations do not amend protected policy or authorize a new implementation.
 ## Retained historical evidence and deployed observer
 
 A831 and B837 remain completed/PM accepted with original rows, receipts, proof, usage,
-counters1/2/1 and workspace byte/metadata snapshots unchanged. Shared lease is now
-released/gen3 after C; historical A/B release evidence remains. V3/#824 remains
+counters1/2/1 and workspace byte/metadata snapshots unchanged. C closeout released the
+shared lease at gen3; latest848 ownership is active/gen4 as recorded above. V3/#824 remains
 cancelled/incomplete_not_delivered, blocked3/released1, assisted commit7b3833bd;
 no V3 mutation. Credentials, configs, workers/images, backups and disabled old permits
 are preserved. The one-time legacy config archive remains intact, with no new config.
@@ -121,7 +121,7 @@ fixed terminal elapsed63.870699s across eight polls/offline/reconnect. C observe
 execution64.303379s is a separate durable field. Usage/counters unchanged; reported cost
 Unknown remains distinct from estimated0. No ignored TLS errors or injected cookies.
 
-## Immediate next safe actions
+## Historical C843 closeout boundary
 
 Task PR844 and evidence PR845 are merged. The main-at-N hold ended after durable
 finalization. This source candidate does not authorize another execution. Do not repeat
