@@ -475,7 +475,21 @@
     "operator_model": "gpt-6.1-sol",
     "operator_effort": null,
     "operator_usage": null,
-    "remaining_checkpoint": "Independent PM disposition for same held unverified job; existing held verification rejects this error. No cleanup/replay/recovery authority."
+    "remaining_checkpoint": "Independent PM disposition for same held unverified job; existing held verification rejects this error. No cleanup/replay/recovery authority.",
+    "evidence_ci_correction": {
+      "run": 41155185398,
+      "head": "a5436a8dcb23b189c40052d4629b23ffba43bac2",
+      "root_failures": 2,
+      "cause": "stable Immediate next safe actions heading renamed",
+      "repair": "restore stable heading with actual held848 instructions; no source/test/operational mutation",
+      "runtime_failures": 1,
+      "local_green": {
+        "context": 24,
+        "runtime_continuity": 6,
+        "root": 1761,
+        "root_seconds": 20.51
+      }
+    }
   },
   "current_outcome": "HELD_UNVERIFIED_CHANGED_PATHS_DENIED",
   "latest_phase": "fresh_auth_continuation; earlier phase outcomes retained as history",

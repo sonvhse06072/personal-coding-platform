@@ -121,13 +121,14 @@ fixed terminal elapsed63.870699s across eight polls/offline/reconnect. C observe
 execution64.303379s is a separate durable field. Usage/counters unchanged; reported cost
 Unknown remains distinct from estimated0. No ignored TLS errors or injected cookies.
 
-## Historical C843 closeout boundary
+## Immediate next safe actions
 
-Task PR844 and evidence PR845 are merged. The main-at-N hold ended after durable
-finalization. This source candidate does not authorize another execution. Do not repeat
-readiness/finalize as a mutating workflow, restore authority, replay work or renew its expiry.
-A later adoption/execution requires a separate finite decision and the new rollout packet.
-Keep DB/observer/HTTPS available and all historical/rollback assets retained.
+Preserve held848 and its running2/active4 ownership. PM reviews PR847's concrete
+workspace/scope/temporary-artifact blocker and proposed SOURCE/FIXTURE repair packet.
+Do not replay admission/model/tests/delivery, clean artifacts or restore authority.
+Keep DB/observer/HTTPS available. Main H and SAME evidence PR847 stay unmerged;
+original expiry07:00Z is unchanged. Reconcile current GitHub/Runtime evidence before
+any separately authorized action. C843 closeout remains completed and historical.
 
 ## Active PCP issues and owner attention
 

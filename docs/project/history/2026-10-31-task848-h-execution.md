@@ -323,3 +323,12 @@ Evidence-only validation: root suite1761 passed in20.89s; JSON parse and git dif
 Source/evidence required final-head CI is recorded on PR847. It is not task848 CI.
 The existing exact stop command above applies; retain DB8b72a8d3…, observerda6c4347…
 and HTTPS601c552b…. Dashboard stays https://localhost:18443/dashboard, tokenless loopback.
+
+Evidence-only CI correction: intermediate heada5436a8/run41155185398 failed two root
+context tests and one Runtime continuity test because a continuity edit renamed the stable `Immediate next safe actions`
+heading. The heading is restored with current held848 instructions; no test assertion,
+retrieval code, platform source or live state changed. Earlier1761-test local PASS
+predated that heading rename. Final-head CI in PR847 supersedes intermediate runs.
+
+After correction: context24 passed, Runtime continuity6 passed, full root1761 passed
+in20.51s. Final four-suite hosted evidence remains a separate mandatory gate.
