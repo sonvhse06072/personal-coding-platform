@@ -426,7 +426,8 @@ async def lifespan(app: FastAPI):
         harden_runtime_process_secret_boundary()
         # A mode flag cannot grant operational authority. No DB initialization,
         # scheduler, replay, publisher or model call runs at process startup.
-        TrustedReaders(engine, PMBridgeGitHubClient()).authority()
+        from .pcp_local_finalization import enabled as finalization_enabled
+        TrustedReaders(engine, PMBridgeGitHubClient(), finalization=finalization_enabled()).authority()
         app.state.pcp_local_worker_ready = True
         try:
             yield

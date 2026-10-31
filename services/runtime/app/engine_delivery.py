@@ -209,13 +209,26 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         )
 
     async def finalize_pcp_local_review(self, payload, *, dry_run=False):
+        from .pcp_local_recovery import operation_lock
+        from .pcp_local_task_queue import PROJECT_ID
+        from .pcp_local_finalization import enabled
+        if not enabled():
+            return await self._finalize_pcp_local_review(payload, dry_run=dry_run)
+        async with self.project_operation_lock(PROJECT_ID):
+            with operation_lock(self.storage):
+                return await self._finalize_pcp_local_review(payload, dry_run=dry_run)
+
+    async def _finalize_pcp_local_review(self, payload, *, dry_run=False):
         """Record authenticated independent PM outcome; no merge/model/replay."""
         import json
         from .pcp_local_worker_loop import TrustedReaders, digest
         from .pcp_local_task_queue import PROJECT_ID, REPOSITORY, require
         from .pm_bridge import PMBridgeGitHubClient
         from .pm_merge import evaluate_standalone_pm_merge
-        readers = TrustedReaders(self, PMBridgeGitHubClient())
+        from .pcp_local_finalization import enabled as finalization_enabled
+        readers = (TrustedReaders(self, PMBridgeGitHubClient(), finalization=True) if finalization_enabled()
+                   else TrustedReaders(self, PMBridgeGitHubClient()))
+        finalization = getattr(readers, 'finalization', None)
         project, baseline = readers.authority()
         a = readers.activation
         job_id = __import__('hashlib').sha256((f"pcp-local:v1:{REPOSITORY}:{a['issue_number']}:"
@@ -234,6 +247,10 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                 'pcp_local_review_unverified_job')
         require('pcp_local_retirement' not in row['checkpoint'], 'pcp_local_retired_job')
         if row.get('status') == 'completed' and result.get('delivery_finalized') is True:
+            if finalization:
+                from .pcp_local_readiness import operation_snapshot
+                done = operation_snapshot(self.storage, job_id)
+                finalization.validate_completed(dict(zip(('job','receipt','lease'),done)),payload)
             require(result.get('review', {}).get('review_id') == payload.review_id,
                     'pcp_local_review_conflicting_retry')
             return dict(job_id=job_id, status='completed', merged=False,
@@ -246,11 +263,14 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         require(workspace == self.workspace_root / job_id and not workspace.is_symlink()
                 and workspace.resolve() == workspace, 'pcp_local_workspace_identity_invalid')
         execution = row['checkpoint']['pcp_local_execution']
+        if finalization:
+            require(readers.authority_digest == execution['authority_digest'], 'local_finalization_project_authority_changed')
         require(execution.get('state') == 'verified' and execution.get('commit') == payload.expected_head,
                 'pcp_local_review_unverified_job')
         if 'pcp_local_review_repair' in row['checkpoint']:
             from .pcp_local_review_repair import validate_latest
-            require(readers.local_review is not None, 'local_repair_finalization_authority_required')
+            require(finalization is not None, 'local_repair_finalization_authority_required')
+            finalization.validate_before(dict(job=row, receipt=receipt_before, lease=lease_before), payload)
             require(row['checkpoint']['pcp_local_review_repair']['state']=='awaiting_pm_review',
                     'local_repair_not_awaiting_review')
             validate_latest(row, readers.local_review)
@@ -264,6 +284,8 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         if 'pcp_local_review_repair' in row['checkpoint']:
             require(required_github_actions_pass(proof.get('ci') or {},repository=REPOSITORY,
                 commit=payload.expected_head,workflow_name='tests'),'local_repair_latest_ci_unproven')
+        if finalization:
+            finalization.validate_remote(proof)
         result['review'] = {'verdict': 'pass', 'source': 'authenticated_github_pm',
                             'review_id': payload.review_id, 'report': proof['report']}
         result['delivery_finalized'] = True
@@ -280,6 +302,9 @@ class RuntimeEngine(ExecutionRuntimeEngine):
         require(reconcile_commit(row, SimpleNamespace(base_sha=payload.source_commit))
                 == payload.expected_head, 'pcp_local_review_commit_changed')
         readers.authority()  # Recheck expiry/revocation after Git, before the transaction.
+        if finalization:
+            finalization.validate_before(dict(job=row, receipt=receipt_before, lease=lease_before),payload)
+            result['finalization'] = finalization.audit()
         if dry_run:
             return dict(job_id=job_id, status='ready_for_pm_finalization', merged=False,
                         pm_merge_eligibility=result['pm_merge_eligibility'])
@@ -294,6 +319,21 @@ class RuntimeEngine(ExecutionRuntimeEngine):
                                          (job_id, PROJECT_ID)).fetchone()
             require(receipt_current == receipt_before, 'pcp_local_review_receipt_changed')
             require(lease_current == lease_before, 'pcp_local_review_lease_changed')
+            if finalization:
+                # Re-read remote authority and Git under the existing locks,
+                # immediately before CAS; never replace sealed expectations.
+                latest = await readers.executor('/v1/pcp-local/pm-review', dict(job_id=job_id,
+                    source_commit=payload.source_commit, expected_head=payload.expected_head,
+                    activation_digest=digest(a), pr_number=payload.pr_number, review_id=payload.review_id))
+                require(latest == proof, 'local_finalization_remote_changed')
+                finalization.validate_remote(latest)
+                finalization.validate_before(dict(job=current,receipt=receipt_current,lease=lease_current),payload)
+                readers.authority()
+                completed = dict(job={**row,'status':'completed','error':None,'result':result},
+                    receipt={**receipt_before,'state':'delivered','generation':3},
+                    lease={**lease_before,'state':'released'})
+                result['finalization']['completed_sha256'] = finalization.completion_digest(completed)
+                finalization.require_fresh()
             receipt = conn.execute("UPDATE cp_pcp_local_source_receipts SET state='delivered', "
                 "generation=generation+1, updated_at=NOW() WHERE repository=%s AND project_id=%s "
                 "AND issue_number=%s AND job_id=%s AND state='running' AND generation=2 "

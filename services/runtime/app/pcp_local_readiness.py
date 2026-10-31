@@ -285,6 +285,25 @@ async def operation_readiness(engine, *, phase, job_id, review_id=None, readers=
             require(commit == execution.get('commit', commit), 'pcp_local_commit_changed')
     await check('verified_proof', proof)
     if phase == 'finalization':
+        from .pcp_local_finalization import enabled as finalization_enabled, Authority
+        if finalization_enabled():
+            permission = await check('finalization_authority', Authority, actor='PM')
+            if permission and payload:
+                await check('sealed_afterimages', lambda: permission.validate_before(
+                    dict(job=row,receipt=receipt,lease=lease), SimpleNamespace(**payload)))
+            def role_rights():
+                with engine.storage.connect() as c:
+                    c.execute('SET TRANSACTION READ ONLY')
+                    rights=c.execute("SELECT bool_and(has_table_privilege(current_user,name,'SELECT') "
+                        "AND has_table_privilege(current_user,name,'UPDATE')) AS allowed "
+                        "FROM unnest(%s::text[]) AS name", (['cp_jobs','cp_pcp_local_source_receipts','cp_project_leases'],)).fetchone()
+                    require(rights['allowed'] is True, 'local_finalization_role_permissions')
+            await check('finalization_schema_role', role_rights)
+            view['prerequisites'] = ['private_finite_authority','historical_integrity','full_job_receipt_lease_afterimages',
+                'latest_proof_and_workspace','registered_project_baseline_policy','scoped_schema_role',
+                'exact_release_images_worker_config_database_network_observer',
+                'actual_independent_review_body_and_PR_head','actual_exact_head_four_executed_CI_suites',
+                'same_checks_under_locks_immediately_before_full_row_CAS']
         if payload:
             await check('authority_review_ci', lambda: engine.finalize_pcp_local_review(SimpleNamespace(**payload), dry_run=True),
                         actor='PM', action='Check installed authority and exact independent review/CI; never renew implicitly')

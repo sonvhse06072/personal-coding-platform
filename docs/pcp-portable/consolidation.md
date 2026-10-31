@@ -1,5 +1,31 @@
 # PCP Local consolidation execution checklist
 
+## Separate finite finalization authority — SOURCE/FIXTURE
+
+[PM6544621726](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6544621726)
+authorizes [Draft source PR852](https://github.com/sonvhse06072/personal-coding-platform/pull/852)
+on `ai/835-finalization-authority-v1`, mainXee7ea0d8.
+[WorkReport, exact schema/resources, RED/GREEN, restored-copy evidence and complete future packet](../project/history/2026-10-31-finalization-authority848.md).
+
+- [x] Engineering acceptance5723218707 binds task8509574d62d/diff902a9163/actual CI41199954657.
+- [x] Repair authority expired2026-10-31T13:15Z; original13e8797f/activation/patch/history unchanged.
+- [x] Default-OFF independent finalization-only private authority; Runtime/Executor exact bindings,
+  no caller-supplied permission, no expired execution capability, no model/test/publication/replay.
+- [x] Existing locks/full-row CAS with immediate review/CI/Git/resource/revocation revalidation;
+  real Git/PostgreSQL concurrency/rollback/lost-ack cases and actual post-delivery restored copy.
+- [x] Restored FIXTURE completed/delivered3/released4,1/4/2 with checkpoint/progress/workspace
+  equal and original expired bytes intact. External observations synthetic; source overlay only.
+- [ ] Independent PM source acceptance and separately selected finite adoption/finalization decision.
+  Required final-source-head four-suite CI is recorded in the source PR; CI never grants authority.
+
+Live848 remains awaiting PM/verified/ci_success/finalized=false, running2/active4/1/4/2.
+SAME task850/evidence847 remain Draft/unmerged and unchanged; live workers/authority OFF,
+DB/N observer/HTTPS available. No live install/start/finalization, source/task replay,
+baseline/CLI/build/provider/global/foreign changes. Preserve ABC/all54 custody/unknown/V3.
+Two historical optional supervision-PG failures remain out of scope. Following sections
+are preserved historical context; their old task heads/counters/windows are not current.
+
+
 ## Local PM test review-repair — SOURCE/FIXTURE
 
 [WO6540919383](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6540919383),

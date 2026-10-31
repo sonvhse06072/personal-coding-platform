@@ -283,6 +283,8 @@ class RuntimeTaskLauncher:
 
 
 def source_worker_flags() -> None:
+    from .pcp_local_finalization import execution_forbidden
+    execution_forbidden()
     from .pcp_local_review_repair import enabled as review_enabled
     require(not review_enabled(), "local_repair_admission_forbidden")
     """Two independent opt-ins. All are ABSENT from shipped DDEV Compose."""
@@ -986,6 +988,8 @@ def retained_workspaces(storage, root, current_job_id):
 
 def read_activation():
     """A switch is not authority: require an independently installed document."""
+    from .pcp_local_finalization import execution_forbidden
+    execution_forbidden()
     from .pcp_local_review_repair import enabled as review_enabled, Permit
     if review_enabled():
         return Permit().activation
@@ -1012,11 +1016,13 @@ def read_activation():
 
 class TrustedReaders:
     """The concrete eight readers. Callables/dictionaries are not wire inputs."""
-    def __init__(self, engine, github):
+    def __init__(self, engine, github, *, finalization=False):
         self.engine, self.github = engine, github
-        self.activation = read_activation()
+        from .pcp_local_finalization import Authority
+        self.finalization = Authority() if finalization else None
+        self.activation = self.finalization.activation if self.finalization else read_activation()
         from .pcp_local_review_repair import enabled as review_enabled, Permit
-        self.local_review = Permit() if review_enabled() else None
+        self.local_review = self.finalization.historical if self.finalization else Permit() if review_enabled() else None
         from .pcp_local_task_queue import enabled, RecoveryPermit
         self.recovery = RecoveryPermit() if enabled() else None
         from .pcp_local_recovery import enabled as held_enabled, load_held_permit
@@ -1029,6 +1035,9 @@ class TrustedReaders:
         self.authority_digest = None
 
     async def executor(self, path, payload):
+        if getattr(self, 'finalization', None):
+            self.finalization.require_fresh()
+            require(path == '/v1/pcp-local/pm-review', 'local_finalization_execution_forbidden')
         async with httpx.AsyncClient(timeout=60) as client:
             response = await client.post(self.engine.ddev.base + path,
                 json=payload, headers=self.engine.ddev.headers)
@@ -1038,7 +1047,11 @@ class TrustedReaders:
     def authority(self):
         from . import config
         from .baseline import resolve_project_baseline
-        require(read_activation() == self.activation, 'pcp_local_delegation_revoked')
+        if getattr(self, 'finalization', None):
+            self.finalization.require_fresh()
+            require(self.activation == self.finalization.activation, 'local_finalization_authority_revoked')
+        else:
+            require(read_activation() == self.activation, 'pcp_local_delegation_revoked')
         # Do not allow cached baseline/model files to survive a revocation.
         config.project_baselines_doc.cache_clear()
         config.models_doc.cache_clear()
@@ -1060,6 +1073,7 @@ class TrustedReaders:
         return project, baseline
 
     async def source(self):
+        require(not getattr(self, 'finalization', None), 'local_finalization_execution_forbidden')
         self.authority()
         a = self.activation
         issue = await self.github.local_source_issue(issue_number=a['issue_number'])
@@ -1074,6 +1088,7 @@ class TrustedReaders:
         return await self.refresh(task, operation="delivery")
 
     async def refresh(self, task, *, operation="admission"):
+        require(not getattr(self, "finalization", None), "local_finalization_execution_forbidden")
         from .config import model_config
         from .model_capabilities import validate_model_choice
         from .quota_telemetry import CodexQuotaCollector
