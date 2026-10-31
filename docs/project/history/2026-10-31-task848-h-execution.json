@@ -1,0 +1,497 @@
+{
+  "decision": 6535853784,
+  "source": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+  "task": {
+    "job": "15271df1a36b1281010465538a9318ae",
+    "issue": 848,
+    "body_sha256": "ffb68e1930c9e1dae24e7b6943bf0763248e2003a9f9edec73d06333d24caf7e",
+    "goal_sha256": "367ff0aecc818759aeb39ae245e94c366817c7f8d22ac270a5e58316fa2cc2d7",
+    "baseline": "pcp-local-context-871fbf2485a1-20261031-draft",
+    "installed": false,
+    "configs": {
+      "projects.pcp-local.yml": "21f5df8c08c38c65a6f861702b2de9d287e89a32656a4ceb81c958369c057983",
+      "project-baselines.pcp-local.yml": "2bc987ccad3232a3f14d7585a2523cf1146ae40861c6d64df533a3bd0dc718f9",
+      "models.yml": "a748faf933fe5c792679a687f2b0870f97fb6f6af8bd70887cc9bb4d8758844d",
+      "routing-policy.yml": "cc71c65bec662e4726ee056525f0a02a6a1bfd9e1f09f92abad22a37b9c9d615"
+    }
+  },
+  "outcome": "BLOCKED_BEFORE_ADMISSION",
+  "readiness_blocker": "budget_not_independently_approved",
+  "source_contract": "pcp_local_worker_admission.py requires 1 <= model_calls <= 2; approved activation has 3",
+  "proof": {
+    "container": "df3b557b6ee863121305fc698d36b70d4ec98d5a129efb653ceaf9f32873f74f",
+    "exit": 0,
+    "report": {
+      "candidate_outcomes": [
+        {
+          "model_calls": 2,
+          "outcome": "PASS_EVIDENCE_ONLY"
+        },
+        {
+          "model_calls": 3,
+          "outcome": "budget_not_independently_approved"
+        }
+      ],
+      "synthetic_only": true,
+      "provider_calls": 0,
+      "registration_calls": 0
+    }
+  },
+  "closeout": {
+    "at": "2026-10-31T00:07:29.169790+00:00",
+    "reason": "budget_not_independently_approved",
+    "workers": {
+      "runtime": "1b0949227f267d6d0b9144348e8e4dd5cd73d2ca9b74c69597e1d5bab7ecdf35",
+      "ddev-executor": "fc32fd0a0bf632a185aad7d83f21234988359a9d803f8dcc0be36145a9d93e1d",
+      "router": "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6"
+    },
+    "all_stopped": true,
+    "activation_disabled_sha256": "4a354af21b2c4f2fd6104ad507feaaf77ada74f0b2de25ea48d2feee425a1a9c",
+    "logout_exit": 0,
+    "scoped_auth_absent": true,
+    "jobs_receipts_leases_events_unchanged": true,
+    "ABC_metadata_unchanged": true,
+    "admission_requests": 0,
+    "model_invocations": 0,
+    "source": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+    "canonical_H_retained": true,
+    "expiry": "2026-10-31T07:00:00Z"
+  },
+  "backup_reused": {
+    "accepted_backup_sha256": "8cc0944416678efeed4c3acc6f4b5678677ba4f4b5cf6e0d8f434ecbac39d50c",
+    "fresh_entire_DB_match": true,
+    "restored_rehearsal_reused": true
+  },
+  "after_backup": {
+    "sha256": "3a23ec19afd9d62dc2b03e23afe43b68f0ef30401ac476093bea579905d37c88",
+    "bytes": 228689
+  },
+  "database_after_sha256": "de4629cb1caf42e5407bf5608c295e1abf9294ab043cbf75333449e07d159b4d",
+  "database_delta": [
+    {
+      "table": "cp_quota_collectors",
+      "sequence": null,
+      "before_count": 2,
+      "after_count": 2
+    },
+    {
+      "table": "cp_quota_snapshots",
+      "sequence": null,
+      "before_count": 1,
+      "after_count": 1
+    }
+  ],
+  "adoption": {
+    "runtime": [
+      "f55b55ded4f2479214233244def8b34e9da36b93e057cdf4c3eda75149df7e14",
+      "1b0949227f267d6d0b9144348e8e4dd5cd73d2ca9b74c69597e1d5bab7ecdf35"
+    ],
+    "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+    "environment_changed": [
+      "PCP_LOCAL_SOURCE_COMMIT"
+    ],
+    "host_lifecycle_delta": {
+      "OomKillDisable": [
+        null,
+        false
+      ]
+    },
+    "executor_reused_exact": true,
+    "router_reused_exact": true
+  },
+  "publisher": {
+    "user_http": 200,
+    "expiry": "2026-11-04 08:29:46 UTC",
+    "repository_http": 200,
+    "main_http": 200,
+    "issue_http": 200,
+    "actions_http": 200,
+    "status_http": 200,
+    "write_operations": 0,
+    "retained_credential": true,
+    "credential_values": "not published"
+  },
+  "activation_sha256": "4a354af21b2c4f2fd6104ad507feaaf77ada74f0b2de25ea48d2feee425a1a9c",
+  "manifest_sha256": "5797551eb97665450443475d900ca079002a57ca4bd29b087386e8204b12b16d",
+  "runtime_model_calls": 0,
+  "owner_interactions": 0,
+  "operator_model": "gpt-6.1-sol",
+  "operator_effort": null,
+  "operator_usage": null,
+  "remaining_decision": "Independent PM disposition for same held unverified job; existing held verification rejects this error. No cleanup/replay/recovery authority.",
+  "baseline_installed_status": "approved",
+  "active_revision": "pcp-local-context-871fbf2485a1-20261031-draft",
+  "execution_authority": "disabled",
+  "v2_offline_checkpoint": {
+    "decision": 6536474373,
+    "source": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+    "job": "15271df1a36b1281010465538a9318ae",
+    "expiry": 1793430000.0,
+    "activation_v1_sha256": "4a354af21b2c4f2fd6104ad507feaaf77ada74f0b2de25ea48d2feee425a1a9c",
+    "activation_v2_sha256": "ec1d28f13f44d149001e1657b9122f3a1eb3947e966c3bebe5e99fcb59dbc665",
+    "manifest_v1_sha256": "5797551eb97665450443475d900ca079002a57ca4bd29b087386e8204b12b16d",
+    "manifest_v2_sha256": "53b95372e77ef563e4fa527d4bebb42a92720981ac1681e18ffd026d2de6fea8",
+    "activation_semantic_diff": {
+      "budget.model_calls": [
+        3,
+        2
+      ]
+    },
+    "manifest_changed_fields": [
+      "decision",
+      "activation_sha256"
+    ],
+    "offline_H_production_validation": "PASS synthetic admission facts, actual task identity/budget; no real readiness claim",
+    "no_job_receipt_workspace_branch_PR": true,
+    "all_workers_stopped": true,
+    "credentials_or_startup": false
+  },
+  "v2_result": {
+    "decision": 6536474373,
+    "outcome": "BLOCKED_AT_INTERACTIVE_AUTHENTICATION",
+    "source": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+    "job": "15271df1a36b1281010465538a9318ae",
+    "offline": {
+      "decision": 6536474373,
+      "source": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+      "job": "15271df1a36b1281010465538a9318ae",
+      "expiry": 1793430000.0,
+      "activation_v1_sha256": "4a354af21b2c4f2fd6104ad507feaaf77ada74f0b2de25ea48d2feee425a1a9c",
+      "activation_v2_sha256": "ec1d28f13f44d149001e1657b9122f3a1eb3947e966c3bebe5e99fcb59dbc665",
+      "manifest_v1_sha256": "5797551eb97665450443475d900ca079002a57ca4bd29b087386e8204b12b16d",
+      "manifest_v2_sha256": "53b95372e77ef563e4fa527d4bebb42a92720981ac1681e18ffd026d2de6fea8",
+      "activation_semantic_diff": {
+        "budget.model_calls": [
+          3,
+          2
+        ]
+      },
+      "manifest_changed_fields": [
+        "decision",
+        "activation_sha256"
+      ],
+      "offline_H_production_validation": "PASS synthetic admission facts, actual task identity/budget; no real readiness claim",
+      "no_job_receipt_workspace_branch_PR": true,
+      "all_workers_stopped": true,
+      "credentials_or_startup": false
+    },
+    "startup": {
+      "workers": {
+        "runtime": "1b0949227f267d6d0b9144348e8e4dd5cd73d2ca9b74c69597e1d5bab7ecdf35",
+        "ddev-executor": "fc32fd0a0bf632a185aad7d83f21234988359a9d803f8dcc0be36145a9d93e1d",
+        "router": "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6"
+      },
+      "original_configuration_fingerprints_unchanged": true,
+      "at": "2026-10-31T00:29:29.491407+00:00",
+      "ordinary_admissions": 0
+    },
+    "authentication": {
+      "exit": 1,
+      "reason": "device auth timed out after 15 minutes",
+      "auth_file_created": false,
+      "instructions_or_code_published": false
+    },
+    "owner_attention": {
+      "reason": "fresh Runtime scoped device authentication after supported logout",
+      "requested_at": "2026-10-31T00:29:48Z",
+      "requests": 1,
+      "active_owner_minutes": null,
+      "status": "device authentication timed out; no authenticated session established",
+      "code_or_token_published": false,
+      "result_at": "2026-10-31T00:45:38.766741+00:00"
+    },
+    "shutdown": {
+      "at": "2026-10-31T00:46:27.551309+00:00",
+      "workers": {
+        "runtime": "1b0949227f267d6d0b9144348e8e4dd5cd73d2ca9b74c69597e1d5bab7ecdf35",
+        "ddev-executor": "fc32fd0a0bf632a185aad7d83f21234988359a9d803f8dcc0be36145a9d93e1d",
+        "router": "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6"
+      },
+      "all_stopped": true,
+      "activation_v2_sha256": "ec1d28f13f44d149001e1657b9122f3a1eb3947e966c3bebe5e99fcb59dbc665",
+      "activation_v1_sha256": "4a354af21b2c4f2fd6104ad507feaaf77ada74f0b2de25ea48d2feee425a1a9c",
+      "logout_exit": 0,
+      "auth_absent": true,
+      "ABC_full_rows_metadata_preserved": true,
+      "backup_sha256": "bd205cc8dad4667de7723a291dace92232efa2a750d895648938d5f76762c3ab",
+      "backup_bytes": 228689,
+      "afterimage_sha256": "de4629cb1caf42e5407bf5608c295e1abf9294ab043cbf75333449e07d159b4d",
+      "expiry": "2026-10-31T07:00:00Z",
+      "running": [
+        "8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8",
+        "da6c434797c46a3312f0ca185b20e0b5fbb9234ce137aee9f81ebc2fb9241660",
+        "601c552bd0562b947529a591b84c70570a1eaa556fb43e50a8c2ae0d76e362aa"
+      ]
+    },
+    "full_DB_before_after_identical": true,
+    "readiness_requests": 0,
+    "eight_readers_accepted": false,
+    "admission_requests": 0,
+    "model_invocations": 0,
+    "task_PR": null,
+    "task_CI": null,
+    "operator_model": "gpt-6.1-sol",
+    "operator_effort": null,
+    "operator_usage": null,
+    "remaining_checkpoint": "fresh scoped interactive authentication and PM disposition for bounded restart; no automatic renewal/replay"
+  },
+  "fresh_auth_continuation": {
+    "decision": 6536904513,
+    "at": "2026-10-31T01:09:13.740919+00:00",
+    "all_original_preimages_match": true,
+    "backup_reused": "V1 closeout3a23ec19 and accepted restored rehearsal; exact full DB freshness match",
+    "V1_V2_unchanged": true,
+    "job": "15271df1a36b1281010465538a9318ae",
+    "workers": {
+      "runtime": "1b0949227f267d6d0b9144348e8e4dd5cd73d2ca9b74c69597e1d5bab7ecdf35",
+      "ddev-executor": "fc32fd0a0bf632a185aad7d83f21234988359a9d803f8dcc0be36145a9d93e1d",
+      "router": "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6"
+    },
+    "expiry": "2026-10-31T07:00:00Z",
+    "no_task_artifacts": true,
+    "scoped_auth_absent": true,
+    "outcome": "HELD_UNVERIFIED_CHANGED_PATHS_DENIED",
+    "authentication": {
+      "cli_exit": 0,
+      "cli_message": "Successfully logged in",
+      "observed_at": "2026-10-31T01:12:30.972921+00:00",
+      "owner_requests": 1,
+      "owner_active_minutes": null,
+      "device_code_not_published": true
+    },
+    "instructions": {
+      "cli": "codex0.160.0",
+      "one_time_instructions_displayed_immediately": true,
+      "login_attempts": 1,
+      "one_time_code_published_to_GitHub": false,
+      "process_pending": true,
+      "owner_requests": 1,
+      "owner_active_minutes": null,
+      "first_output_checked_at": "2026-10-31T01:10:28Z",
+      "cli_displayed_expiry": "expires in 15 minutes"
+    },
+    "services": {
+      "workers": {
+        "runtime": "1b0949227f267d6d0b9144348e8e4dd5cd73d2ca9b74c69597e1d5bab7ecdf35",
+        "ddev-executor": "fc32fd0a0bf632a185aad7d83f21234988359a9d803f8dcc0be36145a9d93e1d",
+        "router": "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6"
+      },
+      "at": "2026-10-31T01:12:32.640547+00:00",
+      "each_started_once": true,
+      "original_fingerprints_unchanged": true,
+      "admission_requests": 0
+    },
+    "readiness": {
+      "aggregate_ready": true,
+      "blockers": [],
+      "eight_readers": "PASS",
+      "provider_quota": "authoritative_available",
+      "publisher": "read_only_entitlements_PASS",
+      "seconds": 17.07306173
+    },
+    "admission": {
+      "requests": 1,
+      "acknowledged": true,
+      "response_seconds": 76.564231755
+    },
+    "live_job": {
+      "id": "15271df1a36b1281010465538a9318ae",
+      "status": "blocked",
+      "error": "pcp_local_changed_paths_denied",
+      "execution": {
+        "state": "held",
+        "attempt": 1,
+        "held_from": "invocation_returned",
+        "started_at": "2026-10-31T01:14:19.052158+00:00",
+        "model_choice": {
+          "id": "codex_gpt6_luna",
+          "model": "gpt-6-luna",
+          "adapter": "codex_cli",
+          "reasoning_effort": "low"
+        },
+        "context_sha256": "a11bd2ad30871fe1b8e2af930649259ccf48c62d278c450961da5cf00bed2004",
+        "authority_digest": "597ed9844cb813542b3fffe6fff423d926e565a04cf57b54fb952bb3e53d4f37",
+        "lease_generation": 4,
+        "returned_invocation": {
+          "attempt": 1,
+          "returncode": 0,
+          "model_calls": 1,
+          "usage_digest": "af9f05f1f64dfd6d183c2244efe36fe176da0bb1392a208685f23bf4d058acb3",
+          "provider_failed": false
+        }
+      },
+      "context_invocations": [
+        {
+          "mode": "execute",
+          "attempt": 1,
+          "packet_bytes": 89111,
+          "packet_sha256": "a11bd2ad30871fe1b8e2af930649259ccf48c62d278c450961da5cf00bed2004",
+          "authority_sha256": "9d0077d5f761124b16f9d8fa7c3b4f97f2921e7a4693683d3403a9a775618976",
+          "total_context_ms": 66.298
+        }
+      ],
+      "receipt": {
+        "state": "running",
+        "generation": 2,
+        "job_id": "15271df1a36b1281010465538a9318ae"
+      },
+      "lease": {
+        "state": "active",
+        "generation": 4,
+        "owner_job_id": "15271df1a36b1281010465538a9318ae"
+      },
+      "model_calls": 1,
+      "mandatory_test_runs": 0,
+      "delivery_attempts": 0,
+      "usage": {
+        "model_calls": 1,
+        "test_runs": 0,
+        "gross_input_tokens": 601376,
+        "cached_input_tokens": 559104,
+        "input_tokens": 42272,
+        "output_tokens": 1711,
+        "cost_usd": null,
+        "estimated_cost_usd": 0,
+        "coverage": {
+          "gross_input_tokens": "complete",
+          "cached_input_tokens": "complete",
+          "input_tokens": "complete",
+          "output_tokens": "complete",
+          "reported_cost_usd": "unknown"
+        },
+        "observed_partial_totals": {
+          "gross_input_tokens": 601376,
+          "cached_input_tokens": 559104,
+          "input_tokens": 42272,
+          "output_tokens": 1711,
+          "reported_cost_usd": null
+        },
+        "tool_calls": null,
+        "returned_invocations": 1
+      },
+      "observed_execution_seconds": 37.31894825201016,
+      "agent_self_tests": "19 passed; not mandatory verification",
+      "task_PR": null,
+      "task_CI": null
+    },
+    "scope": {
+      "changed_entries": 34,
+      "allowed_tracked_files": 3,
+      "unexpected_pytest_entries": 31,
+      "cleanup_rejected": true,
+      "cleanup_performed": false,
+      "temporary_directory_fallback": "inference; not isolated-reproduced",
+      "workspace_evidence": {
+        "sha256": "5079f123c1fc8a59ab2cef23e5fc22e51f79f8c12aa5e5b951cd15e8b80eb665",
+        "entries": 831,
+        "nofollow": true,
+        "noatime": true,
+        "metadata_preserved": true,
+        "unverified": true,
+        "git_operations": 0
+      }
+    },
+    "shutdown": {
+      "at": "2026-10-31T01:16:45.826295+00:00",
+      "workers": {
+        "runtime": "1b0949227f267d6d0b9144348e8e4dd5cd73d2ca9b74c69597e1d5bab7ecdf35",
+        "ddev-executor": "fc32fd0a0bf632a185aad7d83f21234988359a9d803f8dcc0be36145a9d93e1d",
+        "router": "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6"
+      },
+      "all_stopped": true,
+      "activation_v2_sha256": "ec1d28f13f44d149001e1657b9122f3a1eb3947e966c3bebe5e99fcb59dbc665",
+      "activation_v1_sha256": "4a354af21b2c4f2fd6104ad507feaaf77ada74f0b2de25ea48d2feee425a1a9c",
+      "logout_exit": 0,
+      "auth_absent": true,
+      "ABC_full_rows_metadata_preserved": true,
+      "backup_sha256": "1f3fe522d2295117323d32eeb281a51651d06bc32ed93085a60ae06f36b5a029",
+      "backup_bytes": 240271,
+      "afterimage_sha256": "14ea3d3f33fa30451be76e9986205e3e17407fc105f8ac90b20ccb3c3a9282de",
+      "expiry": "2026-10-31T07:00:00Z",
+      "running": [
+        "8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8",
+        "da6c434797c46a3312f0ca185b20e0b5fbb9234ce137aee9f81ebc2fb9241660",
+        "601c552bd0562b947529a591b84c70570a1eaa556fb43e50a8c2ae0d76e362aa"
+      ]
+    },
+    "dashboard": {
+      "result": "PASS",
+      "job": "15271df1a36b1281010465538a9318ae",
+      "status": "blocked",
+      "usage": {
+        "model_calls": 1,
+        "test_runs": 0,
+        "gross_input_tokens": 601376,
+        "cached_input_tokens": 559104,
+        "input_tokens": 42272,
+        "output_tokens": 1711,
+        "cost_usd": null,
+        "estimated_cost_usd": 0,
+        "coverage": {
+          "gross_input_tokens": "complete",
+          "cached_input_tokens": "complete",
+          "input_tokens": "complete",
+          "output_tokens": "complete",
+          "reported_cost_usd": "unknown"
+        },
+        "observed_partial_totals": {
+          "gross_input_tokens": 601376,
+          "cached_input_tokens": 559104,
+          "input_tokens": 42272,
+          "output_tokens": 1711,
+          "reported_cost_usd": null
+        },
+        "tool_calls": null,
+        "returned_invocations": 1
+      },
+      "receipt": {
+        "state": "running",
+        "generation": 2,
+        "job_id": "15271df1a36b1281010465538a9318ae"
+      },
+      "lease": {
+        "state": "active",
+        "generation": 4,
+        "owner_job_id": "15271df1a36b1281010465538a9318ae"
+      },
+      "observed_execution_seconds": 37.31894825201016,
+      "observer_source": "85e415f1f53c8129056e2f04fb99a9b964b89609",
+      "url": "https://localhost:18443/dashboard",
+      "auth": "loopback_readonly",
+      "trusted_tls": true,
+      "ignored_tls_errors": false,
+      "cookies": 0,
+      "forms": 0,
+      "reconnect": "PASS",
+      "fixed_ABC_timers": true,
+      "ordinary_not_assisted": true
+    },
+    "owner_attention": {
+      "requests": 1,
+      "authenticated_sessions": 1,
+      "code_display_to_auth_observed_seconds": 122.972921,
+      "active_minutes": null
+    },
+    "operator_model": "gpt-6.1-sol",
+    "operator_effort": null,
+    "operator_usage": null,
+    "remaining_checkpoint": "Independent PM disposition for same held unverified job; existing held verification rejects this error. No cleanup/replay/recovery authority.",
+    "evidence_ci_correction": {
+      "run": 41155185398,
+      "head": "a5436a8dcb23b189c40052d4629b23ffba43bac2",
+      "root_failures": 2,
+      "cause": "stable Immediate next safe actions heading renamed",
+      "repair": "restore stable heading with actual held848 instructions; no source/test/operational mutation",
+      "runtime_failures": 1,
+      "local_green": {
+        "context": 24,
+        "runtime_continuity": 6,
+        "root": 1761,
+        "root_seconds": 20.51
+      }
+    }
+  },
+  "current_outcome": "HELD_UNVERIFIED_CHANGED_PATHS_DENIED",
+  "latest_phase": "fresh_auth_continuation; earlier phase outcomes retained as history",
+  "root_fields_scope": "Original V1 phase history; current_outcome and fresh_auth_continuation are latest. Earlier zero-artifact assertions refer to their recorded phase only."
+}

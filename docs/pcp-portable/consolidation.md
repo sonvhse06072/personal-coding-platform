@@ -1,26 +1,30 @@
 # PCP Local consolidation execution checklist
 
-## Local PM test review-repair — SOURCE/FIXTURE
+## Same848 config continuation — delivered / awaiting independent PM
 
-[WO6540919383](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6540919383),
-main/platform R44b79c7e; task/base/canonical/baseline/verifier H unchanged. One writer on
-`ai/835-local-ci-review-repair848-v1`; ONE source PR, separate exact private test patch.
-[WorkReport, durable checklist and full source→rollout→repair→finalization packet](../project/history/2026-10-31-local-review-repair848.md).
+[DEC6542820804](https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6542820804), SAME evidence847. [ONE actual WorkReport/full packet](../project/history/2026-10-31-held848-x-config-continuation.md)
+and [sanitized exact receipt](../project/history/2026-10-31-held848-x-config-continuation.json).
 
-- [x] Actual Python3.11.2/3.13.18 portable test patch19 PASS each; valid deep JSON,
-  bounded reasons/negative controls, production/task docs and old schema tests unchanged.
-- [x] Default-OFF authenticated local exact review/patch/PR/head/full-row CAS and original
-  proof/history; real verifier/commit recovery/same-PR/new-head PM compatibility, no model.
-- [x] Real Git/PG/HTTP drift/concurrency/crash/lost-ack coverage; restored copy H19+19/
-  private bare Git/synthetic GitHub+PM finalization PASS. Unknown copy preserved/fenced.
-- [ ] Final-head source CI/independent source+patch review; actual acceptedX/new finite
-  image/config/permit checkpoint before any original mutation. No live permission here.
+- [x] Fresh original/full-ID/ext4/custody/ABC/unknown-copy/config/remote preflight+backup.
+- [x] ONE same-image Executor successor14c608a2; ONLY source-reader flag added. Complete
+  other config/resources/mounts exact; predecessor retained. Cold guard rejection PASS.
+- [x] Permit ONLY Executor config digest; sidecar ONLY Executor ID/config/env delta/direct
+  permit digest. Derived13e8797f/f6687452 semantic deltas/hashes published6543137928 BEFORE
+  install, actual X parsers/release validation PASS; no further hash-selection relay.
+- [x] REAL authenticated source GET848=200, exact body/main/project; actual readiness/
+  read-only plan/fresh original preimages PASS. Runtime ordinary admission FORBIDDEN.
+- [x] ONE apply/repair POST; genuine H19+19; sole-parent test-only append to SAME850
+  **9574d62d9a7d385deb107bc8108b4b6802132fa3**; real CI41199954657 all4 actual suites PASS.
+- [x] Original full proof/result/usage/failed CI/history retained; new cumulative1/4/2,
+  running2/active4, finalized=false. ABC/54custody/unknown copies preserved, no reset.
+- [x] Exact current workersOFF12:13:38Z, derived permit/V2/patch disabled intact; all
+  predecessors/H children/fixtures retained, DB/N observer/HTTPS running; after-backup.
+- [ ] NEW independent review/head/diff/CI acceptance and explicit finalization decision.
+  Old review5721908834 requested changes. No finalization/merge authorized here.
 
-Original848 verified/ci_failure/running2/active4/1/2/1 at task850cf41cad0 unchanged.
-Evidence8475340d978/CI41176395853 records actual delivery and root task CI failure.
-Dashboard/DB/HTTPS available, original workers and authority OFF. No task edit/push/test
-replay, old-permit renewal, baseline activation, login/inference/finalization or merge.
-Following C843 receipts are historical, not current848 ownership or new authority.
+Main X/task-baseline-verifier H unchanged,847/850 unmerged. Fixed13:15Z expiry unchanged,
+no renewal/future wait, model/login/admission replay/source/build/global changes/prune.
+Prior403/preparation reports remain historical; actual production source route now proved.
 
 ## C843 completed and retained — 2026-10-30 17:21 UTC
 
