@@ -1,0 +1,395 @@
+{
+  "workorder": "https://github.com/sonvhse06072/personal-coding-platform/issues/835#issuecomment-6540919383",
+  "source_anchor": "44b79c7e05235c402e426db1b713b1df802a3538",
+  "task_source": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+  "branch": "ai/835-local-ci-review-repair848-v1",
+  "status": "SOURCE_FIXTURE_CANDIDATE_NOT_LIVE_AUTHORITY",
+  "task_patch": {
+    "sha256": "bf3a6c53cf8adce7dcc47b7c8ad4234884804a0d6ba9785e47fd61499166fffb",
+    "bytes": 1973,
+    "only_path": "tests/test_pcp_light_evidence_summary.py",
+    "production_and_task_docs_unchanged": true
+  },
+  "cross_version": {
+    "all_stopped": true,
+    "records": [
+      {
+        "id": "1a391b3b3c785cf491dcf009ff21ad3cd84c486e9590601648e29f6e673f2aa5",
+        "name": "pcp848-review-repair-bad-object-311",
+        "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+        "exit_code": 1,
+        "running": false
+      },
+      {
+        "id": "f11075e3b6553eea5cc77dec558c5656a4fbbd529cc8a1ec479ac724d18745b0",
+        "name": "pcp848-review-repair-version-311",
+        "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+        "exit_code": 0,
+        "running": false,
+        "version": [
+          3,
+          11,
+          2
+        ]
+      },
+      {
+        "id": "36bea63f748a74912c235e1b3af4f4abfa2abf78400adfb341b5bc40615d1651",
+        "name": "pcp848-review-repair-bad-object-313",
+        "image": "sha256:3f10289e6b706a724419f58e7e3cfbb9373df39e6a84170dae845dc1d58db5e5",
+        "exit_code": 1,
+        "running": false
+      },
+      {
+        "id": "592771d135e608c6d2accf9721bc8587c00fad00345d80ab236a022d5e8c32d7",
+        "name": "pcp848-review-repair-version-313",
+        "image": "sha256:3f10289e6b706a724419f58e7e3cfbb9373df39e6a84170dae845dc1d58db5e5",
+        "exit_code": 0,
+        "running": false,
+        "version": [
+          3,
+          13,
+          18
+        ]
+      },
+      {
+        "id": "93a8ea5bf2d47de7860abb5928ad47af29b5a2ce941a4cd5c3f0c2c13eb36cdb",
+        "name": "pcp848-review-repair-no-catch-311",
+        "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+        "exit_code": 1,
+        "running": false
+      }
+    ],
+    "no_production_patch": true
+  },
+  "restored_success": {
+    "kind": "result",
+    "result": "PASS_RESTORED_REVIEW_REPAIR_FINALIZATION_FIXTURE_ONLY",
+    "job_id": "15271df1a36b1281010465538a9318ae",
+    "original_head": "cf41cad08434f930841ced57a773f35783a1f537",
+    "new_head": "54e74df89097e3c6a815d0c7a3e1a77a9223e15d",
+    "tree": "ec77318b2a4a901877d49b6670b5410c1b7f149c",
+    "task_H": "871fbf2485a1ffb89a88a69e1daaaca10e25b318",
+    "platform_R_source_overlay": true,
+    "patch_sha256": "bf3a6c53cf8adce7dcc47b7c8ad4234884804a0d6ba9785e47fd61499166fffb",
+    "receipt": "delivered/gen3",
+    "lease": "released/gen4",
+    "counters": [
+      1,
+      4,
+      2
+    ],
+    "mandatory_tests": [
+      19,
+      19
+    ],
+    "preserved_original_proof_history": true,
+    "original_agent_attempts_unchanged": true,
+    "ABC_rows_and_workspaces_unchanged": true,
+    "publication": [
+      "real_private_git_append",
+      "synthetic_same_PR"
+    ],
+    "actual_GitHub_or_PM_acceptance": false,
+    "diff_sha256": "902a91634b03cc946cff15a01c4ac1af55d69344f8c59a16b4e760d06a64eb22"
+  },
+  "latest_source_read_only_compatibility": {
+    "result": "PASS_LATEST_SOURCE_READ_ONLY_TERMINAL_COMPATIBILITY",
+    "runtime_app_sha256": "6dabac1377b29d52be6a740f0976cb4116d084c6d41e80059de5ee09e61fac8e",
+    "commit": "54e74df89097e3c6a815d0c7a3e1a77a9223e15d",
+    "receipt": "delivered3",
+    "lease": "released4",
+    "counters": [
+      1,
+      4,
+      2
+    ],
+    "no_post_or_verification": true
+  },
+  "unknown_fixture": {
+    "state": "verifying",
+    "phases": [
+      {
+        "phase": "targeted_tests",
+        "result": null
+      }
+    ],
+    "counters": [
+      1,
+      2,
+      1
+    ],
+    "original_commit": "cf41cad08434f930841ced57a773f35783a1f537",
+    "unknown_verification_not_replayed": true
+  },
+  "original_preservation": {
+    "whole_job_receipt_lease_unchanged": true,
+    "ABC_and_848_workspace_bytes_metadata_unchanged": true,
+    "workers_stopped": [
+      "9d046f4fe87ccc2db838b26131a85e07f222872510ebfbadbdc9efbc79b5cf23",
+      "d4d056f14883391a80fa4803bc2bb54b9c6814499d99cdf632d42fe7144b9489",
+      "f03edbd929aa323c011b990d51e30880b60e2fe68c908af10ca8e7db9cd3a6c6"
+    ],
+    "retained_running": [
+      "8b72a8d38971f4ddb67b6f7ce66e5289d5de63d2c861fac493964e67eff9a4e8",
+      "da6c434797c46a3312f0ca185b20e0b5fbb9234ce137aee9f81ebc2fb9241660",
+      "601c552bd0562b947529a591b84c70570a1eaa556fb43e50a8c2ae0d76e362aa"
+    ],
+    "authority_absent": true,
+    "counters": [
+      1,
+      2,
+      1
+    ],
+    "task_PR": 850,
+    "task_head": "cf41cad08434f930841ced57a773f35783a1f537"
+  },
+  "retention": {
+    "at": "2026-10-31T08:57:41.712009+00:00",
+    "all_16_fixture_containers_stopped": true,
+    "resources": [
+      {
+        "id": "694fdabbab7ba3f2af06bfc3166c4bc333a0d4f06f7c3dc48bddc0fe37c289cb",
+        "name": "pcp848-review-repair-h311-red",
+        "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+        "running": false,
+        "exit_code": 0,
+        "oom": false,
+        "created": "2026-10-31T08:07:38.987141683Z"
+      },
+      {
+        "id": "a4e8f12a779f25cfdb5b58e012065d43b6519238aa6264334f53ed4546a00959",
+        "name": "pcp848-review-repair-h311-green",
+        "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+        "running": false,
+        "exit_code": 0,
+        "oom": false,
+        "created": "2026-10-31T08:07:39.749580278Z"
+      },
+      {
+        "id": "4b98c0cf7a5ff27c0dfdf25e98ec4d8ffb53a2d062e74ccde48c235e50a269ba",
+        "name": "pcp848-review-repair-host313-red",
+        "image": "sha256:3f10289e6b706a724419f58e7e3cfbb9373df39e6a84170dae845dc1d58db5e5",
+        "running": false,
+        "exit_code": 1,
+        "oom": false,
+        "created": "2026-10-31T08:07:40.479811856Z"
+      },
+      {
+        "id": "851739c4bda1c53e7de9d27fb5d91c55af6b313d586323f28ede656df22b3a14",
+        "name": "pcp848-review-repair-host313-green",
+        "image": "sha256:3f10289e6b706a724419f58e7e3cfbb9373df39e6a84170dae845dc1d58db5e5",
+        "running": false,
+        "exit_code": 0,
+        "oom": false,
+        "created": "2026-10-31T08:07:41.429148424Z"
+      },
+      {
+        "id": "1a391b3b3c785cf491dcf009ff21ad3cd84c486e9590601648e29f6e673f2aa5",
+        "name": "pcp848-review-repair-bad-object-311",
+        "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+        "running": false,
+        "exit_code": 1,
+        "oom": false,
+        "created": "2026-10-31T08:36:14.928621853Z"
+      },
+      {
+        "id": "36bea63f748a74912c235e1b3af4f4abfa2abf78400adfb341b5bc40615d1651",
+        "name": "pcp848-review-repair-bad-object-313",
+        "image": "sha256:3f10289e6b706a724419f58e7e3cfbb9373df39e6a84170dae845dc1d58db5e5",
+        "running": false,
+        "exit_code": 1,
+        "oom": false,
+        "created": "2026-10-31T08:36:15.716144682Z"
+      },
+      {
+        "id": "f11075e3b6553eea5cc77dec558c5656a4fbbd529cc8a1ec479ac724d18745b0",
+        "name": "pcp848-review-repair-version-311",
+        "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+        "running": false,
+        "exit_code": 0,
+        "oom": false,
+        "created": "2026-10-31T08:36:15.485568213Z"
+      },
+      {
+        "id": "592771d135e608c6d2accf9721bc8587c00fad00345d80ab236a022d5e8c32d7",
+        "name": "pcp848-review-repair-version-313",
+        "image": "sha256:3f10289e6b706a724419f58e7e3cfbb9373df39e6a84170dae845dc1d58db5e5",
+        "running": false,
+        "exit_code": 0,
+        "oom": false,
+        "created": "2026-10-31T08:36:16.413472641Z"
+      },
+      {
+        "id": "93a8ea5bf2d47de7860abb5928ad47af29b5a2ce941a4cd5c3f0c2c13eb36cdb",
+        "name": "pcp848-review-repair-no-catch-311",
+        "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+        "running": false,
+        "exit_code": 1,
+        "oom": false,
+        "created": "2026-10-31T08:36:16.652922926Z"
+      },
+      {
+        "id": "f6d62f7819a4e1a457271a25365dd4d13279759b192e481b4f82d4bde5e9b4df",
+        "name": "pcp848-review-repair-pg",
+        "image": "sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27",
+        "running": false,
+        "exit_code": 0,
+        "oom": false,
+        "created": "2026-10-31T08:13:16.029553498Z"
+      },
+      {
+        "id": "db02c360681b549ec38ed0d35a037755c5253df1d3f9ab4d28ea75ef016eced0",
+        "name": "pcp848-review-repair-restored-runtime",
+        "image": "sha256:59345373e0af3f9c799a7bc775aa782e92fb74aafe1d20793469a9342130730f",
+        "running": false,
+        "exit_code": 1,
+        "oom": false,
+        "created": "2026-10-31T08:29:31.280390489Z"
+      },
+      {
+        "id": "d0949c55e9c586c829e4a17aacf0de5a66be086519163ca65103122a97f64a82",
+        "name": "pcp848-review-repair-restored-runtime2",
+        "image": "sha256:59345373e0af3f9c799a7bc775aa782e92fb74aafe1d20793469a9342130730f",
+        "running": false,
+        "exit_code": 0,
+        "oom": false,
+        "created": "2026-10-31T08:34:57.165311779Z"
+      },
+      {
+        "id": "fea33d4ade7b63edebe337e0f8997920d9da9ff8f36d6ec4233b5c1911c53eec",
+        "name": "pcp848-review-repair-targeted_tests",
+        "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+        "running": false,
+        "exit_code": 0,
+        "oom": false,
+        "created": "2026-10-31T08:33:07.768711721Z"
+      },
+      {
+        "id": "e2e2c690dd2d75e33ea3bde0d2acc9c33e7cdb9743093040fc5e923ce7bff6a6",
+        "name": "pcp848-review-repair-copy2-targeted_tests",
+        "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+        "running": false,
+        "exit_code": 0,
+        "oom": false,
+        "created": "2026-10-31T08:35:08.100429299Z"
+      },
+      {
+        "id": "1f96965cdb68afd93c3ba591e7289f600100690e066e9eb000ea245849debd09",
+        "name": "pcp848-review-repair-copy2-full_tests",
+        "image": "sha256:d9f553ac9a3376b33f0343f3f5ad014689ed383107ca64ceefd85a4a6f6c9d3b",
+        "running": false,
+        "exit_code": 0,
+        "oom": false,
+        "created": "2026-10-31T08:35:09.234147771Z"
+      },
+      {
+        "id": "cbdb102f50ba46b955174baf22db4f2759fd8f368fdcd854025b546faded053a",
+        "name": "pcp848-review-repair-latest-read-only",
+        "image": "sha256:59345373e0af3f9c799a7bc775aa782e92fb74aafe1d20793469a9342130730f",
+        "running": false,
+        "exit_code": 0,
+        "oom": false,
+        "created": "2026-10-31T08:51:23.840627106Z"
+      }
+    ],
+    "retained_volume": "pcp848-review-repair-pg-data",
+    "backups": [
+      {
+        "database": "pcp848_review_restore",
+        "file": "unknown-after.dump",
+        "bytes": 742303,
+        "sha256": "7fa83df017859ea6659402704018165cdedd4c118ab780ebc255afdb055f5e66",
+        "consistent": true,
+        "archive_list_valid": true
+      },
+      {
+        "database": "pcp848_review_restore2",
+        "file": "completed-copy-after.dump",
+        "bytes": 738444,
+        "sha256": "585a840ba8b0e4d787c9456209f4d615bfcb02ec7e5378fa6c8ddc60505dbd97",
+        "consistent": true,
+        "archive_list_valid": true
+      }
+    ],
+    "no_removal_or_original_worker_start": true,
+    "source_overlay_runtime_app_sha256": "6dabac1377b29d52be6a740f0976cb4116d084c6d41e80059de5ee09e61fac8e"
+  },
+  "dashboard": {
+    "at": "2026-10-31T08:58:11.243434+00:00",
+    "url": "https://localhost:18443/dashboard",
+    "http": 200,
+    "auth": "loopback_readonly",
+    "trusted_TLS": true,
+    "ignore_TLS_errors": false,
+    "cookies": 0,
+    "status": "blocked",
+    "head": "cf41cad08434f930841ced57a773f35783a1f537",
+    "model_calls": 1,
+    "test_runs": 2,
+    "unchanged_observer": true
+  },
+  "measurements": {
+    "recorded_artifact_window_started_at": "2026-10-31T08:06:56.382747Z",
+    "fixtures_stopped_at": "2026-10-31T08:57:41.712009+00:00",
+    "seconds_through_fixture_shutdown": 3045.329262,
+    "initial_read_only_audit_time_unknown": true,
+    "operator_model": "gpt-6.1-sol",
+    "requested_effort": "high",
+    "actual_effort": null,
+    "operator_tokens": null,
+    "operator_cost": null,
+    "owner_active_minutes": null,
+    "additional_owner_interactions": 0,
+    "PCP_managed_model_calls": 0,
+    "real_mandatory_fixture_containers": 3,
+    "successful_rehearsal_mandatory_phases": 2,
+    "unknown_rehearsal_mandatory_results": 1,
+    "benchmarked": false
+  },
+  "evidence_hashes": {
+    "task-test-only.patch": "bf3a6c53cf8adce7dcc47b7c8ad4234884804a0d6ba9785e47fd61499166fffb",
+    "rehearsal2-result.json": "e3a05fc0d24a05be780b2b1f4dcd3c6a98dae68b39c24bf81da74d46490f5f77",
+    "latest-source-compatibility.json": "c698d5c879f7b23cca025b186b6972eb5d66c19c5fd8f011fa05a8e371e9d756",
+    "unknown-restored-fixture.json": "302af8b21692ae20b03cbb0b991308a7b7b6eb54a4b3fe6bb4015b33af824a10",
+    "retention.json": "00536b7af7f4cb387705097e6f772498a03a66ff483a07db5bf7835d5bb1c1b5",
+    "original-preservation.json": "d172991c3946af3437fc62a692cfc203d21939dfb6965bc13bee8f9b78460087",
+    "cross-version-controls.json": "fdb41c3a429ee098614d43908fbf6268248a1fbb6ec6e379af78f7373e998045"
+  },
+  "local_verification": {
+    "root": {
+      "passed": 1761,
+      "seconds": 19.61
+    },
+    "context": {
+      "passed": 109,
+      "seconds": 2.0
+    },
+    "runtime_iteration": {
+      "passed": 2790,
+      "skipped": 410,
+      "seconds": 88.59
+    },
+    "real_pg_affected_iteration": {
+      "passed": 256,
+      "failed_assertion_only": 1,
+      "seconds": 158.28
+    },
+    "real_pg_final_new_lane": {
+      "passed": 56,
+      "seconds": 36.54
+    },
+    "real_pg_legacy_fence": {
+      "passed": 1,
+      "seconds": 0.83
+    },
+    "executor_final_dedicated": {
+      "passed": 20,
+      "seconds": 0.68
+    },
+    "continuity_operator": {
+      "passed": 17,
+      "seconds": 0.5
+    },
+    "hosted_final_head": "REQUIRED_IN_PR_CHECKS"
+  }
+}

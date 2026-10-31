@@ -67,6 +67,7 @@
 !services/runtime/app/pcp_local_artifacts.py
 !services/runtime/app/pcp_local_readiness.py
 !services/runtime/app/pcp_local_recovery.py
+!services/runtime/app/pcp_local_review_repair.py
 !services/runtime/app/pcp_local_task_queue.py
 !services/runtime/app/pcp_local_worker_admission.py
 !services/runtime/app/pcp_local_worker_loop.py
@@ -176,6 +177,7 @@ services/runtime/app/orchestrator_resume.py/*
 services/runtime/app/pcp_local_artifacts.py/*
 services/runtime/app/pcp_local_readiness.py/*
 services/runtime/app/pcp_local_recovery.py/*
+services/runtime/app/pcp_local_review_repair.py/*
 services/runtime/app/pcp_local_task_queue.py/*
 services/runtime/app/pcp_local_worker_admission.py/*
 services/runtime/app/pcp_local_worker_loop.py/*
